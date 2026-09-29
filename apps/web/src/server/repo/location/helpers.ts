@@ -49,6 +49,7 @@ import type {
  */
 export const dbLocationToAPI = (
   locationData: RowWithOptionalAliasesAndTags<typeof location.$inferSelect> & {
+    aiDescription?: string | null;
     product?: LocationIdentityProductRow | null;
     images?: Array<{
       image: MappableImageRecord;
@@ -66,10 +67,7 @@ export const dbLocationToAPI = (
     aliases: locationData.aliases ?? [],
     tags: locationData.tags ?? [],
     notes: locationData.notes ?? null,
-    type: parseLocationType(locationData.type, {
-      id: locationData.id,
-      name: locationData.name,
-    }),
+    type: parseLocationType(locationData.type),
     product: mapLocationIdentityProduct(locationData),
     images: mapImages(locationData.images),
     valuation: valuations?.get(locationData.id) ?? null,
@@ -83,10 +81,7 @@ const dbLocationToListRef = (
 ): LocationListRefOut => ({
   id: parseShortcodeFor("location", locationData.shortcode),
   name: locationData.name,
-  type: parseLocationType(locationData.type, {
-    id: locationData.id,
-    name: locationData.name,
-  }),
+  type: parseLocationType(locationData.type),
 });
 
 export const dbLocationToListAPI = (
@@ -107,7 +102,7 @@ export const dbLocationToListAPI = (
     ),
     (entry) => ({
       id: parseShortcodeFor("inventory", entry.shortcode),
-      amount: parseInventoryAmount(entry.amount, entry.id),
+      amount: parseInventoryAmount(entry),
       valuation: entry.valuation,
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
@@ -166,7 +161,7 @@ export const buildLocationWithChildren = (
     id: parseShortcodeFor("location", x.shortcode),
     lastBulkInventory: x.lastBulkInventory,
     aiDescription: x.aiDescription ?? null,
-    type: parseLocationType(x.type, { id: x.id, name: x.name }),
+    type: parseLocationType(x.type),
     product: mapLocationIdentityProduct(x),
     images: mapImages(x.images),
     valuation: valuations?.get(x.id) ?? null,

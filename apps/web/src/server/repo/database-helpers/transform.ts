@@ -1,10 +1,11 @@
-import { amount } from "@cubby/schemas/codec";
+import { amount, amountFromColumns } from "@cubby/schemas/codec";
 /**
  * Data transformation helper functions.
  * Extract, map, and transform database records.
  */
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
+import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import { parseWithContext } from "~/lib/zod-utils";
@@ -209,16 +210,36 @@ export const resolveLiveJoinShortcode = (
   rel: { shortcode: string; deletedAt: Date | null } | null | undefined,
 ): string | null => (rel && rel.deletedAt === null ? rel.shortcode : null);
 
+export {
+  amountFromColumns,
+  amountToColumns,
+  optionalAmountToColumns,
+} from "@cubby/schemas/codec";
+
 /**
- * Parse an inventory entry's amount field with consistent error context.
- * Consolidates the repeated pattern of parsing amount JSON columns.
+ * A `{ value, unit }` object built in SQL from a stored value/unit column pair
+ * (null when the pair is null, e.g. the far side of a left join). For `select`
+ * projections that hand the amount on unchanged; rows already in memory use
+ * {@link amountFromColumns}.
  */
-export const parseInventoryAmount = (
-  rawAmount: z.input<typeof amount>,
-  entryId: string,
-): z.infer<typeof amount> => {
-  return parseWithContext(amount, rawAmount, {
+export const amountJsonSql = (
+  value: AnyColumn,
+  unit: AnyColumn,
+): SQL<z.infer<typeof amount>> =>
+  sql<
+    z.infer<typeof amount>
+  >`CASE WHEN ${value} IS NULL THEN NULL ELSE jsonb_build_object('value', ${value}, 'unit', ${unit}) END`;
+
+/**
+ * Parse an inventory entry's amount with consistent error context.
+ * Consolidates the repeated pattern of validating a stored amount pair.
+ */
+export const parseInventoryAmount = (entry: {
+  id: string;
+  amountValue: number;
+  amountUnit: string;
+}): z.infer<typeof amount> =>
+  parseWithContext(amount, amountFromColumns(entry), {
     entityKind: "InventoryEntry",
-    identifier: { id: entryId },
+    identifier: { id: entry.id },
   });
-};

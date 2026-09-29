@@ -345,7 +345,8 @@ describe("meal recipe preparations", () => {
         },
       },
     });
-    expect(inventoryAfter?.amount).toEqual(inventoryBefore.amount);
+    expect(inventoryAfter?.amountValue).toEqual(inventoryBefore.amountValue);
+    expect(inventoryAfter?.amountUnit).toEqual(inventoryBefore.amountUnit);
     expect(inventoryAfter?.deletedAt).toBeNull();
 
     const recorded = requirePortionForMeal(sourceRead, source.id);

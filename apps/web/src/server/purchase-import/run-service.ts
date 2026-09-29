@@ -430,7 +430,7 @@ export async function startOrResumeRun(
     if (!result.created) return { ...run, created: false };
     await tx
       .update(vendorAccount)
-      .set({ status: "active", lastRunAt: new Date(), updatedAt: new Date() })
+      .set({ status: "active", updatedAt: new Date() })
       .where(eq(vendorAccount.id, input.vendorAccountId));
     return { ...run, created: true };
   });
@@ -2701,7 +2701,6 @@ export async function finishRun(
       .update(vendorAccount)
       .set({
         status: "active",
-        lastSuccessAt: run.status === "completed" ? new Date() : undefined,
         updatedAt: new Date(),
       })
       .where(
@@ -3731,7 +3730,6 @@ export async function controlRun(
             .update(vendorAccount)
             .set({
               status: "active",
-              lastRunAt: new Date(),
               updatedAt: new Date(),
             })
             .where(eq(vendorAccount.id, successorVendorAccountId));

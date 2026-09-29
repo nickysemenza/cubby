@@ -256,21 +256,18 @@ describe("buildLocationWhere", () => {
       contains: '"type"',
     },
     {
+      // Computed from the latest live location-description AiAnalysis.
       name: "AI description presence",
       filters: { aiDescriptionPresenceFilter: "has" } as const,
-      contains: '"aiDescription" is not null',
+      contains: '"AiAnalysis"',
     },
-  ])(
-    "still narrows by $name (declared stored filter)",
-    async ({ filters, contains }) => {
-      expect(await where(filters)).toContain(contains);
-    },
-  );
+  ])("still narrows by $name", async ({ filters, contains }) => {
+    expect(await where(filters)).toContain(contains);
+  });
 
-  it("matches name, AI description, and aliases by element (declared stored text filter)", async () => {
+  it("matches name and aliases by element (declared stored text filter)", async () => {
     const rendered = await where({ nameFilter: "attic" });
     expect(rendered).toContain('"name"');
-    expect(rendered).toContain('"aiDescription"');
     expect(rendered).toContain('unnest("Location"."aliases")');
   });
 });
@@ -288,9 +285,9 @@ describe("buildRecipeWhere", () => {
   it("overlaps tags and ORs the untagged sentinel (declared stored array filter)", async () => {
     expect(await where({ tagFilters: ["quick"] })).toContain('"tags" &&');
     expect(await where({ tagFilters: "quick" })).toContain('"tags" &&');
-    // `tags` is nullable, so untagged means NULL or zero-length.
+    // `tags` is NOT NULL, so untagged means zero-length.
     expect(await where({ tagsPresenceFilter: "none" })).toContain(
-      '"tags" IS NULL OR cardinality("Recipe"."tags") = 0',
+      'cardinality("Recipe"."tags") = 0',
     );
   });
 

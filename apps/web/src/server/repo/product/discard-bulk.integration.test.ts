@@ -105,7 +105,7 @@ describe("discardFromInventoryEntries", () => {
         storedQuantity: -2,
         inventory: { removed: false, remainingValue: 3 },
       });
-      expect((await loadEntry(partial.entry.entityId))?.amount.value).toBe(3);
+      expect((await loadEntry(partial.entry.entityId))?.amountValue).toBe(3);
 
       // Emptied, so soft-deleted rather than left claiming zero stock.
       expect(result.items[1]).toMatchObject({
@@ -141,7 +141,7 @@ describe("discardFromInventoryEntries", () => {
       ),
     ).rejects.toThrow(/holds 1/);
 
-    expect((await loadEntry(ok.entry.entityId))?.amount.value).toBe(4);
+    expect((await loadEntry(ok.entry.entityId))?.amountValue).toBe(4);
     const written = await getDb(ctx.db).query.expense.findMany({
       where: eq(expense.productId, ok.prod.entityId),
     });
@@ -169,6 +169,6 @@ describe("discardFromInventoryEntries", () => {
       ),
     ).rejects.toThrow(/more than once/);
 
-    expect((await loadEntry(entry.entityId))?.amount.value).toBe(5);
+    expect((await loadEntry(entry.entityId))?.amountValue).toBe(5);
   });
 });

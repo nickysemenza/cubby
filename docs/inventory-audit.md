@@ -163,7 +163,7 @@ single-user model, while the transaction still prevents partial recount writes.
 Resolution behavior:
 
 - `verify` stamps `verifiedAt`;
-- `adjust` writes the amount, valuation, and `verifiedAt`;
+- `adjust` writes the amount and `verifiedAt` (valuation is computed on read);
 - `remove` soft-deletes the row and its embedding;
 - `relocate` moves the full row, merging with a same-product destination row
   when necessary and cleaning up a collapsed source embedding.

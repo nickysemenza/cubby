@@ -89,7 +89,7 @@ describe("EntityEditDialog generic create", () => {
             plantingIds: ["PLT-4K7M"],
             observedOn: "2026-08-20",
             harvestAmount: "A handful",
-            note: "First harvest",
+            notes: "First harvest",
           }),
         }),
       }),

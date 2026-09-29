@@ -58,7 +58,7 @@ function loc(
     name,
     aliases: [],
     product: extra.product ?? null,
-    type,
+    type: type ?? "furniture",
     lastBulkInventory: null,
     aiDescription: null,
     notes: null,

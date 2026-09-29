@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import { location } from "~/server/db/schema";
 import { displayableImageRawSql } from "~/server/repo/image-displayability";
+import { locationAiDescriptionSql } from "~/server/repo/location/ai-description";
 
 import { defineEntityChecks } from "../registry";
 
@@ -22,10 +23,16 @@ export const locationChecks = defineEntityChecks({
       // A description is only expected once there's a photo to describe.
       expected: hasDisplayableImage,
       missing: (t) =>
-        sql`(${t.aiDescription} IS NULL OR trim(${t.aiDescription}) = '')`,
+        sql`(coalesce(trim(${locationAiDescriptionSql(t.id)}), '') = '')`,
     },
-    location_type: {
-      missing: (t) => sql`${t.type} IS NULL`,
+    location_furniture_counted: {
+      expected: (t) => sql`${t.type} = 'furniture'`,
+      // Literal foreign-table SQL: the same alias-rewriting hazard as every
+      // correlated subquery in this registry.
+      missing: (t) => sql`EXISTS (
+        SELECT 1 FROM "InventoryEntry" dq_loc_ie
+        WHERE dq_loc_ie."productId" = ${t.productId} AND dq_loc_ie."deletedAt" IS NULL
+      )`,
     },
   },
 });

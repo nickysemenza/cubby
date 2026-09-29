@@ -325,7 +325,7 @@ const metadataFor = (entity: Entity, alias = "t") => {
     case "purchase":
       return sql`jsonb_strip_nulls(jsonb_build_object('date', ${column("date")}::text))`;
     case "inventory":
-      return sql`jsonb_strip_nulls(jsonb_build_object('quantity', ${column("amount")}->>'value', 'unit', ${column("amount")}->>'unit', 'placement', ${column("placement")}::text))`;
+      return sql`jsonb_strip_nulls(jsonb_build_object('quantity', ${column("amountValue")}::text, 'unit', ${column("amountUnit")}, 'placement', ${column("placement")}::text))`;
     default:
       return sql`'{}'::jsonb`;
   }

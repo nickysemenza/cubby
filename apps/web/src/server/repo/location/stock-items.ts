@@ -6,6 +6,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { inventoryAmountSql } from "~/server/repo/inventory/helpers";
 import { stockOnly } from "~/server/repo/inventory/placement";
 
 /**
@@ -32,7 +33,7 @@ export const loadStockItemsByLocation = async (
     .select({
       locationId: inventoryEntry.locationId,
       shortcode: inventoryEntry.shortcode,
-      amount: inventoryEntry.amount,
+      amount: inventoryAmountSql,
       productShortcode: product.shortcode,
       productName: product.name,
     })

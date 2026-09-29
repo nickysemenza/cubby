@@ -50,6 +50,8 @@ export type ProductDeepDB = ProductSelect & {
   externalIds: MappableProductExternalId[];
   inventoryEntry: Array<
     typeof inventoryEntry.$inferSelect & {
+      // Computed on read and attached by the caller (`attachInventoryValuations`).
+      valuation: number | null;
       location: LocationSelect & {
         ancestors?: ProductLocationAncestor[];
         displayImage?: ImageUrlSummary | null;
@@ -89,6 +91,7 @@ export type ProductListDB = ProductSelect & {
   externalIds: MappableProductExternalId[];
   inventoryEntry: Array<
     typeof inventoryEntry.$inferSelect & {
+      valuation: number | null;
       location: LocationSelect;
     }
   >;

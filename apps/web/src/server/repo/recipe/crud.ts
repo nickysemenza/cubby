@@ -588,7 +588,7 @@ const createRecipeReturningId = async (
       ...sourceColumns,
       yield: recipeInput.yield ?? null,
       servings: recipeInput.servings ?? null,
-      tags: recipeInput.tags ?? null,
+      tags: recipeInput.tags ?? [],
       notes: recipeInput.notes ?? null,
       forkedFromRecipeId,
       ...recipeMetaToColumns(recipeInput.meta),
@@ -826,7 +826,7 @@ const upsertRecipeMatching = async (
         ...recipeMetaToColumns(input.meta),
         updatedAt: new Date(),
       };
-      if (input.tags !== undefined) recipeUpdates.tags = input.tags;
+      if (input.tags !== undefined) recipeUpdates.tags = input.tags ?? [];
       const updatedRecipe = await updateLiveAndReturn(
         tx,
         recipe,

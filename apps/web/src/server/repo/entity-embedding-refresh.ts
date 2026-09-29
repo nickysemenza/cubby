@@ -43,6 +43,8 @@ import {
 } from "~/server/garden-guides/windows";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { solePurchaseForTransaction } from "~/server/repo/financial-transaction-allocations";
+import { inventoryAmountSql } from "~/server/repo/inventory/helpers";
+import { locationAiDescriptionExtras } from "~/server/repo/location/ai-description";
 import { categorySummarySql } from "~/server/repo/product-category-sql";
 import { loadAllGtins } from "~/server/repo/product/gtin";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
@@ -417,9 +419,9 @@ async function getLocationEmbeddingTexts(
         id: true,
         name: true,
         type: true,
-        aiDescription: true,
         aliases: true,
       },
+      extras: locationAiDescriptionExtras,
     },
     options.limit,
   );
@@ -602,7 +604,7 @@ async function getInventoryEmbeddingTexts(
   const query = unwrapDb(db)
     .select({
       id: inventoryEntry.id,
-      amount: inventoryEntry.amount,
+      amount: inventoryAmountSql,
       locationName: location.name,
       productName: product.name,
       manufacturer: product.manufacturer,
@@ -1085,7 +1087,7 @@ async function getGardenEntryEmbeddingTexts(
         id: true,
         kind: true,
         observedOn: true,
-        note: true,
+        notes: true,
         harvestAmount: true,
       },
       with: {
@@ -1121,7 +1123,7 @@ async function getGardenEntryEmbeddingTexts(
             link.planting ? [plantingDisplayName(link.planting.plant)] : [],
           )
           .join(", ") || null,
-      note: row.note,
+      note: row.notes,
       harvestAmount: row.harvestAmount,
     }),
   }));

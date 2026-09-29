@@ -18,6 +18,10 @@ import type { Database } from "~/server/db";
 import { inventoryEntry, product, productExternalId } from "~/server/db/schema";
 import { attachDataQuality } from "~/server/repo/data-quality";
 import { getDb, imageOrder, notDeleted } from "~/server/repo/database-helpers";
+import {
+  attachInventoryValuations,
+  loadInventoryValuations,
+} from "~/server/repo/inventory/valuation";
 import { categorySummarySql } from "~/server/repo/product-category-sql";
 
 import { productClassificationEvidenceSql } from "./classification-evidence";
@@ -335,6 +339,7 @@ export const loadProductInventoryEntries = async (
     orderBy: inventoryEntry.createdAt,
     with: { location: true },
   });
+  const valuations = await loadInventoryValuations(db, rows);
 
   const byProduct = new Map<ProductId, typeof rows>();
   for (const row of rows) {
@@ -343,7 +348,12 @@ export const loadProductInventoryEntries = async (
     else byProduct.set(row.productId, [row]);
   }
   for (const [productId, entries] of byProduct) {
-    out.set(productId, mapProductListInventoryEntries(entries));
+    out.set(
+      productId,
+      mapProductListInventoryEntries(
+        attachInventoryValuations(entries, valuations),
+      ),
+    );
   }
   return out;
 };

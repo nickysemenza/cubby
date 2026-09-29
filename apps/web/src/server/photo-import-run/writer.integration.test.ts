@@ -475,7 +475,8 @@ describe("commitPhotoGroup", () => {
         productId: product.entityId,
         locationId: location.entityId,
         shortcode: generateShortcode("inventory"),
-        amount: { value: 2, unit: "each" },
+        amountValue: 2,
+        amountUnit: "each",
         ownershipMode: "person",
         ownerLedgerPartyId: party.id,
       })
@@ -497,9 +498,12 @@ describe("commitPhotoGroup", () => {
     expect(first.inventoryId).toBe(entry!.shortcode);
     expect(replay.inventoryId).toBe(first.inventoryId);
     const [after] = await getDb(ctx.db)
-      .select({ amount: inventoryEntry.amount })
+      .select({
+        amountValue: inventoryEntry.amountValue,
+        amountUnit: inventoryEntry.amountUnit,
+      })
       .from(inventoryEntry)
       .where(eq(inventoryEntry.id, entry!.id));
-    expect(after?.amount).toEqual({ value: 3, unit: "each" });
+    expect(after).toEqual({ amountValue: 3, amountUnit: "each" });
   });
 });

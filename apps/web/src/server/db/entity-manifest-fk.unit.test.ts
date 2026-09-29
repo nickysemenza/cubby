@@ -337,7 +337,7 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "external provider identifier owned by the product",
   },
-  "ProductUnitMappings.productId": {
+  "ProductUnitMapping.productId": {
     classification: "ownership",
     reason: "derived unit-mapping state owned by the product",
   },

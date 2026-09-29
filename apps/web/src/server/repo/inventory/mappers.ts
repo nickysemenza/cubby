@@ -29,8 +29,8 @@ type InventoryEntryBaseDB = Pick<
   InventoryEntryListDB,
   | "id"
   | "shortcode"
-  | "amount"
-  | "valuation"
+  | "amountValue"
+  | "amountUnit"
   | "verifiedAt"
   | "placement"
   | "ownershipMode"
@@ -53,12 +53,13 @@ const unresolvedOwnership = (
 
 const inventoryEntryBaseFields = (
   entry: InventoryEntryBaseDB,
+  valuation: number | null,
   dataQuality: DataQuality,
   ownership: EffectiveInventoryOwnership = unresolvedOwnership(entry),
 ) => ({
   id: parseShortcodeFor("inventory", entry.shortcode),
-  amount: parseInventoryAmount(entry.amount, entry.id),
-  valuation: entry.valuation,
+  amount: parseInventoryAmount(entry),
+  valuation,
   verifiedAt: entry.verifiedAt,
   placement: entry.placement,
   ownershipMode: entry.ownershipMode,
@@ -84,12 +85,14 @@ export const requireLoadedProductPricing = (
 
 export const dbInventoryEntryToAPI: (
   inventoryentry: InventoryEntryDeepDB,
+  valuation: number | null,
   pricing: ProductPricing,
   dataQuality: DataQuality,
   locationDataQuality: DataQuality,
   ownership?: EffectiveInventoryOwnership,
 ) => z.infer<typeof inventoryWithLocationAndProductOut> = (
   inventoryentry,
+  valuation,
   pricing,
   dataQuality,
   locationDataQuality,
@@ -98,11 +101,18 @@ export const dbInventoryEntryToAPI: (
   const { product, location } = inventoryentry;
 
   return {
-    ...inventoryEntryBaseFields(inventoryentry, dataQuality, ownership),
+    ...inventoryEntryBaseFields(
+      inventoryentry,
+      valuation,
+      dataQuality,
+      ownership,
+    ),
     location: {
       id: parseShortcodeFor("location", location.shortcode),
       lastBulkInventory: location.lastBulkInventory,
-      aiDescription: location.aiDescription,
+      // Like `valuation` below: the embed is a lightweight identity reference,
+      // not the place callers read a location's AI description from.
+      aiDescription: null,
       images: mapImages(location.images),
       // Valuation is a whole-tree rollup; an inventory entry's embedded
       // location is a lightweight identity reference, not a place callers
@@ -111,10 +121,7 @@ export const dbInventoryEntryToAPI: (
       name: location.name,
       aliases: location.aliases ?? [],
       notes: location.notes ?? null,
-      type: parseLocationType(location.type, {
-        id: location.id,
-        name: location.name,
-      }),
+      type: parseLocationType(location.type),
       // The inventory embed carries the holding location's own identity so a
       // stock row can render the bin it sits in without a second fetch.
       product: mapLocationIdentityProduct(location),
@@ -144,11 +151,13 @@ export const dbInventoryEntryToAPI: (
 
 export const dbInventoryEntryToListAPI: (
   inventoryentry: InventoryEntryListDB,
+  valuation: number | null,
   pricing: ProductPricing,
   dataQuality: DataQuality,
   ownership?: EffectiveInventoryOwnership,
 ) => Omit<z.infer<typeof inventoryListItemOut>, "displayImages"> = (
   inventoryentry,
+  valuation,
   pricing,
   dataQuality,
   ownership,
@@ -156,14 +165,16 @@ export const dbInventoryEntryToListAPI: (
   const { product, location } = inventoryentry;
 
   return {
-    ...inventoryEntryBaseFields(inventoryentry, dataQuality, ownership),
+    ...inventoryEntryBaseFields(
+      inventoryentry,
+      valuation,
+      dataQuality,
+      ownership,
+    ),
     location: {
       id: parseShortcodeFor("location", location.shortcode),
       name: location.name,
-      type: parseLocationType(location.type, {
-        id: location.id,
-        name: location.name,
-      }),
+      type: parseLocationType(location.type),
     },
     product: mapDbProductToInventoryList({
       ...product,

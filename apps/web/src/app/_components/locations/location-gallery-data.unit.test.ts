@@ -13,7 +13,7 @@ const location = (
     id: testShortcode("location", id),
     name: id,
     aliases: [],
-    type: null,
+    type: "area",
     product: null,
     lastBulkInventory: null,
     aiDescription: null,

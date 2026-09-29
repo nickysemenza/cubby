@@ -192,6 +192,9 @@ async function resolveForkedFromRecipeIdUpdate(
  * actually touched it, so `updateRecipe`'s audit diff can compare uuids on
  * both sides without a second query.
  */
+/** `Recipe.tags` is NOT NULL: a cleared tag list is stored empty. */
+const tagsOrEmpty = (tags: string[] | null): string[] => tags ?? [];
+
 export async function updateRecipeBasicProperties(
   tx: DrizzleTransaction,
   recipeId: RecipeId,
@@ -233,7 +236,7 @@ export async function updateRecipeBasicProperties(
     SourceData?: string | null;
     yield?: RecipeYield | null;
     servings?: number | null;
-    tags?: string[] | null;
+    tags?: string[];
     notes?: string | null;
     forkedFromRecipeId?: RecipeId | null;
   } & Partial<RecipeMetaColumns> = {};
@@ -256,7 +259,7 @@ export async function updateRecipeBasicProperties(
     updateData.servings = updates.servings;
   }
   if (updates.tags !== undefined) {
-    updateData.tags = updates.tags;
+    updateData.tags = tagsOrEmpty(updates.tags);
   }
   if (updates.notes !== undefined) {
     updateData.notes = updates.notes;

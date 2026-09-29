@@ -1,4 +1,3 @@
-import { amount } from "@cubby/schemas/codec";
 import {
   type EntityId,
   type LedgerPartyShortcode,
@@ -14,6 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import { inventoryEntry } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { amountFromColumns } from "~/server/repo/database-helpers";
 import { createExpense, getExpenseByID } from "~/server/repo/expense";
 import {
   confirmInventoryExpenseBeneficiary,
@@ -187,8 +187,8 @@ describe("inventory ownership mutations", () => {
     if (!inherited || !explicit) {
       throw new Error("Expected inherited and explicit ownership rows");
     }
-    expect(amount.parse(inherited.amount).value).toBe(2);
-    expect(amount.parse(explicit.amount).value).toBe(1);
+    expect(amountFromColumns(inherited).value).toBe(2);
+    expect(amountFromColumns(explicit).value).toBe(1);
     expect(explicit.ownerLedgerPartyId).toBe(owner.entityId);
     const effective = await loadEffectiveInventoryOwnershipById(
       ctx.db,
@@ -273,11 +273,11 @@ describe("inventory ownership mutations", () => {
       ),
     });
     expect(
-      rows.reduce((total, row) => total + amount.parse(row.amount).value, 0),
+      rows.reduce((total, row) => total + amountFromColumns(row).value, 0),
     ).toBe(10);
     expect(
       rows.map((row) => ({
-        value: amount.parse(row.amount).value,
+        value: amountFromColumns(row).value,
         ownershipMode: row.ownershipMode,
         ownerLedgerPartyId: row.ownerLedgerPartyId,
       })),

@@ -68,9 +68,13 @@ export type {
 } from "./transform";
 // Transform helpers
 export {
+  amountFromColumns,
+  amountJsonSql,
+  amountToColumns,
   buildPartialUpdateValues,
   mapImages,
   mapRelation,
+  optionalAmountToColumns,
   parseInventoryAmount,
   resolveLiveJoinName,
   resolveLiveJoinShortcode,

@@ -575,7 +575,7 @@ export const ENTITY_EDGES = {
         "An external identifier (e.g. an ASIN) recorded against this product; says nothing about whether the product was ever owned.",
       liveness: { kind: "must-target-live" },
     },
-    "ProductUnitMappings.productId": {
+    "ProductUnitMapping.productId": {
       column: productUnitMappings.productId,
       role: "metadata",
       label: "unit mappings",
@@ -644,7 +644,7 @@ export const ENTITY_EDGES = {
       role: "reference",
       label: "locations",
       description:
-        "A Location that IS an instance of this Product — the bin, tote or rack itself, not stock held in it. Deleting the Product would leave those locations with neither a type nor an identity, since a linked location stops carrying its own `type`.",
+        "A Location that IS an instance of this Product — the bin, tote or rack itself, not stock held in it. Deleting the Product would leave a `furniture` location (whose type only means an instance of a Product) with no identity at all.",
       liveness: { kind: "must-target-live" },
     },
     "Cookbook.productId": {

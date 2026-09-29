@@ -68,7 +68,7 @@ const location = (
   id: testShortcode("location", `LOC-${code}`),
   name,
   aliases: [],
-  type,
+  type: type ?? "furniture",
   product: null,
   lastBulkInventory: null,
   aiDescription: null,

@@ -79,7 +79,7 @@ export const ENTITY_EDGE_OWNERS = {
   ProductComponent: { owner: productComponent.parentProductId },
   ProductConversionCoverage: { owner: productConversionCoverage.productId },
   ProductExternalId: { owner: productExternalId.productId },
-  ProductUnitMappings: { owner: productUnitMappings.productId },
+  ProductUnitMapping: { owner: productUnitMappings.productId },
   ProjectDependency: { owner: projectDependency.projectId },
   ProjectToolUsage: { owner: projectToolUsage.projectId },
   PurchasePaymentEvidence: { owner: purchasePaymentEvidence.purchaseId },

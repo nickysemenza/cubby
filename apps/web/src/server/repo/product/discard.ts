@@ -43,8 +43,11 @@ import { inventoryEntry, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { touchDataQualityTargets } from "~/server/repo/data-quality";
-import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
-import { computeValuationForEntry } from "~/server/repo/inventory/crud";
+import {
+  amountFromColumns,
+  notDeleted,
+  withTransaction,
+} from "~/server/repo/database-helpers";
 import {
   pricingProductIds,
   syncChangedEffectivePrices,
@@ -142,7 +145,12 @@ const writeDiscardLine = async (
         eq(inventoryEntry.productId, input.productId),
         notDeleted(inventoryEntry),
       ),
-      columns: { id: true, shortcode: true, amount: true },
+      columns: {
+        id: true,
+        shortcode: true,
+        amountValue: true,
+        amountUnit: true,
+      },
     });
     if (!entry) {
       throw createAppError(
@@ -173,19 +181,11 @@ const writeDiscardLine = async (
     // {@link discardFromInventoryEntries} is the ONE caller that refuses it
     // instead — see the guard there for why a multi-row selection is not the
     // place to trust a number over the shelf.
-    const remaining = entry.amount.value - Math.abs(input.quantity);
+    const remaining = entry.amountValue - Math.abs(input.quantity);
     if (remaining > 0) {
-      const remainingAmount = { ...entry.amount, value: remaining };
       await tx
         .update(inventoryEntry)
-        .set({
-          amount: remainingAmount,
-          valuation: await computeValuationForEntry(
-            tx,
-            input.productId,
-            remainingAmount,
-          ),
-        })
+        .set({ amountValue: remaining })
         .where(eq(inventoryEntry.id, entry.id));
       await logAuditEntry(tx, actor, {
         entityKind: "inventory",
@@ -305,9 +305,20 @@ export const discardFromInventoryEntries = async (
         inArray(inventoryEntry.id, [...seen]),
         notDeleted(inventoryEntry),
       ),
-      columns: { id: true, shortcode: true, amount: true, productId: true },
+      columns: {
+        id: true,
+        shortcode: true,
+        amountValue: true,
+        amountUnit: true,
+        productId: true,
+      },
     });
-    const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+    const entryById = new Map(
+      entries.map((entry) => [
+        entry.id,
+        { ...entry, amount: amountFromColumns(entry) },
+      ]),
+    );
 
     for (const item of input.items) {
       const entry = entryById.get(item.inventoryEntryId);

@@ -3,13 +3,14 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { cookbook, recipe } from "~/server/db/schema";
+import { cookbookSourceRecipeCountSql } from "~/server/repo/cookbook-source-count";
 import { gapCondition } from "~/server/repo/data-quality/sql";
 import { getDb } from "~/server/repo/database-helpers";
 
 /**
  * Live cookbooks with more extracted source recipes than live linked recipes.
- * `sourceRecipeCount` is stored at upsert (the recipe items in the extracted
- * book tree), so this never walks the JSON.
+ * `sourceRecipeCount` is counted from the stored extraction on every read
+ * (`cookbookSourceRecipeCountSql`).
  *
  * The left join makes a never-imported cookbook visible. Keeping the recipe
  * liveness predicate in the join (rather than WHERE) preserves that zero-row
@@ -23,15 +24,16 @@ import { getDb } from "~/server/repo/database-helpers";
 export const findPartiallyImportedCookbooks = async (
   db: Database,
 ): Promise<ProblemItem<"partiallyImportedCookbooks">[]> => {
+  const sourceRecipeCount = cookbookSourceRecipeCountSql(cookbook.rawJson);
   const result = await getDb(db).execute<
     ProblemItem<"partiallyImportedCookbooks">
   >(sql`
     SELECT
       ${cookbook.shortcode} AS id,
       ${cookbook.name} AS name,
-      ${cookbook.sourceRecipeCount}::int AS "sourceRecipeCount",
+      ${sourceRecipeCount} AS "sourceRecipeCount",
       count(${recipe.id})::int AS "recipeCount",
-      (${cookbook.sourceRecipeCount} - count(${recipe.id}))::int AS "missingRecipeCount"
+      (${sourceRecipeCount} - count(${recipe.id}))::int AS "missingRecipeCount"
     FROM ${cookbook}
     LEFT JOIN ${recipe}
       ON ${recipe.cookbookId} = ${cookbook.id}

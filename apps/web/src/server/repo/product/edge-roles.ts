@@ -42,7 +42,7 @@
  *    with the edge above: deleting a kit is supposed to take its component
  *    list with it, the same way deleting a recipe takes its sections.
  *  - metadata / media: `ProductExternalId.productId`,
- *    `ProductUnitMappings.productId`, `ProductConversionCoverage.productId`,
+ *    `ProductUnitMapping.productId`, `ProductConversionCoverage.productId`,
  *    `ProductImage.productId` — none of which say anything about ownership on
  *    their own.
  *
@@ -208,7 +208,7 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     effect: "soft-delete",
     description: "External ids (e.g. ASINs) are soft-deleted with the product.",
   },
-  "ProductUnitMappings.productId": {
+  "ProductUnitMapping.productId": {
     code: "soft-delete-metadata",
     effect: "soft-delete",
     description:

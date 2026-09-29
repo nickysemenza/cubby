@@ -274,7 +274,8 @@ describe("meal nutrition service", () => {
       mealRecipeId: occurrence.id,
       mealId: targetMeal.id,
       ledgerPartyId: eater.id,
-      amount: { value: 50, unit: "g" },
+      amountValue: 50,
+      amountUnit: "g",
     });
 
     const result = await getMealNutrition(
@@ -412,9 +413,9 @@ describe("meal nutrition service", () => {
     });
     const stored = await getDb(ctx.db).query.mealFoodEntry.findFirst({
       where: eq(mealFoodEntry.id, saved.id),
-      columns: { amount: true },
+      columns: { amountValue: true, amountUnit: true },
     });
-    expect(stored?.amount).toEqual({ value: 25, unit: "g" });
+    expect(stored).toEqual({ amountValue: 25, amountUnit: "g" });
   });
 
   it("keeps a stale product entry visible with unavailable nutrition and refuses new saves to the deleted source", async () => {
@@ -479,8 +480,10 @@ describe("meal nutrition service", () => {
       .where(eq(product.id, food.id));
     const mapping = await insertAndReturn(ctx.db, productUnitMappings, {
       productId: food.id,
-      a: { value: 1, unit: "cup" },
-      b: { value: 100, unit: "g" },
+      aValue: 1,
+      aUnit: "cup",
+      bValue: 100,
+      bUnit: "g",
     });
     const saved = await saveMealFood(
       ctx.db,
@@ -503,7 +506,7 @@ describe("meal nutrition service", () => {
     });
     await getDb(ctx.db)
       .update(productUnitMappings)
-      .set({ b: { value: 200, unit: "g" } })
+      .set({ bValue: 200, bUnit: "g" })
       .where(eq(productUnitMappings.id, mapping.id));
     expect((await read()).people[0]?.foods[0]).toMatchObject({
       amount: { value: 1, unit: "cup" },
@@ -513,9 +516,9 @@ describe("meal nutrition service", () => {
     expect(
       await getDb(ctx.db).query.mealFoodEntry.findFirst({
         where: eq(mealFoodEntry.id, saved.id),
-        columns: { amount: true },
+        columns: { amountValue: true, amountUnit: true },
       }),
-    ).toEqual({ amount: { value: 1, unit: "cup" } });
+    ).toEqual({ amountValue: 1, amountUnit: "cup" });
   });
 
   it("records unmapped product amounts and resolves them when a source mapping is added", async () => {
@@ -544,8 +547,10 @@ describe("meal nutrition service", () => {
     });
     await insertAndReturn(ctx.db, productUnitMappings, {
       productId: food.id,
-      a: { value: 1, unit: "bowl" },
-      b: { value: 50, unit: "g" },
+      aValue: 1,
+      aUnit: "bowl",
+      bValue: 50,
+      bUnit: "g",
     });
     expect((await read()).people[0]?.foods[0]).toMatchObject({
       amount: { value: 2, unit: "bowl" },

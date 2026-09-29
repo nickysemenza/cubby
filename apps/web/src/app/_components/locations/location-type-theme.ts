@@ -35,10 +35,8 @@ const QR_LABEL_GROUPS: ReadonlySet<LocationTypeGroup> = new Set([
  * Whether a location supports QR code labels.
  * Surfaces, storage, and containers get labels — spaces don't.
  *
- * A null type means the location is an instance of a Product, which is by
- * definition a physical vessel you can stick a label on, so it always
- * qualifies. That widens eligibility slightly and correctly: the old gate
- * could only reason about the coarse type groups.
+ * `furniture` (an instance of a Product) is by definition a physical vessel
+ * you can stick a label on, so it always qualifies; so does a type-less hint.
  */
 export const typeSupportsQrCode = (type: LocationType | null): boolean =>
   type === null || QR_LABEL_GROUPS.has(typeToGroup[type]);
@@ -53,6 +51,8 @@ const typeToGroup = {
   cart: "surfaces",
   shelf: "surfaces",
   bed: "surfaces",
+  // A Product instance is a portable vessel (the bin, tote or rack itself).
+  furniture: "containers",
   // Storage - enclosed/built-in (rose/pink family)
   cabinet: "storage",
   drawer: "storage",
@@ -84,21 +84,23 @@ const locationIcons = {
   box: CubeIcon,
   bed: PlantIcon,
   planter: FlowerIcon,
+  furniture: PackageIcon,
 } satisfies Record<LocationType, Icon>;
 
 /**
  * Get the icon component for a location type
  */
 export const getLocationIcon = (type: LocationType | null): Icon =>
-  // safe: complete Record keyed by the enum. Null means the location is an
-  // instance of a Product; callers holding that Product should prefer
-  // `getLocationGlyph`, which resolves the SKU's category icon instead.
+  // safe: complete Record keyed by the enum. `furniture` is an instance of a
+  // Product; callers holding that Product should prefer `getLocationGlyph`,
+  // which resolves the SKU's category icon instead. Null is a type-less hint
+  // (a search hit that carries no type).
   type ? locationIcons[type] : PackageIcon;
 
 /**
  * The glyph for a location, resolving identity before form factor.
  *
- * A linked location has no `type`, so its shape comes from the SKU. The
+ * A `furniture` location has no form factor of its own, so its shape comes from the SKU. The
  * product's *category* icon is the right fallback rather than a new column:
  * nine of the sixteen location types already render the same `Box`, so a
  * per-type glyph was never carrying much, while `storage` / `tools` /
@@ -108,7 +110,8 @@ export const getLocationGlyph = (location: {
   type: LocationType | null;
   product?: { category: ProductCategory | null } | null;
 }): Icon => {
-  if (location.type) return locationIcons[location.type];
+  if (location.type && location.type !== "furniture")
+    return locationIcons[location.type];
   const category = location.product?.category;
   return category ? getCategoryIcon(category.feature) : PackageIcon;
 };

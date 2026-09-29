@@ -42,6 +42,7 @@ import {
   productExpenseTotalSql,
 } from "~/server/repo/expense-aggregate-sql";
 import { stockOnly } from "~/server/repo/inventory/placement";
+import { locationAiDescriptionExtras } from "~/server/repo/location/ai-description";
 import { categorySummarySql } from "~/server/repo/product-category-sql";
 import { productClassificationEvidenceSql } from "~/server/repo/product/classification-evidence";
 
@@ -490,6 +491,8 @@ export const relations = {
   },
   location: {
     list: {
+      // `aiDescription` is computed from AiAnalysis, not stored on the row.
+      extras: locationAiDescriptionExtras,
       with: {
         parent: true,
         product: locationIdentityProduct,
@@ -530,11 +533,13 @@ export const relations = {
       },
     },
     full: {
+      extras: locationAiDescriptionExtras,
       with: {
         parent: true,
         product: locationIdentityProduct,
         children: {
           where: notDeleted(location),
+          extras: locationAiDescriptionExtras,
           with: {
             // Children carry their identity SKU too — the Contents table shows
             // one row per child bin, and without this every product-linked
@@ -563,6 +568,7 @@ export const relations = {
       },
     },
     withImages: {
+      extras: locationAiDescriptionExtras,
       with: {
         product: locationIdentityProduct,
         images: {

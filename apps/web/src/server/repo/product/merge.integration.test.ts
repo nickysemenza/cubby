@@ -167,7 +167,12 @@ describe("mergeProducts", () => {
         eq(inventoryEntry.productId, productId),
         notDeleted(inventoryEntry),
       ),
-      columns: { id: true, locationId: true, amount: true },
+      columns: {
+        id: true,
+        locationId: true,
+        amountValue: true,
+        amountUnit: true,
+      },
     });
 
   it("refuses to merge different ISBN editions", async () => {
@@ -644,8 +649,8 @@ describe("mergeProducts", () => {
     expect(entries).toHaveLength(2);
     // The colliding entry ADDS rather than one row winning or the insert
     // erroring — the whole point of the fold.
-    expect(entries.find((e) => e.locationId === shelf)?.amount.value).toBe(5);
-    expect(entries.find((e) => e.locationId === otherShelf)?.amount.value).toBe(
+    expect(entries.find((e) => e.locationId === shelf)?.amountValue).toBe(5);
+    expect(entries.find((e) => e.locationId === otherShelf)?.amountValue).toBe(
       5,
     );
     expect(await liveEntries(loser.id)).toHaveLength(0);
@@ -869,7 +874,7 @@ describe("mergeProducts", () => {
   });
 
   /**
-   * `ProductUnitMappings` has no unique index, so nothing in the database would
+   * `ProductUnitMapping` has no unique index, so nothing in the database would
    * have refused these — the write path is the only place the duplicate can be
    * stopped, which is exactly why these are integration rather than unit tests.
    */

@@ -73,6 +73,7 @@ export const getLocationsByShortcodes = async (
   const uppercased = shortcodes.map((s) => s.toUpperCase());
   const results = await getDb(db).query.location.findMany({
     where: and(inArray(location.shortcode, uppercased), notDeleted(location)),
+    extras: relations.location.withImages.extras,
     with: {
       ...relations.location.withImages.with,
       parent: true,
@@ -277,7 +278,7 @@ export const getLocationPutAwayCandidates = async (
     return {
       id: parseShortcodeFor("location", row.shortcode),
       name: row.name,
-      type: parseLocationType(row.type, { id: row.id, name: row.name }),
+      type: parseLocationType(row.type),
       ancestors: ancestorsById.get(row.id) ?? [],
       itemCount: tally?.itemCount ?? 0,
       tagSiblings: tally?.tagSiblings ?? 0,
