@@ -110,8 +110,8 @@ export const planSlotCollisions = <Row>(args: {
  * Re-point a pure association row onto one owner, soft-deleting the rows whose
  * slot that owner already fills. Returns how many actually moved.
  *
- * The join tables this covers (product↔image, product↔project, product↔purchase,
- * product↔wish) share an implementation because they share a *shape*, not just a
+ * The pairings this covers (product↔image attachments and the product↔project,
+ * product↔purchase, product↔wish EntityLink kinds) share an implementation because they share a *shape*, not just a
  * plan: the row IS the pair, so an absorbed duplicate carries nothing to fold
  * into its survivor. External ids and inventory look similar and are handled
  * separately precisely because their absorbed rows DO carry something (a url; a

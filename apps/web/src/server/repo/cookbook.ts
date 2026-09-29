@@ -357,8 +357,8 @@ export const getCookbookSummary = async (
 };
 
 /**
- * Every cookbook, by title. Shim for the MCP `list_cookbooks` tool and the
- * `cookbook.list` contract until they read the kernel list.
+ * Every cookbook, by title. Backs the `cookbook.list` contract until
+ * read-only entities join the generic browser list roster.
  */
 export const listCookbooks = async (db: Database): Promise<CookbookSummary[]> =>
   (
@@ -376,8 +376,7 @@ export const listCookbooks = async (db: Database): Promise<CookbookSummary[]> =>
  * so nothing in the codebase writes this without a human choosing the product.
  *
  * No uniqueness guard on the product side. Two cookbooks claiming one copy is
- * odd but harmless — nothing derives money or stock from this edge — and a
- * partial unique index would not survive `db:push` anyway.
+ * odd but harmless — nothing derives money or stock from this edge.
  */
 export const setCookbookProduct = async (
   db: Database,
