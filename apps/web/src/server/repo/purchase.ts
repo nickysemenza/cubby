@@ -54,14 +54,13 @@ import {
   expenseAttribution,
   financialTransactionAllocation,
   image,
-  runEvidence,
-  runTarget,
   importSourceClaim,
   ledgerSourceClaim,
   orderMailCandidateDecision,
   purchase,
   purchasePaymentEvidence,
-  purchaseProduct,
+  runEvidence,
+  runTarget,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -92,6 +91,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
+import { repointLinkEnd } from "~/server/repo/entity-links";
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
@@ -183,7 +183,7 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
     description:
       "Image associations are soft-deleted with the purchase, and each file is\n      deleted too unless something else still references it.",
   },
-  "PurchaseProduct.purchaseId": {
+  "EntityLink[purchaseProduct].from": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -231,7 +231,7 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
     description:
       "The absorbed purchase's images move onto the survivor, skipping any already filed there, and the source associations are soft-deleted.",
   },
-  "PurchaseProduct.purchaseId": {
+  "EntityLink[purchaseProduct].from": {
     code: "move-dedupe-and-soft-delete-source",
     effect: "move-dedupe",
     description:
@@ -1700,26 +1700,12 @@ const moveChargeProducts = async (
   deadId: PurchaseId,
   survivorId: PurchaseId,
 ) => {
-  const rows = await tx.query.purchaseProduct.findMany({
-    where: and(
-      eq(purchaseProduct.purchaseId, deadId),
-      notDeleted(purchaseProduct),
-    ),
-    columns: { productId: true },
+  await repointLinkEnd(tx, {
+    kind: "purchaseProduct",
+    end: "from",
+    keepId: survivorId,
+    loserIds: [deadId],
   });
-  if (rows.length === 0) return;
-  await tx
-    .insert(purchaseProduct)
-    .values(
-      rows.map(({ productId }) => ({ purchaseId: survivorId, productId })),
-    )
-    .onConflictDoNothing();
-  await tx
-    .update(purchaseProduct)
-    .set({ deletedAt: new Date() })
-    .where(
-      and(eq(purchaseProduct.purchaseId, deadId), notDeleted(purchaseProduct)),
-    );
 };
 
 /** Fold charge contents with audited expense re-pointing; callers own index ordering. */

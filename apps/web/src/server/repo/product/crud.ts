@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { EntityLinkKind } from "@cubby/schemas/entity-links";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   displayGtin,
@@ -60,9 +61,9 @@ import {
   cookbook,
   device,
   entityAttachment,
+  entityLink,
   expense,
   image,
-  runTarget,
   inventoryEntry,
   location,
   mealFoodEntry,
@@ -70,14 +71,11 @@ import {
   plant,
   planting,
   product,
-  productComponent,
   productConversionCoverage,
   productExternalId,
   productUnitMappings,
-  projectToolUsage,
-  purchaseProduct,
+  runTarget,
   task,
-  wishCandidate,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { observeOperationPhase } from "~/server/observed-request";
@@ -107,6 +105,7 @@ import {
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
+import { liveLinks } from "~/server/repo/entity-links";
 import { patchEntityRows } from "~/server/repo/entity-patch";
 import {
   productAcquisitionDateFilterSql,
@@ -752,16 +751,16 @@ export const buildProductWhere = async (
   // Kit membership requires live parent and component rows; do not approximate liveness with stale joins.
   const partsAccountedKitsSql = (productId: PgColumn) =>
     sql`(SELECT min(floor(COALESCE(${sql.raw(onHandUnitsSql("kac_p"))}, 0) / kac."quantity"))
-           FROM "ProductComponent" kac
+           FROM "EntityLink" kac
            JOIN "Product" kac_p
-             ON kac_p."id" = kac."componentProductId" AND kac_p."deletedAt" IS NULL
-          WHERE kac."parentProductId" = ${productId}
-            AND kac."deletedAt" IS NULL)`;
+             ON kac_p."id" = kac."toEntityId" AND kac_p."deletedAt" IS NULL
+          WHERE kac."fromEntityId" = ${productId}
+            AND kac."deletedAt" IS NULL AND kac."kind" = 'productComponent')`;
 
   const productIdsWithComponents = dbClient
-    .select({ productId: productComponent.parentProductId })
-    .from(productComponent)
-    .where(notDeleted(productComponent));
+    .select({ productId: entityLink.fromEntityId })
+    .from(entityLink)
+    .where(liveLinks("productComponent"));
 
   // This is the entity-list form of the sold-but-still-stocked diagnostic.
   // The quantity ledger remains the authority for expected quantity and unknown
@@ -983,19 +982,19 @@ export const buildProductWhere = async (
       ? undefined
       : sql`EXISTS (
           SELECT 1
-          FROM "ProductComponent" kit_pc
-          JOIN "Product" kit ON kit."id" = kit_pc."parentProductId" AND kit."deletedAt" IS NULL
-          WHERE kit_pc."componentProductId" = ${product.id}
-            AND kit_pc."deletedAt" IS NULL
+          FROM "EntityLink" kit_pc
+          JOIN "Product" kit ON kit."id" = kit_pc."fromEntityId" AND kit."deletedAt" IS NULL
+          WHERE kit_pc."toEntityId" = ${product.id}
+            AND kit_pc."deletedAt" IS NULL AND kit_pc."kind" = 'productComponent'
             AND ${shortcodeSetCondition(sql`kit."shortcode"`, filters.kitId)})`,
     filters.componentId === undefined
       ? undefined
       : sql`EXISTS (
           SELECT 1
-          FROM "ProductComponent" component_pc
-          JOIN "Product" component ON component."id" = component_pc."componentProductId" AND component."deletedAt" IS NULL
-          WHERE component_pc."parentProductId" = ${product.id}
-            AND component_pc."deletedAt" IS NULL
+          FROM "EntityLink" component_pc
+          JOIN "Product" component ON component."id" = component_pc."toEntityId" AND component."deletedAt" IS NULL
+          WHERE component_pc."fromEntityId" = ${product.id}
+            AND component_pc."deletedAt" IS NULL AND component_pc."kind" = 'productComponent'
             AND ${shortcodeSetCondition(sql`component."shortcode"`, filters.componentId)})`,
     idSetPresence(
       product.id,
@@ -2383,6 +2382,17 @@ type ProductDependentFetcher = (
   ids: ProductId[],
 ) => Promise<Array<{ productId: ProductId | null }>>;
 
+/** Live links of `kind` whose `to` end is one of the products. */
+const liveLinksToProducts =
+  (kind: EntityLinkKind): ProductDependentFetcher =>
+  async (tx, ids) =>
+    (
+      await tx
+        .select({ productId: entityLink.toEntityId })
+        .from(entityLink)
+        .where(and(inArray(entityLink.toEntityId, ids), liveLinks(kind)))
+    ).map((row) => ({ productId: parseEntityId("product", row.productId) }));
+
 const PRODUCT_RETAINING_DEPENDENTS = {
   "RunTarget.entityId": async (tx, ids) => {
     const rows = await tx.query.runTarget.findMany({
@@ -2422,22 +2432,8 @@ const PRODUCT_RETAINING_DEPENDENTS = {
       productId: subjectProductId,
     }));
   },
-  "ProjectToolUsage.productId": (tx, ids) =>
-    tx.query.projectToolUsage.findMany({
-      where: and(
-        inArray(projectToolUsage.productId, ids),
-        notDeleted(projectToolUsage),
-      ),
-      columns: { productId: true },
-    }),
-  "PurchaseProduct.productId": (tx, ids) =>
-    tx.query.purchaseProduct.findMany({
-      where: and(
-        inArray(purchaseProduct.productId, ids),
-        notDeleted(purchaseProduct),
-      ),
-      columns: { productId: true },
-    }),
+  "EntityLink[projectTool].to": liveLinksToProducts("projectTool"),
+  "EntityLink[purchaseProduct].to": liveLinksToProducts("purchaseProduct"),
   "MealFoodEntry.productId": (tx, ids) =>
     tx.query.mealFoodEntry.findMany({
       where: and(
@@ -2446,14 +2442,7 @@ const PRODUCT_RETAINING_DEPENDENTS = {
       ),
       columns: { productId: true },
     }),
-  "WishCandidate.productId": (tx, ids) =>
-    tx.query.wishCandidate.findMany({
-      where: and(
-        inArray(wishCandidate.productId, ids),
-        notDeleted(wishCandidate),
-      ),
-      columns: { productId: true },
-    }),
+  "EntityLink[wishCandidate].to": liveLinksToProducts("wishCandidate"),
   "Location.productId": (tx, ids) =>
     tx.query.location.findMany({
       where: and(inArray(location.productId, ids), notDeleted(location)),
@@ -2464,18 +2453,7 @@ const PRODUCT_RETAINING_DEPENDENTS = {
       where: and(inArray(cookbook.productId, ids), notDeleted(cookbook)),
       columns: { productId: true },
     }),
-  "ProductComponent.componentProductId": async (tx, ids) => {
-    const rows = await tx.query.productComponent.findMany({
-      where: and(
-        inArray(productComponent.componentProductId, ids),
-        notDeleted(productComponent),
-      ),
-      columns: { componentProductId: true },
-    });
-    return rows.map(({ componentProductId }) => ({
-      productId: componentProductId,
-    }));
-  },
+  "EntityLink[productComponent].to": liveLinksToProducts("productComponent"),
   // Never read: `Device.productId`'s disposition is "detach", not "block",
   // so the loop below skips it before calling this. Present only to satisfy
   // this map's exhaustiveness over every retaining edge.

@@ -4,6 +4,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type ProductId,
+  parseEntityId,
   parseShortcodeFor,
   type WishId,
   type WishShortcode,
@@ -22,7 +23,7 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { product, wish, wishCandidate } from "~/server/db/schema";
+import { entityLink, product, wish } from "~/server/db/schema";
 import { entityRepository } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
@@ -37,6 +38,11 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
+import {
+  attachLinks,
+  liveLinks,
+  replaceLinkSet,
+} from "~/server/repo/entity-links";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import {
   effectiveProductPriceSql,
@@ -53,7 +59,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 type WishRow = typeof wish.$inferSelect;
 
 export const WISH_DELETE_EDGE_POLICY = {
-  "WishCandidate.wishId": {
+  "EntityLink[wishCandidate].from": {
     code: "soft-delete-candidate-alternatives",
     effect: "soft-delete",
     description:
@@ -78,7 +84,7 @@ const candidateRowsForWishes = async (
   if (wishIds.length === 0) return new Map();
   const rows = await unwrapDb(db)
     .select({
-      wishId: wishCandidate.wishId,
+      wishId: entityLink.fromEntityId,
       id: product.id,
       shortcode: product.shortcode,
       name: product.name,
@@ -92,12 +98,12 @@ const candidateRowsForWishes = async (
         WHERE ie."productId" = ${product.id} AND ie."deletedAt" IS NULL
       )`,
     })
-    .from(wishCandidate)
-    .innerJoin(product, eq(product.id, wishCandidate.productId))
+    .from(entityLink)
+    .innerJoin(product, eq(product.id, entityLink.toEntityId))
     .where(
       and(
-        inArray(wishCandidate.wishId, [...wishIds]),
-        notDeleted(wishCandidate),
+        inArray(entityLink.fromEntityId, [...wishIds]),
+        liveLinks("wishCandidate"),
         notDeleted(product),
       ),
     )
@@ -105,14 +111,16 @@ const candidateRowsForWishes = async (
   const pricing = await loadProductPricing(db, rows);
   const byWish = new Map<WishId, CandidateRow[]>();
   for (const row of rows) {
+    const wishId = parseEntityId("wish", row.wishId);
     const candidate = {
       ...row,
+      wishId,
       inventoried: Boolean(row.inventoried),
       price:
         pricing.get(row.id)?.effectivePrice ??
         resolveProductPricing(row.price).effectivePrice,
     };
-    byWish.set(row.wishId, [...(byWish.get(row.wishId) ?? []), candidate]);
+    byWish.set(wishId, [...(byWish.get(wishId) ?? []), candidate]);
   }
   return byWish;
 };
@@ -194,9 +202,9 @@ const candidateProductSearch = (term: string) => {
  */
 const candidatePriceAggregate = (fn: "min" | "max") => sql`(
     SELECT ${sql.raw(fn)}(${sql.raw(effectiveProductPriceSql("p"))})
-    FROM "WishCandidate" wc
-    JOIN "Product" p ON p."id" = wc."productId" AND p."deletedAt" IS NULL
-    WHERE wc."wishId" = ${wish.id} AND wc."deletedAt" IS NULL
+    FROM "EntityLink" wc
+    JOIN "Product" p ON p."id" = wc."toEntityId" AND p."deletedAt" IS NULL
+    WHERE wc."fromEntityId" = ${wish.id} AND wc."deletedAt" IS NULL AND wc."kind" = 'wishCandidate'
   )`;
 
 const wishPriceLow = candidatePriceAggregate("min");
@@ -248,10 +256,10 @@ export const buildWishWhere = async (
   const candidateFilter = candidateProductUuids
     ? candidateProductUuids.length > 0
       ? sql`EXISTS (
-        SELECT 1 FROM "WishCandidate" wc
-        JOIN "Product" p ON p."id" = wc."productId" AND p."deletedAt" IS NULL
-        WHERE wc."wishId" = ${wish.id}
-          AND wc."deletedAt" IS NULL
+        SELECT 1 FROM "EntityLink" wc
+        JOIN "Product" p ON p."id" = wc."toEntityId" AND p."deletedAt" IS NULL
+        WHERE wc."fromEntityId" = ${wish.id}
+          AND wc."deletedAt" IS NULL AND wc."kind" = 'wishCandidate'
           AND p."id" IN (${sql.join(
             candidateProductUuids.map((id) => sql`${id}::uuid`),
             sql`, `,
@@ -268,10 +276,10 @@ export const buildWishWhere = async (
         formatSearchTerm(wish.name, filters.search),
         formatSearchTerm(wish.notes, filters.search),
         sql`EXISTS (
-          SELECT 1 FROM "WishCandidate" wc
-          JOIN "Product" p ON p."id" = wc."productId" AND p."deletedAt" IS NULL
-          WHERE wc."wishId" = ${wish.id}
-            AND wc."deletedAt" IS NULL
+          SELECT 1 FROM "EntityLink" wc
+          JOIN "Product" p ON p."id" = wc."toEntityId" AND p."deletedAt" IS NULL
+          WHERE wc."fromEntityId" = ${wish.id}
+            AND wc."deletedAt" IS NULL AND wc."kind" = 'wishCandidate'
             AND ${candidateProductSearch(filters.search)}
         )`,
       )
@@ -385,13 +393,11 @@ export const createWish = async (
       name: data.name,
       notes: data.notes,
     });
-    if (productIds.length) {
-      await tx
-        .insert(wishCandidate)
-        .values(
-          productIds.map((productId) => ({ wishId: created.id, productId })),
-        );
-    }
+    await attachLinks(
+      tx,
+      "wishCandidate",
+      productIds.map((productId) => ({ from: created.id, to: productId })),
+    );
     await logAuditEntry(tx, actor, {
       entityKind: "wish",
       entityId: created.id,
@@ -405,12 +411,12 @@ export const createWish = async (
 const candidateShortcodes = async (tx: DrizzleTransaction, id: WishId) => {
   const rows = await tx
     .select({ shortcode: product.shortcode })
-    .from(wishCandidate)
-    .innerJoin(product, eq(product.id, wishCandidate.productId))
+    .from(entityLink)
+    .innerJoin(product, eq(product.id, entityLink.toEntityId))
     .where(
       and(
-        eq(wishCandidate.wishId, id),
-        notDeleted(wishCandidate),
+        eq(entityLink.fromEntityId, id),
+        liveLinks("wishCandidate"),
         notDeleted(product),
       ),
     )
@@ -438,34 +444,7 @@ export const updateWish = async (
         tx,
         data.candidateProductIds,
       );
-      const currentRows = await tx.query.wishCandidate.findMany({
-        where: and(eq(wishCandidate.wishId, id), notDeleted(wishCandidate)),
-        columns: { productId: true },
-      });
-      const currentIds = new Set(currentRows.map((row) => row.productId));
-      const nextIdSet = new Set(nextIds);
-      const now = new Date();
-      const removeIds = [...currentIds].filter(
-        (productId) => !nextIdSet.has(productId),
-      );
-      if (removeIds.length) {
-        await tx
-          .update(wishCandidate)
-          .set({ deletedAt: now })
-          .where(
-            and(
-              eq(wishCandidate.wishId, id),
-              inArray(wishCandidate.productId, removeIds),
-              notDeleted(wishCandidate),
-            ),
-          );
-      }
-      const addIds = nextIds.filter((productId) => !currentIds.has(productId));
-      if (addIds.length) {
-        await tx
-          .insert(wishCandidate)
-          .values(addIds.map((productId) => ({ wishId: id, productId })));
-      }
+      await replaceLinkSet(tx, "wishCandidate", id, nextIds);
       afterCandidates = await candidateShortcodes(tx, id);
     }
     const acquiredAt =

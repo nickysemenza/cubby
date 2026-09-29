@@ -20,6 +20,10 @@ import type {
 import { entityConnectionsInput } from "@cubby/schemas/entity-connections";
 import type { EdgeRole } from "@cubby/schemas/entity-integrity";
 import {
+  ENTITY_LINK_KINDS,
+  entityLinkKinds,
+} from "@cubby/schemas/entity-links";
+import {
   allEntities,
   entityManifest,
   shortcodeEntities,
@@ -74,6 +78,8 @@ export interface EntityEdgeSpec {
   table: string;
   column: string;
   softDeletable: boolean;
+  /** `EntityLink` arms read only their own link kind's rows. */
+  scope: { column: string; value: string } | null;
   source: EdgeSource;
   label: string;
   role: EdgeRole;
@@ -107,7 +113,11 @@ const tableInfo = (table: PgTable) => {
 const ownerOf = (table: string): EntityEdgeOwner | undefined =>
   Object.entries(ENTITY_EDGE_OWNERS).find(([name]) => name === table)?.[1];
 
-const sourceFor = (table: string, column: string): EdgeSource | null => {
+const sourceFor = (
+  table: string,
+  column: string,
+  scope: string | null,
+): EdgeSource | null => {
   const self = entityByTable.get(table);
   if (self) return { kind: "self", sourceKind: self };
   const owner = ownerOf(table);
@@ -116,6 +126,16 @@ const sourceFor = (table: string, column: string): EdgeSource | null => {
       `EntityEdge: ${table} carries an ENTITY_EDGES column but has no ENTITY_EDGE_OWNERS entry.`,
     );
   if ("excluded" in owner) return null;
+  if ("linkFrom" in owner) {
+    if (owner.linkFrom.name === column) return null;
+    const kind = entityLinkKinds.find((candidate) => candidate === scope);
+    if (!kind)
+      throw new Error(`EntityEdge: ${table}.${column} has no link kind scope.`);
+    const sourceKind = ENTITY_LINK_KINDS[kind].from;
+    if (!isShortcodeEntity(sourceKind))
+      throw new Error(`EntityEdge: link kind ${kind} starts at ${sourceKind}.`);
+    return { kind: "owner", column: owner.linkFrom.name, sourceKind };
+  }
   if ("ownerIdentity" in owner) {
     return owner.ownerIdentity.name === column
       ? null
@@ -154,7 +174,10 @@ export const ENTITY_EDGE_SPECS: readonly EntityEdgeSpec[] = allEntities.flatMap(
       if (!is(column.table, PgTable))
         throw new Error(`EntityEdge: ${edgeKey} is not on a table.`);
       const info = tableInfo(column.table);
-      const source = sourceFor(info.name, column.name);
+      const scope = edge.scope
+        ? { column: edge.scope.column.name, value: edge.scope.value }
+        : null;
+      const source = sourceFor(info.name, column.name, scope?.value ?? null);
       if (source === null) return [];
       const meaning = Object.entries(semantics).find(
         ([key]) => key === edgeKey,
@@ -168,6 +191,7 @@ export const ENTITY_EDGE_SPECS: readonly EntityEdgeSpec[] = allEntities.flatMap(
           table: info.name,
           column: column.name,
           softDeletable: info.softDeletable,
+          scope,
           source,
           label: meaning.label,
           role: meaning.role,
@@ -204,6 +228,8 @@ const branchSql = (spec: EntityEdgeSpec, filter: EdgeFilter): SQL => {
     sql`${sourceId} IS NOT NULL`,
   ];
   if (spec.softDeletable) conditions.push(sql`s."deletedAt" IS NULL`);
+  if (spec.scope)
+    conditions.push(sql`s.${ident(spec.scope.column)} = ${spec.scope.value}`);
   if (filter?.side === "target")
     conditions.push(sql`s.${ident(spec.column)} = ${filter.id}::uuid`);
   if (filter?.side === "source")

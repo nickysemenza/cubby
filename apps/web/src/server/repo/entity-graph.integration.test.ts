@@ -1,19 +1,20 @@
 import { taskCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { testShortcode } from "@cubby/schemas/testing";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  entityLink,
   expense,
   image,
   inventoryEntry,
   location,
   product,
   purchase,
-  purchaseProduct,
 } from "~/server/db/schema";
+import { linkValues, ofLinkKind } from "~/server/repo/entity-links";
 
 import { getDb } from "./database-helpers";
 import { getEntityGraph, readEntityGraph } from "./entity-graph";
@@ -289,9 +290,14 @@ describe("entity graph repository", () => {
     );
 
     await getDb(ctx.db)
-      .update(purchaseProduct)
+      .update(entityLink)
       .set({ deletedAt: new Date() })
-      .where(eq(purchaseProduct.purchaseId, purchase.entityId));
+      .where(
+        and(
+          eq(entityLink.fromEntityId, purchase.entityId),
+          ofLinkKind("purchaseProduct"),
+        ),
+      );
     const withoutExplicitEvidence = await read();
     expect(withoutExplicitEvidence.branches[0]?.edgeIds).toHaveLength(1);
     expect(withoutExplicitEvidence.edges).toEqual([
@@ -498,12 +504,11 @@ describe("entity graph repository", () => {
           ),
         ),
       getDb(ctx.db)
-        .insert(purchaseProduct)
+        .insert(entityLink)
         .values(
-          fixturePairs.map(({ productId, purchaseId }) => ({
-            productId,
-            purchaseId,
-          })),
+          fixturePairs.map(({ productId, purchaseId }) =>
+            linkValues("purchaseProduct", purchaseId, productId),
+          ),
         ),
       getDb(ctx.db)
         .insert(expense)

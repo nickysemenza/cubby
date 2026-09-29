@@ -13,11 +13,11 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
+  entityLink,
   expense,
   financialAccount,
   financialTransaction,
   gardenEntry,
-  gardenEntryPlanting,
   image,
   ingredient,
   inventoryEntry,
@@ -35,13 +35,13 @@ import {
   task,
   vendor,
   wish,
-  wishCandidate,
 } from "~/server/db/schema";
 import {
   plantDisplayName,
   plantingDisplayName,
 } from "~/server/garden-guides/windows";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import { solePurchaseForTransaction } from "~/server/repo/financial-transaction-allocations";
 import { categorySummarySql } from "~/server/repo/product-category-sql";
 import { loadAllGtins } from "~/server/repo/product/gtin";
@@ -365,35 +365,44 @@ async function getWishEmbeddingTexts(
           : undefined,
       ),
       columns: { id: true, name: true, notes: true },
-      with: {
-        candidates: {
-          where: notDeleted(wishCandidate),
-          with: {
-            product: {
-              columns: { name: true, manufacturer: true, model: true },
-            },
-          },
-        },
-      },
     },
     options.limit,
   );
   const rows = await unwrapDb(db).query.wish.findMany(queryConfig);
+  const candidates =
+    rows.length === 0
+      ? []
+      : await unwrapDb(db)
+          .select({
+            wishId: entityLink.fromEntityId,
+            name: product.name,
+            manufacturer: product.manufacturer,
+            model: product.model,
+          })
+          .from(entityLink)
+          .innerJoin(product, eq(product.id, entityLink.toEntityId))
+          .where(
+            and(
+              liveLinks("wishCandidate"),
+              inArray(
+                entityLink.fromEntityId,
+                rows.map((row) => row.id),
+              ),
+            ),
+          );
   return rows.map((row) => ({
     entityKind: "wish",
     entityId: row.id,
     embeddingText: buildWishEmbeddingText({
       name: row.name,
       notes: row.notes,
-      candidateTerms: row.candidates.flatMap((candidate) =>
-        candidate.product
-          ? [
-              candidate.product.name,
-              candidate.product.manufacturer,
-              candidate.product.model,
-            ]
-          : [],
-      ),
+      candidateTerms: candidates
+        .filter((candidate) => candidate.wishId === row.id)
+        .flatMap((candidate) => [
+          candidate.name,
+          candidate.manufacturer,
+          candidate.model,
+        ]),
     }),
   }));
 }
@@ -1090,22 +1099,32 @@ async function getGardenEntryEmbeddingTexts(
       },
       with: {
         location: { columns: { name: true } },
-        plantings: {
-          where: notDeleted(gardenEntryPlanting),
-          with: {
-            planting: {
-              columns: { id: true },
-              with: {
-                plant: { columns: { name: true, gardenGuideKey: true } },
-              },
-            },
-          },
-        },
       },
     },
     options.limit,
   );
   const rows = await unwrapDb(db).query.gardenEntry.findMany(queryConfig);
+  const linked =
+    rows.length === 0
+      ? []
+      : await unwrapDb(db)
+          .select({
+            entryId: entityLink.fromEntityId,
+            plantName: plant.name,
+            gardenGuideKey: plant.gardenGuideKey,
+          })
+          .from(entityLink)
+          .innerJoin(planting, eq(planting.id, entityLink.toEntityId))
+          .leftJoin(plant, eq(plant.id, planting.plantId))
+          .where(
+            and(
+              liveLinks("gardenEntryPlanting"),
+              inArray(
+                entityLink.fromEntityId,
+                rows.map((row) => row.id),
+              ),
+            ),
+          );
   return rows.map((row) => ({
     entityKind: "gardenEntry",
     entityId: row.id,
@@ -1116,9 +1135,14 @@ async function getGardenEntryEmbeddingTexts(
       observedOn: row.observedOn,
       locationName: row.location.name,
       plantingName:
-        row.plantings
-          .flatMap((link) =>
-            link.planting ? [plantingDisplayName(link.planting.plant)] : [],
+        linked
+          .filter((link) => link.entryId === row.id)
+          .map((link) =>
+            plantingDisplayName(
+              link.plantName === null
+                ? null
+                : { name: link.plantName, gardenGuideKey: link.gardenGuideKey },
+            ),
           )
           .join(", ") || null,
       note: row.note,

@@ -12,9 +12,10 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { image, product, productComponent } from "~/server/db/schema";
+import { entityLink, image, product } from "~/server/db/schema";
+import { linkValues, liveLinks, ofLinkKind } from "~/server/repo/entity-links";
 
-import { getDb, notDeleted } from "./database-helpers";
+import { getDb } from "./database-helpers";
 import { deleteProducts, updateProduct } from "./product";
 import {
   attachProductComponents,
@@ -36,12 +37,12 @@ describe("product ⟷ product component links (kit composition)", () => {
 
   const livePairs = (parentProductId: ProductId) =>
     getDb(ctx.db)
-      .select({ componentProductId: productComponent.componentProductId })
-      .from(productComponent)
+      .select({ componentProductId: entityLink.toEntityId })
+      .from(entityLink)
       .where(
         and(
-          eq(productComponent.parentProductId, parentProductId),
-          notDeleted(productComponent),
+          eq(entityLink.fromEntityId, parentProductId),
+          liveLinks("productComponent"),
         ),
       );
 
@@ -289,8 +290,11 @@ describe("product ⟷ product component links (kit composition)", () => {
         ctx.actor,
       );
 
-      const before = await getDb(ctx.db).query.productComponent.findMany({
-        where: eq(productComponent.parentProductId, kit.entityId),
+      const before = await getDb(ctx.db).query.entityLink.findMany({
+        where: and(
+          eq(entityLink.fromEntityId, kit.entityId),
+          ofLinkKind("productComponent"),
+        ),
       });
       expect(before).toHaveLength(2);
 
@@ -299,8 +303,11 @@ describe("product ⟷ product component links (kit composition)", () => {
       ).resolves.toMatchObject({ detachedImageKeys: [] });
 
       // The component rows are soft-deleted along with the kit...
-      const after = await getDb(ctx.db).query.productComponent.findMany({
-        where: eq(productComponent.parentProductId, kit.entityId),
+      const after = await getDb(ctx.db).query.entityLink.findMany({
+        where: and(
+          eq(entityLink.fromEntityId, kit.entityId),
+          ofLinkKind("productComponent"),
+        ),
       });
       for (const row of after) {
         expect(row.deletedAt).not.toBeNull();
@@ -337,11 +344,11 @@ describe("product ⟷ product component links (kit composition)", () => {
       );
 
       await expect(
-        getDb(ctx.db).insert(productComponent).values({
-          parentProductId: kit.entityId,
-          componentProductId: part.entityId,
-          quantity: 0,
-        }),
+        getDb(ctx.db)
+          .insert(entityLink)
+          .values(
+            linkValues("productComponent", kit.entityId, part.entityId, 0),
+          ),
         // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
       ).rejects.toThrow();
     });
@@ -358,18 +365,16 @@ describe("product ⟷ product component links (kit composition)", () => {
         ctx.actor,
       );
 
-      await getDb(ctx.db).insert(productComponent).values({
-        parentProductId: kit.entityId,
-        componentProductId: part.entityId,
-        quantity: 1,
-      });
+      await getDb(ctx.db)
+        .insert(entityLink)
+        .values(linkValues("productComponent", kit.entityId, part.entityId, 1));
 
       await expect(
-        getDb(ctx.db).insert(productComponent).values({
-          parentProductId: kit.entityId,
-          componentProductId: part.entityId,
-          quantity: 2,
-        }),
+        getDb(ctx.db)
+          .insert(entityLink)
+          .values(
+            linkValues("productComponent", kit.entityId, part.entityId, 2),
+          ),
         // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
       ).rejects.toThrow();
     });

@@ -76,8 +76,8 @@ const hasAmazonId = (t: Product) => sql`EXISTS (
 // link (the enrichment path a purchase import takes when it later matches
 // this same Product — see `product-identity.md`).
 const hasPurchaseProductLink = (t: Product) => sql`EXISTS (
-  SELECT 1 FROM "PurchaseProduct" dq_pp
-  WHERE dq_pp."productId" = ${t.id} AND dq_pp."deletedAt" IS NULL
+  SELECT 1 FROM "EntityLink" dq_pp
+  WHERE dq_pp."toEntityId" = ${t.id} AND dq_pp."deletedAt" IS NULL AND dq_pp."kind" = 'purchaseProduct'
 )`;
 
 const hasExternalId = (t: Product) => sql`EXISTS (

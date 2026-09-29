@@ -2,6 +2,7 @@ import { GTIN_SOURCE } from "@cubby/schemas/external-id";
 import {
   type LedgerPartyId,
   type ProductId,
+  parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type {
@@ -16,6 +17,7 @@ import type { z } from "zod";
 import type { Database } from "~/server/db";
 import {
   entityAttachment,
+  entityLink,
   expense,
   image,
   inventoryEntry,
@@ -24,11 +26,11 @@ import {
   productCategory,
   productExternalId,
   purchase,
-  purchaseProduct,
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
 import { loadInheritedProductOwners } from "~/server/repo/inventory";
 
@@ -42,9 +44,9 @@ const HAS_LIVE_INVENTORY = sql.raw(`EXISTS (
   WHERE pm_inv."productId" = "Product"."id" AND pm_inv."deletedAt" IS NULL
 )`);
 const HAS_LIVE_PURCHASE_LINK = sql.raw(`(EXISTS (
-  SELECT 1 FROM "PurchaseProduct" pm_pp
-  JOIN "Purchase" pm_pu ON pm_pu."id" = pm_pp."purchaseId" AND pm_pu."deletedAt" IS NULL
-  WHERE pm_pp."productId" = "Product"."id" AND pm_pp."deletedAt" IS NULL
+  SELECT 1 FROM "EntityLink" pm_pp
+  JOIN "Purchase" pm_pu ON pm_pu."id" = pm_pp."fromEntityId" AND pm_pu."deletedAt" IS NULL
+  WHERE pm_pp."toEntityId" = "Product"."id" AND pm_pp."deletedAt" IS NULL AND pm_pp."kind" = 'purchaseProduct'
 ) OR EXISTS (
   SELECT 1 FROM "Expense" pm_e
   JOIN "Purchase" pm_pu ON pm_pu."id" = pm_e."purchaseId" AND pm_pu."deletedAt" IS NULL
@@ -243,18 +245,18 @@ export async function loadProductMatchSides(
         and(inArray(inventoryEntry.productId, ids), notDeleted(inventoryEntry)),
       ),
     client
-      .selectDistinctOn([purchaseProduct.productId], {
-        productId: purchaseProduct.productId,
+      .selectDistinctOn([entityLink.toEntityId], {
+        productId: entityLink.toEntityId,
         purchaseId: purchase.id,
         shortcode: purchase.shortcode,
         date: purchase.date,
         vendor: vendor.name,
         buyerPartyId: vendorAccount.ledgerPartyId,
       })
-      .from(purchaseProduct)
+      .from(entityLink)
       .innerJoin(
         purchase,
-        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
+        and(eq(purchase.id, entityLink.fromEntityId), notDeleted(purchase)),
       )
       .leftJoin(vendor, eq(vendor.id, purchase.vendorId))
       .leftJoin(
@@ -265,12 +267,9 @@ export async function loadProductMatchSides(
         ),
       )
       .where(
-        and(
-          inArray(purchaseProduct.productId, ids),
-          notDeleted(purchaseProduct),
-        ),
+        and(inArray(entityLink.toEntityId, ids), liveLinks("purchaseProduct")),
       )
-      .orderBy(purchaseProduct.productId, desc(purchase.date)),
+      .orderBy(entityLink.toEntityId, desc(purchase.date)),
     client
       .selectDistinctOn([product.id], {
         productId: product.id,
@@ -341,7 +340,10 @@ export async function loadProductMatchSides(
   ]);
 
   const purchaseByProduct = latestPurchaseByProduct(
-    latestPurchases,
+    latestPurchases.map((row) => ({
+      ...row,
+      productId: parseEntityId("product", row.productId),
+    })),
     expensePurchases,
   );
   const inherited = await loadInheritedProductOwners(db, [

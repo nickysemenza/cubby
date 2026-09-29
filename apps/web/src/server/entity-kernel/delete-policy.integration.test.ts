@@ -1,4 +1,8 @@
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import {
+  ENTITY_LINK_KINDS,
+  entityLinkKinds,
+} from "@cubby/schemas/entity-links";
 /**
  * Every declared delete disposition, checked at the database boundary.
  *
@@ -64,6 +68,7 @@ import {
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
 import {
+  entityLink,
   run as runTable,
   expenseAttribution,
   importHunt,
@@ -106,6 +111,7 @@ import {
   getDb,
   insertAndReturn,
 } from "~/server/repo/database-helpers";
+import { linkValues } from "~/server/repo/entity-links";
 import { attachExistingImageToEntity } from "~/server/repo/image";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
@@ -163,11 +169,58 @@ const physical = (edge: IncomingEdge) => {
     columnName: column.name,
     primary,
     softDeletable: "deletedAt" in getTableColumns(table),
+    // An `EntityLink` edge is one link kind's rows of a shared column.
+    scopeSql: edge.scope
+      ? sql`AND s.${sql.identifier(edge.scope.column.name)} = ${edge.scope.value}`
+      : sql``,
+    scopeBare: edge.scope
+      ? sql`AND ${sql.identifier(edge.scope.column.name)} = ${edge.scope.value}`
+      : sql``,
   };
 };
 
 const liveRow = (softDeletable: boolean) =>
   softDeletable ? sql`AND s."deletedAt" IS NULL` : sql``;
+
+/**
+ * Insert one live link of the edge's kind naming `targetId` at the edge's end
+ * and some other live entity of the declared kind at the other end.
+ */
+const insertLinkAt = async (
+  db: Database,
+  edge: IncomingEdge,
+  targetId: string,
+): Promise<boolean> => {
+  const kind = entityLinkKinds.find((value) => value === edge.scope?.value);
+  if (!kind) return false;
+  const declaration = ENTITY_LINK_KINDS[kind];
+  const atFrom = edge.column.name === "fromEntityId";
+  const otherTable =
+    entityManifest[atFrom ? declaration.to : declaration.from].dbTable;
+  if (!otherTable) return false;
+  const [other] = z.array(z.object({ id: z.string() })).parse(
+    (
+      await getDb(db).execute(sql`
+        SELECT o."id"::text AS id FROM ${sql.identifier(otherTable)} o
+        WHERE o."deletedAt" IS NULL AND o."id"::text <> ${targetId}
+        LIMIT 1
+      `)
+    ).rows,
+  );
+  if (!other) return false;
+  return getDb(db)
+    .transaction(async (tx) => {
+      await tx
+        .insert(entityLink)
+        .values(
+          atFrom
+            ? linkValues(kind, targetId, other.id, 1)
+            : linkValues(kind, other.id, targetId, 1),
+        );
+      return true;
+    })
+    .catch(() => false);
+};
 
 /** Live targets of `entity` that `edge` references, excluding `avoid`. */
 const referencedTargets = async (
@@ -175,7 +228,7 @@ const referencedTargets = async (
   entity: EntityKernelEntity,
   edge: IncomingEdge,
 ): Promise<{ id: string; shortcode: string }[]> => {
-  const { tableName, columnName, softDeletable } = physical(edge);
+  const { tableName, columnName, softDeletable, scopeSql } = physical(edge);
   const target = getTableConfig(SHORTCODE_TABLE[entity]).name;
   return idRowsSchema.parse(
     (
@@ -183,7 +236,7 @@ const referencedTargets = async (
         SELECT DISTINCT t."id"::text AS id, t."shortcode" AS shortcode
         FROM ${sql.identifier(tableName)} s
         JOIN ${sql.identifier(target)} t ON t."id"::text = s.${sql.identifier(columnName)}::text
-        WHERE t."deletedAt" IS NULL ${liveRow(softDeletable)}
+        WHERE t."deletedAt" IS NULL ${liveRow(softDeletable)} ${scopeSql}
         ORDER BY 2
       `)
     ).rows,
@@ -195,13 +248,13 @@ const referencingRows = async (
   edge: IncomingEdge,
   targetId: string,
 ) => {
-  const { tableName, columnName } = physical(edge);
+  const { tableName, columnName, scopeSql } = physical(edge);
   return rowsSchema
     .parse(
       (
         await getDb(db).execute(sql`
           SELECT to_jsonb(s.*) AS row FROM ${sql.identifier(tableName)} s
-          WHERE s.${sql.identifier(columnName)}::text = ${targetId}
+          WHERE s.${sql.identifier(columnName)}::text = ${targetId} ${scopeSql}
         `)
       ).rows,
     )
@@ -338,7 +391,8 @@ const pointEdgeAt = async (
   edge: IncomingEdge,
   targetId: string,
 ): Promise<boolean> => {
-  const { tableName, columnName, softDeletable, primary } = physical(edge);
+  const { tableName, columnName, softDeletable, primary, scopeSql } =
+    physical(edge);
   const table = sql.identifier(tableName);
   const column = sql.identifier(columnName);
   const attempt = (statement: SQL) =>
@@ -353,11 +407,12 @@ const pointEdgeAt = async (
       SELECT s.ctid FROM ${table} s
       WHERE s.${column} IS DISTINCT FROM ${targetId}
         ${primary.includes("id") ? sql`AND s."id"::text <> ${targetId}` : sql``}
-        ${liveRow(softDeletable)}
+        ${liveRow(softDeletable)} ${scopeSql}
       LIMIT 1
     )
   `);
   if (repointed) return true;
+  if (edge.scope) return insertLinkAt(db, edge, targetId);
 
   // SAFETY: INCOMING_EDGES is built only from Postgres schema columns.
   const config = getTableConfig((edge.column as PgColumn).table as PgTable);
@@ -484,7 +539,7 @@ const clearBlockers = async (
 ): Promise<boolean> => {
   const own = physical(measured);
   for (const edge of blockEdges) {
-    const { tableName, columnName, softDeletable } = physical(edge);
+    const { tableName, columnName, softDeletable, scopeBare } = physical(edge);
     // A row that also names the target over the measured edge stays.
     const keep =
       tableName === own.tableName
@@ -494,13 +549,13 @@ const clearBlockers = async (
       (
         await getDb(db).execute(sql`
           SELECT to_jsonb(s.*) AS row FROM ${sql.identifier(tableName)} s
-          WHERE ${sql.identifier(columnName)}::text = ${targetId} ${keep}
+          WHERE ${sql.identifier(columnName)}::text = ${targetId} ${keep} ${scopeBare}
           LIMIT 1
         `)
       ).rows,
     );
     if (!row) continue;
-    const where = sql`WHERE ${sql.identifier(columnName)}::text = ${targetId} ${keep}`;
+    const where = sql`WHERE ${sql.identifier(columnName)}::text = ${targetId} ${keep} ${scopeBare}`;
     if (softDeletable) {
       await getDb(db).execute(sql`
         UPDATE ${sql.identifier(tableName)} SET "deletedAt" = now() ${where}

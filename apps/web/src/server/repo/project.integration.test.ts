@@ -7,8 +7,9 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { projectDependency } from "~/server/db/schema";
+import { entityLink } from "~/server/db/schema";
 import { projectCreateFromTasksWorkflow } from "~/server/operations/project.server";
+import { linkValues } from "~/server/repo/entity-links";
 
 import { insertAndReturn } from "./database-helpers";
 import { createExpense } from "./expense";
@@ -272,10 +273,11 @@ describe("project repository", () => {
     );
 
     await expect(
-      insertAndReturn(ctx.db, projectDependency, {
-        projectId: entityId,
-        blockedByProjectId: entityId,
-      }),
+      insertAndReturn(
+        ctx.db,
+        entityLink,
+        linkValues("projectDependency", entityId, entityId),
+      ),
     ).rejects.toMatchObject({ cause: { code: "23514" } });
   });
 

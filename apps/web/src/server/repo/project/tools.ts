@@ -47,11 +47,11 @@ import {
 } from "~/lib/tool-timeline";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
+  entityLink,
   expense,
   inventoryEntry,
   product,
   project,
-  projectToolUsage,
   task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -61,6 +61,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { linkValues, liveLinks } from "~/server/repo/entity-links";
 import {
   effectiveExpenseProjectSql,
   effectiveExpenseTradeSql,
@@ -154,17 +155,17 @@ export async function loadResourceMetrics(
   const [usageRows, costRows] = await Promise.all([
     dbc
       .select({
-        productId: projectToolUsage.productId,
-        projectUseCount: countDistinct(projectToolUsage.projectId),
+        productId: entityLink.toEntityId,
+        projectUseCount: countDistinct(entityLink.fromEntityId),
       })
-      .from(projectToolUsage)
+      .from(entityLink)
       .where(
         and(
-          inArray(projectToolUsage.productId, productIds),
-          notDeleted(projectToolUsage),
+          inArray(entityLink.toEntityId, productIds),
+          liveLinks("projectTool"),
         ),
       )
-      .groupBy(projectToolUsage.productId),
+      .groupBy(entityLink.toEntityId),
     dbc
       .select({
         productId: expense.productId,
@@ -191,9 +192,10 @@ export async function loadResourceMetrics(
   for (const productId of productIds)
     result.set(productId, { ...EMPTY_METRICS });
   for (const row of usageRows) {
-    const current = result.get(row.productId) ?? { ...EMPTY_METRICS };
+    const productId = parseEntityId("product", row.productId);
+    const current = result.get(productId) ?? { ...EMPTY_METRICS };
     current.projectUseCount = Number(row.projectUseCount);
-    result.set(row.productId, current);
+    result.set(productId, current);
   }
   for (const row of costRows) {
     if (!row.productId) continue;
@@ -420,26 +422,26 @@ async function listProjectResources(
   const dbc = getDb(db);
   const rows = await dbc
     .select({
-      productId: projectToolUsage.productId,
+      productId: product.id,
       productCode: product.shortcode,
       productName: product.name,
       manufacturer: product.manufacturer,
       category: reusableCategorySql(),
-      attachedAt: projectToolUsage.createdAt,
+      attachedAt: entityLink.createdAt,
     })
-    .from(projectToolUsage)
+    .from(entityLink)
     .innerJoin(
       product,
-      and(eq(product.id, projectToolUsage.productId), notDeleted(product)),
+      and(eq(product.id, entityLink.toEntityId), notDeleted(product)),
     )
     .where(
       and(
-        eq(projectToolUsage.projectId, projectId),
+        eq(entityLink.fromEntityId, projectId),
         categoryFeatureInSql(
           sql`${product.categoryId}`,
           projectResourceFeatures,
         ),
-        notDeleted(projectToolUsage),
+        liveLinks("projectTool"),
       ),
     )
     .orderBy(asc(product.name));
@@ -510,12 +512,12 @@ async function liveResourceCodes(
 ): Promise<string[]> {
   const rows = await dbc
     .select({ shortcode: product.shortcode })
-    .from(projectToolUsage)
-    .innerJoin(product, eq(product.id, projectToolUsage.productId))
+    .from(entityLink)
+    .innerJoin(product, eq(product.id, entityLink.toEntityId))
     .where(
       and(
-        eq(projectToolUsage.projectId, projectId),
-        notDeleted(projectToolUsage),
+        eq(entityLink.fromEntityId, projectId),
+        liveLinks("projectTool"),
         notDeleted(product),
       ),
     )
@@ -593,15 +595,15 @@ async function findToolTimelineConflicts(
       .where(and(inArray(product.id, productIds), notDeleted(product))),
     dbc
       .select({
-        projectId: projectToolUsage.projectId,
-        productId: projectToolUsage.productId,
+        projectId: entityLink.fromEntityId,
+        productId: entityLink.toEntityId,
       })
-      .from(projectToolUsage)
+      .from(entityLink)
       .where(
         and(
-          inArray(projectToolUsage.projectId, projectIds),
-          inArray(projectToolUsage.productId, productIds),
-          notDeleted(projectToolUsage),
+          inArray(entityLink.fromEntityId, projectIds),
+          inArray(entityLink.toEntityId, productIds),
+          liveLinks("projectTool"),
         ),
       ),
     loadProjectToolPurchaseCosts(dbc, projectIds, productIds),
@@ -656,13 +658,13 @@ async function liveResourceProductIds(
 ): Promise<Set<string>> {
   if (productIds.length === 0) return new Set();
   const rows = await dbc
-    .select({ productId: projectToolUsage.productId })
-    .from(projectToolUsage)
+    .select({ productId: entityLink.toEntityId })
+    .from(entityLink)
     .where(
       and(
-        eq(projectToolUsage.projectId, projectId),
-        inArray(projectToolUsage.productId, [...productIds]),
-        notDeleted(projectToolUsage),
+        eq(entityLink.fromEntityId, projectId),
+        inArray(entityLink.toEntityId, [...productIds]),
+        liveLinks("projectTool"),
       ),
     );
   return new Set(rows.map((row) => row.productId));
@@ -757,7 +759,7 @@ function assertResourcesAttachable(
 }
 
 const PROJECT_RESOURCE_EDGE = {
-  edgeKey: "ProjectToolUsage.productId",
+  edgeKey: "EntityLink[projectTool].to",
   label: "project resource uses",
 } as const;
 
@@ -841,10 +843,14 @@ export async function attachProjectResources(
 
     const before = await liveResourceCodes(tx, projectId);
     const inserted = await tx
-      .insert(projectToolUsage)
-      .values(uniqueProductIds.map((productId) => ({ projectId, productId })))
+      .insert(entityLink)
+      .values(
+        uniqueProductIds.map((productId) =>
+          linkValues("projectTool", projectId, productId),
+        ),
+      )
       .onConflictDoNothing()
-      .returning({ id: projectToolUsage.id });
+      .returning({ id: entityLink.id });
     const after = await liveResourceCodes(tx, projectId);
 
     if (inserted.length > 0) {
@@ -910,16 +916,16 @@ export async function detachProjectResources(
   return withTransaction(db, async (tx) => {
     const before = await liveResourceCodes(tx, projectId);
     const removed = await tx
-      .update(projectToolUsage)
+      .update(entityLink)
       .set({ deletedAt: new Date() })
       .where(
         and(
-          eq(projectToolUsage.projectId, projectId),
-          inArray(projectToolUsage.productId, uniqueProductIds),
-          notDeleted(projectToolUsage),
+          eq(entityLink.fromEntityId, projectId),
+          inArray(entityLink.toEntityId, uniqueProductIds),
+          liveLinks("projectTool"),
         ),
       )
-      .returning({ id: projectToolUsage.id });
+      .returning({ id: entityLink.id });
     const after = await liveResourceCodes(tx, projectId);
 
     if (removed.length > 0) {
@@ -962,16 +968,29 @@ export async function repointProjectUses(
   return withTransaction(db, async (tx) => {
     await assertReusableResource(tx, toProductId, "The destination Product");
 
-    const rows = await tx.query.projectToolUsage.findMany({
-      where: and(
-        inArray(projectToolUsage.productId, [fromProductId, toProductId]),
-        projectIds?.length
-          ? inArray(projectToolUsage.projectId, projectIds)
-          : undefined,
-        notDeleted(projectToolUsage),
-      ),
-      columns: { id: true, productId: true, projectId: true },
-    });
+    const rows = await tx
+      .select({
+        id: entityLink.id,
+        productId: entityLink.toEntityId,
+        projectId: entityLink.fromEntityId,
+      })
+      .from(entityLink)
+      .where(
+        and(
+          inArray(entityLink.toEntityId, [fromProductId, toProductId]),
+          projectIds?.length
+            ? inArray(entityLink.fromEntityId, projectIds)
+            : undefined,
+          liveLinks("projectTool"),
+        ),
+      )
+      .then((links) =>
+        links.map((row) => ({
+          id: row.id,
+          productId: parseEntityId("product", row.productId),
+          projectId: parseEntityId("project", row.projectId),
+        })),
+      );
     const movable = rows.filter((row) => row.productId === fromProductId);
     if (movable.length === 0) return { repointed: 0, alreadyPresent: 0 };
 
@@ -980,9 +999,9 @@ export async function repointProjectUses(
     // records the destination would abort the transaction. This is the same
     // helper `mergeProducts` uses for this exact table.
     const repointed = await foldAssociation(tx, {
-      table: projectToolUsage,
+      table: entityLink,
       column: "productId",
-      repointValues: (productId) => ({ productId }),
+      repointValues: (productId) => ({ toEntityId: productId }),
       softDeleteValues: (deletedAt) => ({ deletedAt }),
       rows,
       keepId: toProductId,
@@ -1029,14 +1048,9 @@ async function liveProjectCodes(
   }
   const rows = await tx
     .select({ shortcode: project.shortcode })
-    .from(projectToolUsage)
-    .innerJoin(project, eq(project.id, projectToolUsage.projectId))
-    .where(
-      and(
-        eq(projectToolUsage.productId, productId),
-        notDeleted(projectToolUsage),
-      ),
-    );
+    .from(entityLink)
+    .innerJoin(project, eq(project.id, entityLink.fromEntityId))
+    .where(and(eq(entityLink.toEntityId, productId), liveLinks("projectTool")));
   return rows.map((row) => row.shortcode).sort();
 }
 
@@ -1141,11 +1155,11 @@ export async function setProjectToolUsage(
   return withTransaction(db, async (tx) => {
     const { productCode } = await assertUsagePair(tx, projectId, productId);
 
-    const existing = await tx.query.projectToolUsage.findFirst({
+    const existing = await tx.query.entityLink.findFirst({
       where: and(
-        eq(projectToolUsage.projectId, projectId),
-        eq(projectToolUsage.productId, productId),
-        notDeleted(projectToolUsage),
+        eq(entityLink.fromEntityId, projectId),
+        eq(entityLink.toEntityId, productId),
+        liveLinks("projectTool"),
       ),
       columns: { id: true },
     });
@@ -1157,15 +1171,15 @@ export async function setProjectToolUsage(
       // conflicting, which is intended — `attachedAt` should reflect the current
       // attachment. Making that index unconditional would break this insert.
       await tx
-        .insert(projectToolUsage)
-        .values({ projectId, productId })
+        .insert(entityLink)
+        .values(linkValues("projectTool", projectId, productId))
         .onConflictDoNothing();
       changed = true;
     } else if (!used && existing) {
       await tx
-        .update(projectToolUsage)
+        .update(entityLink)
         .set({ deletedAt: new Date() })
-        .where(eq(projectToolUsage.id, existing.id));
+        .where(eq(entityLink.id, existing.id));
       changed = true;
     }
 
@@ -1222,19 +1236,16 @@ export async function setProductProjectUses(
 
     const currentRows = await tx
       .select({
-        projectId: projectToolUsage.projectId,
+        projectId: project.id,
         shortcode: project.shortcode,
       })
-      .from(projectToolUsage)
+      .from(entityLink)
       .innerJoin(
         project,
-        and(eq(project.id, projectToolUsage.projectId), notDeleted(project)),
+        and(eq(project.id, entityLink.fromEntityId), notDeleted(project)),
       )
       .where(
-        and(
-          eq(projectToolUsage.productId, productId),
-          notDeleted(projectToolUsage),
-        ),
+        and(eq(entityLink.toEntityId, productId), liveLinks("projectTool")),
       );
     const current = new Set(currentRows.map((row) => row.projectId));
     const desiredSet = new Set(desired);
@@ -1246,20 +1257,24 @@ export async function setProductProjectUses(
 
     if (removals.length > 0) {
       await tx
-        .update(projectToolUsage)
+        .update(entityLink)
         .set({ deletedAt: new Date() })
         .where(
           and(
-            eq(projectToolUsage.productId, productId),
-            inArray(projectToolUsage.projectId, removals),
-            notDeleted(projectToolUsage),
+            eq(entityLink.toEntityId, productId),
+            inArray(entityLink.fromEntityId, removals),
+            liveLinks("projectTool"),
           ),
         );
     }
     if (additions.length > 0) {
       await tx
-        .insert(projectToolUsage)
-        .values(additions.map((projectId) => ({ projectId, productId })))
+        .insert(entityLink)
+        .values(
+          additions.map((projectId) =>
+            linkValues("projectTool", projectId, productId),
+          ),
+        )
         .onConflictDoNothing();
     }
 
@@ -1309,13 +1324,10 @@ export async function suggestProjectTools(
     loadedWindows,
   ] = await Promise.all([
     dbc
-      .select({ productId: projectToolUsage.productId })
-      .from(projectToolUsage)
+      .select({ productId: entityLink.toEntityId })
+      .from(entityLink)
       .where(
-        and(
-          eq(projectToolUsage.projectId, projectId),
-          notDeleted(projectToolUsage),
-        ),
+        and(eq(entityLink.fromEntityId, projectId), liveLinks("projectTool")),
       ),
     dbc
       .select({ trade: effectiveTaskTrade, taskCount: count() })
@@ -1746,20 +1758,15 @@ export async function listProductProjectUses(
       projectName: project.name,
       status: project.status,
       kind: project.kind,
-      attachedAt: projectToolUsage.createdAt,
+      attachedAt: entityLink.createdAt,
     })
-    .from(projectToolUsage)
+    .from(entityLink)
     .innerJoin(
       project,
-      and(eq(project.id, projectToolUsage.projectId), notDeleted(project)),
+      and(eq(project.id, entityLink.fromEntityId), notDeleted(project)),
     )
-    .where(
-      and(
-        eq(projectToolUsage.productId, productId),
-        notDeleted(projectToolUsage),
-      ),
-    )
-    .orderBy(desc(projectToolUsage.createdAt), asc(project.name));
+    .where(and(eq(entityLink.toEntityId, productId), liveLinks("projectTool")))
+    .orderBy(desc(entityLink.createdAt), asc(project.name));
 
   const projectIds = rows.map((row) => row.projectId);
   const [metricsByProduct, purchaseCostByProject, loadedWindows] =

@@ -46,11 +46,10 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
+  entityLink,
   expense,
   product,
-  productComponent,
   purchase,
-  purchaseProduct,
   vendor,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -60,6 +59,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { linkValues, liveLinks } from "~/server/repo/entity-links";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
@@ -171,25 +171,26 @@ const loadComponentCountsByProductId = async (
   if (productIds.length === 0) return counts;
   const rows = await dbc
     .select({
-      parentProductId: productComponent.parentProductId,
+      parentProductId: entityLink.fromEntityId,
       count: count(),
     })
-    .from(productComponent)
+    .from(entityLink)
     .innerJoin(
       product,
-      and(
-        eq(product.id, productComponent.componentProductId),
-        notDeleted(product),
-      ),
+      and(eq(product.id, entityLink.toEntityId), notDeleted(product)),
     )
     .where(
       and(
-        inArray(productComponent.parentProductId, productIds),
-        notDeleted(productComponent),
+        inArray(entityLink.fromEntityId, productIds),
+        liveLinks("productComponent"),
       ),
     )
-    .groupBy(productComponent.parentProductId);
-  for (const row of rows) counts.set(row.parentProductId, Number(row.count));
+    .groupBy(entityLink.fromEntityId);
+  for (const row of rows)
+    counts.set(
+      parseEntityId("product", row.parentProductId),
+      Number(row.count),
+    );
   return counts;
 };
 
@@ -207,16 +208,16 @@ export async function listPurchaseProducts(
 
   const [linkRows, expenseRows] = await Promise.all([
     dbc
-      .select({ ...productColumns, linkAttachedAt: purchaseProduct.createdAt })
-      .from(purchaseProduct)
+      .select({ ...productColumns, linkAttachedAt: entityLink.createdAt })
+      .from(entityLink)
       .innerJoin(
         product,
-        and(eq(product.id, purchaseProduct.productId), notDeleted(product)),
+        and(eq(product.id, entityLink.toEntityId), notDeleted(product)),
       )
       .where(
         and(
-          eq(purchaseProduct.purchaseId, purchaseId),
-          notDeleted(purchaseProduct),
+          eq(entityLink.fromEntityId, purchaseId),
+          liveLinks("purchaseProduct"),
         ),
       ),
     dbc
@@ -273,18 +274,15 @@ export async function listProductPurchases(
 
   const [linkRows, expenseRows] = await Promise.all([
     dbc
-      .select({ ...purchaseColumns, linkAttachedAt: purchaseProduct.createdAt })
-      .from(purchaseProduct)
+      .select({ ...purchaseColumns, linkAttachedAt: entityLink.createdAt })
+      .from(entityLink)
       .innerJoin(
         purchase,
-        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
+        and(eq(purchase.id, entityLink.fromEntityId), notDeleted(purchase)),
       )
       .leftJoin(vendor, liveVendor)
       .where(
-        and(
-          eq(purchaseProduct.productId, productId),
-          notDeleted(purchaseProduct),
-        ),
+        and(eq(entityLink.toEntityId, productId), liveLinks("purchaseProduct")),
       ),
     dbc
       .selectDistinct(purchaseColumns)
@@ -319,12 +317,12 @@ async function liveProductShortcodes(
 ): Promise<string[]> {
   const rows = await dbc
     .select({ shortcode: product.shortcode })
-    .from(purchaseProduct)
-    .innerJoin(product, eq(product.id, purchaseProduct.productId))
+    .from(entityLink)
+    .innerJoin(product, eq(product.id, entityLink.toEntityId))
     .where(
       and(
-        eq(purchaseProduct.purchaseId, purchaseId),
-        notDeleted(purchaseProduct),
+        eq(entityLink.fromEntityId, purchaseId),
+        liveLinks("purchaseProduct"),
         notDeleted(product),
       ),
     )
@@ -339,13 +337,13 @@ async function livePurchaseProductIds(
 ): Promise<Set<string>> {
   if (productIds.length === 0) return new Set();
   const rows = await dbc
-    .select({ productId: purchaseProduct.productId })
-    .from(purchaseProduct)
+    .select({ productId: entityLink.toEntityId })
+    .from(entityLink)
     .where(
       and(
-        eq(purchaseProduct.purchaseId, purchaseId),
-        inArray(purchaseProduct.productId, [...productIds]),
-        notDeleted(purchaseProduct),
+        eq(entityLink.fromEntityId, purchaseId),
+        inArray(entityLink.toEntityId, [...productIds]),
+        liveLinks("purchaseProduct"),
       ),
     );
   return new Set(rows.map((row) => row.productId));
@@ -404,7 +402,7 @@ async function preflightDetachPurchaseProducts(
 }
 
 const PURCHASE_PRODUCT_EDGE = {
-  edgeKey: "PurchaseProduct.productId",
+  edgeKey: "EntityLink[purchaseProduct].to",
   label: "purchase product links",
 } as const;
 
@@ -450,10 +448,14 @@ export async function attachPurchaseProducts(
 
     const before = await liveProductShortcodes(tx, purchaseId);
     const inserted = await tx
-      .insert(purchaseProduct)
-      .values(uniqueProductIds.map((productId) => ({ purchaseId, productId })))
+      .insert(entityLink)
+      .values(
+        uniqueProductIds.map((productId) =>
+          linkValues("purchaseProduct", purchaseId, productId),
+        ),
+      )
       .onConflictDoNothing()
-      .returning({ id: purchaseProduct.id });
+      .returning({ id: entityLink.id });
     const after = await liveProductShortcodes(tx, purchaseId);
 
     if (inserted.length > 0) {
@@ -485,16 +487,16 @@ export async function detachPurchaseProducts(
   return withTransaction(db, async (tx) => {
     const before = await liveProductShortcodes(tx, purchaseId);
     const removed = await tx
-      .update(purchaseProduct)
+      .update(entityLink)
       .set({ deletedAt: new Date() })
       .where(
         and(
-          eq(purchaseProduct.purchaseId, purchaseId),
-          inArray(purchaseProduct.productId, uniqueProductIds),
-          notDeleted(purchaseProduct),
+          eq(entityLink.fromEntityId, purchaseId),
+          inArray(entityLink.toEntityId, uniqueProductIds),
+          liveLinks("purchaseProduct"),
         ),
       )
-      .returning({ id: purchaseProduct.id });
+      .returning({ id: entityLink.id });
     const after = await liveProductShortcodes(tx, purchaseId);
 
     if (removed.length > 0) {

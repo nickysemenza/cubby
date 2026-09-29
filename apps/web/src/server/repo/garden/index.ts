@@ -37,8 +37,9 @@ import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  entityLink,
   gardenEntry,
-  gardenEntryPlanting,
+  plant,
   planting,
   product,
 } from "~/server/db/schema";
@@ -70,6 +71,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
+import { linkValues, liveLinks, ofLinkKind } from "~/server/repo/entity-links";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { getCategoryFeature } from "~/server/repo/product-category";
 import {
@@ -285,22 +287,55 @@ export const getPlanting = async (db: GardenDb, id: PlantingId) => {
   return mapPlanting(row, dataQualities.get(id)!);
 };
 
+/**
+ * Each entry's live planting links, in the shape `mapEntry` reads. The
+ * planting itself is not filtered by liveness: a link to a removed planting
+ * still names it, as the relation read it before links moved to EntityLink.
+ */
+const loadEntryPlantings = async (
+  db: GardenDb,
+  entryIds: readonly string[],
+): Promise<Map<string, GardenEntryWithReferences["plantings"]>> => {
+  const out = new Map<string, GardenEntryWithReferences["plantings"]>();
+  if (entryIds.length === 0) return out;
+  const rows = await unwrapDb(db)
+    .select({
+      entryId: entityLink.fromEntityId,
+      shortcode: planting.shortcode,
+      plantName: plant.name,
+      gardenGuideKey: plant.gardenGuideKey,
+    })
+    .from(entityLink)
+    .innerJoin(planting, eq(planting.id, entityLink.toEntityId))
+    .leftJoin(plant, eq(plant.id, planting.plantId))
+    .where(
+      and(
+        liveLinks("gardenEntryPlanting"),
+        inArray(entityLink.fromEntityId, [...entryIds]),
+      ),
+    );
+  for (const row of rows) {
+    out.set(row.entryId, [
+      ...(out.get(row.entryId) ?? []),
+      {
+        planting: {
+          shortcode: row.shortcode,
+          plant:
+            row.plantName === null
+              ? null
+              : { name: row.plantName, gardenGuideKey: row.gardenGuideKey },
+        },
+      },
+    ]);
+  }
+  return out;
+};
+
 export const getGardenEntry = async (db: GardenDb, id: GardenEntryId) => {
   const row = await unwrapDb(db).query.gardenEntry.findFirst({
     where: and(eq(gardenEntry.id, id), notDeleted(gardenEntry)),
     with: {
       location: { columns: { shortcode: true, name: true } },
-      plantings: {
-        where: notDeleted(gardenEntryPlanting),
-        with: {
-          planting: {
-            columns: { shortcode: true },
-            with: {
-              plant: { columns: { name: true, gardenGuideKey: true } },
-            },
-          },
-        },
-      },
       images: { with: { image: true } },
     },
   });
@@ -309,9 +344,15 @@ export const getGardenEntry = async (db: GardenDb, id: GardenEntryId) => {
       "CONSTRAINT_VIOLATION",
       "The garden entry no longer exists.",
     );
-  const dataQualities = await loadDataQualities(db, "gardenEntry", [id]);
+  const [dataQualities, plantingsByEntry] = await Promise.all([
+    loadDataQualities(db, "gardenEntry", [id]),
+    loadEntryPlantings(db, [id]),
+  ]);
   // SAFETY: `row` was just fetched live by `id`, so its quality was evaluated.
-  return mapEntry(row, dataQualities.get(id)!);
+  return mapEntry(
+    { ...row, plantings: plantingsByEntry.get(id) ?? [] },
+    dataQualities.get(id)!,
+  );
 };
 
 /**
@@ -336,17 +377,22 @@ const replaceGardenEntryPlantings = async (
   const nextIds = [...new Set(resolved)];
   const rows = await unwrapDb(tx)
     .select({
-      id: gardenEntryPlanting.id,
-      plantingId: gardenEntryPlanting.plantingId,
-      deletedAt: gardenEntryPlanting.deletedAt,
-      createdAt: gardenEntryPlanting.createdAt,
+      id: entityLink.id,
+      plantingId: entityLink.toEntityId,
+      deletedAt: entityLink.deletedAt,
+      createdAt: entityLink.createdAt,
     })
-    .from(gardenEntryPlanting)
-    .where(eq(gardenEntryPlanting.gardenEntryId, gardenEntryId))
-    .orderBy(desc(gardenEntryPlanting.createdAt));
+    .from(entityLink)
+    .where(
+      and(
+        ofLinkKind("gardenEntryPlanting"),
+        eq(entityLink.fromEntityId, gardenEntryId),
+      ),
+    )
+    .orderBy(desc(entityLink.createdAt));
   const liveRows = rows.filter((row) => row.deletedAt === null);
   const currentIds = new Set(liveRows.map((row) => row.plantingId));
-  const nextIdSet = new Set(nextIds);
+  const nextIdSet = new Set<string>(nextIds);
   const now = new Date();
 
   const removedIds = liveRows
@@ -354,13 +400,13 @@ const replaceGardenEntryPlantings = async (
     .filter((id) => !nextIdSet.has(id));
   if (removedIds.length > 0) {
     await tx
-      .update(gardenEntryPlanting)
+      .update(entityLink)
       .set({ deletedAt: now, updatedAt: now })
       .where(
         and(
-          eq(gardenEntryPlanting.gardenEntryId, gardenEntryId),
-          inArray(gardenEntryPlanting.plantingId, removedIds),
-          notDeleted(gardenEntryPlanting),
+          eq(entityLink.fromEntityId, gardenEntryId),
+          inArray(entityLink.toEntityId, removedIds),
+          liveLinks("gardenEntryPlanting"),
         ),
       );
   }
@@ -372,14 +418,13 @@ const replaceGardenEntryPlantings = async (
     );
     if (tombstone) {
       await tx
-        .update(gardenEntryPlanting)
+        .update(entityLink)
         .set({ deletedAt: null, updatedAt: now })
-        .where(eq(gardenEntryPlanting.id, tombstone.id));
+        .where(eq(entityLink.id, tombstone.id));
     } else {
-      await tx.insert(gardenEntryPlanting).values({
-        gardenEntryId,
-        plantingId,
-      });
+      await tx
+        .insert(entityLink)
+        .values(linkValues("gardenEntryPlanting", gardenEntryId, plantingId));
     }
   }
 
@@ -387,11 +432,11 @@ const replaceGardenEntryPlantings = async (
     .select({ shortcode: planting.shortcode })
     .from(planting)
     .innerJoin(
-      gardenEntryPlanting,
+      entityLink,
       and(
-        eq(gardenEntryPlanting.plantingId, planting.id),
-        eq(gardenEntryPlanting.gardenEntryId, gardenEntryId),
-        notDeleted(gardenEntryPlanting),
+        eq(entityLink.toEntityId, planting.id),
+        eq(entityLink.fromEntityId, gardenEntryId),
+        liveLinks("gardenEntryPlanting"),
       ),
     )
     .where(notDeleted(planting))
@@ -596,12 +641,12 @@ export const updateGardenEntry = async (
     if (data.plantingIds !== undefined) {
       const beforeRows = await unwrapDb(tx)
         .select({ shortcode: planting.shortcode })
-        .from(gardenEntryPlanting)
-        .innerJoin(planting, eq(planting.id, gardenEntryPlanting.plantingId))
+        .from(entityLink)
+        .innerJoin(planting, eq(planting.id, entityLink.toEntityId))
         .where(
           and(
-            eq(gardenEntryPlanting.gardenEntryId, id),
-            notDeleted(gardenEntryPlanting),
+            eq(entityLink.fromEntityId, id),
+            liveLinks("gardenEntryPlanting"),
             notDeleted(planting),
           ),
         )
@@ -711,10 +756,10 @@ export const plantingList = async (
       ? undefined
       : sql`EXISTS (
           SELECT 1
-          FROM "GardenEntryPlanting" gep
-          JOIN "GardenEntry" ge ON ge."id" = gep."gardenEntryId" AND ge."deletedAt" IS NULL
-          WHERE gep."plantingId" = ${planting.id}
-            AND gep."deletedAt" IS NULL
+          FROM "EntityLink" gep
+          JOIN "GardenEntry" ge ON ge."id" = gep."fromEntityId" AND ge."deletedAt" IS NULL
+          WHERE gep."toEntityId" = ${planting.id}
+            AND gep."deletedAt" IS NULL AND gep."kind" = 'gardenEntryPlanting'
             AND ${shortcodeSetCondition(sql`ge."shortcode"`, filters.gardenEntryId)})`,
   ]);
   return plantingScaffold.list(
@@ -767,12 +812,12 @@ const journalPredicate = async (db: Database, plantingId: PlantingId) => {
     },
   });
   const directEntryIds = unwrapDb(db)
-    .select({ id: gardenEntryPlanting.gardenEntryId })
-    .from(gardenEntryPlanting)
+    .select({ id: entityLink.fromEntityId })
+    .from(entityLink)
     .where(
       and(
-        eq(gardenEntryPlanting.plantingId, plantingId),
-        notDeleted(gardenEntryPlanting),
+        eq(entityLink.toEntityId, plantingId),
+        liveLinks("gardenEntryPlanting"),
       ),
     );
   if (!row || row.locationId === null) {
@@ -783,10 +828,7 @@ const journalPredicate = async (db: Database, plantingId: PlantingId) => {
   // count query does not. Build self-contained id subqueries rather than a
   // correlated predicate against that unstable outer alias.
   const wholeAreaEntry = alias(gardenEntry, "wholeAreaGardenEntry");
-  const wholeAreaLink = alias(
-    gardenEntryPlanting,
-    "wholeAreaGardenEntryPlanting",
-  );
+  const wholeAreaLink = alias(entityLink, "wholeAreaGardenEntryPlanting");
   const start =
     row.sowedOn ??
     row.transplantedOn ??
@@ -802,8 +844,8 @@ const journalPredicate = async (db: Database, plantingId: PlantingId) => {
             .from(wholeAreaLink)
             .where(
               and(
-                eq(wholeAreaLink.gardenEntryId, wholeAreaEntry.id),
-                notDeleted(wholeAreaLink),
+                eq(wholeAreaLink.fromEntityId, wholeAreaEntry.id),
+                liveLinks("gardenEntryPlanting", wholeAreaLink),
               ),
             ),
         ),
@@ -843,12 +885,12 @@ export const gardenEntryList = async (
       ? inArray(
           gardenEntry.id,
           unwrapDb(db)
-            .select({ id: gardenEntryPlanting.gardenEntryId })
-            .from(gardenEntryPlanting)
+            .select({ id: entityLink.fromEntityId })
+            .from(entityLink)
             .where(
               and(
-                inArray(gardenEntryPlanting.plantingId, plantingIds),
-                notDeleted(gardenEntryPlanting),
+                inArray(entityLink.toEntityId, plantingIds),
+                liveLinks("gardenEntryPlanting"),
               ),
             ),
         )
@@ -878,30 +920,25 @@ export const gardenEntryList = async (
           ...page,
           with: {
             location: { columns: { shortcode: true, name: true } },
-            plantings: {
-              where: notDeleted(gardenEntryPlanting),
-              with: {
-                planting: {
-                  columns: { shortcode: true },
-                  with: {
-                    plant: { columns: { name: true, gardenGuideKey: true } },
-                  },
-                },
-              },
-            },
             images: { with: { image: true } },
           },
         }),
       hydrate: async (rows) => {
-        const dataQualities = await loadDataQualities(
-          db,
-          "gardenEntry",
-          rows.map((row) => parseEntityId("gardenEntry", row.id)),
-        );
+        const [dataQualities, plantingsByEntry] = await Promise.all([
+          loadDataQualities(
+            db,
+            "gardenEntry",
+            rows.map((row) => parseEntityId("gardenEntry", row.id)),
+          ),
+          loadEntryPlantings(
+            db,
+            rows.map((row) => row.id),
+          ),
+        ]);
         return withDisplayImages(db, "gardenEntry", rows, (row) =>
           // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
           mapEntry(
-            row,
+            { ...row, plantings: plantingsByEntry.get(row.id) ?? [] },
             dataQualities.get(parseEntityId("gardenEntry", row.id))!,
           ),
         );

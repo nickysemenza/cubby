@@ -21,6 +21,7 @@ import type { AuditEntryInput } from "~/server/repo/audit-log";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted } from "~/server/repo/database-helpers";
 import { recordMergeRedirects } from "~/server/repo/entity-identity";
+import { parseLinkEdgeKey } from "~/server/repo/entity-links";
 import type { RemovableEntity } from "~/server/repo/removal";
 import { cascadeRemoval } from "~/server/repo/removal";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
@@ -105,6 +106,10 @@ export const repointEdge = async <E extends Entity>(
   args: { from: readonly string[]; to: string; liveOnly: boolean },
 ): Promise<string[]> => {
   if (args.from.length === 0) return [];
+  // A link end shares its column with every other link kind and resolves
+  // collisions by its declaration, which a plain column repoint cannot do.
+  if (parseLinkEdgeKey(String(edgeKey)))
+    throw new Error(`${String(edgeKey)} repoints through repointLinkEnd`);
   const column = edgeColumn(entity, edgeKey);
   // SAFETY: Every incoming-edge column is declared on a PostgreSQL table with
   // the `id` and `deletedAt` columns required by merge operations.

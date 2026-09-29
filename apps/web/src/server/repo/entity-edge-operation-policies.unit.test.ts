@@ -83,11 +83,11 @@ describe("product retaining edges", () => {
     "Location.productId",
     "MealFoodEntry.productId",
     "Planting.sourceProductId",
-    "ProductComponent.componentProductId",
-    "ProjectToolUsage.productId",
-    "PurchaseProduct.productId",
+    "EntityLink[productComponent].to",
+    "EntityLink[projectTool].to",
+    "EntityLink[purchaseProduct].to",
     "Task.subjectProductId",
-    "WishCandidate.productId",
+    "EntityLink[wishCandidate].to",
     // A device's linked hardware. Retaining by role (a device is real
     // evidence the product still matters), but — unlike every other entry
     // here — NOT blocking: it's the first retaining edge the policy

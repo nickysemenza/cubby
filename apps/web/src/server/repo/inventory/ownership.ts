@@ -5,12 +5,13 @@ import type {
   PurchaseId,
   VendorAccountId,
 } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { EffectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
+  entityLink,
   expense,
   expenseAttribution,
   financialAccount,
@@ -19,10 +20,10 @@ import {
   inventoryEntry,
   ledgerParty,
   purchase,
-  purchaseProduct,
   vendorAccount,
 } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
 import { sha256Hex } from "~/server/semantic/hash";
 
@@ -108,25 +109,31 @@ const loadSparsePurchaseRows = async (
 ) =>
   await client
     .select({
-      productId: purchaseProduct.productId,
+      productId: entityLink.toEntityId,
       purchaseId: purchase.id,
       purchaseShortcode: purchase.shortcode,
       vendorAccountId: purchase.vendorAccountId,
     })
-    .from(purchaseProduct)
+    .from(entityLink)
     .innerJoin(
       purchase,
       and(
-        eq(purchaseProduct.purchaseId, purchase.id),
+        eq(entityLink.fromEntityId, purchase.id),
         notDeleted(purchase),
         lte(purchase.date, today()),
       ),
     )
     .where(
       and(
-        inArray(purchaseProduct.productId, productIds),
-        notDeleted(purchaseProduct),
+        inArray(entityLink.toEntityId, productIds),
+        liveLinks("purchaseProduct"),
       ),
+    )
+    .then((rows) =>
+      rows.map((row) => ({
+        ...row,
+        productId: parseEntityId("product", row.productId),
+      })),
     );
 
 type SparsePurchaseRow = Awaited<

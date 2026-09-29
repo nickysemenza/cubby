@@ -317,14 +317,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "WishCandidate.wishId", direction: "incoming" },
-          { edge: "WishCandidate.productId", direction: "outgoing" },
+          { edge: "EntityLink[wishCandidate].from", direction: "incoming" },
+          { edge: "EntityLink[wishCandidate].to", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "WishCandidate.productId", direction: "incoming" },
-          { edge: "WishCandidate.wishId", direction: "outgoing" },
+          { edge: "EntityLink[wishCandidate].to", direction: "incoming" },
+          { edge: "EntityLink[wishCandidate].from", direction: "outgoing" },
         ],
       },
     },

@@ -178,13 +178,10 @@ export function translateDatabaseError(
     }
     case "23514": {
       // check_violation
-      if (
-        pg.constraint === "ProjectDependency_no_self_check" ||
-        pg.constraint === "TaskDependency_no_self_check"
-      ) {
+      if (pg.constraint === "EntityLink_no_self_check") {
         return createAppError(
           "SELF_DEPENDENCY",
-          "A dependency cannot point to itself.",
+          "A dependency or component link cannot point to itself.",
           error,
         );
       }

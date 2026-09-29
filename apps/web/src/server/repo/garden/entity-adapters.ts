@@ -6,7 +6,7 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { gardenEntryPlanting, planting } from "~/server/db/schema";
+import { entityLink, planting } from "~/server/db/schema";
 import {
   bulkUpdatedWithSideEffects,
   defineEntityAdapter,
@@ -15,6 +15,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { diffUnorderedIdSet, logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import { bulkPatchEntities } from "~/server/repo/entity-patch";
 import { deleteByPolicy } from "~/server/repo/removal";
 import {
@@ -38,7 +39,7 @@ const plantings = bindShortcodeResolver("planting");
 const entries = bindShortcodeResolver("gardenEntry");
 
 const PLANTING_DELETE_EDGE_POLICY = {
-  "GardenEntryPlanting.plantingId": {
+  "EntityLink[gardenEntryPlanting].to": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -52,7 +53,7 @@ const GARDEN_ENTRY_DELETE_EDGE_POLICY = {
     effect: "soft-delete",
     description: "Garden entry image associations are removed with the entry.",
   },
-  "GardenEntryPlanting.gardenEntryId": {
+  "EntityLink[gardenEntryPlanting].from": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -106,27 +107,29 @@ const entryPlantingSets = async (
   db: Database | DrizzleTransaction,
   ids: readonly PlantingId[],
 ) => {
-  const link = gardenEntryPlanting;
+  const link = entityLink;
   const touched = unwrapDb(db)
-    .select({ id: link.gardenEntryId })
+    .select({ id: link.fromEntityId })
     .from(link)
-    .where(and(inArray(link.plantingId, [...ids]), notDeleted(link)));
+    .where(
+      and(inArray(link.toEntityId, [...ids]), liveLinks("gardenEntryPlanting")),
+    );
   return unwrapDb(db)
     .select({
-      gardenEntryId: link.gardenEntryId,
-      plantingId: link.plantingId,
+      gardenEntryId: link.fromEntityId,
+      plantingId: link.toEntityId,
       shortcode: planting.shortcode,
     })
     .from(link)
-    .innerJoin(planting, eq(planting.id, link.plantingId))
+    .innerJoin(planting, eq(planting.id, link.toEntityId))
     .where(
       and(
-        inArray(link.gardenEntryId, touched),
-        notDeleted(link),
+        inArray(link.fromEntityId, touched),
+        liveLinks("gardenEntryPlanting"),
         notDeleted(planting),
       ),
     )
-    .orderBy(asc(link.gardenEntryId), asc(planting.shortcode));
+    .orderBy(asc(link.fromEntityId), asc(planting.shortcode));
 };
 
 /** Each affected entry's `plantingIds` set loses the deleted plantings. */

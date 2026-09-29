@@ -12,7 +12,7 @@ import type { ExpenseId, ProjectId } from "@cubby/schemas/identifiers";
 import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { projectDependency, task } from "~/server/db/schema";
+import { task } from "~/server/db/schema";
 import {
   dependencyIdsFor,
   getDb,
@@ -238,13 +238,5 @@ export async function projectDependencyIds(
   blockedBy: Map<ProjectId, ProjectId[]>;
   blocking: Map<ProjectId, ProjectId[]>;
 }> {
-  return dependencyIdsFor(
-    db,
-    {
-      ownColumn: projectDependency.projectId,
-      blockedByColumn: projectDependency.blockedByProjectId,
-      entity: "project",
-    },
-    projectIds,
-  );
+  return dependencyIdsFor(db, "project", projectIds);
 }

@@ -8,13 +8,14 @@ import { and, eq } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import {
+  entityLink,
+  planting,
   product,
   productExternalId,
-  projectToolUsage,
-  planting,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { notDeleted } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import {
   getCategoryFeature,
   resolveProductCategory,
@@ -57,11 +58,8 @@ export async function assertProductCategoryChange(
     requiredFeature,
   );
   const feature = await getCategoryFeature(tx, categoryId);
-  const projectUsage = await tx.query.projectToolUsage.findFirst({
-    where: and(
-      eq(projectToolUsage.productId, productId),
-      notDeleted(projectToolUsage),
-    ),
+  const projectUsage = await tx.query.entityLink.findFirst({
+    where: and(eq(entityLink.toEntityId, productId), liveLinks("projectTool")),
     columns: { id: true },
   });
   if (projectUsage && !isProjectResourceFeature(feature)) {

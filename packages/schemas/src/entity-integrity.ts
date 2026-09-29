@@ -17,8 +17,8 @@ import { entitySchema } from "./entity-core";
 export const edgeKeySchema = z
   .string()
   .regex(
-    /^[A-Z][A-Za-z0-9_]*\.[a-z][A-Za-z0-9_]*$/,
-    "expected `Table.column`, e.g. `PurchaseImage.imageId`",
+    /^(?:[A-Z][A-Za-z0-9_]*\.[a-z][A-Za-z0-9_]*|EntityLink\[[a-z][A-Za-z0-9]*\]\.(?:from|to))$/,
+    "expected `Table.column` (e.g. `PurchaseImage.imageId`) or `EntityLink[kind].from|to`",
   )
   // The test fixture generator can't synthesize a string matching a regex, so
   // hand it one real edge key. See `mockValueHint` in lib/test/mock-schema.ts.

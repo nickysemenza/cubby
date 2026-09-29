@@ -374,10 +374,10 @@ async function getSearchDocumentSources(
         (CASE ge."kind" WHEN 'observation' THEN 'Note' WHEN 'harvest' THEN 'Harvest' ELSE 'Move' END)
           || ' · ' || to_char(ge."observedOn", 'YYYY-MM-DD') || ' · ' || l."name",
         (SELECT string_agg(COALESCE(p."name", 'Unknown plant'), ', ' ORDER BY pl."shortcode")
-         FROM "GardenEntryPlanting" gep
-         JOIN "Planting" pl ON pl."id" = gep."plantingId" AND pl."deletedAt" IS NULL
+         FROM "EntityLink" gep
+         JOIN "Planting" pl ON pl."id" = gep."toEntityId" AND pl."deletedAt" IS NULL
          LEFT JOIN "Plant" p ON p."id" = pl."plantId" AND p."deletedAt" IS NULL
-         WHERE gep."gardenEntryId" = ge."id" AND gep."deletedAt" IS NULL),
+         WHERE gep."fromEntityId" = ge."id" AND gep."deletedAt" IS NULL AND gep."kind" = 'gardenEntryPlanting'),
         ge."kind", ARRAY[]::text[], ARRAY[l."name", ge."harvestAmount"]::text[]
       FROM "GardenEntry" ge
       JOIN "Location" l ON l."id" = ge."locationId" AND l."deletedAt" IS NULL

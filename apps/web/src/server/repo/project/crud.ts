@@ -12,7 +12,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { expense, project, projectDependency, task } from "~/server/db/schema";
+import { expense, project, task } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditChangeMap,
@@ -71,17 +71,17 @@ export const PROJECT_DELETE_EDGE_POLICY = {
     description:
       "A project with live sub-projects can't be deleted — delete or reparent them first.",
   },
-  "ProjectDependency.projectId": {
-    code: "hard-delete-dependency",
-    effect: "hard-delete",
+  "EntityLink[projectDependency].from": {
+    code: "soft-delete-dependency",
+    effect: "soft-delete",
     description:
-      "Blocks/blocked-by dependency rows naming the project are removed outright.",
+      "Blocks/blocked-by dependency links naming the project are soft-deleted with it.",
   },
-  "ProjectDependency.blockedByProjectId": {
-    code: "hard-delete-dependency",
-    effect: "hard-delete",
+  "EntityLink[projectDependency].to": {
+    code: "soft-delete-dependency",
+    effect: "soft-delete",
     description:
-      "Blocks/blocked-by dependency rows naming the project are removed outright.",
+      "Blocks/blocked-by dependency links naming the project are soft-deleted with it.",
   },
   "Task.projectId": {
     code: "block-live-task",
@@ -101,7 +101,7 @@ export const PROJECT_DELETE_EDGE_POLICY = {
     description:
       "Image associations are soft-deleted with the project, and each file is\n      deleted too unless something else still references it.",
   },
-  "ProjectToolUsage.projectId": {
+  "EntityLink[projectTool].from": {
     code: "soft-delete-association",
     effect: "soft-delete",
     description:
@@ -347,17 +347,7 @@ export const updateProject = async (
     if (resolvedBlockedByIds !== undefined) {
       await replaceDependencyEdges(
         tx,
-        projectDependency,
-        {
-          ownColumn: projectDependency.projectId,
-          blockedByColumn: projectDependency.blockedByProjectId,
-          buildRow: (projectId, blockedByProjectId) => ({
-            projectId,
-            blockedByProjectId,
-          }),
-          entityTable: project,
-          entity: "project",
-        },
+        { entityTable: project, entity: "project" },
         id,
         resolvedBlockedByIds,
       );

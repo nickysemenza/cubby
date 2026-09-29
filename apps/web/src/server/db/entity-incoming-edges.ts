@@ -20,9 +20,9 @@ import {
   type ShortcodeEntity,
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
-import type { AnyColumn } from "drizzle-orm";
+import { type AnyColumn, eq, type SQL } from "drizzle-orm";
 
-import type { EntityEdge } from "./entity-edges";
+import type { EdgeScope, EntityEdge } from "./entity-edges";
 import { ENTITY_EDGES } from "./entity-edges";
 
 export interface IncomingEdge {
@@ -37,6 +37,8 @@ export interface IncomingEdge {
   unconstrained?: true;
   /** Free-text justification, for an edge whose key alone doesn't explain itself. */
   note?: string;
+  /** Restricts `column`'s table to this edge's rows; see `EntityEdge.scope`. */
+  scope?: EdgeScope;
 }
 
 /** Drop an `EntityEdge`'s stable-semantics fields, keeping only the physical facts. */
@@ -52,6 +54,7 @@ function projectIncomingEdges<T extends Record<string, EntityEdge>>(
         column: edge.column,
         unconstrained: edge.unconstrained,
         note: edge.note,
+        scope: edge.scope,
       },
     ]),
   ) as { [K in keyof T]: IncomingEdge };
@@ -139,3 +142,7 @@ export const EDGE_KEY_TARGET_ENTITY: ReadonlyMap<string, ShortcodeEntity> =
       ),
     ),
   );
+
+/** An edge's `scope` restriction as a WHERE term, when it has one. */
+export const edgeScopeWhere = (edge: { scope?: EdgeScope }): SQL | undefined =>
+  edge.scope ? eq(edge.scope.column, edge.scope.value) : undefined;

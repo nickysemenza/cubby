@@ -16,12 +16,13 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  entityLink,
   financialTransaction,
   ingredient,
   product,
-  productComponent,
   recipe,
 } from "~/server/db/schema";
+import { linkValues } from "~/server/repo/entity-links";
 
 import {
   taxonomyId,
@@ -217,11 +218,11 @@ describe("problems — orphaned products", () => {
         ctx.actor,
       ),
     ]);
-    await getDb(ctx.db).insert(productComponent).values({
-      parentProductId: kit.entityId,
-      componentProductId: component.entityId,
-      quantity: 1,
-    });
+    await getDb(ctx.db)
+      .insert(entityLink)
+      .values(
+        linkValues("productComponent", kit.entityId, component.entityId, 1),
+      );
 
     const ids = (await findFastProblems(ctx.db)).orphanedProducts.map(
       (row) => row.id,

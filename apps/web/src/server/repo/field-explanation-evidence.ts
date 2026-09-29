@@ -8,6 +8,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
   entityAttachment,
+  entityLink,
   expense,
   financialAccount,
   financialTransaction,
@@ -16,7 +17,6 @@ import {
   meal,
   mealRecipe,
   product,
-  productComponent,
   purchase,
   recipe,
   recipeSection,
@@ -29,6 +29,7 @@ import {
   notDeleted,
   unwrapDb,
 } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 
 const SOURCE_LIMIT = 25;
 const QUERY_LIMIT = SOURCE_LIMIT + 1;
@@ -93,21 +94,21 @@ async function loadProductComponentEvidence(
     .select({
       shortcode: component.shortcode,
       name: component.name,
-      quantity: productComponent.quantity,
+      quantity: entityLink.quantity,
       deletedAt: component.deletedAt,
     })
-    .from(productComponent)
-    .innerJoin(owner, eq(owner.id, productComponent.parentProductId))
+    .from(entityLink)
+    .innerJoin(owner, eq(owner.id, entityLink.fromEntityId))
     // The canonical scalar counts a live edge even if its target was deleted.
-    .innerJoin(component, eq(component.id, productComponent.componentProductId))
+    .innerJoin(component, eq(component.id, entityLink.toEntityId))
     .where(
       and(
         eq(owner.shortcode, shortcode),
         notDeleted(owner),
-        notDeleted(productComponent),
+        liveLinks("productComponent"),
       ),
     )
-    .orderBy(asc(component.name), asc(productComponent.id))
+    .orderBy(asc(component.name), asc(entityLink.id))
     .limit(QUERY_LIMIT);
   return sourcesFromRows(rows, (row) => ({
     label: "Component relationship",

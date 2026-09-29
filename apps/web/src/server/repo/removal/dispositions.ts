@@ -32,12 +32,20 @@ import {
   type ImageShortcode,
   parseEntityRef,
 } from "@cubby/schemas/identifiers";
-import { and, getTableColumns, inArray, notInArray } from "drizzle-orm";
+import {
+  and,
+  getTableColumns,
+  inArray,
+  notInArray,
+  type SQL,
+} from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+import { upperFirst } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import {
+  edgeScopeWhere,
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
@@ -45,6 +53,7 @@ import { entityAttachment } from "~/server/db/schema";
 import { createAppError, createBlockedError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted, withTransactionOn } from "~/server/repo/database-helpers";
+import { parseLinkEdgeKey, repointLinkEnd } from "~/server/repo/entity-links";
 import { countByTarget, impact } from "~/server/repo/impact";
 import type { RemovableEntity } from "~/server/repo/removal/core";
 import { type ChildCascade, removeEntity } from "~/server/repo/removal/entity";
@@ -85,6 +94,8 @@ type EdgePhysical = {
   /** The column's Drizzle property name, which `.set()` keys by. */
   property: string;
   softDeletable: boolean;
+  /** The edge's rows within `table`, when the table carries several edges. */
+  scope: SQL | undefined;
 };
 
 const physicalEdges = <E extends RemovableEntity>(
@@ -119,6 +130,7 @@ const physicalEdges = <E extends RemovableEntity>(
         column,
         property,
         softDeletable: "deletedAt" in columns,
+        scope: edgeScopeWhere(edge),
       };
     })
     .sort((a, b) => rank(a.key) - rank(b.key));
@@ -133,10 +145,13 @@ const sourceEntityOf = (table: PgTable): AuditableEntity | null =>
   ) ?? null;
 
 const liveWhere = (edge: EdgePhysical) =>
-  edge.softDeletable
-    ? // SAFETY: `softDeletable` checked the table has a `deletedAt` column.
-      notDeleted(edge.table as PgTable & { deletedAt: PgColumn })
-    : undefined;
+  and(
+    edge.softDeletable
+      ? // SAFETY: `softDeletable` checked the table has a `deletedAt` column.
+        notDeleted(edge.table as PgTable & { deletedAt: PgColumn })
+      : undefined,
+    edge.scope,
+  );
 
 /**
  * Refuse when a block edge still has live referencing rows, naming every
@@ -157,7 +172,10 @@ const assertNotBlocked = async <E extends RemovableEntity>(
     if (edge.disposition.effect !== "block") continue;
     const byTargetId = await countByTarget(tx, edge.table, edge.column, ids, {
       includeDeleted: !edge.softDeletable,
-      extraWhere: edge.table === own ? notInArray(own.id, [...ids]) : undefined,
+      extraWhere: and(
+        edge.scope,
+        edge.table === own ? notInArray(own.id, [...ids]) : undefined,
+      ),
     });
     if (Object.values(byTargetId).some((n) => n > 0))
       blockers.push({ edge, byTargetId });
@@ -285,17 +303,26 @@ const applyDispositions = async <E extends RemovableEntity>(
         if (edge.table === own) break;
         const hard =
           edge.disposition.effect === "hard-delete" || !edge.softDeletable;
+        const link = parseLinkEdgeKey(edge.key);
         children.push(
           hard
-            ? { table: edge.table, parentColumns: [edge.column], mode: "hard" }
+            ? {
+                table: edge.table,
+                parentColumns: [edge.column],
+                mode: "hard",
+                where: edge.scope,
+              }
             : {
                 // SAFETY: `softDeletable` checked the `deletedAt` column.
                 table: edge.table as PgTable & { deletedAt: PgColumn },
                 parentColumns: [edge.column],
+                where: edge.scope,
                 auditKey:
                   edge.table === entityAttachment
                     ? "cascadedImages"
-                    : `cascaded${edge.key.split(".")[0]}`,
+                    : link
+                      ? `cascaded${upperFirst(link.kind)}Links`
+                      : `cascaded${edge.key.split(".")[0]}`,
               },
         );
         break;
@@ -444,6 +471,20 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
       continue;
     }
     if (edge.disposition.effect === "block") continue;
+    const link = parseLinkEdgeKey(edge.key);
+    if (
+      link &&
+      (edge.disposition.effect === "repoint" ||
+        edge.disposition.effect === "move-dedupe")
+    ) {
+      const moved = await repointLinkEnd(tx, {
+        ...link,
+        keepId: args.keepId,
+        loserIds: args.loserIds,
+      });
+      repointed[edge.key] = moved.moved;
+      continue;
+    }
     if (edge.disposition.effect !== "repoint")
       throw new Error(
         `${edge.key}: a ${edge.disposition.effect} merge edge needs an override`,

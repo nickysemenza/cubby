@@ -12,7 +12,7 @@ import type {
   ProductId,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ProblemItem } from "@cubby/schemas/problems";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { isMiscProduct } from "@cubby/shared";
@@ -41,9 +41,9 @@ import {
   cookbook,
   device,
   entityAttachment,
+  entityLink,
   expense,
   image,
-  runTarget,
   ingredient,
   inventoryEntry,
   location,
@@ -51,19 +51,17 @@ import {
   photoGroupProposal,
   planting,
   product,
-  productComponent,
   productExternalId,
   productUnitMappings,
   project,
-  projectToolUsage,
-  purchaseProduct,
   recipe,
   recipeSection,
   recipeSectionIngredient,
+  runTarget,
   task,
-  wishCandidate,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { canonicalLabelKey } from "~/server/repo/label-canonical";
 import {
@@ -151,27 +149,24 @@ const PRODUCT_RETAINING_NOT_EXISTS = {
           ),
         ),
     ),
-  "ProjectToolUsage.productId": (dbClient) =>
+  "EntityLink[projectTool].to": (dbClient) =>
     notExists(
       dbClient
         .select({ id: sql`1` })
-        .from(projectToolUsage)
+        .from(entityLink)
         .where(
-          and(
-            eq(projectToolUsage.productId, product.id),
-            notDeleted(projectToolUsage),
-          ),
+          and(eq(entityLink.toEntityId, product.id), liveLinks("projectTool")),
         ),
     ),
-  "PurchaseProduct.productId": (dbClient) =>
+  "EntityLink[purchaseProduct].to": (dbClient) =>
     notExists(
       dbClient
         .select({ id: sql`1` })
-        .from(purchaseProduct)
+        .from(entityLink)
         .where(
           and(
-            eq(purchaseProduct.productId, product.id),
-            notDeleted(purchaseProduct),
+            eq(entityLink.toEntityId, product.id),
+            liveLinks("purchaseProduct"),
           ),
         ),
     ),
@@ -187,15 +182,15 @@ const PRODUCT_RETAINING_NOT_EXISTS = {
           ),
         ),
     ),
-  "WishCandidate.productId": (dbClient) =>
+  "EntityLink[wishCandidate].to": (dbClient) =>
     notExists(
       dbClient
         .select({ id: sql`1` })
-        .from(wishCandidate)
+        .from(entityLink)
         .where(
           and(
-            eq(wishCandidate.productId, product.id),
-            notDeleted(wishCandidate),
+            eq(entityLink.toEntityId, product.id),
+            liveLinks("wishCandidate"),
           ),
         ),
     ),
@@ -213,15 +208,15 @@ const PRODUCT_RETAINING_NOT_EXISTS = {
         .from(cookbook)
         .where(and(eq(cookbook.productId, product.id), notDeleted(cookbook))),
     ),
-  "ProductComponent.componentProductId": (dbClient) =>
+  "EntityLink[productComponent].to": (dbClient) =>
     notExists(
       dbClient
         .select({ id: sql`1` })
-        .from(productComponent)
+        .from(entityLink)
         .where(
           and(
-            eq(productComponent.componentProductId, product.id),
-            notDeleted(productComponent),
+            eq(entityLink.toEntityId, product.id),
+            liveLinks("productComponent"),
           ),
         ),
     ),
@@ -277,11 +272,11 @@ export const findOrphanedProducts = async (
         notExists(
           dbClient
             .select({ id: sql`1` })
-            .from(productComponent)
+            .from(entityLink)
             .where(
               and(
-                eq(productComponent.parentProductId, product.id),
-                notDeleted(productComponent),
+                eq(entityLink.fromEntityId, product.id),
+                liveLinks("productComponent"),
               ),
             ),
         ),
@@ -379,24 +374,31 @@ export const findToolsUsedOutsideOwnership = async (
 
   const edges = await dbClient
     .select({
-      projectId: projectToolUsage.projectId,
+      projectId: entityLink.fromEntityId,
       projectShortcode: project.shortcode,
       projectName: project.name,
-      productId: projectToolUsage.productId,
+      productId: entityLink.toEntityId,
       productShortcode: product.shortcode,
       productName: product.name,
       manufacturer: product.manufacturer,
     })
-    .from(projectToolUsage)
+    .from(entityLink)
     .innerJoin(
       project,
-      and(eq(project.id, projectToolUsage.projectId), notDeleted(project)),
+      and(eq(project.id, entityLink.fromEntityId), notDeleted(project)),
     )
     .innerJoin(
       product,
-      and(eq(product.id, projectToolUsage.productId), notDeleted(product)),
+      and(eq(product.id, entityLink.toEntityId), notDeleted(product)),
     )
-    .where(notDeleted(projectToolUsage));
+    .where(liveLinks("projectTool"))
+    .then((rows) =>
+      rows.map((row) => ({
+        ...row,
+        projectId: parseEntityId("project", row.projectId),
+        productId: parseEntityId("product", row.productId),
+      })),
+    );
   if (edges.length === 0) return [];
 
   const [loadedWindows, ownership] = await Promise.all([

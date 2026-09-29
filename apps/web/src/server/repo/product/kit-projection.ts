@@ -78,12 +78,12 @@ export const MAX_KIT_PROJECTION_DEPTH = 4;
  */
 const liveSiblingQuantitySum = (parentExpr: string) =>
   `(SELECT sum(ksib."quantity")
-      FROM "ProductComponent" ksib
+      FROM "EntityLink" ksib
       JOIN "Product" ksibp
-        ON ksibp."id" = ksib."componentProductId"
+        ON ksibp."id" = ksib."toEntityId"
        AND ksibp."deletedAt" IS NULL
-     WHERE ksib."parentProductId" = ${parentExpr}
-       AND ksib."deletedAt" IS NULL)`;
+     WHERE ksib."fromEntityId" = ${parentExpr}
+       AND ksib."deletedAt" IS NULL AND ksib."kind" = 'productComponent')`;
 
 /**
  * The recursive term. One copy, shared by every projection in every consumer:
@@ -91,17 +91,17 @@ const liveSiblingQuantitySum = (parentExpr: string) =>
  * than aspirational.
  */
 const KIT_ANCESTOR_STEP = `SELECT ka.target,
-           kpc."parentProductId",
+           kpc."fromEntityId",
            ka."costWeight" * kpc."quantity"::numeric
-             / NULLIF(${liveSiblingQuantitySum(`kpc."parentProductId"`)}, 0),
+             / NULLIF(${liveSiblingQuantitySum(`kpc."fromEntityId"`)}, 0),
            ka."unitWeight" * kpc."quantity",
            ka.depth + 1
       FROM kit_anc ka
-      JOIN "ProductComponent" kpc
-        ON kpc."componentProductId" = ka."productId"
-       AND kpc."deletedAt" IS NULL
+      JOIN "EntityLink" kpc
+        ON kpc."toEntityId" = ka."productId"
+       AND kpc."deletedAt" IS NULL AND kpc."kind" = 'productComponent'
       JOIN "Product" kparent
-        ON kparent."id" = kpc."parentProductId"
+        ON kparent."id" = kpc."fromEntityId"
        AND kparent."deletedAt" IS NULL
      WHERE ka.depth < ${MAX_KIT_PROJECTION_DEPTH}`;
 

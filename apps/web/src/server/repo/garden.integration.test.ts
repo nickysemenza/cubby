@@ -4,10 +4,11 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
-import { gardenEntry, gardenEntryPlanting, planting } from "~/server/db/schema";
+import { entityLink, gardenEntry, planting } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { getAuditLog } from "~/server/repo/audit-log";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { getDb } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import {
   createGardenEntry,
   createPlanting,
@@ -426,7 +427,7 @@ describe("garden workflows", () => {
     );
     expect(result.affectedEdges).toContainEqual(
       expect.objectContaining({
-        edge: "GardenEntryPlanting.plantingId",
+        edge: "EntityLink[gardenEntryPlanting].to",
         effect: "soft-delete",
         changed: 1,
       }),
@@ -449,16 +450,16 @@ describe("garden workflows", () => {
       action: "update",
       changes: { plantingIds: { to: [retained.id] } },
     });
-    const liveLinks = await getDb(ctx.db)
-      .select({ plantingId: gardenEntryPlanting.plantingId })
-      .from(gardenEntryPlanting)
+    const liveRows = await getDb(ctx.db)
+      .select({ plantingId: entityLink.toEntityId })
+      .from(entityLink)
       .where(
         and(
-          eq(gardenEntryPlanting.gardenEntryId, entryId!),
-          notDeleted(gardenEntryPlanting),
+          eq(entityLink.fromEntityId, entryId!),
+          liveLinks("gardenEntryPlanting"),
         ),
       );
-    expect(liveLinks).toHaveLength(1);
+    expect(liveRows).toHaveLength(1);
     const refreshedSearchText = await getSearchDocumentEmbeddingText(
       ctx.db,
       "gardenEntry",

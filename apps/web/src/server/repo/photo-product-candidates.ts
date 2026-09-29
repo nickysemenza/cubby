@@ -47,9 +47,9 @@ const HAS_PHOTO_IMPORT = sql.raw(`EXISTS (
     AND pc_r."purpose" = 'photo_inventory'
 )`);
 const HAS_PURCHASE = sql.raw(`EXISTS (
-  SELECT 1 FROM "PurchaseProduct" pc_pp
-  JOIN "Purchase" pc_p ON pc_p."id" = pc_pp."purchaseId" AND pc_p."deletedAt" IS NULL
-  WHERE pc_pp."productId" = "Product"."id" AND pc_pp."deletedAt" IS NULL
+  SELECT 1 FROM "EntityLink" pc_pp
+  JOIN "Purchase" pc_p ON pc_p."id" = pc_pp."fromEntityId" AND pc_p."deletedAt" IS NULL
+  WHERE pc_pp."toEntityId" = "Product"."id" AND pc_pp."deletedAt" IS NULL AND pc_pp."kind" = 'purchaseProduct'
 ) OR EXISTS (
   SELECT 1 FROM "Expense" pc_e
   JOIN "Purchase" pc_p ON pc_p."id" = pc_e."purchaseId" AND pc_p."deletedAt" IS NULL

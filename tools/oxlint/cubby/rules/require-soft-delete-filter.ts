@@ -256,7 +256,13 @@ function scanDrizzleExistsCalls(text: string): SoftDeleteViolation[] {
     const queried = body.match(tablePattern);
     if (!queried?.[1]) continue;
     if (hasOptOut(call.index)) continue;
-    if (body.includes("notDeleted") || body.includes("deletedAt")) continue;
+    // `liveLinks(kind)` is the EntityLink live-row filter (kind + deletedAt).
+    if (
+      body.includes("notDeleted") ||
+      body.includes("deletedAt") ||
+      body.includes("liveLinks(")
+    )
+      continue;
 
     violations.push({
       start: call.index,

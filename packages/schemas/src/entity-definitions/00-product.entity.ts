@@ -1991,14 +1991,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "ProjectToolUsage.productId", direction: "incoming" },
-          { edge: "ProjectToolUsage.projectId", direction: "outgoing" },
+          { edge: "EntityLink[projectTool].to", direction: "incoming" },
+          { edge: "EntityLink[projectTool].from", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "ProjectToolUsage.projectId", direction: "incoming" },
-          { edge: "ProjectToolUsage.productId", direction: "outgoing" },
+          { edge: "EntityLink[projectTool].from", direction: "incoming" },
+          { edge: "EntityLink[projectTool].to", direction: "outgoing" },
         ],
       },
     },
@@ -2068,17 +2068,20 @@ export default defineEntity({
           provenance: {
             kind: "local-path",
             steps: [
-              { edge: "PurchaseProduct.productId", direction: "incoming" },
+              { edge: "EntityLink[purchaseProduct].to", direction: "incoming" },
               {
-                edge: "PurchaseProduct.purchaseId",
+                edge: "EntityLink[purchaseProduct].from",
                 direction: "outgoing",
               },
             ],
           },
           inverse: {
             steps: [
-              { edge: "PurchaseProduct.purchaseId", direction: "incoming" },
-              { edge: "PurchaseProduct.productId", direction: "outgoing" },
+              {
+                edge: "EntityLink[purchaseProduct].from",
+                direction: "incoming",
+              },
+              { edge: "EntityLink[purchaseProduct].to", direction: "outgoing" },
             ],
           },
         },
@@ -2169,14 +2172,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "WishCandidate.productId", direction: "incoming" },
-          { edge: "WishCandidate.wishId", direction: "outgoing" },
+          { edge: "EntityLink[wishCandidate].to", direction: "incoming" },
+          { edge: "EntityLink[wishCandidate].from", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "WishCandidate.wishId", direction: "incoming" },
-          { edge: "WishCandidate.productId", direction: "outgoing" },
+          { edge: "EntityLink[wishCandidate].from", direction: "incoming" },
+          { edge: "EntityLink[wishCandidate].to", direction: "outgoing" },
         ],
       },
     },
@@ -2221,9 +2224,9 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "ProductComponent.parentProductId", direction: "incoming" },
+          { edge: "EntityLink[productComponent].from", direction: "incoming" },
           {
-            edge: "ProductComponent.componentProductId",
+            edge: "EntityLink[productComponent].to",
             direction: "outgoing",
           },
         ],
@@ -2231,10 +2234,10 @@ export default defineEntity({
       inverse: {
         steps: [
           {
-            edge: "ProductComponent.componentProductId",
+            edge: "EntityLink[productComponent].to",
             direction: "incoming",
           },
-          { edge: "ProductComponent.parentProductId", direction: "outgoing" },
+          { edge: "EntityLink[productComponent].from", direction: "outgoing" },
         ],
       },
       mutation: {
@@ -2264,17 +2267,17 @@ export default defineEntity({
         kind: "local-path",
         steps: [
           {
-            edge: "ProductComponent.componentProductId",
+            edge: "EntityLink[productComponent].to",
             direction: "incoming",
           },
-          { edge: "ProductComponent.parentProductId", direction: "outgoing" },
+          { edge: "EntityLink[productComponent].from", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "ProductComponent.parentProductId", direction: "incoming" },
+          { edge: "EntityLink[productComponent].from", direction: "incoming" },
           {
-            edge: "ProductComponent.componentProductId",
+            edge: "EntityLink[productComponent].to",
             direction: "outgoing",
           },
         ],

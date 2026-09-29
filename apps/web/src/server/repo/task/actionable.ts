@@ -72,14 +72,10 @@ import { and, asc, ne } from "drizzle-orm";
 import { householdLocalDate } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
-import {
-  project,
-  projectDependency,
-  task,
-  taskDependency,
-} from "~/server/db/schema";
+import { entityLink, project, task } from "~/server/db/schema";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import {
   type EntityRef,
   lookupShortcodes,
@@ -319,11 +315,12 @@ export async function listActionableTasks(
     }),
     getDb(db)
       .select({
-        taskId: taskDependency.taskId,
-        blockedByTaskId: taskDependency.blockedByTaskId,
+        taskId: entityLink.fromEntityId,
+        blockedByTaskId: entityLink.toEntityId,
       })
-      .from(taskDependency)
-      .orderBy(asc(taskDependency.createdAt), asc(taskDependency.id)),
+      .from(entityLink)
+      .where(liveLinks("taskDependency"))
+      .orderBy(asc(entityLink.createdAt), asc(entityLink.id)),
     getDb(db)
       .select({
         id: project.id,
@@ -335,11 +332,12 @@ export async function listActionableTasks(
       .where(and(notDeleted(project), ne(project.status, "done"))),
     getDb(db)
       .select({
-        projectId: projectDependency.projectId,
-        blockedByProjectId: projectDependency.blockedByProjectId,
+        projectId: entityLink.fromEntityId,
+        blockedByProjectId: entityLink.toEntityId,
       })
-      .from(projectDependency)
-      .orderBy(asc(projectDependency.createdAt), asc(projectDependency.id)),
+      .from(entityLink)
+      .where(liveLinks("projectDependency"))
+      .orderBy(asc(entityLink.createdAt), asc(entityLink.id)),
     // ALL live projects (any status) — just enough to walk `parentProjectId`
     // up from a task's project; done-ness is checked separately against
     // `projectsById` per ancestor (see module doc comment).

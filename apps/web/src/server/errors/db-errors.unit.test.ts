@@ -91,13 +91,13 @@ describe("translateDatabaseError", () => {
       cause: Object.assign(new Error("check violation"), {
         code: "23514",
         constraint,
-        table: "TaskDependency",
+        table: "EntityLink",
       }),
     });
 
-  it("maps dependency self-edge checks to SELF_DEPENDENCY", () => {
+  it("maps link self-edge checks to SELF_DEPENDENCY", () => {
     expect(
-      translateDatabaseError(checkViolation("TaskDependency_no_self_check")),
+      translateDatabaseError(checkViolation("EntityLink_no_self_check")),
     ).toMatchObject({ reason: "SELF_DEPENDENCY" });
   });
 });

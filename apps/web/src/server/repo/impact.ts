@@ -41,9 +41,9 @@ type Db = DrizzleClient | DrizzleTransaction;
  * Count rows per target id for one incoming edge.
  *
  * `notDeleted` is applied unless the caller opts out — a soft-deleted row still
- * exists, and counting it would report cascade work that will not happen. The
- * two hard-delete-only source tables (`ProjectDependency`, `TaskDependency`)
- * are the only legitimate reason to pass `includeDeleted`.
+ * exists, and counting it would report cascade work that will not happen. A
+ * source table with no `deletedAt` (a hard-delete-only child) is the only
+ * legitimate reason to pass `includeDeleted`.
  */
 export async function countByTarget(
   db: Db,
@@ -55,8 +55,8 @@ export async function countByTarget(
   if (ids.length === 0) return {};
   const conditions: (SQL | undefined)[] = [inArray(column, [...ids])];
   if (!opts.includeDeleted) {
-    // Guarded rather than assumed: `ProjectDependency`/`TaskDependency` are
-    // hard-delete-only and have no column to filter on.
+    // Guarded rather than assumed: a hard-delete-only child table has no
+    // column to filter on.
     const deletedAt = Object.entries(getTableColumns(table)).find(
       ([columnName]) => columnName === "deletedAt",
     )?.[1];

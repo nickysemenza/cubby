@@ -5,6 +5,7 @@ import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import {
+  edgeScopeWhere,
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
@@ -75,6 +76,7 @@ export async function executeDeleteWithEffects<
           return [
             countByTarget(getDb(transactionDb), table, column, ids, {
               includeDeleted,
+              extraWhere: edgeScopeWhere(incoming),
             }).then(
               (counts) =>
                 [

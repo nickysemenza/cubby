@@ -1035,9 +1035,9 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "ProjectDependency.projectId", direction: "incoming" },
+          { edge: "EntityLink[projectDependency].from", direction: "incoming" },
           {
-            edge: "ProjectDependency.blockedByProjectId",
+            edge: "EntityLink[projectDependency].to",
             direction: "outgoing",
           },
         ],
@@ -1045,10 +1045,10 @@ export default defineEntity({
       inverse: {
         steps: [
           {
-            edge: "ProjectDependency.blockedByProjectId",
+            edge: "EntityLink[projectDependency].to",
             direction: "incoming",
           },
-          { edge: "ProjectDependency.projectId", direction: "outgoing" },
+          { edge: "EntityLink[projectDependency].from", direction: "outgoing" },
         ],
       },
     },
@@ -1061,14 +1061,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "ProjectToolUsage.projectId", direction: "incoming" },
-          { edge: "ProjectToolUsage.productId", direction: "outgoing" },
+          { edge: "EntityLink[projectTool].from", direction: "incoming" },
+          { edge: "EntityLink[projectTool].to", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "ProjectToolUsage.productId", direction: "incoming" },
-          { edge: "ProjectToolUsage.projectId", direction: "outgoing" },
+          { edge: "EntityLink[projectTool].to", direction: "incoming" },
+          { edge: "EntityLink[projectTool].from", direction: "outgoing" },
         ],
       },
       mutation: {

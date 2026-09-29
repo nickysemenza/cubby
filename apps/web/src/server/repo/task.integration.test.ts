@@ -6,11 +6,12 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { auditLog, taskDependency } from "~/server/db/schema";
+import { auditLog, entityLink } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import { taskBulkReorderWorkflow } from "~/server/operations/task.server";
 import { getDb } from "~/server/repo/database-helpers";
+import { linkValues } from "~/server/repo/entity-links";
 import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocument,
@@ -279,10 +280,9 @@ describe("task repository — listActionableTasks", () => {
     );
 
     await expect(
-      getDb(ctx.db).insert(taskDependency).values({
-        taskId: entityId,
-        blockedByTaskId: entityId,
-      }),
+      getDb(ctx.db)
+        .insert(entityLink)
+        .values(linkValues("taskDependency", entityId, entityId)),
     ).rejects.toMatchObject({ cause: { code: "23514" } });
   });
 });
@@ -402,12 +402,12 @@ describe("task kernel — bulkUpdate", () => {
           changed: 1,
         },
         {
-          edge: "TaskDependency.taskId",
+          edge: "EntityLink[taskDependency].from",
           effect: "hard-delete",
           changed: 0,
         },
         {
-          edge: "TaskDependency.blockedByTaskId",
+          edge: "EntityLink[taskDependency].to",
           effect: "hard-delete",
           changed: 0,
         },

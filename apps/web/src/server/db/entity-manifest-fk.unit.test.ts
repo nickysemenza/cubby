@@ -1,5 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { entityRelationshipSchema } from "@cubby/schemas/entity-integrity";
+import {
+  ENTITY_LINK_KINDS,
+  entityLinkEdgeKey,
+  entityLinkKinds,
+} from "@cubby/schemas/entity-links";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
@@ -358,6 +363,18 @@ interface IntrospectedEdge {
   targetEntity: Entity | undefined;
 }
 
+/** Which `EntityLink` end a composite FK binds, if it is one of the two. */
+function linkEndOfFk(
+  sourceTableName: string,
+  columns: readonly { name: string }[],
+): "from" | "to" | null {
+  if (sourceTableName !== "EntityLink") return null;
+  const names = columns.map((column) => column.name);
+  if (names.includes("fromEntityId")) return "from";
+  if (names.includes("toEntityId")) return "to";
+  return null;
+}
+
 /** Every FK column in schema.ts, source table included (join tables too). */
 function introspectFkEdges(): IntrospectedEdge[] {
   const edges: IntrospectedEdge[] = [];
@@ -367,6 +384,22 @@ function introspectFkEdges(): IntrospectedEdge[] {
     for (const fk of getTableConfig(table).foreignKeys) {
       const ref = fk.reference();
       const targetTableName = getTableConfig(ref.foreignTable).name;
+      // `EntityLink`'s two composite FKs to `Entity(id, kind)` carry one edge
+      // per link kind and end; the row's kind (CHECKed from the declaration)
+      // fixes which entity table each lands on.
+      const linkEnd = linkEndOfFk(sourceTableName, ref.columns);
+      if (linkEnd) {
+        for (const kind of entityLinkKinds) {
+          const targetEntity = ENTITY_LINK_KINDS[kind][linkEnd];
+          edges.push({
+            key: entityLinkEdgeKey(kind, linkEnd),
+            sourceEntity,
+            targetTableName: entityManifest[targetEntity].dbTable ?? "",
+            targetEntity,
+          });
+        }
+        continue;
+      }
       const targetEntity = ENTITY_BY_TABLE.get(targetTableName);
       for (const column of ref.columns) {
         edges.push({
@@ -571,6 +604,7 @@ describe("relationship provenance", () => {
 
   /** The table a step's edge lives ON — the left half of its `Table.column` key. */
   const sourceTableOf = (edgeKey: string): string => {
+    if (edgeKey.startsWith("EntityLink[")) return "EntityLink";
     const [table] = edgeKey.split(".");
     return table ?? "";
   };

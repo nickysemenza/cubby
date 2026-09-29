@@ -24,6 +24,8 @@ interface EdgeSpec {
    */
   targetTables: readonly string[];
   sourceSoftDeletable: boolean;
+  /** `EntityLink` edges match only their own link kind's rows. */
+  scope?: { column: string; value: string };
 }
 
 interface TraversalHop {
@@ -81,6 +83,9 @@ const edgeIndex = (): ReadonlyMap<string, EdgeSpec> => {
         sourceSoftDeletable: config.columns.some(
           (candidate) => candidate.name === "deletedAt",
         ),
+        scope: edge.scope
+          ? { column: edge.scope.column.name, value: edge.scope.value }
+          : undefined,
       });
     }
   }
@@ -156,7 +161,10 @@ function edgeCondition(
     WHERE attributed."expenseId" = ${sql.raw(`${sourceAlias}."id"`)}
       AND attributed."projectId" = ${target}
   )`;
-  return sql`${sql.raw(`${sourceAlias}."${edge.sourceColumn}"`)} = ${target}`;
+  const matches = sql`${sql.raw(`${sourceAlias}."${edge.sourceColumn}"`)} = ${target}`;
+  return edge.scope
+    ? sql`${matches} AND ${sql.raw(`${sourceAlias}."${edge.scope.column}"`)} = ${edge.scope.value}`
+    : matches;
 }
 
 const outgoingTarget = (edge: EdgeSpec, to: Entity | undefined): string => {

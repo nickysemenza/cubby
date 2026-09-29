@@ -5,17 +5,18 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { projectToolUsage } from "~/server/db/schema";
+import { entityLink } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import {
   projectRepointUsesWorkflow,
   projectSetToolUsageWorkflow,
 } from "~/server/operations/project.server";
+import { liveLinks } from "~/server/repo/entity-links";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { taxonomyShortcode } from "../../../tooling/product-category-fixtures";
-import { getDb, notDeleted } from "./database-helpers";
+import { getDb } from "./database-helpers";
 import { deleteProducts } from "./product";
 import { createProject, deleteProjects } from "./project";
 import { attachProjectResources, repointProjectUses } from "./project/tools";
@@ -98,14 +99,14 @@ describe("project reusable resources", () => {
         ctx.actor,
       ),
     ).resolves.toEqual({ repointed: 1, alreadyPresent: 0 });
-    const live = await getDb(ctx.db).query.projectToolUsage.findMany({
+    const live = await getDb(ctx.db).query.entityLink.findMany({
       where: and(
-        eq(projectToolUsage.projectId, project.entityId),
-        notDeleted(projectToolUsage),
+        eq(entityLink.fromEntityId, project.entityId),
+        liveLinks("projectTool"),
       ),
-      columns: { productId: true },
+      columns: { toEntityId: true },
     });
-    expect(live).toEqual([{ productId: target.entityId }]);
+    expect(live).toEqual([{ toEntityId: target.entityId }]);
     await expect(resources("detach", target.id)).resolves.toMatchObject({
       result: { changed: 1 },
     });
@@ -246,14 +247,14 @@ describe("repointProjectUses", () => {
   };
 
   const liveProjectIdsFor = async (productEntityId: ProductId) => {
-    const rows = await getDb(ctx.db).query.projectToolUsage.findMany({
+    const rows = await getDb(ctx.db).query.entityLink.findMany({
       where: and(
-        eq(projectToolUsage.productId, productEntityId),
-        notDeleted(projectToolUsage),
+        eq(entityLink.toEntityId, productEntityId),
+        liveLinks("projectTool"),
       ),
-      columns: { projectId: true },
+      columns: { fromEntityId: true },
     });
-    return rows.map((row) => row.projectId).sort();
+    return rows.map((row) => row.fromEntityId).sort();
   };
 
   it("moves every live use and unblocks the source's delete", async () => {

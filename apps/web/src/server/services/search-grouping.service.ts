@@ -103,13 +103,13 @@ async function loadCandidateRelations(
           WHEN 'purchase' THEN (
             SELECT CASE
               WHEN count(pp.id) = 1 AND count(p.id) = 1
-                THEN (array_agg(pp."productId"))[1]
+                THEN (array_agg(pp."toEntityId"))[1]
             END
             FROM "Purchase" purchase
-            LEFT JOIN "PurchaseProduct" pp
-              ON pp."purchaseId" = purchase.id AND pp."deletedAt" IS NULL
+            LEFT JOIN "EntityLink" pp
+              ON pp."fromEntityId" = purchase.id AND pp."deletedAt" IS NULL AND pp."kind" = 'purchaseProduct'
             LEFT JOIN "Product" p
-              ON p.id = pp."productId" AND p."deletedAt" IS NULL
+              ON p.id = pp."toEntityId" AND p."deletedAt" IS NULL
             WHERE purchase.id = refs."entityId" AND purchase."deletedAt" IS NULL
           )
           ELSE NULL
@@ -186,17 +186,17 @@ async function loadComponentPlacements(
     componentEdgeSchema,
     sql`
       WITH requested("productId") AS (VALUES ${values})
-      SELECT pc."parentProductId"::text AS "parentProductId",
-        pc."componentProductId"::text AS "componentProductId",
+      SELECT pc."fromEntityId"::text AS "parentProductId",
+        pc."toEntityId"::text AS "componentProductId",
         pc.quantity AS "componentQuantity"
-      FROM "ProductComponent" pc
-      JOIN requested r ON r."productId" = pc."parentProductId"
+      FROM "EntityLink" pc
+      JOIN requested r ON r."productId" = pc."fromEntityId"
       JOIN "Product" parent
-        ON parent.id = pc."parentProductId" AND parent."deletedAt" IS NULL
+        ON parent.id = pc."fromEntityId" AND parent."deletedAt" IS NULL
       JOIN "Product" component
-        ON component.id = pc."componentProductId" AND component."deletedAt" IS NULL
-      WHERE pc."deletedAt" IS NULL
-      ORDER BY pc."parentProductId", component.name, pc."componentProductId"
+        ON component.id = pc."toEntityId" AND component."deletedAt" IS NULL
+      WHERE pc."deletedAt" IS NULL AND pc."kind" = 'productComponent'
+      ORDER BY pc."fromEntityId", component.name, pc."toEntityId"
     `,
   );
   const componentProductIds = [

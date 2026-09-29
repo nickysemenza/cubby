@@ -30,16 +30,17 @@ import { sql, and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
+  entityLink,
   expense,
   inventoryEntry,
   location,
   product,
   purchase,
-  purchaseProduct,
   vendor,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import {
   getLocationCoverImageUrlsByLocationIds,
   updateLocation,
@@ -180,17 +181,17 @@ const loadPurchasesByProductId = async (
         ),
       ),
     client
-      .select({ productId: purchaseProduct.productId, ...purchaseColumns })
-      .from(purchaseProduct)
+      .select({ productId: entityLink.toEntityId, ...purchaseColumns })
+      .from(entityLink)
       .innerJoin(
         purchase,
-        and(eq(purchase.id, purchaseProduct.purchaseId), notDeleted(purchase)),
+        and(eq(purchase.id, entityLink.fromEntityId), notDeleted(purchase)),
       )
       .leftJoin(vendor, liveVendor)
       .where(
         and(
-          notDeleted(purchaseProduct),
-          inArray(purchaseProduct.productId, productIds),
+          liveLinks("purchaseProduct"),
+          inArray(entityLink.toEntityId, productIds),
         ),
       ),
   ]);

@@ -67,9 +67,10 @@ import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
-import { projectDependency, taskDependency } from "~/server/db/schema";
+import { entityLink } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { findDirectedDependencyCycles } from "~/server/repo/database-helpers/dependency-graph";
+import { liveLinks } from "~/server/repo/entity-links";
 import { lookupShortcodes } from "~/server/repo/shortcode-resolver";
 
 /** Cap on returned rows per edge — a pathological backlog can't blow up the response. */
@@ -87,6 +88,8 @@ interface EdgeAuditSpec {
   targetTableName: string;
   /** Whether the source table itself has a `deletedAt` column to guard on. */
   sourceSoftDeletable: boolean;
+  /** `EntityLink` edges read only their own link kind's rows. */
+  scope: { column: string; value: string } | null;
 }
 
 /**
@@ -137,7 +140,18 @@ function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
         );
       }
 
-      const derivedKey = `${sourceTableName}.${sourceColumnName}`;
+      // A scoped (`EntityLink`) edge is keyed by its link kind and end; its
+      // column must be that end's column on the link table.
+      const linkEnd =
+        sourceColumnName === "fromEntityId"
+          ? "from"
+          : sourceColumnName === "toEntityId"
+            ? "to"
+            : null;
+      const derivedKey =
+        edge.scope && sourceTableName === "EntityLink" && linkEnd
+          ? `EntityLink[${edge.scope.value}].${linkEnd}`
+          : `${sourceTableName}.${sourceColumnName}`;
       if (derivedKey !== edgeKey) {
         throw new Error(
           `INCOMING_EDGES key "${edgeKey}" does not match its column's actual table/column ` +
@@ -167,6 +181,9 @@ function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
         sourceIdColumnName,
         targetTableName,
         sourceSoftDeletable,
+        scope: edge.scope
+          ? { column: edge.scope.column.name, value: edge.scope.value }
+          : null,
       });
     }
   }
@@ -195,6 +212,7 @@ function detailBranch(spec: EdgeAuditSpec): SQL {
       ON t.id = s.${sql.identifier(spec.sourceColumnName)}
     WHERE t."deletedAt" IS NOT NULL
     ${spec.sourceSoftDeletable ? sql`AND s."deletedAt" IS NULL` : sql``}
+    ${scopeFilter(spec)}
     LIMIT ${ROW_CAP}
   )`;
 }
@@ -209,7 +227,14 @@ function countBranch(spec: EdgeAuditSpec): SQL {
       ON t.id = s.${sql.identifier(spec.sourceColumnName)}
     WHERE t."deletedAt" IS NOT NULL
     ${spec.sourceSoftDeletable ? sql`AND s."deletedAt" IS NULL` : sql``}
+    ${scopeFilter(spec)}
   `;
+}
+
+function scopeFilter(spec: EdgeAuditSpec): SQL {
+  return spec.scope
+    ? sql`AND s.${sql.identifier(spec.scope.column)} = ${spec.scope.value}`
+    : sql``;
 }
 
 function describeViolation(
@@ -322,20 +347,12 @@ async function dependencyCyclePaths(
   db: Database,
   entity: "project" | "task",
 ): Promise<string[][]> {
-  const rows =
-    entity === "project"
-      ? await getDb(db)
-          .select({
-            from: projectDependency.projectId,
-            to: projectDependency.blockedByProjectId,
-          })
-          .from(projectDependency)
-      : await getDb(db)
-          .select({
-            from: taskDependency.taskId,
-            to: taskDependency.blockedByTaskId,
-          })
-          .from(taskDependency);
+  const rows = await getDb(db)
+    .select({ from: entityLink.fromEntityId, to: entityLink.toEntityId })
+    .from(entityLink)
+    .where(
+      liveLinks(entity === "project" ? "projectDependency" : "taskDependency"),
+    );
   return findDirectedDependencyCycles(
     rows.map((row) => ({ from: String(row.from), to: String(row.to) })),
   );

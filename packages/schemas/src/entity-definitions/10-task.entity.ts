@@ -919,14 +919,14 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "TaskDependency.taskId", direction: "incoming" },
-          { edge: "TaskDependency.blockedByTaskId", direction: "outgoing" },
+          { edge: "EntityLink[taskDependency].from", direction: "incoming" },
+          { edge: "EntityLink[taskDependency].to", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "TaskDependency.blockedByTaskId", direction: "incoming" },
-          { edge: "TaskDependency.taskId", direction: "outgoing" },
+          { edge: "EntityLink[taskDependency].to", direction: "incoming" },
+          { edge: "EntityLink[taskDependency].from", direction: "outgoing" },
         ],
       },
     },

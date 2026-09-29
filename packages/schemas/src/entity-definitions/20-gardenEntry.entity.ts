@@ -403,14 +403,20 @@ export default defineEntity({
       provenance: {
         kind: "local-path",
         steps: [
-          { edge: "GardenEntryPlanting.gardenEntryId", direction: "incoming" },
-          { edge: "GardenEntryPlanting.plantingId", direction: "outgoing" },
+          {
+            edge: "EntityLink[gardenEntryPlanting].from",
+            direction: "incoming",
+          },
+          { edge: "EntityLink[gardenEntryPlanting].to", direction: "outgoing" },
         ],
       },
       inverse: {
         steps: [
-          { edge: "GardenEntryPlanting.plantingId", direction: "incoming" },
-          { edge: "GardenEntryPlanting.gardenEntryId", direction: "outgoing" },
+          { edge: "EntityLink[gardenEntryPlanting].to", direction: "incoming" },
+          {
+            edge: "EntityLink[gardenEntryPlanting].from",
+            direction: "outgoing",
+          },
         ],
       },
     },

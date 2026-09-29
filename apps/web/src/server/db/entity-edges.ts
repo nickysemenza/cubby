@@ -71,6 +71,13 @@
 
 import type { Entity } from "@cubby/schemas/entity";
 import type { EdgeLiveness, EdgeRole } from "@cubby/schemas/entity-integrity";
+import {
+  ENTITY_LINK_KINDS,
+  entityLinkEdgeKey,
+  type EntityLinkKind,
+  type EntityLinkKindDeclaration,
+  entityLinkKinds,
+} from "@cubby/schemas/entity-links";
 import type { AnyColumn } from "drizzle-orm";
 
 import {
@@ -79,6 +86,7 @@ import {
   cookbook,
   device,
   entityAttachment,
+  entityLink,
   expense,
   expenseAttribution,
   financialAccount,
@@ -90,7 +98,6 @@ import {
   imageDescriptionCorrection,
   imageProcessingJob,
   imageSighting,
-  gardenEntryPlanting,
   runFinding,
   importHunt,
   importPreparedOrder,
@@ -121,17 +128,13 @@ import {
   photoGroupProposal,
   product,
   productCategory,
-  productComponent,
   productConversionCoverage,
   productMatchCandidate,
   productExternalId,
   productUnitMappings,
   project,
-  projectDependency,
-  projectToolUsage,
   purchase,
   purchasePaymentEvidence,
-  purchaseProduct,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -139,9 +142,7 @@ import {
   planting,
   statementRow,
   task,
-  taskDependency,
   vendorAccount,
-  wishCandidate,
 } from "./schema";
 
 /** `${pgTable name}.${column name}` — e.g. `"EntityAttachment.imageId"`. */
@@ -173,6 +174,19 @@ export interface EntityEdge {
   unconstrained?: true;
   /** Free-text justification, for an edge whose key alone doesn't explain itself. */
   note?: string;
+  /**
+   * The rows of `column`'s table that belong to this edge, when the table
+   * carries several edges in one column. Every `EntityLink` edge is scoped to
+   * its link kind (`kind = 'productComponent'`): `toEntityId` alone would
+   * match a product's purchase, tool, wish, and component links at once.
+   * Every consumer that builds SQL from `column` must AND this in.
+   */
+  scope?: EdgeScope;
+}
+
+export interface EdgeScope {
+  column: AnyColumn;
+  value: string;
 }
 
 /**
@@ -190,6 +204,73 @@ type WellKeyed<T extends Record<string, EntityEdge>> = {
 
 function edges<T extends Record<string, EntityEdge>>(t: T & WellKeyed<T>): T {
   return t;
+}
+
+type LinkDeclaration = typeof ENTITY_LINK_KINDS;
+
+/**
+ * The two incoming edges every link kind contributes, keyed by
+ * `entityLinkEdgeKey`: `.from` is incoming at the owning entity, `.to` at the
+ * other end. Each keeps its declaration's literal `role`, which
+ * `PRODUCT_EDGE_ROLES` selects retaining edges by.
+ */
+type LinkEdgesOf<E extends Entity> = {
+  [
+    K in EntityLinkKind as LinkDeclaration[K]["from"] extends E
+      ? `EntityLink[${K}].from`
+      : never
+  ]: Omit<EntityEdge, "role"> & {
+    role: LinkDeclaration[K]["fromEnd"]["role"];
+  };
+} & {
+  [
+    K in EntityLinkKind as LinkDeclaration[K]["to"] extends E
+      ? `EntityLink[${K}].to`
+      : never
+  ]: Omit<EntityEdge, "role"> & {
+    role: LinkDeclaration[K]["toEnd"]["role"];
+  };
+};
+
+/** `entity`'s incoming `EntityLink` edges, generated from `ENTITY_LINK_KINDS`. */
+function linkEdgesFor<E extends Entity>(entity: E): LinkEdgesOf<E> {
+  const entries = entityLinkKinds.flatMap((kind) => {
+    const declaration: EntityLinkKindDeclaration = ENTITY_LINK_KINDS[kind];
+    const scope = { column: entityLink.kind, value: kind };
+    const ends = [
+      {
+        end: "from",
+        at: declaration.from,
+        column: entityLink.fromEntityId,
+        meaning: declaration.fromEnd,
+      },
+      {
+        end: "to",
+        at: declaration.to,
+        column: entityLink.toEntityId,
+        meaning: declaration.toEnd,
+      },
+    ] as const;
+    return ends
+      .filter((candidate) => candidate.at === entity)
+      .map(
+        ({ end, column, meaning }) =>
+          [
+            entityLinkEdgeKey(kind, end),
+            {
+              column,
+              scope,
+              role: meaning.role,
+              label: meaning.label,
+              description: meaning.description,
+              liveness: meaning.liveness,
+            } satisfies EntityEdge,
+          ] as const,
+      );
+  });
+  // SAFETY: the entries are exactly the ends whose endpoint kind is `entity`,
+  // keyed and typed as `LinkEdgesOf<E>` spells out.
+  return Object.fromEntries(entries) as LinkEdgesOf<E>;
 }
 
 export const ENTITY_EDGES = {
@@ -550,175 +631,138 @@ export const ENTITY_EDGES = {
       liveness: { kind: "must-target-live" },
     },
   }),
-  product: edges({
-    "RunTarget.entityId": {
-      column: runTarget.entityId,
-      role: "history",
-      label: "targeted import runs",
-      description:
-        "A no-op validation or enrichment target preserves the Product it examined.",
-      liveness: { kind: "must-target-live" },
-    },
-    "MealFoodEntry.productId": {
-      column: mealFoodEntry.productId,
-      role: "reference",
-      label: "meal food entries",
-      description:
-        "A recorded product amount whose nutrition is recalculated from the current product source while its entered quantity remains fixed.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ProductExternalId.productId": {
-      column: productExternalId.productId,
-      role: "metadata",
-      label: "external ids",
-      description:
-        "An external identifier (e.g. an ASIN) recorded against this product; says nothing about whether the product was ever owned.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ProductUnitMappings.productId": {
-      column: productUnitMappings.productId,
-      role: "metadata",
-      label: "unit mappings",
-      description:
-        "A hand-entered conversion (volume ↔ weight ↔ price) for this product; authored data, not evidence of purchase.",
-      liveness: { kind: "must-target-live" },
-    },
-    "InventoryEntry.productId": {
-      column: inventoryEntry.productId,
-      role: "acquisition",
-      label: "inventory entries",
-      description:
-        "A shelf or bin count of this product currently on hand — proof it was actually acquired, not just cataloged.",
-      liveness: { kind: "must-target-live" },
-    },
-    "EntityAttachment.entityId": {
-      column: entityAttachment.entityId,
-      role: "media",
-      label: "product photos",
-      description:
-        "A photo or manual attachment for this product; says nothing about ownership.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Expense.productId": {
-      column: expense.productId,
-      role: "acquisition",
-      label: "expenses",
-      description:
-        "A spend-ledger line recording money spent acquiring this product — the source of its net cost and owned/sold window; an orphaned product would silently corrupt that derivation with no restore path.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Task.subjectProductId": {
-      column: task.subjectProductId,
-      role: "history",
-      label: "tasks referencing them",
-      description:
-        "Durable work history performed on this product (e.g. a repair or maintenance task); deleting the subject would leave that history nameless.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ProjectToolUsage.productId": {
-      column: projectToolUsage.productId,
-      role: "history",
-      label: "project uses",
-      description:
-        "Durable history that this reusable tool or software Product was used on a household project; deleting the Product would leave that history nameless.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PurchaseProduct.productId": {
-      column: purchaseProduct.productId,
-      role: "acquisition",
-      label: "purchase links",
-      description:
-        "The vendor order this Product was bought on. Provenance, not money — it exists because an order paid in installments is an `allocation` whose Expenses can never carry a productId, leaving the goods with no path back to the order.",
-      liveness: { kind: "must-target-live" },
-    },
-    "WishCandidate.productId": {
-      column: wishCandidate.productId,
-      role: "association",
-      label: "wishlist candidates",
-      description:
-        "A tool Product considered as an alternative for a household Wishlist entry; it is planning data, not inventory or spend.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Location.productId": {
-      column: location.productId,
-      role: "reference",
-      label: "locations",
-      description:
-        "A Location that IS an instance of this Product — the bin, tote or rack itself, not stock held in it. Deleting the Product would leave those locations with neither a type nor an identity, since a linked location stops carrying its own `type`.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Cookbook.productId": {
-      column: cookbook.productId,
-      role: "reference",
-      label: "cookbooks",
-      description:
-        "A Cookbook whose physical copy this Product is — the book on the shelf behind the imported EPUB. Deleting the Product leaves the cookbook and its recipes intact; only the shelf link goes.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ProductComponent.parentProductId": {
-      column: productComponent.parentProductId,
-      role: "composition",
-      label: "kit components",
-      description:
-        "A row on this Product's own component list — what's inside it, when it's a kit or multi-pack. Deleting the kit takes its component list with it.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ProductComponent.componentProductId": {
-      column: productComponent.componentProductId,
-      role: "usage",
-      label: "kits it's listed inside",
-      description:
-        "This Product cited as a part of another (kit) Product's component list, with its own quantity. The kit and the part remain independently real products; this only says the part is currently accounted for inside the kit.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ProductConversionCoverage.productId": {
-      column: productConversionCoverage.productId,
-      role: "metadata",
-      label: "conversion coverage projections",
-      description:
-        "A rebuildable conversion-graph projection owned by this product.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ProductMatchCandidate.productAId": {
-      column: productMatchCandidate.productAId,
-      role: "metadata",
-      label: "product match reviews",
-      description:
-        'One side of a reviewed or agent-proposed "same real item" pair; review metadata that dies with either Product.',
-      liveness: { kind: "must-target-live" },
-    },
-    "ProductMatchCandidate.productBId": {
-      column: productMatchCandidate.productBId,
-      role: "metadata",
-      label: "product match reviews",
-      description:
-        'The other side of a reviewed or agent-proposed "same real item" pair; review metadata that dies with either Product.',
-      liveness: { kind: "must-target-live" },
-    },
-    "Planting.sourceProductId": {
-      column: planting.sourceProductId,
-      role: "history",
-      label: "source products",
-      description:
-        "A planting can retain the seed packet, seedling, or plant it came from.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Device.productId": {
-      column: device.productId,
-      role: "reference",
-      label: "devices",
-      description: "A device whose physical hardware is this Product.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PhotoGroupProposal.productId": {
-      column: photoGroupProposal.productId,
-      role: "reference",
-      label: "photo group proposals",
-      description:
-        "A reviewed photo group that chose, or committed to, this Product.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
+  product: {
+    ...edges({
+      "RunTarget.entityId": {
+        column: runTarget.entityId,
+        role: "history",
+        label: "targeted import runs",
+        description:
+          "A no-op validation or enrichment target preserves the Product it examined.",
+        liveness: { kind: "must-target-live" },
+      },
+      "MealFoodEntry.productId": {
+        column: mealFoodEntry.productId,
+        role: "reference",
+        label: "meal food entries",
+        description:
+          "A recorded product amount whose nutrition is recalculated from the current product source while its entered quantity remains fixed.",
+        liveness: { kind: "must-target-live" },
+      },
+      "ProductExternalId.productId": {
+        column: productExternalId.productId,
+        role: "metadata",
+        label: "external ids",
+        description:
+          "An external identifier (e.g. an ASIN) recorded against this product; says nothing about whether the product was ever owned.",
+        liveness: { kind: "must-target-live" },
+      },
+      "ProductUnitMappings.productId": {
+        column: productUnitMappings.productId,
+        role: "metadata",
+        label: "unit mappings",
+        description:
+          "A hand-entered conversion (volume ↔ weight ↔ price) for this product; authored data, not evidence of purchase.",
+        liveness: { kind: "must-target-live" },
+      },
+      "InventoryEntry.productId": {
+        column: inventoryEntry.productId,
+        role: "acquisition",
+        label: "inventory entries",
+        description:
+          "A shelf or bin count of this product currently on hand — proof it was actually acquired, not just cataloged.",
+        liveness: { kind: "must-target-live" },
+      },
+      "EntityAttachment.entityId": {
+        column: entityAttachment.entityId,
+        role: "media",
+        label: "product photos",
+        description:
+          "A photo or manual attachment for this product; says nothing about ownership.",
+        liveness: { kind: "must-target-live" },
+      },
+      "Expense.productId": {
+        column: expense.productId,
+        role: "acquisition",
+        label: "expenses",
+        description:
+          "A spend-ledger line recording money spent acquiring this product — the source of its net cost and owned/sold window; an orphaned product would silently corrupt that derivation with no restore path.",
+        liveness: { kind: "must-target-live" },
+      },
+      "Task.subjectProductId": {
+        column: task.subjectProductId,
+        role: "history",
+        label: "tasks referencing them",
+        description:
+          "Durable work history performed on this product (e.g. a repair or maintenance task); deleting the subject would leave that history nameless.",
+        liveness: { kind: "must-target-live" },
+      },
+      "Location.productId": {
+        column: location.productId,
+        role: "reference",
+        label: "locations",
+        description:
+          "A Location that IS an instance of this Product — the bin, tote or rack itself, not stock held in it. Deleting the Product would leave those locations with neither a type nor an identity, since a linked location stops carrying its own `type`.",
+        liveness: { kind: "must-target-live" },
+      },
+      "Cookbook.productId": {
+        column: cookbook.productId,
+        role: "reference",
+        label: "cookbooks",
+        description:
+          "A Cookbook whose physical copy this Product is — the book on the shelf behind the imported EPUB. Deleting the Product leaves the cookbook and its recipes intact; only the shelf link goes.",
+        liveness: { kind: "must-target-live" },
+      },
+      "ProductConversionCoverage.productId": {
+        column: productConversionCoverage.productId,
+        role: "metadata",
+        label: "conversion coverage projections",
+        description:
+          "A rebuildable conversion-graph projection owned by this product.",
+        liveness: { kind: "must-target-live" },
+      },
+      "ProductMatchCandidate.productAId": {
+        column: productMatchCandidate.productAId,
+        role: "metadata",
+        label: "product match reviews",
+        description:
+          'One side of a reviewed or agent-proposed "same real item" pair; review metadata that dies with either Product.',
+        liveness: { kind: "must-target-live" },
+      },
+      "ProductMatchCandidate.productBId": {
+        column: productMatchCandidate.productBId,
+        role: "metadata",
+        label: "product match reviews",
+        description:
+          'The other side of a reviewed or agent-proposed "same real item" pair; review metadata that dies with either Product.',
+        liveness: { kind: "must-target-live" },
+      },
+      "Planting.sourceProductId": {
+        column: planting.sourceProductId,
+        role: "history",
+        label: "source products",
+        description:
+          "A planting can retain the seed packet, seedling, or plant it came from.",
+        liveness: { kind: "must-target-live" },
+      },
+      "Device.productId": {
+        column: device.productId,
+        role: "reference",
+        label: "devices",
+        description: "A device whose physical hardware is this Product.",
+        liveness: { kind: "must-target-live" },
+      },
+      "PhotoGroupProposal.productId": {
+        column: photoGroupProposal.productId,
+        role: "reference",
+        label: "photo group proposals",
+        description:
+          "A reviewed photo group that chose, or committed to, this Product.",
+        liveness: { kind: "must-target-live" },
+      },
+    }),
+    ...linkEdgesFor("product"),
+  },
   productCategory: edges({
     "PhotoGroupProposal.productCreateCategoryId": {
       column: photoGroupProposal.productCreateCategoryId,
@@ -793,110 +837,77 @@ export const ENTITY_EDGES = {
       liveness: { kind: "must-target-live" },
     },
   }),
-  project: edges({
-    "Project.parentProjectId": {
-      column: project.parentProjectId,
-      role: "hierarchy",
-      label: "sub-projects",
-      description:
-        "A project nested under this one; sub-project dates and totals roll up into the parent's derived window.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ProjectDependency.projectId": {
-      column: projectDependency.projectId,
-      role: "dependency",
-      label: "blocked-by dependencies",
-      description:
-        "A dependency edge naming this project as the one blocked, waiting on another project to finish first.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ProjectDependency.blockedByProjectId": {
-      column: projectDependency.blockedByProjectId,
-      role: "dependency",
-      label: "blocking dependencies",
-      description:
-        "A dependency edge naming this project as the blocker another project is waiting on.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Task.projectId": {
-      column: task.projectId,
-      role: "owned-child",
-      label: "tasks",
-      description:
-        "A task filed under this project; deleting the project takes its tasks with it.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Purchase.defaultProjectId": {
-      column: purchase.defaultProjectId,
-      role: "ledger",
-      label: "purchase defaults",
-      description:
-        "The default project inherited by purchase items without an override.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Expense.projectId": {
-      column: expense.projectId,
-      role: "ledger",
-      label: "expenses",
-      description:
-        "A spend-ledger line rolled up under this project — all money lives on Expense, so this is the source of the project's cost total.",
-      liveness: { kind: "must-target-live" },
-    },
-    "EntityAttachment.entityId": {
-      column: entityAttachment.entityId,
-      role: "media",
-      label: "project photos",
-      description: "A photo or document attached to this project.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ProjectToolUsage.projectId": {
-      column: projectToolUsage.projectId,
-      role: "association",
-      label: "reusable resources",
-      description:
-        "A durable association recording a reusable tool or software Product used on this exact project.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
-  task: edges({
-    "Task.parentTaskId": {
-      column: task.parentTaskId,
-      role: "hierarchy",
-      label: "sub-tasks",
-      description: "A child task nested under this one.",
-      liveness: { kind: "must-target-live" },
-    },
-    "TaskDependency.taskId": {
-      column: taskDependency.taskId,
-      role: "dependency",
-      label: "blocked-by dependencies",
-      description:
-        "A dependency edge naming this task as the one blocked, waiting on another task to finish first.",
-      liveness: { kind: "must-target-live" },
-    },
-    "TaskDependency.blockedByTaskId": {
-      column: taskDependency.blockedByTaskId,
-      role: "dependency",
-      label: "blocking dependencies",
-      description:
-        "A dependency edge naming this task as the blocker another task is waiting on.",
-      liveness: { kind: "must-target-live" },
-    },
-    "EntityAttachment.entityId": {
-      column: entityAttachment.entityId,
-      role: "media",
-      label: "task photos",
-      description: "A photo attached to this task.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Planting.taskId": {
-      column: planting.taskId,
-      role: "history",
-      label: "plantings",
-      description: "A planting retains the task whose completion produced it.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
+  project: {
+    ...edges({
+      "Project.parentProjectId": {
+        column: project.parentProjectId,
+        role: "hierarchy",
+        label: "sub-projects",
+        description:
+          "A project nested under this one; sub-project dates and totals roll up into the parent's derived window.",
+        liveness: { kind: "must-target-live" },
+      },
+      "Task.projectId": {
+        column: task.projectId,
+        role: "owned-child",
+        label: "tasks",
+        description:
+          "A task filed under this project; deleting the project takes its tasks with it.",
+        liveness: { kind: "must-target-live" },
+      },
+      "Purchase.defaultProjectId": {
+        column: purchase.defaultProjectId,
+        role: "ledger",
+        label: "purchase defaults",
+        description:
+          "The default project inherited by purchase items without an override.",
+        liveness: { kind: "must-target-live" },
+      },
+      "Expense.projectId": {
+        column: expense.projectId,
+        role: "ledger",
+        label: "expenses",
+        description:
+          "A spend-ledger line rolled up under this project — all money lives on Expense, so this is the source of the project's cost total.",
+        liveness: { kind: "must-target-live" },
+      },
+      "EntityAttachment.entityId": {
+        column: entityAttachment.entityId,
+        role: "media",
+        label: "project photos",
+        description: "A photo or document attached to this project.",
+        liveness: { kind: "must-target-live" },
+      },
+    }),
+    ...linkEdgesFor("project"),
+  },
+  task: {
+    ...edges({
+      "Task.parentTaskId": {
+        column: task.parentTaskId,
+        role: "hierarchy",
+        label: "sub-tasks",
+        description: "A child task nested under this one.",
+        liveness: { kind: "must-target-live" },
+      },
+      "EntityAttachment.entityId": {
+        column: entityAttachment.entityId,
+        role: "media",
+        label: "task photos",
+        description: "A photo attached to this task.",
+        liveness: { kind: "must-target-live" },
+      },
+      "Planting.taskId": {
+        column: planting.taskId,
+        role: "history",
+        label: "plantings",
+        description:
+          "A planting retains the task whose completion produced it.",
+        liveness: { kind: "must-target-live" },
+      },
+    }),
+    ...linkEdgesFor("task"),
+  },
   vendor: edges({
     "EntityAttachment.entityId": {
       column: entityAttachment.entityId,
@@ -959,79 +970,74 @@ export const ENTITY_EDGES = {
       liveness: { kind: "must-target-live" },
     },
   }),
-  purchase: edges({
-    "OrderMailCandidateDecision.purchaseId": {
-      column: orderMailCandidateDecision.purchaseId,
-      role: "history",
-      label: "reviewed order email matches",
-      description:
-        "A human link or dismissal for one mail event and Purchase candidate; deletion retains the decision as historical evidence, while merge moves it to the survivor.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Purchase deletion retains reviewed mail history against its tombstone.",
+  purchase: {
+    ...edges({
+      "OrderMailCandidateDecision.purchaseId": {
+        column: orderMailCandidateDecision.purchaseId,
+        role: "history",
+        label: "reviewed order email matches",
+        description:
+          "A human link or dismissal for one mail event and Purchase candidate; deletion retains the decision as historical evidence, while merge moves it to the survivor.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Purchase deletion retains reviewed mail history against its tombstone.",
+        },
       },
-    },
-    "RunTarget.entityId": {
-      column: runTarget.entityId,
-      role: "history",
-      label: "targeted import runs",
-      description:
-        "A validation target preserves the Purchase it examined without claiming a business mutation.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Purchase deletion preserves targeted-run history (see PURCHASE_DELETE_EDGE_POLICY), so the run target deliberately retains the Purchase tombstone.",
+      "RunTarget.entityId": {
+        column: runTarget.entityId,
+        role: "history",
+        label: "targeted import runs",
+        description:
+          "A validation target preserves the Purchase it examined without claiming a business mutation.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Purchase deletion preserves targeted-run history (see PURCHASE_DELETE_EDGE_POLICY), so the run target deliberately retains the Purchase tombstone.",
+        },
       },
-    },
-    "ImportSourceClaim.purchaseId": {
-      column: importSourceClaim.purchaseId,
-      role: "history",
-      label: "import source claims",
-      description: "The idempotency claim that produced this purchase.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PurchasePaymentEvidence.purchaseId": {
-      column: purchasePaymentEvidence.purchaseId,
-      role: "transaction",
-      label: "payment evidence",
-      description:
-        "A captured shipment or order payment tied to this purchase.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Expense.purchaseId": {
-      column: expense.purchaseId,
-      role: "ledger",
-      label: "expenses",
-      description:
-        "A categorized line of spend booked against this purchase. All money lives on Expense.cost; the purchase's own statedTotal is a soft reconciliation cue and is never summed into spend.",
-      liveness: { kind: "must-target-live" },
-    },
-    "EntityAttachment.entityId": {
-      column: entityAttachment.entityId,
-      role: "media",
-      label: "purchase documents",
-      description:
-        "A receipt, invoice, or other document attached to this purchase.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PurchaseProduct.purchaseId": {
-      column: purchaseProduct.purchaseId,
-      role: "association",
-      label: "products",
-      description:
-        "A Product this order bought. Carries no money — spend stays entirely on Expense — so this never doubles as a second ledger path.",
-      liveness: { kind: "must-target-live" },
-    },
-    "FinancialTransactionAllocation.purchaseId": {
-      column: financialTransactionAllocation.purchaseId,
-      role: "transaction",
-      label: "settlement allocations",
-      description:
-        "A slice of one card or bank transaction attributed to this purchase. One real charge can settle several purchases, so the slice — not the whole transaction — is what this order settled. The amount is evidence only; spend remains SUM(Expense.cost).",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
+      "ImportSourceClaim.purchaseId": {
+        column: importSourceClaim.purchaseId,
+        role: "history",
+        label: "import source claims",
+        description: "The idempotency claim that produced this purchase.",
+        liveness: { kind: "must-target-live" },
+      },
+      "PurchasePaymentEvidence.purchaseId": {
+        column: purchasePaymentEvidence.purchaseId,
+        role: "transaction",
+        label: "payment evidence",
+        description:
+          "A captured shipment or order payment tied to this purchase.",
+        liveness: { kind: "must-target-live" },
+      },
+      "Expense.purchaseId": {
+        column: expense.purchaseId,
+        role: "ledger",
+        label: "expenses",
+        description:
+          "A categorized line of spend booked against this purchase. All money lives on Expense.cost; the purchase's own statedTotal is a soft reconciliation cue and is never summed into spend.",
+        liveness: { kind: "must-target-live" },
+      },
+      "EntityAttachment.entityId": {
+        column: entityAttachment.entityId,
+        role: "media",
+        label: "purchase documents",
+        description:
+          "A receipt, invoice, or other document attached to this purchase.",
+        liveness: { kind: "must-target-live" },
+      },
+      "FinancialTransactionAllocation.purchaseId": {
+        column: financialTransactionAllocation.purchaseId,
+        role: "transaction",
+        label: "settlement allocations",
+        description:
+          "A slice of one card or bank transaction attributed to this purchase. One real charge can settle several purchases, so the slice — not the whole transaction — is what this order settled. The amount is evidence only; spend remains SUM(Expense.cost).",
+        liveness: { kind: "must-target-live" },
+      },
+    }),
+    ...linkEdgesFor("purchase"),
+  },
   financialAccount: edges({
     "FinancialTransaction.accountId": {
       column: financialTransaction.accountId,
@@ -1067,16 +1073,10 @@ export const ENTITY_EDGES = {
       liveness: { kind: "must-target-live" },
     },
   }),
-  wish: edges({
-    "WishCandidate.wishId": {
-      column: wishCandidate.wishId,
-      role: "owned-child",
-      label: "tool candidates",
-      description:
-        "An alternative tool Product belonging to this Wishlist entry; the pairing has no independent meaning once the Wish is removed.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
+  wish: {
+    ...edges({}),
+    ...linkEdgesFor("wish"),
+  },
   expense: edges({
     "ExpenseAttribution.expenseId": {
       column: expenseAttribution.expenseId,
@@ -1128,33 +1128,22 @@ export const ENTITY_EDGES = {
       liveness: { kind: "must-target-live" },
     },
   }),
-  planting: edges({
-    "GardenEntryPlanting.plantingId": {
-      column: gardenEntryPlanting.plantingId,
-      role: "history",
-      label: "garden entries",
-      description:
-        "Garden observations and harvests retain the planting they describe.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
-  gardenEntry: edges({
-    "GardenEntryPlanting.gardenEntryId": {
-      column: gardenEntryPlanting.gardenEntryId,
-      role: "history",
-      label: "planting associations",
-      description:
-        "A live association records which growing attempts a garden entry describes.",
-      liveness: { kind: "must-target-live" },
-    },
-    "EntityAttachment.entityId": {
-      column: entityAttachment.entityId,
-      role: "media",
-      label: "garden journal photos",
-      description: "A photo attached to this garden journal entry.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
+  planting: {
+    ...edges({}),
+    ...linkEdgesFor("planting"),
+  },
+  gardenEntry: {
+    ...edges({
+      "EntityAttachment.entityId": {
+        column: entityAttachment.entityId,
+        role: "media",
+        label: "garden journal photos",
+        description: "A photo attached to this garden journal entry.",
+        liveness: { kind: "must-target-live" },
+      },
+    }),
+    ...linkEdgesFor("gardenEntry"),
+  },
   // No table carries a live FK at these two: `inventory` is a leaf stock row,
   // and `usda-food` has no local table at all (it's resolved at query time via
   // `product.fdc_id`, a cross-system id link rather than a DB FK — see

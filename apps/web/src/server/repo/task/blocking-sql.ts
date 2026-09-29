@@ -24,10 +24,11 @@ export const openTaskBlockingCtes = sql`
     FROM "Task" t
     WHERE t."deletedAt" IS NULL AND t."status" = 'blocked'
     UNION
-    SELECT td."taskId"
-    FROM "TaskDependency" td
+    SELECT td."fromEntityId"
+    FROM "EntityLink" td
     JOIN "Task" blocker
-      ON blocker."id" = td."blockedByTaskId"
+      ON td."kind" = 'taskDependency' AND td."deletedAt" IS NULL
+     AND blocker."id" = td."toEntityId"
      AND blocker."deletedAt" IS NULL
      AND blocker."status" <> 'done'
     UNION
@@ -38,9 +39,11 @@ export const openTaskBlockingCtes = sql`
       ON owner."id" = pa."ancestorId"
      AND owner."deletedAt" IS NULL
      AND owner."status" <> 'done'
-    JOIN "ProjectDependency" pd ON pd."projectId" = owner."id"
+    JOIN "EntityLink" pd
+      ON pd."fromEntityId" = owner."id"
+     AND pd."kind" = 'projectDependency' AND pd."deletedAt" IS NULL
     JOIN "Project" blocker
-      ON blocker."id" = pd."blockedByProjectId"
+      ON blocker."id" = pd."toEntityId"
      AND blocker."deletedAt" IS NULL
      AND blocker."status" <> 'done'
     WHERE t."deletedAt" IS NULL

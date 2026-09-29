@@ -26,7 +26,7 @@
  * is a `groupBy` away from being N-columns-wide.
  */
 import type { ProductId, ProjectId } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   ProjectToolMatrixCellOut,
   ProjectToolMatrixColumnOut,
@@ -62,11 +62,11 @@ import { householdLocalDate } from "~/lib/household-date";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import type { Database } from "~/server/db";
 import {
+  entityLink,
   expense,
   inventoryEntry,
   product,
   project,
-  projectToolUsage,
   task,
 } from "~/server/db/schema";
 import {
@@ -75,6 +75,7 @@ import {
   getDb,
   notDeleted,
 } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import {
   effectiveExpenseProjectSql,
   effectiveExpenseTradeSql,
@@ -353,15 +354,15 @@ export async function projectToolMatrix(
         ? []
         : dbc
             .select({
-              projectId: projectToolUsage.projectId,
-              productId: projectToolUsage.productId,
+              projectId: entityLink.fromEntityId,
+              productId: entityLink.toEntityId,
             })
-            .from(projectToolUsage)
+            .from(entityLink)
             .where(
               and(
-                inArray(projectToolUsage.projectId, columnIds),
-                inArray(projectToolUsage.productId, rowIds),
-                notDeleted(projectToolUsage),
+                inArray(entityLink.fromEntityId, columnIds),
+                inArray(entityLink.toEntityId, rowIds),
+                liveLinks("projectTool"),
               ),
             ),
       empty ? new Map() : loadProjectToolPurchaseCosts(dbc, columnIds, rowIds),
@@ -478,7 +479,12 @@ export async function projectToolMatrix(
     inventoryRows.flatMap((row) => (row.productId ? [row.productId] : [])),
   );
   const attachedKeys = new Set(
-    attachedRows.map((row) => cellKey(row.projectId, row.productId)),
+    attachedRows.map((row) =>
+      cellKey(
+        parseEntityId("project", row.projectId),
+        parseEntityId("product", row.productId),
+      ),
+    ),
   );
   const purchaseCostByKey = new Map<MatrixCellKey, number>();
   for (const [projectId, byProduct] of purchasedRows) {

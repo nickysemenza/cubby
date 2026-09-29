@@ -1044,14 +1044,20 @@ export default defineEntity({
           provenance: {
             kind: "local-path",
             steps: [
-              { edge: "PurchaseProduct.purchaseId", direction: "incoming" },
-              { edge: "PurchaseProduct.productId", direction: "outgoing" },
+              {
+                edge: "EntityLink[purchaseProduct].from",
+                direction: "incoming",
+              },
+              { edge: "EntityLink[purchaseProduct].to", direction: "outgoing" },
             ],
           },
           inverse: {
             steps: [
-              { edge: "PurchaseProduct.productId", direction: "incoming" },
-              { edge: "PurchaseProduct.purchaseId", direction: "outgoing" },
+              { edge: "EntityLink[purchaseProduct].to", direction: "incoming" },
+              {
+                edge: "EntityLink[purchaseProduct].from",
+                direction: "outgoing",
+              },
             ],
           },
         },

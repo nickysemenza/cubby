@@ -22,11 +22,11 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityEmbedding,
+  entityLink,
   expense,
   financialTransaction,
   financialTransactionAllocation,
   gardenEntry,
-  gardenEntryPlanting,
   inventoryEntry,
   meal,
   mealRecipe,
@@ -40,7 +40,6 @@ import {
   task,
   vendor,
   wish,
-  wishCandidate,
 } from "~/server/db/schema";
 import {
   notDeleted,
@@ -48,6 +47,7 @@ import {
   uuidArrayParam,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { liveLinks } from "~/server/repo/entity-links";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import {
   getOrphanedSearchDocumentRefs,
@@ -195,13 +195,13 @@ export async function findWishEmbeddingRefsForProducts(
 ): Promise<SearchableEntityRef[]> {
   if (productIds.length === 0) return [];
   const rows = await unwrapDb(db)
-    .selectDistinct({ wishId: wishCandidate.wishId })
-    .from(wishCandidate)
-    .innerJoin(wish, eq(wish.id, wishCandidate.wishId))
+    .selectDistinct({ wishId: entityLink.fromEntityId })
+    .from(entityLink)
+    .innerJoin(wish, eq(wish.id, entityLink.fromEntityId))
     .where(
       and(
-        inArray(wishCandidate.productId, productIds),
-        notDeleted(wishCandidate),
+        inArray(entityLink.toEntityId, productIds),
+        liveLinks("wishCandidate"),
         notDeleted(wish),
       ),
     );
@@ -299,15 +299,12 @@ export async function findGardenEntryEmbeddingRefsForPlantings(
   if (plantingIds.length === 0) return [];
   const rows = await unwrapDb(db)
     .select({ id: gardenEntry.id })
-    .from(gardenEntryPlanting)
-    .innerJoin(
-      gardenEntry,
-      eq(gardenEntry.id, gardenEntryPlanting.gardenEntryId),
-    )
+    .from(entityLink)
+    .innerJoin(gardenEntry, eq(gardenEntry.id, entityLink.fromEntityId))
     .where(
       and(
-        inArray(gardenEntryPlanting.plantingId, plantingIds),
-        notDeleted(gardenEntryPlanting),
+        inArray(entityLink.toEntityId, plantingIds),
+        liveLinks("gardenEntryPlanting"),
         notDeleted(gardenEntry),
       ),
     );

@@ -10,13 +10,13 @@ import {
   entityAttachmentRoleValues,
 } from "@cubby/schemas/entity-attachment";
 import type { Entity } from "@cubby/schemas/entity-core";
+import type { EntityLinkKind } from "@cubby/schemas/entity-links";
 import type {
   DeviceId,
   ExpenseAttributionId,
   ExpenseId,
   FinancialAccountId,
   FinancialTransactionId,
-  GardenEntryId,
   ImageId,
   RunId,
   IngredientId,
@@ -27,16 +27,12 @@ import type {
   MealFoodEntryId,
   MealRecipeId,
   MealRecipePortionId,
-  PlantingId,
   ProductCategoryId,
   ProductId,
-  ProjectId,
   PurchaseId,
   RecipeId,
-  TaskId,
   UserId,
   VendorId,
-  WishId,
 } from "@cubby/schemas/identifiers";
 import type { ContributionRole } from "@cubby/schemas/ledger-party";
 import type { LedgerSourceClaimNormalizedEvidence } from "@cubby/schemas/ledger-transfer";
@@ -90,6 +86,11 @@ import {
   verification,
 } from "./auth.schema";
 import { entityIdentity, entityIdentityFk } from "./entity-identity-schema";
+import {
+  entityLinkKindCheckSql,
+  entityLinkNoSelfCheckSql,
+  entityLinkQuantityCheckSql,
+} from "./entity-link-schema";
 import {
   generatedCookbookColumns,
   generatedDeviceColumns,
@@ -1113,6 +1114,53 @@ export const entityAttachment = pgTable(
 );
 
 /** A cultivar or species the household sows or buys as a transplant. */
+/**
+ * Every many-to-many relationship between two entities (ADR 0007): a kit's
+ * components, an order's products, a project's tools, a garden entry's
+ * plantings, a wish's candidates, and task/project dependencies. Kinds and
+ * their endpoint kinds are declared once in `@cubby/schemas/entity-links`;
+ * the CHECKs below are rendered from that map (`entity-link-schema.ts`), and
+ * the derived-DDL trigger refuses a live link to a deleted entity.
+ *
+ * `from` is the owning side (the kit, the blocked task, the order). Links
+ * soft-delete; the partial pair key lets a detached pair be re-attached.
+ */
+export const entityLink = pgTable(
+  "EntityLink",
+  {
+    id: pkUuid(),
+    kind: text("kind").notNull().$type<EntityLinkKind>(),
+    fromEntityId: uuid("fromEntityId").notNull(),
+    fromKind: text("fromKind").notNull().$type<Entity>(),
+    toEntityId: uuid("toEntityId").notNull(),
+    toKind: text("toKind").notNull().$type<Entity>(),
+    quantity: integer("quantity"),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    foreignKey({
+      name: "EntityLink_from_fk",
+      columns: [table.fromEntityId, table.fromKind],
+      foreignColumns: [entityIdentity.id, entityIdentity.kind],
+    }),
+    foreignKey({
+      name: "EntityLink_to_fk",
+      columns: [table.toEntityId, table.toKind],
+      foreignColumns: [entityIdentity.id, entityIdentity.kind],
+    }),
+    check("EntityLink_kind_check", sql.raw(entityLinkKindCheckSql())),
+    check("EntityLink_quantity_check", sql.raw(entityLinkQuantityCheckSql())),
+    check("EntityLink_no_self_check", sql.raw(entityLinkNoSelfCheckSql())),
+    uniqueIndex("EntityLink_kind_from_to_key")
+      .on(table.kind, table.fromEntityId, table.toEntityId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("EntityLink_to_kind_idx")
+      .on(table.toEntityId, table.kind)
+      .where(sql`${table.deletedAt} IS NULL`),
+  ],
+);
+
 export const plant = pgTable(
   "Plant",
   generatedPlantColumns({
@@ -1158,37 +1206,6 @@ export const gardenEntry = pgTable(
   ],
 );
 
-/**
- * A garden observation may describe more than one growing attempt.  The
- * association is historical in its own right, so removal detaches it without
- * deleting either the dated entry or the planting.  The partial pair key is
- * what permits a removed planting to be re-attached later without resurrecting
- * an unrelated live duplicate.
- */
-export const gardenEntryPlanting = pgTable(
-  "GardenEntryPlanting",
-  {
-    id: pkUuid(),
-    gardenEntryId: uuid("gardenEntryId")
-      .notNull()
-      .$type<GardenEntryId>()
-      .references(() => gardenEntry.id),
-    plantingId: uuid("plantingId")
-      .notNull()
-      .$type<PlantingId>()
-      .references(() => planting.id),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("GardenEntryPlanting_gardenEntryId_plantingId_key")
-      .on(table.gardenEntryId, table.plantingId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("GardenEntryPlanting_gardenEntryId_idx").on(table.gardenEntryId),
-    index("GardenEntryPlanting_plantingId_idx").on(table.plantingId),
-  ],
-);
-
 export const project = pgTable(
   "Project",
   generatedProjectColumns({ project: (): AnyPgColumn => project.id }),
@@ -1209,90 +1226,12 @@ export const project = pgTable(
   ],
 );
 
-export const projectDependency = pgTable(
-  "ProjectDependency",
-  {
-    id: pkUuid(),
-    projectId: uuid("projectId")
-      .notNull()
-      .$type<ProjectId>()
-      .references(() => project.id),
-    blockedByProjectId: uuid("blockedByProjectId")
-      .notNull()
-      .$type<ProjectId>()
-      .references(() => project.id),
-    ...baseTimestamps(),
-  },
-  (table) => [
-    uniqueIndex("ProjectDependency_pair_key").on(
-      table.projectId,
-      table.blockedByProjectId,
-    ),
-    index("ProjectDependency_blockedBy_idx").on(table.blockedByProjectId),
-    check(
-      "ProjectDependency_no_self_check",
-      sql`${table.projectId} <> ${table.blockedByProjectId}`,
-    ),
-  ],
-);
-
-// Durable, deliberately coarse history that a reusable tool or software Product
-// was used on a Project. One live pair is one project-use; no quantities/hours/
-// trades live here because those would turn the relation into a usage ledger.
-export const projectToolUsage = pgTable(
-  "ProjectToolUsage",
-  {
-    id: pkUuid(),
-    projectId: uuid("projectId")
-      .notNull()
-      .$type<ProjectId>()
-      .references(() => project.id),
-    productId: uuid("productId")
-      .notNull()
-      .$type<ProductId>()
-      .references(() => product.id),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("ProjectToolUsage_projectId_productId_key")
-      .on(table.projectId, table.productId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("ProjectToolUsage_projectId_idx").on(table.projectId),
-    index("ProjectToolUsage_productId_idx").on(table.productId),
-  ],
-);
-
 export const wish = pgTable("Wish", generatedWishColumns(), (table) => [
   shortcodeUnique("Wish", table.shortcode),
   entityIdentityFk("Wish", table),
   index("Wish_createdAt_idx").on(table.createdAt),
   index("Wish_acquiredAt_idx").on(table.acquiredAt),
 ]);
-
-export const wishCandidate = pgTable(
-  "WishCandidate",
-  {
-    id: pkUuid(),
-    wishId: uuid("wishId")
-      .notNull()
-      .$type<WishId>()
-      .references(() => wish.id),
-    productId: uuid("productId")
-      .notNull()
-      .$type<ProductId>()
-      .references(() => product.id),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("WishCandidate_wishId_productId_key")
-      .on(table.wishId, table.productId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("WishCandidate_wishId_idx").on(table.wishId),
-    index("WishCandidate_productId_idx").on(table.productId),
-  ],
-);
 
 export const task = pgTable(
   "Task",
@@ -1312,33 +1251,6 @@ export const task = pgTable(
     index("Task_status_idx").on(table.status),
     index("Task_dueDate_idx").on(table.dueDate),
     index("Task_parentTaskId_idx").on(table.parentTaskId),
-  ],
-);
-
-export const taskDependency = pgTable(
-  "TaskDependency",
-  {
-    id: pkUuid(),
-    taskId: uuid("taskId")
-      .notNull()
-      .$type<TaskId>()
-      .references(() => task.id),
-    blockedByTaskId: uuid("blockedByTaskId")
-      .notNull()
-      .$type<TaskId>()
-      .references(() => task.id),
-    ...baseTimestamps(),
-  },
-  (table) => [
-    uniqueIndex("TaskDependency_pair_key").on(
-      table.taskId,
-      table.blockedByTaskId,
-    ),
-    index("TaskDependency_blockedBy_idx").on(table.blockedByTaskId),
-    check(
-      "TaskDependency_no_self_check",
-      sql`${table.taskId} <> ${table.blockedByTaskId}`,
-    ),
   ],
 );
 
@@ -1508,30 +1420,6 @@ export const purchase = pgTable(
       "gin",
       sql`${table.displayLabel} gin_trgm_ops`,
     ),
-  ],
-);
-
-export const purchaseProduct = pgTable(
-  "PurchaseProduct",
-  {
-    id: pkUuid(),
-    purchaseId: uuid("purchaseId")
-      .notNull()
-      .$type<PurchaseId>()
-      .references(() => purchase.id),
-    productId: uuid("productId")
-      .notNull()
-      .$type<ProductId>()
-      .references(() => product.id),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("PurchaseProduct_purchaseId_productId_key")
-      .on(table.purchaseId, table.productId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("PurchaseProduct_purchaseId_idx").on(table.purchaseId),
-    index("PurchaseProduct_productId_idx").on(table.productId),
   ],
 );
 
@@ -2435,53 +2323,6 @@ export const purchasePaymentEvidence = pgTable(
   ],
 );
 
-// What's inside a kit. A combo tool kit or a multi-pack is a Product like any
-// other — it keeps its own UPC, model, ASIN, image, and purchase history — but
-// it is ALSO made of other Products, and this table is the only place that's
-// recorded. It exists because splitting a kit used to mean deleting the kit
-// Product outright, which destroyed the one row holding its own identity and
-// provenance; now the kit survives the split and this table says what came out
-// of it. One row per distinct component; a 4-pack of one part is one row with
-// `quantity: 4`, a 9-piece kit is nine rows.
-//
-// Non-entity, same as PurchaseProduct: no shortcode, no entity-manifest entry.
-// A component row is meaningless without both the kit and the part it names.
-export const productComponent = pgTable(
-  "ProductComponent",
-  {
-    id: pkUuid(),
-    parentProductId: uuid("parentProductId")
-      .notNull()
-      .$type<ProductId>()
-      .references(() => product.id),
-    componentProductId: uuid("componentProductId")
-      .notNull()
-      .$type<ProductId>()
-      .references(() => product.id),
-    quantity: integer("quantity").notNull().default(1),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    uniqueIndex("ProductComponent_parentProductId_componentProductId_key")
-      .on(table.parentProductId, table.componentProductId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("ProductComponent_parentProductId_idx").on(table.parentProductId),
-    index("ProductComponent_componentProductId_idx").on(
-      table.componentProductId,
-    ),
-    check("ProductComponent_quantity_check", sql`${table.quantity} >= 1`),
-    // A product cannot be its own component. Deliberately narrow: catching a
-    // longer cycle (a kit nested inside one of its own components several
-    // hops down) is a graph-traversal question for the write path, not
-    // something a single-row CHECK can express.
-    check(
-      "ProductComponent_not_self_check",
-      sql`${table.parentProductId} <> ${table.componentProductId}`,
-    ),
-  ],
-);
-
 /**
  * A settlement-side event. Amounts are evidence only: they never participate
  * in spend/project/calendar rollups, which remain derived from Expense.cost.
@@ -3070,21 +2911,12 @@ export const productRelations = relations(product, ({ one, many }) => ({
   inventoryEntry: many(inventoryEntry),
   images: many(entityAttachment),
   expenses: many(expense),
-  projectToolUsages: many(projectToolUsage),
-  purchaseProducts: many(purchaseProduct),
-  wishCandidates: many(wishCandidate),
   // Locations that ARE an instance of this product (a bin, tote, rack).
   // Distinct from `inventoryEntry`, which is stock held AT a location.
   locations: many(location),
   // Cookbooks whose physical copy this product is. `many` only because Drizzle
   // models the reverse of a nullable FK that way — in practice it's 0 or 1.
   cookbooks: many(cookbook),
-  components: many(productComponent, {
-    relationName: "productComponent_parentProduct",
-  }),
-  partOfKits: many(productComponent, {
-    relationName: "productComponent_componentProduct",
-  }),
 }));
 
 export const productExternalIdRelations = relations(
@@ -3145,7 +2977,7 @@ export const plantRelations = relations(plant, ({ one, many }) => ({
   products: many(product),
 }));
 
-export const plantingRelations = relations(planting, ({ one, many }) => ({
+export const plantingRelations = relations(planting, ({ one }) => ({
   plant: one(plant, {
     fields: [planting.plantId],
     references: [plant.id],
@@ -3162,7 +2994,6 @@ export const plantingRelations = relations(planting, ({ one, many }) => ({
     fields: [planting.taskId],
     references: [task.id],
   }),
-  entries: many(gardenEntryPlanting),
 }));
 
 export const gardenEntryRelations = relations(gardenEntry, ({ one, many }) => ({
@@ -3170,23 +3001,8 @@ export const gardenEntryRelations = relations(gardenEntry, ({ one, many }) => ({
     fields: [gardenEntry.locationId],
     references: [location.id],
   }),
-  plantings: many(gardenEntryPlanting),
   images: many(entityAttachment),
 }));
-
-export const gardenEntryPlantingRelations = relations(
-  gardenEntryPlanting,
-  ({ one }) => ({
-    gardenEntry: one(gardenEntry, {
-      fields: [gardenEntryPlanting.gardenEntryId],
-      references: [gardenEntry.id],
-    }),
-    planting: one(planting, {
-      fields: [gardenEntryPlanting.plantingId],
-      references: [planting.id],
-    }),
-  }),
-);
 
 export const inventoryEntryRelations = relations(inventoryEntry, ({ one }) => ({
   owner: one(ledgerParty, {
@@ -3265,7 +3081,6 @@ export const projectRelations = relations(project, ({ one, many }) => ({
   tasks: many(task),
   expenses: many(expense),
   images: many(entityAttachment),
-  toolUsages: many(projectToolUsage),
   parentProject: one(project, {
     fields: [project.parentProjectId],
     references: [project.id],
@@ -3274,54 +3089,7 @@ export const projectRelations = relations(project, ({ one, many }) => ({
   childProjects: many(project, {
     relationName: "ProjectToProject",
   }),
-  blockedBy: many(projectDependency, { relationName: "ProjectBlocked" }),
-  blocking: many(projectDependency, { relationName: "ProjectBlocking" }),
 }));
-
-export const projectToolUsageRelations = relations(
-  projectToolUsage,
-  ({ one }) => ({
-    project: one(project, {
-      fields: [projectToolUsage.projectId],
-      references: [project.id],
-    }),
-    product: one(product, {
-      fields: [projectToolUsage.productId],
-      references: [product.id],
-    }),
-  }),
-);
-
-export const wishRelations = relations(wish, ({ many }) => ({
-  candidates: many(wishCandidate),
-}));
-
-export const wishCandidateRelations = relations(wishCandidate, ({ one }) => ({
-  wish: one(wish, {
-    fields: [wishCandidate.wishId],
-    references: [wish.id],
-  }),
-  product: one(product, {
-    fields: [wishCandidate.productId],
-    references: [product.id],
-  }),
-}));
-
-export const projectDependencyRelations = relations(
-  projectDependency,
-  ({ one }) => ({
-    project: one(project, {
-      fields: [projectDependency.projectId],
-      references: [project.id],
-      relationName: "ProjectBlocked",
-    }),
-    blockedByProject: one(project, {
-      fields: [projectDependency.blockedByProjectId],
-      references: [project.id],
-      relationName: "ProjectBlocking",
-    }),
-  }),
-);
 
 export const taskRelations = relations(task, ({ one, many }) => ({
   project: one(project, {
@@ -3340,22 +3108,7 @@ export const taskRelations = relations(task, ({ one, many }) => ({
   subtasks: many(task, {
     relationName: "TaskToTask",
   }),
-  blockedBy: many(taskDependency, { relationName: "TaskBlocked" }),
-  blocking: many(taskDependency, { relationName: "TaskBlocking" }),
   images: many(entityAttachment),
-}));
-
-export const taskDependencyRelations = relations(taskDependency, ({ one }) => ({
-  task: one(task, {
-    fields: [taskDependency.taskId],
-    references: [task.id],
-    relationName: "TaskBlocked",
-  }),
-  blockedByTask: one(task, {
-    fields: [taskDependency.blockedByTaskId],
-    references: [task.id],
-    relationName: "TaskBlocking",
-  }),
 }));
 
 export const expenseRelations = relations(expense, ({ one, many }) => ({
@@ -3438,7 +3191,6 @@ export const purchaseRelations = relations(purchase, ({ one, many }) => ({
   }),
   expenses: many(expense),
   images: many(entityAttachment),
-  products: many(purchaseProduct),
   settlementAllocations: many(financialTransactionAllocation),
 }));
 
@@ -3486,36 +3238,6 @@ export const ledgerTransferRelations = relations(
     }),
     evidenceTransactions: many(financialTransaction),
     sourceClaims: many(ledgerSourceClaim),
-  }),
-);
-
-export const purchaseProductRelations = relations(
-  purchaseProduct,
-  ({ one }) => ({
-    purchase: one(purchase, {
-      fields: [purchaseProduct.purchaseId],
-      references: [purchase.id],
-    }),
-    product: one(product, {
-      fields: [purchaseProduct.productId],
-      references: [product.id],
-    }),
-  }),
-);
-
-export const productComponentRelations = relations(
-  productComponent,
-  ({ one }) => ({
-    parentProduct: one(product, {
-      fields: [productComponent.parentProductId],
-      references: [product.id],
-      relationName: "productComponent_parentProduct",
-    }),
-    componentProduct: one(product, {
-      fields: [productComponent.componentProductId],
-      references: [product.id],
-      relationName: "productComponent_componentProduct",
-    }),
   }),
 );
 
