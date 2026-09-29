@@ -16,6 +16,7 @@ import {
   listGeneratedRelation,
 } from "~/server/generated/entity-relation-bindings.gen";
 import { withTransactionDatabase } from "~/server/repo/database-helpers";
+import { runAfterCommit } from "~/server/repo/database-helpers/core";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   isMutationSideEffectRef,
@@ -80,8 +81,11 @@ const executeMerge = bindWorkflow(
     .commit("merged", async ({ context }, { input, owner }) =>
       owner.operation.execute(context, input.data),
     )
-    .effect("storage", async (_, { merged }) =>
-      deleteStoredObjects(merged.detachedImageKeys),
+    // Inside a caller's transaction the R2 delete waits for its commit.
+    .effect("storage", async ({ context }, { merged }) =>
+      runAfterCommit(context.db, () =>
+        deleteStoredObjects(merged.detachedImageKeys),
+      ),
     )
     .effect("sideEffects", async ({ context }, { owner, merged }) => {
       const entityRef = merged.entityId

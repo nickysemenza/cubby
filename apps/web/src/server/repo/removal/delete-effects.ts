@@ -9,7 +9,7 @@ import {
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
-import { databaseForTransaction, getDb } from "~/server/repo/database-helpers";
+import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
 import { countByTarget } from "~/server/repo/impact";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 
@@ -92,9 +92,11 @@ export async function executeDeleteWithEffects<
       ),
     );
 
-  return getDb(db).transaction(
-    async (tx) => {
-      const transactionDb = databaseForTransaction(tx);
+  // `withTransactionDatabase`, not a raw `.transaction()`: the delete's
+  // publications and R2 deletes must wait for the outermost commit.
+  return withTransactionDatabase(
+    db,
+    async (transactionDb) => {
       const ids = await resolveAllOrThrow(transactionDb, entity, shortcodes);
       const before = await snapshot(transactionDb, ids);
       const result = await execute(transactionDb);
