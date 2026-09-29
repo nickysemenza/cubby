@@ -3,32 +3,11 @@ import { describe, expect, it } from "vitest";
 import { inspectWorkflow } from "~/server/workflow-runtime/definition";
 
 import {
-  approveDetectedInventoryItemWorkflow,
   backfillLocationDescriptionsWorkflow,
-  describeLocationWorkflow,
-  detectInventoryItemsWorkflow,
   precomputeEnrichmentProposalsWorkflow,
 } from "./ai.server";
 
 describe("AI workflow graphs", () => {
-  it("declares resolution before AI reads and writes", () => {
-    expect(
-      inspectWorkflow(describeLocationWorkflow.definition).steps.map(
-        (step) => step.type,
-      ),
-    ).toEqual(["call", "committedCall"]);
-    expect(
-      inspectWorkflow(detectInventoryItemsWorkflow.definition).steps.map(
-        (step) => step.type,
-      ),
-    ).toEqual(["call", "committedCall"]);
-    expect(
-      inspectWorkflow(
-        approveDetectedInventoryItemWorkflow.definition,
-      ).steps.map((step) => step.type),
-    ).toEqual(["call", "committedCall"]);
-  });
-
   it("keeps precompute bounded and parallel while echoing shortcodes", () => {
     const definition = precomputeEnrichmentProposalsWorkflow.definition;
     expect(definition.concurrency).toBe(5);

@@ -45,7 +45,7 @@ export interface RelatednessDependencies {
   makeCandidateKey: typeof suggestionCandidateKey;
 }
 
-export const productionRelatednessDependencies: RelatednessDependencies = {
+const productionRelatednessDependencies: RelatednessDependencies = {
   resolveSourceId: resolveOrThrow,
   findSimilarEntities: findSimilarEntitiesWorkflow,
   getProductsSharingTags,
@@ -63,7 +63,7 @@ type RelatednessContext = {
   dependencies: RelatednessDependencies;
 };
 
-export const productRelatednessWorkflowDefinition = workflow<
+const productRelatednessWorkflowDefinition = workflow<
   RelatednessContext,
   ProductShortcode
 >("relatedness.product")
@@ -136,23 +136,18 @@ export const productRelatednessWorkflowDefinition = workflow<
     };
   });
 
-export const getProductRelatedness = bindWorkflow(
-  productRelatednessWorkflowDefinition,
-  (
-    db: Database,
-    sourceId: ProductShortcode,
-    dependencies: RelatednessDependencies = productionRelatednessDependencies,
-  ) => ({
-    context: { db, dependencies },
-    input: sourceId,
-  }),
-);
+const productRelatedness = bindWorkflow(productRelatednessWorkflowDefinition);
+export const getProductRelatedness = (
+  db: Database,
+  sourceId: ProductShortcode,
+  dependencies: RelatednessDependencies = productionRelatednessDependencies,
+) => productRelatedness({ db, dependencies }, sourceId);
 
 /**
  * Tags are proposed only from current semantic neighbours. They remain out of
  * relatedness scoring, so the ground-truth label cannot vote for itself.
  */
-export const productTagPropagationWorkflowDefinition = workflow<
+const productTagPropagationWorkflowDefinition = workflow<
   RelatednessContext,
   ProductShortcode
 >("recommendations.tagPropagation")
@@ -250,14 +245,11 @@ export const productTagPropagationWorkflowDefinition = workflow<
     }),
   );
 
-export const getProductTagPropagation = bindWorkflow(
+const productTagPropagation = bindWorkflow(
   productTagPropagationWorkflowDefinition,
-  (
-    db: Database,
-    sourceId: ProductShortcode,
-    dependencies: RelatednessDependencies = productionRelatednessDependencies,
-  ) => ({
-    context: { db, dependencies },
-    input: sourceId,
-  }),
 );
+export const getProductTagPropagation = (
+  db: Database,
+  sourceId: ProductShortcode,
+  dependencies: RelatednessDependencies = productionRelatednessDependencies,
+) => productTagPropagation({ db, dependencies }, sourceId);

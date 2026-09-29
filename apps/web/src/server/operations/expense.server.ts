@@ -17,14 +17,15 @@ import {
 } from "@cubby/schemas/project";
 import type { z } from "zod";
 
+import { expenseContract } from "~/contracts/expense.contract";
 import type { Database } from "~/server/db";
+import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   expenseAnalytics,
   expenseList,
   expenseMonthlySummary,
   expenseTradeAffinity,
   getExpenseByID,
-  matchExpenses,
 } from "~/server/repo/expense";
 import {
   buildExpenseAnalysisGrid,
@@ -66,7 +67,6 @@ import {
 import { TraceNames, withTrace } from "~/server/tracing";
 import {
   bindWorkflow,
-  defineWorkflowOperation,
   executeWorkflow,
   workflow,
 } from "~/server/workflow-runtime";
@@ -82,30 +82,18 @@ const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 } as const;
 
 type ExpenseFilters = z.output<typeof expenseFiltersSchema>;
 
-const expenseChartDataDefinition = workflow<Database, ExpenseFilters>(
-  "expense.chartData",
-)
-  .call("list", ({ context }, { input }) =>
-    expenseList(
-      context,
+export const expenseChartDataWorkflow = async (
+  db: Database,
+  input: ExpenseFilters,
+) =>
+  (
+    await expenseList(
+      db,
       input,
       [{ orderBy: "date", direction: "asc" }],
       FETCH_ALL,
-    ),
-  )
-  .output(({ list }) => list.data);
-export const expenseChartDataWorkflow = bindWorkflow(
-  expenseChartDataDefinition,
-  (db: Database, input: ExpenseFilters) => ({ context: db, input }),
-);
-export const expenseAnalyticsWorkflow = defineWorkflowOperation(
-  "expense.analytics",
-  expenseAnalytics,
-);
-export const expenseMonthlySummaryWorkflow = defineWorkflowOperation(
-  "expense.monthlySummary",
-  expenseMonthlySummary,
-);
+    )
+  ).data;
 
 type TraceAttributes = Record<string, string | number | boolean | undefined>;
 export const expenseAnalyzeTraceAttributes = (
@@ -369,74 +357,57 @@ export const expenseFacetCountsWorkflow = Object.assign(
     }),
   { definition: expenseFacetCountsDefinition },
 );
-export const expenseTradeAffinityWorkflow = defineWorkflowOperation(
-  "expense.tradeAffinity",
-  expenseTradeAffinity,
-);
-
-export const expenseInventoryOwnershipContextWorkflow = defineWorkflowOperation(
-  "expense.inventoryOwnershipContext",
-  async (
-    db: Database,
-    input: z.output<typeof expenseInventoryOwnershipContextInput>,
-  ) => {
-    const inventoryId = await resolveOrThrow(
-      db,
-      "inventory",
-      input.inventoryEntryId,
-    );
-    const effectiveOwnership = await loadEffectiveInventoryOwnershipById(
-      db,
-      inventoryId,
-    );
-    if (!effectiveOwnership) {
-      throw new Error("Resolved inventory entry disappeared");
-    }
-    return {
-      inventoryEntryId: input.inventoryEntryId,
-      effectiveOwnership,
-      suggestedBeneficiaries: effectiveOwnership.effectiveOwner
-        ? [{ partyId: effectiveOwnership.effectiveOwner.id, weight: 1 }]
-        : [],
-    };
-  },
-);
-
-export const confirmInventoryExpenseBeneficiaryWorkflow =
-  defineWorkflowOperation(
-    "expense.confirmInventoryBeneficiary",
-    async (
-      context: { db: Database; actorContext: ActorContext },
-      input: z.output<typeof confirmInventoryExpenseBeneficiaryInput>,
-    ) => {
-      const [inventoryId, expenseId] = await Promise.all([
-        resolveOrThrow(context.db, "inventory", input.inventoryEntryId),
-        resolveOrThrow(context.db, "expense", input.expenseId),
-      ]);
-      const result = await confirmInventoryExpenseBeneficiary(
-        context.db,
-        inventoryId,
-        expenseId,
-        input.evidenceFingerprint,
-        context.actorContext,
-      );
-      await runMutationSideEffectsForEntities(
-        context.db,
-        mutationEvents(
-          "expense",
-          "updated",
-          [expenseId],
-          "expense.confirmInventoryBeneficiary",
-        ),
-      );
-      return { expenseId: input.expenseId, ...result };
-    },
+async function expenseInventoryOwnershipContext(
+  db: Database,
+  input: z.output<typeof expenseInventoryOwnershipContextInput>,
+) {
+  const inventoryId = await resolveOrThrow(
+    db,
+    "inventory",
+    input.inventoryEntryId,
   );
+  const effectiveOwnership = await loadEffectiveInventoryOwnershipById(
+    db,
+    inventoryId,
+  );
+  if (!effectiveOwnership) {
+    throw new Error("Resolved inventory entry disappeared");
+  }
+  return {
+    inventoryEntryId: input.inventoryEntryId,
+    effectiveOwnership,
+    suggestedBeneficiaries: effectiveOwnership.effectiveOwner
+      ? [{ partyId: effectiveOwnership.effectiveOwner.id, weight: 1 }]
+      : [],
+  };
+}
 
-export const expenseMatchWorkflow = defineWorkflowOperation(
-  "expense.match",
-  matchExpenses,
-);
+async function confirmInventoryBeneficiary(
+  context: { db: Database; actorContext: ActorContext },
+  input: z.output<typeof confirmInventoryExpenseBeneficiaryInput>,
+) {
+  const [inventoryId, expenseId] = await Promise.all([
+    resolveOrThrow(context.db, "inventory", input.inventoryEntryId),
+    resolveOrThrow(context.db, "expense", input.expenseId),
+  ]);
+  const result = await confirmInventoryExpenseBeneficiary(
+    context.db,
+    inventoryId,
+    expenseId,
+    input.evidenceFingerprint,
+    context.actorContext,
+  );
+  await runMutationSideEffectsForEntities(
+    context.db,
+    mutationEvents(
+      "expense",
+      "updated",
+      [expenseId],
+      "expense.confirmInventoryBeneficiary",
+    ),
+  );
+  return { expenseId: input.expenseId, ...result };
+}
 
 type ChargeContextInput = z.output<typeof expenseShortcode>;
 const requirePurchase = (id: PurchaseId | null): PurchaseId => {
@@ -488,5 +459,20 @@ export const expenseChargeContextWorkflow = bindWorkflow(
       whenFalse: (branch) => branch.output(() => null),
     })
     .output(({ purchaseAvailable }) => purchaseAvailable),
-  (db: Database, input: ChargeContextInput) => ({ context: db, input }),
 );
+
+export const expenseHandlers = implementOperationDomain(expenseContract, {
+  chartData: (context, input) => expenseChartDataWorkflow(context.db, input),
+  analytics: (context, input) => expenseAnalytics(context.db, input),
+  monthlySummary: (context, input) => expenseMonthlySummary(context.db, input),
+  analyze: (context, input) => expenseAnalyzeWorkflow(context.db, input),
+  facetCounts: (context, input) =>
+    expenseFacetCountsWorkflow(context.db, input),
+  tradeAffinity: (context) => expenseTradeAffinity(context.db),
+  chargeContext: (context, input) =>
+    expenseChargeContextWorkflow(context.db, input),
+  inventoryOwnershipContext: (context, input) =>
+    expenseInventoryOwnershipContext(context.db, input),
+  confirmInventoryBeneficiary: (context, input) =>
+    confirmInventoryBeneficiary(context, input),
+});

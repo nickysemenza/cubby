@@ -349,10 +349,6 @@ export const defineEntityOperations = <
                 ),
         });
       }),
-    (
-      context: EntityKernelContext,
-      input: { id: string; missing: "error" | "null" },
-    ) => ({ context, input }),
   ),
   list: bindWorkflow(
     workflow<EntityKernelContext, EntityListInput>(`${binding.entity}.list`)
@@ -423,10 +419,6 @@ export const defineEntityOperations = <
           ),
         }),
       ),
-    <TFilters>(
-      context: EntityKernelContext,
-      input: EntityListInput<TFilters>,
-    ) => ({ context, input }),
   ),
   create: bindWorkflow(
     workflow<EntityKernelContext, unknown>(`${binding.entity}.create`)
@@ -475,10 +467,6 @@ export const defineEntityOperations = <
           sideEffects: mutationSideEffectsWithWarnings(created.warnings),
         }),
       ),
-    <TInput>(context: EntityKernelContext, input: TInput) => ({
-      context,
-      input,
-    }),
   ),
   update: bindWorkflow(
     workflow<EntityKernelContext, { id: string; data: unknown }>(
@@ -534,10 +522,6 @@ export const defineEntityOperations = <
           sideEffects: mutationSideEffectsWithWarnings(updated.warnings),
         }),
       ),
-    <TInput>(context: EntityKernelContext, id: string, data: TInput) => ({
-      context,
-      input: { id, data },
-    }),
   ),
   delete: bindWorkflow(
     workflow<EntityKernelContext, string[]>(`${binding.entity}.delete`)
@@ -566,7 +550,6 @@ export const defineEntityOperations = <
           sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
         }),
       ),
-    (context: EntityKernelContext, input: string[]) => ({ context, input }),
   ),
   bulkUpdate: bindWorkflow(
     workflow<EntityKernelContext, { ids: string[]; data: unknown }>(
@@ -605,9 +588,5 @@ export const defineEntityOperations = <
           sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
         }),
       ),
-    <TInput>(context: EntityKernelContext, ids: string[], data: TInput) => ({
-      context,
-      input: { ids, data },
-    }),
   ),
 });

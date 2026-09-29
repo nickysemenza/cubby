@@ -64,5 +64,4 @@ export const findSimilarEntitiesWorkflow = bindWorkflow(
       status: readiness,
       results: matches,
     })),
-  (context: Database, input: SimilarEntitiesInput) => ({ context, input }),
 );

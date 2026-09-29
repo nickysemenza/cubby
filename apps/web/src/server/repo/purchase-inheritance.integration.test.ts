@@ -5,8 +5,8 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { explainField } from "~/server/field-explanation-browser.server";
 import { expenseChargeContextWorkflow } from "~/server/operations/expense.server";
+import { explainField } from "~/server/operations/field-explanation.server";
 import { getEntityRecommendations } from "~/server/services/entity-recommendations.service";
 import { createTestRequestContext } from "~/server/testing/request-context";
 

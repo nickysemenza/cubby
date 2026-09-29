@@ -20,12 +20,10 @@ import type { Database } from "~/server/db";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import {
-  expenseAnalyticsWorkflow,
   expenseAnalyzeWorkflow,
   expenseChargeContextWorkflow,
   expenseChartDataWorkflow,
   expenseFacetCountsWorkflow,
-  expenseTradeAffinityWorkflow,
 } from "~/server/operations/expense.server";
 import { getAuditLog } from "~/server/repo/audit-log";
 import {
@@ -34,6 +32,7 @@ import {
   expenseAnalytics,
   expenseList,
   expenseMonthlySummary,
+  expenseTradeAffinity,
   getExpenseByShortcode,
   setExpensesCostType,
   setExpensesTrade,
@@ -81,11 +80,11 @@ type ExpenseCreateSeed = z.input<typeof expenseCreateInput>;
 const createExpenseWorkflowCaller = (db: Database) => ({
   chartData: (input: Parameters<typeof expenseChartDataWorkflow>[1]) =>
     expenseChartDataWorkflow(db, input),
-  analytics: (input: Parameters<typeof expenseAnalyticsWorkflow>[1]) =>
-    expenseAnalyticsWorkflow(db, input),
+  analytics: (input: Parameters<typeof expenseAnalytics>[1]) =>
+    expenseAnalytics(db, input),
   chargeContext: (input: Parameters<typeof expenseChargeContextWorkflow>[1]) =>
     expenseChargeContextWorkflow(db, input),
-  tradeAffinity: () => expenseTradeAffinityWorkflow(db),
+  tradeAffinity: () => expenseTradeAffinity(db),
 });
 
 const purchaseIdOf = (expense: ExpenseOut): PurchaseShortcode => {

@@ -13,15 +13,15 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { expectedProblemKeys, problemQuery } from "~/entities/problem-registry";
-import { findProblemCountsWorkflow } from "~/server/operations/problem-counts.server";
+import { readProblemCounts } from "~/server/operations/problem-counts.server";
+import { findViewProblems } from "~/server/services/problem-views.service";
 import {
-  findCoverageProblemsWorkflow,
-  findFastProblemsWorkflow,
-  findProblemByTypeWorkflow,
-  findTrackerProblemsWorkflow,
-  findUpcProblemsWorkflow,
-  findViewProblemsWorkflow,
-} from "~/server/operations/problems.server";
+  findCoverageProblems,
+  findFastProblems,
+  findProblemByType,
+  findTrackerProblems,
+  findUpcProblems,
+} from "~/server/services/problems.service";
 
 import { READ_ONLY_CLOSED, registerRouterTool } from "./_shared";
 
@@ -100,7 +100,7 @@ export function registerProblemsTools(server: McpServer) {
         params.countsOnly === true ||
         (params.countsOnly === undefined && params.type === undefined)
       ) {
-        return await findProblemCountsWorkflow(context);
+        return await readProblemCounts(context);
       }
       if (params.type !== undefined) {
         const parsedProblemKey = problemKeySchema.safeParse(params.type);
@@ -114,16 +114,21 @@ export function registerProblemsTools(server: McpServer) {
         if (!definition)
           throw new Error("Problem query registry is incomplete");
         return pageProblemTypeSlice(
-          await findProblemByTypeWorkflow(context, { key: definition.key }),
+          await findProblemByType(
+            context.db,
+            definition.key,
+            context.upcLookupClient,
+            context.usdaClient,
+          ),
           params,
         );
       }
       const [fast, coverage, upc, tracker, views] = await Promise.all([
-        findFastProblemsWorkflow(context),
-        findCoverageProblemsWorkflow(context),
-        findUpcProblemsWorkflow(context),
-        findTrackerProblemsWorkflow(context),
-        findViewProblemsWorkflow(context),
+        findFastProblems(context.db),
+        findCoverageProblems(context.db, context.usdaClient),
+        findUpcProblems(context.db, context.upcLookupClient),
+        findTrackerProblems(context.db),
+        findViewProblems(context.db),
       ]);
       const all = assembleAllProblems({ fast, coverage, upc, tracker, views });
       return allProblemsMcpSchema.parse(all);

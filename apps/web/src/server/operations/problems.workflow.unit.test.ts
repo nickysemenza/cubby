@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 import { expectedProblemKeys } from "~/entities/problem-registry";
 
 import { resolveProblemCounts } from "./problem-counts.server";
-import { deleteUnusedIngredientsWorkflow } from "./problems.server";
 
 const counts = (total: number) =>
   problemsCountSchema.parse({
@@ -13,19 +12,7 @@ const counts = (total: number) =>
     byType: Object.fromEntries(expectedProblemKeys.map((key) => [key, 0])),
   });
 
-describe("problems workflow ownership", () => {
-  it("keeps delete resolution and presentation around the committed service", () => {
-    expect(deleteUnusedIngredientsWorkflow.definition).toMatchObject({
-      name: "problems.deleteUnused",
-      steps: [
-        { name: "shortcodes", type: "call" },
-        { name: "entityIds", type: "call" },
-        { name: "deleted", type: "committedCall" },
-        { name: "presented", type: "call" },
-      ],
-    });
-  });
-
+describe("problem counts", () => {
   it("prefers a Durable Object snapshot and only falls back when unavailable", async () => {
     const fallback = vi.fn(async () => counts(2));
     await expect(

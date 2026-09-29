@@ -37,24 +37,23 @@ describe("getAuditLog — channel + time window", () => {
       makeProductInput({ name: "Audit subject fixture" }),
       ctx.actor,
     );
-    const listed = await listAuditLog({
-      db: ctx.db,
-      data: { entityKind: "product", entityId: record.id, limit: 50 },
+    const listed = await listAuditLog(ctx.db, {
+      entityKind: "product",
+      entityId: record.id,
+      limit: 50,
     });
     expect(listed.entries.length).toBeGreaterThan(0);
     expect(
-      await listAuditLog({
-        db: ctx.db,
-        data: { entityKind: "ingredient", entityId: record.id, limit: 50 },
+      await listAuditLog(ctx.db, {
+        entityKind: "ingredient",
+        entityId: record.id,
+        limit: 50,
       }),
     ).toEqual({ entries: [] });
     expect(
-      await listAuditLog({
-        db: ctx.db,
-        data: {
-          entityId: testShortcode("product", "missing-audit-subject"),
-          limit: 50,
-        },
+      await listAuditLog(ctx.db, {
+        entityId: testShortcode("product", "missing-audit-subject"),
+        limit: 50,
       }),
     ).toEqual({ entries: [] });
   });
