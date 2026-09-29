@@ -180,18 +180,3 @@ export const dbInventoryEntryListValues = <Q extends DataQuality | undefined>(
     }),
   };
 };
-
-export const dbInventoryEntryToListAPI = (
-  inventoryentry: InventoryEntryListDB,
-  valuation: number | null,
-  pricing: ProductPricing,
-  dataQuality: DataQuality,
-  ownership?: EffectiveInventoryOwnership,
-) =>
-  dbInventoryEntryListValues(
-    inventoryentry,
-    valuation,
-    pricing,
-    dataQuality,
-    ownership,
-  );

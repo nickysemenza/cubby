@@ -5,18 +5,17 @@ import {
   type EntityListInputByEntity,
   type EntityListResultByEntity,
   listEntities,
-  entityListBaseInputSchema,
+  entityListInputSchema,
   entityListBaseOutputSchema,
   entityListEnrichmentInputSchema,
   entityListEnrichmentOutputSchema,
-  entityListSummaryInputSchema,
   entityListSummaryOutputSchema,
   type ListEntity,
 } from "~/entities/generated/entity-lists.gen";
 
 export const entityListContract = defineContract("entity", {
   listBase: query({
-    input: entityListBaseInputSchema,
+    input: entityListInputSchema,
     output: entityListBaseOutputSchema,
     native: "Progressive standard entity lists",
     observability: { entities: listEntities },
@@ -29,7 +28,7 @@ export const entityListContract = defineContract("entity", {
     observability: { entities: listEntities },
   }),
   listSummary: query({
-    input: entityListSummaryInputSchema,
+    input: entityListInputSchema,
     output: entityListSummaryOutputSchema,
     native: "Full-filter list totals",
     observability: { entities: listEntities },

@@ -526,12 +526,10 @@ export const renderEntityArtifacts = (
     .join(",\n");
   const progressiveListSchemas = `
 export const entityListGroupSchema = z.object({id:z.enum(["media","quality","relations","derived"]),fields:z.array(z.string())});
-export const entityListBaseInputSchema = entityListInputSchema;
 ${listBaseItemSchemas}
 export const entityListBaseOutputSchema = z.discriminatedUnion("entity", [${listBaseVariants}]);
 export const entityListEnrichmentInputSchema = z.object({entity:z.enum(listEntities),ids:z.array(z.string().min(1)).max(500),groups:z.array(z.enum(["media","quality","relations","derived"])).max(4)});
 export const entityListEnrichmentOutputSchema = z.discriminatedUnion("entity",[${listEnrichmentVariants}]);
-export const entityListSummaryInputSchema = entityListInputSchema;
 export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntities),sums:z.record(z.string(),z.number()).optional()});
 `;
   const listOutputSchemas = browserCrudEntitySpecs
