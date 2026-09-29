@@ -376,7 +376,27 @@ export default defineEntity({
       {
         key: "reconciliation",
         kind: "json",
-        display: { list: true },
+        display: {
+          list: true,
+          valueOptions: [
+            { value: "match", label: "Reconciles", color: "var(--positive)" },
+            {
+              value: "refund_adjusted",
+              label: "Refund-adjusted",
+              color: "var(--slate)",
+            },
+            {
+              value: "mismatch",
+              label: "Needs review",
+              color: "var(--warning)",
+            },
+            {
+              value: "unknown",
+              label: "No stated total",
+              color: "var(--slate)",
+            },
+          ],
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
@@ -402,7 +422,20 @@ export default defineEntity({
         // Settlement evidence only; never participates in spend rollups.
         key: "financialReconciliation",
         kind: "json",
-        display: { list: true },
+        display: {
+          list: true,
+          // Roster for `financialReconciliation.status`.
+          valueOptions: [
+            { value: "unknown", label: "No evidence", color: "var(--slate)" },
+            { value: "pending", label: "Pending", color: "var(--warning)" },
+            { value: "match", label: "Settled", color: "var(--positive)" },
+            {
+              value: "mismatch",
+              label: "Mismatch",
+              color: "var(--destructive)",
+            },
+          ],
+        },
         provenance: {
           kind: "derived",
           sources: [
@@ -784,7 +817,7 @@ export default defineEntity({
           { value: "1y", label: "Last 12 months" },
         ],
         expandRef: {
-          module: "~/app/expenses/expense-options",
+          module: "~/entities/filter-behavior",
           export: "resolveDateRange",
         },
       },
@@ -819,15 +852,27 @@ export default defineEntity({
         placeholder: "Filter by expense total...",
         deriveSchema: true,
         options: [
-          { value: "gte500", label: "$500 and up" },
-          { value: "gte200", label: "$200 and up" },
-          { value: "gte100", label: "$100 and up" },
-          { value: "nonpositive", label: "Non-positive (≤ $0)" },
+          {
+            value: "gte500",
+            label: "$500 and up",
+            expand: { expenseTotalMin: 500 },
+          },
+          {
+            value: "gte200",
+            label: "$200 and up",
+            expand: { expenseTotalMin: 200 },
+          },
+          {
+            value: "gte100",
+            label: "$100 and up",
+            expand: { expenseTotalMin: 100 },
+          },
+          {
+            value: "nonpositive",
+            label: "Non-positive (≤ $0)",
+            expand: { expenseTotalMax: 0 },
+          },
         ],
-        expandRef: {
-          module: "~/app/purchases/purchase-options",
-          export: "resolvePurchaseExpenseTotalFilter",
-        },
       },
       {
         columnId: "reconciliation",

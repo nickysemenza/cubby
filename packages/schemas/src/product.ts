@@ -6,9 +6,7 @@ import { inventoryPlacementValues } from "@cubby/shared";
 import { foodSummary, foodSummaryMcpOut, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { productRelatedFilterFields } from "./related-view";
 import {
-  auditDateFilterFields,
   dateRangeFields,
   numericRangeFields,
   timestampedFields,
@@ -48,10 +46,7 @@ import { baseKind } from "./problems";
 import { plainDate, taskStatusSchema } from "./project";
 import { recipeUsageMcpEntityOut, recipeUsageOut } from "./recipe";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
-import {
-  generatedProductFieldSchemas,
-  generatedProductFilterFields,
-} from "./generated/entity-field-schemas.product.gen";
+import { generatedProductFieldSchemas } from "./generated/entity-field-schemas.product.gen";
 import {
   mcpUnitMappingOut,
   unitMappingOut,
@@ -59,6 +54,18 @@ import {
 } from "./unitmapping";
 import { productCategory, productPricingOut } from "./product-fields";
 import type { ProductCategorySummary } from "./product-category-fields";
+import {
+  productBaseFilterFields,
+  productCreateInput,
+} from "./generated/product.gen";
+
+export {
+  productCreateInput,
+  productUpdateData,
+  productUpdateInput,
+  type ProductCreateInput,
+  type ProductUpdateInput,
+} from "./generated/product.gen";
 
 export { productPricingOut } from "./product-fields";
 
@@ -80,14 +87,6 @@ export const hasFoodIndicators = (product: {
 }): boolean =>
   hasFdcLink(product.fdc_id) ||
   (product.ingredientId != null && product.ingredientId.length > 0);
-
-export const productCreateInput = z.object(generatedProductFieldSchemas.create);
-export const productUpdateData = z.object(generatedProductFieldSchemas.update);
-
-export const productUpdateInput = z.object({
-  id: productShortcode,
-  data: productUpdateData,
-});
 
 export const productBulkStockTrackedInput = z.object({
   ids: z.array(productShortcode).min(1),
@@ -209,9 +208,7 @@ export const productMarkUsdaUnavailableManyInput = z.object({
 });
 
 export const productFilterFields = {
-  ...auditDateFilterFields,
-  ...productRelatedFilterFields,
-  ...generatedProductFilterFields,
+  ...productBaseFilterFields,
   /** Components of the given kit(s): products on their `productComponent` links. */
   kitId: oneOrMany(productShortcode).optional(),
   /** Kits containing the given component(s): the parents on their `productComponent` links. */
@@ -528,8 +525,6 @@ export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;
 export type ProductFindOrCreateByUPCOut = z.infer<
   typeof productFindOrCreateByUPCOut
 >;
-export type ProductCreateInput = z.infer<typeof productCreateInput>;
-export type ProductUpdateInput = z.infer<typeof productUpdateInput>;
 
 const productIngredientOut = z.object({
   id: ingredientShortcode,

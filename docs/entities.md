@@ -516,7 +516,13 @@ synthetic identity column. A `list: true` field with `readKeyOverride: null` nee
 override; column compilation fails otherwise. `display.listHidden` owns a
 declared column's hidden-by-default state; pages retain
 `initialColumnVisibility` only for computed or relation columns outside the
-field model. `display.preview` marks the facts of the hover preview card
+field model. `display.valueOptions` is the label/tone roster for an
+enum-like value a field renders without a select control (a derived status, or
+the `kind`/`status` member of a JSON field); read it through
+`fieldEnumOptions(entity, key)`. A range filter's presets are declared as
+`options[].expand` patches of filter fields (`{ costMin: 500 }`) and the
+generator emits the expander; only presets that cannot be static (today-relative
+dates, open-ended counts) keep an `expandRef`. `display.preview` marks the facts of the hover preview card
 (compiled to `detail.preview`, in model order); a computed figure the card
 needs is a read-only projection field on the server output, never a web-side
 map. An entity with no preview field falls back to its hero stats and first

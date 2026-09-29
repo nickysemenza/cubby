@@ -362,6 +362,25 @@ const buildMetadataSchemas = () => {
         .optional()
         .default(false),
       /**
+       * Roster (label, tone) for the enum-like value this field renders when
+       * it has no select control of its own: a derived status, or the
+       * `kind`/`status` member of a JSON field. Enum fields with a select
+       * control keep declaring `control.options`.
+       */
+      valueOptions: z
+        .array(
+          z
+            .object({
+              value: nonEmptyString(),
+              label: nonEmptyString(),
+              color: nonEmptyString().optional(),
+            })
+            .strict(),
+        )
+        .nullable()
+        .optional()
+        .default(null),
+      /**
        * A fact on the entity's hover preview card. An entity that declares
        * any shows exactly those, in model order; one that declares none falls
        * back to its hero stats and first detail section.
@@ -385,6 +404,7 @@ const buildMetadataSchemas = () => {
         renderer,
         mobile,
         listHidden,
+        valueOptions,
         preview,
       }) => ({
         list,
@@ -398,6 +418,7 @@ const buildMetadataSchemas = () => {
         renderer,
         mobile,
         listHidden,
+        valueOptions,
         preview,
       }),
     );
@@ -1403,6 +1424,12 @@ const buildMetadataSchemas = () => {
       label: nonEmptyString(),
       /** `gap.message` shown beside the check. */
       message: nonEmptyString(),
+      /**
+       * The Problems coverage meter (`coverageTotalsSchema` key) whose
+       * denominator is this check's `expected` population; the generator
+       * counts it instead of a hand-written query.
+       */
+      coverage: nonEmptyString().optional(),
     })
     .strict();
 
@@ -1494,6 +1521,18 @@ const buildMetadataSchemas = () => {
               label: nonEmptyString(),
               meta: z.boolean({ error: "must be a boolean" }).optional(),
               color: nonEmptyString().optional(),
+              /**
+               * The filter fields this preset sets on a `range` descriptor
+               * (`{ costMin: 500 }`); the generator turns the roster into the
+               * descriptor's expander. Dynamic presets (today-relative dates,
+               * open-ended counts) keep an `expandRef`.
+               */
+              expand: z
+                .record(
+                  nonEmptyString(),
+                  z.union([z.string(), z.number(), z.boolean()]),
+                )
+                .optional(),
             })
             .strict(),
         )

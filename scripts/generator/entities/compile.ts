@@ -492,6 +492,7 @@ const compileFieldModel = (
         list: field.display.list,
         detail: field.display.detail,
         listHidden: field.display.listHidden ?? false,
+        valueOptions: field.display.valueOptions ?? null,
         preview: field.display.preview ?? false,
       },
       validation: field.validation,
@@ -826,6 +827,32 @@ const filterWire = (
     : { kind: "range", from: `${name}Min`, to: `${name}Max` };
 };
 
+/**
+ * A range descriptor's presets either all carry the fields they set
+ * (`expand`, which the generator turns into the expander) or are resolved by a
+ * hand-written `expandRef` — never a mix, or an option would silently resolve
+ * to nothing.
+ */
+const validateFilterPresets = (
+  value: RawFilterDescriptor,
+  kind: FilterDescriptor["kind"],
+  options: FilterDescriptor["options"],
+  context: string,
+): void => {
+  const expanding = (options ?? []).filter(
+    (option) => option.expand !== undefined,
+  );
+  if (expanding.length === 0) return;
+  if (kind !== "range" || value.expandRef != null)
+    throw new EntityDeclarationError(
+      `${context} option expand needs a range descriptor without an expandRef.`,
+    );
+  if (expanding.length !== options?.length)
+    throw new EntityDeclarationError(
+      `${context} every option must declare expand once one does.`,
+    );
+};
+
 const validateFilterReference = (
   value: RawFilterDescriptor,
   kind: FilterDescriptor["kind"],
@@ -914,6 +941,7 @@ const filterDescriptor = (
   }
   const modelField = fields.find((field) => field.key === value.columnId);
   const options = enumFilterOptions(value, parsedKind, modelField, context);
+  validateFilterPresets(value, parsedKind, options, context);
   validateFilterReference(value, parsedKind, context);
   validateDerivedFilter(value, parsedKind, modelField, context);
   const stored = validateStoredFilter(value, parsedKind, storage, context);

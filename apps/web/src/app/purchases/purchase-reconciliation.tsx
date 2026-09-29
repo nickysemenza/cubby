@@ -7,9 +7,8 @@ import type { FC } from "react";
 
 import { Description } from "~/components/ui/description";
 import { EnumPill } from "~/components/ui/enum-pill";
+import { fieldEnumOptions } from "~/entities/enum-field-display";
 import { formatCurrency } from "~/lib/utils";
-
-import { purchaseReconciliationOptions } from "./purchase-options";
 
 /**
  * `statedTotal` vs `SUM(expense.cost)`, as a **soft** cue.
@@ -73,7 +72,7 @@ export const ReconciliationStatus: FC<{
   const delta = reconciliationDelta(purchase);
 
   const presentation = STATUS_PRESENTATION[status];
-  const option = purchaseReconciliationOptions.find(
+  const option = fieldEnumOptions("purchase", "reconciliation").find(
     (candidate) => candidate.value === status,
   );
   return (

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
+import { financialTransactionBaseFilterFields } from "./generated/financialTransaction.gen";
 export {
   financialReconciliationStatus,
   financialReconciliationSummary,
@@ -8,8 +9,6 @@ export type {
   FinancialReconciliationStatus,
   FinancialReconciliationSummary,
 } from "./financial-reconciliation";
-import { financialTransactionRelatedFilterFields } from "./related-view";
-import { auditDateFilterFields } from "./base-entity";
 import {
   financialAccountShortcode,
   financialTransactionShortcode,
@@ -30,7 +29,6 @@ import { plainDate } from "./project";
 import { externalIdSource } from "./external-id";
 import {
   generatedFinancialTransactionFieldSchemas,
-  generatedFinancialTransactionFilterFields,
   generatedFinancialTransactionKindValues,
   generatedFinancialTransactionStatusValues,
 } from "./generated/entity-field-schemas.financialTransaction.gen";
@@ -331,9 +329,7 @@ export type FinancialTransactionUpdateInput = z.infer<
 >;
 
 export const financialTransactionFilterFields = {
-  ...auditDateFilterFields,
-  ...financialTransactionRelatedFilterFields,
-  ...generatedFinancialTransactionFilterFields,
+  ...financialTransactionBaseFilterFields,
   accountId: entityFilterList(financialAccountShortcode).optional(),
   purchaseId: entityFilterList(purchaseShortcode).optional(),
   purchasePresenceFilter: presenceFilter,

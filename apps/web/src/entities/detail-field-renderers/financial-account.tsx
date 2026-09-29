@@ -1,13 +1,16 @@
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
-import { accountIdentityKindOptions } from "~/app/finance/financial-account-options";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
+import { fieldEnumOptions } from "~/entities/enum-field-display";
 
 import type { EntityDetailFieldRenderers } from "./index";
 
 export const financialAccountDetailFields = {
   "financial-account-identity": (account) => ({
-    value: renderOptionCell(account.identity.kind, accountIdentityKindOptions),
+    value: renderOptionCell(
+      account.identity.kind,
+      fieldEnumOptions("financialAccount", "identity"),
+    ),
     filterAction: (
       <EntityFilterLink
         to="/financial-accounts"

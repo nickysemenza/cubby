@@ -507,16 +507,24 @@ export default defineEntity({
         placeholder: "Filter spend...",
         deriveSchema: true,
         options: [
-          { value: "positive", label: "Positive basis" },
-          { value: "zero", label: "Zero basis" },
-          { value: "negative", label: "Credit / negative" },
-          { value: "gte100", label: "$100 and up" },
-          { value: "gte500", label: "$500 and up" },
+          {
+            value: "positive",
+            label: "Positive basis",
+            expand: { spendMin: 0.01 },
+          },
+          {
+            value: "zero",
+            label: "Zero basis",
+            expand: { spendMin: 0, spendMax: 0 },
+          },
+          {
+            value: "negative",
+            label: "Credit / negative",
+            expand: { spendMax: -0.01 },
+          },
+          { value: "gte100", label: "$100 and up", expand: { spendMin: 100 } },
+          { value: "gte500", label: "$500 and up", expand: { spendMin: 500 } },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveVendorSpend",
-        },
       },
       {
         columnId: "latestPurchaseDate",
@@ -825,6 +833,7 @@ export default defineEntity({
           weight: 1,
           label: "Logo",
           message: "No logo is recorded for this vendor.",
+          coverage: "vendorsWithPurchases",
         },
         {
           id: "vendor_website",

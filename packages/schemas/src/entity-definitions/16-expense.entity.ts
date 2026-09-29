@@ -977,7 +977,7 @@ export default defineEntity({
           { value: "1y", label: "Last 12 months" },
         ],
         expandRef: {
-          module: "~/app/expenses/expense-options",
+          module: "~/entities/filter-behavior",
           export: "resolveDateRange",
         },
       },
@@ -1106,17 +1106,23 @@ export default defineEntity({
           },
         },
         options: [
-          { value: "has", label: "Has cost", meta: true },
-          { value: "none", label: "(none)", meta: true },
-          { value: "gte500", label: "$500 and up" },
-          { value: "gte200", label: "$200 and up" },
-          { value: "gte100", label: "$100 and up" },
-          { value: "credits", label: "Credits (≤ $0)" },
+          {
+            value: "has",
+            label: "Has cost",
+            meta: true,
+            expand: { costPresenceFilter: "has" },
+          },
+          {
+            value: "none",
+            label: "(none)",
+            meta: true,
+            expand: { costPresenceFilter: "none" },
+          },
+          { value: "gte500", label: "$500 and up", expand: { costMin: 500 } },
+          { value: "gte200", label: "$200 and up", expand: { costMin: 200 } },
+          { value: "gte100", label: "$100 and up", expand: { costMin: 100 } },
+          { value: "credits", label: "Credits (≤ $0)", expand: { costMax: 0 } },
         ],
-        expandRef: {
-          module: "~/app/expenses/expense-options",
-          export: "resolveCostFilter",
-        },
       },
       {
         columnId: "costMin",
@@ -1157,16 +1163,34 @@ export default defineEntity({
           },
         },
         options: [
-          { value: "has", label: "Has quantity", meta: true },
-          { value: "none", label: "(none)", meta: true },
-          { value: "exactly1", label: "Exactly 1" },
-          { value: "gte2", label: "2+ units" },
-          { value: "gte5", label: "5+ units" },
+          {
+            value: "has",
+            label: "Has quantity",
+            meta: true,
+            expand: { productQuantityPresenceFilter: "has" },
+          },
+          {
+            value: "none",
+            label: "(none)",
+            meta: true,
+            expand: { productQuantityPresenceFilter: "none" },
+          },
+          {
+            value: "exactly1",
+            label: "Exactly 1",
+            expand: { productQuantityMin: 1, productQuantityMax: 1 },
+          },
+          {
+            value: "gte2",
+            label: "2+ units",
+            expand: { productQuantityMin: 2 },
+          },
+          {
+            value: "gte5",
+            label: "5+ units",
+            expand: { productQuantityMin: 5 },
+          },
         ],
-        expandRef: {
-          module: "~/app/expenses/expense-options",
-          export: "resolveProductQuantityFilter",
-        },
       },
       {
         columnId: "productQuantityMin",

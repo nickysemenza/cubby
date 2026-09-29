@@ -30,13 +30,13 @@ import {
 } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListFor } from "~/entities/entity-list";
+import { fieldEnumOptions } from "~/entities/enum-field-display";
 import { formatFieldProvenance } from "~/entities/field-provenance";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/utils";
 
 import { LinkedTransactions } from "../finance/linked-transactions";
-import { financialSettlementOptions } from "./purchase-options";
 
 type FinancialPurchase = PurchaseOut & {
   financialReconciliation: {
@@ -398,7 +398,7 @@ export function FinancialSettlementStatus({
   purchase: FinancialPurchase;
 }) {
   const settlement = purchase.financialReconciliation;
-  const option = financialSettlementOptions.find(
+  const option = fieldEnumOptions("purchase", "financialReconciliation").find(
     (candidate) => candidate.value === settlement.status,
   );
   return (

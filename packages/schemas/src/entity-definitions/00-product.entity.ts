@@ -1544,16 +1544,32 @@ export default defineEntity({
         kind: "range",
         placeholder: "Filter net basis...",
         options: [
-          { value: "positive", label: "Positive basis" },
-          { value: "zero", label: "Zero basis" },
-          { value: "negative", label: "Credit / negative" },
-          { value: "gte100", label: "$100 and up" },
-          { value: "gte500", label: "$500 and up" },
+          {
+            value: "positive",
+            label: "Positive basis",
+            expand: { expenseTotalMin: 0.01 },
+          },
+          {
+            value: "zero",
+            label: "Zero basis",
+            expand: { expenseTotalMin: 0, expenseTotalMax: 0 },
+          },
+          {
+            value: "negative",
+            label: "Credit / negative",
+            expand: { expenseTotalMax: -0.01 },
+          },
+          {
+            value: "gte100",
+            label: "$100 and up",
+            expand: { expenseTotalMin: 100 },
+          },
+          {
+            value: "gte500",
+            label: "$500 and up",
+            expand: { expenseTotalMin: 500 },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveNetBasis",
-        },
       },
       {
         columnId: "ledgerExpectedQuantity",
@@ -1568,16 +1584,32 @@ export default defineEntity({
         placeholder: "Filter expected quantity...",
         deriveSchema: true,
         options: [
-          { value: "negative", label: "Negative (sold more than bought)" },
-          { value: "zero", label: "Zero (none expected)" },
-          { value: "positive", label: "One or more expected" },
-          { value: "gte5", label: "5 or more expected" },
-          { value: "unknown", label: "Has lines with no quantity" },
+          {
+            value: "negative",
+            label: "Negative (sold more than bought)",
+            expand: { expectedQuantityMax: -1 },
+          },
+          {
+            value: "zero",
+            label: "Zero (none expected)",
+            expand: { expectedQuantityMin: 0, expectedQuantityMax: 0 },
+          },
+          {
+            value: "positive",
+            label: "One or more expected",
+            expand: { expectedQuantityMin: 1 },
+          },
+          {
+            value: "gte5",
+            label: "5 or more expected",
+            expand: { expectedQuantityMin: 5 },
+          },
+          {
+            value: "unknown",
+            label: "Has lines with no quantity",
+            expand: { unknownQuantityLinesFilter: "has" },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveExpectedQuantity",
-        },
       },
       {
         columnId: "quantityVariance",
@@ -1585,13 +1617,17 @@ export default defineEntity({
         wire: { kind: "param", name: "quantityVarianceFilter" },
         placeholder: "Filter shelf vs. ledger...",
         options: [
-          { value: "mismatched", label: "Shelf disagrees with ledger" },
-          { value: "matched", label: "Shelf matches ledger" },
+          {
+            value: "mismatched",
+            label: "Shelf disagrees with ledger",
+            expand: { quantityVarianceFilter: "mismatched" },
+          },
+          {
+            value: "matched",
+            label: "Shelf matches ledger",
+            expand: { quantityVarianceFilter: "matched" },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolveQuantityVariance",
-        },
       },
       {
         columnId: "notes",
@@ -1644,15 +1680,29 @@ export default defineEntity({
         wire: { kind: "param", name: "pricePresenceFilter" },
         placeholder: "Filter price...",
         options: [
-          { value: "has", label: "Has price", meta: true },
-          { value: "none", label: "(none)", meta: true },
-          { value: "none-real", label: "No price (excluding buckets)" },
-          { value: "none-bucket", label: "No price (buckets only)" },
+          {
+            value: "has",
+            label: "Has price",
+            meta: true,
+            expand: { pricePresenceFilter: "has" },
+          },
+          {
+            value: "none",
+            label: "(none)",
+            meta: true,
+            expand: { pricePresenceFilter: "none" },
+          },
+          {
+            value: "none-real",
+            label: "No price (excluding buckets)",
+            expand: { pricePresenceFilter: "none", miscBucketFilter: "none" },
+          },
+          {
+            value: "none-bucket",
+            label: "No price (buckets only)",
+            expand: { pricePresenceFilter: "none", miscBucketFilter: "has" },
+          },
         ],
-        expandRef: {
-          module: "~/entities/filter-behavior",
-          export: "resolvePrice",
-        },
       },
       {
         columnId: "food",
@@ -2397,6 +2447,7 @@ export default defineEntity({
           facet: "provenance",
           label: "No image (stocked)",
           message: "No product image is attached.",
+          coverage: "productsWithNoImages",
         },
         {
           id: "amazon_asin",

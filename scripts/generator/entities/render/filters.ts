@@ -44,6 +44,19 @@ export const sourceRefImports = (
   };
 };
 
+/** Preset value → the filter fields it sets, or null when none is declared as data. */
+const presetTable = (
+  descriptor: FilterDescriptor,
+): Record<
+  string,
+  Readonly<Record<string, string | number | boolean>>
+> | null => {
+  const presets = (descriptor.options ?? []).flatMap((option) =>
+    option.expand === undefined ? [] : [[option.value, option.expand] as const],
+  );
+  return presets.length === 0 ? null : Object.fromEntries(presets);
+};
+
 export const renderFilterArtifacts = (
   entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
@@ -71,7 +84,13 @@ export const renderFilterArtifacts = (
       `placeholder:${JSON.stringify(descriptor.placeholder)}`,
       ...(descriptor.options === null
         ? []
-        : [`options:${compactLiteral(descriptor.options)}`]),
+        : [
+            `options:${compactLiteral(
+              descriptor.options.map(
+                ({ expand: _expand, ...option }) => option,
+              ),
+            )}`,
+          ]),
       ...(descriptor.optionsRef === null
         ? []
         : [`options:${alias(descriptor.optionsRef)}`]),
@@ -90,6 +109,9 @@ export const renderFilterArtifacts = (
       ...(descriptor.expandRef === null
         ? []
         : [`expand:${alias(descriptor.expandRef)}`]),
+      ...(presetTable(descriptor) === null
+        ? []
+        : [`expand:presetExpand(${compactLiteral(presetTable(descriptor))})`]),
       ...(descriptor.urlOnly ? ["urlOnly:true"] : []),
       ...(descriptor.nullable === null
         ? []
@@ -97,6 +119,9 @@ export const renderFilterArtifacts = (
     ];
     return `{${properties.join(",")}}`;
   };
+  const usesPresets = filterEntities.some(({ filterDescriptors }) =>
+    filterDescriptors.some((descriptor) => presetTable(descriptor) !== null),
+  );
   const runtimeRoster = filterEntities
     .map(
       ({ key, filterDescriptors }) =>
@@ -139,13 +164,16 @@ export const renderFilterArtifacts = (
             ),
           ],
           audit: filterAudit,
-          rangeExpanders: filterDescriptors.flatMap((descriptor) =>
-            descriptor.kind === "range" && descriptor.expandRef !== null
-              ? [
-                  `${descriptor.columnId}:${descriptor.expandRef.module}#${descriptor.expandRef.export}`,
-                ]
-              : [],
-          ),
+          rangeExpanders: filterDescriptors.flatMap((descriptor) => {
+            if (descriptor.kind !== "range") return [];
+            if (descriptor.expandRef !== null)
+              return [
+                `${descriptor.columnId}:${descriptor.expandRef.module}#${descriptor.expandRef.export}`,
+              ];
+            return presetTable(descriptor) === null
+              ? []
+              : [`${descriptor.columnId}:presets`];
+          }),
         },
       ],
     ),
@@ -182,6 +210,9 @@ export const renderFilterArtifacts = (
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n' +
         'import { parseShortcodeFor } from "@cubby/schemas/identifiers";\n' +
+        (usesPresets
+          ? 'import { presetExpand } from "~/entities/filter-presets";\n'
+          : "") +
         `${runtimeImports}\n` +
         'import type { FilterSpec } from "../filter-manifest";\n\n' +
         "// Generated runtime filter assembly stays one entity per line.\n// oxfmt-ignore\n" +

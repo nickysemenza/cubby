@@ -3,16 +3,8 @@ import { fdcId } from "@cubby/usda-schemas";
 import { gtin } from "./external-id";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import { locationRelatedFilterFields } from "./related-view";
-import {
-  generatedLocationFieldSchemas,
-  generatedLocationFilterFields,
-} from "./generated/entity-field-schemas.location.gen";
-import {
-  auditDateFilterFields,
-  numericRangeFields,
-  timestampedFields,
-} from "./base-entity";
+import { generatedLocationFieldSchemas } from "./generated/entity-field-schemas.location.gen";
+import { numericRangeFields, timestampedFields } from "./base-entity";
 import { amount } from "./codec";
 import { money, moneyNullable } from "./money";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
@@ -33,6 +25,15 @@ import {
   locationValuation,
 } from "./location-fields";
 import { displayImagesField } from "./display-images";
+import { locationBaseFilterFields } from "./generated/location.gen";
+
+export {
+  locationCreateInput,
+  locationUpdateData,
+  locationUpdateInput,
+  type LocationCreateInput,
+  type LocationUpdateInput,
+} from "./generated/location.gen";
 
 export {
   locationIdentityProductOut,
@@ -45,9 +46,7 @@ export type LocationType = z.infer<typeof locationType>;
 export { locationTypeValues } from "@cubby/shared";
 
 export const locationFilterFields = {
-  ...auditDateFilterFields,
-  ...locationRelatedFilterFields,
-  ...generatedLocationFilterFields,
+  ...locationBaseFilterFields,
   /**
    * Locations that ARE this product. Matches the identity link, not stock
    * held at the location — for that, use the inventory list.
@@ -363,19 +362,6 @@ export const infLocationWithSideEffects = infLocation.and(
 
 const optionalLocationShortcode = locationShortcode.nullable().optional();
 
-export const locationCreateInput = z.object(
-  generatedLocationFieldSchemas.create,
-);
-
-export const locationUpdateData = z.object(
-  generatedLocationFieldSchemas.update,
-);
-
-export const locationUpdateInput = z.object({
-  id: locationShortcode,
-  data: locationUpdateData,
-});
-
 export const locationBulkUpdateParentInput = z.object({
   ids: z.array(locationShortcode).min(1).max(3000),
   parentId: optionalLocationShortcode,
@@ -397,8 +383,6 @@ export const locationShortcodeInput = z.object({
   shortcode: locationShortcode,
 });
 
-export type LocationCreateInput = z.infer<typeof locationCreateInput>;
-export type LocationUpdateInput = z.infer<typeof locationUpdateInput>;
 export type LocationBulkUpdateParentInput = z.infer<
   typeof locationBulkUpdateParentInput
 >;

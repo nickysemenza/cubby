@@ -15,6 +15,7 @@ type CompiledDataQualityCheck = Readonly<{
   weight: number;
   label: string;
   message: string;
+  coverage?: string;
 }>;
 
 type CompiledDataQuality = Readonly<{
@@ -61,6 +62,7 @@ export const compileDataQuality = (
       weight: number;
       label: string;
       message: string;
+      coverage?: string;
     }[];
     exceptions: boolean;
     related: readonly string[];
@@ -150,6 +152,7 @@ export const compileDataQuality = (
       renderer: { list: DATA_QUALITY_LIST_RENDERER, detail: null },
       mobile: null,
       listHidden: true,
+      valueOptions: null,
       preview: false,
     },
     // The real read schema is `dataQuality` from `@cubby/schemas/data-quality`,
@@ -191,6 +194,7 @@ export const compileDataQuality = (
       renderer: null,
       mobile: null,
       listHidden: false,
+      valueOptions: null,
       preview: false,
     },
     validation: { read: null, create: null, update: null },

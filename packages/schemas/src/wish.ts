@@ -1,41 +1,24 @@
 import { z } from "zod";
-import { auditDateFilterFields } from "./base-entity";
-import {
-  generatedWishFieldSchemas,
-  generatedWishFilterFields,
-} from "./generated/entity-field-schemas.wish.gen";
-import { productShortcode, wishShortcode } from "./identifiers";
+import { productShortcode } from "./identifiers";
+import { wishBaseFilterFields, wishOut } from "./generated/wish.gen";
+
+export {
+  wishCreateInput,
+  wishUpdateData,
+  wishUpdateInput,
+  wishOut,
+  wishListItemOut,
+  type WishCreateInput,
+  type WishUpdateData,
+  type WishUpdateInput,
+  type WishOut,
+  type WishListItemOut,
+} from "./generated/wish.gen";
 export { wishCandidateOut, type WishCandidateOut } from "./wish-fields";
 import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
-import { wishRelatedFilterFields } from "./related-view";
-import { displayImagesField } from "./display-images";
-
-export const wishCreateInput = z.object(generatedWishFieldSchemas.create);
-export type WishCreateInput = z.infer<typeof wishCreateInput>;
-
-export const wishUpdateData = z.object(generatedWishFieldSchemas.update);
-export type WishUpdateData = z.infer<typeof wishUpdateData>;
-
-export const wishUpdateInput = z.object({
-  id: wishShortcode,
-  data: wishUpdateData,
-});
-export type WishUpdateInput = z.infer<typeof wishUpdateInput>;
-
-export const wishOut = z.object({
-  ...generatedWishFieldSchemas.read,
-});
-export type WishOut = z.infer<typeof wishOut>;
-
-export const wishListItemOut = wishOut.extend({
-  displayImages: displayImagesField,
-});
-export type WishListItemOut = z.infer<typeof wishListItemOut>;
 
 export const wishFilterFields = {
-  ...auditDateFilterFields,
-  ...wishRelatedFilterFields,
-  ...generatedWishFilterFields,
+  ...wishBaseFilterFields,
   candidateProductId: oneOrMany(productShortcode).optional(),
 };
 export const wishFiltersSchema = z.object(wishFilterFields);
