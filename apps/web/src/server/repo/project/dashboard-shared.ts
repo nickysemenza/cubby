@@ -3,7 +3,7 @@
  *   - an empty/omitted `statusScope` adds NO status condition (all four
  *     statuses). It used to silently fall back to `!= 'done'`, which nothing
  *     in the chip bar said — callers that want the live-only default now pass
- *     `LIVE_PROJECT_STATUSES` explicitly (see the MCP `get_house_status`
+ *     `LIVE_PROJECT_STATUSES` explicitly (see the MCP `project_overview.house_status`
  *     tool and the Overview default);
  *   - a date window filters the PROJECT set too (interval overlap), not just
  *     the expense/task aggregates hanging off it — and since `startDate`/

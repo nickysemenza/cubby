@@ -191,7 +191,7 @@ export const createInputImages = z.object({
 
 export const updateInputImages = z.object({
   // All three are public `IMG-` codes now that `Image` mints a shortcode at
-  // insert time: `pendingImageIds` comes back from `create_file_uploads`/
+  // insert time: `pendingImageIds` comes back from `image.create_uploads`/
   // `image.uploadImage`/`importImageFromUrl`, `removeImageIds`/`imageOrder`
   // from `ImageOut`. Every one has to be resolved to a uuid (via
   // `resolveAllPresent`) before it reaches a join-table write.
@@ -378,12 +378,12 @@ export const attachFileFields = {
     .string()
     .optional()
     .describe(
-      "Base64-encoded file bytes, optionally a `data:<type>;base64,...` URI. Provide exactly one of `url`, `data`, or `uploadId`. Unusable at photo sizes — stage the file with create_file_uploads instead.",
+      "Base64-encoded file bytes, optionally a `data:<type>;base64,...` URI. Provide exactly one of `url`, `data`, or `uploadId`. Unusable at photo sizes — stage the file with image.create_uploads instead.",
     ),
   uploadId: imageShortcode
     .optional()
     .describe(
-      "`IMG-` code from create_file_uploads, after the presigned PUT succeeded. This is the route for a file on local disk: neither `url` nor `data` can carry one. Provide exactly one of `url`, `data`, or `uploadId`.",
+      "`IMG-` code from image.create_uploads, after the presigned PUT succeeded. This is the route for a file on local disk: neither `url` nor `data` can carry one. Provide exactly one of `url`, `data`, or `uploadId`.",
     ),
   contentType: z
     .string()
@@ -487,11 +487,11 @@ export type AttachFileResponse = z.infer<typeof attachFileResponse>;
  * blocks `file://`, localhost, and private IPs as an SSRF guard), while `data`
  * costs ~82k tokens for a single photo. The browser has always had a two-phase
  * presigned flow for exactly this; this exposes it, so the client PUTs the bytes
- * straight to R2 and hands `attach_files` the id.
+ * straight to R2 and hands `image.attach_files` the id.
  */
 export const createFileUploadInput = z.object({
   entityId: attachableImageEntityId.describe(
-    "Shortcode of the entity the file will be attached to. Only used to file the object readably; the attachment itself happens in attach_files.",
+    "Shortcode of the entity the file will be attached to. Only used to file the object readably; the attachment itself happens in image.attach_files.",
   ),
   filename: z.string().min(1).describe("Filename, including its extension."),
   contentType: z
@@ -503,7 +503,7 @@ export const createFileUploadInput = z.object({
     .int()
     .positive()
     .describe(
-      "Byte size of the file. Recorded on the staged row; the real size is measured again when attach_files reads the object back.",
+      "Byte size of the file. Recorded on the staged row; the real size is measured again when image.attach_files reads the object back.",
     ),
 });
 export type CreateFileUploadInput = z.infer<typeof createFileUploadInput>;
@@ -513,7 +513,7 @@ export const createFileUploadResponse = z.object({
   // shortcode at insert time like every other entity, and a raw uuid never
   // crosses this API.
   uploadId: imageShortcode.describe(
-    "`IMG-` code of the staged row. Pass to attach_files as `uploadId` once the PUT succeeds.",
+    "`IMG-` code of the staged row. Pass to image.attach_files as `uploadId` once the PUT succeeds.",
   ),
   uploadUrl: z
     .url()

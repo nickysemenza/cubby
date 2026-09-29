@@ -247,7 +247,7 @@ const requestContextSchema = z.custom<McpRequestContext>(
 );
 
 /** The policy-selected request context `prepareToolExtra` placed in the SDK's untyped authInfo bag. */
-export function getRequestContext(extra: ToolExtra): McpRequestContext {
+function getRequestContext(extra: ToolExtra): McpRequestContext {
   const candidate = extra.authInfo?.extra?.requestContext;
   if (candidate === undefined)
     throw new Error("Authenticated request context is missing");

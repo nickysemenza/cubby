@@ -1598,7 +1598,7 @@ const projectAttentionItemFields = {
   name: z.string(),
   /**
    * One-sentence rendering of `name` + `facts`, for prose consumers (MCP
-   * `get_house_status`, `list_problems`). Produced ONLY by
+   * `project_overview.house_status`, `activity.problems`). Produced ONLY by
    * {@link describeAttentionItem} — never hand-written at a rule site, which is
    * how the two builders drifted apart in the first place.
    */
@@ -1675,7 +1675,7 @@ export type ProjectAttentionDescribable = DistributivePick<
 
 /**
  * The ONE wording source for an attention row's sentence. Every prose consumer
- * (MCP `get_house_status`, `list_problems`) reads `description`, which is only
+ * (MCP `project_overview.house_status`, `activity.problems`) reads `description`, which is only
  * ever produced here.
  *
  * Deliberately UNFORMATTED — ISO dates and whole dollars. Its readers are

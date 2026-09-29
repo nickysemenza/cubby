@@ -37,7 +37,7 @@ const houseStatusTask = schemas.taskOut.pick({
 });
 
 /** `dashboardSummary` minus `filterOptions` (UI select options only). */
-export const projectHouseStatusOut = schemas.projectDashboardSummaryOut
+const projectHouseStatusOut = schemas.projectDashboardSummaryOut
   .omit({
     filterOptions: true,
     projects: true,
@@ -74,7 +74,7 @@ const projectBudgetRow = z.object({
   overBudget: z.boolean().describe("projected exceeds estimate"),
 });
 
-export const projectBudgetOut = z.object({
+const projectBudgetOut = z.object({
   projects: z
     .array(projectBudgetRow)
     .describe("Worst overrun first; unbudgeted projects last"),

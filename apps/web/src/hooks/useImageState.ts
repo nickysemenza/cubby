@@ -44,7 +44,7 @@ export function useImageState() {
     // Pending documents merge into pendingImageIds — same association path.
     // `PendingImage.id` is plain `string` (the same gallery component also
     // handles existing images), but the value underneath is always the
-    // `IMG-` shortcode `create_file_uploads`/`image.uploadImage` hand back —
+    // `IMG-` shortcode `image.create_uploads`/`image.uploadImage` hand back —
     // parsed at this shared gallery boundary before the update input is built.
     // A Product role correction deliberately reuses pendingImageIds: the
     // product repository accepts an already-active attachment and applies its

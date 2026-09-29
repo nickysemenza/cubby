@@ -120,7 +120,7 @@ describe("MCP workflow tools", () => {
     ).toBe(8);
   });
 
-  it("add_recipe_to_meal defaults to compact coverage and opts into nutrition", () => {
+  it("meal_recipe.add defaults to compact coverage and opts into nutrition", () => {
     const meal = mock(mealOut, {
       overrides: { name: "Dinner", totals: knownTotals, recipes: [] },
     });
@@ -438,7 +438,7 @@ describe("MCP workflow tools", () => {
     });
   });
 
-  it("get_meal_preparations nutrition=kcal keeps cost and only the kcal estimate", () => {
+  it("nutrition.preparations nutrition=kcal keeps cost and only the kcal estimate", () => {
     const view = mock(getMealPreparationsOut, {
       overrides: {
         preparations: [],

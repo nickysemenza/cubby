@@ -293,7 +293,7 @@ const toVia = (via: { recipe_id: string; name: string }[]): NeedVia[] =>
  * costing engine's conversion kernel). This service owns the DB loads and
  * shapes the batched WASM results.
  *
- * This is the shared engine behind "what can I make?", the find_cookable_recipes
+ * This is the shared engine behind "what can I make?", the recipe_insights.cookable
  * agent tool, and the meal-planning shopping list.
  */
 export class AvailabilityService {

@@ -33,7 +33,7 @@ const callKernel = (
   );
 
 // A scored entity's write summary carries its data-quality coverage beside
-// the identity; a get summary does not (`response-projection.ts`).
+// the identity; a get summary does not (`contracts/mcp-projections.ts`).
 const wishSummaryResultSchema = z.object({
   item: z
     .object({

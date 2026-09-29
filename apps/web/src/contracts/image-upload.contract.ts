@@ -27,7 +27,7 @@ const {
 } = attachFileFields;
 
 /** One file to attach; the target entity is named by its shortcode's prefix. */
-export const attachFileItem = z
+const attachFileItem = z
   .object({
     ...attachFileEntityless,
     entityId: attachFileEntityless.entityId.describe(

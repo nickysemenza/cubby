@@ -171,7 +171,7 @@ export const productCreateManyInput = z
 /**
  * Lookup-only name resolution for imports: "which of these receipt lines already
  * has a Product?" without minting anything. The ingredient twin
- * (`resolve_ingredients`) creates on miss because an ingredient is just a
+ * (`entity.resolve`) creates on miss because an ingredient is just a
  * name; a Product is identity plus cost basis, so the create stays a separate,
  * deliberate call after the agent has read the candidates.
  */
@@ -614,7 +614,7 @@ const productExternalIdMcpEntityOut = externalIdOut.omit({ id: true });
  * `syncProductUnitMappings` (repo/product/update-helpers.ts) accepts to update
  * an existing row in place — a mapping resent without it is hard-deleted and
  * reinserted, losing `createdAt`/`updatedAt` and its audit trail. External-id
- * rows have their own slot-addressed patch tool (`patch_products_external_ids`)
+ * rows have their own slot-addressed patch tool (`product_enrichment.patch_external_ids`)
  * and stay id-less, but a unit mapping has no such tool, so this child row
  * keeps its raw uuid across the MCP boundary — the same "id is the follow-up
  * write handle" carve-out as mealRecipe `id` and recipe section `lineId` (see

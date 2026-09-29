@@ -57,7 +57,7 @@ export function getRegisteredTool(
   return getRegisteredTools(server)[name];
 }
 
-export interface DeclaredToolSchemas {
+interface DeclaredToolSchemas {
   readonly name: string;
   readonly description?: string;
   readonly inputSchema?: z.ZodType;
@@ -73,7 +73,7 @@ export interface DeclaredToolSchemas {
  * that need every registered tool's real Zod schemas, e.g. a `toWire` parity
  * check across the whole catalog.
  */
-export function listDeclaredToolSchemas(
+function listDeclaredToolSchemas(
   server: McpServer,
 ): readonly DeclaredToolSchemas[] {
   const registeredTools = getRegisteredTools(server);

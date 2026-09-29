@@ -44,7 +44,7 @@ export interface KernelActionRef<K extends Kind = Kind> {
  * tool accepts `{ items: [...] }`. Items succeed or fail independently and the
  * result is `{ summary, results }` (see `server/mcp/batch.ts`).
  */
-export interface McpBatchSpec<Output> {
+interface McpBatchSpec<Output> {
   /** Default 50. */
   readonly maxItems?: number;
   /** Default `summary`: `{ index, status, reference }` per item. */

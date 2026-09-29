@@ -89,7 +89,7 @@ interface RecipeLinePatchUpdate {
  * resends its lines, each with its id so the others update in place with
  * their current values. Instructions are left out, so they are untouched.
  */
-export function buildRecipeLinePatch(
+function buildRecipeLinePatch(
   recipe: RecipeDetail,
   lineId: string,
   patch: RecipeLinePatch,

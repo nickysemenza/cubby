@@ -31,7 +31,7 @@ export type PlantOut = z.infer<typeof plantOut>;
 
 export const plantListResponse = createPaginatedResponseSchema(plantOut);
 
-/** `resolve_plants`: a cultivar or species name, optionally scoped to a crop. */
+/** `entity.resolve`: a cultivar or species name, optionally scoped to a crop. */
 export const resolvePlantsInput = z.object({
   plants: z
     .array(

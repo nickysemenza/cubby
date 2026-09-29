@@ -602,7 +602,7 @@ type ExplicitProductResolution = NonNullable<
 >[number];
 
 /**
- * Resolve the explicit `commit_purchase_import` path's caller-supplied
+ * Resolve the explicit `purchase_import.commit` path's caller-supplied
  * resolutions into the same shape `decideLineIdentities` produces. Adjustment
  * lines (tax/shipping/discount/etc.) never carry a Product, so the resolution
  * roster the MCP layer builds is keyed to principal lines only — a missing

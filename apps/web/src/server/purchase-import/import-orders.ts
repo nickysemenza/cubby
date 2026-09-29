@@ -871,7 +871,7 @@ export async function validatePurchaseImport(
   const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
   if (scope.public.purpose !== "purchase_validation")
     throw new Error(
-      "validate_purchase_import requires a purchase validation run",
+      "purchase_import.validate requires a purchase validation run",
     );
   if (scope.public.status !== "running")
     throw new Error(`Import run is fenced in status ${scope.public.status}`);

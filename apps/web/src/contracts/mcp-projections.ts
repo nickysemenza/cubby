@@ -204,13 +204,6 @@ export function slimUsdaFoodListItem<TInput>(row: TInput) {
   return mcpUsdaFoodListItemOut.parse(item);
 }
 
-export function respond<TInput, TOutput>(
-  result: TInput,
-  project: (row: TInput) => TOutput,
-): TOutput {
-  return project(result);
-}
-
 export interface ProjectedList<TItem> {
   items: TItem[];
 }

@@ -517,7 +517,7 @@ describe("project repository — date windows (derivation)", () => {
 
 /**
  * `projectPortfolioAnalytics` backs both the Analytics tab's charts and the
- * MCP `get_project_budget` tool, and the only coverage it had was a mocked
+ * MCP `project_overview.budget` tool, and the only coverage it had was a mocked
  * unit test (`mcp/server.unit.test.ts`). These pin the two aggregates whose
  * numbers come out of the subtree rollup — `costVsEstimate` and
  * `spendingByProject` — against a parent/child pair with spend on BOTH, plus

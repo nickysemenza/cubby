@@ -646,10 +646,14 @@ Workflow operations are explicit Start functions with no entity business logic i
 the transport adapter. Removing an operation has no deployment shim: a tab loaded
 before that deployment must reload before calling the removed function.
 
-MCP invokes `executeEntity` directly through the `entity` and `entity_read` tools and publishes its
-machine-readable contract at `entities://catalog`. The `entity_read` tool
-uses the same generated get/list/search contracts with mutation actions excluded
-by its input schema. Workflow-shaped MCP tools remain separate. MCP, jobs, repositories, entity modules, and kernel tests must
+The MCP surface is declared once in `apps/web/src/contracts/mcp-tools.ts`: 21
+tools, each a group of actions called as `{ action, ...fields }`, where an
+action is a contract member or an entity-kernel verb. `pnpm generate` binds
+every action to its `implementOperationDomain` handler and refuses a tool that
+mixes queries and mutations, so read-only tools stay auto-approvable. MCP
+invokes `executeEntity` through the kernel verbs of the `entity` (writes) and
+`entity_read` (reads) tools and publishes their machine-readable contract at
+`entities://catalog`. MCP, jobs, repositories, entity modules, and kernel tests must
 not import browser transport modules. Explicit workflow adapters and typed JSONL
 stream routes are the only transport seams; business behavior remains in
 workflow modules.
