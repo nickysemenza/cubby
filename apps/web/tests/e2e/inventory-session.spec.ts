@@ -172,9 +172,9 @@ test("the shelf-disagrees view offers a recount of its worklist", async ({
   await gotoAuthenticatedPage(
     page,
     "/products",
-    page.getByRole("button", { name: "Actions" }),
+    page.getByRole("button", { name: "Actions", exact: true }),
   );
-  await page.getByRole("button", { name: "Actions" }).click();
+  await page.getByRole("button", { name: "Actions", exact: true }).click();
   await page.getByRole("menuitem", { name: /Saved views/ }).click();
   await page.getByRole("menuitem", { name: /Recount these/ }).click();
   await expect(page).toHaveURL(
@@ -236,9 +236,13 @@ test("shelf triage stocks with the ledger default, parks in Unknown, and discard
     "Other",
   );
   await discard.getByRole("button", { name: "Discard", exact: true }).click();
-  await expect(queueItem(discardName)).toContainText("done", {
-    timeout: 15000,
-  });
+  // Settling the last outstanding product ends the pass on its summary; with a
+  // stranger's rows still queued, this one shows as done instead.
+  await expect(
+    page
+      .getByRole("heading", { name: "Shelf triage complete" })
+      .or(queueItem(discardName).filter({ hasText: "done" })),
+  ).toBeVisible({ timeout: 15000 });
 });
 
 test("the not-on-a-shelf view offers a triage of its rows", async ({
@@ -247,9 +251,9 @@ test("the not-on-a-shelf view offers a triage of its rows", async ({
   await gotoAuthenticatedPage(
     page,
     "/products",
-    page.getByRole("button", { name: "Actions" }),
+    page.getByRole("button", { name: "Actions", exact: true }),
   );
-  await page.getByRole("button", { name: "Actions" }).click();
+  await page.getByRole("button", { name: "Actions", exact: true }).click();
   await page.getByRole("menuitem", { name: /Saved views/ }).click();
   await page.getByRole("menuitem", { name: /Triage these/ }).click();
   await expect(page).toHaveURL(/\/inventory\/triage$/);
