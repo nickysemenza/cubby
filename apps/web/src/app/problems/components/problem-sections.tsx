@@ -81,6 +81,8 @@ import {
 import { byManufacturer, CodeChip, createdAgoDetail } from "./render-helpers";
 import {
   DuplicateProductMergeFix,
+  DuplicateAccountAliasFix,
+  DuplicateTransactionRefFix,
   DuplicateVendorMergeFix,
   OrphanedDeleteFix,
 } from "./tier2-fixes";
@@ -1725,6 +1727,12 @@ const DECLARED_SECTIONS = [
           item.transactionIds,
         ),
       ],
+      inlineFix: {
+        label: "Choose keeper",
+        render: (close) => (
+          <DuplicateTransactionRefFix variant={item} close={close} />
+        ),
+      },
     }),
   }),
   section({
@@ -1745,6 +1753,12 @@ const DECLARED_SECTIONS = [
           item.accountIds,
         ),
       ],
+      inlineFix: {
+        label: "Choose keeper",
+        render: (close) => (
+          <DuplicateAccountAliasFix variant={item} close={close} />
+        ),
+      },
     }),
   }),
   section({
