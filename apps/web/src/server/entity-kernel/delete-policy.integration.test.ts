@@ -29,7 +29,12 @@ import {
 import {
   entityManifest,
   type ShortcodeEntity,
+  shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
+import {
+  EXTERNAL_ID_KINDS,
+  entityExternalIdKind,
+} from "@cubby/schemas/external-id";
 import type {
   DeviceId,
   ExpenseId,
@@ -68,6 +73,7 @@ import {
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
 import {
+  entityExternalId,
   entityLink,
   run as runTable,
   expenseAttribution,
@@ -111,6 +117,7 @@ import {
   getDb,
   insertAndReturn,
 } from "~/server/repo/database-helpers";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { linkValues } from "~/server/repo/entity-links";
 import { attachExistingImageToEntity } from "~/server/repo/image";
 import { createImageFixture } from "~/server/repo/repo.fixtures";
@@ -181,6 +188,47 @@ const physical = (edge: IncomingEdge) => {
 
 const liveRow = (softDeletable: boolean) =>
   softDeletable ? sql`AND s."deletedAt" IS NULL` : sql``;
+
+/**
+ * Insert one live identifier on `targetId` of a kind its entity kind accepts
+ * (`EXTERNAL_ID_KINDS`): the generic filler cannot satisfy the pair CHECK or
+ * the registered-source FK.
+ */
+const insertExternalIdAt = async (
+  db: Database,
+  targetId: string,
+): Promise<boolean> => {
+  const [identity] = z
+    .array(z.object({ kind: z.string() }))
+    .parse(
+      (
+        await getDb(db).execute(
+          sql`SELECT "kind" FROM "Entity" WHERE "id"::text = ${targetId}`,
+        )
+      ).rows,
+    );
+  const kind = Object.entries(EXTERNAL_ID_KINDS).find(([, declaration]) =>
+    declaration.entities.some((entity: string) => entity === identity?.kind),
+  )?.[0];
+  const parsedKind = entityExternalIdKind.safeParse(kind);
+  if (!identity || !parsedKind.success) return false;
+  const entityKind = z.enum(shortcodeEntities).safeParse(identity.kind);
+  if (!entityKind.success) return false;
+  return getDb(db)
+    .transaction(async (tx) => {
+      await ensureExternalSources(tx, ["delete-policy"]);
+      await tx.insert(entityExternalId).values({
+        entityId: targetId,
+        entityKind: entityKind.data,
+        source: "delete-policy",
+        kind: parsedKind.data,
+        externalId: crypto.randomUUID(),
+        isPrimary: EXTERNAL_ID_KINDS[parsedKind.data].primarySlot ? true : null,
+      });
+      return true;
+    })
+    .catch(() => false);
+};
 
 /**
  * Insert one live link of the edge's kind naming `targetId` at the edge's end
@@ -413,6 +461,7 @@ const pointEdgeAt = async (
   `);
   if (repointed) return true;
   if (edge.scope) return insertLinkAt(db, edge, targetId);
+  if (tableName === "EntityExternalId") return insertExternalIdAt(db, targetId);
 
   // SAFETY: INCOMING_EDGES is built only from Postgres schema columns.
   const config = getTableConfig((edge.column as PgColumn).table as PgTable);
@@ -740,6 +789,8 @@ async function seedProductMatchCandidate(db: Database, ids: StagingIds) {
 
 /** LedgerSourceClaim: exactly one of expenseId/ledgerTransferId, never both. */
 async function seedLedgerSourceClaims(db: Database, ids: StagingIds) {
+  // Every claim source names a registered ExternalSource (FK).
+  await ensureExternalSources(db, ["delete-policy"]);
   const claimEvidence = {
     normalizedEvidence: {
       amount: 10,
@@ -771,6 +822,7 @@ async function seedLedgerSourceClaims(db: Database, ids: StagingIds) {
 /** StatementRow.accountId. */
 async function seedStatementRow(db: Database, ids: StagingIds) {
   if (!ids.financialAccountId) return;
+  await ensureExternalSources(db, ["delete-policy"]);
   const batch = await insertAndReturn(db, statementImport, {
     source: "delete-policy",
     label: "Delete policy fixture",

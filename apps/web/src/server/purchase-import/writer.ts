@@ -41,13 +41,11 @@ import { runJevChoice, type JevChoiceResult } from "~/server/ai/jev";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityAttachment,
+  entityExternalId,
   expense,
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
-  runFinding,
-  run as runTable,
-  runMutation,
   importSourceClaim,
   ledgerParty,
   ledgerSourceClaim,
@@ -55,9 +53,11 @@ import {
   orderMailAttachment,
   orderMailEvent,
   product,
-  productExternalId,
   purchase,
   purchasePaymentEvidence,
+  run as runTable,
+  runFinding,
+  runMutation,
   vendorAccount,
 } from "~/server/db/schema";
 import { assertRunCapabilityById } from "~/server/purchase-import/capabilities";
@@ -479,27 +479,24 @@ async function decideLineIdentities(
     const identifiers = lineIdentifiers(line);
     const [externalMatch] = identifiers.length
       ? await database
-          .select({ productId: productExternalId.productId })
-          .from(productExternalId)
+          .select({ productId: entityExternalId.entityId })
+          .from(entityExternalId)
           .innerJoin(
             product,
-            and(
-              eq(product.id, productExternalId.productId),
-              notDeleted(product),
-            ),
+            and(eq(product.id, entityExternalId.entityId), notDeleted(product)),
           )
           .where(
             and(
-              eq(productExternalId.source, source),
+              eq(entityExternalId.source, source),
               or(
                 ...identifiers.map((identifier) =>
                   and(
-                    eq(productExternalId.kind, identifier.kind),
-                    eq(productExternalId.externalId, identifier.externalId),
+                    eq(entityExternalId.kind, identifier.kind),
+                    eq(entityExternalId.externalId, identifier.externalId),
                   ),
                 ),
               ),
-              notDeleted(productExternalId),
+              notDeleted(entityExternalId),
             ),
           )
           .limit(1)

@@ -70,7 +70,7 @@ export const appearsInRecipesRefsForIngredientSql = (
 
 export const cookbookOnlyForIngredientSql = (ingredientRef: string): string =>
   `(SELECT count(DISTINCT rs."recipeId") > 0 ` +
-  `AND bool_and(r."SourceType" = 'Book' AND r."SourceData" IS NOT NULL AND r."SourceData" <> '') ` +
+  `AND bool_and(r."sourceType" = 'Book' AND (r."cookbookId" IS NOT NULL OR coalesce(r."sourceLabel", '') <> '')) ` +
   `FROM "RecipeSectionIngredient" rsi ` +
   `JOIN "RecipeSection" rs ON rs."id" = rsi."recipeSectionId" AND rs."deletedAt" IS NULL ` +
   `JOIN "Recipe" r ON r."id" = rs."recipeId" AND r."deletedAt" IS NULL ` +
@@ -165,8 +165,10 @@ export const dbRecipeToTopLevel = (
   // source badge, no fork pointer) rather than forcing every caller to join a
   // table it doesn't otherwise need.
   recipeData: RecipeSelect & {
-    cookbook?: { shortcode: string } | null;
+    cookbook?: { shortcode: string; name?: string } | null;
     forkedFrom?: { shortcode: string; name: string } | null;
+    /** Live Notion page identifiers (`RECIPE_SOURCE_RELATIONS`). */
+    externalIds?: { externalId: string }[];
   },
 ): RecipeTopLevel => {
   return {
@@ -174,19 +176,18 @@ export const dbRecipeToTopLevel = (
     name: recipeData.name,
     createdAt: recipeData.createdAt,
     updatedAt: recipeData.updatedAt,
-    // The DB stores provenance as SourceType + SourceData; the API exposes it as
-    // meta.url. This derivation is deliberately kept (rather than collapsing the two
-    // columns into one nullable sourceUrl) to avoid a DB migration + backfill —
-    // the `meta` jsonb column added for times/equipment/page holds no url.
+    // A Website recipe's page is `sourceUrl`; the API exposes it as meta.url.
     meta: recipeMetaFromColumns(
       recipeData,
-      recipeData.SourceType === "Website" ? recipeData.SourceData : null,
+      recipeData.sourceType === "Website" ? recipeData.sourceUrl : null,
     ),
     source: recipeSourceFromDb({
-      SourceType: recipeData.SourceType,
-      SourceData: recipeData.SourceData,
-      cookbookId: recipeData.cookbookId,
+      sourceType: recipeData.sourceType,
+      sourceUrl: recipeData.sourceUrl,
+      sourceLabel: recipeData.sourceLabel,
+      cookbookName: recipeData.cookbook?.name ?? null,
       cookbookShortcode: recipeData.cookbook?.shortcode ?? null,
+      notionPageId: recipeData.externalIds?.[0]?.externalId ?? null,
     }),
     yield: recipeData.yield,
     servings: recipeData.servings,

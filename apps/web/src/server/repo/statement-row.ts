@@ -31,6 +31,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import {
   merchantVendorInferences,
   normalizeMerchant,
@@ -38,28 +39,22 @@ import {
 import { statementRowExternalId } from "~/server/repo/statement-row-identity";
 
 /**
- * Every live `(source, externalId)` pair, unnested ONCE.
+ * Every live settlement reference with its transaction's shortcode — the
+ * `(source, externalId)` pairs a statement row matches on.
  *
- * This was a correlated `sourceRefs @> jsonb_build_array(...)` probe per row,
- * and that is why this comment is long. The containment operand is built from
- * the outer row, so it is not a constant and the planner cannot use
- * `FinancialTransaction_sourceRefs_gin_idx` — it fell back to a sequential scan
- * of every transaction FOR EVERY ROW. Measured on 33,681 live rows with only
- * two of the summary's six aggregates: 231 seconds and 13.9M buffer hits.
- * Unnesting once and hash-joining is O(refs + rows), so cost scales with
- * FinancialTransaction (~3.4k refs) rather than with StatementRow.
+ * Joined once and hashed rather than probed per row: cost scales with the
+ * references (~6k) rather than with StatementRow (~34k).
  *
- * LOAD-BEARING, and the guarantee lives in another file: joining without
- * DISTINCT is safe only because `assertSourceRefsAvailable`
- * (repo/financial-transaction.ts) makes `(source, externalId)` globally unique
- * across live transactions. Two transactions claiming one ref would fan this
- * join out and silently duplicate rows.
+ * LOAD-BEARING: joining without DISTINCT is safe because the live
+ * `EntityExternalId_source_kind_externalId_key` unique allows one live owner
+ * per `(source, 'settlement_ref', externalId)`. The transaction must be live
+ * too: its references are soft-deleted with it, and the join says so again.
  */
 const LIVE_REFS = sql`(
-  SELECT r->>'source' AS source, r->>'externalId' AS "externalId", ft.shortcode
-  FROM "FinancialTransaction" ft
-  CROSS JOIN LATERAL jsonb_array_elements(ft."sourceRefs") r
-  WHERE ft."deletedAt" IS NULL
+  SELECT fx."source" AS source, fx."externalId" AS "externalId", ft.shortcode
+  FROM "EntityExternalId" fx
+  JOIN "FinancialTransaction" ft ON ft."id" = fx."entityId" AND ft."deletedAt" IS NULL
+  WHERE fx."kind" = 'settlement_ref' AND fx."deletedAt" IS NULL
 )`;
 
 const FROM_WITH_REFS = sql`FROM "StatementRow"
@@ -344,7 +339,7 @@ const storedRowCount = async (
  * Record provider rows verbatim. Not an importer: it creates no account, no
  * transaction and no link, and makes no match. The server derives every
  * `externalId` so a client cannot mint an identity that disagrees with the one
- * `sourceRefs` matching depends on.
+ * settlement-reference matching depends on.
  *
  * Idempotent — re-submitting an export inserts nothing. Pass `dryRun` to learn
  * what a real call would do without creating the batch or the rows.
@@ -454,6 +449,9 @@ export async function recordStatementRows(
       };
     }
 
+    // Every `source` names a registered ExternalSource (FK); a new provider
+    // registers on its first import.
+    await ensureExternalSources(tx, [source]);
     const batchId =
       existingBatch?.id ??
       (
@@ -513,8 +511,8 @@ export async function recordStatementRows(
  * a SECOND identity for money already recorded, a shape found by hand-writing
  * this self-join against a real Monarch export.
  *
- * Detection, not prevention: the hash is stored externally in
- * `FinancialTransaction.sourceRefs` with no back-reference, so changing what it
+ * Detection, not prevention: the hash is stored externally as a transaction's
+ * `settlement_ref` EntityExternalId with no back-reference, so changing what it
  * covers would orphan every ref (`statement-row-identity.ts` says so at
  * length). Reporting, not repair: `(accountDescriptor, statementDate,
  * providerAmount)` also matches genuine same-day same-amount pairs, so a

@@ -41,6 +41,7 @@ import {
   plantingDisplayName,
 } from "~/server/garden-guides/windows";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { settlementRefsFor } from "~/server/repo/entity-external-ids";
 import { liveLinks } from "~/server/repo/entity-links";
 import { solePurchaseForTransaction } from "~/server/repo/financial-transaction-allocations";
 import { categorySummarySql } from "~/server/repo/product-category-sql";
@@ -943,7 +944,6 @@ async function getFinancialTransactionEmbeddingTexts(
       merchant: financialTransaction.merchant,
       rawDescription: financialTransaction.rawDescription,
       sourceCategory: financialTransaction.sourceCategory,
-      sourceRefs: financialTransaction.sourceRefs,
       notes: financialTransaction.notes,
       accountName: financialAccount.name,
       vendorName: vendor.name,
@@ -987,12 +987,16 @@ async function getFinancialTransactionEmbeddingTexts(
     );
   const rows =
     options.limit == null ? await query : await query.limit(options.limit);
+  const sourceRefs = await settlementRefsFor(
+    db,
+    rows.map((row) => row.id),
+  );
   return rows.map((row) => ({
     entityKind: "financialTransaction",
     entityId: row.id,
     embeddingText: buildFinancialTransactionEmbeddingText({
       ...row,
-      sourceRefTerms: row.sourceRefs.flatMap((ref) => [
+      sourceRefTerms: (sourceRefs.get(row.id) ?? []).flatMap((ref) => [
         ref.source,
         ref.externalId,
       ]),

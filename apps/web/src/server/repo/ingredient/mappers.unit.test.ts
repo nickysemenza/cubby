@@ -92,8 +92,9 @@ const baseRecipe = {
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
   deletedAt: DELETED_AT,
-  SourceType: "Website" as const,
-  SourceData: "https://example.com/pancakes",
+  sourceType: "Website" as const,
+  sourceUrl: "https://example.com/pancakes",
+  sourceLabel: null,
   cookbookId: null,
   forkedFromRecipeId: null,
   yield: null,
@@ -176,7 +177,8 @@ describe("ingredient product mappers", () => {
         externalIds: [
           {
             id: EXTERNAL_ID,
-            productId: PRODUCT_ID,
+            entityId: PRODUCT_ID,
+            entityKind: "product" as const,
             source: "amazon",
             externalId: "B000000001",
             url: "https://example.com/product",
@@ -186,7 +188,8 @@ describe("ingredient product mappers", () => {
           },
           {
             id: DELETED_EXTERNAL_ID,
-            productId: PRODUCT_ID,
+            entityId: PRODUCT_ID,
+            entityKind: "product" as const,
             source: "old",
             externalId: "OLD",
             url: null,

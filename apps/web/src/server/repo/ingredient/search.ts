@@ -50,6 +50,7 @@ import {
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
+import { recipeSourceRelations } from "~/server/repo/database-helpers/relations";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import {
@@ -187,7 +188,7 @@ export const getRecipeUsagesForIngredient = async (
     ),
     with: {
       recipeSection: {
-        with: { recipe: true },
+        with: { recipe: { with: recipeSourceRelations } },
       },
     },
   });

@@ -7,14 +7,14 @@ import {
 } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
-import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { isCanonicalPriceMapping } from "~/lib/price-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { DrizzleTransaction } from "~/server/db";
 import {
   entityAttachment,
-  productExternalId,
+  entityExternalId,
   productUnitMappings,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -25,6 +25,7 @@ import {
   nextImageSortOrder,
   notDeleted,
 } from "~/server/repo/database-helpers";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { detachImagesFromEntity } from "~/server/repo/image";
 import {
   resolveAllPresent,
@@ -140,20 +141,20 @@ export async function ensureSlotPrimaries(
     const key = `${source}\u0000${slot.kind}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const live = await tx.query.productExternalId.findMany({
+    const live = await tx.query.entityExternalId.findMany({
       where: and(
-        eq(productExternalId.productId, productId),
-        eq(productExternalId.source, source),
-        eq(productExternalId.kind, slot.kind),
-        notDeleted(productExternalId),
+        eq(entityExternalId.entityId, productId),
+        eq(entityExternalId.source, source),
+        sql`${entityExternalId.kind} = ${slot.kind}`,
+        notDeleted(entityExternalId),
       ),
-      orderBy: [asc(productExternalId.createdAt), asc(productExternalId.id)],
+      orderBy: [asc(entityExternalId.createdAt), asc(entityExternalId.id)],
     });
     if (live.length === 0 || live.some((row) => row.isPrimary)) continue;
     await tx
-      .update(productExternalId)
+      .update(entityExternalId)
       .set({ isPrimary: true })
-      .where(eq(productExternalId.id, live[0]!.id));
+      .where(eq(entityExternalId.id, live[0]!.id));
   }
 }
 
@@ -168,7 +169,7 @@ export async function ensureSlotPrimaries(
  */
 export function externalIdSlotUnchanged(
   existing: Pick<
-    typeof productExternalId.$inferSelect,
+    typeof entityExternalId.$inferSelect,
     "source" | "kind" | "externalId" | "url" | "isPrimary"
   >,
   incoming: Pick<
@@ -283,22 +284,22 @@ export async function syncPrimaryGtin(
   raw: string | null,
 ): Promise<void> {
   const value = raw === null ? null : requireCanonicalGtin(raw);
-  const live = await tx.query.productExternalId.findMany({
+  const live = await tx.query.entityExternalId.findMany({
     where: and(
-      eq(productExternalId.productId, productId),
-      eq(productExternalId.source, GTIN_SOURCE),
-      notDeleted(productExternalId),
+      eq(entityExternalId.entityId, productId),
+      eq(entityExternalId.source, GTIN_SOURCE),
+      notDeleted(entityExternalId),
     ),
-    orderBy: [asc(productExternalId.createdAt), asc(productExternalId.id)],
+    orderBy: [asc(entityExternalId.createdAt), asc(entityExternalId.id)],
   });
   const currentPrimary = live.find((row) => row.isPrimary);
 
   if (value === null) {
     if (currentPrimary) {
       await tx
-        .update(productExternalId)
+        .update(entityExternalId)
         .set({ deletedAt: new Date() })
-        .where(eq(productExternalId.id, currentPrimary.id));
+        .where(eq(entityExternalId.id, currentPrimary.id));
     }
   } else if (currentPrimary?.externalId !== value) {
     // Demote BEFORE promoting or inserting: the partial unique is a plain
@@ -306,19 +307,21 @@ export async function syncPrimaryGtin(
     // the write aborts. Same ordering `syncProductExternalIds` relies on.
     if (currentPrimary) {
       await tx
-        .update(productExternalId)
+        .update(entityExternalId)
         .set({ isPrimary: false })
-        .where(eq(productExternalId.id, currentPrimary.id));
+        .where(eq(entityExternalId.id, currentPrimary.id));
     }
     const existing = live.find((row) => row.externalId === value);
     if (existing) {
       await tx
-        .update(productExternalId)
+        .update(entityExternalId)
         .set({ isPrimary: true })
-        .where(eq(productExternalId.id, existing.id));
+        .where(eq(entityExternalId.id, existing.id));
     } else {
-      await tx.insert(productExternalId).values({
-        productId,
+      await ensureExternalSources(tx, [GTIN_SOURCE]);
+      await tx.insert(entityExternalId).values({
+        entityId: productId,
+        entityKind: "product" as const,
         source: GTIN_SOURCE,
         kind: GTIN_KIND,
         externalId: value,
@@ -358,10 +361,10 @@ export async function syncProductExternalIds(
   productId: ProductId,
   externalIds: ExternalIdInput[],
 ): Promise<void> {
-  const existingExternalIds = await tx.query.productExternalId.findMany({
+  const existingExternalIds = await tx.query.entityExternalId.findMany({
     where: and(
-      eq(productExternalId.productId, productId),
-      notDeleted(productExternalId),
+      eq(entityExternalId.entityId, productId),
+      notDeleted(entityExternalId),
     ),
   });
 
@@ -375,6 +378,10 @@ export async function syncProductExternalIds(
   // externalId/url, it's a re-submission of the current value, not a real
   // change. Leave that row untouched (no tombstone, no updatedAt bump)
   // instead of soft-deleting it and inserting an identical copy.
+  await ensureExternalSources(
+    tx,
+    normalized.map((eid) => eid.source),
+  );
   const unchangedExistingIds = new Set<string>();
   const toCreate = normalized.filter((eid) => {
     if (eid.id !== undefined) return false;
@@ -402,11 +409,11 @@ export async function syncProductExternalIds(
 
   if (toDelete.length > 0) {
     await tx
-      .update(productExternalId)
+      .update(entityExternalId)
       .set({ deletedAt: new Date() })
       .where(
         inArray(
-          productExternalId.id,
+          entityExternalId.id,
           toDelete.map((e) => e.id),
         ),
       );
@@ -419,7 +426,7 @@ export async function syncProductExternalIds(
   for (const raw of toUpdate) {
     const eid = { ...raw, source: raw.source.trim().toLowerCase() };
     await tx
-      .update(productExternalId)
+      .update(entityExternalId)
       .set({
         source: eid.source,
         kind: eid.kind,
@@ -427,13 +434,14 @@ export async function syncProductExternalIds(
         url: storedExternalIdUrl(eid),
         isPrimary: eid.isPrimary ?? true,
       })
-      .where(eq(productExternalId.id, eid.id));
+      .where(eq(entityExternalId.id, eid.id));
   }
 
   if (toCreate.length > 0) {
-    await tx.insert(productExternalId).values(
+    await tx.insert(entityExternalId).values(
       toCreate.map((eid) => ({
-        productId,
+        entityId: productId,
+        entityKind: "product" as const,
         source: eid.source,
         kind: eid.kind,
         externalId: eid.externalId,

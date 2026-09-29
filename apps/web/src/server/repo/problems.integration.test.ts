@@ -599,7 +599,6 @@ describe("problems — charges not reconciling", () => {
       merchant: "Posted Refund Mart",
       rawDescription: null,
       sourceCategory: null,
-      sourceRefs: [],
       notes: null,
     });
 
@@ -740,7 +739,6 @@ describe("problems — purchase financial settlement mismatches", () => {
       merchant: "Settlement Merchant",
       rawDescription: null,
       sourceCategory: null,
-      sourceRefs: [],
       notes: null,
     });
   };

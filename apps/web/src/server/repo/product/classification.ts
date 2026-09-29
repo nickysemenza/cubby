@@ -8,10 +8,10 @@ import { and, eq } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import {
+  entityExternalId,
   entityLink,
   planting,
   product,
-  productExternalId,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { notDeleted } from "~/server/repo/database-helpers";
@@ -38,10 +38,10 @@ export async function assertProductCategoryChange(
     columns: { fdc_id: true, ingredientId: true },
   });
   if (!current) throw createAppError("PRODUCT_NOT_FOUND", "Product not found");
-  const externalIds = await tx.query.productExternalId.findMany({
+  const externalIds = await tx.query.entityExternalId.findMany({
     where: and(
-      eq(productExternalId.productId, productId),
-      notDeleted(productExternalId),
+      eq(entityExternalId.entityId, productId),
+      notDeleted(entityExternalId),
     ),
   });
   const requiredFeature = hasFoodIndicators({

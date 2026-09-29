@@ -9,6 +9,7 @@ import type { DrizzleTransaction } from "~/server/db";
 import { ledgerSourceClaim } from "~/server/db/schema";
 import { createAppError, createBlockedError } from "~/server/errors/app-error";
 import { notDeleted } from "~/server/repo/database-helpers";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { lookupShortcodes } from "~/server/repo/shortcode-resolver";
 
 const SOURCE_KEY_VERSION = 1;
@@ -168,6 +169,11 @@ export async function replaceLedgerSourceClaims(
         `${right.source}\0${right.sourceKey}`,
       ),
     );
+  // Every `source` names a registered ExternalSource (FK).
+  await ensureExternalSources(
+    tx,
+    reservations.map((values) => values.source),
+  );
   const existing: (typeof ledgerSourceClaim.$inferSelect)[] = [];
   for (const values of reservations) {
     await tx

@@ -1,4 +1,8 @@
-import { parseShortcodeFor, type ProductId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  parseShortcodeFor,
+  type ProductId,
+} from "@cubby/schemas/identifiers";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import type {
   PhotoGroupProposal,
@@ -9,9 +13,9 @@ import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
+  entityExternalId,
   expense,
   product,
-  productExternalId,
   purchase,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -250,19 +254,21 @@ export async function findPhotoProductCandidates(
   const exactRows = identifiers.length
     ? await getDb(db)
         .select({
-          productId: productExternalId.productId,
-          externalId: productExternalId.externalId,
+          productId: entityExternalId.entityId,
+          externalId: entityExternalId.externalId,
         })
-        .from(productExternalId)
+        .from(entityExternalId)
         .where(
           and(
-            notDeleted(productExternalId),
-            inArray(productExternalId.externalId, identifiers),
+            notDeleted(entityExternalId),
+            inArray(entityExternalId.externalId, identifiers),
           ),
         )
         .limit(50)
     : [];
-  const exactIds = [...new Set(exactRows.map((row) => row.productId))];
+  const exactIds = [
+    ...new Set(exactRows.map((row) => parseEntityId("product", row.productId))),
+  ];
   if (!terms.length && !exactIds.length) return [];
   const textMatch = (term: string) => {
     const pattern = searchPattern(term);

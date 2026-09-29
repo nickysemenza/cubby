@@ -61,28 +61,28 @@ import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   aiUsage,
   entityAttachment,
+  entityExternalId,
   entityIdentity,
   financialTransaction,
   financialTransactionAllocation,
   image,
-  runFinding,
   importHunt,
   importPreparedLine,
   importPreparedOrder,
+  ledgerParty,
+  photoGroupProposal,
+  product,
+  purchase,
   run as runTable,
   runApproval,
   runControlEvent,
   runEvidence,
+  runFinding,
   runMutation,
   runOperation,
   runOrderCandidate,
   runProgress,
   runTarget,
-  photoGroupProposal,
-  ledgerParty,
-  product,
-  productExternalId,
-  purchase,
   user,
   vendor,
   vendorAccount,
@@ -1533,7 +1533,7 @@ export async function claimNextImportWork(
     .selectDistinct({
       productId: product.id,
       productName: product.name,
-      startUrl: productExternalId.url,
+      startUrl: entityExternalId.url,
     })
     .from(runMutation)
     .innerJoin(
@@ -1541,11 +1541,11 @@ export async function claimNextImportWork(
       and(eq(product.id, runMutation.targetId), notDeleted(product)),
     )
     .innerJoin(
-      productExternalId,
+      entityExternalId,
       and(
-        eq(productExternalId.productId, product.id),
-        isNotNull(productExternalId.url),
-        notDeleted(productExternalId),
+        eq(entityExternalId.entityId, product.id),
+        isNotNull(entityExternalId.url),
+        notDeleted(entityExternalId),
       ),
     )
     .leftJoin(

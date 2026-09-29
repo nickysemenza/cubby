@@ -145,6 +145,27 @@ export function translateDatabaseError(
   switch (pg.code) {
     case "23505": {
       // unique_violation
+      // Backstop for the repository pre-checks: an identifier already held by
+      // another live record. The key detail names the kind, which picks the
+      // structured refusal (a settlement reference keeps its own reason).
+      if (pg.constraint === "EntityExternalId_source_kind_externalId_key") {
+        const key = /\)=\(([^,]+), ([^,]+), (.+)\) already exists/u.exec(
+          pg.detail ?? "",
+        );
+        return key?.[2] === "settlement_ref"
+          ? createAppError(
+              "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT",
+              `Source transaction ${key[1]}/${key[3]} is already recorded.`,
+              error,
+            )
+          : createAppError(
+              "EXTERNAL_ID_CONFLICT",
+              key
+                ? `${key[1]} ${key[2]} ${key[3]} already belongs to another record.`
+                : "That identifier already belongs to another record.",
+              error,
+            );
+      }
       const cols = columnsFromDetail(pg.detail);
       const a = article(entity);
       return createAppError(

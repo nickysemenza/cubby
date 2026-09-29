@@ -1,6 +1,9 @@
 import { type AnyColumn, and, asc, eq, sql } from "drizzle-orm";
 
 import {
+  cookbook,
+  entityAttachment,
+  entityExternalId,
   expenseAttribution,
   image,
   inventoryEntry,
@@ -8,10 +11,7 @@ import {
   location,
   mealRecipe,
   product,
-  productExternalId,
   productUnitMappings,
-  cookbook,
-  entityAttachment,
   recipe,
   recipeSection,
   recipeSectionIngredient,
@@ -243,6 +243,18 @@ const locationIdentityProduct = {
   },
 } as const;
 
+/**
+ * What `dbRecipeToTopLevel` reads to decode a recipe's `source`: its
+ * Cookbook's code and title, and its live Notion page identifier.
+ */
+export const recipeSourceRelations = {
+  cookbook: { columns: { shortcode: true, name: true } },
+  externalIds: {
+    where: and(eq(entityExternalId.kind, "page"), notDeleted(entityExternalId)),
+    columns: { externalId: true },
+  },
+} as const;
+
 export const relations = {
   ingredient: {
     full: {
@@ -252,7 +264,7 @@ export const relations = {
           where: notDeleted(product),
           with: {
             unitMappings: { where: notDeleted(productUnitMappings) },
-            externalIds: { where: notDeleted(productExternalId) },
+            externalIds: { where: notDeleted(entityExternalId) },
             images: {
               where: notDeleted(entityAttachment),
               orderBy: imageOrder,
@@ -262,13 +274,13 @@ export const relations = {
             },
           },
         },
-        recipe: true,
+        recipe: { with: recipeSourceRelations },
         recipeSectionIngredient: {
           where: notDeleted(recipeSectionIngredient),
           with: {
             recipeSection: {
               with: {
-                recipe: true,
+                recipe: { with: recipeSourceRelations },
               },
             },
           },
@@ -290,7 +302,7 @@ export const relations = {
               where: notDeleted(productUnitMappings),
             },
             externalIds: {
-              where: notDeleted(productExternalId),
+              where: notDeleted(entityExternalId),
             },
             images: {
               where: notDeleted(entityAttachment),
@@ -310,7 +322,7 @@ export const relations = {
         ingredient: true,
         growsPlant: { columns: { shortcode: true } },
         unitMappings: { where: notDeleted(productUnitMappings) },
-        externalIds: { where: notDeleted(productExternalId) },
+        externalIds: { where: notDeleted(entityExternalId) },
         // Locations that ARE this product — a bin in service, as opposed to
         // `inventoryEntry`, which is stock held somewhere. Scalar columns only;
         // the detail table renders a name, a type and a link.
@@ -378,7 +390,7 @@ export const relations = {
           where: notDeleted(productUnitMappings),
         },
         externalIds: {
-          where: notDeleted(productExternalId),
+          where: notDeleted(entityExternalId),
         },
         inventoryEntry: {
           where: notDeleted(inventoryEntry),
@@ -427,7 +439,7 @@ export const relations = {
         // Shortcode only — the source badge links the book, and Cookbook is a
         // handful of rows, so this join is far cheaper than resolving the code
         // per recipe on the client.
-        cookbook: { columns: { shortcode: true } },
+        ...recipeSourceRelations,
         // Shortcode + name — the lineage pointer's link needs a real label to
         // show, not just a code (same reasoning as `cookbook` above, plus a name).
         forkedFrom: { columns: { shortcode: true, name: true } },
@@ -441,7 +453,7 @@ export const relations = {
               with: {
                 ingredient: {
                   with: {
-                    recipe: true,
+                    recipe: { with: recipeSourceRelations },
                   },
                 },
               },
@@ -464,7 +476,7 @@ export const relations = {
     // payload and one per-recipe lateral join off the hot list query.
     list: {
       with: {
-        cookbook: { columns: { shortcode: true } },
+        ...recipeSourceRelations,
         // Shortcode + name — the lineage pointer's link needs a real label to
         // show, not just a code (same reasoning as `cookbook` above, plus a name).
         forkedFrom: { columns: { shortcode: true, name: true } },
@@ -478,7 +490,7 @@ export const relations = {
               with: {
                 ingredient: {
                   with: {
-                    recipe: true,
+                    recipe: { with: recipeSourceRelations },
                   },
                 },
               },
@@ -513,7 +525,7 @@ export const relations = {
             // barcode is derived from its primary `gtin` identifier row.
             product: {
               extras: productCategoryProjection,
-              with: { externalIds: { where: notDeleted(productExternalId) } },
+              with: { externalIds: { where: notDeleted(entityExternalId) } },
             },
           },
         },
@@ -583,7 +595,7 @@ export const relations = {
         // without it every inventory row would report itself barcode-less.
         product: {
           extras: productCategoryProjection,
-          with: { externalIds: { where: notDeleted(productExternalId) } },
+          with: { externalIds: { where: notDeleted(entityExternalId) } },
         },
         location: true,
       },
@@ -594,7 +606,7 @@ export const relations = {
           extras: productCategoryProjection,
           with: {
             unitMappings: { where: notDeleted(productUnitMappings) },
-            externalIds: { where: notDeleted(productExternalId) },
+            externalIds: { where: notDeleted(entityExternalId) },
             images: {
               where: notDeleted(entityAttachment),
               orderBy: imageOrder,

@@ -569,7 +569,6 @@ describe("purchase repository — mergePurchases", () => {
         merchant: "Settlement Merge",
         rawDescription: null,
         sourceCategory: null,
-        sourceRefs: [],
         notes: null,
       });
     }

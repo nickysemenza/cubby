@@ -371,6 +371,11 @@ export default defineEntity({
         key: "googleDriveFolderUrl",
         kind: "text",
         nullable: true,
+        // Stored as a `(google-drive, folder)` EntityExternalId.
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Google Drive folder identifier" }],
+        },
         control: { kind: "text", renderer: "url", sectionOverride: "details" },
         display: {
           list: true,
@@ -386,6 +391,11 @@ export default defineEntity({
         key: "notionPageUrl",
         kind: "text",
         nullable: true,
+        // Stored as the url of the project's `(notion, page)` EntityExternalId.
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Notion page identifier" }],
+        },
         control: { kind: "text", renderer: "url", sectionOverride: "details" },
         display: {
           list: true,
@@ -530,11 +540,6 @@ export default defineEntity({
       },
       { key: "shortcode", kind: "text" },
       {
-        key: "notionPageId",
-        kind: "text",
-        nullable: true,
-      },
-      {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
@@ -570,9 +575,6 @@ export default defineEntity({
       "endDate",
       "icon",
       "notes",
-      "googleDriveFolderUrl",
-      "notionPageUrl",
-      "notionPageId",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",

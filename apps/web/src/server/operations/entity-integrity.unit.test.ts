@@ -28,7 +28,12 @@ describe("integrity catalog", () => {
         ),
       ).toEqual(ENTITY_EDGE_SEMANTICS[entry.entity]);
       for (const edge of entry.incomingEdges) {
-        expect(`${edge.sourceTable}.${edge.sourceColumn}`).toBe(edge.edgeKey);
+        // A link edge is keyed by its link kind and end; its column is that
+        // end's column on the one EntityLink table.
+        const link = /^EntityLink\[\w+\]\.(from|to)$/u.exec(edge.edgeKey);
+        expect(`${edge.sourceTable}.${edge.sourceColumn}`).toBe(
+          link ? `EntityLink.${link[1]}EntityId` : edge.edgeKey,
+        );
       }
     }
   });

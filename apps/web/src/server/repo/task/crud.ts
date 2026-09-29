@@ -109,6 +109,12 @@ export const TASK_DELETE_EDGE_POLICY = {
     effect: "detach",
     description: "A planting outlives the task that produced it.",
   },
+  "EntityExternalId.entityId": {
+    code: "soft-delete-metadata",
+    effect: "soft-delete",
+    description:
+      "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
+  },
 } as const satisfies IncomingEdgePolicy<"task", OperationDisposition>;
 
 type TaskUpdateData = TaskUpdateInput["data"];

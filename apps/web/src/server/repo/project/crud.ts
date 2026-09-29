@@ -55,6 +55,10 @@ import {
   effectiveProjectTradeSql,
 } from "../task-project-inheritance";
 import { projectDependencyIds } from "./analytics";
+import {
+  setProjectExternalUrls,
+  withProjectExternalUrls,
+} from "./external-links";
 import { hydrateProjectRow } from "./helpers";
 import { loadProjectSubtreeRollups } from "./subtree";
 
@@ -107,6 +111,12 @@ export const PROJECT_DELETE_EDGE_POLICY = {
     description:
       "Tool-use associations are soft-deleted with the project; the tool Products and their other project history remain.",
   },
+  "EntityExternalId.entityId": {
+    code: "soft-delete-metadata",
+    effect: "soft-delete",
+    description:
+      "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
+  },
 } as const satisfies IncomingEdgePolicy<"project", OperationDisposition>;
 
 /** `projectUpdateData` has no standalone type export — derive it from the input. */
@@ -124,15 +134,18 @@ const projectReader = createEntityReader({
     // Whole-tree parent/child map + this project's subtree rollup — see
     // subtree.ts's doc comment for why the tree is loaded in full rather than
     // walked with per-row queries.
-    const [projectContext, deps, dataQualities] = await Promise.all([
-      loadProjectSubtreeRollups(db, [row.id]),
-      projectDependencyIds(db, [row.id]),
-      loadDataQualities(db, "project", [row.id]),
-    ]);
+    const [projectContext, deps, dataQualities, [withUrls]] = await Promise.all(
+      [
+        loadProjectSubtreeRollups(db, [row.id]),
+        projectDependencyIds(db, [row.id]),
+        loadDataQualities(db, "project", [row.id]),
+        withProjectExternalUrls(db, [row]),
+      ],
+    );
 
     // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
     return hydrateProjectRow(
-      row,
+      withUrls!,
       projectContext,
       deps,
       dataQualities.get(row.id)!,
@@ -207,6 +220,8 @@ export const createProject = async (
       endDate: data.endDate,
       icon: data.icon,
       notes: data.notes,
+    });
+    await setProjectExternalUrls(tx, created.id, {
       googleDriveFolderUrl: data.googleDriveFolderUrl,
       notionPageUrl: data.notionPageUrl,
     });
@@ -336,10 +351,14 @@ export const updateProject = async (
       endDate: data.endDate,
       icon: data.icon,
       notes: data.notes,
+    });
+    const [beforeWithUrls] = await withProjectExternalUrls(tx, [before]);
+    const updatedRow = await updateLiveAndReturn(tx, project, updateValues, id);
+    await setProjectExternalUrls(tx, id, {
       googleDriveFolderUrl: data.googleDriveFolderUrl,
       notionPageUrl: data.notionPageUrl,
     });
-    const updated = await updateLiveAndReturn(tx, project, updateValues, id);
+    const [updated] = await withProjectExternalUrls(tx, [updatedRow]);
     await validateLiveEffectiveTrades(tx);
 
     // Full-replacement set: clear this project's blocked-by edges and insert
@@ -354,7 +373,9 @@ export const updateProject = async (
     }
 
     const changes: AuditChangeMap = {
-      ...computeChanges(before, updated, [...entityFieldModels.project.audit]),
+      ...computeChanges(beforeWithUrls!, updated!, [
+        ...entityFieldModels.project.audit,
+      ]),
     };
     if (resolvedBlockedByIds !== undefined) {
       const blockedByChange = diffUnorderedIdSet(

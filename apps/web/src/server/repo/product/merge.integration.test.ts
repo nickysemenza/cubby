@@ -8,10 +8,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   entityAttachment,
+  entityExternalId,
   inventoryEntry,
   planting,
   product,
-  productExternalId,
   productUnitMappings,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
@@ -147,10 +147,10 @@ describe("mergeProducts", () => {
   });
 
   const liveExternalIds = (productId: ProductId) =>
-    getDb(ctx.db).query.productExternalId.findMany({
+    getDb(ctx.db).query.entityExternalId.findMany({
       where: and(
-        eq(productExternalId.productId, productId),
-        notDeleted(productExternalId),
+        eq(entityExternalId.entityId, productId),
+        notDeleted(entityExternalId),
       ),
       columns: {
         source: true,
@@ -379,11 +379,11 @@ describe("mergeProducts", () => {
     expect(survivor?.price).toBe(199);
     expect(survivor?.notes).toBe("From the retailer import");
     expect(summary.carriedFields).not.toContain("upc");
-    const survivorGtins = await getDb(ctx.db).query.productExternalId.findMany({
+    const survivorGtins = await getDb(ctx.db).query.entityExternalId.findMany({
       where: and(
-        eq(productExternalId.productId, keeper.id),
-        eq(productExternalId.source, GTIN_SOURCE),
-        notDeleted(productExternalId),
+        eq(entityExternalId.entityId, keeper.id),
+        eq(entityExternalId.source, GTIN_SOURCE),
+        notDeleted(entityExternalId),
       ),
       columns: { externalId: true, isPrimary: true },
     });

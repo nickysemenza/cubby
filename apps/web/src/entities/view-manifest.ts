@@ -797,7 +797,7 @@ export const viewManifest = defineViewManifest({
       label: "No instructions",
       description: "Recipes with no written instructions",
       // The source exclusion is spelled as a POSITIVE list plus the `(none)`
-      // sentinel, not as a negation: `SourceType` is nullable, a NULL is a
+      // sentinel, not as a negation: `sourceType` is nullable, a NULL is a
       // legacy hand-entered recipe that must stay visible, and `!= 'Book'`
       // would evaluate UNKNOWN against it and drop it. Book and Notion recipes
       // live elsewhere by design — the text isn't supposed to be here.

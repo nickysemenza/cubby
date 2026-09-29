@@ -6,7 +6,7 @@ import { cents } from "./money";
  * A statement row has no natural key: exports carry no stable row id, and the
  * client-supplied `key` is unique only within one request. So identity is a
  * content hash over the fields a provider actually originates, and that hash is
- * what `FinancialTransaction.sourceRefs` stores. Match state everywhere else is
+ * what a transaction's `settlement_ref` EntityExternalId stores. Match state elsewhere is
  * derived from it, which makes this file load-bearing for reconciliation as a
  * whole — it lives on its own so the preview and any future ledger cannot drift
  * apart on what a row *is*.
@@ -63,7 +63,7 @@ export type StatementRowIdentityInput = {
  * by coincidence — and where it did collide it would silently merge two
  * independent observations into one, destroying exactly the cross-corroboration
  * that makes "absent from both exports" usable evidence. One transaction can
- * carry both refs; that is what `sourceRefs` being an array is for.
+ * carry both refs; that is why settlement references have no primary slot.
  */
 export async function statementRowExternalId(
   row: StatementRowIdentityInput,

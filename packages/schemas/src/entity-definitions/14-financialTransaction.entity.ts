@@ -257,6 +257,11 @@ export default defineEntity({
       {
         key: "sourceRefs",
         kind: "json",
+        // Stored as `settlement_ref` EntityExternalId rows.
+        provenance: {
+          kind: "relation",
+          sources: [{ label: "Settlement references" }],
+        },
         // "Source" reproduces the list column's existing header text (its
         // `display.columnId` alias below). One label serves both surfaces,
         // so the detail page's overview heading for this field (which has
@@ -433,11 +438,6 @@ export default defineEntity({
       "merchant",
       "rawDescription",
       "sourceCategory",
-      {
-        key: "sourceRefs",
-        defaultValue: "'[]'::jsonb",
-        specialized: "json:sourceRefs",
-      },
       "notes",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },

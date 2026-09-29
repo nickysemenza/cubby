@@ -65,6 +65,7 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
     purchaseId:
       "settlement link lives on FinancialTransactionAllocation, not the row",
     allocations: "writes FinancialTransactionAllocation rows",
+    sourceRefs: "writes settlement_ref EntityExternalId rows",
   },
   ledgerTransfer: {
     sourceClaims: "writes LedgerSourceClaim provenance rows",
@@ -73,7 +74,7 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
   },
   location: { pendingImageIds: "writes LocationImage rows" },
   gardenEntry: {
-    plantingIds: "writes GardenEntryPlanting rows",
+    plantingIds: "writes gardenEntryPlanting EntityLink rows",
     pendingImageIds: "writes GardenEntryImage rows",
   },
   meal: {
@@ -81,13 +82,17 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
     pendingImageIds: "writes MealImage rows",
   },
   product: {
-    upc: "barcode write slot; lands in ProductExternalId, not on Product",
-    isbn: "book identifier; lands in ProductExternalId, not on Product",
-    externalIds: "writes ProductExternalId rows",
+    upc: "barcode write slot; lands in EntityExternalId, not on Product",
+    isbn: "book identifier; lands in EntityExternalId, not on Product",
+    externalIds: "writes product EntityExternalId rows",
     unitMappings: "writes ProductUnitMappings rows",
     pendingImageIds: "writes ProductImage rows",
     pendingImagePurposes:
       "sets the item or label purpose for each pending ProductImage row",
+  },
+  project: {
+    googleDriveFolderUrl: "writes the (google-drive, folder) EntityExternalId",
+    notionPageUrl: "the url of the (notion, page) EntityExternalId",
   },
   purchase: { pendingImageIds: "writes PurchaseImage rows" },
   recipe: {
@@ -95,7 +100,7 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
     pendingImageIds: "writes RecipeImage rows",
   },
   task: { pendingImageIds: "writes TaskImage rows" },
-  wish: { candidateProductIds: "writes WishCandidate rows" },
+  wish: { candidateProductIds: "writes wishCandidate EntityLink rows" },
 };
 
 /**

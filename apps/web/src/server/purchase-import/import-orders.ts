@@ -40,20 +40,20 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import {
   entityAttachment,
+  entityExternalId,
   expense,
   image,
   importHunt,
   importPreparedLine,
   importPreparedOrder,
+  importSourceClaim,
+  product,
+  purchase,
   run as runTable,
   runEvidence,
   runMutation,
   runOperation,
   runTarget,
-  importSourceClaim,
-  product,
-  productExternalId,
-  purchase,
 } from "~/server/db/schema";
 import {
   getDb,
@@ -163,25 +163,25 @@ async function productCandidates(
           manufacturer: product.manufacturer,
           model: product.model,
         })
-        .from(productExternalId)
+        .from(entityExternalId)
         .innerJoin(
           product,
-          and(eq(product.id, productExternalId.productId), notDeleted(product)),
+          and(eq(product.id, entityExternalId.entityId), notDeleted(product)),
         )
         .where(
           and(
-            notDeleted(productExternalId),
+            notDeleted(entityExternalId),
             or(
               and(
-                eq(productExternalId.source, source),
-                inArray(productExternalId.kind, ["retailer_sku", "asin"]),
-                inArray(productExternalId.externalId, exactIds),
+                eq(entityExternalId.source, source),
+                inArray(entityExternalId.kind, ["retailer_sku", "asin"]),
+                inArray(entityExternalId.externalId, exactIds),
               ),
               gtins.length
                 ? and(
-                    eq(productExternalId.source, GTIN_SOURCE),
-                    eq(productExternalId.kind, GTIN_KIND),
-                    inArray(productExternalId.externalId, gtins),
+                    eq(entityExternalId.source, GTIN_SOURCE),
+                    eq(entityExternalId.kind, GTIN_KIND),
+                    inArray(entityExternalId.externalId, gtins),
                   )
                 : undefined,
             ),

@@ -38,6 +38,7 @@ import { classifyOrderCapture } from "~/server/purchase-import/order-list";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { productEnrichmentTarget } from "~/server/purchase-import/product-enrichment-target";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { replaceSettlementRefs } from "~/server/repo/entity-external-ids";
 import { recordStatementRows } from "~/server/repo/statement-row";
 import { statementRowExternalId } from "~/server/repo/statement-row-identity";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -212,7 +213,13 @@ async function readConvergenceFacts(
       }>(
         `SELECT t.shortcode, a."purchaseId", t.amount::text AS amount,
               a.amount::text AS "allocatedAmount", t."postedDate",
-              t."transactionDate", t."sourceRefs"
+              t."transactionDate",
+              COALESCE((
+                SELECT jsonb_agg(jsonb_build_object('source', x.source, 'externalId', x."externalId")
+                  ORDER BY x.source, x."externalId")
+                FROM "EntityExternalId" x
+                WHERE x."entityId" = t.id AND x.kind = 'settlement_ref' AND x."deletedAt" IS NULL
+              ), '[]'::jsonb) AS "sourceRefs"
        FROM "FinancialTransaction" t
        JOIN "FinancialTransactionAllocation" a ON a."transactionId" = t.id
        JOIN "Purchase" p ON p.id = a."purchaseId"
@@ -654,8 +661,10 @@ async function importSyntheticMonarchCsv(
     await api.dispose();
   }
   const recorded = await pool.query<{ shortcode: string }>(
-    `SELECT shortcode FROM "FinancialTransaction"
-     WHERE "sourceRefs" @> '[{"source":"monarch"}]'::jsonb AND "deletedAt" IS NULL`,
+    `SELECT DISTINCT t.shortcode FROM "FinancialTransaction" t
+     JOIN "EntityExternalId" x ON x."entityId" = t.id AND x.kind = 'settlement_ref'
+       AND x.source = 'monarch' AND x."deletedAt" IS NULL
+     WHERE t."deletedAt" IS NULL`,
   );
   const statementRows = await pool.query<{ count: string }>(
     `SELECT count(*)::text AS count FROM "StatementRow" WHERE source = 'monarch'`,
@@ -1077,7 +1086,7 @@ async function recordOverlappingStatementCsvAndDecoy(
     amount: -29.99,
     originalStatement: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
   });
-  return insertWithShortcode(db, "financialTransaction", {
+  const created = await insertWithShortcode(db, "financialTransaction", {
     accountId: parseEntityId("financialAccount", fixtureVisaId),
     kind: "purchase",
     status: "posted",
@@ -1087,8 +1096,13 @@ async function recordOverlappingStatementCsvAndDecoy(
     merchant: "Synthetic Deceptive Retail",
     rawDescription: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
     sourceCategory: "Clothing",
-    sourceRefs: [{ source: "monarch", externalId: decoyExternalId }],
   });
+  await getDb(db).transaction((tx) =>
+    replaceSettlementRefs(tx, created.id, [
+      { source: "monarch", externalId: decoyExternalId },
+    ]),
+  );
+  return created;
 }
 
 /**

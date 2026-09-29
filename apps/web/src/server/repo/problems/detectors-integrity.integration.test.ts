@@ -34,7 +34,8 @@ import {
   orderMailAttachment,
   photoGroupProposal,
   productConversionCoverage,
-  productExternalId,
+  entityExternalId,
+  externalSource,
   productMatchCandidate,
   productUnitMappings,
   purchasePaymentEvidence,
@@ -55,6 +56,7 @@ import {
   user,
 } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { linkValues } from "~/server/repo/entity-links";
 import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -498,7 +500,31 @@ const TARGET_FACTORIES = {
 /** One factory per must-target-live edge: insert a live SOURCE row whose FK
  * (named by the edge key) points at `targetId`. Every other required column on
  * the source row is filled with an unrelated, always-live fixture. */
+/** A claim's source names a registered ExternalSource (FK). */
+const insertLedgerClaim = async (
+  db: Database,
+  values: typeof ledgerSourceClaim.$inferInsert,
+) => {
+  await ensureExternalSources(db, [values.source]);
+  return insertAndReturn(db, ledgerSourceClaim, values);
+};
+
 const SOURCE_FACTORIES = {
+  "ExternalSource.vendorId": async (db, targetId) => {
+    const slug = uniq("synthetic-source")
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9]+/gu, "-");
+    const [row] = await getDb(db)
+      .insert(externalSource)
+      .values({
+        slug,
+        label: slug,
+        vendorId: parseEntityId("vendor", targetId),
+      })
+      .returning({ id: externalSource.slug });
+    return row!;
+  },
+
   "ProductCategory.parentId": (db, targetId) =>
     insertWithShortcode(db, "productCategory", {
       name: uniq("Child category"),
@@ -737,7 +763,7 @@ const SOURCE_FACTORIES = {
   },
 
   "LedgerSourceClaim.expenseId": async (db, targetId) =>
-    insertAndReturn(db, ledgerSourceClaim, {
+    insertLedgerClaim(db, {
       expenseId: parseEntityId("expense", targetId),
       source: "synthetic-integrity",
       sourceKey: uniq("claim"),
@@ -754,7 +780,7 @@ const SOURCE_FACTORIES = {
     }),
 
   "LedgerSourceClaim.ledgerTransferId": async (db, targetId) =>
-    insertAndReturn(db, ledgerSourceClaim, {
+    insertLedgerClaim(db, {
       ledgerTransferId: parseEntityId("ledgerTransfer", targetId),
       source: "synthetic-integrity",
       sourceKey: uniq("claim"),
@@ -1000,12 +1026,28 @@ const SOURCE_FACTORIES = {
     });
   },
 
-  "ProductExternalId.productId": (db, targetId) =>
-    insertAndReturn(db, productExternalId, {
-      productId: parseEntityId("product", targetId),
-      source: "amazon",
-      externalId: uniq("B"),
-    }),
+  // One identifier column names every entity an identifier kind attaches to;
+  // the row's kind must be one its target's entity kind accepts.
+  "EntityExternalId.entityId": async (db, targetId) => {
+    const entityKind = await entityKindOf(db, targetId);
+    const identifier =
+      entityKind === "product"
+        ? { source: "amazon", kind: "asin" as const, isPrimary: true }
+        : entityKind === "financialTransaction"
+          ? {
+              source: "monarch",
+              kind: "settlement_ref" as const,
+              isPrimary: null,
+            }
+          : { source: "notion", kind: "page" as const, isPrimary: true };
+    await ensureExternalSources(db, [identifier.source]);
+    return insertAndReturn(db, entityExternalId, {
+      entityId: targetId,
+      entityKind,
+      externalId: uniq("X"),
+      ...identifier,
+    });
+  },
 
   "ProductUnitMappings.productId": (db, targetId) =>
     insertAndReturn(db, productUnitMappings, {
@@ -1303,6 +1345,7 @@ const SOURCE_FACTORIES = {
     }),
 
   "StatementRow.accountId": async (db, targetId) => {
+    await ensureExternalSources(db, ["monarch"]);
     const batch = await insertAndReturn(db, statementImport, {
       source: "monarch",
       label: "liveness-fixture.csv",

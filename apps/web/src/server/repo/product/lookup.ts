@@ -15,7 +15,7 @@ import { match } from "ts-pattern";
 
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { Database } from "~/server/db";
-import { inventoryEntry, product, productExternalId } from "~/server/db/schema";
+import { entityExternalId, inventoryEntry, product } from "~/server/db/schema";
 import { attachDataQuality } from "~/server/repo/data-quality";
 import { getDb, imageOrder, notDeleted } from "~/server/repo/database-helpers";
 import { categorySummarySql } from "~/server/repo/product-category-sql";
@@ -151,7 +151,7 @@ export const countProductsByFoodIdentifiers = async (
   const products = await getDb(db).query.product.findMany({
     where: and(linkCondition, notDeleted(product)),
     columns: { fdc_id: true },
-    with: { externalIds: { where: notDeleted(productExternalId) } },
+    with: { externalIds: { where: notDeleted(entityExternalId) } },
   });
   return lookups.map(
     (lookup) =>

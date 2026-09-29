@@ -1,10 +1,11 @@
 import type { ExternalIdKind } from "@cubby/schemas/external-id";
-import type { ProductId } from "@cubby/schemas/identifiers";
+import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
-import { productExternalId } from "~/server/db/schema";
+import { entityExternalId } from "~/server/db/schema";
 import { notDeleted } from "~/server/repo/database-helpers";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 
 export class PurchaseProductExternalIdCollisionError extends Error {
   readonly source: string;
@@ -47,42 +48,44 @@ export async function learnPurchaseProductExternalId(
   },
 ): Promise<"learned" | "already_present"> {
   const source = input.source.trim().toLowerCase();
-  const existing = await tx.query.productExternalId.findFirst({
+  const existing = await tx.query.entityExternalId.findFirst({
     where: and(
-      eq(productExternalId.source, source),
-      eq(productExternalId.kind, input.kind),
-      eq(productExternalId.externalId, input.externalId),
-      notDeleted(productExternalId),
+      eq(entityExternalId.source, source),
+      eq(entityExternalId.kind, input.kind),
+      eq(entityExternalId.externalId, input.externalId),
+      notDeleted(entityExternalId),
     ),
   });
 
   if (existing) {
-    if (existing.productId !== input.productId) {
+    if (existing.entityId !== input.productId) {
       throw new PurchaseProductExternalIdCollisionError({
         source,
         kind: input.kind,
         externalId: input.externalId,
-        ownerProductId: existing.productId,
+        ownerProductId: parseEntityId("product", existing.entityId),
       });
     }
     return "already_present";
   }
 
-  const primary = await tx.query.productExternalId.findFirst({
+  const primary = await tx.query.entityExternalId.findFirst({
     where: and(
-      eq(productExternalId.productId, input.productId),
-      eq(productExternalId.source, source),
-      eq(productExternalId.kind, input.kind),
-      eq(productExternalId.isPrimary, true),
-      notDeleted(productExternalId),
+      eq(entityExternalId.entityId, input.productId),
+      eq(entityExternalId.source, source),
+      eq(entityExternalId.kind, input.kind),
+      eq(entityExternalId.isPrimary, true),
+      notDeleted(entityExternalId),
     ),
     columns: { id: true },
   });
 
+  await ensureExternalSources(tx, [source]);
   const [inserted] = await tx
-    .insert(productExternalId)
+    .insert(entityExternalId)
     .values({
-      productId: input.productId,
+      entityId: input.productId,
+      entityKind: "product" as const,
       source,
       kind: input.kind,
       externalId: input.externalId,
@@ -90,28 +93,28 @@ export async function learnPurchaseProductExternalId(
       isPrimary: primary === undefined,
     })
     .onConflictDoNothing()
-    .returning({ id: productExternalId.id });
+    .returning({ id: entityExternalId.id });
 
   if (inserted) return "learned";
 
   // Another transaction may have won either unique-index race. Re-read the
   // global identifier first so an identifier claimed by another Product is
   // never reinterpreted as a harmless primary-slot race.
-  const winner = await tx.query.productExternalId.findFirst({
+  const winner = await tx.query.entityExternalId.findFirst({
     where: and(
-      eq(productExternalId.source, source),
-      eq(productExternalId.kind, input.kind),
-      eq(productExternalId.externalId, input.externalId),
-      notDeleted(productExternalId),
+      eq(entityExternalId.source, source),
+      eq(entityExternalId.kind, input.kind),
+      eq(entityExternalId.externalId, input.externalId),
+      notDeleted(entityExternalId),
     ),
   });
-  if (winner?.productId === input.productId) return "already_present";
+  if (winner?.entityId === input.productId) return "already_present";
   if (winner) {
     throw new PurchaseProductExternalIdCollisionError({
       source,
       kind: input.kind,
       externalId: input.externalId,
-      ownerProductId: winner.productId,
+      ownerProductId: parseEntityId("product", winner.entityId),
     });
   }
 
@@ -119,9 +122,10 @@ export async function learnPurchaseProductExternalId(
   // read. Preserve this identifier as a secondary instead of asking the whole
   // import to retry. The global unique index remains the final ownership guard.
   const [secondary] = await tx
-    .insert(productExternalId)
+    .insert(entityExternalId)
     .values({
-      productId: input.productId,
+      entityId: input.productId,
+      entityKind: "product" as const,
       source,
       kind: input.kind,
       externalId: input.externalId,
@@ -129,24 +133,24 @@ export async function learnPurchaseProductExternalId(
       isPrimary: false,
     })
     .onConflictDoNothing()
-    .returning({ id: productExternalId.id });
+    .returning({ id: entityExternalId.id });
   if (secondary) return "learned";
 
-  const secondaryWinner = await tx.query.productExternalId.findFirst({
+  const secondaryWinner = await tx.query.entityExternalId.findFirst({
     where: and(
-      eq(productExternalId.source, source),
-      eq(productExternalId.kind, input.kind),
-      eq(productExternalId.externalId, input.externalId),
-      notDeleted(productExternalId),
+      eq(entityExternalId.source, source),
+      eq(entityExternalId.kind, input.kind),
+      eq(entityExternalId.externalId, input.externalId),
+      notDeleted(entityExternalId),
     ),
   });
-  if (secondaryWinner?.productId === input.productId) return "already_present";
+  if (secondaryWinner?.entityId === input.productId) return "already_present";
   if (secondaryWinner) {
     throw new PurchaseProductExternalIdCollisionError({
       source,
       kind: input.kind,
       externalId: input.externalId,
-      ownerProductId: secondaryWinner.productId,
+      ownerProductId: parseEntityId("product", secondaryWinner.entityId),
     });
   }
   throw new Error("Product external ID write could not be recorded");

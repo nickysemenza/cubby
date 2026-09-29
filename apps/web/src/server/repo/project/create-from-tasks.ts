@@ -32,6 +32,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { getTasksByIDs } from "~/server/repo/task";
 
 import { getProjectByID } from "./crud";
+import { setProjectExternalUrls } from "./external-links";
 
 export async function createProjectFromTasks(
   db: Database,
@@ -71,6 +72,8 @@ export async function createProjectFromTasks(
       endDate: input.project.endDate,
       icon: input.project.icon,
       notes: input.project.notes,
+    });
+    await setProjectExternalUrls(tx, created.id, {
       googleDriveFolderUrl: input.project.googleDriveFolderUrl,
       notionPageUrl: input.project.notionPageUrl,
     });

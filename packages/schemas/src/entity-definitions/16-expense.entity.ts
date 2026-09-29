@@ -678,11 +678,6 @@ export default defineEntity({
       },
       { key: "shortcode", kind: "text" },
       {
-        key: "notionPageId",
-        kind: "text",
-        nullable: true,
-      },
-      {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
@@ -716,7 +711,6 @@ export default defineEntity({
       { key: "productId", reference: "product" },
       { key: "productQuantity", specialized: "double-precision" },
       { key: "purchaseId", reference: "purchase" },
-      "notionPageId",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",

@@ -64,6 +64,8 @@ const NON_ENTITY_FK_TARGETS = {
   // Durable identity (ADR 0006): every payload binds to its own row, and an
   // attachment names its subject here because a subject can be any entity.
   Entity: "durable identity, not a domain entity of its own",
+  // The registry every identifier/statement/claim source slug names.
+  ExternalSource: "a source slug registry, not a domain entity",
   // Owned wholly by its parent recipe (Recipe -> RecipeSection ->
   // RecipeSectionIngredient) — not independently addressable, so it never
   // graduated to its own entity.
@@ -338,9 +340,9 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "review queue state for a candidate same-item pair",
   },
-  "ProductExternalId.productId": {
+  "ExternalSource.vendorId": {
     classification: "metadata",
-    reason: "external provider identifier owned by the product",
+    reason: "names the Vendor a source slug is; registry metadata",
   },
   "ProductUnitMappings.productId": {
     classification: "ownership",

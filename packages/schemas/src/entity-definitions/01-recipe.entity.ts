@@ -450,13 +450,22 @@ export default defineEntity({
         nullable: true,
       },
       {
-        key: "SourceType",
+        key: "sourceType",
         kind: "enum",
         nullable: true,
         readKeyOverride: "source",
       },
       {
-        key: "SourceData",
+        // A Website recipe's page. A Notion recipe's page id is an
+        // EntityExternalId; a cookbook recipe names its Cookbook.
+        key: "sourceUrl",
+        kind: "text",
+        nullable: true,
+        readKeyOverride: "source",
+      },
+      {
+        // The book a Book recipe came from when no Cookbook row exists.
+        key: "sourceLabel",
         kind: "text",
         nullable: true,
         readKeyOverride: "source",
@@ -533,8 +542,9 @@ export default defineEntity({
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
-      { key: "SourceType", specialized: "enum:RecipeSource" },
-      "SourceData",
+      { key: "sourceType", specialized: "enum:sourceType" },
+      "sourceUrl",
+      "sourceLabel",
       { key: "cookbookId", reference: "cookbook" },
       { key: "forkedFromRecipeId", reference: "recipe" },
       { key: "yield", specialized: "json:yield" },

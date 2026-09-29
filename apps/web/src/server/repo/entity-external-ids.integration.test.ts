@@ -1,0 +1,293 @@
+/**
+ * `EntityExternalId` (one table for every outside identifier). Failure modes
+ * pinned here, each a regression a money or identity path would carry:
+ *
+ * - a settlement reference whose transaction was deleted cannot be recorded
+ *   again (the deleted transaction's rows still hold the live unique);
+ * - a transaction carrying several references loses some, or trips a
+ *   per-entity primary slot that settlement references do not have;
+ * - Purchase settlement status or the `settlement_reference` gap reads the
+ *   wrong evidence once references leave the transaction row;
+ * - two products claim the same identity identifier without a structured
+ *   refusal;
+ * - re-importing a statement export writes anything;
+ * - re-importing a Notion recipe page mints a second recipe.
+ */
+import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
+import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
+import { expenseCreateInput } from "@cubby/schemas/project";
+import { purchaseCreateInput } from "@cubby/schemas/purchase";
+import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
+import { and, eq } from "drizzle-orm";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
+
+import { entityIdentity } from "~/server/db/entity-identity-schema";
+import { entityExternalId } from "~/server/db/schema";
+
+import { loadDataQualities } from "./data-quality";
+import { getDb } from "./database-helpers";
+import { createExpense } from "./expense";
+import { createFinancialAccount } from "./financial-account";
+import {
+  createFinancialTransaction,
+  financialTransactionRepository,
+  updateFinancialTransaction,
+} from "./financial-transaction";
+import { updateProduct } from "./product";
+import { createPurchase, getPurchaseByID } from "./purchase";
+import { getNotionRecipePageIds, upsertNotionRecipe } from "./recipe/crud";
+import {
+  createProductFixture as createProduct,
+  makeProductInput,
+  makeRecipeInput,
+} from "./repo.fixtures";
+import { resolveOrThrow } from "./shortcode-resolver";
+import { recordStatementRows } from "./statement-row";
+import { findOrCreateVendor, getVendorByID } from "./vendor";
+
+describe("EntityExternalId", () => {
+  const ctx = withTestDb();
+
+  const mkAccount = async (name: string) =>
+    (
+      await createFinancialAccount(
+        ctx.db,
+        financialAccountCreateInput.parse({
+          name,
+          identity: { kind: "credit_card", issuer: null, network: "visa" },
+          cardNumbers: [],
+          sourceAliases: [],
+        }),
+        ctx.actor,
+      )
+    ).output;
+
+  const mkTransaction = async (
+    accountId: string,
+    sourceRefs: { source: string; externalId: string }[],
+    extra: Partial<z.input<typeof financialTransactionCreateInput>> = {},
+  ) =>
+    (
+      await createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId,
+          kind: "purchase",
+          status: "pending",
+          amount: 12.5,
+          sourceRefs,
+          ...extra,
+        }),
+        ctx.actor,
+      )
+    ).output;
+
+  // By shortcode through Entity: a deleted transaction no longer resolves.
+  const refRows = (transactionShortcode: string) =>
+    getDb(ctx.db)
+      .select({
+        source: entityExternalId.source,
+        externalId: entityExternalId.externalId,
+        isPrimary: entityExternalId.isPrimary,
+        deletedAt: entityExternalId.deletedAt,
+      })
+      .from(entityExternalId)
+      .innerJoin(
+        entityIdentity,
+        eq(entityIdentity.id, entityExternalId.entityId),
+      )
+      .where(eq(entityIdentity.shortcode, transactionShortcode))
+      .orderBy(entityExternalId.source, entityExternalId.externalId);
+
+  it("re-records a settlement reference after its transaction is deleted", async () => {
+    const account = await mkAccount("Delete Visa");
+    const ref = { source: "monarch", externalId: "mon-deleted-1" };
+    const first = await mkTransaction(account.id, [ref]);
+    await financialTransactionRepository.delete(ctx.db, [first.id], ctx.actor);
+    // The deleted transaction's reference went with it...
+    expect(await refRows(first.id)).toEqual([
+      expect.objectContaining({ ...ref, deletedAt: expect.any(Date) }),
+    ]);
+    // ...so the same bank line can be recorded again.
+    const second = await mkTransaction(account.id, [ref]);
+    expect(second.sourceRefs).toEqual([ref]);
+  });
+
+  it("keeps every reference of a multi-reference transaction, none primary", async () => {
+    const account = await mkAccount("Multi Visa");
+    const refs = [
+      { source: "copilot", externalId: "cop-1" },
+      { source: "monarch", externalId: "mon-1" },
+      { source: "monarch", externalId: "mon-2" },
+    ];
+    const transaction = await mkTransaction(account.id, refs);
+    expect(transaction.sourceRefs).toEqual(refs);
+    expect((await refRows(transaction.id)).map((row) => row.isPrimary)).toEqual(
+      [null, null, null],
+    );
+
+    const updated = await updateFinancialTransaction(
+      ctx.db,
+      transaction.id,
+      { sourceRefs: [refs[0]!, refs[2]!] },
+      ctx.actor,
+    );
+    expect(updated.output.sourceRefs).toEqual([refs[0], refs[2]]);
+    const rows = await refRows(transaction.id);
+    expect(rows.filter((row) => row.deletedAt === null)).toHaveLength(2);
+    expect(rows.filter((row) => row.deletedAt !== null)).toEqual([
+      expect.objectContaining(refs[1]),
+    ]);
+  });
+
+  it("refuses a reference another live transaction holds, with the structured reason", async () => {
+    const account = await mkAccount("Conflict Visa");
+    const ref = { source: "monarch", externalId: "mon-held" };
+    await mkTransaction(account.id, [ref]);
+    await expect(mkTransaction(account.id, [ref])).rejects.toMatchObject({
+      reason: "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT",
+    });
+  });
+
+  it("settles a purchase by reference exactly as before and reopens the gap when the reference goes", async () => {
+    const account = await mkAccount("Settlement Visa");
+    const vendorId = await findOrCreateVendor(ctx.db, "Settlement Vendor");
+    const purchase = (
+      await createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({
+          date: "2026-03-02",
+          vendorId: (await getVendorByID(ctx.db, vendorId)).id,
+          orderId: "settle-by-ref-1",
+        }),
+        ctx.actor,
+      )
+    ).output;
+    await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        name: "Settled line",
+        date: "2026-03-02",
+        trade: "other",
+        costType: "materials",
+        cost: 40,
+        purchaseId: purchase.id,
+        future: false,
+      }),
+      ctx.actor,
+    );
+    const transaction = await mkTransaction(
+      account.id,
+      [{ source: "monarch", externalId: "mon-settle-1" }],
+      {
+        purchaseId: purchase.id,
+        amount: 40,
+        status: "posted",
+        postedDate: "2026-03-03",
+      },
+    );
+    const purchaseId = await resolveOrThrow(ctx.db, "purchase", purchase.id);
+    const gaps = async () =>
+      (await loadDataQualities(ctx.db, "purchase", [purchaseId]))
+        .get(purchaseId)
+        ?.gaps.map((gap) => gap.check) ?? [];
+
+    const settled = await getPurchaseByID(ctx.db, purchaseId);
+    expect(settled.financialReconciliation?.status).toBe("match");
+    expect(await gaps()).not.toContain("settlement_reference");
+
+    await updateFinancialTransaction(
+      ctx.db,
+      transaction.id,
+      { sourceRefs: [] },
+      ctx.actor,
+    );
+    const unreferenced = await getPurchaseByID(ctx.db, purchaseId);
+    expect(unreferenced.financialReconciliation?.status).toBe("match");
+    expect(await gaps()).toContain("settlement_reference");
+  });
+
+  it("refuses one ASIN on two live products with a structured error", async () => {
+    const asin = {
+      source: "amazon",
+      kind: "asin" as const,
+      externalId: "B0SYNTH001",
+      url: null,
+    };
+    await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Holder Widget", externalIds: [asin] }),
+      ctx.actor,
+    );
+    const other = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Other Widget" }),
+      ctx.actor,
+    );
+    await expect(
+      updateProduct(ctx.db, other.entityId, { externalIds: [asin] }, ctx.actor),
+    ).rejects.toMatchObject({ reason: "PRODUCT_ALREADY_EXISTS" });
+  });
+
+  it("treats a statement re-import as a no-op", async () => {
+    const input = recordStatementRowsInput.parse({
+      import: {
+        source: "monarch",
+        label: "monarch-2026-03.csv",
+        fingerprint: "fp-reimport-1",
+        dateKind: "transaction",
+        rowCountDeclared: 1,
+        notes: null,
+      },
+      rows: [
+        {
+          accountDescriptor: "Synthetic Card (...0001)",
+          statementDate: "2026-03-04",
+          providerAmount: -19.99,
+          merchant: "Synthetic Hardware",
+          rawDescription: "SYNTHETIC HARDWARE 0001",
+          sourceCategory: "Home",
+          providerStatus: "posted",
+          providerNotes: null,
+        },
+      ],
+      dryRun: false,
+    });
+    await expect(
+      recordStatementRows(ctx.db, input, ctx.actor),
+    ).resolves.toMatchObject({ inserted: 1 });
+    await expect(
+      recordStatementRows(ctx.db, input, ctx.actor),
+    ).resolves.toMatchObject({ inserted: 0 });
+  });
+
+  it("re-imports a Notion recipe page into the same recipe", async () => {
+    const pageId = "0f8e7d6c-5b4a-4938-8271-605f4e3d2c1b";
+    const first = await upsertNotionRecipe(
+      makeRecipeInput({ name: "Synthetic Notion Soup" }),
+      pageId,
+      ctx.db,
+      ctx.actor,
+    );
+    const renamed = await upsertNotionRecipe(
+      makeRecipeInput({ name: "Synthetic Notion Soup, renamed" }),
+      pageId,
+      ctx.db,
+      ctx.actor,
+    );
+    expect(renamed.id).toBe(first.id);
+    expect(await getNotionRecipePageIds(ctx.db)).toEqual([pageId]);
+    const rows = await getDb(ctx.db)
+      .select({ entityId: entityExternalId.entityId })
+      .from(entityExternalId)
+      .where(
+        and(
+          eq(entityExternalId.source, "notion"),
+          eq(entityExternalId.externalId, pageId),
+        ),
+      );
+    expect(rows).toEqual([{ entityId: first.id }]);
+  });
+});

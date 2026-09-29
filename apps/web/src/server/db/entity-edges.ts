@@ -78,6 +78,10 @@ import {
   type EntityLinkKindDeclaration,
   entityLinkKinds,
 } from "@cubby/schemas/entity-links";
+import {
+  EXTERNAL_ID_KINDS,
+  type EntityExternalIdKind,
+} from "@cubby/schemas/external-id";
 import type { AnyColumn } from "drizzle-orm";
 
 import {
@@ -86,7 +90,9 @@ import {
   cookbook,
   device,
   entityAttachment,
+  entityExternalId,
   entityLink,
+  externalSource,
   expense,
   expenseAttribution,
   financialAccount,
@@ -130,7 +136,6 @@ import {
   productCategory,
   productConversionCoverage,
   productMatchCandidate,
-  productExternalId,
   productUnitMappings,
   project,
   purchase,
@@ -231,6 +236,45 @@ type LinkEdgesOf<E extends Entity> = {
     role: LinkDeclaration[K]["toEnd"]["role"];
   };
 };
+
+type ExternalIdEntity =
+  (typeof EXTERNAL_ID_KINDS)[EntityExternalIdKind]["entities"][number];
+
+/** The `EntityExternalId` edge of an entity some identifier kind attaches to. */
+type ExternalIdEdgesOf<E extends Entity> = E extends ExternalIdEntity
+  ? {
+      "EntityExternalId.entityId": Omit<EntityEdge, "role"> & {
+        role: "metadata";
+      };
+    }
+  : Record<never, never>;
+
+/**
+ * `entity`'s incoming `EntityExternalId` edge, present exactly when
+ * `EXTERNAL_ID_KINDS` lets some identifier kind attach to it. Identifiers are
+ * metadata: they never say the entity was owned, bought, or used.
+ */
+function externalIdEdgesFor<E extends Entity>(entity: E): ExternalIdEdgesOf<E> {
+  const attaches = Object.values(EXTERNAL_ID_KINDS).some((declaration) =>
+    declaration.entities.some((candidate: string) => candidate === entity),
+  );
+  // SAFETY: the edge is present exactly when some kind attaches to `entity`,
+  // which is the condition `ExternalIdEdgesOf<E>` spells out.
+  return (
+    attaches
+      ? {
+          "EntityExternalId.entityId": {
+            column: entityExternalId.entityId,
+            role: "metadata",
+            label: "external ids",
+            description:
+              "An identifier another system gives this record (an ASIN, a barcode, a settlement reference, a Notion page); says nothing about ownership or spend.",
+            liveness: { kind: "must-target-live" },
+          },
+        }
+      : {}
+  ) as ExternalIdEdgesOf<E>;
+}
 
 /** `entity`'s incoming `EntityLink` edges, generated from `ENTITY_LINK_KINDS`. */
 function linkEdgesFor<E extends Entity>(entity: E): LinkEdgesOf<E> {
@@ -372,55 +416,58 @@ export const ENTITY_EDGES = {
       liveness: { kind: "must-target-live" },
     },
   }),
-  recipe: edges({
-    "RecipeSection.recipeId": {
-      column: recipeSection.recipeId,
-      role: "composition",
-      label: "recipe sections",
-      description:
-        'A named section (e.g. "For the crust") that structures this recipe\'s ingredient list; meaningless outside the recipe it belongs to.',
-      liveness: { kind: "must-target-live" },
-    },
-    "Ingredient.recipeId": {
-      column: ingredient.recipeId,
-      role: "reference",
-      label: "sub-recipe ingredient lines",
-      description:
-        "An ingredient line in another recipe's section that uses this recipe as a sub-recipe (composition) rather than a plain ingredient.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Deleting a recipe deliberately preserves the recipe-as-ingredient pointer " +
-          "(`preserve-sub-recipe-pointer` in RECIPE_DELETE_EDGE_POLICY, " +
-          "apps/web/src/server/repo/recipe/crud.ts) so parent recipes still resolve " +
-          "the tombstone for staleness detection and recompute, instead of silently " +
-          "losing a line.",
+  recipe: {
+    ...edges({
+      "RecipeSection.recipeId": {
+        column: recipeSection.recipeId,
+        role: "composition",
+        label: "recipe sections",
+        description:
+          'A named section (e.g. "For the crust") that structures this recipe\'s ingredient list; meaningless outside the recipe it belongs to.',
+        liveness: { kind: "must-target-live" },
       },
-    },
-    "MealRecipe.recipeId": {
-      column: mealRecipe.recipeId,
-      role: "association",
-      label: "meal-plan entries",
-      description:
-        "A join row placing this recipe on the meal calendar; the meal and the recipe each exist independently of the pairing.",
-      liveness: { kind: "must-target-live" },
-    },
-    "EntityAttachment.entityId": {
-      column: entityAttachment.entityId,
-      role: "media",
-      label: "recipe photos",
-      description: "A photo attached to this recipe.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Recipe.forkedFromRecipeId": {
-      column: recipe.forkedFromRecipeId,
-      role: "hierarchy",
-      label: "forks",
-      description:
-        "A recipe that records this one as the recipe it was forked from — a lineage pointer only, enforced by the Recipe self-FK.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
+      "Ingredient.recipeId": {
+        column: ingredient.recipeId,
+        role: "reference",
+        label: "sub-recipe ingredient lines",
+        description:
+          "An ingredient line in another recipe's section that uses this recipe as a sub-recipe (composition) rather than a plain ingredient.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Deleting a recipe deliberately preserves the recipe-as-ingredient pointer " +
+            "(`preserve-sub-recipe-pointer` in RECIPE_DELETE_EDGE_POLICY, " +
+            "apps/web/src/server/repo/recipe/crud.ts) so parent recipes still resolve " +
+            "the tombstone for staleness detection and recompute, instead of silently " +
+            "losing a line.",
+        },
+      },
+      "MealRecipe.recipeId": {
+        column: mealRecipe.recipeId,
+        role: "association",
+        label: "meal-plan entries",
+        description:
+          "A join row placing this recipe on the meal calendar; the meal and the recipe each exist independently of the pairing.",
+        liveness: { kind: "must-target-live" },
+      },
+      "EntityAttachment.entityId": {
+        column: entityAttachment.entityId,
+        role: "media",
+        label: "recipe photos",
+        description: "A photo attached to this recipe.",
+        liveness: { kind: "must-target-live" },
+      },
+      "Recipe.forkedFromRecipeId": {
+        column: recipe.forkedFromRecipeId,
+        role: "hierarchy",
+        label: "forks",
+        description:
+          "A recipe that records this one as the recipe it was forked from — a lineage pointer only, enforced by the Recipe self-FK.",
+        liveness: { kind: "must-target-live" },
+      },
+    }),
+    ...externalIdEdgesFor("recipe"),
+  },
   ingredient: edges({
     "MealFoodEntry.ingredientId": {
       column: mealFoodEntry.ingredientId,
@@ -649,14 +696,6 @@ export const ENTITY_EDGES = {
           "A recorded product amount whose nutrition is recalculated from the current product source while its entered quantity remains fixed.",
         liveness: { kind: "must-target-live" },
       },
-      "ProductExternalId.productId": {
-        column: productExternalId.productId,
-        role: "metadata",
-        label: "external ids",
-        description:
-          "An external identifier (e.g. an ASIN) recorded against this product; says nothing about whether the product was ever owned.",
-        liveness: { kind: "must-target-live" },
-      },
       "ProductUnitMappings.productId": {
         column: productUnitMappings.productId,
         role: "metadata",
@@ -762,6 +801,7 @@ export const ENTITY_EDGES = {
       },
     }),
     ...linkEdgesFor("product"),
+    ...externalIdEdgesFor("product"),
   },
   productCategory: edges({
     "PhotoGroupProposal.productCreateCategoryId": {
@@ -880,6 +920,7 @@ export const ENTITY_EDGES = {
       },
     }),
     ...linkEdgesFor("project"),
+    ...externalIdEdgesFor("project"),
   },
   task: {
     ...edges({
@@ -907,6 +948,7 @@ export const ENTITY_EDGES = {
       },
     }),
     ...linkEdgesFor("task"),
+    ...externalIdEdgesFor("task"),
   },
   vendor: edges({
     "EntityAttachment.entityId": {
@@ -938,6 +980,14 @@ export const ENTITY_EDGES = {
       role: "reference",
       label: "vendor accounts",
       description: "A member-owned login for this vendor.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ExternalSource.vendorId": {
+      column: externalSource.vendorId,
+      role: "metadata",
+      label: "identifier sources",
+      description:
+        "A registered identifier source (a catalog, an export) that is this vendor; it names the vendor, it does not depend on it.",
       liveness: { kind: "must-target-live" },
     },
     "ImportHunt.vendorId": {
@@ -1056,45 +1106,51 @@ export const ENTITY_EDGES = {
       liveness: { kind: "must-target-live" },
     },
   }),
-  financialTransaction: edges({
-    "ImportHunt.financialTransactionId": {
-      column: importHunt.financialTransactionId,
-      role: "history",
-      label: "import hunts",
-      description: "An evidence hunt opened for an unallocated transaction.",
-      liveness: { kind: "must-target-live" },
-    },
-    "FinancialTransactionAllocation.transactionId": {
-      column: financialTransactionAllocation.transactionId,
-      role: "composition",
-      label: "purchase allocations",
-      description:
-        "One slice of this transaction's amount, attributed to a single Purchase. The slices are meaningless apart from the charge whose amount they decompose: a transaction has either none of them, or a set that sums to its amount exactly and shares its sign.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
+  financialTransaction: {
+    ...edges({
+      "ImportHunt.financialTransactionId": {
+        column: importHunt.financialTransactionId,
+        role: "history",
+        label: "import hunts",
+        description: "An evidence hunt opened for an unallocated transaction.",
+        liveness: { kind: "must-target-live" },
+      },
+      "FinancialTransactionAllocation.transactionId": {
+        column: financialTransactionAllocation.transactionId,
+        role: "composition",
+        label: "purchase allocations",
+        description:
+          "One slice of this transaction's amount, attributed to a single Purchase. The slices are meaningless apart from the charge whose amount they decompose: a transaction has either none of them, or a set that sums to its amount exactly and shares its sign.",
+        liveness: { kind: "must-target-live" },
+      },
+    }),
+    ...externalIdEdgesFor("financialTransaction"),
+  },
   wish: {
     ...edges({}),
     ...linkEdgesFor("wish"),
   },
-  expense: edges({
-    "ExpenseAttribution.expenseId": {
-      column: expenseAttribution.expenseId,
-      role: "composition",
-      label: "party shares",
-      description:
-        "Unitless beneficiary or initial-funder weights that allocate this Expense without storing money.",
-      liveness: { kind: "must-target-live" },
-    },
-    "LedgerSourceClaim.expenseId": {
-      column: ledgerSourceClaim.expenseId,
-      role: "metadata",
-      label: "import source references",
-      description:
-        "Durable external identity proving which normalized source row became this Expense.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
+  expense: {
+    ...edges({
+      "ExpenseAttribution.expenseId": {
+        column: expenseAttribution.expenseId,
+        role: "composition",
+        label: "party shares",
+        description:
+          "Unitless beneficiary or initial-funder weights that allocate this Expense without storing money.",
+        liveness: { kind: "must-target-live" },
+      },
+      "LedgerSourceClaim.expenseId": {
+        column: ledgerSourceClaim.expenseId,
+        role: "metadata",
+        label: "import source references",
+        description:
+          "Durable external identity proving which normalized source row became this Expense.",
+        liveness: { kind: "must-target-live" },
+      },
+    }),
+    ...externalIdEdgesFor("expense"),
+  },
   ledgerTransfer: edges({
     "FinancialTransaction.ledgerTransferId": {
       column: financialTransaction.ledgerTransferId,

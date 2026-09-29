@@ -191,7 +191,7 @@ export const recipeTimes = z.object({
 export type RecipeTimes = z.infer<typeof recipeTimes>;
 
 /**
- * `url` is DERIVED from the `SourceType`/`SourceData` columns on read (see
+ * `url` is DERIVED from the `sourceType`/`sourceUrl` columns on read (see
  * `dbRecipeToTopLevelShape`) — it is deliberately not stored in the `meta`
  * jsonb, so provenance keeps its single source of truth. Everything else here
  * is import-carried and persisted: `activeMinutes`/`totalMinutes` as real

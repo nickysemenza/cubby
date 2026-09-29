@@ -203,7 +203,7 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     reason: "PRODUCT_HAS_WISH_CANDIDATES",
     label: "wishlist candidates",
   },
-  "ProductExternalId.productId": {
+  "EntityExternalId.entityId": {
     code: "soft-delete-metadata",
     effect: "soft-delete",
     description: "External ids (e.g. ASINs) are soft-deleted with the product.",

@@ -64,8 +64,8 @@ const hasAmazonPurchase = (t: Product) => sql`EXISTS (
 )`;
 
 const hasAmazonId = (t: Product) => sql`EXISTS (
-  SELECT 1 FROM "ProductExternalId" dq_asin
-  WHERE dq_asin."productId" = ${t.id}
+  SELECT 1 FROM "EntityExternalId" dq_asin
+  WHERE dq_asin."entityId" = ${t.id}
     AND dq_asin."deletedAt" IS NULL
     AND dq_asin."source" = ${AMAZON_SOURCE}
     AND dq_asin."kind" = 'asin'
@@ -81,23 +81,23 @@ const hasPurchaseProductLink = (t: Product) => sql`EXISTS (
 )`;
 
 const hasExternalId = (t: Product) => sql`EXISTS (
-  SELECT 1 FROM "ProductExternalId" dq_xid
-  WHERE dq_xid."productId" = ${t.id} AND dq_xid."deletedAt" IS NULL
+  SELECT 1 FROM "EntityExternalId" dq_xid
+  WHERE dq_xid."entityId" = ${t.id} AND dq_xid."deletedAt" IS NULL
 )`;
 
 const hasExternalIdCollision = (t: Product) => sql`EXISTS (
   SELECT 1
-  FROM "ProductExternalId" dq_mine
-  JOIN "ProductExternalId" dq_other
+  FROM "EntityExternalId" dq_mine
+  JOIN "EntityExternalId" dq_other
     ON dq_other."source" = dq_mine."source"
    AND dq_other."kind" = dq_mine."kind"
    AND dq_other."externalId" = dq_mine."externalId"
-   AND dq_other."productId" <> dq_mine."productId"
+   AND dq_other."entityId" <> dq_mine."entityId"
    AND dq_other."deletedAt" IS NULL
   JOIN "Product" dq_other_product
-    ON dq_other_product."id" = dq_other."productId"
+    ON dq_other_product."id" = dq_other."entityId"
    AND dq_other_product."deletedAt" IS NULL
-  WHERE dq_mine."productId" = ${t.id}
+  WHERE dq_mine."entityId" = ${t.id}
     AND dq_mine."deletedAt" IS NULL
 )`;
 

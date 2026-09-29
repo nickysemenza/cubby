@@ -41,6 +41,7 @@ import {
   cookbook,
   device,
   entityAttachment,
+  entityExternalId,
   entityLink,
   expense,
   image,
@@ -51,7 +52,6 @@ import {
   photoGroupProposal,
   planting,
   product,
-  productExternalId,
   productUnitMappings,
   project,
   recipe,
@@ -548,19 +548,19 @@ export const findDuplicateProductIdentities = async (
 
   const identifiers = await dbClient
     .select({
-      productId: productExternalId.productId,
-      source: productExternalId.source,
-      kind: productExternalId.kind,
-      externalId: productExternalId.externalId,
+      productId: entityExternalId.entityId,
+      source: entityExternalId.source,
+      kind: entityExternalId.kind,
+      externalId: entityExternalId.externalId,
     })
-    .from(productExternalId)
+    .from(entityExternalId)
     .where(
       and(
         inArray(
-          productExternalId.productId,
+          entityExternalId.entityId,
           candidates.map((row) => row.id),
         ),
-        notDeleted(productExternalId),
+        notDeleted(entityExternalId),
       ),
     );
 

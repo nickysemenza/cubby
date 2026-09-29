@@ -310,7 +310,7 @@ const entityDefinitions = withEntityNames({
     ...generatedBrowserRoutes.recipe,
     color: INK.primary,
     // Cost/calorie column IDs sort the canonical estimates' known lower amount
-    // via jsonb expressions. `source` (SourceType+SourceData)
+    // via jsonb expressions. `source` (sourceType + its stored provenance)
     // and `yield` (→ servings) are also special-cased there. See recipe/crud.recipeList.
   },
   cookbook: {

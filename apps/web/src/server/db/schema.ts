@@ -11,6 +11,7 @@ import {
 } from "@cubby/schemas/entity-attachment";
 import type { Entity } from "@cubby/schemas/entity-core";
 import type { EntityLinkKind } from "@cubby/schemas/entity-links";
+import type { EntityExternalIdKind } from "@cubby/schemas/external-id";
 import type {
   DeviceId,
   ExpenseAttributionId,
@@ -41,6 +42,7 @@ import {
   type PurchaseDocumentKind,
   purchaseDocumentKindValues,
 } from "@cubby/schemas/purchase";
+import { recipeSourceValues } from "@cubby/schemas/recipe-shared";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import type {
   McpToolCallOutcome,
@@ -92,6 +94,10 @@ import {
   entityLinkQuantityCheckSql,
 } from "./entity-link-schema";
 import {
+  externalIdKindCheckSql,
+  externalIdPrimaryCheckSql,
+} from "./external-id-schema";
+import {
   generatedCookbookColumns,
   generatedDeviceColumns,
   generatedExpenseColumns,
@@ -121,12 +127,10 @@ import {
   imageStatusEnum,
   imageStorageStatusEnum,
   inventoryPlacementEnum,
-  recipeSourceEnum,
 } from "./generated/entity-columns.gen";
 import { productCategory } from "./product-category-schema";
 
 export {
-  recipeSourceEnum,
   imageStatusEnum,
   inventoryPlacementEnum,
   imageRenderStatusEnum,
@@ -279,32 +283,30 @@ export const recipe = pgTable(
   (table) => [
     shortcodeUnique("Recipe", table.shortcode),
     entityIdentityFk("Recipe", table),
-    // Non-cookbook recipes keep a globally-unique name. EPUB-imported (Book) and
-    // Notion-synced recipes are excluded here — they're keyed by (name, book) and
-    // by Notion page id respectively — so the same title can appear across a
-    // cookbook, a Notion page, and a web recipe. `IS DISTINCT FROM` (not NOT IN)
-    // keeps NULL-SourceType legacy rows inside the index.
+    // Non-cookbook recipes keep a globally-unique name. Cookbook (Book) and
+    // Notion recipes are excluded — they're keyed by (cookbook, name) and by
+    // their Notion page's EntityExternalId — so the same title can appear
+    // across a cookbook, a Notion page, and a web recipe. `IS DISTINCT FROM`
+    // (not NOT IN) keeps NULL-sourceType legacy rows inside the index.
     uniqueIndex("Recipe_name_key")
       .on(table.name)
       .where(
-        sql`${table.deletedAt} IS NULL AND ${table.SourceType} IS DISTINCT FROM 'Book' AND ${table.SourceType} IS DISTINCT FROM 'Notion'`,
+        sql`${table.deletedAt} IS NULL AND ${table.sourceType} IS DISTINCT FROM 'Book' AND ${table.sourceType} IS DISTINCT FROM 'Notion'`,
       ),
-    // A cookbook recipe's identity is (cookbook, title): unique per book, but the
-    // same title may recur across books. The upsert keys on `cookbookId`; this DB
-    // guard uses `SourceData` (kept synced to the cookbook name, which is itself
-    // unique) so it's equivalent and needs no nullable-FK partial index.
-    uniqueIndex("Recipe_book_title_key")
-      .on(table.name, table.SourceData)
-      .where(sql`${table.deletedAt} IS NULL AND ${table.SourceType} = 'Book'`),
-    // A Notion-synced recipe's identity is its Notion page id, stored in
-    // SourceData. This makes re-importing a page idempotent (and a renamed page
-    // still hits the same row) — the analogue of bookTitleUnique for Notion.
-    uniqueIndex("Recipe_notion_page_key")
-      .on(table.SourceData)
+    // A cookbook recipe's identity is (cookbook, title): unique per book, but
+    // the same title may recur across books.
+    uniqueIndex("Recipe_cookbookId_name_key")
+      .on(table.cookbookId, table.name)
       .where(
-        sql`${table.deletedAt} IS NULL AND ${table.SourceType} = 'Notion'`,
+        sql`${table.cookbookId} IS NOT NULL AND ${table.deletedAt} IS NULL`,
       ),
-    index("Recipe_SourceType_idx").on(table.SourceType),
+    check(
+      "Recipe_sourceType_check",
+      sql.raw(
+        `"sourceType" IS NULL OR "sourceType" IN (${recipeSourceValues.map((value) => `'${value}'`).join(", ")})`,
+      ),
+    ),
+    index("Recipe_sourceType_idx").on(table.sourceType),
     index("Recipe_cookbookId_idx").on(table.cookbookId),
     index("Recipe_forkedFromRecipeId_idx").on(table.forkedFromRecipeId),
     index("Recipe_created_at_desc_idx").on(table.createdAt.desc()),
@@ -585,70 +587,6 @@ export const product = pgTable(
     index("Product_manufacturer_active_idx")
       .on(table.manufacturer)
       .where(sql`${table.deletedAt} IS NULL`),
-  ],
-);
-
-export const productExternalId = pgTable(
-  "ProductExternalId",
-  {
-    id: pkUuid(),
-    productId: uuid("productId")
-      .notNull()
-      .$type<ProductId>()
-      .references(() => product.id),
-    source: text("source").notNull(), // e.g. "amazon", "mcmaster", "mouser"
-    kind: text("kind").notNull().default("legacy_unspecified"),
-    externalId: text("externalId").notNull(), // The actual identifier (ASIN, part number, etc.)
-    url: text("url"), // Optional direct link to the product page
-    /**
-     * The value that stands for the slot. One per (productId, source, kind);
-     * secondaries are unlimited.
-     *
-     * A slot used to hold exactly one row, so merging two products that each
-     * carried an ASIN destroyed one of them — and each discarded ASIN is a real
-     * listing, so the next order line quoting it re-mints the duplicate the
-     * merge just removed.
-     */
-    isPrimary: boolean("isPrimary").notNull().default(true),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    index("ProductExternalId_productId_idx").on(table.productId),
-    // One PRIMARY per slot rather than one row per slot.
-    //
-    // This replaced `ProductExternalId_product_source_kind_key`, and the swap
-    // had to straddle the deploy: the two code versions infer DIFFERENT arbiter
-    // indexes for the same upsert (`WHERE deletedAt IS NULL` before,
-    // `WHERE isPrimary AND deletedAt IS NULL` after), so both had to exist at
-    // once. Applied by hand for that reason, not because push cannot express it.
-    uniqueIndex("ProductExternalId_product_source_kind_primary_key")
-      .on(table.productId, table.source, table.kind)
-      .where(sql`${table.isPrimary} AND ${table.deletedAt} IS NULL`),
-    // Stays GLOBAL and unconditional: this is the constraint that makes
-    // `find_product_external_id_collisions` work at all, by guaranteeing an
-    // identifier has at most one live owner.
-    uniqueIndex("ProductExternalId_source_kind_externalId_key")
-      .on(table.source, table.kind, table.externalId)
-      .where(sql`${table.deletedAt} IS NULL`),
-    check(
-      "ProductExternalId_source_slug_check",
-      sql`${table.source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND ${table.source} = lower(trim(${table.source}))`,
-    ),
-    // Barcodes are stored in ONE canonical encoding (GTIN-14, zero-padded), so
-    // that the global `(source, kind, externalId)` unique above is what stops
-    // two live products claiming one barcode. Storing the encoding as scanned
-    // would put a 12-digit UPC-A and its 13-digit reprint in two different
-    // strings, and the unique would let both through — which is exactly the bug
-    // the partial `Product_upc_key` had.
-    //
-    // A constraint rather than a Zod convention because the normalization is a
-    // `lpad(..., 14, '0')` on the SQL side, and lpad TRUNCATES input longer
-    // than 14 instead of erroring.
-    check(
-      "ProductExternalId_gtin_digits_check",
-      sql`${table.source} <> 'gtin' OR ${table.externalId} ~ '^[0-9]{14}$'`,
-    ),
   ],
 );
 
@@ -1212,9 +1150,6 @@ export const project = pgTable(
   (table) => [
     shortcodeUnique("Project", table.shortcode),
     entityIdentityFk("Project", table),
-    uniqueIndex("Project_notionPageId_key")
-      .on(table.notionPageId)
-      .where(sql`${table.deletedAt} IS NULL`),
     index("Project_status_idx").on(table.status),
     index("Project_kind_idx").on(table.kind),
     index("Project_startDate_idx").on(table.startDate),
@@ -1243,9 +1178,6 @@ export const task = pgTable(
   (table) => [
     shortcodeUnique("Task", table.shortcode),
     entityIdentityFk("Task", table),
-    uniqueIndex("Task_notionPageId_key")
-      .on(table.notionPageId)
-      .where(sql`${table.deletedAt} IS NULL`),
     index("Task_projectId_idx").on(table.projectId),
     index("Task_subjectProductId_idx").on(table.subjectProductId),
     index("Task_status_idx").on(table.status),
@@ -1275,6 +1207,82 @@ export const vendor = pgTable("Vendor", generatedVendorColumns(), (table) => [
     sql`${table.returnWindowDays} IS NULL OR ${table.returnWindowDays} >= 0`,
   ),
 ]);
+
+/**
+ * The registry of places an identifier can come from: a vendor's catalog
+ * (`amazon`), a provider export (`monarch`), or a system (`notion`). Every
+ * `EntityExternalId.source`, statement import, statement row, and ledger claim
+ * names one, so a slug is spelled once. `vendorId` names the Vendor the slug
+ * is, when it is one.
+ */
+export const externalSource = pgTable(
+  "ExternalSource",
+  {
+    slug: text("slug").primaryKey(),
+    label: text("label").notNull(),
+    vendorId: uuid("vendorId")
+      .$type<VendorId>()
+      .references(() => vendor.id),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      "ExternalSource_slug_check",
+      sql`${table.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`,
+    ),
+  ],
+);
+
+/**
+ * Every identifier an outside system gives an entity: a product's ASIN or
+ * barcode, a settlement's order reference, a task's Notion page. Kinds and the
+ * entities they attach to are declared in `EXTERNAL_ID_KINDS`; the CHECKs are
+ * rendered from it (`external-id-schema.ts`).
+ *
+ * An identifier names at most one live entity (`source, kind, externalId`),
+ * which is what makes collision detection and statement matching exact. Rows
+ * soft-delete with their entity, so a re-import after a delete can claim the
+ * identifier again.
+ */
+export const entityExternalId = pgTable(
+  "EntityExternalId",
+  {
+    id: pkUuid(),
+    ...entityRef({ nullable: false }),
+    source: text("source")
+      .notNull()
+      .references(() => externalSource.slug, { onUpdate: "cascade" }),
+    kind: text("kind").notNull().$type<EntityExternalIdKind>(),
+    externalId: text("externalId").notNull(),
+    url: text("url"),
+    /** The value that stands for its `(entity, source, kind)` slot; NULL for slotless kinds. */
+    isPrimary: boolean("isPrimary"),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    entityRefFk("EntityExternalId_entity_fk", table),
+    check("EntityExternalId_kind_check", sql.raw(externalIdKindCheckSql())),
+    check(
+      "EntityExternalId_primary_check",
+      sql.raw(externalIdPrimaryCheckSql()),
+    ),
+    // Barcodes are stored in ONE canonical encoding (GTIN-14): Postgres
+    // `lpad` truncates longer input, so the format is a constraint, not a
+    // convention.
+    check(
+      "EntityExternalId_gtin_check",
+      sql`${table.kind} <> 'gtin_14' OR ${table.externalId} ~ '^[0-9]{14}$'`,
+    ),
+    uniqueIndex("EntityExternalId_source_kind_externalId_key")
+      .on(table.source, table.kind, table.externalId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    uniqueIndex("EntityExternalId_entity_source_kind_primary_key")
+      .on(table.entityId, table.source, table.kind)
+      .where(sql`${table.isPrimary} AND ${table.deletedAt} IS NULL`),
+    index("EntityExternalId_entityId_idx").on(table.entityId),
+  ],
+);
 
 export const financialAccount = pgTable(
   "FinancialAccount",
@@ -2354,14 +2362,6 @@ export const financialTransaction = pgTable(
     index("FinancialTransaction_status_idx").on(table.status),
     index("FinancialTransaction_transactionDate_idx").on(table.transactionDate),
     index("FinancialTransaction_postedDate_idx").on(table.postedDate),
-    // Serves the `sourceRefs @> '[{source,externalId}]'` containment probes that
-    // every statement-import write and every reconciliation read performs.
-    // Plain jsonb_ops — naming an opclass here produces perpetual `db:push`
-    // drift.
-    index("FinancialTransaction_sourceRefs_gin_idx").using(
-      "gin",
-      table.sourceRefs,
-    ),
     check(
       "FinancialTransaction_amount_whole_cent_check",
       sql`${table.amount} <> 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
@@ -2441,7 +2441,9 @@ export const statementImport = pgTable(
   "StatementImport",
   {
     id: pkUuid(),
-    source: text("source").notNull(),
+    source: text("source")
+      .notNull()
+      .references(() => externalSource.slug, { onUpdate: "cascade" }),
     label: text("label").notNull(),
     fingerprint: text("fingerprint").notNull(),
     /**
@@ -2480,11 +2482,9 @@ export const statementImport = pgTable(
  * One verbatim row from a provider export.
  *
  * Match state is **derived**, not stored: a row is matched when a live
- * `FinancialTransaction.sourceRefs` contains its `(source, externalId)` pair.
- * That join needs no DISTINCT only because `assertSourceRefsAvailable`
- * guarantees the pair is globally unique across live transactions — a
- * guarantee that lives in `repo/financial-transaction.ts`, so weakening it
- * there fans this out.
+ * `settlement_ref` `EntityExternalId` names its `(source, externalId)` pair.
+ * That join needs no DISTINCT because the live `(source, kind, externalId)`
+ * unique allows one owner per pair.
  *
  * The provider columns are immutable after ingest; the only mutable fields are
  * the judgments an agent explicitly writes (`accountId`, `disposition*`,
@@ -2497,7 +2497,9 @@ export const statementRow = pgTable(
     batchId: uuid("batchId")
       .notNull()
       .references(() => statementImport.id),
-    source: text("source").notNull(),
+    source: text("source")
+      .notNull()
+      .references(() => externalSource.slug, { onUpdate: "cascade" }),
     externalId: text("externalId").notNull(),
 
     accountDescriptor: text("accountDescriptor").notNull(),
@@ -2626,9 +2628,6 @@ export const expense = pgTable(
       "Expense_live_charge_assignment_check",
       sql`${table.deletedAt} IS NOT NULL OR ${table.lineKind} = 'principal' OR (${table.projectId} IS NULL AND ${table.purchaseId} IS NOT NULL)`,
     ),
-    uniqueIndex("Expense_notionPageId_key")
-      .on(table.notionPageId)
-      .where(sql`${table.deletedAt} IS NULL`),
     index("Expense_projectId_idx").on(table.projectId),
     index("Expense_productId_idx").on(table.productId),
     index("Expense_date_idx").on(table.date),
@@ -2720,7 +2719,9 @@ export const ledgerSourceClaim = pgTable(
     ledgerTransferId: uuid("ledgerTransferId")
       .$type<LedgerTransferId>()
       .references(() => ledgerTransfer.id),
-    source: text("source").notNull(),
+    source: text("source")
+      .notNull()
+      .references(() => externalSource.slug, { onUpdate: "cascade" }),
     sourceKey: text("sourceKey").notNull(),
     sourceKeyVersion: integer("sourceKeyVersion").notNull(),
     normalizedEvidence: jsonb("normalizedEvidence")
@@ -2769,6 +2770,7 @@ export const ledgerSourceClaim = pgTable(
 
 export const recipeRelations = relations(recipe, ({ one, many }) => ({
   sections: many(recipeSection),
+  externalIds: many(entityExternalId, { relationName: "recipeExternalIds" }),
   pointerIngredient: one(ingredient, {
     fields: [recipe.id],
     references: [ingredient.recipeId],
@@ -2907,7 +2909,7 @@ export const productRelations = relations(product, ({ one, many }) => ({
   unitMappings: many(productUnitMappings),
   mealFoodEntries: many(mealFoodEntry),
   conversionCoverage: one(productConversionCoverage),
-  externalIds: many(productExternalId),
+  externalIds: many(entityExternalId, { relationName: "productExternalIds" }),
   inventoryEntry: many(inventoryEntry),
   images: many(entityAttachment),
   expenses: many(expense),
@@ -2919,12 +2921,24 @@ export const productRelations = relations(product, ({ one, many }) => ({
   cookbooks: many(cookbook),
 }));
 
-export const productExternalIdRelations = relations(
-  productExternalId,
+export const entityExternalIdRelations = relations(
+  entityExternalId,
   ({ one }) => ({
+    // Entity ids are unique across tables, so the product side of a row is
+    // exact without a kind filter.
     product: one(product, {
-      fields: [productExternalId.productId],
+      fields: [entityExternalId.entityId],
       references: [product.id],
+      relationName: "productExternalIds",
+    }),
+    recipe: one(recipe, {
+      fields: [entityExternalId.entityId],
+      references: [recipe.id],
+      relationName: "recipeExternalIds",
+    }),
+    externalSource: one(externalSource, {
+      fields: [entityExternalId.source],
+      references: [externalSource.slug],
     }),
   }),
 );

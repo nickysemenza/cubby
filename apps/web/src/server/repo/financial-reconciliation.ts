@@ -196,7 +196,7 @@ export const postedRefundTotalSql = (purchaseAlias: string) =>
 /**
  * What makes a settlement row count as *evidence* for the
  * `settlement_reference` data-quality check: posted, of a settlement kind, and
- * carrying either an external source reference or a cash account (cash leaves no
+ * carrying either a live `settlement_ref` EntityExternalId or a cash account (cash leaves no
  * statement to reference, so the account itself is the evidence).
  *
  * **Account liveness belongs here**, unlike in `postedRefundPredicate` — the
@@ -218,7 +218,12 @@ const settlementReferencePredicate = (ftxAlias: string, accountAlias: string) =>
        .join(", ")})
      AND ${accountAlias}."deletedAt" IS NULL
      AND (
-       jsonb_array_length(${ftxAlias}."sourceRefs") > 0
+       EXISTS (
+         SELECT 1 FROM "EntityExternalId" settlement_ref
+         WHERE settlement_ref."entityId" = ${ftxAlias}."id"
+           AND settlement_ref."kind" = 'settlement_ref'
+           AND settlement_ref."deletedAt" IS NULL
+       )
        OR ${accountAlias}."identity"->>'kind' = 'cash'
      )`;
 

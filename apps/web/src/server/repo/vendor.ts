@@ -126,6 +126,12 @@ export const VENDOR_DELETE_EDGE_POLICY = {
     description:
       "The logo association is soft-deleted with the vendor; the image is reaped when nothing else uses it.",
   },
+  "ExternalSource.vendorId": {
+    code: "clear-source-vendor",
+    effect: "detach",
+    description:
+      "Identifier sources that named this vendor stay registered and simply stop naming it.",
+  },
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
 export const VENDOR_MERGE_EDGE_POLICY = {
@@ -173,6 +179,12 @@ export const VENDOR_MERGE_EDGE_POLICY = {
     effect: "repoint",
     description:
       "A loser's logo becomes the survivor's when the survivor has none; any other loser logo is detached and reaped unless shared.",
+  },
+  "ExternalSource.vendorId": {
+    code: "repoint-source-vendor",
+    effect: "repoint",
+    description:
+      "Identifier sources that named a merged vendor name the survivor.",
   },
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 

@@ -162,7 +162,8 @@ const deletedImage = {
 
 const activeExternalId = {
   id: EXTERNAL_ID,
-  productId: PRODUCT_ID,
+  entityId: PRODUCT_ID,
+  entityKind: "product" as const,
   source: "amazon",
   externalId: "B000000001",
   url: "https://example.com/product",

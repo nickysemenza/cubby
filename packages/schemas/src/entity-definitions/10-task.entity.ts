@@ -504,11 +504,6 @@ export default defineEntity({
       },
       { key: "shortcode", kind: "text" },
       {
-        key: "notionPageId",
-        kind: "text",
-        nullable: true,
-      },
-      {
         key: "deletedAt",
         kind: "timestamp",
         nullable: true,
@@ -543,7 +538,6 @@ export default defineEntity({
       "dueEndDate",
       { key: "trade", specialized: "enum:trade" },
       { key: "sortOrder", specialized: "double-precision" },
-      "notionPageId",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",

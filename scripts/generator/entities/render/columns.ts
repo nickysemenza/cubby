@@ -40,7 +40,6 @@ const storageJsonTypes = {
   "financialAccount.cardNumbers": "FinancialAccountCardNumber[]",
   "financialAccount.identity": "FinancialAccountIdentity",
   "financialAccount.sourceAliases": "FinancialAccountSourceAlias[]",
-  "financialTransaction.sourceRefs": "FinancialTransactionSourceRef[]",
   "ingredient.naKinds": "BaseKind[]",
   "image.sourceFingerprint": "ImageSourceFingerprint | null",
   "image.captureLocation": "ImageCaptureLocation | null",
@@ -91,7 +90,7 @@ const enumColumnExpression = (
     "imageSighting.matchKind": `text(${column},{enum:["import","libraryMatch"]})`,
     "project.kind": `text(${column},{enum:projectKindValues})`,
     "project.status": `text(${column},{enum:projectStatusValues})`,
-    "recipe.SourceType": `recipeSourceEnum(${column})`,
+    "recipe.sourceType": `text(${column},{enum:recipeSourceValues})`,
     "task.status": `text(${column},{enum:taskStatusValues})`,
     "task.trade": `text(${column},{enum:tradeValues})`,
   } as const satisfies Readonly<Record<string, string>>;
@@ -210,7 +209,6 @@ export const renderEntityColumnsArtifact = (
     generatedHeader +
     'import type { Amount } from "@cubby/schemas/codec";\n' +
     'import type { FinancialAccountCardNumber, FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
-    'import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";\n' +
     `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +
     'import { imageStatusValues } from "@cubby/schemas/image";\n' +
     'import type { ImageSourceFingerprint, StoredImageEmbeddedMetadata } from "@cubby/schemas/image";\n' +
@@ -230,7 +228,6 @@ export const renderEntityColumnsArtifact = (
     'import { inventoryPlacementValues } from "@cubby/shared";\n' +
     'import { sql } from "drizzle-orm";\n' +
     'import { type AnyPgColumn, boolean, date, doublePrecision, integer, jsonb, pgEnum, real, text, timestamp, uuid } from "drizzle-orm/pg-core";\n\n' +
-    'export const recipeSourceEnum = pgEnum("RecipeSource", recipeSourceValues);\n' +
     'export const imageStatusEnum = pgEnum("ImageStatus", imageStatusValues);\n' +
     'export const inventoryPlacementEnum = pgEnum("InventoryPlacement", inventoryPlacementValues);\n' +
     'export const imageRenderStatusEnum = pgEnum("ImageRenderStatus", ["unverified", "verified", "failed"]);\n' +

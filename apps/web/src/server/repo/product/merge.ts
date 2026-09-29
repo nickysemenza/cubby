@@ -39,6 +39,7 @@ import {
   cookbook,
   device,
   entityAttachment,
+  entityExternalId,
   entityLink,
   expense,
   ingredient,
@@ -50,7 +51,6 @@ import {
   product,
   productCategory,
   productConversionCoverage,
-  productExternalId,
   productUnitMappings,
   runEvidence,
   runTarget,
@@ -93,7 +93,7 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     effect: "repoint",
     description: "Targeted enrichment history follows the surviving Product.",
   },
-  "ProductExternalId.productId": {
+  "EntityExternalId.entityId": {
     code: "repoint-or-discard-conflicting-slot",
     effect: "move-dedupe",
     description:
@@ -849,14 +849,14 @@ async function buildProductMergePlan(
     productId: parseEntityId("product", row.productId),
   }));
   const externalIdRows = (
-    await db.query.productExternalId.findMany({
+    await db.query.entityExternalId.findMany({
       where: and(
-        inArray(productExternalId.productId, ids),
-        notDeleted(productExternalId),
+        inArray(entityExternalId.entityId, ids),
+        notDeleted(entityExternalId),
       ),
       columns: {
         id: true,
-        productId: true,
+        entityId: true,
         source: true,
         kind: true,
         externalId: true,
@@ -864,15 +864,17 @@ async function buildProductMergePlan(
         isPrimary: true,
       },
       orderBy: [
-        desc(productExternalId.isPrimary),
-        asc(productExternalId.createdAt),
-        asc(productExternalId.id),
+        desc(entityExternalId.isPrimary),
+        asc(entityExternalId.createdAt),
+        asc(entityExternalId.id),
       ],
     })
-  ).map((row): ExternalIdRow => ({
+  ).map(({ entityId, ...row }): ExternalIdRow => ({
     ...row,
-    productId: parseEntityId("product", row.productId),
+    productId: parseEntityId("product", entityId),
     kind: externalIdKind.parse(row.kind),
+    // Product identifier kinds always have a primary slot (CHECKed).
+    isPrimary: row.isPrimary === true,
   }));
   const imageRows = (
     await db.query.entityAttachment.findMany({
@@ -1235,11 +1237,11 @@ const foldProductExternalIds = async (
   const externalIdPlan = plan.externalIds.collision;
   if (externalIdPlan.repoint.length > 0) {
     await tx
-      .update(productExternalId)
-      .set({ productId: keepId })
+      .update(entityExternalId)
+      .set({ entityId: keepId })
       .where(
         inArray(
-          productExternalId.id,
+          entityExternalId.id,
           externalIdPlan.repoint.map((row) => row.id),
         ),
       );
@@ -1253,18 +1255,18 @@ const foldProductExternalIds = async (
       into.url ?? rows.find((row) => row.url != null)?.url ?? null;
     if (into.url == null && filledUrl != null) {
       await tx
-        .update(productExternalId)
+        .update(entityExternalId)
         .set({ url: filledUrl })
-        .where(eq(productExternalId.id, into.id));
+        .where(eq(entityExternalId.id, into.id));
     }
     // A slot holds one primary. Conflicting loser identities survive as
     // secondaries and are named in both the response and audit trail.
     await tx
-      .update(productExternalId)
-      .set({ productId: keepId, isPrimary: false })
+      .update(entityExternalId)
+      .set({ entityId: keepId, isPrimary: false })
       .where(
         inArray(
-          productExternalId.id,
+          entityExternalId.id,
           rows.map((row) => row.id),
         ),
       );
@@ -1902,7 +1904,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "Different ISBNs identify different physical editions or formats. Correct or remove an ISBN before merging these Products.",
       },
-      edgeKey: "ProductExternalId.productId",
+      edgeKey: "EntityExternalId.entityId",
       label:
         isbns.length > 1
           ? `distinct ISBN editions (${isbns.join(", ")})`
@@ -2060,8 +2062,8 @@ const previewMergeProductsFromPlan = async (
       byTargetId: byProduct(inventoryPlan.absorb.flatMap(({ rows }) => rows)),
     }),
     impact({
-      disposition: PRODUCT_MERGE_EDGE_POLICY["ProductExternalId.productId"],
-      edgeKey: "ProductExternalId.productId",
+      disposition: PRODUCT_MERGE_EDGE_POLICY["EntityExternalId.entityId"],
+      edgeKey: "EntityExternalId.entityId",
       label: "external ids moved",
       byTargetId: byProduct(plan.externalIds.collision.repoint),
     }),
@@ -2072,7 +2074,7 @@ const previewMergeProductsFromPlan = async (
         description:
           "The survivor already fills this source and kind slot. The merged identifier is retained as a secondary while the survivor's identifier stays primary.",
       },
-      edgeKey: "ProductExternalId.productId",
+      edgeKey: "EntityExternalId.entityId",
       label: "conflicting external ids kept as secondary",
       byTargetId: byProduct(
         plan.externalIds.collision.absorb.flatMap(({ rows }) => rows),

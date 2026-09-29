@@ -124,9 +124,14 @@ describe("upsertCookbookRecipe", () => {
 
     const all = await getDb(db).query.recipe.findMany({
       where: eq(recipe.name, "Pancakes"),
+      with: { cookbook: { columns: { name: true } } },
     });
     expect(all).toHaveLength(2);
-    expect(all.map((r) => r.SourceData).sort()).toEqual(["Book A", "Book B"]);
+    // A cookbook recipe is named by its Cookbook row, not a copied title.
+    expect(all.map((r) => r.cookbook?.name).sort()).toEqual([
+      "Book A",
+      "Book B",
+    ]);
   });
 
   // The tree: a piecrust, and a galette whose first line references it by

@@ -61,6 +61,7 @@ import {
   buildUndatedProjectWhere,
   dashboardKindLocationConditions,
 } from "./dashboard-shared";
+import { withProjectExternalUrls } from "./external-links";
 import { EMPTY_PROJECT_SUBTREE_ROLLUP, hydrateProjectRow } from "./helpers";
 import {
   collectDescendantIds,
@@ -326,7 +327,7 @@ export async function projectDashboardSummary(
     loadDataQualities(db, "project", ids),
   ]);
 
-  const projects = projectRows.map((row) =>
+  const projects = (await withProjectExternalUrls(db, projectRows)).map((row) =>
     // SAFETY: `row` came from `projectRows`, whose ids (`ids`) `dataQualities`
     // was loaded for.
     hydrateProjectRow(row, subtreeLoad, deps, dataQualities.get(row.id)!),

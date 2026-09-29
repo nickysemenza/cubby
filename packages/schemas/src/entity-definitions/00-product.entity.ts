@@ -2291,7 +2291,7 @@ export default defineEntity({
       provenance: {
         kind: "external",
         system: "usda-api",
-        sourceColumns: ["ProductExternalId.externalId", "Product.fdc_id"],
+        sourceColumns: ["EntityExternalId.externalId", "Product.fdc_id"],
       },
     },
   ],

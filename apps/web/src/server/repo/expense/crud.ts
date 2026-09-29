@@ -95,6 +95,12 @@ export const EXPENSE_DELETE_EDGE_POLICY = {
     description:
       "Deleting an Expense retires the normalized import references that identify that ledger row.",
   },
+  "EntityExternalId.entityId": {
+    code: "soft-delete-metadata",
+    effect: "soft-delete",
+    description:
+      "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
+  },
 } as const satisfies IncomingEdgePolicy<"expense", OperationDisposition>;
 
 type ExpenseUpdateData = ExpenseUpdateInput["data"];

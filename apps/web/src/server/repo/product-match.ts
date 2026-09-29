@@ -17,6 +17,7 @@ import type { z } from "zod";
 import type { Database } from "~/server/db";
 import {
   entityAttachment,
+  entityExternalId,
   entityLink,
   expense,
   image,
@@ -24,7 +25,6 @@ import {
   ledgerParty,
   product,
   productCategory,
-  productExternalId,
   purchase,
   vendor,
   vendorAccount,
@@ -325,15 +325,15 @@ export async function loadProductMatchSides(
       .groupBy(expense.productId),
     client
       .select({
-        productId: productExternalId.productId,
-        source: productExternalId.source,
-        externalId: productExternalId.externalId,
+        productId: entityExternalId.entityId,
+        source: entityExternalId.source,
+        externalId: entityExternalId.externalId,
       })
-      .from(productExternalId)
+      .from(entityExternalId)
       .where(
         and(
-          inArray(productExternalId.productId, ids),
-          notDeleted(productExternalId),
+          inArray(entityExternalId.entityId, ids),
+          notDeleted(entityExternalId),
         ),
       ),
     loadCategoryRoots(db),

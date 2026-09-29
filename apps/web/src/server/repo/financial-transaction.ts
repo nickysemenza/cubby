@@ -20,7 +20,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { capitalize, uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -46,6 +46,12 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import {
+  assertSettlementRefsAvailable,
+  replaceSettlementRefs,
+  type SettlementRef,
+  settlementRefsFor,
+} from "~/server/repo/entity-external-ids";
 import { allocationIntegrityDefectSql } from "~/server/repo/financial-allocation-integrity";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import {
@@ -113,7 +119,6 @@ const columns = {
   merchant: financialTransaction.merchant,
   rawDescription: financialTransaction.rawDescription,
   sourceCategory: financialTransaction.sourceCategory,
-  sourceRefs: financialTransaction.sourceRefs,
   notes: financialTransaction.notes,
   createdAt: financialTransaction.createdAt,
   updatedAt: financialTransaction.updatedAt,
@@ -139,21 +144,24 @@ const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: FinancialTransactionRow[],
 ): Promise<FinancialTransactionOut[]> => {
-  const dataQualities = await loadDataQualities(
-    db,
-    "financialTransaction",
-    rows.map((row) => row.id),
-  );
+  const ids = rows.map((row) => row.id);
+  const [dataQualities, sourceRefs] = await Promise.all([
+    loadDataQualities(db, "financialTransaction", ids),
+    settlementRefsFor(db, ids),
+  ]);
   return enrichFinancialTransactionsWithVendorInference(
     db,
-    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-    rows.map((row) => toOut(row, dataQualities.get(row.id)!)),
+    rows.map((row) =>
+      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+      toOut(row, dataQualities.get(row.id)!, sourceRefs.get(row.id) ?? []),
+    ),
   );
 };
 
 const toOut = (
   row: FinancialTransactionRow,
   dataQuality: DataQuality,
+  sourceRefs: SettlementRef[],
 ): FinancialTransactionOut => {
   const allocations = (row.allocations ?? []).map((allocation) => ({
     purchaseId: parseShortcodeFor("purchase", allocation.purchaseId),
@@ -178,7 +186,7 @@ const toOut = (
     merchant: row.merchant,
     rawDescription: row.rawDescription,
     sourceCategory: row.sourceCategory,
-    sourceRefs: row.sourceRefs,
+    sourceRefs,
     notes: row.notes,
     allocations,
     ledgerTransferId: row.ledgerTransferShortcode
@@ -199,30 +207,14 @@ const toOut = (
 };
 
 /**
- * Containment (`@>`), not a `jsonb_array_elements` subquery, so the GIN index on
- * sourceRefs serves the filter instead of a sequential scan.
- *
- * Supplying both lists yields their cross product, because "source and
- * externalId on the *same* ref" is what one containment operand expresses —
- * OR-ing two independent groups would match a transaction that took its source
- * from one ref and its externalId from another. Both lists come from UI filter
- * state, so the product stays small.
- *
- * The `jsonb_typeof` guard the subquery needed is gone: `@>` against a scalar or
- * non-array jsonb returns false rather than erroring.
+ * "Carries a live settlement reference matching the filters". Both filters
+ * constrain the SAME reference row, so a transaction that took its source
+ * from one reference and its externalId from another does not match.
  *
  * Emptiness is normalized on `.length`, NOT nullishness: `oneOrMany`'s array
- * branch has no `.min(1)`, so `[]` is valid input and is not nullish. Letting it
- * through collapses the cross-product to zero operands, which makes `or()`
- * return undefined and silently drops the *other* field's constraint — turning
- * "externalId = X" into a whole-table match. An empty list means "no constraint
- * on that field", never "no constraint at all".
+ * branch has no `.min(1)`, so `[]` is valid input and is not nullish. An empty
+ * list means "no constraint on that field", never "no constraint at all".
  */
-interface SourceReferenceOperand {
-  source?: string;
-  externalId?: string;
-}
-
 const refsCondition = (
   sources?: string[],
   externalIds?: string[],
@@ -230,19 +222,27 @@ const refsCondition = (
   const src = sources?.length ? sources : undefined;
   const ext = externalIds?.length ? externalIds : undefined;
   if (!src && !ext) return undefined;
-  const operands = (src ?? [undefined]).flatMap((source) =>
-    (ext ?? [undefined]).map((externalId) => {
-      const reference: SourceReferenceOperand = {};
-      if (source !== undefined) reference.source = source;
-      if (externalId !== undefined) reference.externalId = externalId;
-      return JSON.stringify([reference]);
-    }),
-  );
-  return or(
-    ...operands.map(
-      (operand) => sql`${financialTransaction.sourceRefs} @> ${operand}::jsonb`,
-    ),
-  );
+  return sql`EXISTS (
+    SELECT 1 FROM "EntityExternalId" fx
+    WHERE fx."entityId" = "FinancialTransaction"."id"
+      AND fx."kind" = 'settlement_ref' AND fx."deletedAt" IS NULL
+      ${
+        src
+          ? sql`AND fx."source" IN (${sql.join(
+              src.map((value) => sql`${value}`),
+              sql`, `,
+            )})`
+          : sql``
+      }
+      ${
+        ext
+          ? sql`AND fx."externalId" IN (${sql.join(
+              ext.map((value) => sql`${value}`),
+              sql`, `,
+            )})`
+          : sql``
+      }
+  )`;
 };
 
 // These are filters built from user-supplied codes, not a write target: a
@@ -366,35 +366,6 @@ const getFinancialTransactionByID = financialTransactionReader.getByID;
 export const getFinancialTransactionByShortcode =
   financialTransactionReader.getByShortcode;
 
-async function assertSourceRefsAvailable(
-  db: Database | DrizzleTransaction,
-  refs: FinancialTransactionCreateInput["sourceRefs"],
-  exceptId?: FinancialTransactionId,
-) {
-  for (const ref of refs) {
-    // Containment (`@>`) rather than unnesting every row's refs: this is the
-    // global uniqueness guarantee that lets readers join on
-    // (source, externalId) without a DISTINCT, and it ran as a sequential scan
-    // on every write. `@>` against a scalar or non-array jsonb returns false
-    // instead of erroring, so the old `jsonb_typeof` guard is unnecessary.
-    const operand = JSON.stringify([
-      { source: ref.source, externalId: ref.externalId },
-    ]);
-    const result = await unwrapDb(db).execute<{ id: string }>(sql`
-      SELECT ft.id::text AS id FROM "FinancialTransaction" ft
-      WHERE ft."deletedAt" IS NULL
-        AND ft."sourceRefs" @> ${operand}::jsonb
-        ${exceptId ? sql`AND ft.id <> ${exceptId}` : sql``}
-      LIMIT 1
-    `);
-    if (result.rows[0])
-      throw createAppError(
-        "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT",
-        `Source transaction ${ref.source}/${ref.externalId} is already recorded.`,
-      );
-  }
-}
-
 async function resolveForeignKeys(
   db: Database | DrizzleTransaction,
   data: Pick<FinancialTransactionCreateInput, "accountId" | "purchaseId">,
@@ -419,12 +390,15 @@ export async function createFinancialTransaction(
       "transaction-ref",
       data.sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
     );
-    await assertSourceRefsAvailable(tx, data.sourceRefs);
-    const { allocations, ...columns } = data;
+    // The global uniqueness guarantee that lets statement matching join on
+    // (source, externalId) without a DISTINCT; the live unique backstops it.
+    await assertSettlementRefsAvailable(tx, data.sourceRefs);
+    const { allocations, sourceRefs, ...columns } = data;
     const created = await insertWithShortcode(tx, "financialTransaction", {
       ...columns,
       ...foreign,
     });
+    await replaceSettlementRefs(tx, created.id, sourceRefs);
     await logAuditEntry(tx, actor, {
       entityKind: "financialTransaction",
       entityId: created.id,
@@ -663,17 +637,22 @@ export async function updateFinancialTransaction(
       data.accountId === undefined
         ? before.accountId
         : await resolveOrThrow(tx, "financialAccount", data.accountId);
-    const sourceRefs = data.sourceRefs ?? before.sourceRefs;
+    const beforeSourceRefs = (await settlementRefsFor(tx, [id])).get(id) ?? [];
+    const sourceRefs = data.sourceRefs ?? beforeSourceRefs;
     await lockFinancialEvidenceKeys(
       tx,
       "transaction-ref",
       sourceRefs.map((ref) => `${ref.source}\0${ref.externalId}`),
     );
-    await assertSourceRefsAvailable(tx, sourceRefs, id);
+    await assertSettlementRefsAvailable(tx, sourceRefs, id);
 
     // `purchaseId` is input sugar only — there is no such column any more, so it
-    // never reaches the physical update.
-    const { purchaseId: _sugarOnly, ...writableData } = data;
+    // never reaches the physical update. `sourceRefs` lives in EntityExternalId.
+    const {
+      purchaseId: _sugarOnly,
+      sourceRefs: _references,
+      ...writableData
+    } = data;
     const values = buildPartialUpdateValues({ ...writableData, accountId });
 
     // The create input rejects a purchaseId/allocations pair that disagrees;
@@ -687,9 +666,14 @@ export async function updateFinancialTransaction(
       .where(
         and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
       );
-    const changes = computeChanges(before, { ...before, ...values }, [
-      ...entityFieldModels.financialTransaction.audit,
-    ]);
+    if (data.sourceRefs !== undefined)
+      await replaceSettlementRefs(tx, id, data.sourceRefs);
+    const beforeState = { ...before, sourceRefs: beforeSourceRefs };
+    const changes = computeChanges(
+      beforeState,
+      { ...beforeState, ...values, sourceRefs },
+      [...entityFieldModels.financialTransaction.audit],
+    );
     if (changes)
       await logAuditEntry(tx, actor, {
         entityKind: "financialTransaction",
@@ -729,6 +713,12 @@ export const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
     effect: "soft-delete",
     description:
       "Deleting a settlement transaction soft-deletes the purchase allocations that decompose it. Those Purchases keep their expenses and their identity; they simply lose this piece of settlement evidence.",
+  },
+  "EntityExternalId.entityId": {
+    code: "soft-delete-metadata",
+    effect: "soft-delete",
+    description:
+      "The transaction's settlement references are soft-deleted with it, releasing each (source, externalId) so the same statement line can be recorded again.",
   },
 } as const satisfies IncomingEdgePolicy<
   "financialTransaction",
@@ -777,22 +767,21 @@ const touchAllocatedPurchases = async (
 };
 
 /**
- * Distinct `sourceRefs[].source` values across live transactions, with counts.
- *
- * `sourceRefs` is a jsonb array, so this unnests rather than grouping a column —
- * one transaction carrying both a `monarch` and a `zoro` ref counts once under
- * each, which is what a filter over "has a ref from this source" means.
+ * Distinct settlement-reference sources across live transactions, with the
+ * number of transactions carrying each: one transaction carrying both a
+ * `monarch` and a `zoro` reference counts once under each, which is what a
+ * filter over "has a ref from this source" means.
  */
 export async function financialTransactionSourceOptions(
   db: Database,
 ): Promise<FinancialTransactionSourceOptionsOut> {
   const rows = await getDb(db).execute<{ source: string; count: number }>(sql`
-    SELECT ref->>'source' AS source, count(*)::int AS count
-    FROM "FinancialTransaction" ft
-    CROSS JOIN LATERAL jsonb_array_elements(ft."sourceRefs") ref
-    WHERE ft."deletedAt" IS NULL AND ref->>'source' IS NOT NULL
+    SELECT fx."source" AS source, count(DISTINCT fx."entityId")::int AS count
+    FROM "EntityExternalId" fx
+    JOIN "FinancialTransaction" ft ON ft."id" = fx."entityId" AND ft."deletedAt" IS NULL
+    WHERE fx."kind" = 'settlement_ref' AND fx."deletedAt" IS NULL
     GROUP BY 1
-    ORDER BY count(*) DESC, 1 ASC
+    ORDER BY count(DISTINCT fx."entityId") DESC, 1 ASC
   `);
   return rows.rows.map((row) => ({
     source: row.source,

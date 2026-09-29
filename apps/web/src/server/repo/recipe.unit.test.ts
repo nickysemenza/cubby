@@ -51,8 +51,9 @@ const baseRecipe = {
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
   deletedAt: DELETED_AT,
-  SourceType: "Website" as const,
-  SourceData: "https://example.com/recipe",
+  sourceType: "Website" as const,
+  sourceUrl: "https://example.com/recipe",
+  sourceLabel: null,
   cookbookId: null,
   forkedFromRecipeId: null,
   yield: null,
@@ -71,8 +72,9 @@ const subRecipe = {
   id: SUB_RECIPE_ID,
   shortcode: "RCP-SUB7",
   name: "Sub Recipe",
-  SourceType: "Other" as const,
-  SourceData: null,
+  sourceType: "Other" as const,
+  sourceUrl: null,
+  sourceLabel: null,
 };
 
 const baseIngredient = {
@@ -238,16 +240,17 @@ describe("recipe repository helpers", () => {
       });
       expect(result).not.toHaveProperty("deletedAt");
       expect(result).not.toHaveProperty("totalsComputedAt");
-      expect(result).not.toHaveProperty("SourceType");
-      expect(result).not.toHaveProperty("SourceData");
+      expect(result).not.toHaveProperty("sourceType");
+      expect(result).not.toHaveProperty("sourceUrl");
       expect(recipeShallowOut.parse(result)).toEqual(result);
     });
 
     it("converts non-website recipe without URL", () => {
       const result = dbRecipeToAPIShallow({
         ...baseRecipe,
-        SourceType: "Other",
-        SourceData: "some data",
+        sourceType: "Other",
+        sourceUrl: null,
+        sourceLabel: null,
       });
 
       expect(result).toMatchObject({
@@ -297,7 +300,7 @@ describe("recipe repository helpers", () => {
       ],
     });
     expect(result).not.toHaveProperty("deletedAt");
-    expect(result).not.toHaveProperty("SourceType");
+    expect(result).not.toHaveProperty("sourceType");
     expect(result.images).toHaveLength(1);
     expect(result.sections[0]).not.toHaveProperty("recipeId");
     expect(result.sections[0]).not.toHaveProperty("sortOrder");

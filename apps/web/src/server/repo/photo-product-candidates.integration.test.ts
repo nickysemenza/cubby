@@ -1,8 +1,9 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { productExternalId } from "~/server/db/schema";
+import { entityExternalId } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { createUploadedImageRecord } from "~/server/repo/image";
 import {
   createProductFixture,
@@ -82,12 +83,17 @@ describe("photo product candidates", () => {
       }),
       ctx.actor,
     );
-    await getDb(ctx.db).insert(productExternalId).values({
-      productId: item.entityId,
-      source: "synthetic",
-      kind: "sku",
-      externalId: "FW-7744",
-    });
+    await ensureExternalSources(ctx.db, ["synthetic"]);
+    await getDb(ctx.db)
+      .insert(entityExternalId)
+      .values({
+        entityId: item.entityId,
+        entityKind: "product" as const,
+        source: "synthetic",
+        kind: "retailer_sku",
+        externalId: "FW-7744",
+        isPrimary: true,
+      });
     const alias = await findPhotoProductCandidates(ctx.db, {
       name: "ForgeWear work boots",
       manufacturer: "ForgeWear",

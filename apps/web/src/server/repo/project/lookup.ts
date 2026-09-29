@@ -44,6 +44,7 @@ import {
   projectAttentionFilterTypes,
 } from "./attention";
 import { dashboardProjectDateCondition } from "./dashboard-shared";
+import { withProjectExternalUrls } from "./external-links";
 import { EMPTY_PROJECT_DATE_WINDOW, hydrateProjectRow } from "./helpers";
 import {
   aggregateSubtreeDates,
@@ -386,9 +387,13 @@ export const projectList = async (
     loadDataQualities(db, "project", ids),
   ]);
 
-  const data = await withDisplayImages(db, "project", rows, (row) =>
-    // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-    hydrateProjectRow(row, projectContext, deps, dataQualities.get(row.id)!),
+  const data = await withDisplayImages(
+    db,
+    "project",
+    await withProjectExternalUrls(db, rows),
+    (row) =>
+      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
+      hydrateProjectRow(row, projectContext, deps, dataQualities.get(row.id)!),
   );
 
   return { data, count, sums };

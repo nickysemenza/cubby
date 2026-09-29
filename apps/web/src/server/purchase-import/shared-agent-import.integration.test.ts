@@ -7,16 +7,17 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
+  entityExternalId,
   expense,
   financialTransactionAllocation,
+  product,
+  purchase,
   runFinding,
   runOperation,
   runTarget,
-  product,
-  productExternalId,
-  purchase,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
+import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import {
   createProductFixture,
   makeProductInput,
@@ -62,8 +63,10 @@ describe("shared purchase-import prepare and commit", () => {
       .where(eq(product.id, existingProduct.entityId));
     if (!existingProductRow) throw new Error("Product fixture was not created");
     await withTransaction(ctx.db, async (tx) => {
-      await tx.insert(productExternalId).values({
-        productId: existingProduct.entityId,
+      await ensureExternalSources(tx, ["amazon", "gtin"]);
+      await tx.insert(entityExternalId).values({
+        entityId: existingProduct.entityId,
+        entityKind: "product" as const,
         source: "amazon",
         kind: "asin",
         externalId: "B012345678",
@@ -249,8 +252,10 @@ describe("shared purchase-import prepare and commit", () => {
       .where(eq(product.id, photoProduct.entityId));
     if (!photoProductRow) throw new Error("Product fixture was not created");
     await withTransaction(ctx.db, async (tx) => {
-      await tx.insert(productExternalId).values({
-        productId: photoProduct.entityId,
+      await ensureExternalSources(tx, ["amazon", "gtin"]);
+      await tx.insert(entityExternalId).values({
+        entityId: photoProduct.entityId,
+        entityKind: "product" as const,
         source: "gtin",
         kind: "gtin_14",
         externalId: "00012345678905",
