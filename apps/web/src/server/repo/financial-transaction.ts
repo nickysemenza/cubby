@@ -14,6 +14,7 @@ import {
   financialTransactionOut,
   financialTransactionSettlementViolation,
 } from "@cubby/schemas/financial-transaction";
+import type { FinancialTransactionItemization } from "@cubby/schemas/financial-transaction-fields";
 import {
   type FinancialTransactionId,
   type FinancialTransactionShortcode,
@@ -37,6 +38,7 @@ import {
 } from "~/server/repo/data-quality";
 import {
   buildPartialUpdateValues,
+  correlated,
   eqAny,
   getDb,
   type ListReadIntent,
@@ -52,6 +54,7 @@ import {
 } from "~/server/repo/entity-external-ids";
 import { allocationIntegrityDefectSql } from "~/server/repo/financial-allocation-integrity";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
+import { financialTransactionItemizationSql } from "~/server/repo/financial-reconciliation";
 import {
   type AllocationInput,
   applyAllocationChanges,
@@ -136,6 +139,10 @@ const columns = {
     WHERE aa."transactionId" = "FinancialTransaction"."id" AND aa."deletedAt" IS NULL
   ), '[]'::jsonb)`,
   accountName,
+  // A raw string in a select field: Drizzle would strip a column prefix.
+  itemization: correlated<FinancialTransactionItemization>(
+    financialTransactionItemizationSql('"FinancialTransaction"."id"'),
+  ),
 } as const;
 
 const selectTransactions = (db: Database | DrizzleTransaction) =>
@@ -197,6 +204,7 @@ const toOut = (
       ? parseShortcodeFor("ledgerTransfer", row.ledgerTransferShortcode)
       : null,
     accountName: row.accountName,
+    itemization: row.itemization,
     // `merchant`/`rawDescription` are both nullable statement fields; `kind`
     // is the last resort so an imported row with neither still gets a
     // non-blank identity.
@@ -303,6 +311,9 @@ export async function buildFinancialTransactionWhere(
       : filters.purchasePresenceFilter === "none"
         ? sql`NOT ${hasAnyAllocation()}`
         : undefined,
+    filters.itemization
+      ? sql`${sql.raw(financialTransactionItemizationSql('"FinancialTransaction"."id"'))} = ${filters.itemization}`
+      : undefined,
     filters.allocationIntegrity === "defect"
       ? allocationIntegrityDefectSql('"FinancialTransaction"')
       : undefined,

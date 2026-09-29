@@ -157,6 +157,53 @@ export const purchaseFinancialMismatchSql = (purchaseAlias: string) => `
   )`;
 
 /**
+ * The itemization verdict for one charge, as a correlated scalar over
+ * `transactionIdRef` (the enclosing query's quoted transaction id, e.g.
+ * `'"FinancialTransaction"."id"'`). Values mirror
+ * `financialTransactionItemizationValues`.
+ *
+ * Verdicts are per allocated Purchase, then folded with `shared` first. A
+ * charge that is one of several live settlement charges on a purchase
+ * (installments, combined orders) is `shared` and is never compared with the
+ * purchase's lines. Otherwise a purchase with no product-linked expense line is
+ * a `lump` order (booked, not itemized); an itemized one is compared through
+ * `purchaseFinancialMismatchSql` so it agrees with the Problems worklist,
+ * including accepted exceptions. Money stays `SUM(Expense.cost)`.
+ */
+export const financialTransactionItemizationSql = (transactionIdRef: string) =>
+  `(SELECT CASE
+      WHEN count(*) = 0 THEN 'bare'
+      WHEN bool_or(iz.shared) THEN 'shared'
+      WHEN bool_or(iz.itemized AND iz.mismatch) THEN 'itemized_mismatch'
+      WHEN bool_or(iz.itemized) THEN 'itemized_match'
+      ELSE 'lump'
+    END
+    FROM (
+      SELECT
+        EXISTS (
+          SELECT 1 FROM "FinancialTransactionAllocation" iz_o
+          JOIN "FinancialTransaction" iz_ft ON iz_ft."id" = iz_o."transactionId"
+          WHERE iz_o."purchaseId" = iz_p."id"
+            AND iz_o."transactionId" <> ${transactionIdRef}
+            AND iz_o."deletedAt" IS NULL
+            AND iz_ft."deletedAt" IS NULL
+            AND iz_ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
+            AND iz_ft."status" <> 'void'
+        ) AS shared,
+        EXISTS (
+          SELECT 1 FROM "Expense" iz_e
+          WHERE iz_e."purchaseId" = iz_p."id"
+            AND iz_e."productId" IS NOT NULL
+            AND iz_e."deletedAt" IS NULL
+        ) AS itemized,
+        COALESCE(${purchaseFinancialMismatchSql("iz_p")}, false) AS mismatch
+      FROM "FinancialTransactionAllocation" iz_a
+      JOIN "Purchase" iz_p ON iz_p."id" = iz_a."purchaseId" AND iz_p."deletedAt" IS NULL
+      WHERE iz_a."transactionId" = ${transactionIdRef}
+        AND iz_a."deletedAt" IS NULL
+    ) iz)`;
+
+/**
  * `kind = 'refund' AND status = 'posted'` — the atom behind every posted-refund
  * figure. It had been spelled out five times (two grouped scans, two correlated
  * scalars, one hand-written detector query), which is exactly the shape of

@@ -34,6 +34,7 @@ import {
 } from "./generated/entity-field-schemas.financialTransaction.gen";
 import {
   financialTransactionAllocation,
+  financialTransactionItemization,
   financialTransactionNonZeroAmount as nonZeroAmount,
   financialTransactionSourceRef,
   merchantVendorCandidate,
@@ -333,6 +334,7 @@ export const financialTransactionFilterFields = {
   accountId: entityFilterList(financialAccountShortcode).optional(),
   purchaseId: entityFilterList(purchaseShortcode).optional(),
   purchasePresenceFilter: presenceFilter,
+  itemization: financialTransactionItemization.optional(),
   allocationIntegrity: z.enum(["defect"]).optional(),
   source: oneOrMany(z.string().min(1)).optional(),
   externalId: oneOrMany(z.string().min(1)).optional(),

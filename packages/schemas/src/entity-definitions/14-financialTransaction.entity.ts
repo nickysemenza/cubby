@@ -2,6 +2,7 @@ import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
   financialTransactionAllocations,
+  financialTransactionItemization,
   financialTransactionNonZeroAmount,
   financialTransactionSourceRefs,
   merchantVendorInference,
@@ -321,6 +322,51 @@ export default defineEntity({
         },
       },
       {
+        key: "itemization",
+        kind: "enum",
+        display: {
+          list: true,
+          width: "sm",
+          valueOptions: [
+            { value: "bare", label: "No purchase", color: "var(--slate)" },
+            { value: "lump", label: "Lump order", color: "var(--warning)" },
+            {
+              value: "itemized_match",
+              label: "Itemized, matches",
+              color: "var(--positive)",
+            },
+            {
+              value: "itemized_mismatch",
+              label: "Itemized, differs",
+              color: "var(--destructive)",
+            },
+            {
+              value: "shared",
+              label: "Shared charge",
+              color: "var(--primary)",
+            },
+          ],
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "purchase", relation: "purchase" }],
+        },
+        explanation: {
+          ruleId: "financial-transaction.itemization",
+          description:
+            "Itemization compares the purchase this charge settles with its product-linked expense lines. A charge that shares its purchase with other live charges is reported as shared rather than compared.",
+          readPath: "itemization",
+          sourceDependencies: [
+            { path: "allocations", label: "Confirmed allocations" },
+          ],
+        },
+        validation: {
+          read: financialTransactionItemization,
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "id",
         kind: "identifier",
         validation: {
@@ -559,6 +605,7 @@ export default defineEntity({
       "allocations",
       "ledgerTransferId",
       "accountName",
+      "itemization",
       "vendorInference",
       "displayName",
       "createdAt",
@@ -712,6 +759,18 @@ export default defineEntity({
         options: [
           { value: "has", label: "Has purchase", meta: true },
           { value: "none", label: "(none)", meta: true },
+        ],
+      },
+      {
+        columnId: "itemization",
+        kind: "select",
+        placeholder: "Filter itemization...",
+        options: [
+          { value: "bare", label: "No purchase" },
+          { value: "lump", label: "Lump order" },
+          { value: "itemized_match", label: "Itemized, matches" },
+          { value: "itemized_mismatch", label: "Itemized, differs" },
+          { value: "shared", label: "Shared charge" },
         ],
       },
       {
