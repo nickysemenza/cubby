@@ -1,5 +1,5 @@
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { type DataType } from "@cubby/usda-schemas";
+import { type DataType } from "@cubby/usda";
 
 import { wasm } from "~/lib/wasm";
 /**

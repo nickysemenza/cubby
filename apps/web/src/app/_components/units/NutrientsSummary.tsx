@@ -4,13 +4,13 @@ import {
   KEY_NUTRIENT_KEYS,
   type NutrientsPer100,
   TIER1_NUTRIENTS,
-} from "@cubby/usda-schemas";
+} from "@cubby/usda";
 
 import { Row } from "~/components/layout";
 import { cn } from "~/lib/utils";
 
 // Short table headers — the one per-surface override of the long displayName.
-// The ordered key membership is canonical in `@cubby/usda-schemas`
+// The ordered key membership is canonical in `@cubby/usda`
 // (`KEY_NUTRIENT_KEYS`), shared with the unit-mapping macro chips so they can't
 // drift; only these presentation labels live here.
 const SHORT_LABEL = {

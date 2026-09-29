@@ -3,7 +3,7 @@ import {
   getNutrientUnitString,
   MACRO_KEYS,
   type NutrientKey,
-} from "@cubby/usda-schemas";
+} from "@cubby/usda";
 
 /**
  * Which macro nutrients (protein/fat/carbs/fiber/sodium) a product's unit graph

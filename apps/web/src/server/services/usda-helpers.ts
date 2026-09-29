@@ -1,4 +1,4 @@
-import type { FoodLookupParam, FoodSummary } from "@cubby/usda-schemas";
+import type { FoodLookupParam, FoodSummary } from "@cubby/usda";
 
 import type { USDAClient } from "../clients/usda";
 

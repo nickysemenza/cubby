@@ -5,7 +5,7 @@ import {
   TIER1_NUTRIENTS,
   KEY_NUTRIENT_KEYS,
   type NutrientKey,
-} from "@cubby/usda-schemas";
+} from "@cubby/usda";
 import { Link } from "@tanstack/react-router";
 import { mapValues } from "es-toolkit";
 import { useMemo, useState } from "react";

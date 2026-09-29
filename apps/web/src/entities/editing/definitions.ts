@@ -19,7 +19,7 @@ import {
   collectionTagFromSlug,
   normalizeCollectionSlug,
 } from "@cubby/shared/collection-tag";
-import { isNutrientKey } from "@cubby/usda-schemas";
+import { isNutrientKey } from "@cubby/usda";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 

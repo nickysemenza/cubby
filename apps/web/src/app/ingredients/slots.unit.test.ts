@@ -1,6 +1,6 @@
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
-import { foodSummary } from "@cubby/usda-schemas";
+import { foodSummary } from "@cubby/usda";
 import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";

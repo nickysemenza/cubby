@@ -150,12 +150,8 @@
       "entry": ["src/index.ts!", "src/**/*.test.ts!"],
       "project": ["src/**/*.ts!"]
     },
-    "packages/usda-contract": {
-      "entry": ["src/index.ts!", "src/**/*.test.ts!"],
-      "project": ["src/**/*.ts!"]
-    },
-    "packages/usda-schemas": {
-      "entry": ["src/index.ts!", "src/**/*.test.ts!"],
+    "packages/usda": {
+      "entry": ["src/index.ts!", "src/contract.ts!", "src/**/*.test.ts!"],
       "project": ["src/**/*.ts!"]
     },
     "packages/worker-tracing": {

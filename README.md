@@ -164,8 +164,7 @@ and drift-check procedure live in [docs/infrastructure.md](docs/infrastructure.m
 | -------------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | [packages/wasm](packages/wasm)                     | `@cubby/recipebridge`   | WASM bindings — built from `recipebridge/` Rust source via `pnpm run wasm`                                                                                                    | `web`                                                                                   |
 | [packages/upc-contract](packages/upc-contract)     | `@cubby/upc-contract`   | Shared UPC request/response transport contract                                                                                                                                | `web`, `upc-lookup`                                                                     |
-| [packages/usda-contract](packages/usda-contract)   | `@cubby/usda-contract`  | ts-rest endpoint contract for the USDA API                                                                                                                                    | `web`, `usda-api`                                                                       |
-| [packages/usda-schemas](packages/usda-schemas)     | `@cubby/usda-schemas`   | Shared Zod schemas for USDA entities                                                                                                                                          | `web`, `usda-api`                                                                       |
+| [packages/usda](packages/usda)                     | `@cubby/usda`           | Shared Zod schemas for USDA entities; the ts-rest USDA API contract is the `@cubby/usda/contract` subpath                                                                     | `web`, `usda-api`                                                                       |
 | [packages/schemas](packages/schemas)               | `@cubby/schemas`        | Cross-app Zod schemas                                                                                                                                                         | `web`                                                                                   |
 | [packages/shared](packages/shared)                 | `@cubby/shared`         | Shared utilities, including guarded external fetches                                                                                                                          | `web`, `upc-lookup`                                                                     |
 | [packages/worker-tracing](packages/worker-tracing) | `@cubby/worker-tracing` | Cloudflare Worker tracing/Sentry bootstrap                                                                                                                                    | `upc-lookup`, `usda-api`                                                                |
@@ -833,8 +832,8 @@ between the web app and the iframes.
 
 ## 🥕 USDA Integration
 
-- **Contract:** `@cubby/usda-contract` defines endpoints with Zod schemas (ts-rest).
-- **Schemas:** `@cubby/usda-schemas` for shared entity types.
+- **Contract:** `@cubby/usda/contract` defines endpoints with Zod schemas (ts-rest).
+- **Schemas:** `@cubby/usda` for shared entity types.
 - **Client:** [apps/web/src/server/clients/usda.ts](apps/web/src/server/clients/usda.ts) wraps the ts-rest client.
 - **Browser adapter:** [apps/web/src/contracts/usda.contract.ts](apps/web/src/contracts/usda.contract.ts) (cache tags and freshness live on its members; the generated `catalog.gen.ts` resolves them).
 - Service layer processes USDA portion data through WASM for conversions.

@@ -6,7 +6,7 @@ import {
   usdaFoodLookupInput,
   usdaListInput,
 } from "@cubby/schemas/usda";
-import { dataTypeEnum, fdcId, ndb, upc } from "@cubby/usda-schemas";
+import { dataTypeEnum, fdcId, ndb, upc } from "@cubby/usda";
 import { z } from "zod";
 
 import { defineContract, query } from "~/contracts/define";

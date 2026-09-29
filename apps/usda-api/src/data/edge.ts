@@ -1,5 +1,5 @@
-import { countsSchema } from "@cubby/usda-contract";
-import type { FoodLookupParam, FoodSummary } from "@cubby/usda-schemas";
+import { countsSchema } from "@cubby/usda/contract";
+import type { FoodLookupParam, FoodSummary } from "@cubby/usda";
 import type { D1PreparedStatement } from "@cloudflare/workers-types";
 import { type SpanAttr, withSpan } from "@cubby/worker-tracing";
 import { toFtsQuery } from "../search/fts-query.js";

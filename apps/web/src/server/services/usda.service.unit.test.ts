@@ -4,11 +4,7 @@ import {
   productTopLevelOut,
 } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
-import type {
-  DataType,
-  FoodLookupParam,
-  FoodSummary,
-} from "@cubby/usda-schemas";
+import type { DataType, FoodLookupParam, FoodSummary } from "@cubby/usda";
 import { describe, expect, it, vi } from "vitest";
 
 import { USDAService, type USDAServiceClient } from "./usda.service";

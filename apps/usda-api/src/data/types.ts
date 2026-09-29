@@ -3,8 +3,8 @@ import type {
   ListFoodsArgs,
   ListFoodsResult,
   countsSchema,
-} from "@cubby/usda-contract";
-import type { FoodLookupParam, FoodSummary } from "@cubby/usda-schemas";
+} from "@cubby/usda/contract";
+import type { FoodLookupParam, FoodSummary } from "@cubby/usda";
 
 export type { ListFoodsArgs, ListFoodsResult };
 

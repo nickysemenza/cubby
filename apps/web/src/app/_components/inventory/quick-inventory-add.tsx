@@ -9,7 +9,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { fdcId, upc } from "@cubby/usda-schemas";
+import { fdcId, upc } from "@cubby/usda";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";

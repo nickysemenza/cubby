@@ -4,7 +4,7 @@ import { productCategoryShortcode } from "./identifier-fields";
 import { productTopLevelOut } from "./product-output-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
 import { upc } from "@cubby/shared/upc";
-import { foodSummary, foodSummaryMcpOut } from "@cubby/usda-schemas";
+import { foodSummary, foodSummaryMcpOut } from "@cubby/usda";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import {

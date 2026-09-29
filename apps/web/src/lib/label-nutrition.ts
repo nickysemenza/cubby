@@ -10,7 +10,7 @@ import {
   isTier1Nutrient,
   type NutrientKey,
   type NutrientsPer100,
-} from "@cubby/usda-schemas";
+} from "@cubby/usda";
 
 // A per-product label-nutrition override synthesizes the same shape of edges
 // USDA nutrition does (recipebridge's `nutrition_mappings`: `100 g = X <unit>`)

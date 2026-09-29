@@ -10,7 +10,7 @@ import {
   getNutrientUnitString,
   KEY_NUTRIENT_KEYS,
   type NutrientKey,
-} from "@cubby/usda-schemas";
+} from "@cubby/usda";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useId, useMemo, useState } from "react";
 

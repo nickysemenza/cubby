@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Context, MiddlewareHandler, Next } from "hono";
 import { apiReference } from "@scalar/hono-api-reference";
-import { countsSchema, errorSchema } from "@cubby/usda-contract";
+import { countsSchema, errorSchema } from "@cubby/usda/contract";
 import { openApiDocument } from "./openapi.js";
 import { createFoodRoutes } from "./routes/foods.js";
 import type { USDADataSource } from "./data/types.js";

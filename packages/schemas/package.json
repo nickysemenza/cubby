@@ -151,7 +151,7 @@
   },
   "dependencies": {
     "@cubby/shared": "workspace:*",
-    "@cubby/usda-schemas": "workspace:*",
+    "@cubby/usda": "workspace:*",
     "zod": "^4.6.5"
   },
   "devDependencies": {

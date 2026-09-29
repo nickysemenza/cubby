@@ -4,8 +4,8 @@ import {
   batchLookupBody,
   fdcIdParam,
   listFoodsQuery,
-} from "@cubby/usda-contract";
-import { foodLookupParam } from "@cubby/usda-schemas";
+} from "@cubby/usda/contract";
+import { foodLookupParam } from "@cubby/usda";
 import type { USDADataSource } from "../data/types.js";
 
 export interface FoodRoutePort {

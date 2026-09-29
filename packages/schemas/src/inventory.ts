@@ -1,7 +1,7 @@
 import { tradeSchema } from "./task-fields";
 import { productCategoryShortcode } from "./identifier-fields";
 import { inventoryPlacementValues } from "@cubby/shared";
-import { fdcId } from "@cubby/usda-schemas";
+import { fdcId } from "@cubby/usda";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { inventoryRelatedFilterFields } from "./related-view";

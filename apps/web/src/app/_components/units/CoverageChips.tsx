@@ -1,5 +1,5 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { MACRO_KEYS } from "@cubby/usda-schemas";
+import { MACRO_KEYS } from "@cubby/usda";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 
 import { Row } from "~/components/layout";
