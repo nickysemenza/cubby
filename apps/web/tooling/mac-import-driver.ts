@@ -451,7 +451,7 @@ export class MacImportDriver {
   async screenshot(name: string): Promise<void> {
     this.guardForeground();
     const script =
-      'ObjC.import("CoreGraphics"); function run(argv) { const pid=Number(argv[0]); const windows=ObjC.deepUnwrap($.NSArray.arrayWithArray($.CGWindowListCopyWindowInfo(1, 0))); const own=windows.filter(w => Number(w.kCGWindowOwnerPID)===pid && Number(w.kCGWindowLayer)===0); own.sort((a,b)=>b.kCGWindowBounds.Width*b.kCGWindowBounds.Height-a.kCGWindowBounds.Width*a.kCGWindowBounds.Height); if (!own.length) throw Error("No owned fixture window"); return String(own[0].kCGWindowNumber); }';
+      'ObjC.import("CoreGraphics"); function run(argv) { const pid=Number(argv[0]); const windows=ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(1, 0))); const own=windows.filter(w => Number(w.kCGWindowOwnerPID)===pid && Number(w.kCGWindowLayer)===0); own.sort((a,b)=>b.kCGWindowBounds.Width*b.kCGWindowBounds.Height-a.kCGWindowBounds.Width*a.kCGWindowBounds.Height); if (!own.length) throw Error("No owned fixture window"); return String(own[0].kCGWindowNumber); }';
     const windowID = execFileSync(
       "osascript",
       ["-l", "JavaScript", "-e", script, String(this.pid)],
