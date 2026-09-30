@@ -29,6 +29,25 @@ describe("withUnhandledErrorBody", () => {
     expect(await response.json()).toEqual({ error: "Upstream said no" });
   });
 
+  it("preserves a handled canonical API error and diagnostics for native clients", async () => {
+    const payload = {
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Statement row 1 needs review: possible_existing.",
+      requestId: "synthetic-request",
+      diagnostics: { stage: "operation" },
+    };
+    const original = Response.json(payload, {
+      status: 500,
+      headers: { "x-request-id": "synthetic-request" },
+    });
+    const response = await withUnhandledErrorBody(
+      original,
+      new Error(payload.message),
+    );
+    expect(response).toBe(original);
+    expect(await response.json()).toEqual(payload);
+  });
+
   it("leaves HTML error pages alone", async () => {
     const html = new Response("<html>boom</html>", {
       status: 500,

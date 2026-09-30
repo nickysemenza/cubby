@@ -90,7 +90,12 @@ const adminURL = "postgresql://postgres:password@localhost:55432/postgres";
 const simName = `cubby_sim_${randomBytes(8).toString("hex")}`;
 const databaseURL = adminURL.replace(/\/postgres$/u, `/${simName}`);
 process.env.DATABASE_URL = databaseURL;
-const artifacts = path.join(repoRoot, "artifacts", lane, simName);
+const artifacts = path.join(
+  repoRoot,
+  "artifacts",
+  statementCsv ? "headless-e2e/statement-csv" : lane,
+  simName,
+);
 mkdirSync(artifacts, { recursive: true });
 const runStartedAt = performance.now();
 const phases: Array<{ name: string; durationMs: number }> = [];
@@ -380,6 +385,7 @@ async function run(
   stdoutFile?: string,
   allowInterrupted = false,
   environment: NodeJS.ProcessEnv = process.env,
+  stderrFile?: string,
 ): Promise<void> {
   if (interrupted && !allowInterrupted)
     throw new Error(`${lane} interrupted by ${interrupted}`);
@@ -400,6 +406,8 @@ async function run(
         appendFileSync(log, chunk);
         if (stdoutFile && stream === child.stdout)
           appendFileSync(stdoutFile, chunk);
+        if (stderrFile && stream === child.stderr)
+          appendFileSync(stderrFile, chunk);
         if (!stdoutFile || stream === child.stderr)
           (stream === child.stdout ? process.stdout : process.stderr).write(
             chunk,
@@ -1100,9 +1108,10 @@ async function runHeadlessStatementCsvScenario(url: URL, userId: string) {
       origin: url.origin,
       artifacts,
       userId,
-      runNative: (args, outputPath) => run(binary, args, repoRoot, outputPath),
+      runNative: (args, outputPath, errorPath) =>
+        run(binary, args, repoRoot, outputPath, false, process.env, errorPath),
     });
-    scenarioEvidence.push(evidence);
+    scenarioEvidence.push(...evidence);
   } finally {
     await pool.end();
   }

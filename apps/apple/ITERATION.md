@@ -22,7 +22,7 @@ and reviewed import through generated OpenAPI calls. The disposable Worker
 journey checks physical occurrences, exact retry, ambiguous date matches,
 canonical charge preservation, and no implicit Expense or stock creation. Its
 sanitized results and replay command are checksummed under
-`artifacts/headless-statement-csv-e2e/`.
+`artifacts/headless-e2e/statement-csv/`.
 
 ## Recommended loop
 

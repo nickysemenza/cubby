@@ -5,10 +5,14 @@ import {
   statementCsvPreviewOut,
 } from "@cubby/schemas/statement-row";
 import { testUserId } from "@cubby/schemas/testing";
+import { request } from "@playwright/test";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Pool } from "pg";
 import { z } from "zod";
+
+import { httpContract } from "~/lib/generated/http-contract.gen";
+import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
 
 import {
   buildKernelContext,
@@ -60,7 +64,11 @@ type ScenarioInput = {
   origin: string;
   artifacts: string;
   userId: string;
-  runNative: (args: string[], outputPath: string) => Promise<void>;
+  runNative: (
+    args: string[],
+    outputPath: string,
+    errorPath: string,
+  ) => Promise<void>;
 };
 
 function requireFact(value: boolean, message: string): asserts value {
@@ -121,12 +129,34 @@ export async function runSwiftStatementCsvScenario(input: ScenarioInput) {
   };
   const before = await snapshot();
   let invocation = 0;
-  const invoke = async (args: string[]) => {
+  const refusalEvidence: string[] = [];
+  const invoke = async (args: string[], expectedError?: string) => {
     invocation++;
     const outputPath = path.join(artifacts, `native-csv-${invocation}.json`);
-    await runNative(
-      ["headless-statement-csv-import", "--base-url", origin, ...args],
-      outputPath,
+    const errorPath = path.join(
+      artifacts,
+      `native-csv-${invocation}.stderr.txt`,
+    );
+    await writeFile(errorPath, "");
+    try {
+      await runNative(
+        ["headless-statement-csv-import", "--base-url", origin, ...args],
+        outputPath,
+        errorPath,
+      );
+    } catch (error) {
+      if (!expectedError) throw error;
+      const diagnostic = await readFile(errorPath, "utf8");
+      requireFact(
+        diagnostic.trim() === expectedError,
+        `Native CSV failed for an unexpected reason: ${diagnostic.trim()}`,
+      );
+      refusalEvidence.push(errorPath);
+      return outputPath;
+    }
+    requireFact(
+      !expectedError,
+      "Native CSV accepted a review that should be refused",
     );
     return outputPath;
   };
@@ -179,15 +209,9 @@ export async function runSwiftStatementCsvScenario(input: ScenarioInput) {
     changedReviewPath,
     JSON.stringify({ ...reviewed, text: `${file.text}\n` }),
   );
-  let staleReviewRefused = false;
-  try {
-    await invoke(["--file", filePath, "--review-file", changedReviewPath]);
-  } catch {
-    staleReviewRefused = true;
-  }
-  requireFact(
-    staleReviewRefused,
-    "Native CSV accepted review of different file bytes",
+  await invoke(
+    ["--file", filePath, "--review-file", changedReviewPath],
+    "Review must name this exact CSV file, bytes, and mapping",
   );
   requireFact(
     JSON.stringify(await snapshot()) === JSON.stringify(before),
@@ -255,24 +279,54 @@ export async function runSwiftStatementCsvScenario(input: ScenarioInput) {
     artifacts,
     "synthetic-cli-guessed-review.json",
   );
-  await writeFile(
-    guessedReviewPath,
-    JSON.stringify(
-      statementCsvCommitInput.parse({
-        ...mint,
-        selected: [{ key: candidate.key, kind: "purchase" }],
-      }),
-    ),
+  const guessedReview = statementCsvCommitInput.parse({
+    ...mint,
+    selected: [{ key: candidate.key, kind: "purchase" }],
+  });
+  await writeFile(guessedReviewPath, JSON.stringify(guessedReview));
+  const expectedRefusal = `Statement row ${candidate.key} needs review: possible_existing.`;
+  const refusalWirePath = path.join(
+    artifacts,
+    "statement-csv-refusal-wire.json",
   );
-  let guessedMatchRefused = false;
+  // Check the actual Worker response before the native decoder. A generic
+  // HTTP failure must not count as the expected domain refusal.
+  const http = await request.newContext({
+    baseURL: origin,
+    extraHTTPHeaders: { Origin: origin },
+    storageState: { cookies: [], origins: [] },
+  });
   try {
-    await invoke(["--file", mintPath, "--review-file", guessedReviewPath]);
-  } catch {
-    guessedMatchRefused = true;
+    const signIn = await http.post("/api/auth/sign-in/email", {
+      data: { email: "sim@cubby.localhost", password: "cubby-sim-local-only" },
+    });
+    requireFact(signIn.ok(), "CSV refusal probe could not authenticate");
+    const response = await http.fetch(
+      httpContract.statementRow.commitCsv.path,
+      {
+        method: httpContract.statementRow.commitCsv.method,
+        data: guessedReview,
+      },
+    );
+    const body: unknown = await response.json();
+    await writeFile(
+      refusalWirePath,
+      `${JSON.stringify({ status: response.status(), body }, null, 2)}\n`,
+    );
+    const refusal = publicStartOperationErrorSchema.parse(body);
+    requireFact(
+      response.status() === 400 &&
+        refusal.code === "BAD_REQUEST" &&
+        refusal.reason === "CONSTRAINT_VIOLATION" &&
+        refusal.message === expectedRefusal,
+      "CSV ambiguous review did not return its canonical API refusal",
+    );
+  } finally {
+    await http.dispose();
   }
-  requireFact(
-    guessedMatchRefused,
-    "Native CSV created a transaction despite ambiguous existing matches",
+  await invoke(
+    ["--file", mintPath, "--review-file", guessedReviewPath],
+    `HTTP 400 BAD_REQUEST: ${expectedRefusal}`,
   );
   requireFact(
     JSON.stringify(await snapshot()) === JSON.stringify(beforeAmbiguity),
@@ -344,6 +398,7 @@ export async function runSwiftStatementCsvScenario(input: ScenarioInput) {
           "physical-occurrences-and-zero-evidence",
           "exact-retry-no-writes",
           "ambiguous-date-match-refused",
+          "canonical-refusal-wire-and-native-diagnostics",
           "reviewed-attachment-preserves-canonical-charge",
           "no-implicit-expense-or-inventory",
         ],
@@ -355,5 +410,5 @@ export async function runSwiftStatementCsvScenario(input: ScenarioInput) {
       2,
     )}\n`,
   );
-  return evidencePath;
+  return [evidencePath, refusalWirePath, ...refusalEvidence];
 }

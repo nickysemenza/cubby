@@ -2,13 +2,16 @@ import { z } from "zod";
 
 import { scrubErrorMessage } from "../../lib/error-diagnostics";
 
-const routeErrorBody = z.object({ error: z.string() });
+const routeErrorBody = z.union([
+  z.object({ error: z.string() }),
+  z.object({ code: z.string(), message: z.string() }),
+]);
 
 /**
  * An error thrown past a server route becomes h3's generic 5xx JSON body
  * (`{ message: "HTTPError" }`), so the client can only show "(500)". Error
  * surfaces show raw diagnostics (AGENTS.md), so put the scrubbed thrown error
- * in the `error` field `throwHttpError` reads. A route's own `error` body and
+ * in the `error` field `throwHttpError` reads. A route's own `error` or canonical API body and
  * non-JSON responses (SSR error pages) pass through untouched.
  */
 export async function withUnhandledErrorBody(

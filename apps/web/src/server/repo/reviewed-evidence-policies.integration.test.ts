@@ -145,7 +145,9 @@ describe("reviewed evidence policy rollout", () => {
     );
     await expect(
       applyReviewedEvidencePolicies(context(), decisions, fresh.fingerprint),
-    ).rejects.toThrow(/fixture_policy_refusal/);
+    ).rejects.toMatchObject({
+      cause: { code: "23514", constraint: "fixture_policy_refusal" },
+    });
     expect(
       (
         await unwrapDb(ctx.db).execute(
