@@ -17,7 +17,7 @@ import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
 
-import { createFixture } from "./e2e-fixtures";
+import { createFixture, seedProductPrerequisite } from "./e2e-fixtures";
 import {
   gotoAuthenticatedPage,
   reloadAuthenticatedPage,
@@ -73,6 +73,15 @@ test("Photo item uploads a staged image and commits one Product with one each at
       tags: [],
     }),
   );
+  const existing = await seedProductPrerequisite(page, {
+    name: uniqueName(testInfo, "Synthetic existing shelf item"),
+  });
+  await createFixture(page, "inventory", {
+    productId: existing.id,
+    locationId: location.id,
+    amount: { value: 1, unit: "each" },
+    placement: "stock",
+  });
   const name = uniqueName(testInfo, "Synthetic photo capture clamp");
   const addHere = page.getByRole("button", { name: /Add something here/ });
   await gotoAuthenticatedPage(
