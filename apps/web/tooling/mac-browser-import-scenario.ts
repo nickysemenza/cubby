@@ -125,6 +125,7 @@ export async function createMacBrowserScenario(input: Input) {
       return result(operationId);
     }
     return {
+      evidence: browserDriver.evidence,
       async run(appDriver: MacImportDriver) {
         const deadline = Date.now() + 30_000;
         while (!(await broker.connected())) {
@@ -203,7 +204,7 @@ export async function createMacBrowserScenario(input: Input) {
             2,
           ) + "\n",
         );
-        appDriver.evidence.push(evidence, ...browserDriver.evidence);
+        appDriver.evidence.push(evidence);
       },
       async close() {
         await browserDriver.close().catch(() => {});

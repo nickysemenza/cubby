@@ -140,6 +140,7 @@ export class MacImportDriver {
   }
 
   async close(): Promise<void> {
-    await this.action(["close", ...(this.bundleID ? [this.bundleID] : [])]);
+    if (!this.bundleID) return;
+    await this.action(["close", this.bundleID]);
   }
 }

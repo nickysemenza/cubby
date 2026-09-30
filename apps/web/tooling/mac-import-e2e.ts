@@ -253,6 +253,7 @@ async function cleanupResources(input: {
   await browserScenario?.close().catch((error) => {
     failure ??= error;
   });
+  if (browserScenario) driver.evidence.push(...browserScenario.evidence);
   await retailer?.close().catch((error) => {
     failure ??= error;
   });
