@@ -137,8 +137,8 @@ test("Photo item uploads a staged image and commits one Product with one each at
   expect(uploaded.url() === staged.uploadUrl).toBe(true);
   expect(uploaded.ok()).toBe(true);
   expect(uploaded.request().headers()["content-type"]).toBe("image/png");
-  expect(uploaded.request().postDataBuffer()?.byteLength).toBe(
-    statSync(itemPhoto).size,
+  expect(await uploaded.request().headerValue("content-length")).toBe(
+    String(statSync(itemPhoto).size),
   );
 
   const response = await committedResponse;
