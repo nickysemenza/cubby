@@ -24,6 +24,12 @@ import { Pool } from "pg";
 import { scrubErrorMessage } from "../src/lib/error-diagnostics";
 import { writeE2ERunBundle } from "./e2e-run-bundle";
 import { MacImportDriver } from "./mac-import-driver";
+import {
+  stopOwnedMacProcess,
+  waitForOwnedMacProcess,
+  type MacProcessExpectation,
+  type OwnedMacProcess,
+} from "./mac-owned-process";
 import { assertSimulatorAdminUrl } from "./sim-db-guard";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
 import {
@@ -98,6 +104,9 @@ const milestones = {
   composedGraphVerified: false,
 };
 let verifiedLaunchedPID: number | undefined;
+let nativeProcessExpectation: MacProcessExpectation | undefined;
+let ownedNativeProcess: OwnedMacProcess | undefined;
+let ownedProcessCleanupFailed = false;
 let activeChild: ReturnType<typeof spawn> | undefined;
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
@@ -402,6 +411,60 @@ function saveArtifact(): void {
   console.log(`[mac-import-e2e] Artifact: ${manifest}`);
 }
 
+async function cleanupNativeProcess(): Promise<void> {
+  if (!nativeProcessExpectation) return;
+  const evidence = path.join(artifacts, "native-process-cleanup.json");
+  let result;
+  try {
+    result = await stopOwnedMacProcess(
+      nativeProcessExpectation,
+      ownedNativeProcess,
+    );
+  } catch (error) {
+    ownedProcessCleanupFailed = true;
+    retainCleanupFailure(error);
+  }
+  writeFileSync(
+    evidence,
+    JSON.stringify(
+      {
+        verifiedPID: verifiedLaunchedPID ?? null,
+        exited: !ownedProcessCleanupFailed,
+        result: result ?? null,
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  driver.evidence.push(evidence);
+}
+function finishFixtureLease(
+  lease: ReturnType<typeof acquireMacFixtureLease> | undefined,
+  cleanupSucceeded: boolean,
+): void {
+  if (!lease) return;
+  try {
+    assertMacFixturesIdle();
+    if (!cleanupSucceeded || ownedProcessCleanupFailed)
+      throw new Error(
+        "Mac fixture cleanup failed; host lease retained for diagnosis",
+      );
+    lease.release();
+  } catch (error) {
+    retainCleanupFailure(error);
+    const evidence = path.join(artifacts, "fixture-lease-retained.json");
+    writeFileSync(
+      evidence,
+      JSON.stringify(
+        { retained: true, cleanupSucceeded, ownedProcessCleanupFailed },
+        null,
+        2,
+      ) + "\n",
+    );
+    driver.evidence.push(evidence);
+  }
+}
+
 async function cleanupResources(input: {
   opened: boolean;
   browserScenario:
@@ -438,11 +501,13 @@ async function cleanupResources(input: {
     await driver.close().catch((error) => {
       failure ??= error;
     });
+  await cleanupNativeProcess();
   await browserScenario?.close().catch((error) => {
     failure ??= error;
   });
   if (browserScenario) driver.evidence.push(...browserScenario.evidence);
   await retailer?.close().catch((error) => {
+    ownedProcessCleanupFailed = true;
     failure ??= error;
   });
   if (retailer) {
@@ -715,35 +780,23 @@ async function main(): Promise<void> {
       "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
       ["-f", appPath],
     );
+    nativeProcessExpectation = {
+      executable: path.join(appPath, "Contents/MacOS/Cubby"),
+      arguments: [
+        "--cubby-e2e-server",
+        url.origin,
+        ...(retailer ? ["--cubby-e2e-browser-bundle", retailer.bundleID] : []),
+      ],
+    };
+    opened = true;
     await run("open", [
       "-n",
       appPath,
       "--args",
-      "--cubby-e2e-server",
-      url.origin,
-      ...(retailer ? ["--cubby-e2e-browser-bundle", retailer.bundleID] : []),
+      ...nativeProcessExpectation.arguments,
     ]);
-    opened = true;
-    const executable = path.join(appPath, "Contents/MacOS/Cubby");
-    function launchedProcess() {
-      const lines = execFileSync("ps", ["-axo", "pid=,command="], {
-        encoding: "utf8",
-      }).split("\n");
-      const matches = lines.flatMap((line) => {
-        const parsed = line.trim().match(/^(\d+)\s+(.+)$/);
-        return parsed &&
-          parsed[2]?.startsWith(`${executable} `) &&
-          parsed[2].includes(`--cubby-e2e-server ${url.origin}`)
-          ? [Number(parsed[1])]
-          : [];
-      });
-      if (matches.length !== 1 || !matches[0])
-        throw new Error(
-          "Expected exactly one built Mac app process using the isolated fixture launch arguments",
-        );
-      return matches[0];
-    }
-    const beforePID = launchedProcess();
+    ownedNativeProcess = await waitForOwnedMacProcess(nativeProcessExpectation);
+    const beforePID = ownedNativeProcess.pid;
     verifiedLaunchedPID = beforePID;
     milestones.launched = true;
     const beforeEvidence = path.join(
@@ -765,7 +818,8 @@ async function main(): Promise<void> {
     );
     driver.evidence.push(beforeEvidence);
     await driver.open(bundleID, beforePID);
-    const afterPID = launchedProcess();
+    const afterPID = (await waitForOwnedMacProcess(nativeProcessExpectation))
+      .pid;
     if (afterPID !== beforePID)
       throw new Error("Native UI adapter changed the verified fixture process");
     milestones.launched = true;
@@ -860,6 +914,7 @@ async function main(): Promise<void> {
     if (fixtureUIReady) await driver.screenshot("failure").catch(() => {});
     await holdFailedFixture();
   } finally {
+    let cleanupSucceeded = false;
     try {
       await cleanupResources({
         opened,
@@ -871,10 +926,11 @@ async function main(): Promise<void> {
         created,
         admin,
       });
+      cleanupSucceeded = true;
     } catch (error) {
       retainCleanupFailure(error);
     } finally {
-      fixtureLease?.release();
+      finishFixtureLease(fixtureLease, cleanupSucceeded);
     }
     saveArtifact();
   }

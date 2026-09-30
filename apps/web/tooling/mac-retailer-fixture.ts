@@ -14,6 +14,12 @@ import {
 } from "./mac-fixture-identity";
 import { chromium } from "@playwright/test";
 import { z } from "zod";
+import {
+  stopOwnedMacProcess,
+  waitForOwnedMacProcess,
+  type MacProcessExpectation,
+  type OwnedMacProcess,
+} from "./mac-owned-process";
 
 /** Synthetic HTTPS retailer and stable fixture Chromium, never a user browser. */
 export async function createMacRetailerFixture(
@@ -50,10 +56,10 @@ export async function createMacRetailerFixture(
       },
       launch: () => fixture.launch(),
       async close() {
-        try {
-          await fixture.close();
-        } finally {
-          if (ownsLease) lease.release();
+        await fixture.close();
+        if (ownsLease) {
+          assertMacFixturesIdle();
+          lease.release();
         }
       },
     };
@@ -151,6 +157,8 @@ async function prepareRetailerFixture(
     path.dirname(path.dirname(originalExecutable)),
   );
   let browser: ReturnType<typeof spawn> | undefined;
+  let browserExpectation: MacProcessExpectation | undefined;
+  let browserOwnership: OwnedMacProcess | undefined;
   try {
     const signed = prepareMacFixtureApp({
       source: sourceApp,
@@ -203,59 +211,41 @@ async function prepareRetailerFixture(
         "Contents/MacOS",
         path.basename(originalExecutable),
       );
-      browser = spawn(
-        executable,
-        [
-          `--user-data-dir=${profile}`,
-          `--ignore-certificate-errors-spki-list=${spki}`,
-          "--host-resolver-rules=MAP shop.example.test 127.0.0.1",
-          "--no-proxy-server",
-          "--use-mock-keychain",
-          "--disable-features=DialMediaRouteProvider",
-          "--no-first-run",
-          "--no-default-browser-check",
-          "about:blank",
-        ],
-        { stdio: "ignore" },
-      );
+      const args = [
+        `--user-data-dir=${profile}`,
+        `--ignore-certificate-errors-spki-list=${spki}`,
+        "--host-resolver-rules=MAP shop.example.test 127.0.0.1",
+        "--no-proxy-server",
+        "--use-mock-keychain",
+        "--disable-features=DialMediaRouteProvider",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "about:blank",
+      ];
+      browserExpectation = { executable, arguments: args };
+      browser = spawn(executable, args, { stdio: "ignore" });
       const owned = browser;
       await new Promise<void>((resolve, reject) => {
         owned.once("spawn", resolve);
         owned.once("error", reject);
       });
       if (!owned.pid) throw new Error("Fixture browser did not launch");
-      const command = execFileSync(
-        "ps",
-        ["-p", String(owned.pid), "-o", "command="],
-        { encoding: "utf8" },
-      );
-      if (
-        !command.startsWith(executable) ||
-        !command.includes(`--user-data-dir=${profile}`)
-      )
-        throw new Error("Fixture browser process/profile identity mismatch");
+      browserOwnership = await waitForOwnedMacProcess(browserExpectation);
+      if (browserOwnership.pid !== owned.pid)
+        throw new Error("Fixture browser process/profile ownership mismatch");
     },
     async close() {
-      if (browser && browser.exitCode === null && browser.signalCode === null) {
-        const owned = browser;
-        await new Promise<void>((resolve) => {
-          const timeout = setTimeout(() => {
-            owned.kill("SIGKILL");
-            resolve();
-          }, 5000);
-          owned.once("close", () => {
-            clearTimeout(timeout);
-            resolve();
-          });
-          owned.kill("SIGTERM");
-        });
+      try {
+        if (browserExpectation)
+          await stopOwnedMacProcess(browserExpectation, browserOwnership);
+      } finally {
+        server.closeAllConnections();
+        writeFileSync(
+          path.join(root, "requests.json"),
+          JSON.stringify(requests, null, 2) + "\n",
+        );
+        await new Promise<void>((resolve) => server.close(() => resolve()));
       }
-      server.closeAllConnections();
-      writeFileSync(
-        path.join(root, "requests.json"),
-        JSON.stringify(requests, null, 2) + "\n",
-      );
-      await new Promise<void>((resolve) => server.close(() => resolve()));
     },
   };
 }
