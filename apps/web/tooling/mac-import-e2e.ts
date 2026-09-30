@@ -654,6 +654,11 @@ async function main(): Promise<void> {
     try {
       const { migrateDatabase } = await import("./db-migrate");
       await migrateDatabase(drizzle(pool));
+      // A freshly migrated database needs the same hierarchy root as the web E2E lane.
+      await pool.query(`
+        INSERT INTO "Location" (shortcode, name, aliases, tags, type, "parentId")
+        VALUES ('LOC-HM3E', 'Home', ARRAY[]::text[], ARRAY[]::text[], 'house', NULL)
+      `);
     } finally {
       await pool.end();
     }
