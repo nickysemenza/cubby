@@ -15,6 +15,8 @@ struct EntityEditorSheet: View {
     let mode: GenericEntityEditModel.Mode
     /// The loaded record for an update editor opened from a detail screen (skips the fetch).
     var original: JSONValue? = nil
+    /// A detail action stages a reset for review; Save remains the only write.
+    var resolutionResetField: String? = nil
     let onSaved: (String) -> Void
 
     @Environment(AppModel.self) private var appModel
@@ -33,10 +35,13 @@ struct EntityEditorSheet: View {
     private struct EditorIdentity: Hashable {
         let key: EntityKey
         let mode: GenericEntityEditModel.Mode
+        let resolutionResetField: String?
     }
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
-    private var editorIdentity: EditorIdentity { EditorIdentity(key: key, mode: mode) }
+    private var editorIdentity: EditorIdentity {
+        EditorIdentity(key: key, mode: mode, resolutionResetField: resolutionResetField)
+    }
 
     private var isCreate: Bool {
         if case .create = mode { return true }
@@ -225,6 +230,7 @@ struct EntityEditorSheet: View {
         await created.load()
         guard !Task.isCancelled, initializedIdentity == identity, model === created else { return }
         initialDraft = created.draft
+        if let resolutionResetField { created.stageResolutionReset(resolutionResetField) }
         seedPickedTitles(created)
         suggestions = suggestionReview(for: created)
     }

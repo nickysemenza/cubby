@@ -195,6 +195,7 @@ import {
   loadProductPriceSum,
   loadProductPricing,
   resolveProductPricing,
+  resolveProductPriceField,
 } from "./pricing";
 import {
   enrichProductRowsWithQuantityLedger,
@@ -1419,6 +1420,12 @@ export const listProductsRead = async (
       if (wantsListGroup(projection, "derived"))
         Object.assign(patch, {
           pricing: pricingById.get(row.id),
+          fieldResolutions: {
+            price: resolveProductPriceField(
+              row.price,
+              pricingById.get(row.id) ?? resolveProductPricing(row.price),
+            ),
+          },
           expenseCount: Number(row.expenseCount),
           expenseTotal: Number(row.expenseTotal),
           componentCount: Number(row.componentCount),

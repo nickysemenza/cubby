@@ -2,6 +2,7 @@ import { timestampedFields } from "./base-entity";
 import { fdcId } from "@cubby/usda";
 import { z } from "zod";
 import { positiveAmount } from "./codec";
+import { optionalFieldResolutionsSchema } from "./field-resolution";
 import { cookbookShortcode, recipeShortcode } from "./identifier-fields";
 import {
   nutritionTotals,
@@ -251,6 +252,7 @@ export const recipeTopLevelFields = {
   source: recipeSource.nullish(),
   yield: recipeYieldSchema.nullish(),
   servings: recipeServings.nullish(),
+  fieldResolutions: optionalFieldResolutionsSchema,
   tags: recipeTags.nullish(),
   notes: recipeNotes.nullish(),
   // Lineage pointer only — nullable(), not nullish(), because it's always
@@ -263,3 +265,25 @@ export const recipeTopLevelFields = {
 
 export const recipeTopLevel = z.object(recipeTopLevelFields);
 export type RecipeTopLevel = z.infer<typeof recipeTopLevel>;
+
+export type RecipeServingBasis = Pick<
+  RecipeTopLevel,
+  "servings" | "yield" | "fieldResolutions"
+>;
+
+/** The stored rule is shared with legacy read shapes that predate resolutions. */
+export const resolveRecipeServingValue = (
+  recipe: Pick<RecipeServingBasis, "servings" | "yield">,
+): number | null =>
+  recipe.servings ??
+  (recipe.yield?.unit === "servings" ? recipe.yield.value : null);
+
+/** Read consumers use the backend resolution; old embedded recipes remain readable. */
+export const recipeServingsForRead = (
+  recipe: RecipeServingBasis,
+): number | null => {
+  const resolution = recipe.fieldResolutions?.servings;
+  return resolution
+    ? z.number().nullable().parse(resolution.value)
+    : resolveRecipeServingValue(recipe);
+};

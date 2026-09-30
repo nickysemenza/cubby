@@ -16,6 +16,7 @@ import {
 } from "../identifier-fields.js";
 import { productAttachmentImageOut } from "./field-primitives.js";
 import { money } from "@cubby/schemas/money";
+import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { productLabelNutrition } from "@cubby/schemas/nutrition";
 import {
   moneyNullable,
@@ -138,6 +139,7 @@ export default defineEntity({
         derived: [
           "price",
           "pricing",
+          "fieldResolutions",
           "usdaUnavailable",
           "unitPrice",
           "unitPriceMappings",
@@ -552,23 +554,32 @@ export default defineEntity({
           detail: true,
           format: "currency",
         },
+        resolution: {
+          reset: { price: null },
+          redundancy: "eligible",
+        },
         explanation: {
           ruleId: "product.effective-valuation-price",
           description:
             "A manual valuation price wins; otherwise Cubby derives a per-unit price from live priced expenses and their recorded quantities.",
-          resolver: "productValuation",
           projections: {
-            list: "pricing.effectivePrice",
-            detail: "pricing.effectivePrice",
-            summary: "pricing.effectivePrice",
+            list: "fieldResolutions.price.value",
+            detail: "fieldResolutions.price.value",
+            summary: "fieldResolutions.price.value",
           },
           sourceDependencies: [
-            { path: "price", label: "Manual valuation price" },
             {
-              path: "pricing.derivedPrice",
+              path: "fieldResolutions.price.storedValue",
+              label: "Manual valuation price",
+            },
+            {
+              path: "fieldResolutions.price.fallbackValue",
               label: "Expense-derived unit price",
             },
-            { path: "pricing.source", label: "Selected price source" },
+            {
+              path: "fieldResolutions.price.source",
+              label: "Selected price source",
+            },
             { path: "pricing.partial", label: "Incomplete expense coverage" },
           ],
           actions: ["editSource"],
@@ -814,6 +825,15 @@ export default defineEntity({
         kind: "json",
         validation: {
           read: productPricingOut,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "fieldResolutions",
+        kind: "json",
+        validation: {
+          read: optionalFieldResolutionsSchema,
           create: null,
           update: null,
         },
@@ -1401,6 +1421,7 @@ export default defineEntity({
       "externalIds",
       "price",
       "pricing",
+      "fieldResolutions",
       "usdaUnavailable",
       "stockTracked",
       "labelNutrition",

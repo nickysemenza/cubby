@@ -29,6 +29,25 @@ struct EntityFieldControl: View {
             } else {
                 control
             }
+            if let resolved = model.resolutionForEditor(field) {
+                Text("Effective: \(EntityFieldValue.text(resolved.effectiveValue, field: field) ?? "None")")
+                    .font(.caption).foregroundStyle(.secondary)
+                EntityFieldResolutionLabel(resolved: resolved)
+                if resolved.resetPayload(field: field) != nil, !model.readOnly(key) {
+                    Button(resolved.resetLabel) { model.stageResolutionReset(key) }
+                        .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).reset")
+                    Text("Save commits the reset.").font(.caption).foregroundStyle(.secondary)
+                }
+            } else if let original = model.original,
+                FieldResolutionPresentation(raw: original, field: field) != nil
+            {
+                Text("Saved resolution is out of date for this draft. Save to refresh.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if field.resolution?.none != nil, !model.readOnly(key) {
+                Button("Use no value") { model.stageResolutionNone(key) }
+                    .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).none")
+            }
             if let error = model.fieldErrors[key] {
                 Text(error)
                     .font(.caption)

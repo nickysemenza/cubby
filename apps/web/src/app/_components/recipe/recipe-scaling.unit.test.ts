@@ -8,6 +8,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 import { scaleRecipe } from "./recipe-scaling";
+import { getEffectiveServings } from "./recipe-utils";
 
 const row = (id: string, amounts: Amount[]) =>
   ({
@@ -31,7 +32,9 @@ const row = (id: string, amounts: Amount[]) =>
 
 const recipe = (
   ingredients: ReadonlyArray<ReturnType<typeof row>>,
-  extra: Partial<Pick<RecipeOut, "yield" | "servings">> = {},
+  extra: Partial<
+    Pick<RecipeOut, "yield" | "servings" | "fieldResolutions">
+  > = {},
 ): RecipeOut =>
   recipeOut.parse({
     id: testShortcode("recipe", "RCP-SCALE"),
@@ -126,6 +129,37 @@ describe("scaleRecipe", () => {
     );
     expect(scaled.yield?.value).toBe(6);
     expect(scaled.servings).toBe(6);
+  });
+
+  it("scales the canonical serving resolution while preserving its assignment intent", () => {
+    const input = recipe([], {
+      servings: null,
+      yield: { value: 4, unit: "servings" },
+      fieldResolutions: {
+        servings: {
+          mode: "inherit",
+          storedValue: null,
+          value: 4,
+          fallbackValue: 4,
+          source: "Recipe yield",
+          sourceEntity: null,
+          matchesFallback: true,
+          canReset: false,
+        },
+      },
+    });
+    const scaled = scaleRecipe(input, 1.5);
+    expect(getEffectiveServings(scaled)).toBe(6);
+    expect(scaled.fieldResolutions?.servings).toMatchObject({
+      mode: "inherit",
+      storedValue: null,
+      value: 6,
+      fallbackValue: 6,
+      source: "Recipe yield",
+      matchesFallback: true,
+      canReset: false,
+    });
+    expect(input.fieldResolutions?.servings?.value).toBe(4);
   });
 
   it("returns the input untouched at 1x", () => {

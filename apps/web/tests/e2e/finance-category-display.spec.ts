@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { gotoAuthenticatedPage } from "./e2e-helpers";
+import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
+import { gotoAuthenticatedPage, selectComboboxItem } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("saved transaction categories display their readable label and effective expectation", async ({
@@ -46,12 +47,25 @@ test("saved transaction categories display their readable label and effective ex
         spendingCategoryId: z.string(),
         evidenceExpectation: z.null(),
         coverage: z.object({ expectation: z.string() }),
+        fieldResolutions: z.object({
+          evidenceExpectation: fieldResolutionSchema,
+        }),
       })
       .parse(await saved.json()),
   ).toMatchObject({
     spendingCategoryId: categoryId,
     evidenceExpectation: null,
     coverage: { expectation: "not_expected" },
+    fieldResolutions: {
+      evidenceExpectation: {
+        mode: "inherit",
+        storedValue: null,
+        value: "not_expected",
+        fallbackValue: "not_expected",
+        sourceEntity: { entityKind: "spendingCategory", entityId: categoryId },
+        canReset: false,
+      },
+    },
   });
   const enrichment = page.waitForResponse(
     (response) =>
@@ -119,4 +133,181 @@ test("saved transaction categories display their readable label and effective ex
     evidenceExpectation: "required",
     coverage: { expectation: "required" },
   });
+  await gotoAuthenticatedPage(page, `/financial-transactions/${transactionId}`);
+  await expect(
+    page.getByText("Set here", { exact: true }).first(),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Use inherited value", exact: true })
+    .first()
+    .click();
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(
+        `/api/v1/financial-transactions/${transactionId}`,
+      );
+      return z
+        .object({
+          evidenceExpectation: z.string().nullable(),
+          fieldResolutions: z.object({
+            evidenceExpectation: fieldResolutionSchema,
+          }),
+        })
+        .parse(await response.json());
+    })
+    .toMatchObject({
+      evidenceExpectation: null,
+      fieldResolutions: {
+        evidenceExpectation: { mode: "inherit", value: "not_expected" },
+      },
+    });
+  await expect(
+    page.getByText("From spending category", { exact: true }).first(),
+  ).toBeVisible();
+});
+
+test("draft category edits hide obsolete policy provenance while the replacement request is pending", async ({
+  page,
+  baseURL,
+}) => {
+  const tag = `Synthetic policy draft ${Date.now()}`;
+  const create = async (path: string, data: unknown) => {
+    const response = await page.request.post(`/api/v1/${path}`, {
+      headers: { Origin: baseURL! },
+      data: z.json().parse(data),
+    });
+    expect(response.status(), await response.text()).toBe(201);
+    return z
+      .object({ item: z.object({ id: z.string() }) })
+      .parse(await response.json()).item.id;
+  };
+  const oldCategory = await create("spending-categories", {
+    name: `${tag} original`,
+    evidenceExpectation: "required",
+    productExpectation: "not_expected",
+  });
+  const newCategoryName = `${tag} replacement`;
+  const newCategory = await create("spending-categories", {
+    name: newCategoryName,
+    evidenceExpectation: "not_expected",
+    productExpectation: "not_expected",
+  });
+  const accountId = await create("financial-accounts", {
+    name: tag,
+    identity: { kind: "credit_card", issuer: null, network: "visa" },
+  });
+  const transactionId = await create("financial-transactions", {
+    accountId,
+    amount: 23,
+    merchant: tag,
+    kind: "purchase",
+    status: "posted",
+    postedDate: "2026-09-10",
+    spendingCategoryId: oldCategory,
+  });
+  await gotoAuthenticatedPage(page, `/financial-transactions/${transactionId}`);
+  const suggestionRequest = z.object({
+    json: z.object({
+      operation: z.string(),
+      input: z.looseObject({
+        basis: z.record(z.string(), z.string().nullable()),
+      }),
+    }),
+  });
+  const persisted = await page.request.get(
+    `/api/v1/financial-transactions/${transactionId}`,
+  );
+  expect(
+    z
+      .object({
+        fieldResolutions: z.object({
+          evidenceExpectation: fieldResolutionSchema,
+        }),
+      })
+      .parse(await persisted.json()).fieldResolutions.evidenceExpectation,
+  ).toMatchObject({
+    mode: "inherit",
+    value: "required",
+    sourceEntity: { entityId: oldCategory },
+  });
+  await page
+    .getByRole("button", { name: /Edit Financial Transaction/i })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  const oldSource = dialog.locator(
+    `[data-slot="field-resolution"] a[href="/spending-categories/${oldCategory}"]`,
+  );
+  await expect(oldSource).toBeVisible();
+
+  let releaseRequest = () => {};
+  const released = new Promise<void>((resolve) => {
+    releaseRequest = resolve;
+  });
+  let requestBlocked = false;
+  await page.route("**/api/browser/dispatch", async (route) => {
+    const request = suggestionRequest.safeParse(route.request().postDataJSON());
+    if (
+      request.success &&
+      request.data.json.operation === "ai.suggestFields" &&
+      request.data.json.input.basis.spendingCategoryId === newCategory
+    ) {
+      requestBlocked = true;
+      await released;
+    }
+    await route.continue();
+  });
+  try {
+    await selectComboboxItem(
+      page,
+      dialog.getByRole("combobox", { name: /Spending category/i }),
+      newCategoryName,
+    );
+    await expect.poll(() => requestBlocked).toBe(true);
+    // The pending draft has no authoritative source yet; the old query must not supply one.
+    await expect(oldSource).toHaveCount(0);
+  } finally {
+    releaseRequest();
+  }
+  const saved = await page.request.get(
+    `/api/v1/financial-transactions/${transactionId}`,
+  );
+  expect(
+    z
+      .object({ spendingCategoryId: z.string(), evidenceExpectation: z.null() })
+      .parse(await saved.json()),
+  ).toEqual({
+    spendingCategoryId: oldCategory,
+    evidenceExpectation: null,
+  });
+  await dialog
+    .getByRole("button", { name: "Save transaction", exact: true })
+    .click();
+  await expect(dialog).toHaveCount(0);
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(
+        `/api/v1/financial-transactions/${transactionId}`,
+      );
+      return z
+        .object({
+          spendingCategoryId: z.string(),
+          evidenceExpectation: z.null(),
+          fieldResolutions: z.object({
+            evidenceExpectation: fieldResolutionSchema,
+          }),
+        })
+        .parse(await response.json());
+    })
+    .toMatchObject({
+      spendingCategoryId: newCategory,
+      evidenceExpectation: null,
+      fieldResolutions: {
+        evidenceExpectation: {
+          mode: "inherit",
+          value: "not_expected",
+          sourceEntity: { entityId: newCategory },
+        },
+      },
+    });
 });

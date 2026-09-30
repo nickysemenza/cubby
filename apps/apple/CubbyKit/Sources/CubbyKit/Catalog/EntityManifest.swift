@@ -236,6 +236,12 @@ public struct FieldSuggestionDescriptor: Codable, Sendable {
     public let mode: String?
 }
 
+public struct FieldResolutionDescriptor: Codable, Sendable {
+    public let reset: [String: JSONValue]
+    public let none: [String: JSONValue]?
+    public let redundancy: String
+}
+
 public struct FieldDescriptor: Codable, Sendable {
     public let key: String
     /// The list/relation column id this source field supplies, when renamed.
@@ -246,6 +252,7 @@ public struct FieldDescriptor: Codable, Sendable {
     public let nullable: Bool
     public let reference: FieldReference?
     public let explanation: FieldExplanation?
+    public let resolution: FieldResolutionDescriptor?
     public let controlKind: EntityControlKind?
     /// Semantic specialized-control id; the platform registry owns its implementation.
     public let controlRenderer: ControlRendererID?

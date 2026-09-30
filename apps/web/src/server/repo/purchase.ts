@@ -153,7 +153,10 @@ import {
 } from "./expense-inheritance";
 import { hydrateExpenseProjectAllocations } from "./expense-project-allocation";
 import { validateLiveEffectiveTrades } from "./inheritance-validation";
-import { purchaseCoverageSql } from "./purchase-evidence-policy";
+import {
+  purchaseCoverageSql,
+  purchaseEvidenceFieldResolutionsSql,
+} from "./purchase-evidence-policy";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
   "ImportPreparedOrder.targetPurchaseId": {
@@ -351,6 +354,7 @@ const purchaseVendorLogoKey = sql<string | null>`(
 
 const purchaseColumns = {
   coverage: purchaseCoverageSql("Purchase"),
+  fieldResolutions: purchaseEvidenceFieldResolutionsSql("Purchase"),
   defaultProjectShortcode: purchaseDefaultProjectShortcode,
   defaultTrade: purchase.defaultTrade,
   id: purchase.id,
@@ -385,6 +389,7 @@ const purchaseColumns = {
 
 type PurchaseRow = {
   coverage: PurchaseOut["coverage"];
+  fieldResolutions: PurchaseOut["fieldResolutions"];
   spendingCategoryShortcode: string | null;
   evidenceExpectation: PurchaseOut["evidenceExpectation"];
   itemizationEvidence: boolean;
@@ -435,6 +440,7 @@ const dbPurchaseToAPI = (
   evidenceExpectation: row.evidenceExpectation,
   itemizationEvidence: row.itemizationEvidence,
   coverage: row.coverage,
+  fieldResolutions: row.fieldResolutions,
   bookingCoverage: row.coverage.booking,
   documentCoverage: row.coverage.document,
   itemizationCoverage: row.coverage.itemization,
@@ -675,6 +681,7 @@ export const purchaseListRead = async (
 ) => {
   const {
     coverage,
+    fieldResolutions,
     defaultProjectShortcode,
     vendorShortcode,
     vendorAccountShortcode,
@@ -710,6 +717,7 @@ export const purchaseListRead = async (
             ...listGroupFields(projection, "media", () => ({ vendorLogoKey })),
             ...listGroupFields(projection, "derived", () => ({
               coverage,
+              fieldResolutions,
               expenseCount,
               unpricedExpenseCount,
               expenseTotal,
@@ -778,6 +786,7 @@ export const purchaseListRead = async (
               })),
               ...listGroupFields(projection, "derived", () => ({
                 coverage: row.coverage!,
+                fieldResolutions: row.fieldResolutions,
                 bookingCoverage: row.coverage!.booking,
                 documentCoverage: row.coverage!.document,
                 itemizationCoverage: row.coverage!.itemization,

@@ -968,6 +968,7 @@ export const productMcpOut = z
     tags: true,
     price: true,
     pricing: true,
+    fieldResolutions: true,
     expectedQuantity: true,
     itemImageCount: true,
     labelImageCount: true,

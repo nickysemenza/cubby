@@ -1,5 +1,6 @@
 import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import { match } from "ts-pattern";
+import { z } from "zod";
 
 import {
   type CalculateTotalsResult,
@@ -96,7 +97,7 @@ export const scaleRecipe = (recipe: RecipeOut, factor: number): RecipeOut => {
     })),
   }));
 
-  return {
+  const result: RecipeOut = {
     ...recipe,
     sections,
     // Scale yield/servings too so the summary card's "Makes" line stays coherent
@@ -110,4 +111,27 @@ export const scaleRecipe = (recipe: RecipeOut, factor: number): RecipeOut => {
         ? round2(recipe.servings * factor)
         : recipe.servings,
   };
+  const servingResolution = recipe.fieldResolutions?.servings;
+  if (servingResolution) {
+    const values = z
+      .object({
+        storedValue: z.number().nullable(),
+        value: z.number().nullable(),
+        fallbackValue: z.number().nullable(),
+      })
+      .parse(servingResolution);
+    const scaleServingValue = (value: number | null) =>
+      value === null ? null : round2(value * factor);
+    // Transform the server's selected values for this display preview; provenance stays intact.
+    result.fieldResolutions = {
+      ...recipe.fieldResolutions,
+      servings: {
+        ...servingResolution,
+        storedValue: scaleServingValue(values.storedValue),
+        value: scaleServingValue(values.value),
+        fallbackValue: scaleServingValue(values.fallbackValue),
+      },
+    };
+  }
+  return result;
 };

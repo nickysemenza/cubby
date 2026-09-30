@@ -64,13 +64,24 @@ extension EntityDescriptor {
                 let base = field.key.hasSuffix("Id") ? String(field.key.dropLast(2)) : field.key
                 let value: String?
                 if field.reference != nil {
-                    value =
-                        object[base]?["name"]?.stringValue
-                        ?? object["\(base)Name"]?.stringValue
-                        ?? object[field.key]?["name"]?.stringValue
-                        ?? object[field.key]?.stringValue
+                    if let resolution = FieldResolutionPresentation(raw: object, field: field) {
+                        let id = resolution.effectiveValue.stringValue
+                        value =
+                            id.flatMap {
+                                FieldResolutionPresentation.referenceName(
+                                    in: object, field: field, effectiveID: $0)
+                            } ?? id
+                    } else {
+                        value =
+                            object[base]?["name"]?.stringValue
+                            ?? object["\(base)Name"]?.stringValue
+                            ?? object[field.key]?["name"]?.stringValue
+                            ?? object[field.key]?.stringValue
+                    }
                 } else {
-                    value = object[field.key]?.stringValue
+                    value =
+                        FieldResolutionPresentation.readValue(in: object, field: field, surface: "list")?
+                        .stringValue
                 }
                 guard let value, !value.isEmpty else {
                     return nil

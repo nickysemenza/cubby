@@ -8,6 +8,7 @@ export const fieldResolutionSourceSchema = z.object({
     "purchase",
     "productCategory",
     "spendingCategory",
+    "vendor",
   ]),
   entityId: z.string(),
   name: z.string().nullable(),

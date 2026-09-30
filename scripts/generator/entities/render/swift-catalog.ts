@@ -392,6 +392,7 @@ const fieldJSON = (
     nullable: field.nullable,
     reference: referenceJSON(field.reference, entityKey, where),
     explanation: explanationJSON(field.explanation),
+    resolution: field.resolution,
     ...fieldControlJSON(field.control, vocabulary, where),
     inCreate: fieldModel.create.includes(field.key),
     // Required when the create schema rejects `undefined` (the same rule as

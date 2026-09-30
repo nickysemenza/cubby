@@ -44,7 +44,11 @@ import { mapLocationIdentityProduct } from "~/server/repo/location/identity-prod
 import { parseLocationType } from "~/server/repo/location/parse-type";
 
 import type { MappableProductExternalId } from "./external-id-types";
-import { type ProductPricing, resolveProductPricing } from "./pricing";
+import {
+  type ProductPricing,
+  resolveProductPricing,
+  resolveProductPriceField,
+} from "./pricing";
 import type { QuantityLedger } from "./quantity-ledger";
 import type { ProductDeepDB, ProductListDB } from "./types";
 import { unitMappingSides } from "./unit-mappings";
@@ -202,6 +206,8 @@ export const mapDbProductToTopLevel = (
   productData: ProductTopLevelDB,
 ): ProductTopLevelOut => {
   const imageGroups = splitProductImages(productData.images);
+  const pricing =
+    productData.pricing ?? resolveProductPricing(productData.price);
   return {
     id: parseShortcodeFor("product", productData.shortcode),
     name: productData.name,
@@ -220,7 +226,10 @@ export const mapDbProductToTopLevel = (
       ? parseShortcodeFor("plant", productData.growsPlant.shortcode)
       : null,
     price: productData.price,
-    pricing: productData.pricing ?? resolveProductPricing(productData.price),
+    pricing,
+    fieldResolutions: {
+      price: resolveProductPriceField(productData.price, pricing),
+    },
     usdaUnavailable: productData.usdaUnavailable,
     stockTracked: productData.stockTracked,
     acquisitionOrigin: productData.acquisitionOrigin,
@@ -534,6 +543,8 @@ export const dbProductToAPI = (
     }),
   );
 
+  const pricing =
+    productData.pricing ?? resolveProductPricing(productData.price);
   const result = {
     id: parseShortcodeFor("product", productData.shortcode),
     name: productData.name,
@@ -552,7 +563,10 @@ export const dbProductToAPI = (
       ? parseShortcodeFor("plant", productData.growsPlant.shortcode)
       : null,
     price: productData.price,
-    pricing: productData.pricing ?? resolveProductPricing(productData.price),
+    pricing,
+    fieldResolutions: {
+      price: resolveProductPriceField(productData.price, pricing),
+    },
     usdaUnavailable: productData.usdaUnavailable,
     stockTracked: productData.stockTracked,
     acquisitionOrigin: productData.acquisitionOrigin,

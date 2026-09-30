@@ -114,6 +114,100 @@ struct GenericEntityEditModelTests {
         #expect(try model.patch().values["notes"] == .string("Unsaved sibling"))
     }
 
+    @Test func inheritedReadDoesNotBecomeStoredDraftOrUnchangedPatch() throws {
+        let original: JSONValue = [
+            "spendingCategoryId": "SPC-4K7M",
+            "fieldResolutions": [
+                "spendingCategoryId": [
+                    "mode": "inherit", "storedValue": .null, "value": "SPC-4K7M", "fallbackValue": "SPC-4K7M",
+                    "source": "purchase", "sourceEntity": .null, "matchesFallback": true, "canReset": false,
+                ]
+            ],
+        ]
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"), client: try makeClient(),
+            original: original)
+        #expect(model.draft["spendingCategoryId"] == .null)
+        #expect(try model.patch().values["spendingCategoryId"] == nil)
+        #expect(!model.canSave)
+    }
+
+    @Test func resolutionResetStagesDeclaredPatchOnlyWhenServerAllowsIt() throws {
+        func original(_ canReset: Bool) -> JSONValue {
+            [
+                "spendingCategoryId": "SPC-8K7M", "notes": "Keep this",
+                "fieldResolutions": [
+                    "spendingCategoryId": [
+                        "mode": "explicit", "storedValue": "SPC-8K7M", "value": "SPC-8K7M",
+                        "fallbackValue": "SPC-4K7M",
+                        "source": "explicit", "sourceEntity": .null, "matchesFallback": false,
+                        "canReset": .bool(canReset),
+                    ]
+                ],
+            ]
+        }
+        let blocked = GenericEntityEditModel(
+            descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"), client: try makeClient(),
+            original: original(false))
+        #expect(!blocked.stageResolutionReset("spendingCategoryId"))
+        #expect(try blocked.patch().isEmpty)
+        let allowed = GenericEntityEditModel(
+            descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"), client: try makeClient(),
+            original: original(true))
+        #expect(allowed.stageResolutionReset("spendingCategoryId"))
+        let resetPatch = try allowed.patch()
+        #expect(resetPatch.values.isEmpty)
+        #expect(resetPatch.cleared == ["spendingCategoryId"])
+        #expect(allowed.draft["notes"] == .string("Keep this"))
+    }
+
+    @Test func acknowledgedFieldDoesNotKeepStaleResolutionEvidence() throws {
+        let field = try #require(EntityCatalog[.expense].field("spendingCategoryId"))
+        let original: JSONValue = [
+            "spendingCategoryId": "SPC-4K7M",
+            "fieldResolutions": [
+                "spendingCategoryId": [
+                    "mode": "inherit", "storedValue": .null, "value": "SPC-4K7M", "fallbackValue": "SPC-4K7M",
+                    "source": "purchase", "sourceEntity": .null, "matchesFallback": true, "canReset": false,
+                ]
+            ],
+        ]
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"), client: try makeClient(),
+            original: original)
+        model.acknowledgeSavedField(
+            "spendingCategoryId", value: .string("SPC-8K7M"), reviewedDraftValue: .null)
+        let saved = try #require(model.original)
+        #expect(FieldResolutionPresentation(raw: saved, field: field) == nil)
+        #expect(try model.patch().values["spendingCategoryId"] == nil)
+    }
+
+    @Test func editedAssignmentOrDependencyCannotPresentSavedResolutionAsCurrent() throws {
+        let field = try #require(EntityCatalog[.expense].field("spendingCategoryId"))
+        let original: JSONValue = [
+            "spendingCategoryId": "SPC-8K7M", "purchaseId": "PUR-4K7M",
+            "fieldResolutions": [
+                "spendingCategoryId": [
+                    "mode": "explicit", "storedValue": "SPC-8K7M", "value": "SPC-8K7M",
+                    "fallbackValue": "SPC-4K7M", "source": "explicit", "sourceEntity": .null,
+                    "matchesFallback": false, "canReset": true,
+                ]
+            ],
+        ]
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"),
+            client: try makeClient(), original: original)
+        #expect(model.resolutionForEditor(field) != nil)
+        model.draft["purchaseId"] = .string("PUR-8K7M")
+        #expect(model.resolutionForEditor(field) == nil)
+        #expect(!model.stageResolutionReset(field.key))
+        model.draft["purchaseId"] = .string("PUR-4K7M")
+        #expect(model.resolutionForEditor(field) != nil)
+        #expect(model.stageResolutionReset(field.key))
+        #expect(model.resolutionForEditor(field) == nil)
+        #expect(!model.stageResolutionReset(field.key))
+    }
+
     @Test func updateSendsExactlyTheChangedAndClearedKeys() async throws {
         defer { EditStub.handler.withLock { $0 = nil } }
         let seen = capture { _ in (200, Self.productUpdated) }

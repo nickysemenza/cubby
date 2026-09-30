@@ -178,7 +178,9 @@ function resolutionPhrase(resolution: FieldResolution): string {
         ? `From ${resolution.sourceEntity.entityKind === "task" ? "parent task" : entitySummary[resolution.sourceEntity.entityKind].singular.toLowerCase()}`
         : sentenceCase(resolution.source);
     case "allocated":
-      return "Allocated from";
+      return resolution.sourceEntity
+        ? "Allocated from"
+        : sentenceCase(resolution.source);
     case "none":
       return "Set to none here";
     case "explicit":
@@ -210,7 +212,15 @@ export function FieldResolutionBadge({
   compact?: boolean;
 }) {
   const entry = fieldResolutionEntryFor(record, field);
-  if (!entry || !resolutionIsInformative(entry.resolution)) return null;
+  if (!entry) return null;
+  if (!resolutionIsInformative(entry.resolution))
+    return interactive && entry.resolution.canReset ? (
+      <FieldResolutionActions
+        record={record}
+        field={entry.field}
+        resolution={entry.resolution}
+      />
+    ) : null;
   return (
     <FieldResolutionStatus
       compact={compact}
@@ -259,7 +269,6 @@ function FieldResolutionActions({
       none={
         policy.none === null ? null : resolutionPatchSchema.parse(policy.none)
       }
-      redundancy={policy.redundancy}
     />
   );
 }
@@ -270,14 +279,12 @@ function BoundFieldResolutionActions({
   resolution,
   reset,
   none,
-  redundancy,
 }: {
   entity: StandardEntity;
   id: string;
   resolution: FieldResolution;
   reset: ResolutionPatch;
   none: ResolutionPatch | null;
-  redundancy: "eligible" | "intentional";
 }) {
   const commands = useEntityCommands(entity);
   const [pending, setPending] = useState(false);
@@ -300,9 +307,7 @@ function BoundFieldResolutionActions({
   };
   return (
     <>
-      {resolution.canReset &&
-      redundancy === "eligible" &&
-      resolution.fallbackValue !== null ? (
+      {resolution.canReset ? (
         <Button
           type="button"
           variant="link"
@@ -314,7 +319,9 @@ function BoundFieldResolutionActions({
             void submit({ ...reset });
           }}
         >
-          Use inherited value
+          {resolution.fallbackValue === null
+            ? "Clear override"
+            : "Use inherited value"}
         </Button>
       ) : null}
       {resolution.mode === "inherit" && resolution.value !== null && none ? (

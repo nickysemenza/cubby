@@ -1,10 +1,15 @@
+import type { ProductCategoryShortcode } from "@cubby/schemas/identifiers";
 import { testShortcode } from "@cubby/schemas/testing";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { product as productTable, project } from "~/server/db/schema";
+import {
+  product as productTable,
+  productCategory,
+  project,
+} from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { createExpense } from "~/server/repo/expense";
 import {
@@ -81,9 +86,9 @@ describe("product category hierarchy", () => {
     expect(
       listed.get(taxonomyShortcode("tools"))?.productCount,
     ).toBeGreaterThanOrEqual(2);
-    expect(listed.get(taxonomyShortcode("tools"))?.fieldResolutions).toBe(
-      undefined,
-    );
+    expect(
+      listed.get(taxonomyShortcode("tools"))?.fieldResolutions?.feature,
+    ).toMatchObject({ mode: "explicit", value: "tools", fallbackValue: null });
 
     const detail = await getProductCategoryByShortcode(ctx.db, type.output.id);
     expect(detail?.productCount).toBe(1);
@@ -95,6 +100,128 @@ describe("product category hierarchy", () => {
         entityKind: "productCategory",
         entityId: taxonomyShortcode("tools"),
       },
+    });
+  });
+
+  it("preserves permanent feature intent and resolves live ancestry after moves", async () => {
+    // Feature bindings are globally unique; reserve these seeded bindings for this fixture.
+    await getDb(ctx.db)
+      .update(productCategory)
+      .set({ feature: null })
+      .where(
+        inArray(productCategory.feature, ["books", "tools", "electronics"]),
+      );
+    const create = (
+      name: string,
+      feature: "books" | "tools" | "electronics" | null,
+      parentId: ProductCategoryShortcode | null = null,
+    ) =>
+      createProductCategory(
+        ctx.db,
+        {
+          name,
+          aliases: [],
+          description: null,
+          parentId,
+          sortOrder: 0,
+          feature,
+        },
+        ctx.actor,
+      );
+    const parent = await create("Synthetic feature parent", "books");
+    const otherParent = await create(
+      "Synthetic alternate parent",
+      "electronics",
+    );
+    const child = await create(
+      "Synthetic feature child",
+      "tools",
+      parent.output.id,
+    );
+    const inheriting = await create(
+      "Synthetic inherited child",
+      null,
+      parent.output.id,
+    );
+    const read = () => getProductCategoryByShortcode(ctx.db, child.output.id);
+    expect((await read())?.fieldResolutions?.feature).toMatchObject({
+      mode: "explicit",
+      storedValue: "tools",
+      value: "tools",
+      fallbackValue: "books",
+      matchesFallback: false,
+      canReset: false,
+    });
+    for (const feature of ["books", null] as const) {
+      await expect(
+        updateProductCategory(ctx.db, child.output.id, { feature }, ctx.actor),
+      ).rejects.toThrow(
+        "A category behavior binding cannot be cleared or replaced",
+      );
+      expect((await read())?.feature).toBe("tools");
+    }
+    await updateProductCategory(
+      ctx.db,
+      child.output.id,
+      { parentId: otherParent.output.id },
+      ctx.actor,
+    );
+    expect((await read())?.fieldResolutions?.feature).toMatchObject({
+      mode: "explicit",
+      value: "tools",
+      fallbackValue: "electronics",
+      canReset: false,
+    });
+    expect(
+      (await getProductCategoryByShortcode(ctx.db, inheriting.output.id))
+        ?.fieldResolutions?.feature,
+    ).toMatchObject({
+      mode: "inherit",
+      storedValue: null,
+      value: "books",
+      canReset: false,
+      sourceEntity: { entityId: parent.output.id },
+    });
+    await updateProductCategory(
+      ctx.db,
+      inheriting.output.id,
+      { parentId: otherParent.output.id },
+      ctx.actor,
+    );
+    expect(
+      (await getProductCategoryByShortcode(ctx.db, inheriting.output.id))
+        ?.fieldResolutions?.feature,
+    ).toMatchObject({
+      mode: "inherit",
+      value: "electronics",
+      sourceEntity: { entityId: otherParent.output.id },
+    });
+    await updateProductCategory(
+      ctx.db,
+      child.output.id,
+      { parentId: null },
+      ctx.actor,
+    );
+    expect((await read())?.fieldResolutions?.feature).toMatchObject({
+      mode: "explicit",
+      value: "tools",
+      fallbackValue: null,
+      canReset: false,
+    });
+    // Legacy deleted ancestry must never remain an effective source.
+    await getDb(ctx.db)
+      .update(productCategory)
+      .set({ deletedAt: new Date() })
+      .where(eq(productCategory.id, otherParent.entityId));
+    expect(
+      (await getProductCategoryByShortcode(ctx.db, inheriting.output.id))
+        ?.fieldResolutions?.feature,
+    ).toMatchObject({
+      mode: "inherit",
+      value: null,
+      fallbackValue: null,
+      sourceEntity: null,
+      canReset: false,
     });
   });
 

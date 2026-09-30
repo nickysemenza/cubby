@@ -207,6 +207,18 @@ describe("recipe repository helpers", () => {
         updatedAt: UPDATED_AT,
         yield: null,
         servings: null,
+        fieldResolutions: {
+          servings: {
+            mode: "inherit",
+            storedValue: null,
+            value: null,
+            fallbackValue: null,
+            source: "No serving yield",
+            sourceEntity: null,
+            matchesFallback: true,
+            canReset: false,
+          },
+        },
         tags: [],
         notes: null,
         forkedFromRecipeId: null,

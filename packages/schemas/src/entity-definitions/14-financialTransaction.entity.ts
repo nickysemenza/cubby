@@ -1,4 +1,5 @@
 import { financialTransactionCoverage } from "../purchase-evidence-policy";
+import { optionalFieldResolutionsSchema } from "../field-resolution";
 import { spendingCategoryShortcode } from "../identifier-fields";
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -65,7 +66,7 @@ export default defineEntity({
           "itemizationCoverage",
           "productsCoverage",
           "coverage",
-          "effectiveEvidenceExpectation",
+          "fieldResolutions",
           "itemization",
           "vendorInference",
         ],
@@ -240,36 +241,17 @@ export default defineEntity({
         },
       },
       {
-        key: "effectiveEvidenceExpectation",
-        labelOverride: "Evidence expectation",
-        kind: "enum",
-        provenance: {
-          kind: "derived",
-          sources: [
-            {
-              label:
-                "Transaction, linked purchase, vendor, and category policy",
-            },
-          ],
-        },
-        control: {
-          kind: "select",
-          options: [
-            { value: "unknown", label: "Unclassified" },
-            { value: "required", label: "Expected" },
-            { value: "not_expected", label: "Not expected" },
-          ],
-        },
-        display: { list: true, width: "sm" },
+        key: "fieldResolutions",
+        kind: "json",
         validation: {
-          read: financialTransactionCoverage.shape.expectation,
+          read: optionalFieldResolutionsSchema,
           create: null,
           update: null,
         },
       },
       {
         key: "evidenceExpectation",
-        labelOverride: "Evidence override",
+        labelOverride: "Evidence expectation",
         description:
           "Leave blank to use the effective policy from linked records and the spending category.",
         kind: "enum",
@@ -278,6 +260,8 @@ export default defineEntity({
           kind: "select",
           suggest: {
             basis: [
+              "purchaseId",
+              "spendingCategoryId",
               "merchant",
               "rawDescription",
               "sourceCategory",
@@ -291,7 +275,35 @@ export default defineEntity({
             { value: "not_expected", label: "Not expected" },
           ],
         },
-        display: { list: true, detail: true, listHidden: true },
+        display: { list: true, detail: true },
+        resolution: {
+          reset: { evidenceExpectation: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "financialTransaction.effective-evidence-expectation",
+          description:
+            "Reviewed reimbursement requires no vendor receipt. Otherwise an explicit transaction policy wins, followed by linked purchase policies and the transaction spending category.",
+          projections: {
+            list: "fieldResolutions.evidenceExpectation.value",
+            detail: "fieldResolutions.evidenceExpectation.value",
+            summary: "fieldResolutions.evidenceExpectation.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.evidenceExpectation.sourceEntity",
+              label: "Source",
+            },
+            {
+              path: "fieldResolutions.evidenceExpectation.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.evidenceExpectation.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
+        },
         validation: {
           read: z
             .enum(["unknown", "required", "not_expected"])
@@ -856,7 +868,7 @@ export default defineEntity({
       "coverage",
       "spendingCategoryId",
       "spendingCategoryName",
-      "effectiveEvidenceExpectation",
+      "fieldResolutions",
       "evidenceExpectation",
       "id",
       "accountId",

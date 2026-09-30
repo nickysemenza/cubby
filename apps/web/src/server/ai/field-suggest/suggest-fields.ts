@@ -58,6 +58,7 @@ import {
   isFinanceCategoryEntity,
   loadFinanceSuggestionContext,
 } from "~/server/repo/finance-suggestion-context";
+import { resolveDraftEvidenceFields } from "~/server/repo/purchase-evidence-policy";
 import {
   lookupEntityLabels,
   resolveShortcodes,
@@ -136,6 +137,12 @@ async function resolveSuggestionInheritance(
       draft as Parameters<typeof resolveDraftTaskFields>[1],
     );
   }
+  if (input.entity === "purchase" || input.entity === "financialTransaction")
+    return resolveDraftEvidenceFields(db, {
+      entity: input.entity,
+      entityId: input.entityId,
+      basis: draft,
+    });
   return {};
 }
 

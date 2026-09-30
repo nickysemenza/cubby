@@ -5,10 +5,56 @@ import { expect, it } from "vitest";
 
 import {
   formatYield,
+  getEffectiveServings,
   getIngredientName,
   getRecipeNutritionBasis,
   getServingBasis,
 } from "./recipe-utils";
+
+it("uses the canonical serving resolution even when legacy fields suggest another value", () => {
+  expect(
+    getEffectiveServings({
+      servings: null,
+      yield: { value: 10, unit: "servings" },
+      fieldResolutions: {
+        servings: {
+          mode: "inherit",
+          storedValue: null,
+          value: 4,
+          fallbackValue: 4,
+          source: "Recipe yield",
+          sourceEntity: null,
+          matchesFallback: true,
+          canReset: false,
+        },
+      },
+    }),
+  ).toBe(4);
+  expect(
+    getEffectiveServings({
+      servings: null,
+      yield: { value: 2.5, unit: "servings" },
+    }),
+  ).toBe(2.5);
+  expect(
+    getServingBasis({
+      servings: null,
+      yield: { value: 10, unit: "servings" },
+      fieldResolutions: {
+        servings: {
+          mode: "inherit",
+          storedValue: null,
+          value: 4,
+          fallbackValue: 4,
+          source: "Recipe yield",
+          sourceEntity: null,
+          matchesFallback: true,
+          canReset: false,
+        },
+      },
+    }),
+  ).toEqual({ divisor: 4, noun: "serving" });
+});
 
 it("recipe utils", () => {
   const recipe: RecipeOut = {

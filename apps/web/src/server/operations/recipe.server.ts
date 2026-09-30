@@ -9,7 +9,10 @@ import type {
   recipeCookbookScopeInput,
   recipeIdInput,
 } from "@cubby/schemas/recipe";
-import type { RecipeCostingExplain } from "@cubby/schemas/recipe-shared";
+import {
+  recipeServingsForRead,
+  type RecipeCostingExplain,
+} from "@cubby/schemas/recipe-shared";
 import type { makeableRecipesInput } from "@cubby/schemas/suggestions";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
@@ -438,14 +441,7 @@ export const recipeHandlers = implementOperationDomain(recipeContract, {
   patchLine: (context, input) => patchRecipeLine(context, input),
 });
 
-type RecipeServingBasis = {
-  servings?: number | null;
-  yield?: { value: number; unit: string } | null;
-};
-
-export const effectiveRecipeServings = (recipe: RecipeServingBasis) =>
-  recipe.servings ??
-  (recipe.yield?.unit === "servings" ? recipe.yield.value : null);
+export const effectiveRecipeServings = recipeServingsForRead;
 
 export const buildRecipeNutrition = (input: {
   recipe: { id: string; name: string };

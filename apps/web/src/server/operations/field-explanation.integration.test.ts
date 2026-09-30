@@ -57,12 +57,15 @@ describe("derived field explanations against canonical records", () => {
       surface: "detail",
     });
     expect(price.value).toBe(20);
-    expect(price.sources).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ value: 20 }),
-        expect.objectContaining({ value: 6 }),
-      ]),
-    );
+    expect(price.resolution).toMatchObject({
+      mode: "explicit",
+      storedValue: 20,
+      value: 20,
+      fallbackValue: 6,
+      sourceEntity: null,
+      canReset: true,
+    });
+    expect(price.sources).toEqual([]);
 
     const count = await explainField(requestContext, {
       entityKind: "product",

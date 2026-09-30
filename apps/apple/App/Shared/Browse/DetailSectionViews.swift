@@ -64,9 +64,13 @@ struct EntityHeroView<Actions: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
                 if let chip = presentation.heroChip, let field = descriptor.field(chip),
-                    let text = EntityFieldValue.text(row.raw[chip], field: field)
+                    let text = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
                 {
-                    StatusChip(text: text, tone: Self.tone(for: row.raw[chip]?.stringValue))
+                    StatusChip(
+                        text: text,
+                        tone: Self.tone(
+                            for: FieldResolutionPresentation.readValue(
+                                in: row.raw, field: field, surface: "detail")?.stringValue))
                 }
             }
             if let subtitle = row.subtitle, !subtitle.isEmpty {
@@ -109,7 +113,7 @@ struct EntityHeroView<Actions: View>: View {
     private var heroStats: [(label: String, value: String, field: FieldDescriptor)] {
         presentation.heroStats.compactMap { key in
             guard let field = descriptor.field(key),
-                let value = EntityFieldValue.text(row.raw[key], field: field)
+                let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
             else { return nil }
             return (field.label, value, field)
         }
@@ -154,12 +158,36 @@ struct FieldsSectionView<Inline: View>: View {
     let keys: [String]
     var inlineFieldKey: String? = nil
     @ViewBuilder let inline: Inline
+    @Environment(AppModel.self) private var appModel
+    @State private var resetReview: ResetReview?
+
+    private struct ResetReview: Identifiable {
+        let field: String
+        var id: String { field }
+    }
 
     var body: some View {
         let rows = rows
         ForEach(rows, id: \.key) { field in
             fieldRow(field)
+            if let resolved = FieldResolutionPresentation(raw: row.raw, field: field) {
+                EntityFieldResolutionLabel(resolved: resolved)
+                if resolved.resetPayload(field: field) != nil, descriptor.key.nativeActions.contains(.update)
+                {
+                    Button("Review reset: \(resolved.resetLabel.lowercased())") {
+                        resetReview = ResetReview(field: field.key)
+                    }
+                }
+            }
             if field.key == inlineFieldKey { inline }
+        }
+        .sheet(item: $resetReview) { review in
+            EntityEditorSheet(
+                key: descriptor.key, mode: .update(id: row.id), original: row.raw,
+                resolutionResetField: review.field,
+                onSaved: { _ in
+                    appModel.recordEntityMutation(keys: [descriptor.key])
+                })
         }
         if rows.isEmpty { Text("Nothing recorded").foregroundStyle(.secondary) }
     }
@@ -177,7 +205,10 @@ struct FieldsSectionView<Inline: View>: View {
             if EntityFieldValue.reference(in: row.raw, field: field) != nil {
                 return field
             }
-            guard EntityFieldValue.text(row.raw[key], field: field) != nil else { return nil }
+            guard
+                EntityFieldValue.text(in: row.raw, field: field, surface: "detail") != nil
+                    || FieldResolutionPresentation(raw: row.raw, field: field) != nil
+            else { return nil }
             return field
         }
     }
@@ -199,7 +230,9 @@ struct FieldsSectionView<Inline: View>: View {
                         subject: EntityRef(entity: descriptor.key, id: row.id))
                 }
             }
-        } else if let value = EntityFieldValue.text(row.raw[field.key], field: field) {
+        } else if let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
+            ?? (FieldResolutionPresentation(raw: row.raw, field: field) == nil ? nil : "None")
+        {
             LabeledContent {
                 Text(value)
                     .font(field.kind == .identifier ? .fieldGuideCode : .fieldGuideBody)

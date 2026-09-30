@@ -105,4 +105,40 @@ struct FieldSuggestionReviewModelTests {
         await #expect(throws: CancellationError.self) { try await stale.apply("spendingCategoryId") }
         #expect(stale.proposal("spendingCategoryId") == nil)
     }
+
+    @Test func requestCarriesDeclaredLinkValueAlongsideChangedOrClearedIntent() async throws {
+        let response = try response(finance: false)
+        var masks: [[String]] = []
+        let cases: [(stored: JSONValue, draft: JSONValue)] = [
+            (.null, .null), (.string("PUR-4K7M"), .null), (.null, .string("PUR-8K7M")),
+        ]
+        for purchase in cases {
+            let editor = GenericEntityEditModel(
+                descriptor: EntityCatalog[.financialTransaction], mode: .update(id: "FTX-4K7M"),
+                client: CubbyClient(
+                    baseURL: URL(string: "http://localhost:3000")!,
+                    credentials: CredentialProvider(
+                        host: "localhost:3000", store: InMemorySessionTokenStore())),
+                original: [
+                    "purchaseId": purchase.stored, "evidenceExpectation": .null, "notes": "Saved note",
+                ])
+            editor.draft["purchaseId"] = purchase.draft
+            let review = FieldSuggestionReviewModel(
+                editor: editor,
+                fetch: { input in
+                    let encoded = try #require(input.basis.additionalProperties["__draftFields"] ?? nil)
+                    masks.append(try JSONDecoder().decode([String].self, from: Data(encoded.utf8)))
+                    #expect(input.basis.additionalProperties.keys.contains("purchaseId"))
+                    let basisPurchase = input.basis.additionalProperties["purchaseId"] ?? nil
+                    #expect(basisPurchase == purchase.draft.stringValue)
+                    return response
+                },
+                saveCategory: { _ in throw CancellationError() })
+            try await review.request()
+            #expect(review.proposal("evidenceExpectation") != nil)
+            editor.draft["purchaseId"] = .string("PUR-9K7M")
+            #expect(review.proposal("evidenceExpectation") == nil)
+        }
+        #expect(masks == [[], ["purchaseId"], ["purchaseId"]])
+    }
 }

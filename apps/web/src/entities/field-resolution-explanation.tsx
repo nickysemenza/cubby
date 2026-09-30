@@ -85,7 +85,14 @@ function InEffectRow({
   if (resolution.mode === "allocated") {
     return (
       <span className="flex min-w-0 flex-wrap items-center gap-1 break-words">
-        <span className="break-words">Allocated across the purchase</span>
+        <ResolutionValue
+          entity={entity}
+          field={field}
+          value={resolution.value}
+        />
+        <span className="break-words text-muted-foreground">
+          · {sentenceCase(resolution.source)}
+        </span>
         {resolution.sourceEntity ? (
           <ExplanationEntityLink
             entity={resolution.sourceEntity.entityKind}
@@ -159,6 +166,20 @@ export function ResolutionExplanation({
             ) : null}
           </span>
         ),
+    });
+  } else if (
+    resolution.mode === "allocated" &&
+    resolution.storedValue !== null
+  ) {
+    rows.push({
+      label: `Stored on this ${noun}`,
+      content: (
+        <ResolutionValue
+          entity={entity}
+          field={field}
+          value={resolution.storedValue}
+        />
+      ),
     });
   } else if (resolution.mode === "inherit") {
     const linkedNoun = resolution.sourceEntity

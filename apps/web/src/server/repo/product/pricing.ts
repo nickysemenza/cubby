@@ -1,3 +1,4 @@
+import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import {
   type IngredientId,
   type ProductId,
@@ -95,6 +96,28 @@ export const resolveProductPricing = (
       aggregate.knownExpenseCount > 0 && aggregate.unknownExpenseCount > 0,
   };
 };
+
+/** Preserve assignment intent while reusing the canonical rounded price rule. */
+export const resolveProductPriceField = (
+  storedPrice: number | null,
+  pricing: ProductPricing,
+): FieldResolution => ({
+  mode: storedPrice !== null ? "explicit" : "inherit",
+  storedValue: storedPrice,
+  value: pricing.effectivePrice,
+  fallbackValue: pricing.derivedPrice,
+  source:
+    storedPrice !== null
+      ? "manual valuation price"
+      : pricing.derivedPrice !== null
+        ? "expense-derived unit price"
+        : "no valuation price",
+  // The fallback aggregates live Expense history, including kit shares; it
+  // cannot honestly point at one Expense or Purchase as its source record.
+  sourceEntity: null,
+  matchesFallback: storedPrice !== null && storedPrice === pricing.derivedPrice,
+  canReset: storedPrice !== null,
+});
 
 /**
  * This product's OWN acquisition rows: all-history, live, actual, positive,

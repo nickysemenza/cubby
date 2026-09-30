@@ -3,6 +3,7 @@ import {
   financialTransactionKind,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
+import { evidenceExpectation } from "@cubby/schemas/purchase-evidence-policy";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
@@ -25,6 +26,7 @@ import { financialTransaction } from "~/integrations/tanstack-query/generated/ca
 
 const AccountSearch = referenceEntitySearch("financialAccount");
 const PurchaseSearch = referenceEntitySearch("purchase");
+const SpendingCategorySearch = referenceEntitySearch("spendingCategory");
 
 const financialTransactionSourceRefsField = requiredFieldModel(
   "financialTransaction",
@@ -35,6 +37,8 @@ export const financialTransactionFormSchema = z
   .object({
     accountId: z.string().min(1, "Account shortcode is required"),
     purchaseId: z.string(),
+    spendingCategoryId: z.string().nullable(),
+    evidenceExpectation: evidenceExpectation.nullable(),
     kind: financialTransactionKind,
     status: financialTransactionStatus,
     amount: z
@@ -67,6 +71,8 @@ export type FinancialTransactionFormValues = z.infer<
 export const emptyFinancialTransactionForm: FinancialTransactionFormValues = {
   accountId: "",
   purchaseId: "",
+  spendingCategoryId: null,
+  evidenceExpectation: null,
   kind: "purchase",
   status: "pending",
   amount: 0,
@@ -84,6 +90,7 @@ export const normalizeFinancialTransactionForm = (
 ) => ({
   ...values,
   purchaseId: values.purchaseId.trim() || null,
+  spendingCategoryId: values.spendingCategoryId?.trim() || null,
   transactionDate: values.transactionDate || null,
   postedDate: values.postedDate || null,
   merchant: values.merchant?.trim() || null,
@@ -181,6 +188,16 @@ export function FinancialTransactionFormFields({
           clearable
         />
       </Stack>
+      <EntityValueField
+        form={form}
+        name="spendingCategoryId"
+        suggestField="spendingCategoryId"
+        entity="spendingCategory"
+        label="Spending category"
+        placeholder="Optional spending category"
+        SearchProvider={SpendingCategorySearch}
+        clearable
+      />
       <EntityPrimitiveFields
         entity="financialTransaction"
         mode={mode}

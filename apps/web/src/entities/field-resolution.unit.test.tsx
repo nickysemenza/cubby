@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {
+  FieldResolutionBadge,
   FieldResolutionStatus,
   resolutionIsInformative,
 } from "./field-resolution";
@@ -23,6 +24,40 @@ const base: FieldResolution = {
 };
 
 describe("field resolution indicators", () => {
+  it("keeps a server-approved clear action available when there is no inherited value", () => {
+    const harness = createBrowserTestHarness();
+    try {
+      render(
+        <FieldResolutionBadge
+          field="trade"
+          record={{
+            id: testShortcode("expense", "clear-override"),
+            fieldResolutions: {
+              trade: {
+                ...base,
+                mode: "explicit",
+                storedValue: "plumbing",
+                fallbackValue: null,
+                sourceEntity: null,
+                canReset: true,
+              },
+            },
+          }}
+        />,
+        { wrapper: harness.wrapper },
+      );
+      expect(
+        screen.getByRole("button", { name: "Clear override" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", {
+          name: "Use inherited value",
+        }),
+      ).not.toBeInTheDocument();
+    } finally {
+      harness.dispose();
+    }
+  });
   // Regression: an empty inherited value rendered "Unassigned" beside its
   // "—", and a top-level task's own project rendered "Override · Use
   // inherited value" although resetting would only clear it.
