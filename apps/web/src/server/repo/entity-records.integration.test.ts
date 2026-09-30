@@ -1,11 +1,14 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { entityRecordsInputSchema } from "~/contracts/entity-records.schema";
 import { product, run as runTable } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
-import { listEntityRecords } from "~/server/repo/entity-records";
+import {
+  buildEntityRecordsQuery,
+  listEntityRecords,
+} from "~/server/repo/entity-records";
 import {
   createLocationFixture,
   createProductFixture,
@@ -18,6 +21,36 @@ import { ensureRun } from "~/server/runs/ensure-run";
 // identity creation, deleted identities leaking, and unscored rows called 100%.
 describe("combined entity records", () => {
   const ctx = withTestDb();
+  it("evaluates default-list quality and image subplans only for the requested page", async () => {
+    for (let i = 0; i < 30; i++) {
+      await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: `Page cost product ${i}` }),
+        ctx.actor,
+      );
+    }
+    const result = await getDb(ctx.db).execute(sql`
+      EXPLAIN (ANALYZE, FORMAT JSON) ${buildEntityRecordsQuery(
+        entityRecordsInputSchema.parse({ kind: "product", pageSize: 3 }),
+      )}
+    `);
+    type Plan = {
+      "Parent Relationship"?: string;
+      "Actual Loops": number;
+      Plans?: Plan[];
+    };
+    // SAFETY: EXPLAIN (ANALYZE, FORMAT JSON) returns a plan tree with loop counts.
+    const document = result.rows[0]!["QUERY PLAN"] as { Plan: Plan }[];
+    const loops: number[] = [];
+    const visit = (plan: Plan) => {
+      if (plan["Parent Relationship"] === "SubPlan")
+        loops.push(plan["Actual Loops"]);
+      plan.Plans?.forEach(visit);
+    };
+    visit(document[0]!.Plan);
+    expect(loops.length).toBeGreaterThan(0);
+    expect(Math.max(...loops)).toBeLessThanOrEqual(3);
+  });
   it("sorts and pages one filtered roster across payload kinds", async () => {
     const location = await createLocationFixture(
       ctx.db,
@@ -40,6 +73,16 @@ describe("combined entity records", () => {
     );
     expect(first.totalCount).toBe(2);
     expect(first.items.map((row) => row.id)).toEqual([location.id]);
+    const defaultPage = await listEntityRecords(
+      ctx.db,
+      entityRecordsInputSchema.parse({}),
+    );
+    expect(defaultPage.items.map((row) => row.id)).toEqual(
+      expect.arrayContaining([location.id, item.id]),
+    );
+    expect(defaultPage.items.find((row) => row.id === item.id)?.name).toBe(
+      "Records roster Zulu",
+    );
     const second = await listEntityRecords(
       ctx.db,
       entityRecordsInputSchema.parse({
