@@ -3,16 +3,76 @@ import { createHash, X509Certificate } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:https";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  acquireMacFixtureLease,
+  assertMacFixturesIdle,
+  macFixtureBrowserBundleID,
+  macFixturePaths,
+  macFixtureSigningIdentity,
+  prepareMacFixtureApp,
+} from "./mac-fixture-identity";
 import { chromium } from "@playwright/test";
 import { z } from "zod";
+import {
+  stopOwnedMacProcess,
+  waitForOwnedMacProcess,
+  type MacProcessExpectation,
+  type OwnedMacProcess,
+} from "./mac-owned-process";
 
-/** Synthetic HTTPS retailer and uniquely addressed native Chromium, never a user browser. */
+/** Synthetic HTTPS retailer and stable fixture Chromium, never a user browser. */
 export async function createMacRetailerFixture(
   artifacts: string,
   nonce: string,
+  options?: {
+    identity: ReturnType<typeof macFixtureSigningIdentity>;
+    lease: ReturnType<typeof acquireMacFixtureLease>;
+  },
 ) {
   if (process.platform !== "darwin" || !/^[a-f\d]{16}$/u.test(nonce))
     throw new Error("Mac retailer fixture requires macOS and a fixture nonce");
+  const paths = macFixturePaths();
+  const ownsLease = !options;
+  const lease = options?.lease ?? acquireMacFixtureLease(paths.root, nonce);
+  try {
+    if (lease.nonce !== nonce || lease.root !== paths.root)
+      throw new Error("Retailer fixture requires its owning Mac run lease");
+    assertMacFixturesIdle();
+    const identity =
+      options?.identity ??
+      macFixtureSigningIdentity(
+        path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.."),
+      );
+    const fixture = await prepareRetailerFixture(artifacts, identity);
+    return {
+      bundleID: fixture.bundleID,
+      origin: fixture.origin,
+      profile: fixture.profile,
+      appPath: fixture.appPath,
+      historyURL: fixture.historyURL,
+      get pid() {
+        return fixture.pid;
+      },
+      launch: () => fixture.launch(),
+      async close() {
+        await fixture.close();
+        if (ownsLease) {
+          assertMacFixturesIdle();
+          lease.release();
+        }
+      },
+    };
+  } catch (error) {
+    if (ownsLease) lease.release();
+    throw error;
+  }
+}
+
+async function prepareRetailerFixture(
+  artifacts: string,
+  identity: ReturnType<typeof macFixtureSigningIdentity>,
+) {
   const root = path.join(artifacts, "retailer");
   mkdirSync(root, { recursive: true });
   const key = path.join(root, "tls-key.pem");
@@ -89,34 +149,23 @@ export async function createMacRetailerFixture(
     .object({ port: z.number().int().positive() })
     .parse(server.address());
   origin = `https://shop.example.test:${address.port}`;
-  const bundleID = `com.cubby.fixture.browser.${nonce}`;
-  const appPath = path.join(root, "FixtureBrowser.app");
+  const bundleID = macFixtureBrowserBundleID;
+  const appPath = macFixturePaths().browser;
   const profile = path.join(root, "profile");
   const originalExecutable = chromium.executablePath();
   const sourceApp = path.dirname(
     path.dirname(path.dirname(originalExecutable)),
   );
   let browser: ReturnType<typeof spawn> | undefined;
+  let browserExpectation: MacProcessExpectation | undefined;
+  let browserOwnership: OwnedMacProcess | undefined;
   try {
-    execFileSync("ditto", [sourceApp, appPath]);
-    const info = path.join(appPath, "Contents/Info.plist");
-    execFileSync("/usr/libexec/PlistBuddy", [
-      "-c",
-      `Set :CFBundleIdentifier ${bundleID}`,
-      info,
-    ]);
-    execFileSync(
-      "codesign",
-      [
-        "--force",
-        "--deep",
-        "--sign",
-        "-",
-        "--preserve-metadata=entitlements",
-        appPath,
-      ],
-      { stdio: "ignore" },
-    );
+    const signed = prepareMacFixtureApp({
+      source: sourceApp,
+      target: appPath,
+      bundleID,
+      identity,
+    });
     execFileSync(
       "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
       ["-f", appPath],
@@ -131,6 +180,7 @@ export async function createMacRetailerFixture(
       JSON.stringify(
         {
           bundleID,
+          signed,
           origin,
           certificateSPKI: spki,
           isolatedProfile: true,
@@ -161,46 +211,41 @@ export async function createMacRetailerFixture(
         "Contents/MacOS",
         path.basename(originalExecutable),
       );
-      browser = spawn(
-        executable,
-        [
-          `--user-data-dir=${profile}`,
-          `--ignore-certificate-errors-spki-list=${spki}`,
-          "--host-resolver-rules=MAP shop.example.test 127.0.0.1",
-          "--no-proxy-server",
-          "--use-mock-keychain",
-          "--disable-features=DialMediaRouteProvider",
-          "--no-first-run",
-          "--no-default-browser-check",
-          "about:blank",
-        ],
-        { stdio: "ignore" },
-      );
+      const args = [
+        `--user-data-dir=${profile}`,
+        `--ignore-certificate-errors-spki-list=${spki}`,
+        "--host-resolver-rules=MAP shop.example.test 127.0.0.1",
+        "--no-proxy-server",
+        "--use-mock-keychain",
+        "--disable-features=DialMediaRouteProvider",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "about:blank",
+      ];
+      browserExpectation = { executable, arguments: args };
+      browser = spawn(executable, args, { stdio: "ignore" });
       const owned = browser;
       await new Promise<void>((resolve, reject) => {
         owned.once("spawn", resolve);
         owned.once("error", reject);
       });
       if (!owned.pid) throw new Error("Fixture browser did not launch");
-      const command = execFileSync(
-        "ps",
-        ["-p", String(owned.pid), "-o", "command="],
-        { encoding: "utf8" },
-      );
-      if (
-        !command.startsWith(executable) ||
-        !command.includes(`--user-data-dir=${profile}`)
-      )
-        throw new Error("Fixture browser process/profile identity mismatch");
+      browserOwnership = await waitForOwnedMacProcess(browserExpectation);
+      if (browserOwnership.pid !== owned.pid)
+        throw new Error("Fixture browser process/profile ownership mismatch");
     },
     async close() {
-      browser?.kill("SIGTERM");
-      server.closeAllConnections();
-      writeFileSync(
-        path.join(root, "requests.json"),
-        JSON.stringify(requests, null, 2) + "\n",
-      );
-      await new Promise<void>((resolve) => server.close(() => resolve()));
+      try {
+        if (browserExpectation)
+          await stopOwnedMacProcess(browserExpectation, browserOwnership);
+      } finally {
+        server.closeAllConnections();
+        writeFileSync(
+          path.join(root, "requests.json"),
+          JSON.stringify(requests, null, 2) + "\n",
+        );
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      }
     },
   };
 }

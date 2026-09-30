@@ -19,6 +19,12 @@ struct CubbyApp: App {
         #if DEBUG
             let e2eURL = Self.e2eServerURL
             let serverURL = e2eURL ?? Self.devServerURL
+            #if os(macOS)
+                if Self.isMacImportFixture, let bundleID = Bundle.main.bundleIdentifier {
+                    // Stable signing retains OS permissions; fixture preferences still start fresh.
+                    UserDefaults.standard.removePersistentDomain(forName: bundleID)
+                }
+            #endif
             if e2eURL != nil {
                 // A fixture install stays a plain viewer without presenting the
                 // first-install companion-work decision over the E2E flow.
@@ -32,7 +38,12 @@ struct CubbyApp: App {
         #if DEBUG
             let model =
                 serverURL.map {
-                    AppModel(
+                    #if os(macOS)
+                        if Self.isMacImportFixture {
+                            return AppModel(store: InMemorySessionTokenStore(), baseURL: $0)
+                        }
+                    #endif
+                    return AppModel(
                         store: FileSessionTokenStore(
                             fileURL: URL.applicationSupportDirectory.appending(
                                 path: e2eURL == nil
@@ -146,6 +157,13 @@ struct CubbyApp: App {
         private static var e2eServerURL: URL? {
             serverURL(argument: "--cubby-e2e-server")
         }
+
+        #if os(macOS)
+            static var isMacImportFixture: Bool {
+                Bundle.main.bundleIdentifier == "com.nickysemenza.cubby.e2e"
+                    && e2eServerURL != nil
+            }
+        #endif
 
         private static var devServerURL: URL? {
             let key = "cubby.devServerURL"

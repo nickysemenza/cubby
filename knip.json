@@ -89,6 +89,7 @@
         "magick",
         "apple",
         "openssl",
+        "security",
         "ditto",
         "osascript",
         "screencapture"

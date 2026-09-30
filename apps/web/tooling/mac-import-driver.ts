@@ -160,10 +160,22 @@ export class MacImportDriver {
       data.nodes.some(
         (node) => node.bundleId && node.bundleId !== this.bundleID,
       )
-    )
+    ) {
+      this.record(
+        ["snapshot-ownership"],
+        1,
+        JSON.stringify({
+          nodeCount: data.nodes.length,
+          expectedBundle: this.bundleID,
+          observedBundles: [
+            ...new Set(data.nodes.map((node) => node.bundleId).filter(Boolean)),
+          ],
+        }),
+      );
       throw new Error(
         "Native AX snapshot did not belong exclusively to the owned fixture",
       );
+    }
     this.nodes = data.nodes;
     this.generation++;
     return this.nodes
@@ -403,11 +415,11 @@ export class MacImportDriver {
   }
   async open(bundleID: string, expectedPID: number): Promise<string> {
     if (
-      !/^(?:com\.nickysemenza\.cubby\.e2e|com\.cubby\.fixture\.browser)\.[a-f\d]{16}$/.test(
+      !/^(?:com\.nickysemenza\.cubby\.e2e|com\.cubby\.fixture\.browser)(?:\.[a-f\d]{16})?$/.test(
         bundleID,
       )
     )
-      throw new Error("Native driver requires a unique fixture bundle");
+      throw new Error("Native driver requires an isolated fixture bundle");
     if (!Number.isInteger(expectedPID) || expectedPID <= 0)
       throw new Error("Native driver requires a verified fixture PID");
     this.pid = expectedPID;
@@ -547,10 +559,9 @@ export class MacImportDriver {
   }
   async close(): Promise<void> {
     if (!this.bundleID) return;
-    this.invoke(
-      ["app", "quit", "--bundle-id", this.bundleID],
-      z.object({}).passthrough(),
-    );
-    this.record(["close", this.bundleID], 0, "Owned fixture closed");
+    // The launch owner terminates its verified PID and waits for exit before releasing the host lease.
+    this.record(["detach", this.bundleID], 0, "Fixture UI adapter detached");
+    this.bundleID = undefined;
+    this.pid = undefined;
   }
 }
