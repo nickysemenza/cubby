@@ -559,10 +559,9 @@ export class MacImportDriver {
   }
   async close(): Promise<void> {
     if (!this.bundleID) return;
-    this.invoke(
-      ["app", "quit", "--bundle-id", this.bundleID],
-      z.object({}).passthrough(),
-    );
-    this.record(["close", this.bundleID], 0, "Owned fixture closed");
+    // The launch owner terminates its verified PID and waits for exit before releasing the host lease.
+    this.record(["detach", this.bundleID], 0, "Fixture UI adapter detached");
+    this.bundleID = undefined;
+    this.pid = undefined;
   }
 }

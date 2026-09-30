@@ -283,8 +283,10 @@ export function prepareMacFixtureApp(input: {
             "[configured Developer ID]",
           )
         : "Unknown codesign failure";
+    // The original child-process error embeds the local certificate selector in its command and args.
+    // eslint-disable-next-line preserve-caught-error
     throw new Error(`Apple-issued fixture signing failed: ${message}`, {
-      cause: error,
+      cause: new Error(message),
     });
   }
   const signature = fixtureSignature(
