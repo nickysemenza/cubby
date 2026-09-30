@@ -513,6 +513,18 @@ export const fieldSuggestionsOut = z.object({
 });
 export type FieldSuggestionsOut = z.infer<typeof fieldSuggestionsOut>;
 
+/** Swift keeps nullable object properties, but drops nullable dictionary values. */
+export const fieldSuggestionsReviewOut = fieldSuggestionsOut
+  .omit({ suggestions: true })
+  .extend({
+    suggestions: z.array(
+      z.object({
+        field: z.string(),
+        suggestion: fieldSuggestionSchema.nullable(),
+      }),
+    ),
+  });
+
 /** JSON-safe provider runtime details, independent of any feature result schema. */
 export type AiAnalysisRuntime = Record<
   string,

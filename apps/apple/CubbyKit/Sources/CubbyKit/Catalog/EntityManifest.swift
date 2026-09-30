@@ -231,6 +231,11 @@ public struct FieldExplanation: Codable, Sendable {
     public let actions: [String]
 }
 
+public struct FieldSuggestionDescriptor: Codable, Sendable {
+    public let basis: [String]
+    public let mode: String?
+}
+
 public struct FieldDescriptor: Codable, Sendable {
     public let key: String
     /// The list/relation column id this source field supplies, when renamed.
@@ -250,6 +255,8 @@ public struct FieldDescriptor: Codable, Sendable {
     public let controlWidth: String?
     /// A select control's choices; nil for every other control.
     public let controlOptions: [LabeledOption]?
+    /// Shared declaration eligibility and evidence keys; the server owns inference.
+    public let suggestion: FieldSuggestionDescriptor?
     public let placeholder: String?
     /// `today` seeds a date control on create.
     public let initial: String?

@@ -160,6 +160,17 @@ public final class GenericEntityEditModel {
         editedKeys.contains(key)
     }
 
+    /// A reviewed command saved one field independently of the editor's remaining draft.
+    /// Advance only its diff base; a newer local choice must remain dirty against that base.
+    public func acknowledgeSavedField(
+        _ key: String, value: JSONValue, reviewedDraftValue: JSONValue
+    ) {
+        guard case .update = mode, var saved = original?.objectValue else { return }
+        saved[key] = value
+        original = .object(saved)
+        if (draft[key] ?? .null) == reviewedDraftValue { draft[key] = value }
+    }
+
     // MARK: - Body
 
     public var hasImageChanges: Bool {

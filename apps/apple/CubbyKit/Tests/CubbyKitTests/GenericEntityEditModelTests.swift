@@ -88,6 +88,32 @@ struct GenericEntityEditModelTests {
         "attachments": [["id": "IMG-2345"], ["id": "IMG-3456"], ["id": "IMG-4567"]],
     ]
 
+    @Test func acknowledgingSavedCategoryPreservesNewerDraftAndSiblingChanges() throws {
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"),
+            client: try makeClient(), original: ["spendingCategoryId": .null, "notes": "Saved note"])
+        model.draft["notes"] = .string("Unsaved sibling")
+        model.draft["spendingCategoryId"] = .string("SPC-8K7M")
+        model.acknowledgeSavedField(
+            "spendingCategoryId", value: .string("SPC-4K7M"), reviewedDraftValue: .null)
+        #expect(model.original?["spendingCategoryId"] == .string("SPC-4K7M"))
+        #expect(model.draft["spendingCategoryId"] == .string("SPC-8K7M"))
+        #expect(try model.patch().values["spendingCategoryId"] == .string("SPC-8K7M"))
+        #expect(try model.patch().values["notes"] == .string("Unsaved sibling"))
+    }
+
+    @Test func acknowledgedCategoryDoesNotReplayOnLaterSiblingSave() throws {
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"),
+            client: try makeClient(), original: ["spendingCategoryId": .null, "notes": "Saved note"])
+        model.draft["notes"] = .string("Unsaved sibling")
+        model.acknowledgeSavedField(
+            "spendingCategoryId", value: .string("SPC-4K7M"), reviewedDraftValue: .null)
+        #expect(model.draft["spendingCategoryId"] == .string("SPC-4K7M"))
+        #expect(try model.patch().values["spendingCategoryId"] == nil)
+        #expect(try model.patch().values["notes"] == .string("Unsaved sibling"))
+    }
+
     @Test func updateSendsExactlyTheChangedAndClearedKeys() async throws {
         defer { EditStub.handler.withLock { $0 = nil } }
         let seen = capture { _ in (200, Self.productUpdated) }

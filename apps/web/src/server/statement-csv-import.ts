@@ -19,6 +19,7 @@ import {
   statementCsvHeaders,
 } from "~/app/finance/statement-csv";
 import type { Database } from "~/server/db";
+import { createAppError } from "~/server/errors/app-error";
 import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
 import { createFinancialTransaction } from "~/server/repo/financial-transaction";
 import {
@@ -91,18 +92,23 @@ function validateDecisions(
 ) {
   const selected = new Map(decisions.map((row) => [row.key, row]));
   if (selected.size !== decisions.length)
-    throw new Error("A statement row was selected more than once.");
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A statement row was selected more than once.",
+    );
   const attachTargets = decisions.flatMap((row) =>
     row.transactionId ? [row.transactionId] : [],
   );
   if (new Set(attachTargets).size !== attachTargets.length)
-    throw new Error(
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
       "Two occurrences in one file cannot attach to the same transaction. Review each purchase separately.",
     );
   for (const key of selected.keys()) {
     const row = previewRows.find((candidate) => candidate.key === key);
     if (!row)
-      throw new Error(
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
         `Statement row ${key} is unavailable for transaction creation.`,
       );
     const decision = selected.get(key)!;
@@ -112,16 +118,23 @@ function validateDecisions(
         (row.status !== "possible_existing" &&
           row.status !== "already_recorded")
       )
-        throw new Error(
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
           `Statement row ${key} needs review: selected transaction is unavailable.`,
         );
     } else if (
       row.status !== "ready_to_create" &&
       row.status !== "already_recorded"
     ) {
-      throw new Error(`Statement row ${key} needs review: ${row.status}.`);
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Statement row ${key} needs review: ${row.status}.`,
+      );
     } else if (row.status === "ready_to_create" && !decision.kind) {
-      throw new Error(`Choose a transaction kind for statement row ${key}.`);
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Choose a transaction kind for statement row ${key}.`,
+      );
     }
   }
   return selected;

@@ -12,6 +12,15 @@ receipt, reviewed itemization, Product resolution, and Expense booking have
 separate coverage. Optional paperwork contributes no missing-evidence penalty.
 Gift and previously-owned Product provenance needs no purchase proof.
 
+Category policies apply to the assigned category, without inheriting a parent
+policy. An explicit `unknown` Purchase or transaction override also stops
+fallback. Reviewed reimbursement purpose can support the original spending
+category; a payment provider name or credit direction alone cannot. Suggestions
+use saved linked Purchases, signed Expense lines, and Products, and remain
+proposals until reviewed. Native editors request the same backend inference:
+policy and create-form choices change the draft; saved finance categories use
+the audited atomic Apply command and preserve other unsaved edits.
+
 Vendor paperwork excludes reimbursement Expenses; net spend includes their
 signed costs. Booking a vendor refund checks negative principal Expenses and
 prior vendor settlements. Discounts cannot be reused as refund evidence.
@@ -44,6 +53,13 @@ deterministic. It asserts the final Product, inventory ownership, Expense,
 Purchase allocation, and original source edges; it does not seed the economic
 graph or repair it at the end.
 
+`pnpm test:e2e:sim -- --headless --statement-csv` drives a real Swift CLI
+file through shared OpenAPI preview and reviewed commit. It checks read-only
+preview, repeated physical rows, exact replay, changed-byte refusal, ambiguous
+settlement-date attachment, and no implicit Expense or Inventory writes. The
+CLI is a loopback test harness; native UI acceptance still exercises file
+selection, presentation, and approval.
+
 `finance-evidence-journey.spec.ts` covers reviewed spending, reimbursements,
 corrections, transfer conversion, and refusal after edits.
 `financial-booking-review.spec.ts` drives browser review, stale refusal, exact
@@ -68,3 +84,26 @@ unset. Existing Products retain unknown acquisition origin. Neither old bank
 transactions nor old Expenses are automatically reclassified or booked.
 The PR requires production migration and schema readback before merge under
 [validation policy](agents/validation.md); deployment does not apply migrations.
+
+## Reviewed policy rollout
+
+`apps/web/tooling/review-evidence-policies.ts` accepts an explicit reviewed JSON
+array of Vendor or SpendingCategory identities, exact current names, and
+`evidenceExpectation` or category `productExpectation` decisions. It never
+classifies merchant names or replaces an existing required/not-expected choice.
+Run with `--target=dev|production --policy-file=<private-reviewed-file.json>`;
+preview is read-only. Provide the fingerprint via `--apply=<fingerprint>` to
+commit an unchanged plan through normal audited entity writes.
+
+Set `EVIDENCE_POLICY_ROLLOUT_DEV_DATABASE_URL` for a loopback database, or
+`PRODUCTION_DIRECT_DATABASE_URL` for the verified direct production endpoint.
+Apply requires the real `EVIDENCE_POLICY_ROLLOUT_ACTOR_USER_ID`. Ambient
+`DATABASE_URL` is never used to choose the target. Keep real reviewed files
+outside repository content and published artifacts.
+
+The preview uses canonical coverage calculations to report effective
+transitions, higher-precedence overrides, and unreviewed child categories. Its
+fingerprint includes live identities and the evidence graph. Apply is atomic,
+refuses a stale preview, and returns the reviewed forecast. Verify actual
+policies, coverage, and quality through a fresh post-commit read; ambiguous
+merchant identities and unreviewed exceptions remain unresolved.

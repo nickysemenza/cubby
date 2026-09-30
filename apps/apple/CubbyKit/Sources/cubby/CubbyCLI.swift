@@ -9,6 +9,7 @@ struct CubbyCLI: AsyncParsableCommand {
         subcommands: [
             Version.self, Auth.self, Call.self, Entity.self, Scan.self, Search.self, Parse.self,
             Photo.self, HeadlessProductEdit.self, HeadlessPhotoImport.self,
+            HeadlessStatementCsvImport.self,
         ]
     )
 }

@@ -1,4 +1,7 @@
-import type { enrichmentProposalPrecomputeInput } from "@cubby/schemas/ai";
+import type {
+  FieldSuggestionsInput,
+  enrichmentProposalPrecomputeInput,
+} from "@cubby/schemas/ai";
 import {
   parseEntityId,
   type IngredientId,
@@ -199,6 +202,16 @@ export const backfillLocationDescriptionsWorkflow = bindCoordinatorStream(
   }),
 );
 /** AI reads are authoritative: suggestions must see the row just written. */
+const suggestionsForContext = async (
+  context: AuthenticatedStartOperationContext,
+  input: FieldSuggestionsInput,
+) =>
+  suggestFields(
+    context.db,
+    await actorAiRun(context, { runKey: input.runKey }),
+    input,
+  );
+
 export const aiHandlers = implementOperationDomain(aiContract, {
   describeLocation: async (context, input) => {
     const runId = await actorAiRun(context);
@@ -281,15 +294,21 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   },
   applyFinanceCategorySuggestion: (context, input) =>
     applyFinanceCategorySuggestion(context, input),
-  suggestFields: async (context, input) =>
-    // A page's own `runKey` groups every target it asks about into one
-    // `ai_suggest` run; no `runKey` (an older client, a one-off caller)
-    // shares the actor's run for the hour.
-    suggestFields(
-      context.db,
-      await actorAiRun(context, { runKey: input.runKey }),
+  // Both presentations share the page run grouping and authoritative inference.
+  suggestFields: suggestionsForContext,
+  suggestFieldsReview: async (context, input) => {
+    const { suggestions, ...contextual } = await suggestionsForContext(
+      context,
       input,
-    ),
+    );
+    return {
+      ...contextual,
+      suggestions: Object.entries(suggestions).map(([field, suggestion]) => ({
+        field,
+        suggestion,
+      })),
+    };
+  },
   suggestExternalIdKind: async (context, input) =>
     suggestExternalIdKind(input, {
       db: context.db,
