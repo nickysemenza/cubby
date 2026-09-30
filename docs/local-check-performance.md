@@ -78,6 +78,19 @@ or weakened to obtain these results.
 The historical setup and cache experiments are preserved in Git history. The
 retained boundaries are:
 
+- pnpm imports package contents from its content-addressable store using
+  hardlinks or filesystem clones. A per-project `node_modules` can report
+  gigabytes without consuming that much additional space. The global virtual
+  store shares dependency graphs as well, leaving each checkout with symlinks
+  to those graphs instead of a local `.pnpm` tree. Published type declarations
+  must declare their type dependencies to work in that layout; dependencies
+  available only through project-local hoisting need narrow package extensions.
+  Measure reclaimed space using the filesystem's available space before and
+  after cleanup, rather than adding up worktree `node_modules` sizes.
+  The shared virtual store remains disabled: a pnpm 12.4.1 compatibility check
+  found that `@phosphor-icons/react` cannot resolve `@types/react` from its
+  published declarations in that layout. Enabling it requires an explicit type
+  dependency through a package extension and the corresponding lockfile update.
 - Nx targets own checks and their declared inputs. The repository-wide static
   checks exclude Markdown and other files those tools do not inspect; Markdown
   changes receive their own link/format validation. The validation policy in
