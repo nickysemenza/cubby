@@ -36,6 +36,7 @@ import {
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { type ListPage, listScaffold } from "~/server/repo/list";
 import {
+  listGroupFields,
   loadListGroup,
   wantsListGroup,
   type ListProjection,
@@ -510,7 +511,11 @@ const selectExpensePage = (
   const declared = relations.expense.withProject.with;
   return getDb(db).query.expense.findMany({
     ...page,
-    extras: expenseInheritanceReadExtras(),
+    extras: listGroupFields(
+      projection,
+      ["relations", "derived"],
+      expenseInheritanceReadExtras,
+    ),
     with: {
       project: references || derived ? declared.project : undefined,
       product: references ? declared.product : undefined,
