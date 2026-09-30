@@ -17,25 +17,61 @@ import { readDatabaseFreshness } from "~/server/database-freshness/client";
 import type { Database } from "~/server/db";
 import { boundedStaleDb, db } from "~/server/db";
 import { device } from "~/server/db/schema";
+import { deferredService } from "~/server/deferred-service";
 import { createAppError } from "~/server/errors/app-error";
 import {
   decideReadConsistency,
   type ReadConsistencyDecision,
 } from "~/server/read-consistency";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { currentMemberLedgerParty } from "~/server/repo/member-login";
-import {
-  findProductsByFoodIdentifier,
-  getFoodLookupsForLinkedProducts,
-} from "~/server/repo/product";
-import {
-  countProductsByFoodIdentifiers,
-  findProductsByFoodIdentifiers,
-} from "~/server/repo/product/lookup";
-import { AvailabilityService } from "~/server/services/availability.service";
-import { RecipeCostingService } from "~/server/services/recipe-costing.service";
-import { USDAService } from "~/server/services/usda.service";
+import { currentMemberLedgerParty } from "~/server/repo/current-member-party";
+import { getDb } from "~/server/repo/database-helpers/core";
+import { notDeleted } from "~/server/repo/database-helpers/query";
+import type { AvailabilityService } from "~/server/services/availability.service";
+import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
+import type { USDAService } from "~/server/services/usda.service";
 import type { RequestOrigin } from "~/server/workload";
+
+const deferredRecipeCosting = (
+  load: () => Promise<RecipeCostingService>,
+  database: Database,
+): RecipeCostingService =>
+  deferredService(load, (loaded) => ({
+    database,
+    bindTo: (selected, publish) =>
+      deferredRecipeCosting(
+        async () => (await loaded()).bindTo(selected, publish),
+        selected,
+      ),
+  }));
+
+const deferredRequestServices = (
+  database: Database,
+  usdaClient: USDAClient,
+) => {
+  let pending:
+    | Promise<import("./request-services").RequestServices>
+    | undefined;
+  const loaded = () =>
+    (pending ??= import("./request-services").then((module) =>
+      module.buildRequestServices(database, usdaClient),
+    ));
+  return {
+    usdaService: deferredService<USDAService>(
+      async () => (await loaded()).usdaService,
+      () => ({}),
+    ),
+    services: {
+      availability: deferredService<AvailabilityService>(
+        async () => (await loaded()).services.availability,
+        () => ({}),
+      ),
+      recipeCosting: deferredRecipeCosting(
+        async () => (await loaded()).services.recipeCosting,
+        database,
+      ),
+    },
+  };
+};
 
 export const buildCrudServices = (
   database: Database,
@@ -49,25 +85,13 @@ export const buildCrudServices = (
     opts?.usdaFetcher ?? getBindingFetcher("USDA_API"),
   );
   const upcLookupClient = createUpcLookupClient();
-  const usdaService = new USDAService(
-    usdaClient,
-    async (lookup) => await findProductsByFoodIdentifier(database, lookup),
-    async () => await getFoodLookupsForLinkedProducts(database),
-    async (lookups) => await findProductsByFoodIdentifiers(database, lookups),
-    async (lookups) => await countProductsByFoodIdentifiers(database, lookups),
-  );
-  const services = {
-    availability: new AvailabilityService(database, usdaClient),
-    recipeCosting: new RecipeCostingService(database, usdaClient),
-  };
 
   return {
     db: database,
     notionClient,
     usdaClient,
     upcLookupClient,
-    usdaService,
-    services,
+    ...deferredRequestServices(database, usdaClient),
   };
 };
 
@@ -102,7 +126,7 @@ async function resolveRequestDevice(
   return row?.id ?? null;
 }
 
-export type { CurrentParty } from "~/server/repo/member-login";
+export type { CurrentParty } from "~/server/repo/current-member-party";
 
 /** Resolve the authenticated member's claimed ledger party at use time. */
 export const currentParty = (database: Database, authenticatedUserId: UserId) =>
@@ -213,7 +237,8 @@ export async function selectOperationContext<
     readConsistency,
     services: {
       ...context.services,
-      availability: new AvailabilityService(selected, context.usdaClient),
+      availability: deferredRequestServices(selected, context.usdaClient)
+        .services.availability,
     },
   };
 }
