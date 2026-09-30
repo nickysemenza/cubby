@@ -22,7 +22,17 @@ import {
   generatedEntityRelationListOutputSchema,
 } from "~/entities/generated/entity-relation-lists.gen";
 
+import {
+  entityRecordsInputSchema,
+  entityRecordsOutputSchema,
+} from "./entity-records.schema";
+
 export const entityGraphContract = defineContract("entity", {
+  records: query({
+    input: entityRecordsInputSchema,
+    output: entityRecordsOutputSchema,
+    cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
+  }),
   connectedRecords: query({
     native: "Complete connection tables with record path evidence",
     input: connectedRecordsInputSchema,

@@ -7,15 +7,20 @@ import {
 } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { lazy, Suspense, useMemo } from "react";
+import { lazy, Suspense, useMemo, useCallback } from "react";
 import { z } from "zod";
 
 import { EntityIntegrityTab } from "~/app/_components/entities/EntityIntegrityTab";
 import { EntityManifestGrid } from "~/app/_components/entities/EntityManifestGrid";
+import { EntityRecordsTab } from "~/app/_components/entities/EntityRecordsTab";
 import { CookbookSelect } from "~/app/_components/recipe/cookbook-select";
 import { EntityGraphPicker } from "~/app/_components/relationships/entity-graph-picker";
 import { EntityRelations } from "~/app/_components/relationships/entity-relations";
 import type { GraphFilters } from "~/app/_components/visualizations/dependency-graph-model";
+import {
+  entityRecordsInputSchema,
+  type EntityRecordsInput,
+} from "~/contracts/entity-records.schema";
 const RecipeDependencyGraph = lazy(() =>
   import("~/app/_components/visualizations/recipe-dependency-graph").then(
     (module) => ({ default: module.RecipeDependencyGraph }),
@@ -32,7 +37,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useTabParam } from "~/hooks/useTabParam";
 import { pageTitle } from "~/lib/page-title";
 
-const tabSchema = z.enum(["recipes", "work", "schema", "integrity", "explore"]);
+const tabSchema = z.enum([
+  "records",
+  "recipes",
+  "work",
+  "schema",
+  "integrity",
+  "explore",
+]);
 const graphRefSearchSchema = z.string().refine((value) => {
   const separator = value.indexOf(":");
   if (separator < 1) return false;
@@ -41,6 +53,8 @@ const graphRefSearchSchema = z.string().refine((value) => {
   return entity.success && shortcode?.type === entity.data;
 });
 const searchSchema = z.object({
+  ...entityRecordsInputSchema.omit({ direction: true }).partial().shape,
+  recordsDirection: z.enum(["asc", "desc"]).optional(),
   // Active tab, deep-linkable. Default ("schema") is omitted from the URL —
   // it preserves the pre-merge /entities content (and its zero-query cost);
   // the recipe graph is opt-in via ?tab=recipes (the recipes-list Graph button).
@@ -103,6 +117,26 @@ export const Route = createFileRoute("/_authenticated/entities")({
 function EntitiesRoute() {
   const { tab, entity } = Route.useSearch();
   const navigate = useNavigate();
+  const rawSearch = Route.useSearch();
+  const recordsSearch = entityRecordsInputSchema.parse({
+    ...rawSearch,
+    direction: rawSearch.recordsDirection,
+  });
+  const changeRecordsSearch = useCallback(
+    (patch: Partial<EntityRecordsInput>) => {
+      const { direction, ...filters } = patch;
+      void navigate({
+        to: "/entities",
+        search: (previous) => ({
+          ...searchSchema.parse(previous),
+          ...filters,
+          recordsDirection: direction ?? previous.recordsDirection,
+          tab: "records",
+        }),
+      });
+    },
+    [navigate],
+  );
 
   const tabs = useTabParam(tab, "schema", tabSchema, (next) =>
     navigate({
@@ -123,12 +157,21 @@ function EntitiesRoute() {
           variant="line"
           className="h-auto max-w-full flex-wrap justify-start gap-2 [&>[data-slot=tabs-trigger]]:flex-none"
         >
+          <TabsTrigger value="records">Records</TabsTrigger>
           <TabsTrigger value="explore">Explore records</TabsTrigger>
           <TabsTrigger value="schema">Schema</TabsTrigger>
           <TabsTrigger value="integrity">Integrity</TabsTrigger>
           <TabsTrigger value="work">Projects &amp; tasks</TabsTrigger>
           <TabsTrigger value="recipes">Recipe graph</TabsTrigger>
         </TabsList>
+        <TabsContent value="records">
+          {tabs.value === "records" && (
+            <EntityRecordsTab
+              search={recordsSearch}
+              onChange={changeRecordsSearch}
+            />
+          )}
+        </TabsContent>
         <TabsContent value="explore">
           <CrossEntityTab />
         </TabsContent>
