@@ -155,8 +155,9 @@ export class MacImportDriver {
       ],
       z.object({ nodes: z.array(nodeSchema) }),
     );
+    // A newly launched SwiftUI window can publish its AX tree after activation.
+    // Empty snapshots are readiness observations; foreign nodes still fail closed.
     if (
-      !data.nodes.length ||
       data.nodes.some(
         (node) => node.bundleId && node.bundleId !== this.bundleID,
       )
@@ -450,7 +451,7 @@ export class MacImportDriver {
   async screenshot(name: string): Promise<void> {
     this.guardForeground();
     const script =
-      'ObjC.import("CoreGraphics"); function run(argv) { const pid=Number(argv[0]); const windows=ObjC.deepUnwrap($.CGWindowListCopyWindowInfo(1, 0)); const own=windows.filter(w => Number(w.kCGWindowOwnerPID)===pid && Number(w.kCGWindowLayer)===0); own.sort((a,b)=>b.kCGWindowBounds.Width*b.kCGWindowBounds.Height-a.kCGWindowBounds.Width*a.kCGWindowBounds.Height); if (!own.length) throw Error("No owned fixture window"); return String(own[0].kCGWindowNumber); }';
+      'ObjC.import("CoreGraphics"); function run(argv) { const pid=Number(argv[0]); const windows=ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo(1, 0))); const own=windows.filter(w => Number(w.kCGWindowOwnerPID)===pid && Number(w.kCGWindowLayer)===0); own.sort((a,b)=>b.kCGWindowBounds.Width*b.kCGWindowBounds.Height-a.kCGWindowBounds.Width*a.kCGWindowBounds.Height); if (!own.length) throw Error("No owned fixture window"); return String(own[0].kCGWindowNumber); }';
     const windowID = execFileSync(
       "osascript",
       ["-l", "JavaScript", "-e", script, String(this.pid)],
@@ -472,17 +473,17 @@ export class MacImportDriver {
   async clickSidebar(label: "Browse" | "Photos"): Promise<void> {
     await this.click('label="View" role=MenuBarItem');
     await this.click(`label="${label}" role=MenuItem`);
-    await this.wait(`label="${label}" role=cell selected=true`);
+    await this.wait(`label="${label}" role=window`);
   }
   async openStatementImport(): Promise<void> {
-    await this.click('label="Import statement CSV" role=cell');
+    await this.click("id=browse.importStatement");
     await this.wait("id=statement.csv.chooseFile");
   }
   async chooseFile(file: string): Promise<void> {
     await this.wait('label="Open" role=Button');
     await this.action(["type", "/"]);
-    await this.wait("role=TextField editable=true");
-    await this.action(["fill", "role=TextField editable=true", file]);
+    await this.wait("id=PathTextField");
+    await this.action(["fill", "id=PathTextField", file]);
     await this.action(["type", "\n"]);
     await this.click('label="Open" role=Button');
   }

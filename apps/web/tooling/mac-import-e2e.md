@@ -1,5 +1,7 @@
 # Actual Mac import convergence
 
+The backend linking matrix belongs in `tests/e2e/import-order-convergence.spec.ts`: its 24 web journeys exercise all evidence-arrival orders through the shared services. RPC and OpenAPI adapters share those services. Use Swift CLI journeys for focused native client contracts, and keep real Mac/iOS UI runs for file selection, navigation, review, permissions and approval. Do not repeat the full backend matrix through each presentation surface for an ordinary backend change.
+
 Run from this checkout on an unlocked Mac:
 
 ```sh
@@ -40,7 +42,7 @@ The fixture Chromium process uses `--use-mock-keychain` and disables DialMediaRo
 
 Use `--order csv,photo,receipt` to compose native CSV intake and booking, two-photo upload and review, and retailer capture and receipt review in a specified order. Only external image-description, grouping and receipt-extraction outputs are supplied deterministically. Original upload hashes, captured receipt facts, pre-approval economic records and canonical final graph links are checked independently; production writers perform the economic changes.
 
-Run all six orders sequentially with:
+For a change to native orchestration that specifically needs every native arrival order, run all six orders sequentially with:
 
 ```sh
 pnpm --dir apps/web exec tsx tooling/mac-import-orders-e2e.ts
