@@ -42,6 +42,9 @@ overrides:
   # the purchase agent's 2026-09-19 compatibility date. The older Vite runtime
   # only accepted dates through 2026-08-08.
   "@cloudflare/vite-plugin": 1.62.1
+  # Patched recursive brace parsing used by Nx and transitive minimatch.
+  # Covers GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p, GHSA-q2hr-2g5m-vwhr.
+  brace-expansion: ^5.0.12
   effect: ^3.20.0
   esbuild: ^0.28.1
   # GHSA-7p8r-x3mc-p8w7 / GHSA-v2hh-gcrm-f6hx (host confusion). Transitive via
