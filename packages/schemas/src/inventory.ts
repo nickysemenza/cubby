@@ -348,6 +348,7 @@ const inventoryReceiveAmount = positiveAmount.refine(
 );
 export const inventoryReceiveExpenseInput = z.object({
   expenseId: expenseShortcode,
+  expectedProductId: productShortcode,
   locationId: locationShortcode,
   action: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("move"), entryId: inventoryShortcode }),

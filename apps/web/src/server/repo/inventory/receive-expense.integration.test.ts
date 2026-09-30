@@ -90,6 +90,37 @@ describe("atomic reviewed Expense receiving", () => {
       await getDb(ctx.db).select().from(runFinding).where(eq(runFinding.id, id))
     )[0]?.status;
 
+  it("refuses a Product relink after review without stocking or resolving arrival", async () => {
+    const f = await fixture();
+    const replacement = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Receiving fixture replacement" }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ productId: replacement.entityId })
+      .where(eq(expense.id, f.line.id));
+    await expect(
+      receive({
+        expenseId: f.line.shortcode,
+        expectedProductId: f.good.id,
+        locationId: f.place.id,
+        action: { kind: "create", amount: { value: 1, unit: "each" } },
+      }),
+    ).rejects.toThrow(/Product changed/i);
+    expect(await rows()).toEqual([]);
+    expect(await findingState(f.finding.id)).toBe("open");
+    await receive({
+      expenseId: f.line.shortcode,
+      expectedProductId: replacement.id,
+      locationId: f.place.id,
+      action: { kind: "create", amount: { value: 1, unit: "each" } },
+    });
+    expect((await rows())[0]?.productId).toBe(replacement.entityId);
+    expect(await findingState(f.finding.id)).toBe("applied");
+  });
+
   it("creates stock only on explicit receive and resolves arrived only when all live product lines are stocked", async () => {
     const f = await fixture();
     const second = await createProductFixture(
@@ -108,6 +139,7 @@ describe("atomic reviewed Expense receiving", () => {
     expect(await rows()).toHaveLength(0);
     const first = await receive({
       expenseId: f.line.shortcode,
+      expectedProductId: f.good.id,
       locationId: f.place.id,
       action: { kind: "create", amount: { value: 2, unit: "each" } },
     });
@@ -115,6 +147,7 @@ describe("atomic reviewed Expense receiving", () => {
     expect(await findingState(f.finding.id)).toBe("open");
     const last = await receive({
       expenseId: secondLine.shortcode,
+      expectedProductId: second.id,
       locationId: f.place.id,
       action: { kind: "create", amount: { value: 1, unit: "each" } },
     });
@@ -148,6 +181,7 @@ describe("atomic reviewed Expense receiving", () => {
       .where(eq(inventoryEntry.shortcode, entry.id));
     await receive({
       expenseId: f.line.shortcode,
+      expectedProductId: f.good.id,
       locationId: f.place.id,
       action: {
         kind: "add",
@@ -163,6 +197,7 @@ describe("atomic reviewed Expense receiving", () => {
     await expect(
       receive({
         expenseId: f.line.shortcode,
+        expectedProductId: f.good.id,
         locationId: f.place.id,
         action: {
           kind: "add",
@@ -207,6 +242,7 @@ describe("atomic reviewed Expense receiving", () => {
         await expect(
           receive({
             expenseId: f.line.shortcode,
+            expectedProductId: f.good.id,
             locationId: kind === "move" ? f.otherPlace.id : f.place.id,
             action,
           }),
@@ -240,6 +276,7 @@ describe("atomic reviewed Expense receiving", () => {
     await expect(
       receive({
         expenseId: f.line.shortcode,
+        expectedProductId: f.good.id,
         locationId: f.place.id,
         action: {
           kind: "add",
@@ -251,12 +288,14 @@ describe("atomic reviewed Expense receiving", () => {
     await expect(
       receive({
         expenseId: f.line.shortcode,
+        expectedProductId: f.good.id,
         locationId: f.otherPlace.id,
         action: { kind: "create", amount: { value: 1, unit: "each" } },
       }),
     ).rejects.toThrow(/one-of-a-kind/i);
     await receive({
       expenseId: f.line.shortcode,
+      expectedProductId: f.good.id,
       locationId: f.otherPlace.id,
       action: { kind: "move", entryId: entry.id },
     });
@@ -290,6 +329,7 @@ describe("atomic reviewed Expense receiving", () => {
     await expect(
       receive({
         expenseId: f.line.shortcode,
+        expectedProductId: f.good.id,
         locationId: f.otherPlace.id,
         action: { kind: "move", entryId: entry.id },
       }),
@@ -301,6 +341,7 @@ describe("atomic reviewed Expense receiving", () => {
     await expect(
       receive({
         expenseId: f.line.shortcode,
+        expectedProductId: f.good.id,
         locationId: f.place.id,
         action: { kind: "create", amount: { value: 1, unit: "each" } },
       }),
@@ -318,6 +359,7 @@ describe("atomic reviewed Expense receiving", () => {
       expect(() =>
         receive({
           expenseId: f.line.shortcode,
+          expectedProductId: f.good.id,
           locationId: f.place.id,
           action: { kind: "create", amount },
         }),

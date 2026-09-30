@@ -97,7 +97,12 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   });
   const receiveAction = (action: InventoryReceiveExpenseInput["action"]) => {
     if (!locationId) return;
-    receive.mutate({ expenseId, locationId, action });
+    receive.mutate({
+      expenseId,
+      expectedProductId: productId,
+      locationId,
+      action,
+    });
   };
 
   const entries = product?.inventoryEntry ?? [];

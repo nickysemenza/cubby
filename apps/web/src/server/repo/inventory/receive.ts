@@ -105,13 +105,22 @@ export const receiveExpenseInventory = async (
         "Receiving requires a live Expense with a Product.",
       );
     const [good] = await transaction
-      .select({ id: product.id, expectedQuantity: product.expectedQuantity })
+      .select({
+        id: product.id,
+        shortcode: product.shortcode,
+        expectedQuantity: product.expectedQuantity,
+      })
       .from(product)
       .where(and(eq(product.id, line.productId), notDeleted(product)));
     if (!good)
       throw createAppError(
         "PRODUCT_NOT_FOUND",
         "The Expense Product was deleted; review the Expense before receiving.",
+      );
+    if (good.shortcode !== input.expectedProductId)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "The Expense Product changed; review receiving again before stocking it.",
       );
     const stocked = await transaction
       .select()
