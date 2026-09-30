@@ -12,13 +12,8 @@ struct BrowseRootView: View {
         List {
             if query.isEmpty {
                 Section {
-                    NavigationLink {
-                        StatementCsvImportView()
-                    } label: {
-                        Label("Import statement CSV", systemImage: "doc.text")
-                            .frame(minHeight: FieldGuideTokens.touchTarget)
-                    }
-                    .accessibilityIdentifier("browse.importStatement")
+                    statementImportLink
+                        .accessibilityIdentifier("browse.importStatement")
                 } header: {
                     headerTitle("Finance intake")
                 }
@@ -67,6 +62,28 @@ struct BrowseRootView: View {
         .refreshControl {
             await model.browseCounts.load(client: model.client, host: model.host, force: true)
         }
+    }
+
+    @ViewBuilder private var statementImportLink: some View {
+        #if os(macOS)
+            // The split view's content-column NavigationLink owns an implicit
+            // destination that selected-record deep links cannot clear.
+            Button {
+                model.navigator.paths[.browse] = [.statementCsvImport]
+            } label: {
+                statementImportLabel
+            }
+            .buttonStyle(.plain)
+        #else
+            NavigationLink(value: Route.statementCsvImport) {
+                statementImportLabel
+            }
+        #endif
+    }
+
+    private var statementImportLabel: some View {
+        Label("Import statement CSV", systemImage: "doc.text")
+            .frame(minHeight: FieldGuideTokens.touchTarget)
     }
 
     @ViewBuilder
