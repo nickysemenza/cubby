@@ -373,6 +373,24 @@ final class AppModel {
         }
     }
 
+    #if DEBUG
+        func signInForDevelopment() async {
+            lastError = nil
+            let flow = auth
+            do {
+                let credential = try await flow.signInForDevelopment()
+                guard auth === flow else { return }
+                await finishSignIn(with: credential)
+            } catch let error as AuthError {
+                lastError = error.message
+                Diagnostics.report(error, context: "auth.developmentSignIn")
+            } catch {
+                lastError = String(describing: error)
+                Diagnostics.report(error, context: "auth.developmentSignIn")
+            }
+        }
+    #endif
+
     func signInWithGoogle(
         authenticate: @escaping AuthFlow.WebAuthenticationHandler
     ) async {

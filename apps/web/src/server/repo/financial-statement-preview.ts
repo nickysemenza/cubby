@@ -387,9 +387,13 @@ export async function previewFinancialStatementImport(
     );
     const nearbyMatches = account
       ? parsedTransactions.filter((transaction) => {
+          const sameAmount =
+            cents(Number(transaction.amount)) === cents(normalizedAmount);
           if (
             transaction.accountId !== account.id ||
-            cents(Number(transaction.amount)) !== cents(normalizedAmount)
+            (!sameAmount &&
+              Math.sign(cents(Number(transaction.amount))) !==
+                Math.sign(cents(normalizedAmount)))
           )
             return false;
           const date = transaction.postedDate ?? transaction.transactionDate;
@@ -399,7 +403,9 @@ export async function previewFinancialStatementImport(
           )
             return false;
           return (
-            !row.importFingerprint ||
+            // A settled tip or other amount correction without a provider ID
+            // is a review candidate only with matching source description.
+            (!row.importFingerprint && sameAmount) ||
             canonical(transaction.rawDescription ?? "") ===
               canonical(row.originalStatement) ||
             Boolean(

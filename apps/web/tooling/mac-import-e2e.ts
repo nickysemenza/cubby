@@ -531,7 +531,7 @@ async function main(): Promise<void> {
     fixtureUIReady = true;
     milestones.fixtureUIObserved = true;
     phase = "file-import";
-    await driver.click("label=Browse");
+    await driver.clickSidebar("Browse");
     await driver.click("id=browse.importStatement");
     await driver.importStatement(
       path.join(webRoot, "tests/e2e/fixtures/synthetic-monarch-wardrobe.csv"),

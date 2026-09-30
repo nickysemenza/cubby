@@ -1,7 +1,87 @@
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
+import { z } from "zod";
 import { createFixture } from "./e2e-fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+
+test("a no-ID posted tip requires reviewed attachment to the pending charge", async ({
+  page,
+  baseURL,
+}) => {
+  const tag = `synthetic-tip-${Date.now()}`;
+  await gotoAuthenticatedPage(page, "/statement-rows/import");
+  const account = await createFixture(
+    page,
+    "financialAccount",
+    financialAccountCreateInput.parse({
+      name: tag,
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      sourceAliases: [
+        { source: "copilot", alias: tag, externalAccountId: null },
+      ],
+    }),
+  );
+  const pending = await page.request.post("/api/v1/financial-transactions", {
+    headers: { Origin: baseURL! },
+    data: {
+      accountId: account.id,
+      kind: "purchase",
+      status: "pending",
+      amount: 20,
+      transactionDate: "2026-08-16",
+      merchant: tag,
+      rawDescription: tag,
+    },
+  });
+  expect(pending.status(), await pending.text()).toBe(201);
+  const transactionId = z
+    .object({ item: z.object({ id: z.string() }) })
+    .parse(await pending.json()).item.id;
+  await page.getByLabel("Statement CSV file").setInputFiles({
+    name: "posted-tip.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      `date,name,amount,status,category,type,account,account mask,note\n2026-08-18,${tag},24,posted,Dining,regular,${tag},,`,
+    ),
+  });
+  const candidate = page.getByLabel(`Attach existing transaction for ${tag}`, {
+    exact: true,
+  });
+  await expect(candidate).toBeVisible();
+  await expect(
+    candidate.locator("option", { hasText: /20.00.+pending/ }),
+  ).toHaveCount(1);
+  await candidate.selectOption(transactionId);
+  await page
+    .getByRole("button", {
+      name: "Save rows and attach 1 reviewed observations",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText(/0 transactions created.*1 observations attached/),
+  ).toBeVisible();
+  const canonical = await page.request.get(
+    `/api/v1/financial-transactions/${transactionId}`,
+  );
+  expect(
+    z
+      .object({
+        amount: z.number(),
+        status: z.string(),
+        transactionDate: z.string(),
+        postedDate: z.null(),
+        sourceRefs: z.array(z.unknown()),
+      })
+      .parse(await canonical.json()),
+  ).toMatchObject({
+    amount: 20,
+    status: "pending",
+    transactionDate: "2026-08-16",
+    postedDate: null,
+    sourceRefs: [expect.anything()],
+  });
+});
 
 test("full-size statement CSV saves in bounded batches and replays without duplicate rows", async ({
   page,

@@ -294,6 +294,46 @@ try {
     },
   );
   await check(
+    "native development login returns a real signed bearer without redirecting",
+    async () => {
+      const response = await fetch(
+        `${first.profile.origin}/__dev/login?native=true`,
+        {
+          redirect: "manual",
+        },
+      );
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("location"), null);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+      const token = response.headers.get("set-auth-token");
+      assert.ok(token);
+      const session = await fetch(
+        `${first.profile.origin}/api/auth/get-session`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Origin: "cubby-mobile://",
+          },
+        },
+      );
+      assert.equal(session.status, 200);
+      assert.equal(
+        z
+          .object({ user: z.object({ email: z.string() }) })
+          .parse(await session.json()).user.email,
+        DEV_USER_EMAIL,
+      );
+      assert.equal(
+        (
+          await fetch(`${first.profile.origin}/__dev/login?native=true`, {
+            method: "POST",
+          })
+        ).status,
+        405,
+      );
+    },
+  );
+  await check(
     "readiness rejects incomplete or outdated fixtures while health stays available",
     async () => {
       const fixture = await databaseCheck(

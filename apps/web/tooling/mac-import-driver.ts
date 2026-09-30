@@ -91,6 +91,22 @@ export class MacImportDriver {
     this.evidence.push(output);
   }
 
+  async clickSidebar(label: "Browse" | "Photos"): Promise<void> {
+    const snapshot = await this.snapshot();
+    const candidates = [
+      ...snapshot.matchAll(
+        new RegExp(
+          `^\\s*(@e\\d+(?:~s\\d+)?)\\s+\\[cell\\]\\s+"${label}"(?:\\s+\\[selected\\])?\\s*$`,
+          "gm",
+        ),
+      ),
+    ];
+    const reference = candidates[0]?.[1];
+    if (candidates.length !== 1 || !reference)
+      throw new Error(`Expected one actionable ${label} sidebar cell`);
+    await this.click(reference);
+  }
+
   /** NSOpenPanel's slash shortcut opens Go to Folder without hardcoded coordinates. */
   async chooseFile(file: string): Promise<void> {
     await this.wait('label="Open" role=Button');
@@ -119,7 +135,7 @@ export class MacImportDriver {
   }
 
   async addPhotoToImportRun(file: string): Promise<void> {
-    await this.click("label=Photos");
+    await this.clickSidebar("Photos");
     await this.click("id=photo.source.files");
     await this.chooseFile(file);
     await this.click('label="Add to import run…"');

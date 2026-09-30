@@ -103,6 +103,8 @@ struct CubbyApp: App {
                         // This uses the normal AuthFlow and credential store against the
                         // disposable loopback workerd server selected at launch.
                         await model.signIn(email: "sim@cubby.localhost", password: "cubby-sim-local-only")
+                    } else if Self.devServerURL != nil {
+                        await model.signInForDevelopment()
                     }
                 #endif
             }
