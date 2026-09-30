@@ -15,7 +15,7 @@ import type {
   EntityKernelCoreBinding,
   EntityKernelContext,
 } from "./adapter";
-import { parseGroupBy, parseSorts, parseSchema } from "./entity-operations";
+import { parseGroupBy, parseSorts, parseSchema } from "./list-input";
 
 type ListReadFailure = Parameters<typeof normalizeStartOperationError>[0];
 const inputSchema = z.object({
