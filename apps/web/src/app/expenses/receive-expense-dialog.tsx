@@ -2,22 +2,24 @@
  * ReceiveExpenseDialog — put the thing an expense bought onto a shelf.
  *
  * Receiving is always explicit: buying something never moves inventory on its
- * own (the mirror of the no-auto-decrement tenet). What makes this more than a
- * thin wrapper over QuickInventoryAdd is that the product may already be
- * stocked, and `InventoryEntry` carries a partial unique index on
- * (productId, locationId) — so a blind create raises a bare constraint error.
- * The three real cases are branched here, where the operator can see the
- * decision, rather than by turning createInventoryEntry into a silent upsert.
+ * own (the mirror of the no-auto-decrement tenet). Existing stock determines
+ * which reviewed action is offered; an occupied inventory slot cannot accept
+ * a blind second create.
+ * The operator chooses move, add, or create here; the shared receiving command
+ * rechecks the choice against current stock and resolves delivery atomically.
  */
 
 import type {
-  InventoryShortcode,
+  ExpenseShortcode,
   ProductShortcode,
-  PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
+import {
+  positiveAmount,
+  type InventoryReceiveExpenseInput,
+} from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { type FC, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { type FC } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -27,8 +29,11 @@ import {
   optionalLocationField,
 } from "~/app/_components/form-fields";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
-import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { QuickInventoryAdd } from "~/app/_components/inventory/quick-inventory-add";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import {
+  AmountFieldGroup,
+  DEFAULT_AMOUNT_UNIT,
+} from "~/app/_components/inventory/amount-field-group";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
@@ -40,13 +45,13 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail";
-import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 const formSchema = z.object({
   location: optionalLocationField,
   addQuantity: z.number().positive(),
+  createAmount: positiveAmount,
 });
 
 type ReceiveValues = z.infer<typeof formSchema>;
@@ -56,8 +61,7 @@ interface ReceiveExpenseDialogProps {
   onOpenChange: (open: boolean) => void;
   productId: ProductShortcode;
   expenseName: string;
-  /** The purchase whose open `arrived` finding this receive may close. */
-  purchaseId: PurchaseShortcode | null;
+  expenseId: ExpenseShortcode;
 }
 
 export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
@@ -65,7 +69,7 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   onOpenChange,
   productId,
   expenseName,
-  purchaseId,
+  expenseId,
 }) => {
   const { data: product, isLoading } = useQuery({
     ...entityDetailFor("product").queryOptions(productId),
@@ -74,38 +78,31 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
 
   const form = useForm<ReceiveValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { location: null, addQuantity: 1 },
+    defaultValues: {
+      location: null,
+      addQuantity: 1,
+      createAmount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
+    },
   });
   const locationId = getOptionalLocationId(form.watch("location"));
-
-  const updateInventory = useUpdateMutation({
-    mutationFn: entityMutationOptionsFactory("inventory", "update"),
-    entity: "inventory",
-  });
-
-  const initialProduct = useMemo(
-    () =>
-      product
-        ? {
-            id: product.id,
-            name: `${product.name} (${product.manufacturer})`,
-          }
-        : null,
-    [product],
-  );
 
   const close = (nextOpen: boolean) => {
     if (!nextOpen) form.reset();
     onOpenChange(nextOpen);
   };
-  const resolveArrived = useMutation(
-    problemOperations.resolveArrivedFindings.mutationOptions(),
-  );
-  // Receiving stays interactive; the finding just learns about it. The server
-  // keeps the finding open until every product line of the purchase landed.
-  const received = () => {
-    if (purchaseId) resolveArrived.mutate({ purchaseId });
-    close(false);
+  const receive = useActionMutation({
+    mutationFn: inventoryOperations.receiveExpense.mutationOptions,
+    success: "Received into Inventory",
+    onSuccess: () => close(false),
+  });
+  const receiveAction = (action: InventoryReceiveExpenseInput["action"]) => {
+    if (!locationId) return;
+    receive.mutate({
+      expenseId,
+      expectedProductId: productId,
+      locationId,
+      action,
+    });
   };
 
   const entries = product?.inventoryEntry ?? [];
@@ -117,16 +114,8 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
     ? entries.find((e) => e.location.id === locationId)
     : undefined;
 
-  const applyUpdate = async (
-    id: InventoryShortcode,
-    data: Parameters<typeof updateInventory.mutateAsync>[0]["data"],
-  ) => {
-    await updateInventory.mutateAsync({ id, data });
-    received();
-  };
-
   const body = () => {
-    if (isLoading || !product || !initialProduct) {
+    if (isLoading || !product) {
       return <Description>Loading product…</Description>;
     }
 
@@ -148,10 +137,14 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
           />
           <Row justify="end">
             <Button
-              disabled={!locationId || locationId === soleEntry.location.id}
+              disabled={
+                receive.isPending ||
+                !locationId ||
+                locationId === soleEntry.location.id
+              }
               onClick={() => {
                 if (!locationId) return;
-                void applyUpdate(soleEntry.id, { locationId });
+                receiveAction({ kind: "move", entryId: soleEntry.id });
               }}
             >
               Move here
@@ -193,15 +186,14 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
                 }
               />
               <Button
-                disabled={!(form.watch("addQuantity") > 0)}
+                disabled={receive.isPending || !(form.watch("addQuantity") > 0)}
                 onClick={() => {
                   const add = form.getValues("addQuantity");
                   if (!(add > 0)) return;
-                  void applyUpdate(entryHere.id, {
-                    amount: {
-                      ...entryHere.amount,
-                      value: entryHere.amount.value + add,
-                    },
+                  receiveAction({
+                    kind: "add",
+                    entryId: entryHere.id,
+                    amount: { value: add, unit: entryHere.amount.unit },
                   });
                 }}
               >
@@ -210,11 +202,34 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
             </Row>
           </Stack>
         ) : (
-          <QuickInventoryAdd
-            locationId={locationId}
-            initialProduct={initialProduct}
-            onSuccess={received}
-          />
+          <Stack gap="sm">
+            <Description>
+              {product.name} is not stocked at this location.
+            </Description>
+            <AmountFieldGroup
+              form={form}
+              valuePath="createAmount.value"
+              unitPath="createAmount.unit"
+              step="any"
+            />
+            <Row justify="end">
+              <Button
+                disabled={receive.isPending}
+                onClick={() => {
+                  const parsed = positiveAmount.safeParse(
+                    form.getValues("createAmount"),
+                  );
+                  if (!parsed.success) {
+                    void form.trigger("createAmount");
+                    return;
+                  }
+                  receiveAction({ kind: "create", amount: parsed.data });
+                }}
+              >
+                Add to inventory
+              </Button>
+            </Row>
+          </Stack>
         )}
       </Stack>
     );

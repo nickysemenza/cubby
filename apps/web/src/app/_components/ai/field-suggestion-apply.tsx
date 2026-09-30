@@ -8,6 +8,7 @@ import {
 } from "./field-suggestion";
 import { FieldSuggestionHint } from "./field-suggestion-hint";
 import { RecordSuggestionScope } from "./record-suggestions";
+import { useFinanceCategoryApply } from "./use-finance-category-apply";
 
 /**
  * The query-layer half of the hint, for surfaces with no RHF form to hang a
@@ -39,10 +40,12 @@ function StandaloneSuggestion({
   onApply,
   operations,
 }: ApplyProps) {
-  const { suggestions, outcomes, isFetching } = useEntitySuggestionsQuery({
-    source,
-    operations,
-  });
+  const financeApply = useFinanceCategoryApply(operations);
+  const { suggestions, outcomes, isFetching, refetch } =
+    useEntitySuggestionsQuery({
+      source,
+      operations,
+    });
   const targetKey = source?.targets[0];
   const suggestion = targetKey ? (suggestions[targetKey] ?? null) : null;
   const outcome = targetKey ? (outcomes[targetKey] ?? null) : null;
@@ -57,7 +60,19 @@ function StandaloneSuggestion({
       suggestion={suggestion}
       applied={applied}
       pending={isFetching}
-      onApply={suggestion ? () => onApply(suggestion) : undefined}
+      onApply={
+        suggestion
+          ? async () => {
+              if (!suggestion.financeReview) return onApply(suggestion);
+              try {
+                await financeApply.apply(suggestion);
+              } catch (error) {
+                await refetch();
+                throw error;
+              }
+            }
+          : undefined
+      }
       alternative={source?.basisMode === "provided"}
       outcome={outcome}
       surface="line"

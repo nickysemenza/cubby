@@ -1,8 +1,10 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { financialTransactionOut } from "@cubby/schemas/financial-transaction";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseOut } from "@cubby/schemas/project";
 import {
   type linkExpensesToPurchaseInput,
   type purchaseProductsInput,
+  type purchaseSettlementCandidatesOut,
   splitExpenseDelta,
   type splitExpenseInput,
 } from "@cubby/schemas/purchase";
@@ -18,6 +20,7 @@ import {
   splitExpense,
 } from "~/server/repo/purchase";
 import { listPurchaseProducts } from "~/server/repo/purchase-products";
+import { listPurchaseSettlementCandidates } from "~/server/repo/purchase-settlement-candidates";
 import {
   resolveAllPresent,
   resolveOrThrow,
@@ -105,6 +108,33 @@ export async function purchaseProductsWorkflow(
 }
 
 export const purchaseHandlers = implementOperationDomain(purchaseContract, {
+  settlementCandidates: async (context, input) => {
+    const candidates = await listPurchaseSettlementCandidates(
+      context.db,
+      input.purchaseId,
+    );
+    return {
+      advisory: true,
+      candidates: await Promise.all(
+        candidates.map(async ({ transactionId, ...rank }) => {
+          const result = await executeEntity(context, {
+            action: "get",
+            entity: "financialTransaction",
+            id: parseShortcodeFor("financialTransaction", transactionId),
+            missing: "error",
+          });
+          if (result.action !== "get" || !result.item)
+            throw new Error(
+              "Entity kernel returned the wrong financial transaction detail",
+            );
+          return {
+            ...rank,
+            transaction: financialTransactionOut.parse(result.item),
+          };
+        }),
+      ),
+    } satisfies typeof purchaseSettlementCandidatesOut._output;
+  },
   orderMail: (context, input) => listPurchaseOrderMail(context.db, input),
   products: (context, input) => purchaseProductsWorkflow(context, input),
   link: (context, input) => linkExpensesToPurchaseWorkflow(context, input),

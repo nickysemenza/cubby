@@ -338,6 +338,40 @@ export const inventoryBulkAddOut = z.object({
   sideEffects: mutationSideEffectsSchema,
 });
 
+/** Explicit receiving of one live Expense Product; purchasing never stocks inventory. */
+const inventoryReceiveAmount = positiveAmount.refine(
+  (amount) => amount.upperValue === undefined,
+  {
+    error: "Inventory receiving requires a point amount, not a range",
+    path: ["upperValue"],
+  },
+);
+export const inventoryReceiveExpenseInput = z.object({
+  expenseId: expenseShortcode,
+  expectedProductId: productShortcode,
+  locationId: locationShortcode,
+  action: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("move"), entryId: inventoryShortcode }),
+    z.object({
+      kind: z.literal("add"),
+      entryId: inventoryShortcode,
+      amount: inventoryReceiveAmount,
+    }),
+    z.object({ kind: z.literal("create"), amount: inventoryReceiveAmount }),
+  ]),
+});
+export type InventoryReceiveExpenseInput = z.infer<
+  typeof inventoryReceiveExpenseInput
+>;
+export const inventoryReceiveExpenseOut = z.object({
+  item: inventoryWithLocationAndProductOut,
+  resolvedArrivedFindings: z.number().int().nonnegative(),
+  sideEffects: mutationSideEffectsSchema,
+});
+export type InventoryReceiveExpenseOut = z.infer<
+  typeof inventoryReceiveExpenseOut
+>;
+
 /**
  * One shelf row to write off, and how much of it.
  *

@@ -1,5 +1,6 @@
 import {
   type MealCreateInput,
+  mealAddRecipeInput,
   mealCreateInput,
   shoppingListInput,
 } from "@cubby/schemas/meal";
@@ -15,6 +16,7 @@ import { describe, expect, it } from "vitest";
 
 import { inventoryEntry, recipe } from "~/server/db/schema";
 import {
+  addRecipeToMealWorkflow,
   getShoppingListWorkflow,
   saveMealRecipePreparationWorkflow,
 } from "~/server/operations/meal.server";
@@ -25,6 +27,7 @@ import { createLedgerParty } from "./ledger-party";
 import {
   addRecipeToMeal,
   createMealWithEntityId,
+  getMealByID,
   getMealsByDateRange,
   getUpcomingMealSummary,
 } from "./meal/crud";
@@ -69,6 +72,57 @@ const expectNutritionScaled = (
 
 describe("meal recipe preparations", () => {
   const ctx = withTestDb();
+  // Reviewed conversion must not survive a refused recipe, and unreviewed
+  // additions must preserve the meal kind.
+  it("commits reviewed meal conversion with recipe addition and rolls both back on refusal", async () => {
+    const fixture = await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({ name: "Synthetic reviewed recipe" }),
+      ctx.actor,
+    );
+    const target = await createMealWithEntityId(
+      ctx.db,
+      mealCreateInput.parse({ date: "2026-09-22", mealKind: "takeout" }),
+      ctx.actor,
+    );
+    const context = { db: ctx.db, actorContext: ctx.actor };
+    const reviewed = mealAddRecipeInput.parse({
+      mealId: target.output.id,
+      recipeId: fixture.id,
+      convertToCooked: true,
+    });
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ deletedAt: new Date() })
+      .where(eq(recipe.id, fixture.entityId));
+    await expect(addRecipeToMealWorkflow(context, reviewed)).rejects.toThrow(
+      "Recipe not found",
+    );
+    const unchanged = await getMealByID(ctx.db, target.entityId);
+    expect(unchanged?.mealKind).toBe("takeout");
+    expect(unchanged?.recipes).toEqual([]);
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ deletedAt: null })
+      .where(eq(recipe.id, fixture.entityId));
+    const added = await addRecipeToMealWorkflow(context, reviewed);
+    expect(added.meal.mealKind).toBe("cooked");
+    expect(added.meal.recipes).toHaveLength(1);
+
+    const unreviewed = await createMealWithEntityId(
+      ctx.db,
+      mealCreateInput.parse({ date: "2026-09-22", mealKind: "takeout" }),
+      ctx.actor,
+    );
+    const preserved = await addRecipeToMealWorkflow(
+      context,
+      mealAddRecipeInput.parse({
+        mealId: unreviewed.output.id,
+        recipeId: fixture.id,
+      }),
+    );
+    expect(preserved.meal.mealKind).toBe("takeout");
+  });
   const recipeTotals = (multiplier = 1) => ({
     cost: {
       status: "complete" as const,

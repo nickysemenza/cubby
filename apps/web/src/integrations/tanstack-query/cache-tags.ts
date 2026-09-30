@@ -398,6 +398,7 @@ export const ripple = {
   // the old name until a hard reload. No expense/project tags: a vendor holds
   // identity only, and every dollar lives on `Expense`.
   spendingCategory: rippleTags([
+    FIELD_SUGGESTIONS,
     ["spendingCategory"],
     ["purchase"],
     ["expense"],
@@ -405,6 +406,7 @@ export const ripple = {
     ["problems"],
   ]),
   vendor: rippleTags([
+    FIELD_SUGGESTIONS,
     ["expense"],
     ["financialTransaction"],
     ["vendor"],
@@ -461,6 +463,7 @@ export const ripple = {
   /** A transfer is never spend; it only moves a party's ledger position. */
   ledgerTransfer: rippleTags([["ledgerTransfer"], ["householdContribution"]]),
   financialTransaction: rippleTags([
+    FIELD_SUGGESTIONS,
     ["financialTransaction"],
     ["financialAccount"],
     ["purchase"],

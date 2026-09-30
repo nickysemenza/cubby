@@ -9,6 +9,10 @@ import {
   productWithFoodOut,
 } from "@cubby/schemas/product";
 import {
+  productCreateWithInventoryInput,
+  productCreateWithInventoryOut,
+} from "@cubby/schemas/product-capture";
+import {
   productBackfillUpcImagesEvent,
   productCreateManyEvent,
   productMarkUsdaUnavailableEvent,
@@ -29,6 +33,13 @@ import {
 } from "~/contracts/define";
 
 export const productContract = defineContract("product", {
+  createWithInventory: mutation({
+    native:
+      "Create a Product and staged photo with explicit Inventory placement atomically",
+    input: productCreateWithInventoryInput,
+    output: productCreateWithInventoryOut,
+    invalidates: ["product", "inventory"],
+  }),
   search: query({ ...productWorkflowSchemas.search }),
   resolveNames: query({
     ...productWorkflowSchemas.resolveNames,

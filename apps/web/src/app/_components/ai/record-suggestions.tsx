@@ -41,6 +41,7 @@ import {
   suggestionContextKeys,
   isBasisSufficient,
   basisValueOf,
+  financeSuggestionEntityId,
   productionEntitySuggestionsOperations,
   type EntitySuggestionsOperations,
   type FieldSuggestionSource,
@@ -48,6 +49,7 @@ import {
 } from "./field-suggestion";
 import {
   actionableSuggestion,
+  suggestionReviewKey,
   SuggestionReview,
   SuggestionVisitProvider,
   useSuggestionVisit,
@@ -57,6 +59,7 @@ import {
   SuggestionStatus,
   type SuggestionStatusField,
 } from "./suggestion-status";
+import { useFinanceCategoryApply } from "./use-finance-category-apply";
 
 const SuggestionSchedulerContext = createContext<ReturnType<
   typeof createSuggestionScheduler
@@ -316,6 +319,7 @@ function suggestionRequestsForRecord(
             record,
             source: {
               entity,
+              entityId: financeSuggestionEntityId(entity, record),
               basisMode: "suggested" as const,
               targets: suggested,
               basis,
@@ -330,6 +334,7 @@ function suggestionRequestsForRecord(
             record,
             source: {
               entity,
+              entityId: financeSuggestionEntityId(entity, record),
               basisMode: "provided" as const,
               targets: alternatives,
               basis,
@@ -344,6 +349,7 @@ function suggestionRequestsForRecord(
             record,
             source: {
               entity,
+              entityId: financeSuggestionEntityId(entity, record),
               basisMode: "provided" as const,
               targets: pruneTargets,
               basis,
@@ -470,9 +476,7 @@ function actionableRowSuggestionCount(
         row.sourceByField.get(key),
       ]);
       if (
-        !dismissed?.has(
-          JSON.stringify([question, current, suggestion?.value]),
-        ) &&
+        !dismissed?.has(suggestionReviewKey(question, current, suggestion)) &&
         actionableSuggestion(
           suggestion,
           current,
@@ -539,6 +543,7 @@ function BoundRecordSuggestions({
   const parentScheduler = useContext(SuggestionSchedulerContext);
   const [ownScheduler] = useState(() => createSuggestionScheduler());
   const scheduler = parentScheduler ?? ownScheduler;
+  const financeApply = useFinanceCategoryApply(operations);
   const update = useEntityCommands(entity, { mutationPort });
   const [correctionRecord, setCorrectionRecord] =
     useState<SuggestionRecord | null>(null);
@@ -589,6 +594,15 @@ function BoundRecordSuggestions({
       source: FieldSuggestionSource,
       expectedCurrent: string | null,
     ) => {
+      if (field === "spendingCategoryId" && suggestion.financeReview) {
+        try {
+          await financeApply.apply(suggestion);
+        } catch (error) {
+          await Promise.all(queries.map((query) => query.refetch()));
+          throw error;
+        }
+        return;
+      }
       // Acceptance reads the entity again without asking Jev twice. Rebuild
       // the basis over the request's own key set (`source.basis`'s keys,
       // not every visible target's union) so a parent/default or line-kind
@@ -726,6 +740,7 @@ function suggestionWentStale(
     source: FieldSuggestionSource;
     currentValue: string | null;
     suggestionValue: string | undefined;
+    suggestionFingerprint: string | undefined;
   },
 ): boolean {
   const row = latest.row;
@@ -741,7 +756,11 @@ function suggestionWentStale(
     expected.currentValue
   )
     return true;
-  return row.suggestions[expected.field]?.value !== expected.suggestionValue;
+  return (
+    row.suggestions[expected.field]?.value !== expected.suggestionValue ||
+    row.suggestions[expected.field]?.financeReview?.fingerprint !==
+      expected.suggestionFingerprint
+  );
 }
 
 type RecordSuggestionsCtx = NonNullable<
@@ -796,6 +815,7 @@ function ResolvedFieldSuggestion({
         source,
         currentValue: current.value,
         suggestionValue: suggestion?.value,
+        suggestionFingerprint: suggestion?.financeReview?.fingerprint,
       })
     )
       throw new Error("Suggestion inputs changed");
@@ -882,9 +902,7 @@ export function RecordRowSuggestions({ record }: { record: unknown }) {
         current,
         row.sourceByField.get(field)?.basisMode === "provided",
       ) &&
-      !visit?.dismissed.has(
-        JSON.stringify([question, current, suggestion?.value]),
-      )
+      !visit?.dismissed.has(suggestionReviewKey(question, current, suggestion))
     );
   });
   if (fields.length === 0) return null;

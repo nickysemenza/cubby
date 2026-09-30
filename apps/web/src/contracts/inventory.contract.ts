@@ -13,6 +13,8 @@ import {
   inventoryWithLocationAndProductListOut,
   moveInventoryEntriesPayload,
   reconcileSessionPayload,
+  inventoryReceiveExpenseInput,
+  inventoryReceiveExpenseOut,
 } from "@cubby/schemas/inventory";
 import {
   confirmInventoryOwnershipInput,
@@ -29,6 +31,12 @@ import {
 import { defineContract, mutation, query } from "~/contracts/define";
 
 export const inventoryContract = defineContract("inventory", {
+  receiveExpense: mutation({
+    native: "Explicit Expense inventory receiving",
+    input: inventoryReceiveExpenseInput,
+    output: inventoryReceiveExpenseOut,
+    invalidates: ["inventory", "product", "purchase", "problems"],
+  }),
   bulkAdd: mutation({
     input: inventoryBulkAddPayload,
     output: inventoryBulkAddOut,

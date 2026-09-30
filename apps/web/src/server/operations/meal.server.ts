@@ -34,6 +34,7 @@ import {
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { withTransactionDatabase } from "~/server/repo/database-helpers";
 import {
   addRecipeToMeal,
   getMealPreparations,
@@ -41,6 +42,7 @@ import {
   getUpcomingMealSummary,
   removeMealRecipeWithEntityId,
   saveMealRecipePreparation,
+  updateMeal,
   updateMealRecipeWithEntityId,
 } from "~/server/repo/meal";
 import { getMealByID } from "~/server/repo/meal";
@@ -98,16 +100,25 @@ export const addRecipeToMealWorkflow = bindWorkflow(
       mealShortcodes.one(context.db, input.mealId),
     )
     .commit("updated", async ({ context }, { input, mealId }) =>
-      addRecipeToMeal(
-        context.db,
-        mealId,
-        {
-          recipeId: input.recipeId,
-          scale: input.scale,
-          sortOrder: input.sortOrder,
-        },
-        context.actorContext,
-      ),
+      withTransactionDatabase(context.db, async (db) => {
+        if (input.convertToCooked)
+          await updateMeal(
+            db,
+            mealId,
+            { mealKind: "cooked" },
+            context.actorContext,
+          );
+        return addRecipeToMeal(
+          db,
+          mealId,
+          {
+            recipeId: input.recipeId,
+            scale: input.scale,
+            sortOrder: input.sortOrder,
+          },
+          context.actorContext,
+        );
+      }),
     )
     .effect("embedding", async ({ context }, { mealId }) =>
       refreshMealEmbedding(context.db, mealId, "meal.addRecipe"),

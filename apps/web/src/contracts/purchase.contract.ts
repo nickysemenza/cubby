@@ -7,6 +7,8 @@ import {
   purchaseOut,
   purchaseProductsInput,
   purchaseProductsOut,
+  purchaseSettlementCandidatesInput,
+  purchaseSettlementCandidatesOut,
   reclassifyPurchaseDocumentInput,
   splitExpenseInput,
   splitExpenseOut,
@@ -41,6 +43,11 @@ export const splitExpenseWithDeltaOut = z.object({
 });
 
 export const purchaseContract = defineContract("purchase", {
+  settlementCandidates: query({
+    input: purchaseSettlementCandidatesInput,
+    output: purchaseSettlementCandidatesOut,
+    cache: { tags: [["purchase"], ["financialTransaction"]] },
+  }),
   orderMail: query({
     native: "Show linked order email events on native Purchase detail",
     input: purchaseOrderMailInput,

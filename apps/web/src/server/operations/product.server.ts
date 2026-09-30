@@ -49,6 +49,7 @@ import {
   listKitMembership,
   listProductComponents,
 } from "~/server/repo/product-components";
+import { createProductWithInventory } from "~/server/repo/product/capture";
 import { findProductExternalIdCollisions } from "~/server/repo/product/external-id-collisions";
 import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
 import { previewProductMergeDecisions } from "~/server/repo/product/merge";
@@ -494,6 +495,7 @@ export const backfillProductUpcImagesWorkflow = bindBulkWorkflow(
 );
 
 export const productHandlers = implementOperationDomain(productContract, {
+  createWithInventory: createProductWithInventory,
   search: searchProducts,
   resolveNames: (context, input) =>
     resolveProductNames(context.db, input.names),

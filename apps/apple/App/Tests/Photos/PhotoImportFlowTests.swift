@@ -358,6 +358,35 @@ struct PhotoImportFlowTests {
         #expect(manifest.groups.first?.decision == .automaticPrimary)
     }
 
+    @Test func failedRelatedLookupKeepsPhotosUnassignedAndCanRetryAnExistingMatch() async throws {
+        let item = try selection(
+            filename: "retry.jpg", capturedAt: Date(timeIntervalSince1970: 1_789_000_000))
+        let manifest = makeManifest(items: [item])
+        let type = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
+        let row = EntityRow(
+            id: "PLT-5678", title: "Synthetic planting", subtitle: nil, imageURL: nil,
+            raw: ["id": "PLT-5678", "locationId": "LOC-0009"])
+        let failed = try routeClient(gardenEntries: [], statusCode: 503)
+        let resolution = await manifest.chooseSourceRecord(type, row: row, client: failed)
+        guard case .relatedChooser(let option, let page) = resolution else {
+            Issue.record("A refused lookup must offer retry without staging a new record")
+            return
+        }
+        #expect(option.route.kind == .existingRelated)
+        #expect(page == nil)
+        #expect(manifest.groups.isEmpty)
+        #expect(manifest.needsDestination == [item.id])
+        #expect(manifest.createDraftBody(for: item.id) == nil)
+        let retry = try routeClient(gardenEntries: [(id: "GDE-0001", locationId: "LOC-0009")])
+        let retried = await manifest.chooseSourceRecord(type, row: row, client: retry)
+        guard case .resolved = retried else {
+            Issue.record("Retry must resolve the existing destination")
+            return
+        }
+        #expect(manifest.groups.first?.id == "\(option.id):GDE-0001")
+        #expect(manifest.createDraftBody(for: item.id) == nil)
+    }
+
     @Test func chooseSourceRecordOpensTheRelatedChooserForMultipleMatches() async throws {
         let item = try selection(filename: "ambiguous.jpg")
         let manifest = makeManifest(items: [item])
@@ -585,10 +614,10 @@ struct PhotoImportFlowTests {
     /// A `CubbyClient` stubbed at the network layer (same approach as `PhotoMatchStoreTests`) so
     /// `chooseSourceRecord`'s auto-resolve exercises the real `findRelated` → `CubbyClient.list`
     /// path against a canned Garden Entry list page, rather than a re-implemented loader.
-    /// Each row must satisfy the generated Garden Entry list schema: a decode failure is caught by
-    /// `chooseSourceRecord` and silently falls back to the create path, so a stale fixture (it
-    /// once lacked the required `dataQuality`) reads as a routing regression, not a decode error.
-    private func routeClient(gardenEntries: [(id: String, locationId: String)]) throws -> CubbyClient {
+    /// Each row must satisfy the generated list schema so decode refusal remains distinct from an empty page.
+    private func routeClient(gardenEntries: [(id: String, locationId: String)], statusCode: Int = 200) throws
+        -> CubbyClient
+    {
         let items =
             gardenEntries
             .map { entry in
@@ -598,7 +627,12 @@ struct PhotoImportFlowTests {
             }.joined(separator: ",")
         let json =
             "{\"items\":[\(items)],\"meta\":{\"pageIndex\":1,\"pageSize\":25,\"totalCount\":\(gardenEntries.count)}}"
-        PhotoRouteTestProtocol.response.withLock { $0 = Data(json.utf8) }
+        PhotoRouteTestProtocol.response.withLock {
+            $0 = Data(
+                (statusCode == 200
+                    ? json : "{\"code\":\"UPSTREAM_ERROR\",\"message\":\"Synthetic lookup refusal\"}").utf8)
+        }
+        PhotoRouteTestProtocol.statusCode.withLock { $0 = statusCode }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [PhotoRouteTestProtocol.self]
         let store = InMemorySessionTokenStore()
@@ -613,11 +647,12 @@ struct PhotoImportFlowTests {
 /// The synchronized response belongs only to this serialized suite; it never reaches a network.
 nonisolated private final class PhotoRouteTestProtocol: URLProtocol, @unchecked Sendable {
     static let response = Mutex(Data())
+    static let statusCode = Mutex(200)
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         let response = HTTPURLResponse(
-            url: request.url!, statusCode: 200, httpVersion: nil,
+            url: request.url!, statusCode: Self.statusCode.withLock { $0 }, httpVersion: nil,
             headerFields: ["Content-Type": "application/json"])!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: Self.response.withLock { $0 })

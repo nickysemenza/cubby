@@ -359,6 +359,21 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
+    file: "inventory-session-photo-capture.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/inventory.session.tsx`,
+      `${WEB}/src/app/inventory/session/**`,
+      `${WEB}/src/contracts/product.contract.ts`,
+      `${WEB}/src/contracts/image-upload.contract.ts`,
+      `${WEB}/src/server/operations/product.server.ts`,
+      `${WEB}/src/server/operations/image.server.ts`,
+      `${WEB}/src/server/repo/product/capture.ts`,
+      `${WEB}/src/lib/presigned-upload.ts`,
+      "packages/schemas/src/product-capture.ts",
+      "packages/schemas/src/image.ts",
+    ],
+  },
+  {
     file: "mcp-worklist.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/mcp.tsx`,

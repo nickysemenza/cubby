@@ -83,6 +83,12 @@ export const mealAddRecipeInput = z.object({
   mealId: mealShortcode,
   recipeId: recipeShortcode.describe("Recipe ID to plan into the meal"),
   scale: mealScale.default(1).describe("Scale multiplier (1 = as written)"),
+  convertToCooked: z
+    .boolean()
+    .optional()
+    .describe(
+      "Explicitly reviewed conversion to cooked, committed with the recipe addition",
+    ),
   sortOrder: z
     .number()
     .int()

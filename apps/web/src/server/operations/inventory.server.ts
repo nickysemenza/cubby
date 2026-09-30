@@ -15,6 +15,7 @@ import {
   inventoryLocationSnapshotInput,
   moveInventoryEntriesPayload,
   reconcileSessionPayload,
+  type InventoryReceiveExpenseInput,
 } from "@cubby/schemas/inventory";
 import {
   confirmInventoryOwnershipInput,
@@ -39,6 +40,7 @@ import {
   reconcileLocationSession,
   setInventoryOwnership,
   confirmInventoryOwnership,
+  receiveExpenseInventory,
 } from "~/server/repo/inventory";
 import {
   discardFromInventoryEntries,
@@ -606,7 +608,28 @@ async function confirmOwnership(
   return { entries: await inventoryCodesForIds(context.db, ids) };
 }
 
+export async function receiveExpenseInventoryWorkflow(
+  db: Database,
+  actor: ActorContext,
+  input: InventoryReceiveExpenseInput,
+) {
+  const received = await receiveExpenseInventory(db, input, actor);
+  const ids = await inventoryShortcodes.all(db, [received.item.id]);
+  await runMutationSideEffectsForEntities(
+    db,
+    mutationEvents(
+      "inventory",
+      input.action.kind === "create" ? "created" : "updated",
+      ids,
+      "inventory.receiveExpense",
+    ),
+  );
+  return { ...received, sideEffects: EMPTY_MUTATION_SIDE_EFFECTS };
+}
+
 export const inventoryHandlers = implementOperationDomain(inventoryContract, {
+  receiveExpense: (context, input) =>
+    receiveExpenseInventoryWorkflow(context.db, context.actorContext, input),
   bulkAdd: (context, input) =>
     bulkAddInventoryWorkflow(context.db, context.actorContext, input),
   bulkDiscard: (context, input) => bulkDiscardInventoryWorkflow(context, input),

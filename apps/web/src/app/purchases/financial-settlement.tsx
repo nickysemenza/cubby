@@ -3,7 +3,7 @@ import type { FinancialTransactionOut } from "@cubby/schemas/financial-transacti
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { TableCellWorkbench } from "~/app/_components/data-table/table-cell-workbench";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
@@ -29,10 +29,10 @@ import {
   type EntityEditDialogRequest,
 } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityListFor } from "~/entities/entity-list";
 import { fieldEnumOptions } from "~/entities/enum-field-display";
 import { formatFieldProvenance } from "~/entities/field-provenance";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
+import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/utils";
 
@@ -59,48 +59,6 @@ if (!settlementField?.provenance) {
 const settlementProvenanceDescription = formatFieldProvenance(
   settlementField.provenance,
 );
-
-export function rankSettlementCandidates(
-  purchase: Pick<PurchaseOut, "date" | "statedTotal" | "vendorName">,
-  transactions: FinancialTransactionOut[],
-) {
-  const anchor = purchase.date ? Date.parse(`${purchase.date}T00:00:00Z`) : NaN;
-  return transactions
-    .flatMap((transaction) => {
-      if (
-        transaction.allocations.length ||
-        (transaction.kind !== "purchase" && transaction.kind !== "refund")
-      )
-        return [];
-      const value = purchase.statedTotal;
-      const posted = transaction.postedDate ?? transaction.transactionDate;
-      const days =
-        posted && Number.isFinite(anchor)
-          ? Math.abs(Date.parse(`${posted}T00:00:00Z`) - anchor) / 86_400_000
-          : Number.POSITIVE_INFINITY;
-      if (days > 45) return [];
-      const merchantMatches = Boolean(
-        purchase.vendorName &&
-        transaction.merchant &&
-        transaction.merchant
-          .toLocaleLowerCase()
-          .includes(purchase.vendorName.toLocaleLowerCase()),
-      );
-      const exactAmount =
-        transaction.kind === "purchase" &&
-        value !== null &&
-        Math.abs(transaction.amount - value) <= 0.01;
-      if (!merchantMatches && !exactAmount) return [];
-      return [{ transaction, days, merchantMatches, exactAmount }];
-    })
-    .sort(
-      (a, b) =>
-        Number(b.exactAmount) - Number(a.exactAmount) ||
-        Number(b.merchantMatches) - Number(a.merchantMatches) ||
-        a.days - b.days,
-    )
-    .slice(0, 10);
-}
 
 type SettlementAllocationInput = { purchaseId: string; amount: string };
 type SettlementAllocationDraft = SettlementAllocationInput & { key: string };
@@ -175,28 +133,13 @@ function MatchStatementTransaction({
     [],
   );
   const date = purchase.date ? Date.parse(`${purchase.date}T00:00:00Z`) : NaN;
-  const from = Number.isFinite(date)
-    ? new Date(date - 45 * 86_400_000).toISOString().slice(0, 10)
-    : undefined;
-  const to = Number.isFinite(date)
-    ? new Date(date + 45 * 86_400_000).toISOString().slice(0, 10)
-    : undefined;
   const candidatesQuery = useQuery({
-    ...entityListFor("financialTransaction").queryOptions({
-      filters: {
-        purchasePresenceFilter: "none",
-        postedDateFrom: from,
-        postedDateTo: to,
-      },
-      pagination: { pageIndex: 0, pageSize: 200 },
-      sort: [{ orderBy: "postedDate", direction: "desc" }],
+    ...purchaseOperations.settlementCandidates.queryOptions({
+      purchaseId: purchase.id,
     }),
     enabled: open && Number.isFinite(date),
   });
-  const candidates = useMemo(
-    () => rankSettlementCandidates(purchase, candidatesQuery.data?.items ?? []),
-    [purchase, candidatesQuery.data],
-  );
+  const candidates = candidatesQuery.data?.candidates ?? [];
   const update = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("financialTransaction", "update"),
     entity: "financialTransaction",

@@ -14,6 +14,7 @@ import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { listRecentAiUsage, summarizeAiUsage } from "~/server/repo/ai-usage";
+import { applyFinanceCategorySuggestion } from "~/server/repo/finance-suggestion-context";
 import {
   resolveAllOrThrow,
   resolveLiveShortcodes,
@@ -278,6 +279,8 @@ export const aiHandlers = implementOperationDomain(aiContract, {
       target: target ? { id: target.shortcode, name: target.name } : null,
     }));
   },
+  applyFinanceCategorySuggestion: (context, input) =>
+    applyFinanceCategorySuggestion(context, input),
   suggestFields: async (context, input) =>
     // A page's own `runKey` groups every target it asks about into one
     // `ai_suggest` run; no `runKey` (an older client, a one-off caller)

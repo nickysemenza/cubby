@@ -59,7 +59,7 @@ export const ExpenseSettlement: DetailSlotComponent<"expense"> = ({
           onOpenChange={setReceiveOpen}
           productId={expense.productId}
           expenseName={expense.name}
-          purchaseId={expense.purchaseId}
+          expenseId={expense.id}
         />
       )}
     </Stack>

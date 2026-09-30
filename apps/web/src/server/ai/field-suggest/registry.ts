@@ -415,7 +415,7 @@ function spendingCategorySpec(
     entity: "spendingCategory",
     maxCandidates: Number.MAX_SAFE_INTEGER,
     rules:
-      "Choose the most specific existing spending category supported by the transaction or purchase evidence. Compare the full tree and parent names. The imported bank/CSV Source Category is a clue, not an authoritative household category. Never create or invent categories. Choose none when the roster or evidence does not support a choice. Return a reviewed proposal only; preserve any explicit category until the user applies a change.",
+      "Choose the most specific existing spending category supported by the transaction or purchase evidence. Saved linked evidence preserves signed amounts, principal versus adjustment lines, reimbursement roles and split settlements. Do not count tax, shipping, refunds or reimbursements as separate purchased goods; mixed goods or split allocations can support different categories, so choose none when no single category represents the reviewed subject. Truncated evidence is incomplete. Compare the full tree and parent names. The imported bank/CSV Source Category is a clue, not an authoritative household category. Never create or invent categories. Choose none when the roster or evidence does not support a choice. Return a reviewed proposal only; preserve any explicit category until the user applies a change.",
     roster: spendingCategoryRoster,
     idOf: (c) => c.id,
     labelOf: (c) => c.name,

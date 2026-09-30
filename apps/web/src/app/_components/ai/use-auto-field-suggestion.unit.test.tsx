@@ -1,3 +1,4 @@
+import { financeCategoryApplyOut } from "@cubby/schemas/ai";
 import type {
   FieldSuggestion,
   FieldSuggestionsInput,
@@ -19,6 +20,7 @@ import {
   type UseFormReturn,
 } from "react-hook-form";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { z } from "zod";
 
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -64,6 +66,16 @@ function operationsReturning(
  * `waitFor` (a positive-assertion poll) cannot express. */
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function deferredFinanceApply() {
+  let resolve!: (value: z.output<typeof financeCategoryApplyOut>) => void;
+  const promise = new Promise<z.output<typeof financeCategoryApplyOut>>(
+    (complete) => {
+      resolve = complete;
+    },
+  );
+  return { promise, resolve };
 }
 
 /** Reads the DOM-rendered `isDirty` indicator a `Probe` mounts for `target`. */
@@ -125,6 +137,7 @@ function Harness({
   textFields,
   operations,
   record,
+  scopeKey,
   onReady,
 }: {
   entity: "task" | "inventory" | "expense";
@@ -137,6 +150,7 @@ function Harness({
   textFields: readonly string[];
   operations: EntitySuggestionsOperations;
   record?: unknown;
+  scopeKey?: string;
   onReady: (form: UseFormReturn<FieldValues>) => void;
 }) {
   const defaultValues: FieldValues = {};
@@ -152,6 +166,7 @@ function Harness({
         fieldKeys={fieldKeys}
         operations={operations}
         record={record}
+        scopeKey={scopeKey}
       >
         {textFields.map((field) => (
           <input key={field} aria-label={field} {...form.register(field)} />
@@ -672,6 +687,166 @@ describe("useAutoFieldSuggestion", () => {
     expect(screen.getByLabelText("trade")).toHaveValue("");
     expect(calls[0]?.basisMode).toBe("provided");
   });
+
+  it("preserves a newer category draft when explicit finance Apply finishes later, while acknowledging its saved default", async () => {
+    let form!: UseFormReturn<FieldValues>;
+    const proposal: FieldSuggestion = {
+      value: "SPC-4K7M",
+      label: "Fixture clothing",
+      detail: null,
+      confidence: "high",
+      probability: 0.96,
+      reasoning: "Saved linked shirt",
+      alternatives: [],
+      operation: "set",
+      removals: [],
+      financeReview: {
+        entity: "expense",
+        entityId: "EXP-4K7M",
+        fingerprint: "a".repeat(64),
+      },
+    };
+    const pending = deferredFinanceApply();
+    const transport = vi.fn(async () => await pending.promise);
+    const operations = {
+      ...operationsReturning(() => ({
+        suggestions: { spendingCategoryId: proposal },
+      })),
+      applyFinanceCategorySuggestion:
+        ai.applyFinanceCategorySuggestion.withTransport(transport),
+    };
+    render(
+      <Harness
+        entity="expense"
+        mode="edit"
+        record={{ id: "EXP-4K7M" }}
+        fieldKeys={["spendingCategoryId"]}
+        textFields={["name"]}
+        operations={operations}
+        onReady={(f) => {
+          form = f;
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    await waitFor(() => expect(calls).toHaveLength(1));
+    fireEvent.change(screen.getByLabelText("name"), {
+      target: { value: "Unsaved sibling note" },
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByTestId("seed-items-spendingCategoryId").textContent,
+      ).toContain("Fixture clothing"),
+    );
+    await delay(FIELD_SUGGEST_DEBOUNCE_MS + 20);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply spendingCategoryId" }),
+    );
+    await waitFor(() => expect(transport).toHaveBeenCalledOnce());
+    fireEvent.change(screen.getByLabelText("spendingCategoryId"), {
+      target: { value: "SPC-8K7M" },
+    });
+    await act(async () =>
+      pending.resolve(
+        financeCategoryApplyOut.parse({
+          entity: "expense",
+          entityId: "EXP-4K7M",
+          spendingCategoryId: "SPC-4K7M",
+          sideEffects: {},
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(form.getValues("spendingCategoryId")).toBe("SPC-8K7M"),
+    );
+    expect(isDirtyText("spendingCategoryId")).toBe("true");
+    expect(form.getValues("name")).toBe("Unsaved sibling note");
+    act(() => form.resetField("spendingCategoryId"));
+    expect(form.getValues("spendingCategoryId")).toBe("SPC-4K7M");
+  });
+
+  it.each(["record", "intent"])(
+    "does not apply a late finance response after changing %s with the same empty category",
+    async (change) => {
+      let form!: UseFormReturn<FieldValues>;
+      const proposal: FieldSuggestion = {
+        value: "SPC-4K7M",
+        label: "Fixture clothing",
+        detail: null,
+        confidence: "high",
+        probability: 0.96,
+        reasoning: "Saved linked shirt",
+        alternatives: [],
+        operation: "set",
+        removals: [],
+        financeReview: {
+          entity: "expense",
+          entityId: "EXP-4K7M",
+          fingerprint: "a".repeat(64),
+        },
+      };
+      const pending = deferredFinanceApply();
+      const transport = vi.fn(async () => await pending.promise);
+      const operations = {
+        ...operationsReturning(() => ({
+          suggestions: { spendingCategoryId: proposal },
+        })),
+        applyFinanceCategorySuggestion:
+          ai.applyFinanceCategorySuggestion.withTransport(transport),
+      };
+      const props = {
+        entity: "expense" as const,
+        mode: "edit" as const,
+        fieldKeys: ["spendingCategoryId"],
+        textFields: ["name"],
+        operations,
+        onReady: (f: UseFormReturn<FieldValues>) => {
+          form = f;
+        },
+      };
+      const view = render(
+        <Harness
+          {...props}
+          record={{ id: "EXP-4K7M" }}
+          scopeKey="expense:full"
+        />,
+        {
+          wrapper: harness.wrapper,
+        },
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByTestId("seed-items-spendingCategoryId").textContent,
+        ).toContain("Fixture clothing"),
+      );
+      await delay(FIELD_SUGGEST_DEBOUNCE_MS + 20);
+      fireEvent.click(
+        screen.getByRole("button", { name: "Apply spendingCategoryId" }),
+      );
+      await waitFor(() => expect(transport).toHaveBeenCalledOnce());
+      view.rerender(
+        <Harness
+          {...props}
+          record={{ id: change === "record" ? "EXP-8K7M" : "EXP-4K7M" }}
+          scopeKey={
+            change === "intent" ? "expense:other-intent" : "expense:full"
+          }
+        />,
+      );
+      await act(async () =>
+        pending.resolve(
+          financeCategoryApplyOut.parse({
+            entity: "expense",
+            entityId: "EXP-4K7M",
+            spendingCategoryId: "SPC-4K7M",
+            sideEffects: {},
+          }),
+        ),
+      );
+      expect(form.getValues("spendingCategoryId")).toBe("");
+      expect(isDirtyText("spendingCategoryId")).toBe("false");
+    },
+  );
 
   it("never auto-writes in edit mode, but apply() writes and dirties", async () => {
     let form!: UseFormReturn<FieldValues>;

@@ -1,9 +1,12 @@
 import type { DetectedItem } from "@cubby/schemas/ai";
 import type {
+  ImageShortcode,
   LocationShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { ALLOWED_IMAGE_TYPES } from "@cubby/schemas/image";
+import { productCreateInput } from "@cubby/schemas/product";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
 import { CameraIcon } from "@phosphor-icons/react/dist/csr/Camera";
@@ -108,6 +111,10 @@ export function SessionCaptureActions({
   const addPhotoInputRef = useRef<HTMLInputElement>(null);
   const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
   const [photoName, setPhotoName] = useState("");
+  const [stagedPhotoUpload, setStagedPhotoUpload] = useState<{
+    file: File;
+    imageId: ImageShortcode;
+  } | null>(null);
 
   // Scan follow-up: a brand-new UPC product lands with no ingredient link
   // (invisible to recipe costing) and often with a placeholder name and no
@@ -177,28 +184,11 @@ export function SessionCaptureActions({
       onError: () => {},
     }),
   );
-  const createInventory = useMutation(
-    entityMutationOptionsFactory(
-      "inventory",
-      "create",
-    )({
+  const createWithInventory = useMutation(
+    product.createWithInventory.mutationOptions({
       onSuccess: () => invalidate({ watch: true }),
-      // No toast here: `submitPhotoIdentity`'s catch below already turns any
-      // failure in that flow into one `showErrorToast`; a populated
-      // `onError` would additionally trigger the global toast.
       onError: () => {},
     }),
-  );
-  const quickCreateProduct = useMutation(
-    product.quickCreate.mutationOptions({
-      // No toast here: `submitPhotoIdentity`'s catch below already turns any
-      // failure in that flow into one `showErrorToast`; a populated
-      // `onError` would additionally trigger the global toast.
-      onError: () => {},
-    }),
-  );
-  const updateProduct = useMutation(
-    entityMutationOptionsFactory("product", "update")({ onError: () => {} }),
   );
   const handleFile = async (file: File) => {
     try {
@@ -250,14 +240,9 @@ export function SessionCaptureActions({
     removeSuggestion(index);
   };
 
-  // Photo-as-identity: add an unlabeled object from a photo + a short name as a
-  // lightweight `misc:` product (no schema change — reuses the misc convention):
-  // upload the image → quickCreate the product → attach the image → add one each.
+  // Upload stays client-side; refused placement retains staging for retry.
   const photoIdentityPending =
-    uploadImage.isPending ||
-    quickCreateProduct.isPending ||
-    updateProduct.isPending ||
-    createInventory.isPending;
+    uploadImage.isPending || createWithInventory.isPending;
 
   const submitPhotoIdentity = async () => {
     const file = pendingPhoto;
@@ -269,33 +254,40 @@ export function SessionCaptureActions({
         toast.error(`Unsupported image type: ${file.type}`);
         return;
       }
-      const init = await uploadImage.mutateAsync({
-        filename: file.name,
-        contentType: contentType.data,
-        size: file.size,
-        entityKind: "PRODUCT",
-      });
-      try {
-        await putPresignedObject(init.uploadUrl, file, contentType.data);
-      } catch {
-        throw new Error("Image upload failed");
+      let imageId =
+        stagedPhotoUpload?.file === file ? stagedPhotoUpload.imageId : null;
+      if (!imageId) {
+        const init = await uploadImage.mutateAsync({
+          filename: file.name,
+          contentType: contentType.data,
+          size: file.size,
+          entityKind: "PRODUCT",
+        });
+        try {
+          await putPresignedObject(init.uploadUrl, file, contentType.data);
+        } catch {
+          throw new Error("Image upload failed");
+        }
+        imageId = init.imageId;
+        setStagedPhotoUpload({ file, imageId });
       }
-      const product = await quickCreateProduct.mutateAsync({
-        name: `misc: ${name}`,
-      });
-      await updateProduct.mutateAsync({
-        id: product.id,
-        data: { pendingImageIds: [init.imageId] },
-      });
-      const created = await createInventory.mutateAsync({
-        productId: product.id,
-        locationId: location.id,
-        amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
+      const created = await createWithInventory.mutateAsync({
+        product: productCreateInput.parse({
+          name: `misc: ${name}`,
+          manufacturer: UNSPECIFIED_MANUFACTURER,
+          pendingImageIds: [imageId],
+        }),
+        inventory: {
+          locationId: location.id,
+          placement: "stock",
+          amount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
+        },
       });
       toast.success(
         savedWithBackgroundWork(created.sideEffects, `Added ${name}`),
       );
       setPendingPhoto(null);
+      setStagedPhotoUpload(null);
       setPhotoName("");
     } catch (error) {
       showErrorToast(error, "Add failed");
@@ -330,6 +322,7 @@ export function SessionCaptureActions({
             const file = event.target.files?.[0];
             if (file) {
               setPendingPhoto(file);
+              setStagedPhotoUpload(null);
               setPhotoName("");
             }
             event.target.value = "";
@@ -468,6 +461,7 @@ export function SessionCaptureActions({
         onOpenChange={(open) => {
           if (!open && !photoIdentityPending) {
             setPendingPhoto(null);
+            setStagedPhotoUpload(null);
             setPhotoName("");
           }
         }}

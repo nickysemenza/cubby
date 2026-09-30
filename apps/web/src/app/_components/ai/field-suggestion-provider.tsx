@@ -28,6 +28,7 @@ import {
   type EntitySuggestionsOperations,
   type FieldSuggestionSource,
   FIELD_SUGGEST_DEBOUNCE_MS,
+  financeSuggestionEntityId,
   isBasisSufficient,
   type SuggestTargets,
   suggestionContextKeys,
@@ -40,11 +41,14 @@ import {
   useSuggestionVisit,
 } from "./suggestion-review";
 import { SuggestionStatus } from "./suggestion-status";
+import { useFinanceCategoryApply } from "./use-finance-category-apply";
 
 export interface FieldSuggestionContextValue {
   readonly questionKey: string;
   readonly entity: ShortcodeEntity;
   readonly mode: "create" | "edit";
+  readonly entityId?: string;
+  readonly editorScope?: string;
   readonly suggestions: Record<string, FieldSuggestion | null>;
   readonly isFetching: boolean;
   readonly resolutionFor: (field: string) => FieldResolution | null;
@@ -66,6 +70,9 @@ export interface FieldSuggestionContextValue {
    * inside this form (e.g. `ExternalIdKindSuggestion`) reuses it instead of
    * filing its call under the actor's hourly run. */
   readonly runKey: string;
+  readonly applyFinanceCategory: ReturnType<
+    typeof useFinanceCategoryApply
+  >["apply"];
 }
 
 const FieldSuggestionContext =
@@ -159,6 +166,7 @@ export function FieldSuggestionProvider({
   operations,
   fieldKeys,
   record,
+  scopeKey,
   children,
 }: {
   entity: ShortcodeEntity;
@@ -180,12 +188,16 @@ export function FieldSuggestionProvider({
   /** Existing read projection. Its field resolutions preserve raw inheritance
    * intent while edit-mode suggestions are reviewed as explicit alternatives. */
   record?: unknown;
+  scopeKey?: string;
   children: ReactNode;
 }) {
   const form = useFormContext();
   // One id per page mount, grouping every suggestFields call this provider
   // makes into one `ai_suggest` run.
   const [runKey] = useState(() => crypto.randomUUID());
+  const persistedEntityId =
+    mode === "edit" ? financeSuggestionEntityId(entity, record) : undefined;
+  const financeApply = useFinanceCategoryApply(operations);
   const recordResolutions = useMemo(() => {
     const parsed = resolutionRecordSchema.safeParse(record);
     return parsed.success ? (parsed.data.fieldResolutions ?? {}) : {};
@@ -309,12 +321,25 @@ export function FieldSuggestionProvider({
     wait: FIELD_SUGGEST_DEBOUNCE_MS,
   });
 
-  const sufficient = isBasisSufficient(entity, targets, debouncedBasis);
+  const sufficient = isBasisSufficient(
+    entity,
+    targets,
+    debouncedBasis,
+    persistedEntityId,
+  );
   const basisSettled = JSON.stringify(basis) === JSON.stringify(debouncedBasis);
   const { suggestedTargets, alternativeTargets } = useMemo(() => {
     const suggestedTargets: string[] = [];
     const alternativeTargets: string[] = [];
     targets.targets.forEach((target, index) => {
+      if (
+        persistedEntityId &&
+        target.key === "spendingCategoryId" &&
+        ["purchaseId", "productId", "vendorId"].some(
+          (key) => form.getFieldState(paths?.[key] ?? key).isDirty,
+        )
+      )
+        return;
       if (isAllocatedExpenseProject(entity, target.key, basis)) {
         return;
       }
@@ -347,11 +372,14 @@ export function FieldSuggestionProvider({
     form,
     basis,
     authoritativeResolutions,
+    persistedEntityId,
+    paths,
   ]);
   const suggestedSource = useMemo(
     () =>
       suggestedTargets.length > 0 && sufficient && basisSettled
         ? {
+            entityId: persistedEntityId,
             basisMode: "suggested" as const,
             entity,
             targets: suggestedTargets,
@@ -366,12 +394,14 @@ export function FieldSuggestionProvider({
       basisSettled,
       debouncedBasis,
       runKey,
+      persistedEntityId,
     ],
   );
   const alternativeSource = useMemo(
     () =>
       alternativeTargets.length > 0 && sufficient && basisSettled
         ? {
+            entityId: persistedEntityId,
             basisMode: "provided" as const,
             entity,
             targets: alternativeTargets,
@@ -386,6 +416,7 @@ export function FieldSuggestionProvider({
       basisSettled,
       debouncedBasis,
       runKey,
+      persistedEntityId,
     ],
   );
 
@@ -472,11 +503,16 @@ export function FieldSuggestionProvider({
   const failures =
     (suggestedQuery.isError ? 1 : 0) + (alternativeQuery.isError ? 1 : 0);
 
+  const applyFinanceCategory = financeApply.apply;
+  const refetchSuggested = suggestedQuery.refetch;
+  const refetchAlternatives = alternativeQuery.refetch;
   const value = useMemo<FieldSuggestionContextValue>(
     () => ({
       questionKey: JSON.stringify([suggestedSource, alternativeSource]),
       entity,
       mode,
+      entityId: persistedEntityId,
+      editorScope: scopeKey ?? persistedEntityId,
       suggestions: settled ? suggestions : {},
       isFetching: isFetching || !settled,
       resolutionFor: (field) => liveResolutions[field] ?? null,
@@ -489,6 +525,14 @@ export function FieldSuggestionProvider({
       clearAutoFilled,
       isAutoFilled,
       runKey,
+      applyFinanceCategory: async (suggestion) => {
+        try {
+          return await applyFinanceCategory(suggestion);
+        } catch (error) {
+          await Promise.all([refetchSuggested(), refetchAlternatives()]);
+          throw error;
+        }
+      },
     }),
     [
       suggestedSource,
@@ -496,6 +540,8 @@ export function FieldSuggestionProvider({
       settled,
       entity,
       mode,
+      persistedEntityId,
+      scopeKey,
       suggestions,
       outcomes,
       currentValuesByField,
@@ -506,6 +552,9 @@ export function FieldSuggestionProvider({
       clearAutoFilled,
       isAutoFilled,
       runKey,
+      applyFinanceCategory,
+      refetchSuggested,
+      refetchAlternatives,
     ],
   );
 

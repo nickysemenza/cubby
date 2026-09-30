@@ -113,9 +113,28 @@ export function useEntityEditSession<E extends EditableEntity>(
     defaultValues: initialValues,
   });
 
+  const recordIdentity = z
+    .object({ id: z.string() })
+    .safeParse(stableRequest.record);
+  const scope = JSON.stringify({
+    ...stableRequest,
+    record: recordIdentity.success
+      ? recordIdentity.data.id
+      : stableRequest.record,
+  });
+  const previousScope = useRef<string | null>(null);
+  const dirtyFields = useRef(form.formState.dirtyFields);
+  dirtyFields.current = form.formState.dirtyFields;
   useEffect(() => {
-    form.reset(initialValues);
-  }, [form, initialValues]);
+    // An immediate field save refreshes the same record while sibling drafts
+    // remain open. A different record/intent still starts a fresh editor.
+    form.reset(initialValues, {
+      keepDirtyValues:
+        previousScope.current === scope &&
+        Object.keys(dirtyFields.current).length > 0,
+    });
+    previousScope.current = scope;
+  }, [form, initialValues, scope]);
 
   const access = isResolvedEntityEdit(resolved)
     ? resolved.intentDefinition.access({
@@ -162,8 +181,8 @@ export function useEntityEditSession<E extends EditableEntity>(
   );
   const reset = useCallback(() => {
     setThrownIssues(NO_ISSUES);
-    form.reset(initialValues);
-  }, [form, initialValues]);
+    form.reset();
+  }, [form]);
   const submit = useCallback(async (): Promise<EntityEditResult<E>> => {
     if (!isResolvedEntityEdit(resolved)) {
       applyIssues(resolved.issues);

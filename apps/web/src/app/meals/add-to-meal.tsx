@@ -197,11 +197,7 @@ export function AddToMeal({
   const addRecipe = useMutation(
     operations.addRecipe.mutationOptions({ onSuccess }),
   );
-  const updateMeal = useMutation(
-    operations.mealMutation.forEntity("meal").mutationOptions(),
-  );
-  const isPending =
-    createMeal.isPending || addRecipe.isPending || updateMeal.isPending;
+  const isPending = createMeal.isPending || addRecipe.isPending;
 
   const submit = async () => {
     if (target === NEW_MEAL) {
@@ -217,17 +213,12 @@ export function AddToMeal({
       });
       return;
     }
-    // Re-kind first so the meal is never briefly a non-cooked meal holding a
-    // recipe — that intermediate state is the one the shopping list drops.
-    if (targetNotCooked && switchToCooked) {
-      await updateMeal.mutateAsync({
-        action: "update",
-        entity: "meal",
-        id: target,
-        data: { mealKind: "cooked" },
-      });
-    }
-    addRecipe.mutate({ mealId: target, recipeId, scale: 1 });
+    addRecipe.mutate({
+      mealId: target,
+      recipeId,
+      scale: 1,
+      convertToCooked: targetNotCooked && switchToCooked,
+    });
   };
 
   return (

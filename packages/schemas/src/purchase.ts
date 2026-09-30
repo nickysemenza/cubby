@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { financialTransactionOut } from "./financial-transaction";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
 import { uniqueBy } from "./base-entity";
@@ -43,6 +44,28 @@ export {
 } from "./generated/purchase.gen";
 
 export const splitExpenseOut = z.array(expenseOut);
+
+export const purchaseSettlementCandidatesInput = z.object({
+  purchaseId: purchaseShortcode,
+});
+
+export const purchaseSettlementCandidatesOut = z.object({
+  advisory: z
+    .literal(true)
+    .describe(
+      "Suggestions only: reading candidates does not allocate settlement evidence or change the Expense ledger. Review and explicitly save allocations separately.",
+    ),
+  candidates: z
+    .array(
+      z.object({
+        transaction: financialTransactionOut,
+        days: z.number().int().min(0).max(45),
+        merchantMatches: z.boolean(),
+        exactAmount: z.boolean(),
+      }),
+    )
+    .max(10),
+});
 
 const purchaseCreateFields = {
   ...generatedPurchaseFieldSchemas.create,

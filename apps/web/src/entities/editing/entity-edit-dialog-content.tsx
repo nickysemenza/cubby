@@ -394,6 +394,12 @@ export function EntityEditDialogContent<E extends EditableEntity>({
           fieldKeys={intentFields}
           staticBasis={staticBasis}
           record={record}
+          scopeKey={JSON.stringify([
+            request.entity,
+            request.operation,
+            request.intent,
+            "dialog",
+          ])}
         >
           <presentation.Fields
             form={session.form}

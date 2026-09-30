@@ -59,6 +59,7 @@
     "./unitmapping": "./src/unitmapping.ts",
     "./external-id": "./src/external-id.ts",
     "./product": "./src/product.ts",
+    "./product-capture": "./src/product-capture.ts",
     "./product-fields": "./src/product-fields.ts",
     "./product-workflow": "./src/product-workflow.ts",
     "./product-components": "./src/product-components.ts",

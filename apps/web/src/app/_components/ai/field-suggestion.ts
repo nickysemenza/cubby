@@ -4,6 +4,7 @@ import type {
 } from "@cubby/schemas/ai";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 
@@ -65,7 +66,12 @@ export function suggestionContextKeys(
       : entity === "task"
         ? INHERITANCE_CONTEXT_KEYS.task
         : [];
-  return [...new Set([...targets.basisKeys, ...inheritedKeys])];
+  const financeKeys =
+    entity === "financialTransaction" &&
+    targets.targets.some((target) => target.key === "spendingCategoryId")
+      ? ["purchaseId"]
+      : [];
+  return [...new Set([...targets.basisKeys, ...inheritedKeys, ...financeKeys])];
 }
 
 const EMPTY_TARGETS: SuggestTargets = { targets: [], basisKeys: [] };
@@ -152,6 +158,12 @@ export function fieldSuggestionBasisFromRecord<TRecord extends object>(
   record: TRecord,
 ) {
   const basis: Record<string, string | null> = {};
+  const entityId = financeSuggestionEntityId(entity, record);
+  if (
+    entityId &&
+    targets.targets.some((target) => target.key === "spendingCategoryId")
+  )
+    basis.__financeEntityId = entityId;
   const referenceLabels: Record<string, { id: string; name: string | null }> =
     {};
   for (const key of targets.basisKeys) {
@@ -191,8 +203,15 @@ export function isBasisSufficient(
   entity: ShortcodeEntity,
   targets: SuggestTargets,
   basis: Record<string, string | null>,
+  entityId?: string,
 ): boolean {
   if (targets.targets.length === 0) return false;
+  if (
+    (entityId ?? basis.__financeEntityId) &&
+    ["financialTransaction", "purchase", "expense"].includes(entity) &&
+    targets.targets.some((target) => target.key === "spendingCategoryId")
+  )
+    return true;
   const onlyProductReferenceTargets = targets.targets.every(
     (target) => target.reference?.entity === "product",
   );
@@ -207,7 +226,20 @@ export function isBasisSufficient(
   return false;
 }
 
+export function financeSuggestionEntityId(
+  entity: string,
+  record: unknown,
+): string | undefined {
+  if (!["financialTransaction", "purchase", "expense"].includes(entity))
+    return undefined;
+  const parsed = z.object({ id: z.string() }).safeParse(record);
+  return parsed.success && parseShortcode(parsed.data.id)?.type === entity
+    ? parsed.data.id
+    : undefined;
+}
+
 export interface FieldSuggestionSource {
+  readonly entityId?: string;
   basisMode: "provided" | "suggested";
   readonly entity: ShortcodeEntity;
   /** Bare manifest field keys of `entity` being requested this call. */
@@ -223,11 +255,13 @@ export interface FieldSuggestionSource {
  * via `.withTransport(...)` without touching the hook itself. */
 export interface EntitySuggestionsOperations {
   suggestFields: typeof ai.suggestFields;
+  applyFinanceCategorySuggestion?: typeof ai.applyFinanceCategorySuggestion;
 }
 
 export const productionEntitySuggestionsOperations: EntitySuggestionsOperations =
   {
     suggestFields: ai.suggestFields,
+    applyFinanceCategorySuggestion: ai.applyFinanceCategorySuggestion,
   };
 
 /** Never a fresh `{}` — a stable default keeps `suggestions` referentially
@@ -271,7 +305,8 @@ const INACTIVE_SUGGESTION_SOURCE: FieldSuggestionSource = {
  * `FieldSuggestionProvider` (one per form) and `FieldSuggestionApply`
  * (non-RHF surfaces) both call this rather than rolling their own `useQuery`.
  * The query key **is** the basis, so a response can never be shown against a
- * basis it wasn't asked about — no separate staleness check is needed.
+ * basis it wasn't asked about. Saved finance evidence also has a server-checked
+ * review fingerprint because linked records can change independently.
  */
 export function useEntitySuggestionsQuery({
   source,
@@ -284,6 +319,8 @@ export function useEntitySuggestionsQuery({
 }) {
   const effective = source ?? INACTIVE_SUGGESTION_SOURCE;
   const opts = operations.suggestFields.queryOptions({
+    entityId:
+      effective.entityId ?? effective.basis.__financeEntityId ?? undefined,
     basisMode: effective.basisMode,
     entity: effective.entity,
     targets: [...effective.targets],
@@ -297,6 +334,7 @@ export function useEntitySuggestionsQuery({
     meta: { ...opts.meta, silentErrors: true },
   });
   return {
+    refetch: query.refetch,
     suggestions: query.data?.suggestions ?? EMPTY_SUGGESTIONS,
     fieldResolutions: query.data?.fieldResolutions ?? EMPTY_FIELD_RESOLUTIONS,
     eligibleTargets: query.data?.eligibleTargets ?? [],
