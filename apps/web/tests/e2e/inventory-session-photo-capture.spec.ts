@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { initiateUploadWithoutEntityResponseSchema } from "@cubby/schemas/image";
 import { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
+import { locationCreateInput } from "@cubby/schemas/location";
 import { productWithFoodOut } from "@cubby/schemas/product";
 import {
   productCreateWithInventoryInput,
@@ -16,7 +17,7 @@ import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
 
-import { seedLocationPrerequisite } from "./e2e-fixtures";
+import { createFixture } from "./e2e-fixtures";
 import {
   gotoAuthenticatedPage,
   reloadAuthenticatedPage,
@@ -61,9 +62,16 @@ const operationResult = async <Schema extends z.ZodType>(
 test("Photo item uploads a staged image and commits one Product with one each at the reviewed location", async ({
   page,
 }, testInfo) => {
-  const location = await seedLocationPrerequisite(
+  const location = await createFixture(
     page,
-    uniqueName(testInfo, "Synthetic photo capture shelf"),
+    "location",
+    locationCreateInput.parse({
+      name: uniqueName(testInfo, "Synthetic photo capture shelf"),
+      type: "shelf",
+      parentId: null,
+      aliases: [],
+      tags: [],
+    }),
   );
   const name = uniqueName(testInfo, "Synthetic photo capture clamp");
   const addHere = page.getByRole("button", { name: /Add something here/ });
