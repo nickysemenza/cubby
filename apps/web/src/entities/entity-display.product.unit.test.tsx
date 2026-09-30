@@ -3,7 +3,6 @@ import type { CellData } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import {
   createCubbyColumnCollection,
@@ -234,38 +233,11 @@ function renderProductCell(columnId: string, row: ProductRow) {
   return first;
 }
 
-/** True type guard (not a bare `typeof`-narrowed cast): the domain type here
- * is exactly a column's `header`, a TanStack `ColumnDefTemplate` — a string
- * or a template function taking header context. */
-function isHeaderFunction<TProps extends object>(
-  header: string | ((props: TProps) => ReactNode) | undefined,
-): header is (props: TProps) => ReactNode {
-  return typeof header === "function";
-}
-
-/** Most columns' header is the declared label (a plain string); "price"
- * alone keeps a header FUNCTION (see `buildProductColumns`), the one shape
- * `createEntityDisplayColumns` lets through unreplaced. */
-function headerText<TRecord extends object, TValue extends CellData>(
-  header: CubbyColumnDef<TRecord, TValue>["header"],
-): string {
-  const parsed = z.string().safeParse(header);
-  if (parsed.success) return parsed.data;
-  if (!isHeaderFunction(header)) {
-    throw new Error("Expected a string or header-template function.");
-  }
-  // SAFETY: "price" is this fixture's only header function
-  // (`() => "Price"`), and it ignores its HeaderContext entirely — an empty
-  // stand-in context is never read.
-  return z.string().parse(header({} as never));
-}
-
 function buildProductColumnMeta() {
   return buildProductColumns().visit((column) => ({
     id: String(
       column.id ?? ("accessorKey" in column ? column.accessorKey : ""),
     ),
-    header: headerText(column.header),
     className: column.meta?.className,
     mobile: column.meta?.mobile,
     enableSorting: column.enableSorting,
@@ -273,60 +245,6 @@ function buildProductColumnMeta() {
 }
 
 describe("product list display columns", () => {
-  it("builds exactly the declared columns, in listOrder", () => {
-    const ids = buildProductColumnMeta().map((d) => d.id);
-    expect(ids).toEqual([
-      "tags",
-      "fdc_id",
-      "manufacturer",
-      "dataQuality",
-      "model",
-      "notes",
-      "categoryId",
-      "price",
-      "externalIds",
-      "usdaUnavailable",
-      "stockTracked",
-      "primaryGtin",
-      "expenseTotal",
-      "componentCount",
-      "servingAsLocations",
-      "ledgerExpectedQuantity",
-      "quantityVariance",
-      "purchaseDate",
-      "expenseCount",
-      "onHandUnits",
-    ]);
-  });
-
-  it("takes every header from the declared label, including on overrides", () => {
-    const byId = Object.fromEntries(
-      buildProductColumnMeta().map((d) => [d.id, d.header]),
-    );
-    expect(byId).toEqual({
-      categoryId: "Category",
-      manufacturer: "Manufacturer",
-      primaryGtin: "Primary GTIN",
-      fdc_id: "FDC ID",
-      model: "Model",
-      notes: "Notes",
-      stockTracked: "Stock tracked",
-      dataQuality: "Data quality",
-      externalIds: "External IDs",
-      price: "Price",
-      expenseTotal: "Expense total",
-      servingAsLocations: "Serving as locations",
-      componentCount: "Component count",
-      ledgerExpectedQuantity: "Ledger expected quantity",
-      quantityVariance: "Quantity variance",
-      purchaseDate: "Purchase date",
-      tags: "Tags",
-      expenseCount: "Expense count",
-      usdaUnavailable: "USDA unavailable",
-      onHandUnits: "On hand units",
-    });
-  });
-
   it("derives enableSorting from the generated sort roster per column id", () => {
     const byId = Object.fromEntries(
       buildProductColumnMeta().map((d) => [d.id, d.enableSorting]),

@@ -1128,6 +1128,29 @@ export default defineEntity({
   },
   relations: [
     {
+      key: "spendingCategory",
+      label: "Spending category",
+      target: "spendingCategory",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          {
+            edge: "FinancialTransaction.spendingCategoryId",
+            direction: "outgoing",
+          },
+        ],
+      },
+      inverse: {
+        steps: [
+          {
+            edge: "FinancialTransaction.spendingCategoryId",
+            direction: "incoming",
+          },
+        ],
+      },
+    },
+    {
       key: "account",
       label: "Financial account",
       target: "financialAccount",

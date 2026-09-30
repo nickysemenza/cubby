@@ -106,6 +106,9 @@ export type ExpenseRow = {
   date: string | null;
   spendingCategoryId?: SpendingCategoryId | null;
   spendingCategoryShortcode?: string | null;
+  spendingCategoryName?: string | null;
+  storedSpendingCategoryShortcode?: string | null;
+  fallbackSpendingCategoryShortcode?: string | null;
   economicRole?: ExpenseOut["economicRole"];
   bookingTransactionCode?: string | null;
   lineKind: ExpenseOut["lineKind"];
@@ -221,6 +224,41 @@ const expenseSourceClaims = (row: ExpenseRow): ExpenseOut["sourceClaims"] =>
       createdAt: value.createdAt,
       updatedAt: value.updatedAt,
     }));
+
+const expenseSpendingCategoryFieldResolution = (
+  row: ExpenseRow,
+  purchaseRow: ExpenseRow["purchase"],
+): NonNullable<ExpenseOut["fieldResolutions"]>[string] => {
+  const value = row.spendingCategoryShortcode ?? null;
+  const storedValue = row.storedSpendingCategoryShortcode ?? null;
+  const fallbackValue = row.fallbackSpendingCategoryShortcode ?? null;
+  return {
+    mode: storedValue ? "explicit" : value ? "inherit" : "none",
+    storedValue,
+    value,
+    fallbackValue,
+    source: storedValue
+      ? "expense override"
+      : value
+        ? "purchase default"
+        : "none",
+    sourceEntity: storedValue
+      ? {
+          entityKind: "spendingCategory",
+          entityId: storedValue,
+          name: row.spendingCategoryName ?? null,
+        }
+      : value && purchaseRow
+        ? {
+            entityKind: "purchase",
+            entityId: purchaseRow.shortcode,
+            name: purchaseRow.displayLabel ?? purchaseRow.orderId ?? null,
+          }
+        : null,
+    matchesFallback: value === fallbackValue,
+    canReset: storedValue !== null,
+  };
+};
 
 const expenseProjectFieldResolution = (
   row: ExpenseRow,
@@ -438,6 +476,10 @@ export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
       row.effectiveProjectShortcode === undefined
         ? undefined
         : {
+            spendingCategoryId: expenseSpendingCategoryFieldResolution(
+              row,
+              purchaseRow,
+            ),
             projectId: expenseProjectFieldResolution(
               row,
               purchaseRow,

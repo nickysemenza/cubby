@@ -100,6 +100,7 @@ const referencePickerEntities = new Set<PickerEntity>([
   "location",
   "product",
   "productCategory",
+  "spendingCategory",
   "recipe",
   "project",
   "task",

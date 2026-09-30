@@ -194,7 +194,83 @@ export default defineEntity({
       },
     ],
   },
-  relations: [],
+  relations: [
+    {
+      key: "parent",
+      label: "Parent category",
+      target: "spendingCategory",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "SpendingCategory.parentId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "SpendingCategory.parentId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "children",
+      label: "Subcategories",
+      target: "spendingCategory",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "SpendingCategory.parentId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "SpendingCategory.parentId", direction: "outgoing" }],
+      },
+    },
+    {
+      key: "purchases",
+      label: "Purchases",
+      target: "purchase",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Purchase.spendingCategoryId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Purchase.spendingCategoryId", direction: "outgoing" }],
+      },
+    },
+    {
+      key: "expenses",
+      label: "Expense overrides",
+      target: "expense",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Expense.spendingCategoryId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Expense.spendingCategoryId", direction: "outgoing" }],
+      },
+    },
+    {
+      key: "transactions",
+      label: "Transactions",
+      target: "financialTransaction",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          {
+            edge: "FinancialTransaction.spendingCategoryId",
+            direction: "incoming",
+          },
+        ],
+      },
+      inverse: {
+        steps: [
+          {
+            edge: "FinancialTransaction.spendingCategoryId",
+            direction: "outgoing",
+          },
+        ],
+      },
+    },
+  ],
   search: { enabled: false },
   capabilities: {
     auditable: true,

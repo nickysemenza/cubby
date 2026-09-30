@@ -17,7 +17,7 @@ import {
   statementImportOut,
   statementRowOut,
 } from "@cubby/schemas/statement-row";
-import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -825,7 +825,19 @@ export async function updateStatementRows(
     const updated = await unwrapDb(tx)
       .update(statementRow)
       .set(values)
-      .where(selectorConditions(selector))
+      .where(
+        and(
+          selectorConditions(selector),
+          // A repeated reviewed assignment must preserve observation metadata
+          // and its row version, including nullable judgments.
+          or(
+            ...Object.entries(values).map(
+              ([column, value]) =>
+                sql`${sql.identifier(column)} IS DISTINCT FROM ${value}`,
+            ),
+          ),
+        ),
+      )
       .returning({ id: statementRow.id });
     return { affected: updated.length };
   });

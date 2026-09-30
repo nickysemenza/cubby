@@ -83,7 +83,14 @@
         "~/*": ["./src/*"],
         "tooling/*": ["./tooling/*"]
       },
-      "ignoreBinaries": ["tsgo", "rsvg-convert", "magick", "apple"],
+      "ignoreBinaries": [
+        "tsgo",
+        "rsvg-convert",
+        "magick",
+        "apple",
+        "openssl",
+        "ditto"
+      ],
       "ignoreDependencies": [
         "@fontsource-variable/inter",
         "@fontsource-variable/jetbrains-mono",

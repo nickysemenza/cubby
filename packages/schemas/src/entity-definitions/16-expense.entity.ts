@@ -86,6 +86,7 @@ export default defineEntity({
           "beneficiaries",
           "funders",
           "sourceClaims",
+          "spendingCategoryId",
           "projectAllocations",
         ],
         media: ["vendorLogo", "displayImages"],
@@ -153,6 +154,34 @@ export default defineEntity({
         reference: { entity: "spendingCategory" },
         control: { kind: "specialized", renderer: "entity-select" },
         display: { list: true, detail: true },
+        resolution: {
+          reset: { spendingCategoryId: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "expense.effective-spending-category",
+          description:
+            "An Expense spending category override wins; otherwise the Expense uses its Purchase's spending category.",
+          projections: {
+            list: "fieldResolutions.spendingCategoryId.value",
+            detail: "fieldResolutions.spendingCategoryId.value",
+            summary: "fieldResolutions.spendingCategoryId.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.spendingCategoryId.sourceEntity",
+              label: "Source",
+            },
+            {
+              path: "fieldResolutions.spendingCategoryId.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.spendingCategoryId.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
+        },
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
           create: spendingCategoryShortcode.nullable().default(null),
@@ -1426,6 +1455,19 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "spendingCategory",
+      label: "Category override",
+      target: "spendingCategory",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Expense.spendingCategoryId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Expense.spendingCategoryId", direction: "incoming" }],
+      },
+    },
     {
       key: "purchase",
       label: "Purchase",

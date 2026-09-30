@@ -57,6 +57,11 @@ const fixtureOverrides = {
   inventory: { product: { externalIds: [] }, attachments: [] },
   meal: { recipes: [], totals: emptyTotals, attachments: [] },
   recipe: { totals: emptyTotals, attachments: [] },
+  financialTransaction: {
+    status: "posted",
+    postedDate: "2026-09-21",
+    attachments: [],
+  },
   // Candidate rows hydrate product images over the transport; none here.
   wish: { candidates: [], attachments: [] },
 } as const;

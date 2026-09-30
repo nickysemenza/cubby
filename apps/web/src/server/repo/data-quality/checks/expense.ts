@@ -1,4 +1,4 @@
-import { getTableName, sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 import { expense } from "~/server/db/schema";
 import {
@@ -9,6 +9,16 @@ import {
 import { defineEntityChecks } from "../registry";
 
 type Expense = typeof expense;
+
+// Relational lists rename Expense to expense. Keep the outer reference as a
+// Drizzle column and evaluate policy under an alias local to this subquery.
+const policyProjection = (
+  t: Expense,
+  policy: (alias: string) => SQL,
+): SQL => sql`(
+  SELECT ${policy("dq_expense_policy")} FROM "Expense" dq_expense_policy
+  WHERE dq_expense_policy.id = ${t.id}
+)`;
 
 export const expenseChecks = defineEntityChecks({
   entity: "expense",
@@ -24,16 +34,16 @@ export const expenseChecks = defineEntityChecks({
     expense_spending_category: {
       expected: (t) => sql`${t.future} = false`,
       missing: (t) =>
-        sql`${effectiveExpenseSpendingCategorySql(getTableName(t))} IS NULL`,
+        sql`${policyProjection(t, effectiveExpenseSpendingCategorySql)} IS NULL`,
       fingerprint: (t) => [
-        effectiveExpenseSpendingCategorySql(getTableName(t)),
+        policyProjection(t, effectiveExpenseSpendingCategorySql),
       ],
     },
     expense_product_resolution: {
-      expected: (t) => expenseProductExpectedSql(getTableName(t)),
+      expected: (t) => policyProjection(t, expenseProductExpectedSql),
       missing: (t) => sql`${t.productId} IS NULL`,
       fingerprint: (t) => [
-        expenseProductExpectedSql(getTableName(t)),
+        policyProjection(t, expenseProductExpectedSql),
         sql`${t.productId}`,
       ],
     },

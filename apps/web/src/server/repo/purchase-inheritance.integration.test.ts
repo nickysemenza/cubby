@@ -11,7 +11,7 @@ import { getEntityRecommendations } from "~/server/services/entity-recommendatio
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { getDb } from "./database-helpers";
-import { getExpenseByShortcode, updateExpense } from "./expense";
+import { expenseList, getExpenseByShortcode, updateExpense } from "./expense";
 import { resolveDraftExpenseFields } from "./expense-inheritance";
 import {
   deletePurchases,
@@ -86,6 +86,98 @@ describe("purchase inheritance lifecycle", () => {
     expect(await getExpenseByShortcode(ctx.db, code)).toMatchObject({
       projectId: second.shortcode,
       trade: "plumbing",
+    });
+  });
+
+  it("reads the effective spending category on detail and lists while preserving override and reset intent", async () => {
+    const { source, item } = await fixture();
+    const inherited = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Inherited fixture category",
+    });
+    const override = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Explicit fixture category",
+    });
+    await updatePurchase(
+      ctx.db,
+      source.shortcode,
+      { spendingCategoryId: inherited.shortcode },
+      ctx.actor,
+    );
+    const expectedInherited = {
+      spendingCategoryId: inherited.shortcode,
+      fieldResolutions: {
+        spendingCategoryId: {
+          mode: "inherit",
+          storedValue: null,
+          value: inherited.shortcode,
+          fallbackValue: inherited.shortcode,
+          source: "purchase default",
+          sourceEntity: { entityKind: "purchase", entityId: source.shortcode },
+          matchesFallback: true,
+          canReset: false,
+        },
+      },
+    };
+    expect(await getExpenseByShortcode(ctx.db, item.shortcode)).toMatchObject(
+      expectedInherited,
+    );
+    const list = await expenseList(ctx.db, {}, [], {
+      pageIndex: 0,
+      pageSize: 25,
+    });
+    expect(list.data.find((row) => row.id === item.shortcode)).toMatchObject(
+      expectedInherited,
+    );
+    await updateExpense(
+      ctx.db,
+      item.shortcode,
+      { spendingCategoryId: override.shortcode },
+      ctx.actor,
+    );
+    expect(await getExpenseByShortcode(ctx.db, item.shortcode)).toMatchObject({
+      spendingCategoryId: override.shortcode,
+      fieldResolutions: {
+        spendingCategoryId: {
+          mode: "explicit",
+          storedValue: override.shortcode,
+          value: override.shortcode,
+          fallbackValue: inherited.shortcode,
+          source: "expense override",
+          matchesFallback: false,
+          canReset: true,
+        },
+      },
+    });
+    await updateExpense(
+      ctx.db,
+      item.shortcode,
+      { spendingCategoryId: null },
+      ctx.actor,
+    );
+    expect(await getExpenseByShortcode(ctx.db, item.shortcode)).toMatchObject(
+      expectedInherited,
+    );
+    expect(
+      await getDb(ctx.db).query.expense.findFirst({
+        where: (row, { eq }) => eq(row.id, item.id),
+      }),
+    ).toMatchObject({ spendingCategoryId: null });
+    await updatePurchase(
+      ctx.db,
+      source.shortcode,
+      { spendingCategoryId: override.shortcode },
+      ctx.actor,
+    );
+    expect(await getExpenseByShortcode(ctx.db, item.shortcode)).toMatchObject({
+      spendingCategoryId: override.shortcode,
+      fieldResolutions: {
+        spendingCategoryId: {
+          mode: "inherit",
+          storedValue: null,
+          fallbackValue: override.shortcode,
+          source: "purchase default",
+        },
+      },
     });
   });
 

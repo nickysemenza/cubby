@@ -662,6 +662,16 @@ async function enrichUniverse(
       // A create that refuses this combination leaves its edges uncovered.
     }
   }
+  const spendingCategoryCode = shortcodeByPrefix.get("SPC-");
+  if (spendingCategoryCode)
+    await insertWithShortcode(db, "spendingCategory", {
+      name: "Delete policy fixture child category",
+      parentId: await resolveOrThrow(
+        db,
+        "spendingCategory",
+        spendingCategoryCode,
+      ),
+    });
   const image = await createImageFixture(db, "delete-policy");
   for (const code of shortcodeByPrefix.values()) {
     if (!attachableImageEntityId.safeParse(code).success) continue;

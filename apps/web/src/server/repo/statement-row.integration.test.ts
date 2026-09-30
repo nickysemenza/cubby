@@ -112,6 +112,10 @@ describe("statement row ledger", () => {
       ],
     });
     expect(committed).toMatchObject({ transactions: 2, evidence: 3 });
+    const savedOccurrences = await getDb(ctx.db).execute(sql`
+      SELECT "externalId", "accountId", "updatedAt", xmin::text AS version
+      FROM "StatementRow" ORDER BY "externalId"
+    `);
     expect(
       await commitStatementCsv(ctx.db, ctx.actor, {
         ...file,
@@ -121,6 +125,16 @@ describe("statement row ledger", () => {
         ],
       }),
     ).toMatchObject({ transactions: 0, evidence: 0 });
+    // Exact-file retry must preserve both observation metadata and the row's
+    // MVCC version; unchanged economic totals alone would miss a hidden UPDATE.
+    expect(
+      (
+        await getDb(ctx.db).execute(sql`
+        SELECT "externalId", "accountId", "updatedAt", xmin::text AS version
+        FROM "StatementRow" ORDER BY "externalId"
+      `)
+      ).rows,
+    ).toEqual(savedOccurrences.rows);
     const drift = {
       fileName: "drift.csv",
       text: `${header}\n2026-08-18,Synthetic Cafe,Food,Occurrence Visa,CAFE,,-4.50,one`,

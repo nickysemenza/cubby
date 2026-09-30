@@ -86,7 +86,7 @@ const expenseProductExpectationSql = (alias: string): SQL => sql`(CASE
 export const expenseProductExpectedSql = (alias: string): SQL =>
   sql`(${expenseProductExpectationSql(alias)} = 'required')`;
 
-export const purchaseBookingSql = (alias: string): SQL => sql`(SELECT CASE
+const purchaseBookingSql = (alias: string): SQL => sql`(SELECT CASE
   WHEN count(*) = 0 THEN 'missing'
   WHEN count(*) FILTER (WHERE ep_book.cost IS NULL) > 0 THEN 'partial'
   ELSE 'recorded' END

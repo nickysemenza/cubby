@@ -3,6 +3,7 @@
     {
       "id": "PRD-2345",
       "name": "Sample Product",
+      "acquisitionOrigin": "unknown",
       "aliases": [],
       "tags": [],
       "primaryGtin": null,

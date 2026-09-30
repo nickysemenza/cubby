@@ -20,6 +20,7 @@ import { unwrapDb } from "~/server/repo/database-helpers";
 import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
+import { effectiveExpenseSpendingCategorySql } from "./purchase-evidence-policy";
 import { effectiveProjectTradeSql } from "./task-project-inheritance";
 
 const column = (alias: string, name: string) => sql.raw(`${alias}."${name}"`);
@@ -96,7 +97,11 @@ export const effectiveExpenseTradeSql = (
 };
 
 /** Scalar extras used by relational Expense reads. */
-export const expenseInheritanceReadExtras = (alias = '"expense"') => {
+export const expenseInheritanceReadExtras = (alias = "expense") => {
+  const spendingCategoryId = effectiveExpenseSpendingCategorySql(alias);
+  const fallbackSpendingCategoryId = sql`(SELECT inherited_purchase."spendingCategoryId"
+    FROM "Purchase" inherited_purchase WHERE inherited_purchase.id = ${column(alias, "purchaseId")}
+      AND inherited_purchase."deletedAt" IS NULL)`;
   const projectId = effectiveExpenseProjectSql(alias);
   const lineKind = column(alias, "lineKind");
   const purchaseId = column(alias, "purchaseId");
@@ -156,8 +161,23 @@ export const expenseInheritanceReadExtras = (alias = '"expense"') => {
   return {
     spendingCategoryShortcode: sql<
       string | null
-    >`(SELECT c."shortcode" FROM "SpendingCategory" c WHERE c."id" = ${column(alias, "spendingCategoryId")} AND c."deletedAt" IS NULL)`.as(
+    >`(SELECT c."shortcode" FROM "SpendingCategory" c WHERE c."id" = ${spendingCategoryId} AND c."deletedAt" IS NULL)`.as(
       "spendingCategoryShortcode",
+    ),
+    spendingCategoryName: sql<
+      string | null
+    >`(SELECT c.name FROM "SpendingCategory" c WHERE c.id = ${spendingCategoryId} AND c."deletedAt" IS NULL)`.as(
+      "spendingCategoryName",
+    ),
+    storedSpendingCategoryShortcode: sql<
+      string | null
+    >`(SELECT c.shortcode FROM "SpendingCategory" c WHERE c.id = ${column(alias, "spendingCategoryId")} AND c."deletedAt" IS NULL)`.as(
+      "storedSpendingCategoryShortcode",
+    ),
+    fallbackSpendingCategoryShortcode: sql<
+      string | null
+    >`(SELECT c.shortcode FROM "SpendingCategory" c WHERE c.id = ${fallbackSpendingCategoryId} AND c."deletedAt" IS NULL)`.as(
+      "fallbackSpendingCategoryShortcode",
     ),
     effectiveProjectId: projectId.as("effectiveProjectId"),
     effectiveProjectShortcode: sql<

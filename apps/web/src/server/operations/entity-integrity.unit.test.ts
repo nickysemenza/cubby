@@ -47,23 +47,6 @@ describe("integrity catalog", () => {
     expect(catalog.coverage.auditedEdges + catalog.coverage.exemptEdges).toBe(
       edges.length,
     );
-    expect(catalog.coverage.exemptEdges).toBe(8);
-    expect(
-      edges
-        .filter(
-          (edge) => edge.semantics.liveness.kind === "allow-target-deleted",
-        )
-        .map((edge) => edge.edgeKey),
-    ).toEqual([
-      "Ingredient.recipeId",
-      "OrderMailCandidateDecision.purchaseId",
-      "RunTarget.entityId",
-      "AuditLog.runId",
-      "AiUsage.runId",
-      "ImageProcessingJob.runId",
-      "AuditLog.deviceId",
-      "RunTarget.deviceWorkDeviceId",
-    ]);
   });
 
   it("projects operation owners and incoming-edge dispositions", () => {

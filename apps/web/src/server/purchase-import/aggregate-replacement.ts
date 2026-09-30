@@ -201,7 +201,6 @@ export async function loadAggregateReplacementSnapshot(
     allocations,
     snapshot: aggregateReplacementSnapshot.parse({
       fingerprint,
-      expenseId: row.id,
       expenseCode: row.shortcode,
       title: row.name,
       amount: row.cost,

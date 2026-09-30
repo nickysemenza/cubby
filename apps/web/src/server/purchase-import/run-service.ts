@@ -2722,7 +2722,7 @@ export async function finishRun(
   return { ...run, findingCount: findingCount?.value ?? 0 };
 }
 
-/** @lintignore Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
+/**  Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function markRunFailed(
   db: Database,
   input: {

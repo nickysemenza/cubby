@@ -326,11 +326,18 @@ describe("MCP catalog", () => {
     expect(
       await call("upc", { action: "find_or_create", upc: "012345678905" }),
     ).toMatchObject({ id: productId });
-    // The split's Purchase has no primary document yet: a real data gap.
+    // Exercise a known exception-eligible gap rather than whichever required
+    // field happens to be first as the quality registry grows.
     const purchaseId = z
       .object({ items: z.array(z.object({ id: z.string() })) })
       .parse(await call("entity_read", { action: "list", entity: "purchase" }))
       .items[0]!.id;
+    await call("entity", {
+      action: "update",
+      entity: "purchase",
+      id: purchaseId,
+      data: { evidenceExpectation: "required" },
+    });
     const detail = await call("entity_read", {
       action: "get",
       entity: "purchase",
@@ -347,7 +354,7 @@ describe("MCP catalog", () => {
       })
       .parse(detail)
       .item.dataQuality.gaps.filter(
-        (candidate) => candidate.kind === "missing",
+        (candidate) => candidate.check === "primary_document",
       );
     expect(gap).toBeDefined();
     expect(

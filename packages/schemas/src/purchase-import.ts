@@ -9,6 +9,7 @@ import { runPurpose, runStatus, runTrigger } from "./run-fields";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import {
   imageShortcode,
+  expenseShortcode,
   productShortcode,
   projectShortcode,
   runEntityId,
@@ -399,8 +400,7 @@ export const replacementLineAttribution = z.object({
 
 export const aggregateReplacementSnapshot = z.object({
   fingerprint: z.string(),
-  expenseId: z.uuid(),
-  expenseCode: z.string(),
+  expenseCode: expenseShortcode,
   title: z.string(),
   amount: money,
   notes: z.string().nullable(),

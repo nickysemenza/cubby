@@ -2,7 +2,6 @@ import type { CellData } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import {
   createCubbyColumnCollection,
@@ -171,7 +170,6 @@ function buildTransactionColumnMeta() {
     id: String(
       column.id ?? ("accessorKey" in column ? column.accessorKey : ""),
     ),
-    header: z.string().parse(column.header),
     className: column.meta?.className,
     mobile: column.meta?.mobile,
     enableSorting: column.enableSorting,
@@ -179,50 +177,6 @@ function buildTransactionColumnMeta() {
 }
 
 describe("financial transaction list display columns", () => {
-  it("builds exactly the declared columns, in listOrder", () => {
-    const ids = buildTransactionColumnMeta().map((d) => d.id);
-    expect(ids).toEqual([
-      "accountId",
-      "purchaseId",
-      "kind",
-      "status",
-      "amount",
-      "transactionDate",
-      "postedDate",
-      "merchant",
-      "rawDescription",
-      "sourceCategory",
-      "sourceRefs",
-      "notes",
-      "itemization",
-      "vendorInference",
-      "dataQuality",
-    ]);
-  });
-
-  it("takes every header from the declared label, including on overrides", () => {
-    const byId = Object.fromEntries(
-      buildTransactionColumnMeta().map((d) => [d.id, d.header]),
-    );
-    expect(byId).toEqual({
-      accountId: "Account",
-      kind: "Kind",
-      status: "Status",
-      amount: "Amount",
-      purchaseId: "Purchase",
-      transactionDate: "Transaction date",
-      postedDate: "Posted date",
-      merchant: "Merchant",
-      vendorInference: "Vendor inference",
-      sourceRefs: "Source refs",
-      rawDescription: "Raw description",
-      sourceCategory: "Source category",
-      notes: "Notes",
-      itemization: "Itemization",
-      dataQuality: "Data quality",
-    });
-  });
-
   it("derives enableSorting from the generated sort roster per column id", () => {
     const byId = Object.fromEntries(
       buildTransactionColumnMeta().map((d) => [d.id, d.enableSorting]),

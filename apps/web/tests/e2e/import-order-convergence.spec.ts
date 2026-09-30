@@ -48,8 +48,16 @@ for (const order of sourcePermutations(EVIDENCE_SOURCES)) {
       `/products/${result.productCode}`,
       page.getByRole("heading", { name: harness.productName, exact: true }),
     );
-    await expect(page.locator("#images").getByRole("img")).toHaveCount(1);
-    await expect(page.locator("#labels").getByRole("img")).toHaveCount(1);
+    await expect(
+      page
+        .locator("#images")
+        .getByRole("img", { name: `${token}-shirt.png`, exact: true }),
+    ).toHaveCount(1);
+    await expect(
+      page
+        .locator("#labels")
+        .getByRole("img", { name: `${token}-label.png`, exact: true }),
+    ).toHaveCount(1);
     testInfo.annotations.push({
       type: "exercised-boundaries",
       description:

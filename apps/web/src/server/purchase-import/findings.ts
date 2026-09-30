@@ -303,10 +303,7 @@ async function applyAggregateReplacement(
     );
   const current = await existingExpenses(tx, purchaseId);
   const decision = decideLineWrite(current, fix.lines);
-  if (
-    decision.kind !== "review_aggregate" ||
-    decision.aggregate.id !== fix.reviewSnapshot.expenseId
-  )
+  if (decision.kind !== "review_aggregate")
     throw new Error(
       "The Purchase changed after this preview; prepare the receipt again.",
     );
@@ -315,6 +312,10 @@ async function applyAggregateReplacement(
     purchaseId,
     decision.aggregate.id,
   );
+  if (preview.snapshot.expenseCode !== fix.reviewSnapshot.expenseCode)
+    throw new Error(
+      "The Purchase changed after this preview; prepare the receipt again.",
+    );
   const allocations = await redistributeReplacementAttributions(
     tx,
     preview.allocations,
