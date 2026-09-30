@@ -137,6 +137,7 @@ interface ReviewBodyProps {
   alternative: boolean;
   autoFilled: boolean;
   prune?: boolean;
+  notice?: string;
 }
 
 function stop(event: MouseEvent) {
@@ -153,6 +154,7 @@ function ReviewButtons({
   apply,
   dismiss,
   hasCurrentValue,
+  notice,
 }: {
   isRemove?: boolean;
   applyLabel: string;
@@ -161,9 +163,11 @@ function ReviewButtons({
   apply: () => void;
   dismiss: () => void;
   hasCurrentValue: boolean;
+  notice?: string;
 }) {
   return (
     <Row gap="xs" wrap>
+      {notice ? <Description size="xs">{notice}</Description> : null}
       <Button
         type="button"
         variant="link"
@@ -208,6 +212,7 @@ function RemoveReviewBody({
   apply,
   dismiss,
   applyLabel,
+  notice,
   children,
   outcome,
   surface,
@@ -240,6 +245,7 @@ function RemoveReviewBody({
         <ReviewButtons
           isRemove
           applyLabel={applyLabel}
+          notice={notice}
           saving={saving}
           pending={pending}
           apply={apply}
@@ -262,6 +268,7 @@ function SetReviewBody({
   apply,
   dismiss,
   applyLabel,
+  notice,
   children,
   outcome,
   surface,
@@ -307,6 +314,7 @@ function SetReviewBody({
         />
         <ReviewButtons
           applyLabel={applyLabel}
+          notice={notice}
           saving={saving}
           pending={pending}
           apply={apply}
@@ -332,7 +340,9 @@ function CellReviewSlot({
   apply,
   dismiss,
   applyLabel,
+  notice,
 }: {
+  notice?: string;
   isRemove: boolean;
   currentValue: string | null;
   currentLabel?: ReactNode;
@@ -358,6 +368,7 @@ function CellReviewSlot({
       <ReviewButtons
         isRemove={isRemove}
         applyLabel={applyLabel}
+        notice={notice}
         saving={saving}
         pending={pending}
         apply={apply}
@@ -392,6 +403,21 @@ function MarkedValue({
 }
 
 /** The key includes the question, current value and answer: new evidence can be reviewed. */
+export function suggestionReviewKey(
+  questionKey: string,
+  currentValue: string | null,
+  suggestion: FieldSuggestion | null | undefined,
+) {
+  return JSON.stringify([
+    questionKey,
+    currentValue,
+    suggestion?.value,
+    ...(suggestion?.financeReview
+      ? [suggestion.financeReview.fingerprint]
+      : []),
+  ]);
+}
+
 export function SuggestionReview({
   suggestion,
   currentValue,
@@ -431,7 +457,7 @@ export function SuggestionReview({
   /** The suggestion query failed; the mark shows it rather than vanishing. */
   error?: unknown;
 }) {
-  const key = JSON.stringify([questionKey, currentValue, suggestion?.value]);
+  const key = suggestionReviewKey(questionKey, currentValue, suggestion);
   const { dismissed, dismiss, apply, saving, failure } = useSuggestionActions(
     key,
     onApply,
@@ -469,8 +495,9 @@ export function SuggestionReview({
     );
   }
   const isRemove = suggestion.operation === "remove";
-  const resolvedApplyLabel =
-    applyLabel ?? (isRemove ? "Remove tags" : "Use suggestion");
+  const resolvedApplyLabel = suggestion.financeReview
+    ? "Apply and save category"
+    : (applyLabel ?? (isRemove ? "Remove tags" : "Use suggestion"));
   // Phones fold every inline review into the glyph too: an inline review
   // arriving after load grew the page under the reader's finger (+96px), and
   // neither engine's scroll anchoring held the tapped control in place.
@@ -500,6 +527,11 @@ export function SuggestionReview({
                 apply={apply}
                 dismiss={dismiss}
                 applyLabel={resolvedApplyLabel}
+                notice={
+                  suggestion.financeReview
+                    ? "Based on saved record and linked items"
+                    : undefined
+                }
               />
             }
           />
@@ -517,6 +549,9 @@ export function SuggestionReview({
     apply,
     dismiss,
     applyLabel: resolvedApplyLabel,
+    notice: suggestion.financeReview
+      ? "Based on saved record and linked items"
+      : undefined,
     children,
     outcome,
     surface,

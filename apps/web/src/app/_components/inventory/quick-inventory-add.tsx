@@ -14,6 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import { useMutation } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -30,16 +31,14 @@ import {
   NullableNumericField,
   UnifiedTextField,
 } from "~/app/_components/form-utils";
-import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { showErrorToast } from "~/components/feedback/error-details";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Collapsible, CollapsibleContent } from "~/components/ui/collapsible";
 import { Spinner } from "~/components/ui/spinner";
 import { EntityIntentFields } from "~/entities/editing/entity-primitive-fields";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { useImageState } from "~/hooks/useImageState";
-import { getErrorMessage } from "~/lib/error-utils";
+import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
@@ -204,75 +203,52 @@ export function QuickInventoryAdd({
     },
   });
 
-  const productCreateMutation = useEntityActionMutation({
-    entity: "product",
-    operation: "create",
-    mutationFn: entityMutationOptionsFactory("product", "create"),
-    onSuccess: invalidateProductLookup,
-    error: "Failed to create product",
-  });
-  const inventoryCreateMutation = useCreateInventoryMutation({
-    // No toast here: the inner catch below already turns this mutation's
-    // failure into one `showErrorToast` with the "product was created,
-    // but..." context; a populated `onError` would additionally trigger the
-    // global toast.
-    onError: () => {},
-  });
+  const createWithInventory = useMutation(
+    product.createWithInventory.mutationOptions({
+      onSuccess: invalidateProductLookup,
+      onError: () => {},
+    }),
+  );
 
   const [isCreating, setIsCreating] = useState(false);
 
   const onCreateSubmit = async (values: CreateFormValues) => {
     setIsCreating(true);
     try {
-      const newProduct = await productCreateMutation.mutateAsync({
-        name: values.name,
-        manufacturer: values.manufacturer,
-        model: values.model,
-        notes: values.notes,
-        categoryId:
-          values.categoryId == null
-            ? null
-            : productCategoryShortcode.parse(values.categoryId),
-        upc: values.upc,
-        isbn: values.isbn,
-        fdc_id: values.fdc_id,
-        expectedQuantity: values.expectedQuantity,
-        price: values.price,
-        ingredientId:
-          values.ingredientId == null
-            ? null
-            : ingredientShortcode.parse(values.ingredientId),
-        unitMappings: values.unitMappings,
-        ...imageState.getImageData(true),
+      const created = await createWithInventory.mutateAsync({
+        product: {
+          name: values.name,
+          manufacturer: values.manufacturer,
+          model: values.model,
+          notes: values.notes,
+          categoryId:
+            values.categoryId == null
+              ? null
+              : productCategoryShortcode.parse(values.categoryId),
+          upc: values.upc,
+          isbn: values.isbn,
+          fdc_id: values.fdc_id,
+          expectedQuantity: values.expectedQuantity,
+          price: values.price,
+          ingredientId:
+            values.ingredientId == null
+              ? null
+              : ingredientShortcode.parse(values.ingredientId),
+          unitMappings: values.unitMappings,
+          ...imageState.getImageData(true),
+        },
+        inventory: { locationId, placement: "stock", amount: values.amount },
       });
-
-      try {
-        await inventoryCreateMutation.mutateAsync({
-          productId: newProduct.id,
-          locationId,
-          amount: values.amount,
-        });
-
-        toast.success(
-          savedWithBackgroundWork(
-            newProduct.sideEffects,
-            `Created "${newProduct.name}" and added to inventory`,
-          ),
-        );
-        switchToSelectMode();
-        onSuccess();
-      } catch (inventoryErr) {
-        showErrorToast(
-          inventoryErr,
-          `Product "${newProduct.name}" was created, but adding to inventory failed: ${getErrorMessage(inventoryErr)}. Search for it to add manually.`,
-        );
-        invalidateProductLookup();
-        switchToSelectMode();
-      }
-    } catch {
-      // SILENT: already showErrorToast'd by productCreateMutation's own
-      // onError (useEntityActionMutation); this only stops the rejection
-      // from escaping the submit handler.
+      toast.success(
+        savedWithBackgroundWork(
+          created.sideEffects,
+          `Created "${created.product.name}" and added to inventory`,
+        ),
+      );
+      switchToSelectMode();
+      onSuccess();
+    } catch (error) {
+      showErrorToast(error, "Add failed");
     } finally {
       setIsCreating(false);
     }

@@ -55,6 +55,10 @@ import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveDraftExpenseFields } from "~/server/repo/expense-inheritance";
 import {
+  isFinanceCategoryEntity,
+  loadFinanceSuggestionContext,
+} from "~/server/repo/finance-suggestion-context";
+import {
   lookupEntityLabels,
   resolveShortcodes,
 } from "~/server/repo/shortcode-resolver";
@@ -521,6 +525,7 @@ async function resolveSpec(
   rawBasis: RawBasis,
   usage: AiSelectionUsage,
   jev: JevPort | undefined,
+  linkedSubject?: string,
 ): Promise<TargetResolution> {
   if (spec.kind === "prune") {
     return resolvePruneTarget(db, spec, resolvedBasis, rawBasis, usage, jev);
@@ -528,7 +533,11 @@ async function resolveSpec(
   return resolveOneTarget(
     db,
     spec,
-    spec.subject(resolvedBasis),
+    [spec.subject(resolvedBasis), linkedSubject]
+      .filter(Boolean)
+      .join(
+        "\nSaved linked evidence (mixed lines remain distinct; truncation means incomplete evidence):\n",
+      ),
     resolvedBasis,
     rawBasis,
     usage,
@@ -735,6 +744,16 @@ export async function suggestFields(
   rawInput: FieldSuggestionsInput,
   ports?: SuggestFieldsPorts,
 ): Promise<FieldSuggestionsOut> {
+  const financeContext =
+    rawInput.entityId &&
+    isFinanceCategoryEntity(rawInput.entity) &&
+    rawInput.targets.includes("spendingCategoryId")
+      ? await loadFinanceSuggestionContext(
+          db,
+          rawInput.entity,
+          rawInput.entityId,
+        )
+      : null;
   const input =
     rawInput.entity === "expense"
       ? {
@@ -837,12 +856,16 @@ export async function suggestFields(
       const spec = targetSpecs.get(target)!;
       const basisKeys = targetBasisKeys.get(target) ?? [];
 
+      const linkedContext =
+        target === "spendingCategoryId" ? financeContext : null;
       const rawBasis = effectiveRawBasis(
         basisKeys,
-        clientBasis,
+        linkedContext
+          ? new Map(Object.entries(linkedContext.basis))
+          : clientBasis,
         requestedTargets,
         input.basisMode === "suggested" ? resolvedRawByTarget : new Map(),
-        authoritativeKeys,
+        linkedContext ? new Set(basisKeys) : authoritativeKeys,
       );
       const resolvedBasis = await resolveDisplayBasis(
         db,
@@ -852,7 +875,9 @@ export async function suggestFields(
         resolveLabels,
       );
 
-      const hasSignal = basisKeys.some((key) => resolvedBasis[key] != null);
+      const hasSignal =
+        linkedContext?.hasSignal ||
+        basisKeys.some((key) => resolvedBasis[key] != null);
       if (!hasSignal) {
         suggestions[target] = null;
         outcomes[target] = { kind: "skipped", reason: "no_signal" };
@@ -874,8 +899,23 @@ export async function suggestFields(
         rawBasis,
         usage,
         ports?.jev,
+        linkedContext?.subject,
       );
-      suggestions[target] = suggestion;
+      suggestions[target] =
+        suggestion &&
+        linkedContext &&
+        isFinanceCategoryEntity(input.entity) &&
+        input.entityId
+          ? {
+              ...suggestion,
+              reasoning: `Based on saved record and linked items. ${suggestion.reasoning}`,
+              financeReview: {
+                entity: input.entity,
+                entityId: input.entityId,
+                fingerprint: linkedContext.fingerprint,
+              },
+            }
+          : suggestion;
       outcomes[target] = outcome;
       resolvedRawByTarget.set(target, rawValue);
     });

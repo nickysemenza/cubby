@@ -9,6 +9,7 @@ import {
   inventoryShortcode,
   locationShortcode,
   productShortcode,
+  spendingCategoryShortcode,
 } from "./identifiers";
 import { productCategory } from "./product-fields";
 import { foodSummaryWithLinkedProducts } from "./usda";
@@ -363,7 +364,25 @@ export type AiUsageSummaryRow = z.infer<typeof aiUsageSummaryRowSchema>;
  * are shortcodes for reference fields and plain text otherwise, `null` when
  * unset/unknown. `provided` mode never uses another target's proposal as evidence.
  */
+export const financeCategoryReviewSchema = z.object({
+  entity: z.enum(["financialTransaction", "purchase", "expense"]),
+  entityId: z.string().min(1),
+  fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export const financeCategoryApplyInput = financeCategoryReviewSchema.extend({
+  spendingCategoryId: spendingCategoryShortcode,
+});
+export const financeCategoryApplyOut = financeCategoryApplyInput
+  .omit({ fingerprint: true })
+  .extend({
+    sideEffects: mutationSideEffectsSchema,
+  });
+export type FinanceCategoryApplyInput = z.infer<
+  typeof financeCategoryApplyInput
+>;
+
 export const fieldSuggestionsInput = z.object({
+  entityId: z.string().min(1).optional(),
   basisMode: z.enum(["provided", "suggested"]),
   entity: z.enum(shortcodeEntities),
   targets: z.array(z.string().min(1)).min(1),
@@ -412,6 +431,7 @@ export type FieldSuggestionRemoval = z.infer<
 >;
 
 export const fieldSuggestionSchema = z.object({
+  financeReview: financeCategoryReviewSchema.optional(),
   value: z.string().nullable(),
   label: z.string().nullable(),
   detail: z.string().nullable(),

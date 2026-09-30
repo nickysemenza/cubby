@@ -55,22 +55,45 @@ const request = (name = "saved") => ({
 });
 
 describe("useEntityEditSession", () => {
-  it("keeps a draft through an equivalent inline request and resets for record changes", () => {
+  it("preserves sibling drafts through a same-record refresh and resets when changing records", () => {
     const harness = createBrowserTestHarness();
     const { mutationPort } = financialAccountMutationPort();
     const { result, rerender } = renderHook(
-      ({ name }) => useEntityEditSession(request(name), { mutationPort }),
-      { initialProps: { name: "saved" }, wrapper: harness.wrapper },
+      ({ name, id, dueDate }) =>
+        useEntityEditSession(
+          {
+            ...request(name),
+            record: { ...request(name).record, id, dueDate },
+          },
+          { mutationPort },
+        ),
+      {
+        initialProps: { name: "saved", id: "TSK-4K7M", dueDate: "2026-08-20" },
+        wrapper: harness.wrapper,
+      },
     );
-
-    act(() => result.current.set("name", "draft name"));
+    act(() => {
+      result.current.form.register("dueDate");
+      result.current.set("name", "draft name");
+    });
+    rerender({ name: "server refresh", id: "TSK-4K7M", dueDate: "2026-08-22" });
     expect(result.current.form.getValues("name")).toBe("draft name");
-
-    rerender({ name: "saved" });
-    expect(result.current.form.getValues("name")).toBe("draft name");
-
-    rerender({ name: "server refresh" });
+    expect(result.current.form.getValues("dueDate")).toBe("2026-08-22");
+    // An explicitly saved field acknowledges only its new persisted baseline.
+    act(() =>
+      result.current.form.resetField("dueDate", { defaultValue: "2026-08-23" }),
+    );
+    act(() => result.current.reset());
     expect(result.current.form.getValues("name")).toBe("server refresh");
+    expect(result.current.form.getValues("dueDate")).toBe("2026-08-23");
+    act(() => result.current.set("name", "another draft"));
+    rerender({
+      name: "other saved task",
+      id: "TSK-8K7M",
+      dueDate: "2026-08-24",
+    });
+    expect(result.current.form.getValues("name")).toBe("other saved task");
+    expect(result.current.form.getValues("dueDate")).toBe("2026-08-24");
     harness.dispose();
   });
 

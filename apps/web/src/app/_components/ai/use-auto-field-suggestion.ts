@@ -1,6 +1,6 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   type FieldValues,
   type Path,
@@ -14,7 +14,10 @@ import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { enumFieldLabel } from "~/entities/enum-field-display";
 
 import { basisValueOf } from "./field-suggestion";
-import { useFieldSuggestionContext } from "./field-suggestion-provider";
+import {
+  type FieldSuggestionContextValue,
+  useFieldSuggestionContext,
+} from "./field-suggestion-provider";
 
 export interface UseAutoFieldSuggestionResult {
   currentLabel: string | null;
@@ -27,7 +30,7 @@ export interface UseAutoFieldSuggestionResult {
   isPending: boolean;
   /** Writes the suggestion, dirtying and touching the field — for hint
    * surfaces (edit mode, or once a manual edit has cleared the auto-fill). */
-  apply: () => void;
+  apply: () => void | Promise<void>;
   /** The suggestion rendered as a `ComboboxItem`, for a reference-valued
    * field whose picker needs a label for an id it just silently wrote (the
    * id alone would otherwise render as a bare shortcode). */
@@ -151,6 +154,30 @@ function currentEquals(
   return text.success && text.data === suggestion.value;
 }
 
+function financeProposalBelongsToEditor(
+  context: FieldSuggestionContextValue | null,
+  review: NonNullable<FieldSuggestion["financeReview"]>,
+): context is FieldSuggestionContextValue {
+  return (
+    context !== null &&
+    context.mode === "edit" &&
+    context.entity === review.entity &&
+    context.entityId === review.entityId
+  );
+}
+
+function sameFinanceEditor(
+  current: FieldSuggestionContextValue | null,
+  expected: FieldSuggestionContextValue,
+) {
+  return (
+    current?.entityId === expected.entityId &&
+    current?.entity === expected.entity &&
+    current?.mode === expected.mode &&
+    current?.editorScope === expected.editorScope
+  );
+}
+
 /**
  * Per-field half of the auto-suggest system. Reads the mounted
  * `FieldSuggestionProvider`'s answer for `field` (a manifest target key, e.g.
@@ -194,6 +221,15 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
   const formState = useFormState({ control: form.control, name });
   const state = form.getFieldState(name, formState);
   const isDirty = state.isDirty || state.isTouched;
+  const activeContext = useRef(context);
+  activeContext.current = context;
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const suggestion = context?.suggestions[field] ?? null;
   const resolution = context?.resolutionFor(field) ?? null;
   const current: unknown = form.getValues(name);
@@ -206,6 +242,7 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       !context ||
       disabled ||
       context.mode !== "create" ||
+      suggestion?.financeReview ||
       isDirty ||
       context.isFetching ||
       (resolution !== null &&
@@ -266,6 +303,7 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       !context ||
       disabled ||
       context.mode !== "create" ||
+      suggestion?.financeReview ||
       isDirty ||
       context.isFetching ||
       suggestion?.value ||
@@ -285,13 +323,43 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
     context.clearAutoFilled(field);
   }, [context, disabled, isDirty, suggestion, form, name, field]);
 
-  const apply = useCallback(() => {
+  const apply = useCallback(async () => {
     if (
       !suggestion?.value ||
       context?.isFetching ||
       basisValueOf(form.getValues(name)) !== basisValueOf(current)
     )
       return;
+    if (suggestion.financeReview) {
+      if (!financeProposalBelongsToEditor(context, suggestion.financeReview))
+        return;
+      const saved = await context.applyFinanceCategory(suggestion);
+      if (
+        !mounted.current ||
+        !sameFinanceEditor(activeContext.current, context)
+      )
+        return;
+      const latestValue = form.getValues(name);
+      const changedDuringApply =
+        basisValueOf(latestValue) !== basisValueOf(current);
+      // SAFETY: the caller-declared valueKind is the same field/value contract
+      // as local suggestion application; the server confirms the category ID.
+      form.resetField(name, {
+        defaultValue: suggestionValueFor(
+          { ...suggestion, value: saved.spendingCategoryId },
+          valueKind,
+        ) as PathValue<TFieldValues, Path<TFieldValues>>,
+      });
+      if (changedDuringApply) {
+        // Keep the newer draft against the category actually saved by the RPC.
+        form.setValue(name, latestValue, {
+          shouldDirty: true,
+          shouldTouch: true,
+        });
+      }
+      context.clearAutoFilled(field);
+      return;
+    }
     // SAFETY: see the auto-fill effect above — same caller-declared
     // `valueKind` relationship.
     form.setValue(

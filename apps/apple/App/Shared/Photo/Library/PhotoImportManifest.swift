@@ -435,8 +435,7 @@ final class PhotoImportManifest {
                 }
             } catch {
                 Diagnostics.report(error, context: "photos.manifest.findRelated")
-                return stageOrOpenCreateEditor(
-                    pair.create, source: row, captureDate: captureDate, decision: decision)
+                return .relatedChooser(option: pair.existing, page: nil)
             }
         }
 

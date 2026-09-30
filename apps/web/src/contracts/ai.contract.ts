@@ -12,6 +12,8 @@ import {
   detectedInventorySchema,
   enrichmentProposalPrecomputeInput,
   externalIdKindSuggestionInput,
+  financeCategoryApplyInput,
+  financeCategoryApplyOut,
   fieldSuggestionsInput,
   fieldSuggestionsOut,
   ingredientMergeSuggestionBatchInput,
@@ -93,6 +95,11 @@ export const aiContract = defineContract("ai", {
   // Nested `basis` can't ride the HTTP GET projection (precedent:
   // `entity-list.contract.ts`'s `list`) — `.queryOptions()` still works.
   // AI and externally hydrated food reads own authoritative database helpers.
+  applyFinanceCategorySuggestion: mutation({
+    input: financeCategoryApplyInput,
+    output: financeCategoryApplyOut,
+    invalidates: ["financialTransaction", "purchase", "expense"],
+  }),
   suggestFields: query({
     readPolicy: "strong",
     input: fieldSuggestionsInput,
