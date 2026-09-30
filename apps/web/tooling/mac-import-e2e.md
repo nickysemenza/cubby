@@ -1,4 +1,4 @@
-# Actual Mac statement import
+# Actual Mac import convergence
 
 Run from this checkout on an unlocked Mac:
 
@@ -34,4 +34,12 @@ That preflight verifies the unique signed browser bundle and HTTPS certificate/a
 
 The nonce Chromium process uses `--use-mock-keychain` and disables DialMediaRouteProvider, following [Chromium’s macOS developer instructions](https://chromium.googlesource.com/chromium/src/+/main/docs/mac_build_instructions.md#avoiding-system-permissions-dialogs-after-each-build). These flags avoid requesting the real login Keychain and media-discovery network consent for the disposable fixture profile. The fixture metadata records these choices.
 
-`MacImportDriver` also exposes photo upload into a new import run and photo approval helpers for composed journeys. These helpers require unlocked-host verification. CSV/photo/receipt ordering permutations are not exercised by this runner.
+Use `--order csv,photo,receipt` to compose native CSV intake and booking, two-photo upload and review, and retailer capture and receipt review in a specified order. Only external image-description, grouping and receipt-extraction outputs are supplied deterministically. Original upload hashes, captured receipt facts, pre-approval economic records and canonical final graph links are checked independently; production writers perform the economic changes.
+
+Run all six orders sequentially with:
+
+```sh
+pnpm --dir apps/web exec tsx tooling/mac-import-orders-e2e.ts
+```
+
+Every child owns a fresh database, fixture app identity and browser profile. Later children may reuse the verified native build; source and whole-bundle fingerprints are still checked by the child runner. The batch stops after its first failure, leaving later orders unrun, so a system dialog does not trigger repeated launches. Its sealed aggregate copies only checksum-verified evidence declared by each child manifest, excluding browser profiles, certificates and app bundles. An authored scenario does not establish actual Mac acceptance; all six must finish successfully on an unlocked host.

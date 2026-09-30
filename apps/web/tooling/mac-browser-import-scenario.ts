@@ -125,7 +125,15 @@ export async function createMacBrowserScenario(input: Input) {
       return result(operationId);
     }
     return {
-      context: { db, kernel, member, vendor, account, run },
+      context: {
+        db,
+        kernel,
+        member,
+        vendor,
+        account,
+        run,
+        retailerOrigin: input.retailer.origin,
+      },
       evidence: browserDriver.evidence,
       async run(appDriver: MacImportDriver) {
         const deadline = Date.now() + 30_000;

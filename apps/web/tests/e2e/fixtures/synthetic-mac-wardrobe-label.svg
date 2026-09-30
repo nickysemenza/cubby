@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+  <rect width="640" height="640" fill="#b4bcc5"/>
+  <rect x="90" y="90" width="460" height="460" rx="18" fill="#faf9f5" stroke="#d2d0c8" stroke-width="6"/>
+  <g fill="#273142" font-family="sans-serif" text-anchor="middle">
+    <text x="320" y="162" font-size="28">SYNTHETIC WORKS</text>
+    <text x="320" y="230" font-size="24">BLACK CREW SHIRT</text>
+    <text x="320" y="338" font-size="90">M</text>
+    <text x="320" y="402" font-size="23">100% COTTON</text>
+    <text x="320" y="460" font-size="22">GTIN 00012345678905</text>
+    <text x="320" y="507" font-size="16">SYNTHETIC TEST FIXTURE</text>
+  </g>
+</svg>

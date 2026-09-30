@@ -33,6 +33,15 @@ const role = (node: Node) =>
     .replaceAll("-", "")
     .toLowerCase();
 
+function matchesRole(node: Node, value: string | undefined): boolean {
+  const expected = value?.replaceAll("-", "").toLowerCase();
+  return (
+    role(node) === expected ||
+    (expected === "cell" && role(node) === "row") ||
+    (expected === "searchfield" && node.subrole === "AXSearchField")
+  );
+}
+
 /** Native agent-device AX/CGEvent backend preserves the already-launched fixture process. */
 export class MacImportDriver {
   private sequence = 0;
@@ -191,10 +200,7 @@ export class MacImportDriver {
               (node.label ?? node.value ?? "").includes(value ?? ""),
             );
           case "role":
-            return (
-              role(node) === value?.replaceAll("-", "").toLowerCase() ||
-              (value?.toLowerCase() === "cell" && role(node) === "row")
-            );
+            return matchesRole(node, value);
           case "editable":
             return (
               value === "true" &&

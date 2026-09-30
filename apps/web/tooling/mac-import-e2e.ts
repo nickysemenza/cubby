@@ -14,6 +14,8 @@ import { setTimeout } from "node:timers/promises";
 import { request } from "@playwright/test";
 import { z } from "zod";
 import { createMacRetailerFixture } from "./mac-retailer-fixture";
+import { macImportOrder } from "./mac-import-orders";
+import type { createMacComposedScenario } from "./mac-import-composed-scenario";
 import type { createMacBrowserScenario } from "./mac-browser-import-scenario";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
@@ -33,11 +35,27 @@ const webRoot = path.resolve(
 );
 const repoRoot = path.resolve(webRoot, "../..");
 const flags = process.argv.slice(2).filter((arg) => arg !== "--");
-const browserMode = flags.length === 1 && flags[0] === "--browser";
+const order =
+  flags.length === 2 && flags[0] === "--order"
+    ? macImportOrder.parse(flags[1]!.split(","))
+    : undefined;
+const browserMode =
+  Boolean(order) || (flags.length === 1 && flags[0] === "--browser");
 if ((flags.length && !browserMode) || process.platform !== "darwin")
   throw new Error(
-    "Usage on macOS: pnpm --dir apps/web exec tsx tooling/mac-import-e2e.ts [--browser]",
+    "Usage on macOS: pnpm --dir apps/web exec tsx tooling/mac-import-e2e.ts [--browser | --order csv,photo,receipt]",
   );
+const replayFlags = order
+  ? ["--order", order.join(",")]
+  : browserMode
+    ? ["--browser"]
+    : [];
+const scenarioTitle = order
+  ? `Actual Mac composed evidence arrival: ${order.join(" → ")}`
+  : browserMode
+    ? "Actual Mac CSV import and isolated HTTPS retailer browser capture/resume"
+    : "Actual sandboxed macOS app statement CSV file import";
+const fixtureVersion = order ? 2 : 1;
 const nonce = randomBytes(8).toString("hex");
 const databaseName = `cubby_sim_${nonce}`;
 const adminURL = "postgresql://postgres:password@localhost:55432/postgres";
@@ -70,6 +88,10 @@ const milestones = {
   databaseVerified: false,
   browserFixturePrepared: false,
   browserCaptureVerified: false,
+  nativeBookingReviewed: false,
+  nativePhotoApproved: false,
+  retailerCommitted: false,
+  composedGraphVerified: false,
 };
 let activeChild: ReturnType<typeof spawn> | undefined;
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
@@ -272,6 +294,31 @@ async function stageNativeApp(): Promise<void> {
   ]);
 }
 
+function composedCases() {
+  if (!order) return [];
+  return [
+    {
+      name: "Native reviewed Expense booking or settlement link",
+      milestone: milestones.nativeBookingReviewed,
+    },
+    {
+      name: "Native original photo intake, supplied external analysis and native approval",
+      milestone: milestones.nativePhotoApproved,
+    },
+    {
+      name: "Actual captured retailer prepare/commit and native replacement approval",
+      milestone: milestones.retailerCommitted,
+    },
+    {
+      name: "Exact canonical Product/Expense/Purchase/source/image/inventory graph",
+      milestone: milestones.composedGraphVerified,
+    },
+  ].map(({ name, milestone }) => ({
+    name,
+    status: milestone ? "passed" : "not-run",
+  }));
+}
+
 function saveArtifact(): void {
   const webBuild = readWebBuildProvenance(repoRoot);
   const actions = path.join(artifacts, "actions.jsonl");
@@ -310,13 +357,11 @@ function saveArtifact(): void {
       "exec",
       "tsx",
       "tooling/mac-import-e2e.ts",
-      ...(browserMode ? ["--browser"] : []),
+      ...replayFlags,
     ],
-    scenario: browserMode
-      ? "Actual Mac CSV import and isolated HTTPS retailer browser capture/resume"
-      : "Actual sandboxed macOS app statement CSV file import",
+    scenario: scenarioTitle,
     fixture: "synthetic-monarch-wardrobe",
-    fixtureVersion: 1,
+    fixtureVersion,
     cases: [
       {
         name: "Mac file selection, review, commit and database readback",
@@ -339,6 +384,7 @@ function saveArtifact(): void {
             },
           ]
         : []),
+      ...composedCases(),
     ],
     evidence: [
       results,
@@ -459,6 +505,9 @@ async function main(): Promise<void> {
   let browserScenario:
     | Awaited<ReturnType<typeof createMacBrowserScenario>>
     | undefined;
+  let composed:
+    | Awaited<ReturnType<typeof createMacComposedScenario>>
+    | undefined;
   let restoreEnvironment = () => {};
   let harness:
     | ReturnType<
@@ -568,6 +617,23 @@ async function main(): Promise<void> {
         harness,
         retailer,
       });
+      if (order) {
+        const { createMacComposedScenario } =
+          await import("./mac-import-composed-scenario");
+        composed = await createMacComposedScenario({
+          browser: browserScenario,
+          driver,
+          artifacts,
+          webRoot,
+          appPath: () => appPath,
+          onStage: (stage) => {
+            phase = stage;
+          },
+          onMilestone: (stage) => {
+            milestones[stage] = true;
+          },
+        });
+      }
       await retailer.launch();
       milestones.browserFixturePrepared = true;
     }
@@ -707,59 +773,67 @@ async function main(): Promise<void> {
     await driver.wait("id=sidebar.destinations");
     fixtureUIReady = true;
     milestones.fixtureUIObserved = true;
-    phase = "file-import";
-    await driver.clickSidebar("Browse");
-    await driver.openStatementImport();
-    await driver.importStatement(
-      path.join(webRoot, "tests/e2e/fixtures/synthetic-monarch-wardrobe.csv"),
-    );
-    milestones.previewObserved = true;
-    await driver.screenshot("csv-review");
-    const review = await driver.snapshot();
-    const toggle = review.match(/(@e\d+(?:~s\d+)?)\s+[^\n]*Record transaction/);
-    if (!toggle?.[1])
-      throw new Error(
-        "Native review did not expose the synthetic charge selector",
+    async function csv() {
+      phase = "file-import";
+      await driver.clickSidebar("Browse");
+      await driver.openStatementImport();
+      await driver.importStatement(
+        path.join(webRoot, "tests/e2e/fixtures/synthetic-monarch-wardrobe.csv"),
       );
-    await driver.click(toggle[1]);
-    await driver.click("label=Kind");
-    await driver.click('label="Purchase"');
-    await driver.click("id=statement.csv.confirm");
-    await driver.wait('text="2 source rows · 1 transactions"');
-    milestones.savedObserved = true;
-    await driver.screenshot("csv-saved");
-    phase = "database-readback";
-    const checkPool = new Pool({ connectionString: databaseURL });
-    try {
-      const count = await checkPool.query<{
-        rows: string;
-        transactions: string;
-      }>(
-        'SELECT (SELECT count(*) FROM "StatementRow")::text AS rows, (SELECT count(*) FROM "FinancialTransaction")::text AS transactions',
+      milestones.previewObserved = true;
+      await driver.screenshot("csv-review");
+      const review = await driver.snapshot();
+      const toggle = review.match(
+        /(@e\d+(?:~s\d+)?)\s+[^\n]*Record transaction/,
       );
-      if (count.rows[0]?.rows !== "2" || count.rows[0]?.transactions !== "1")
+      if (!toggle?.[1])
         throw new Error(
-          `Native CSV readback differs: ${JSON.stringify(count.rows)}`,
+          "Native review did not expose the synthetic charge selector",
         );
-      milestones.databaseVerified = true;
-      const output = path.join(artifacts, "database-assertions.json");
-      writeFileSync(
-        output,
-        JSON.stringify(
-          {
-            sourceRows: 2,
-            transactions: 1,
-            input: "synthetic-monarch-wardrobe.csv",
-          },
-          null,
-          2,
-        ),
-      );
-      driver.evidence.push(output);
-    } finally {
-      await checkPool.end();
+      await driver.click(toggle[1]);
+      await driver.click("label=Kind");
+      await driver.click('label="Purchase"');
+      await driver.click("id=statement.csv.confirm");
+      await driver.wait('text="2 source rows · 1 transactions"');
+      milestones.savedObserved = true;
+      await driver.screenshot("csv-saved");
+      phase = "database-readback";
+      const checkPool = new Pool({ connectionString: databaseURL });
+      try {
+        const count = await checkPool.query<{
+          rows: string;
+          transactions: string;
+        }>(
+          'SELECT (SELECT count(*) FROM "StatementRow")::text AS rows, (SELECT count(*) FROM "FinancialTransaction")::text AS transactions',
+        );
+        if (count.rows[0]?.rows !== "2" || count.rows[0]?.transactions !== "1")
+          throw new Error(
+            `Native CSV readback differs: ${JSON.stringify(count.rows)}`,
+          );
+        milestones.databaseVerified = true;
+        const output = path.join(artifacts, "database-assertions.json");
+        writeFileSync(
+          output,
+          JSON.stringify(
+            {
+              sourceRows: 2,
+              transactions: 1,
+              input: "synthetic-monarch-wardrobe.csv",
+            },
+            null,
+            2,
+          ),
+        );
+        driver.evidence.push(output);
+      } finally {
+        await checkPool.end();
+      }
     }
-    if (browserScenario) {
+    if (order && composed) {
+      await composed.run(order, csv);
+      milestones.composedGraphVerified = true;
+    } else await csv();
+    if (browserScenario && !composed) {
       phase = "native-browser-capture-resume";
       await browserScenario.run(driver);
       milestones.browserCaptureVerified = true;
