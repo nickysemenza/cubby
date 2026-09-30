@@ -26,6 +26,8 @@ export const pagination = {
 
 /** The entities `useEntityListSource` drives end-to-end (list + typed + exact-code + optional create). */
 export type PickerSearchEntity =
+  | "ledgerTransfer"
+  | "spendingCategory"
   | "financialAccount"
   | "purchase"
   | "ingredient"
@@ -200,6 +202,8 @@ const FALLBACK_BLANK_FILTER_KEY = {
   plant: "search",
   planting: "searchQuery",
   financialAccount: "search",
+  ledgerTransfer: "search",
+  spendingCategory: "search",
   purchase: "search",
 } satisfies Record<Exclude<PickerSearchEntity, "vendor">, string>;
 

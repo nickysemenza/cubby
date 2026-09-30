@@ -61,6 +61,8 @@ export type ComboboxItem<TId extends string = string> = {
 };
 
 export type PickerEntity =
+  | "ledgerTransfer"
+  | "spendingCategory"
   | "ingredient"
   | "location"
   | "product"

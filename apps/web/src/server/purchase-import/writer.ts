@@ -1,5 +1,4 @@
 import { buildActorContext } from "@cubby/schemas/context";
-import { costTypeSchema } from "@cubby/schemas/expense-fields";
 import {
   expenseLineKindValues,
   type ExpenseLineKind,
@@ -18,7 +17,6 @@ import {
   type ImportWriterOutput,
   type ProposedImportFix,
 } from "@cubby/schemas/purchase-import";
-import { tradeSchema } from "@cubby/schemas/task-fields";
 import {
   and,
   between,
@@ -73,6 +71,11 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { sha256Hex } from "~/server/semantic/hash";
 
+import {
+  aggregateReplacementApprovalFingerprint,
+  loadAggregateReplacementSnapshot,
+  redistributeReplacementAttributions,
+} from "./aggregate-replacement";
 import { learnPurchaseProductExternalId } from "./external-id-learning";
 import { recordRunWrites } from "./run-audit";
 import {
@@ -182,7 +185,7 @@ async function findPurchase(
   });
 }
 
-async function existingExpenses(
+export async function existingExpenses(
   tx: DrizzleTransaction,
   purchaseId: ReturnType<typeof parseEntityId<"purchase">>,
 ): Promise<ExistingExpenseSnapshot[]> {
@@ -206,7 +209,13 @@ async function existingExpenses(
         notDeleted(ledgerSourceClaim),
       ),
     )
-    .where(and(eq(expense.purchaseId, purchaseId), notDeleted(expense)));
+    .where(
+      and(
+        eq(expense.purchaseId, purchaseId),
+        eq(expense.economicRole, "vendor"),
+        notDeleted(expense),
+      ),
+    );
   return rows.map((row) => ({
     id: row.id,
     title: row.title,
@@ -338,7 +347,7 @@ export const lineExternalIdentity = (
     ? `${externalSource(line.productUrl, vendorId)}:${lineIdentifiers(line)[0]?.kind}:${lineIdentifiers(line)[0]?.externalId}`
     : null;
 
-type LineIdentityDecision = {
+export type LineIdentityDecision = {
   productId: string | null;
   promote: boolean;
   variantDoubt: boolean;
@@ -653,7 +662,18 @@ export async function explicitLineDecisions(
   return decisions;
 }
 
-async function resolveLineProduct(
+export function receiptProductQuantity(
+  productId: string | null,
+  line: ExtractedPurchaseLine,
+  decision: LineIdentityDecision,
+): number | null {
+  if (!productId || line.quantity === undefined) return null;
+  if (line.amount >= 0) return Math.abs(line.quantity);
+  if (decision.reversalKind === "return") return -Math.abs(line.quantity);
+  return decision.reversalKind === "concession" ? 0 : null;
+}
+
+export async function resolveLineProduct(
   tx: DrizzleTransaction,
   line: ExtractedPurchaseLine,
   decision: LineIdentityDecision,
@@ -668,6 +688,10 @@ async function resolveLineProduct(
   if (resolvedEarlier) return parseEntityId("product", resolvedEarlier);
   if (decision.productId) {
     const productId = parseEntityId("product", decision.productId);
+    const liveProduct = await tx.query.product.findFirst({
+      where: and(eq(product.id, productId), notDeleted(product)),
+    });
+    if (!liveProduct) throw new Error("The reviewed Product no longer exists.");
     for (const identifier of lineIdentifiers(line)) {
       await learnPurchaseProductExternalId(tx, {
         productId,
@@ -871,6 +895,12 @@ export async function importVendorOrder(
         eq(importSourceClaim.externalKey, input.source.externalKey),
       ),
     });
+    if (
+      input.targetPurchaseId &&
+      existingClaim?.purchaseId &&
+      input.targetPurchaseId !== existingClaim.purchaseId
+    )
+      throw new Error("This source already belongs to a different Purchase.");
     if (existingClaim && existingClaim.checksum === input.source.checksum) {
       await tx
         .update(importSourceClaim)
@@ -894,8 +924,32 @@ export async function importVendorOrder(
     const vendorAccountId = input.vendorAccountId
       ? parseEntityId("vendorAccount", input.vendorAccountId)
       : null;
-    let target = await findPurchase(tx, vendorId, candidate.orderId);
-    const created = target === null;
+    const ordered = await findPurchase(tx, vendorId, candidate.orderId);
+    const selectedId = input.targetPurchaseId ?? existingClaim?.purchaseId;
+    const chosen = selectedId
+      ? await tx.query.purchase.findFirst({
+          where: and(
+            eq(purchase.id, parseEntityId("purchase", selectedId)),
+            notDeleted(purchase),
+          ),
+        })
+      : undefined;
+    if (selectedId && !chosen)
+      throw new Error("The reviewed Purchase target no longer exists.");
+    if (
+      chosen &&
+      (chosen.vendorId !== vendorId ||
+        (chosen.orderId !== null && chosen.orderId !== candidate.orderId))
+    )
+      throw new Error(
+        "The reviewed Purchase target has a different vendor or order identity.",
+      );
+    if (chosen && ordered && chosen.id !== ordered.id)
+      throw new Error(
+        "Another Purchase already owns this vendor order. Review the two Purchases before importing.",
+      );
+    let target = chosen ?? ordered;
+    const created = target == null;
     if (!target) {
       target = await insertWithShortcode(tx, "purchase", {
         vendorId,
@@ -914,11 +968,14 @@ export async function importVendorOrder(
       await tx
         .update(purchase)
         .set({
+          orderId: target.orderId ?? candidate.orderId,
           vendorAccountId: target.vendorAccountId ?? vendorAccountId,
-          defaultTrade: input.defaultTrade ?? target.defaultTrade,
-          defaultProjectId: input.defaultProjectId
-            ? parseEntityId("project", input.defaultProjectId)
-            : target.defaultProjectId,
+          defaultTrade: target.defaultTrade ?? input.defaultTrade,
+          defaultProjectId:
+            target.defaultProjectId ??
+            (input.defaultProjectId
+              ? parseEntityId("project", input.defaultProjectId)
+              : null),
           runId: target.runId ?? input.runId,
           displayLabel: target.displayLabel ?? candidate.merchant,
           statedTotal: target.statedTotal ?? candidate.printedGrandTotal,
@@ -927,6 +984,7 @@ export async function importVendorOrder(
     }
     const purchaseId = parseEntityId("purchase", target.id);
     const findingIds: string[] = [];
+    let replacementExpenseId: string | null = null;
     const rowMutations: Array<{
       targetKind: "expense" | "product";
       targetId: string;
@@ -962,7 +1020,7 @@ export async function importVendorOrder(
             cost: candidate.printedGrandTotal,
             date: dateOnly(candidate.orderedAt),
             lineKind: "principal",
-            lineBasis: "item_line",
+            lineBasis: "allocation",
             costType: "materials",
             trade: null,
           });
@@ -1014,28 +1072,27 @@ export async function importVendorOrder(
             null,
           ),
         );
-      } else if (decision.kind !== "no_op") {
-        const aggregate =
-          decision.kind === "replace_aggregate" ? decision.aggregate : null;
-        const productsByExternalIdentity = new Map<string, string>();
-        if (aggregate) {
-          await tx
-            .update(expense)
-            .set({ deletedAt: new Date() })
-            .where(eq(expense.id, parseEntityId("expense", aggregate.id)));
-          rowMutations.push({
-            targetKind: "expense",
-            targetId: aggregate.id,
-            mutationKind: "delete",
-            fields: ["deletedAt"],
-          });
-          if (!target.displayLabel) {
-            await tx
-              .update(purchase)
-              .set({ displayLabel: aggregate.title })
-              .where(eq(purchase.id, purchaseId));
-          }
+      } else if (decision.kind === "review_aggregate") {
+        if (target.itemizationEvidence) {
+          findingIds.push(
+            await fileFinding(
+              tx,
+              input,
+              purchaseId,
+              "duplicate_lines",
+              "Reviewed item lines already exist. Compare the new evidence before changing them.",
+              null,
+            ),
+          );
+        } else {
+          replacementExpenseId = decision.aggregate.id;
         }
+      } else if (decision.kind === "insert") {
+        const productsByExternalIdentity = new Map<string, string>();
+        await tx
+          .update(purchase)
+          .set({ itemizationEvidence: true })
+          .where(eq(purchase.id, purchaseId));
         for (const [lineIndex, line] of decision.lines.entries()) {
           const identity = identityDecisions[lineIndex] ?? {
             productId: null,
@@ -1054,16 +1111,7 @@ export async function importVendorOrder(
             input.vendorId,
             productsByExternalIdentity,
           );
-          const quantity =
-            !productId || line.quantity === undefined
-              ? null
-              : line.amount >= 0
-                ? Math.abs(line.quantity)
-                : identity.reversalKind === "return"
-                  ? -Math.abs(line.quantity)
-                  : identity.reversalKind === "concession"
-                    ? 0
-                    : null;
+          const quantity = receiptProductQuantity(productId, line, identity);
           const inserted = await insertWithShortcode(tx, "expense", {
             purchaseId,
             name: line.title,
@@ -1072,12 +1120,9 @@ export async function importVendorOrder(
             date: dateOnly(candidate.orderedAt),
             lineKind: identity.lineKind,
             lineBasis: "item_line",
-            costType: costTypeSchema.parse(aggregate?.costType ?? "materials"),
-            trade: tradeSchema.nullable().parse(aggregate?.tradeId ?? null),
-            projectId:
-              identity.lineKind === "principal" && aggregate?.projectId
-                ? parseEntityId("project", aggregate.projectId)
-                : null,
+            costType: "materials",
+            trade: null,
+            economicRole: "vendor",
             productId,
             productQuantity: quantity,
           });
@@ -1302,8 +1347,44 @@ export async function importVendorOrder(
         });
       }
     }
-    // A soft-deleted aggregate expense is recorded as the update it is: the
-    // audit trail's `delete` needs the removal cascade's witness.
+    if (replacementExpenseId) {
+      const preview = await loadAggregateReplacementSnapshot(
+        tx,
+        purchaseId,
+        replacementExpenseId,
+      );
+      const reviewedLineAttributions =
+        await redistributeReplacementAttributions(
+          tx,
+          preview.allocations,
+          lines,
+        );
+      findingIds.push(
+        await fileFinding(
+          tx,
+          input,
+          purchaseId,
+          "duplicate_lines",
+          "Review replacing the recorded aggregate with these receipt lines. The preview preserves category, project, notes and each party's exact cents.",
+          {
+            kind: "replace_aggregate_line",
+            purchaseId,
+            lines,
+            reviewSnapshot: {
+              ...preview.snapshot,
+              fingerprint: await aggregateReplacementApprovalFingerprint(
+                preview.snapshot.fingerprint,
+                lines,
+                identityDecisions,
+                reviewedLineAttributions,
+              ),
+            },
+            reviewedLineIdentities: identityDecisions,
+            reviewedLineAttributions,
+          },
+        ),
+      );
+    }
     await recordRunWrites(
       tx,
       buildActorContext(userIdSchema.parse(actorUserId), "mcp", {

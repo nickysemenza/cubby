@@ -89,6 +89,7 @@ describe("entity graph cross-entity journey", () => {
         name: "Journey vendor",
         website: null,
         orderUrlTemplate: null,
+        evidenceExpectation: null,
         orderEvidence: null,
         orderEmailSenders: [],
         browserDomains: [],

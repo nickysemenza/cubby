@@ -24,6 +24,8 @@ const statusToneClass = {
 } as const;
 
 const ENTITY_CODE = {
+  ledgerTransfer: "LTR",
+  spendingCategory: "SPC",
   ingredient: "ING",
   location: "LOC",
   product: "PRD",

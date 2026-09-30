@@ -1,4 +1,12 @@
 import {
+  financialBookingInput,
+  financialBookingPreview,
+  financialBookingResult,
+  financialBookingCorrectionInput,
+  financialBookingCorrectionPreview,
+  financialBookingCorrectionResult,
+} from "@cubby/schemas/financial-booking";
+import {
   financialStatementImportPreviewInput,
   financialStatementImportPreviewOut,
   financialTransactionSourceOptionsOut,
@@ -47,6 +55,44 @@ export const ledgerPartyContract = defineContract("ledgerParty", {
 export const financialTransactionContract = defineContract(
   "financialTransaction",
   {
+    previewBookingCorrection: query({
+      input: financialBookingCorrectionInput,
+      output: financialBookingCorrectionPreview,
+      transport: "post",
+      native: "Review reimbursement moves and transfer corrections",
+      cache: {
+        tags: [
+          ["financialTransaction"],
+          ["purchase"],
+          ["expense"],
+          ["ledgerTransfer"],
+        ],
+      },
+    }),
+    commitBookingCorrection: mutation({
+      input: financialBookingCorrectionPreview,
+      output: financialBookingCorrectionResult,
+      native: "Apply reviewed financial corrections atomically",
+      invalidates: [
+        "financialTransaction",
+        "purchase",
+        "expense",
+        "ledgerTransfer",
+      ],
+    }),
+    previewBooking: query({
+      input: financialBookingInput,
+      output: financialBookingPreview,
+      transport: "post",
+      native: "Review spending before booking",
+      cache: { tags: [["financialTransaction"], ["purchase"], ["expense"]] },
+    }),
+    commitBooking: mutation({
+      input: financialBookingPreview,
+      output: financialBookingResult,
+      native: "Book reviewed spending",
+      invalidates: ["financialTransaction", "purchase", "expense"],
+    }),
     previewStatementImport: query({
       input: financialStatementImportPreviewInput,
       output: financialStatementImportPreviewOut,

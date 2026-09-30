@@ -4,6 +4,7 @@ import type {
   ProductId,
   ProjectId,
   PurchaseId,
+  SpendingCategoryId,
   VendorId,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -103,6 +104,10 @@ export type ExpenseRow = {
   name: string;
   cost: number | null;
   date: string | null;
+  spendingCategoryId?: SpendingCategoryId | null;
+  spendingCategoryShortcode?: string | null;
+  economicRole?: ExpenseOut["economicRole"];
+  bookingTransactionCode?: string | null;
   lineKind: ExpenseOut["lineKind"];
   lineBasis: ExpenseOut["lineBasis"];
   costType: ExpenseOut["costType"];
@@ -348,6 +353,16 @@ const expenseProjectName = (row: ExpenseRow) =>
     ? resolveLiveJoinName(row.project)
     : row.effectiveProjectName;
 
+const expenseEvidenceFields = (row: ExpenseRow) => ({
+  spendingCategoryId: row.spendingCategoryShortcode
+    ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
+    : null,
+  economicRole: row.economicRole ?? "vendor",
+  bookingTransactionCode: row.bookingTransactionCode
+    ? parseShortcodeFor("financialTransaction", row.bookingTransactionCode)
+    : null,
+});
+
 export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
   row: ExpenseRow,
   dataQuality: Q,
@@ -370,6 +385,7 @@ export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
     name: row.name,
     cost: row.cost,
     date: row.date,
+    ...expenseEvidenceFields(row),
     lineKind: row.lineKind,
     lineBasis: row.lineBasis,
     costType: row.costType,

@@ -73,6 +73,103 @@ const record = (
 describe("statement row ledger", () => {
   const ctx = withTestDb();
 
+  // This exercises the real PostgreSQL identity/ref constraints and shared
+  // web/native CSV writer; a browser cannot expose duplicate ref ownership.
+  it("retains identical and zero CSV occurrences, then reviews date/provider drift without another charge", async () => {
+    await createFinancialAccount(
+      ctx.db,
+      financialAccountCreateInput.parse({
+        name: "Occurrence card",
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        sourceAliases: [
+          {
+            source: "monarch",
+            alias: "Occurrence Visa",
+            externalAccountId: null,
+          },
+          { source: "mint", alias: "Occurrence Visa", externalAccountId: null },
+        ],
+      }),
+      ctx.actor,
+    );
+    const header =
+      "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Id";
+    const file = {
+      fileName: "occurrences.csv",
+      text: `${header}\n2026-08-16,Synthetic Cafe,Food,Occurrence Visa,CAFE,,-4.50,one\n2026-08-16,Synthetic Cafe,Food,Occurrence Visa,CAFE,,-4.50,two\n2026-08-16,Synthetic Cafe,Food,Occurrence Visa,ZERO,,0,zero`,
+    };
+    const preview = await previewStatementCsv(ctx.db, ctx.actor, file);
+    expect(preview.totalRows).toBe(3);
+    expect(preview.preview?.rows.map((row) => row.status)).toEqual([
+      "ready_to_create",
+      "ready_to_create",
+    ]);
+    const committed = await commitStatementCsv(ctx.db, ctx.actor, {
+      ...file,
+      selected: [
+        { key: "1", kind: "purchase" },
+        { key: "2", kind: "purchase" },
+      ],
+    });
+    expect(committed).toMatchObject({ transactions: 2, evidence: 3 });
+    expect(
+      await commitStatementCsv(ctx.db, ctx.actor, {
+        ...file,
+        selected: [
+          { key: "1", kind: "purchase" },
+          { key: "2", kind: "purchase" },
+        ],
+      }),
+    ).toMatchObject({ transactions: 0, evidence: 0 });
+    const drift = {
+      fileName: "drift.csv",
+      text: `${header}\n2026-08-18,Synthetic Cafe,Food,Occurrence Visa,CAFE,,-4.50,one`,
+    };
+    const driftPreview = await previewStatementCsv(ctx.db, ctx.actor, drift);
+    const candidate = driftPreview.preview?.rows[0];
+    expect(candidate?.status).toBe("possible_existing");
+    expect(candidate?.existingTransactionIds).toHaveLength(1);
+    await expect(
+      commitStatementCsv(ctx.db, ctx.actor, {
+        ...drift,
+        selected: [{ key: "1", kind: "purchase" }],
+      }),
+    ).rejects.toThrow("needs review");
+    const transactionId = candidate?.existingTransactionIds[0];
+    if (!transactionId) throw new Error("Expected stable-provider candidate");
+    expect(
+      await commitStatementCsv(ctx.db, ctx.actor, {
+        ...drift,
+        selected: [{ key: "1", transactionId }],
+      }),
+    ).toMatchObject({ transactions: 0, attached: 1, evidence: 1 });
+    expect(
+      (await previewStatementCsv(ctx.db, ctx.actor, drift)).preview?.rows[0]
+        ?.status,
+    ).toBe("already_recorded");
+    const mint = {
+      fileName: "mint-observation.csv",
+      text: "Date,Description,Original Description,Amount,Transaction Type,Category,Account Name\n2026-08-17,Synthetic Cafe,CAFE,4.50,debit,Food,Occurrence Visa",
+    };
+    const mintPreview = await previewStatementCsv(ctx.db, ctx.actor, mint);
+    expect(mintPreview.preview?.rows[0]?.status).toBe("possible_existing");
+    expect(mintPreview.preview?.rows[0]?.existingTransactionIds).toHaveLength(
+      2,
+    );
+    await expect(
+      commitStatementCsv(ctx.db, ctx.actor, {
+        ...mint,
+        selected: [{ key: "1", kind: "purchase" }],
+      }),
+    ).rejects.toThrow("needs review");
+    expect(
+      await commitStatementCsv(ctx.db, ctx.actor, {
+        ...mint,
+        selected: [{ key: "1", transactionId }],
+      }),
+    ).toMatchObject({ transactions: 0, attached: 1 });
+  });
+
   it("previews, confirms and safely replays a synthetic CSV through the native intake contract", async () => {
     await createFinancialAccount(
       ctx.db,

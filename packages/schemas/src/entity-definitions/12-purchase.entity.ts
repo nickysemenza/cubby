@@ -1,3 +1,5 @@
+import { purchaseEvidenceCoverage } from "../purchase-evidence-policy";
+import { spendingCategoryShortcode } from "../identifier-fields";
 import { defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -73,6 +75,11 @@ export default defineEntity({
         ],
         media: ["vendorLogo", "images", "displayImages"],
         derived: [
+          "bookingCoverage",
+          "documentCoverage",
+          "itemizationCoverage",
+          "productsCoverage",
+          "coverage",
           "expenseCount",
           "unpricedExpenseCount",
           "expenseTotal",
@@ -101,6 +108,168 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        key: "bookingCoverage",
+        kind: "enum",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Source evidence and booked expenses" }],
+        },
+        control: {
+          kind: "select",
+          options: [
+            { value: "missing", label: "Missing" },
+            { value: "partial", label: "Partial" },
+            { value: "recorded", label: "Recorded" },
+          ],
+        },
+        display: { list: true, detail: true, width: "sm" },
+        validation: {
+          read: purchaseEvidenceCoverage.shape.booking,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "documentCoverage",
+        kind: "enum",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Source evidence and booked expenses" }],
+        },
+        control: {
+          kind: "select",
+          options: [
+            { value: "missing", label: "Missing" },
+            { value: "present", label: "Present" },
+            { value: "not_expected", label: "Not expected" },
+            { value: "unknown", label: "Unclassified" },
+          ],
+        },
+        display: { list: true, detail: true, width: "sm" },
+        validation: {
+          read: purchaseEvidenceCoverage.shape.document,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "itemizationCoverage",
+        kind: "enum",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Source evidence and booked expenses" }],
+        },
+        control: {
+          kind: "select",
+          options: [
+            { value: "missing", label: "Missing" },
+            { value: "present", label: "Present" },
+            { value: "not_expected", label: "Not expected" },
+            { value: "unknown", label: "Unclassified" },
+          ],
+        },
+        display: { list: true, detail: true, width: "sm" },
+        validation: {
+          read: purchaseEvidenceCoverage.shape.itemization,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "productsCoverage",
+        kind: "enum",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Source evidence and booked expenses" }],
+        },
+        control: {
+          kind: "select",
+          options: [
+            { value: "missing", label: "Missing" },
+            { value: "partial", label: "Partial" },
+            { value: "present", label: "Present" },
+            { value: "not_expected", label: "Not expected" },
+            { value: "unknown", label: "Unclassified" },
+          ],
+        },
+        display: { list: true, detail: true, width: "sm" },
+        validation: {
+          read: purchaseEvidenceCoverage.shape.products,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "coverage",
+        kind: "json",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Source evidence and booked expenses" }],
+        },
+        explanation: {
+          ruleId: "purchase.coverage",
+          description:
+            "Booking, receipt, itemization, and Product coverage are evaluated independently against household expectations.",
+        },
+        validation: {
+          read: purchaseEvidenceCoverage,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "spendingCategoryId",
+        kind: "identifier",
+        nullable: true,
+        reference: { entity: "spendingCategory" },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { list: true, detail: true },
+        validation: {
+          read: spendingCategoryShortcode.nullable().default(null),
+          create: spendingCategoryShortcode.nullable().default(null),
+          update: spendingCategoryShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "evidenceExpectation",
+        kind: "enum",
+        nullable: true,
+        control: {
+          kind: "select",
+          options: [
+            { value: "unknown", label: "Unclassified" },
+            { value: "required", label: "Expected" },
+            { value: "not_expected", label: "Not expected" },
+          ],
+        },
+        display: { list: true, detail: true },
+        validation: {
+          read: z
+            .enum(["unknown", "required", "not_expected"])
+            .nullable()
+            .default(null),
+          create: z
+            .enum(["unknown", "required", "not_expected"])
+            .nullable()
+            .default(null),
+          update: z
+            .enum(["unknown", "required", "not_expected"])
+            .nullable()
+            .optional(),
+        },
+      },
+      {
+        key: "itemizationEvidence",
+        kind: "boolean",
+        control: { kind: "checkbox" },
+        display: { detail: true },
+        validation: {
+          read: z.boolean().default(false),
+          create: z.boolean().default(false),
+          update: z.boolean().optional(),
+        },
+      },
       {
         key: "defaultProjectId",
         kind: "identifier",
@@ -611,6 +780,9 @@ export default defineEntity({
       },
     ],
     storage: [
+      { key: "spendingCategoryId", reference: "spendingCategory" },
+      { key: "evidenceExpectation", specialized: "enum:evidenceExpectation" },
+      { key: "itemizationEvidence", defaultValue: false },
       {
         key: "id",
         specialized: "primary-key:PurchaseId",
@@ -630,6 +802,9 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "spendingCategoryId",
+      "evidenceExpectation",
+      "itemizationEvidence",
       "vendorId",
       "vendorAccountId",
       "defaultProjectId",
@@ -642,6 +817,9 @@ export default defineEntity({
       "pendingImageIds",
     ],
     update: [
+      "spendingCategoryId",
+      "evidenceExpectation",
+      "itemizationEvidence",
       "vendorId",
       "vendorAccountId",
       "defaultProjectId",
@@ -657,6 +835,9 @@ export default defineEntity({
     ],
     bulk: [],
     audit: [
+      "spendingCategoryId",
+      "evidenceExpectation",
+      "itemizationEvidence",
       "vendorId",
       "vendorAccountId",
       "defaultProjectId",
@@ -697,6 +878,9 @@ export default defineEntity({
           "notes",
         ],
         full: [
+          "spendingCategoryId",
+          "evidenceExpectation",
+          "itemizationEvidence",
           "vendorId",
           "vendorAccountId",
           "defaultProjectId",
@@ -714,6 +898,14 @@ export default defineEntity({
       update: ["full", "vendor", "identity"],
     },
     output: [
+      "bookingCoverage",
+      "documentCoverage",
+      "itemizationCoverage",
+      "productsCoverage",
+      "coverage",
+      "spendingCategoryId",
+      "evidenceExpectation",
+      "itemizationEvidence",
       "id",
       "vendorId",
       "vendorAccountId",
@@ -1228,9 +1420,6 @@ export default defineEntity({
   search: { enabled: true, embeddingOverride: false },
   capabilities: {
     auditable: true,
-    // Equal weights: a purchase is a paperwork checklist, not a ranking.
-    // `primary_document` and `empty_expenses` are expected only when the
-    // vendor's `orderEvidence` says the vendor can supply them (checks/purchase.ts).
     dataQuality: {
       exceptions: true,
       related: ["product"],
@@ -1265,6 +1454,25 @@ export default defineEntity({
           facet: "ledger",
           label: "No expense lines",
           message: "Purchase has no live Expenses.",
+        },
+        {
+          id: "purchase_spending_category",
+          facet: "identity",
+          label: "Spending category",
+          message: "Purchase has no default spending category.",
+        },
+        {
+          id: "purchase_evidence_expectation",
+          facet: "paperwork",
+          label: "Receipt expectation",
+          message: "Whether this Purchase needs a receipt is unclassified.",
+        },
+        {
+          id: "purchase_itemization",
+          facet: "ledger",
+          weight: 2,
+          label: "Receipt itemization",
+          message: "Expected receipt line itemization has not been reviewed.",
         },
         {
           id: "unpriced_expense",

@@ -227,6 +227,7 @@ async function computeTargetFingerprint(
     sourceKind: z.infer<typeof importSourceKind>;
     sourceExternalKey: string;
     orderId: string | null;
+    targetPurchaseId?: string | null;
   },
 ) {
   const database = getDb(db);
@@ -246,13 +247,9 @@ async function computeTargetFingerprint(
       ),
     )
     .limit(1);
-  const [target] = input.orderId
+  const [ordered] = input.orderId
     ? await database
-        .select({
-          id: purchase.id,
-          vendorAccountId: purchase.vendorAccountId,
-          updatedAt: purchase.updatedAt,
-        })
+        .select()
         .from(purchase)
         .where(
           and(
@@ -263,6 +260,35 @@ async function computeTargetFingerprint(
         )
         .limit(1)
     : [];
+  const [chosen] = input.targetPurchaseId
+    ? await database
+        .select()
+        .from(purchase)
+        .where(
+          and(
+            eq(purchase.id, parseEntityId("purchase", input.targetPurchaseId)),
+            notDeleted(purchase),
+          ),
+        )
+        .limit(1)
+    : [];
+  if (input.targetPurchaseId && !chosen)
+    throw new Error("The reviewed Purchase target no longer exists.");
+  if (
+    chosen &&
+    (chosen.vendorId !== input.vendorId ||
+      (chosen.orderId !== null && chosen.orderId !== input.orderId))
+  )
+    throw new Error(
+      "The reviewed Purchase target has a different vendor or order identity.",
+    );
+  if (chosen && ordered && chosen.id !== ordered.id)
+    throw new Error(
+      "Another Purchase already owns this vendor order. Review the two Purchases before importing.",
+    );
+  if (chosen && claim?.purchaseId && claim.purchaseId !== chosen.id)
+    throw new Error("This source already belongs to a different Purchase.");
+  const target = chosen ?? ordered;
   const expenses = target
     ? await database
         .select({ id: expense.id, updatedAt: expense.updatedAt })
@@ -415,12 +441,20 @@ export async function preparePurchaseImport(
         throw new Error(
           "Unreadable imports cannot be prepared without a candidate",
         );
+      const targetPurchaseId = order.targetPurchaseId
+        ? await resolveOrThrow(
+            transactionDb,
+            "purchase",
+            order.targetPurchaseId,
+          )
+        : null;
       const targetFingerprint = await computeTargetFingerprint(transactionDb, {
         ledgerPartyId: scope.ledgerPartyId,
         vendorId,
         sourceKind: order.source.kind,
         sourceExternalKey: order.source.externalKey,
         orderId: candidate.orderId,
+        targetPurchaseId,
       });
       const evidenceFingerprint = await computeEvidenceFingerprint({
         source: order.source,
@@ -437,6 +471,7 @@ export async function preparePurchaseImport(
           prepareOperationId: input._runExecution.operationId,
           itemOperationId: order.itemOperationId,
           stableOrderId: order.stableOrderId,
+          targetPurchaseId,
           sourceKind: order.source.kind,
           sourceExternalKey: order.source.externalKey,
           sourceChecksum: order.source.checksum,
@@ -487,6 +522,7 @@ export async function preparePurchaseImport(
         });
       }
       outputOrders.push({
+        targetPurchaseId: order.targetPurchaseId ?? null,
         stableOrderId: order.stableOrderId,
         itemOperationId: order.itemOperationId,
         source: order.source,
@@ -659,6 +695,7 @@ export async function commitPurchaseImport(
               sourceKind: importSourceKind.parse(order.sourceKind),
               sourceExternalKey: order.sourceExternalKey,
               orderId: extraction.candidate?.orderId ?? null,
+              targetPurchaseId: order.targetPurchaseId,
             },
           );
           const evidenceFingerprint = await computeEvidenceFingerprint({
@@ -739,6 +776,7 @@ export async function commitPurchaseImport(
           const result = await importVendorOrder(
             transactionDb,
             {
+              targetPurchaseId: order.targetPurchaseId,
               defaultTrade: input.defaultTrade,
               defaultProjectId: defaultProjectId ?? undefined,
               runId: scope.public.runId,

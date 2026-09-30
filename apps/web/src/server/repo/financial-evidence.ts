@@ -16,7 +16,7 @@ import { unwrapDb } from "~/server/repo/database-helpers";
  */
 export async function lockFinancialEvidenceKeys(
   tx: DrizzleTransaction,
-  namespace: "account-alias" | "transaction-ref",
+  namespace: "account-alias" | "transaction-ref" | "reviewed-booking",
   keys: readonly string[],
 ): Promise<void> {
   // JSON escaping keeps evidence values containing NUL delimiters valid UTF-8

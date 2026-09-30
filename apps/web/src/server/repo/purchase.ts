@@ -101,6 +101,9 @@ import {
   postedRefundTotalSql,
   settleableExpenseTotalSql,
   settleableUnpricedExpenseCountSql,
+  vendorExpenseTotalSql,
+  vendorExpenseCountSql,
+  vendorUnpricedExpenseCountSql,
 } from "~/server/repo/financial-reconciliation";
 import {
   applyAllocationChanges,
@@ -150,8 +153,15 @@ import {
 } from "./expense-inheritance";
 import { hydrateExpenseProjectAllocations } from "./expense-project-allocation";
 import { validateLiveEffectiveTrades } from "./inheritance-validation";
+import { purchaseCoverageSql } from "./purchase-evidence-policy";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
+  "ImportPreparedOrder.targetPurchaseId": {
+    code: "preserve-prepared-target",
+    effect: "preserve",
+    description:
+      "An import preparation retains its reviewed target tombstone and must be prepared again before commit.",
+  },
   "OrderMailCandidateDecision.purchaseId": {
     code: "preserve-reviewed-mail-history",
     effect: "preserve",
@@ -203,6 +213,12 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 export const PURCHASE_MERGE_EDGE_POLICY = {
+  "ImportPreparedOrder.targetPurchaseId": {
+    code: "preserve-prepared-target",
+    effect: "preserve",
+    description:
+      "A merge invalidates preparation against the original target rather than silently changing its approved identity.",
+  },
   "OrderMailCandidateDecision.purchaseId": {
     code: "move-dedupe-to-survivor",
     effect: "move-dedupe",
@@ -279,6 +295,16 @@ const purchaseSettleableUnpricedExpenseCount = correlated<number>(
   settleableUnpricedExpenseCountSql('"Purchase"'),
 );
 
+const purchaseVendorExpenseTotal = correlated<number>(
+  vendorExpenseTotalSql('"Purchase"'),
+);
+const purchaseVendorExpenseCount = correlated<number>(
+  vendorExpenseCountSql('"Purchase"'),
+);
+const purchaseVendorUnpricedExpenseCount = correlated<number>(
+  vendorUnpricedExpenseCountSql('"Purchase"'),
+);
+
 const purchasePostedRefundTotal = correlated<number>(
   postedRefundTotalSql('"Purchase"'),
 );
@@ -324,6 +350,7 @@ const purchaseVendorLogoKey = sql<string | null>`(
 )`;
 
 const purchaseColumns = {
+  coverage: purchaseCoverageSql("Purchase"),
   defaultProjectShortcode: purchaseDefaultProjectShortcode,
   defaultTrade: purchase.defaultTrade,
   id: purchase.id,
@@ -331,6 +358,11 @@ const purchaseColumns = {
   orderId: purchase.orderId,
   displayLabel: purchase.displayLabel,
   date: purchase.date,
+  spendingCategoryShortcode: sql<
+    string | null
+  >`(SELECT shortcode FROM "SpendingCategory" WHERE id = "Purchase"."spendingCategoryId" AND "deletedAt" IS NULL)`,
+  evidenceExpectation: purchase.evidenceExpectation,
+  itemizationEvidence: purchase.itemizationEvidence,
   statedTotal: purchase.statedTotal,
   notes: purchase.notes,
   createdAt: purchase.createdAt,
@@ -343,12 +375,19 @@ const purchaseColumns = {
   expenseCount: purchaseExpenseCount,
   unpricedExpenseCount: purchaseUnpricedExpenseCount,
   expenseTotal: purchaseExpenseTotal,
+  vendorExpenseTotal: purchaseVendorExpenseTotal,
+  vendorExpenseCount: purchaseVendorExpenseCount,
+  vendorUnpricedExpenseCount: purchaseVendorUnpricedExpenseCount,
   settleableExpenseTotal: purchaseSettleableExpenseTotal,
   settleableUnpricedExpenseCount: purchaseSettleableUnpricedExpenseCount,
   documentCount: purchaseDocumentCount,
 } as const;
 
 type PurchaseRow = {
+  coverage: PurchaseOut["coverage"];
+  spendingCategoryShortcode: string | null;
+  evidenceExpectation: PurchaseOut["evidenceExpectation"];
+  itemizationEvidence: boolean;
   defaultProjectShortcode: string | null;
   defaultTrade: PurchaseOut["defaultTrade"];
   id: PurchaseId;
@@ -368,6 +407,9 @@ type PurchaseRow = {
   expenseCount: number;
   unpricedExpenseCount: number;
   expenseTotal: number;
+  vendorExpenseTotal: number;
+  vendorExpenseCount: number;
+  vendorUnpricedExpenseCount: number;
   settleableExpenseTotal: number;
   settleableUnpricedExpenseCount: number;
   documentCount: number;
@@ -387,6 +429,16 @@ const dbPurchaseToAPI = (
   defaultProjectId: row.defaultProjectShortcode
     ? parseShortcodeFor("project", row.defaultProjectShortcode)
     : null,
+  spendingCategoryId: row.spendingCategoryShortcode
+    ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
+    : null,
+  evidenceExpectation: row.evidenceExpectation,
+  itemizationEvidence: row.itemizationEvidence,
+  coverage: row.coverage,
+  bookingCoverage: row.coverage.booking,
+  documentCoverage: row.coverage.document,
+  itemizationCoverage: row.coverage.itemization,
+  productsCoverage: row.coverage.products,
   defaultTrade: row.defaultTrade,
   orderId: row.orderId,
   displayLabel: row.displayLabel,
@@ -406,9 +458,9 @@ const dbPurchaseToAPI = (
   expenseTotal: Number(row.expenseTotal),
   reconciliation: reconcilePurchase({
     statedTotal: row.statedTotal,
-    expenseTotal: Number(row.expenseTotal),
-    expenseCount: Number(row.expenseCount),
-    unpricedExpenseCount: Number(row.unpricedExpenseCount),
+    expenseTotal: Number(row.vendorExpenseTotal),
+    expenseCount: Number(row.vendorExpenseCount),
+    unpricedExpenseCount: Number(row.vendorUnpricedExpenseCount),
     postedRefundTotal: financial.postedRefundTotal,
   }),
   documentCount: Number(row.documentCount),
@@ -503,21 +555,21 @@ const reconciliationCondition = (
   const toleranceInCents = Math.round(RECONCILIATION_TOLERANCE * 100);
   const gapInCents = sql`abs(
     floor((${purchase.statedTotal} * 100)::numeric + 0.5) -
-    floor((${purchaseExpenseTotal} * 100)::numeric + 0.5)
+    floor((${purchaseVendorExpenseTotal} * 100)::numeric + 0.5)
   )`;
   const deltaInCents = sql`(
-    floor((${purchaseExpenseTotal} * 100)::numeric + 0.5) -
+    floor((${purchaseVendorExpenseTotal} * 100)::numeric + 0.5) -
     floor((${purchase.statedTotal} * 100)::numeric + 0.5)
   )`;
   const refundInCents = sql`floor((${purchasePostedRefundTotal} * 100)::numeric + 0.5)`;
-  const refundAdjusted = sql`${purchaseUnpricedExpenseCount} = 0
+  const refundAdjusted = sql`${purchaseVendorUnpricedExpenseCount} = 0
     AND ${deltaInCents} < ${-toleranceInCents}
     AND ${refundInCents} = ${deltaInCents}`;
   // Mirrors the zero-expense guard in `reconcilePurchase`: once the totals fail
   // to match, a purchase with no lines is `unknown` rather than a mismatch, so
   // the filter agrees with the verdict the hydrated purchase carries.
   const comparable = sql`${purchase.statedTotal} IS NOT NULL
-    AND (${gapInCents} <= ${toleranceInCents} OR ${purchaseExpenseCount} > 0)`;
+    AND (${gapInCents} <= ${toleranceInCents} OR ${purchaseVendorExpenseCount} > 0)`;
   return or(
     selected.includes("unknown")
       ? or(isNull(purchase.statedTotal), sql`NOT (${comparable})`)
@@ -605,7 +657,9 @@ const resolvePurchaseSort = (sort: SortParams) => {
   if (sort.orderBy === "expenseCount") return [dir(purchaseExpenseCount)];
   if (sort.orderBy === "expenseTotal") return [dir(purchaseExpenseTotal)];
   if (sort.orderBy === "reconciliationGap") {
-    return [dir(sql`abs(${purchaseExpenseTotal} - ${purchase.statedTotal})`)];
+    return [
+      dir(sql`abs(${purchaseVendorExpenseTotal} - ${purchase.statedTotal})`),
+    ];
   }
   if (sort.orderBy === "documentCount") return [dir(purchaseDocumentCount)];
   return null;
@@ -620,6 +674,7 @@ export const purchaseListRead = async (
   projection: ListProjection = { kind: "full" },
 ) => {
   const {
+    coverage,
     defaultProjectShortcode,
     vendorShortcode,
     vendorAccountShortcode,
@@ -628,6 +683,9 @@ export const purchaseListRead = async (
     expenseCount,
     unpricedExpenseCount,
     expenseTotal,
+    vendorExpenseTotal,
+    vendorExpenseCount,
+    vendorUnpricedExpenseCount,
     settleableExpenseTotal,
     settleableUnpricedExpenseCount,
     documentCount,
@@ -651,9 +709,13 @@ export const purchaseListRead = async (
             })),
             ...listGroupFields(projection, "media", () => ({ vendorLogoKey })),
             ...listGroupFields(projection, "derived", () => ({
+              coverage,
               expenseCount,
               unpricedExpenseCount,
               expenseTotal,
+              vendorExpenseTotal,
+              vendorExpenseCount,
+              vendorUnpricedExpenseCount,
               settleableExpenseTotal,
               settleableUnpricedExpenseCount,
               documentCount,
@@ -687,6 +749,12 @@ export const purchaseListRead = async (
                 date: row.date,
               }),
               ...listGroupFields(projection, "relations", () => ({
+                spendingCategoryId: row.spendingCategoryShortcode
+                  ? parseShortcodeFor(
+                      "spendingCategory",
+                      row.spendingCategoryShortcode,
+                    )
+                  : null,
                 vendorId: parseShortcodeFor("vendor", row.vendorShortcode!),
                 vendorAccountId: row.vendorAccountShortcode
                   ? parseShortcodeFor(
@@ -709,11 +777,16 @@ export const purchaseListRead = async (
                   : null,
               })),
               ...listGroupFields(projection, "derived", () => ({
+                coverage: row.coverage!,
+                bookingCoverage: row.coverage!.booking,
+                documentCoverage: row.coverage!.document,
+                itemizationCoverage: row.coverage!.itemization,
+                productsCoverage: row.coverage!.products,
                 reconciliation: reconcilePurchase({
                   statedTotal: row.statedTotal,
-                  expenseTotal: Number(row.expenseTotal),
-                  expenseCount: Number(row.expenseCount),
-                  unpricedExpenseCount: Number(row.unpricedExpenseCount),
+                  expenseTotal: Number(row.vendorExpenseTotal),
+                  expenseCount: Number(row.vendorExpenseCount),
+                  unpricedExpenseCount: Number(row.vendorUnpricedExpenseCount),
                   postedRefundTotal: financial.postedRefundTotal,
                 }),
                 financialReconciliation: calculateFinancialReconciliation({
@@ -964,6 +1037,11 @@ export const createPurchase = async (
       defaultProjectId: data.defaultProjectId
         ? await resolveOrThrow(tx, "project", data.defaultProjectId)
         : null,
+      spendingCategoryId: data.spendingCategoryId
+        ? await resolveOrThrow(tx, "spendingCategory", data.spendingCategoryId)
+        : null,
+      evidenceExpectation: data.evidenceExpectation,
+      itemizationEvidence: data.itemizationEvidence,
       defaultTrade: data.defaultTrade,
       vendorId,
       vendorAccountId,
@@ -995,6 +1073,14 @@ const resolvePurchaseDefaultProjectUpdate = async (
   tx: DrizzleTransaction,
   shortcode: string | null | undefined,
 ) => (shortcode == null ? shortcode : resolveOrThrow(tx, "project", shortcode));
+
+const resolvePurchaseCategoryUpdate = async (
+  tx: DrizzleTransaction,
+  shortcode: string | null | undefined,
+) =>
+  shortcode == null
+    ? shortcode
+    : resolveOrThrow(tx, "spendingCategory", shortcode);
 
 export const updatePurchase = async (
   db: Database,
@@ -1084,6 +1170,12 @@ export const updatePurchase = async (
           tx,
           data.defaultProjectId,
         ),
+        spendingCategoryId: await resolvePurchaseCategoryUpdate(
+          tx,
+          data.spendingCategoryId,
+        ),
+        evidenceExpectation: data.evidenceExpectation,
+        itemizationEvidence: data.itemizationEvidence,
         defaultTrade: data.defaultTrade,
         orderId:
           data.orderId === undefined ? undefined : data.orderId?.trim() || null,
@@ -1417,19 +1509,6 @@ export const splitExpense = async (
         pricingCandidates,
       );
 
-      if (original.cost !== null) {
-        await tx
-          .update(purchase)
-          .set({ statedTotal: original.cost })
-          .where(
-            and(
-              eq(purchase.id, chargeId),
-              isNull(purchase.statedTotal),
-              notDeleted(purchase),
-            ),
-          );
-      }
-
       const inserted: ExpenseId[] = [];
       for (const { part, productId, projectId, lineKind } of preparedParts) {
         await validateExpenseInheritance(tx, {
@@ -1443,6 +1522,10 @@ export const splitExpense = async (
           name: part.name,
           cost: part.cost,
           date: original.date,
+          economicRole: original.economicRole,
+          spendingCategoryId: original.spendingCategoryId,
+          bookingTransactionCode: original.bookingTransactionCode,
+          lineBasis: original.lineBasis,
           lineKind,
           costType: part.costType,
           trade: part.trade,
@@ -1707,6 +1790,11 @@ const carryChargeMetadata = async (
   survivorId: PurchaseId,
 ) => {
   const selection = {
+    spendingCategoryId: purchase.spendingCategoryId,
+    evidenceExpectation: purchase.evidenceExpectation,
+    itemizationEvidence: purchase.itemizationEvidence,
+    vendorExpenseCount: purchaseVendorExpenseCount,
+
     statedTotal: purchase.statedTotal,
     displayLabel: purchase.displayLabel,
     notes: purchase.notes,
@@ -1722,11 +1810,46 @@ const carryChargeMetadata = async (
     .from(purchase)
     .where(eq(purchase.id, survivorId))
     .limit(1);
+  if (!dead || !survivor)
+    throw new Error("Both Purchases must exist before merging their metadata.");
+  if (
+    survivor.evidenceExpectation != null &&
+    dead.evidenceExpectation != null &&
+    survivor.evidenceExpectation !== dead.evidenceExpectation
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "These Purchases have conflicting receipt expectations. Review their expectations before merging.",
+    );
+  if (
+    survivor.spendingCategoryId != null &&
+    dead.spendingCategoryId != null &&
+    survivor.spendingCategoryId !== dead.spendingCategoryId
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "These Purchases have conflicting spending categories. Preserve item overrides and review their defaults before merging.",
+    );
   const carried = buildPartialUpdateValues({
-    statedTotal: carryMissing(survivor?.statedTotal, dead?.statedTotal),
-    displayLabel: carryMissing(survivor?.displayLabel, dead?.displayLabel),
-    notes: carryMissing(survivor?.notes, dead?.notes),
-    date: carryMissing(survivor?.date, dead?.date),
+    spendingCategoryId: carryMissing(
+      survivor.spendingCategoryId,
+      dead.spendingCategoryId,
+    ),
+    evidenceExpectation: carryMissing(
+      survivor.evidenceExpectation,
+      dead.evidenceExpectation,
+    ),
+    itemizationEvidence: Boolean(
+      (survivor.itemizationEvidence ||
+        Number(survivor.vendorExpenseCount) === 0) &&
+      (dead.itemizationEvidence || Number(dead.vendorExpenseCount) === 0) &&
+      (survivor.itemizationEvidence || dead.itemizationEvidence),
+    ),
+
+    statedTotal: carryMissing(survivor.statedTotal, dead.statedTotal),
+    displayLabel: carryMissing(survivor.displayLabel, dead.displayLabel),
+    notes: carryMissing(survivor.notes, dead.notes),
+    date: carryMissing(survivor.date, dead.date),
   });
   if (Object.keys(carried).length > 0) {
     await tx.update(purchase).set(carried).where(eq(purchase.id, survivorId));
@@ -1734,10 +1857,10 @@ const carryChargeMetadata = async (
   return {
     carried,
     discardedStatedTotal: discardedStatedTotalOf(
-      survivor?.statedTotal,
-      dead?.statedTotal,
+      survivor.statedTotal,
+      dead.statedTotal,
     ),
-    survivorStatedTotal: survivor?.statedTotal,
+    survivorStatedTotal: survivor.statedTotal,
   };
 };
 

@@ -1,9 +1,9 @@
 import { cents } from "./money";
 
 /**
- * The identity function for a provider statement row.
+ * The frozen legacy identity function for a provider statement row.
  *
- * A statement row has no natural key: exports carry no stable row id, and the
+ * Legacy clients supplied no file positions or stable provider IDs, and the
  * client-supplied `key` is unique only within one request. So identity is a
  * content hash over the fields a provider actually originates, and that hash is
  * what a transaction's `settlement_ref` EntityExternalId stores. Match state elsewhere is
@@ -80,4 +80,19 @@ export async function statementRowExternalId(
     new TextEncoder().encode(payload),
   );
   return `v1:${toHex(digest)}`;
+}
+
+/** Immutable observation identity. Provider IDs and content are reconciliation
+ * evidence; neither may collapse two positions in the same export. */
+export async function statementRowOccurrenceId(
+  source: string,
+  fingerprint: string,
+  rowPosition: number,
+): Promise<string> {
+  const payload = JSON.stringify([source, "v2", fingerprint, rowPosition]);
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(payload),
+  );
+  return `v2:${toHex(digest)}`;
 }

@@ -733,6 +733,23 @@ extension JSONValue {
  * hand-written in `CubbyClient.swift`.
  */
 const CLIENT_PASSTHROUGH_METHODS = {
+  "financialTransaction.previewBookingCorrection": {
+    method: "previewFinancialBookingCorrection",
+    doc: null,
+  },
+  "financialTransaction.commitBookingCorrection": {
+    method: "commitFinancialBookingCorrection",
+    doc: null,
+  },
+  "problems.resolveRunFinding": { method: "resolveRunFinding", doc: null },
+  "financialTransaction.previewBooking": {
+    method: "previewFinancialBooking",
+    doc: null,
+  },
+  "financialTransaction.commitBooking": {
+    method: "commitFinancialBooking",
+    doc: null,
+  },
   "entity.listBase": { method: "entityListBase", doc: null },
   "entity.listEnrichment": { method: "entityListEnrichment", doc: null },
   "entity.listSummary": { method: "entityListSummary", doc: null },

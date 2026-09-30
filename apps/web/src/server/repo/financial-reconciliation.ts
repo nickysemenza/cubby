@@ -79,6 +79,23 @@ export const settleableUnpricedExpenseCountSql = (purchaseAlias: string) =>
        AND se_e."deletedAt" IS NULL
        AND se_e."future" = false)`;
 
+/** Vendor paperwork excludes household reimbursements; spend and settlement
+ * continue to include every incurred Expense, including those credits. */
+export const vendorExpenseTotalSql = (purchaseAlias: string) =>
+  `(SELECT COALESCE(sum(vp_e."cost"::numeric), 0)::double precision FROM "Expense" vp_e
+    WHERE vp_e."purchaseId" = ${purchaseAlias}."id" AND vp_e."deletedAt" IS NULL
+      AND vp_e."economicRole" = 'vendor')`;
+
+export const vendorExpenseCountSql = (purchaseAlias: string) =>
+  `(SELECT count(*)::int FROM "Expense" vp_e
+    WHERE vp_e."purchaseId" = ${purchaseAlias}."id" AND vp_e."deletedAt" IS NULL
+      AND vp_e."economicRole" = 'vendor')`;
+
+export const vendorUnpricedExpenseCountSql = (purchaseAlias: string) =>
+  `(SELECT count(*)::int FROM "Expense" vp_e
+    WHERE vp_e."purchaseId" = ${purchaseAlias}."id" AND vp_e."deletedAt" IS NULL
+      AND vp_e."economicRole" = 'vendor' AND vp_e."cost" IS NULL)`;
+
 /**
  * The settlement total compared with incurred expenses. Outstanding expected
  * or pending rows make the projected total authoritative; otherwise only

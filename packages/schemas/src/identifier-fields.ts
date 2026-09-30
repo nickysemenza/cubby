@@ -67,6 +67,7 @@ export const recipeId = ENTITY_ID_SCHEMA.recipe;
 export const imageId = ENTITY_ID_SCHEMA.image;
 export const ingredientId = ENTITY_ID_SCHEMA.ingredient;
 export const productCategoryId = ENTITY_ID_SCHEMA.productCategory;
+export const spendingCategoryId = ENTITY_ID_SCHEMA.spendingCategory;
 export const productId = ENTITY_ID_SCHEMA.product;
 export const locationId = ENTITY_ID_SCHEMA.location;
 export const inventoryId = ENTITY_ID_SCHEMA.inventory;
@@ -166,6 +167,7 @@ const entityRefParser =
  * compile when an entity is missing.
  */
 const PARSE_ENTITY_REF = {
+  spendingCategory: entityRefParser("spendingCategory"),
   cookbook: entityRefParser("cookbook"),
   expense: entityRefParser("expense"),
   financialAccount: entityRefParser("financialAccount"),
@@ -223,6 +225,7 @@ export {
   mealShortcode,
   productShortcode,
   productCategoryShortcode,
+  spendingCategoryShortcode,
   projectShortcode,
   purchaseShortcode,
   parseShortcodeFor,
@@ -252,6 +255,7 @@ export type {
   MealShortcode,
   ProductShortcode,
   ProductCategoryShortcode,
+  SpendingCategoryShortcode,
   ProjectShortcode,
   PurchaseShortcode,
   RecipeShortcode,
@@ -264,3 +268,5 @@ export type {
   DeviceShortcode,
   PlantShortcode,
 } from "@cubby/shared";
+
+export type SpendingCategoryId = EntityId<"spendingCategory">;

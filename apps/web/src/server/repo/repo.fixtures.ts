@@ -104,6 +104,7 @@ export const makeProductInput = <
 ): ProductFixtureInput<Ingredient, GrowsPlant, Category> => {
   const { ingredientId, growsPlantId, categoryId, ...rest } = overrides;
   return {
+    acquisitionOrigin: "unknown",
     name: "Test Product",
     aliases: [],
     tags: [],
@@ -361,6 +362,8 @@ export const makeExpenseInput = (
   overrides: Partial<ExpenseCreateInput> = {},
 ): ExpenseCreateInput => {
   const input: ExpenseCreateInput = {
+    economicRole: "vendor",
+    spendingCategoryId: null,
     name: "Test Expense",
     cost: 100,
     date: "2024-01-15",

@@ -61,6 +61,34 @@ export default defineEntity({
   model: {
     fields: [
       {
+        key: "evidenceExpectation",
+        kind: "enum",
+        nullable: true,
+        control: {
+          kind: "select",
+          options: [
+            { value: "unknown", label: "Unclassified" },
+            { value: "required", label: "Expected" },
+            { value: "not_expected", label: "Not expected" },
+          ],
+        },
+        display: { list: true, detail: true },
+        validation: {
+          read: z
+            .enum(["unknown", "required", "not_expected"])
+            .nullable()
+            .default(null),
+          create: z
+            .enum(["unknown", "required", "not_expected"])
+            .nullable()
+            .default(null),
+          update: z
+            .enum(["unknown", "required", "not_expected"])
+            .nullable()
+            .optional(),
+        },
+      },
+      {
         key: "name",
         kind: "text",
         control: { kind: "text", placeholder: "Who are you paying?" },
@@ -351,6 +379,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      { key: "evidenceExpectation", specialized: "enum:evidenceExpectation" },
       {
         key: "id",
         specialized: "primary-key:VendorId",
@@ -383,6 +412,7 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "evidenceExpectation",
       "name",
       "website",
       "orderUrlTemplate",
@@ -394,6 +424,7 @@ export default defineEntity({
       "notes",
     ],
     update: [
+      "evidenceExpectation",
       "name",
       "website",
       "orderUrlTemplate",
@@ -406,6 +437,7 @@ export default defineEntity({
     ],
     bulk: [],
     audit: [
+      "evidenceExpectation",
       "name",
       "website",
       "orderUrlTemplate",
@@ -434,6 +466,7 @@ export default defineEntity({
       fields: {
         capture: ["name", "website", "notes"],
         full: [
+          "evidenceExpectation",
           "name",
           "website",
           "orderUrlTemplate",
@@ -449,6 +482,7 @@ export default defineEntity({
       update: ["full", "identity"],
     },
     output: [
+      "evidenceExpectation",
       "id",
       "name",
       "website",

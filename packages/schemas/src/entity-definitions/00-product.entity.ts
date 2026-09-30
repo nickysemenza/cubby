@@ -191,7 +191,12 @@ export default defineEntity({
         {
           id: "stock-and-price",
           title: "Stock & price",
-          fields: ["expectedQuantity", "price", "stockTracked"],
+          fields: [
+            "expectedQuantity",
+            "price",
+            "stockTracked",
+            "acquisitionOrigin",
+          ],
         },
         {
           id: "identifiers",
@@ -220,6 +225,31 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        key: "acquisitionOrigin",
+        kind: "enum",
+        control: {
+          kind: "select",
+          options: [
+            { value: "unknown", label: "Unclassified" },
+            { value: "purchased", label: "Purchased" },
+            { value: "gift", label: "Gift" },
+            { value: "previously_owned", label: "Previously owned" },
+          ],
+        },
+        display: { list: true, detail: true },
+        validation: {
+          read: z
+            .enum(["unknown", "purchased", "gift", "previously_owned"])
+            .default("unknown"),
+          create: z
+            .enum(["unknown", "purchased", "gift", "previously_owned"])
+            .default("unknown"),
+          update: z
+            .enum(["unknown", "purchased", "gift", "previously_owned"])
+            .optional(),
+        },
+      },
       {
         key: "name",
         kind: "text",
@@ -1126,6 +1156,11 @@ export default defineEntity({
     ],
     storage: [
       {
+        key: "acquisitionOrigin",
+        specialized: "enum:acquisitionOrigin",
+        defaultValue: "unknown",
+      },
+      {
         key: "id",
         specialized: "primary-key:ProductId",
       },
@@ -1158,6 +1193,7 @@ export default defineEntity({
       { key: "labelNutrition", specialized: "json:labelNutrition" },
     ],
     create: [
+      "acquisitionOrigin",
       "name",
       "aliases",
       "tags",
@@ -1181,6 +1217,7 @@ export default defineEntity({
       "pendingImagePurposes",
     ],
     update: [
+      "acquisitionOrigin",
       "name",
       "aliases",
       "tags",
@@ -1207,6 +1244,7 @@ export default defineEntity({
     ],
     bulk: ["stockTracked"],
     audit: [
+      "acquisitionOrigin",
       "name",
       "aliases",
       "tags",
@@ -1298,6 +1336,7 @@ export default defineEntity({
           "imageOrder",
         ],
         full: [
+          "acquisitionOrigin",
           "name",
           "aliases",
           "tags",
@@ -1345,6 +1384,7 @@ export default defineEntity({
       update: ["full", "identity", "price", "stock"],
     },
     output: [
+      "acquisitionOrigin",
       "id",
       "name",
       "aliases",

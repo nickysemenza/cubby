@@ -510,7 +510,7 @@ const selectExpensePage = (
   const declared = relations.expense.withProject.with;
   return getDb(db).query.expense.findMany({
     ...page,
-    extras: derived ? expenseInheritanceReadExtras() : undefined,
+    extras: expenseInheritanceReadExtras(),
     with: {
       project: references || derived ? declared.project : undefined,
       product: references ? declared.product : undefined,

@@ -16,11 +16,11 @@ struct CubbyApp: App {
     #endif
 
     init() {
-        #if DEBUG && os(iOS)
+        #if DEBUG
             let e2eURL = Self.e2eServerURL
             let serverURL = e2eURL ?? Self.devServerURL
             if e2eURL != nil {
-                // A fresh simulator stays a plain viewer without presenting the
+                // A fixture install stays a plain viewer without presenting the
                 // first-install companion-work decision over the E2E flow.
                 DeviceParticipation(automaticWork: false, answeredAt: .now).save(to: .standard)
             }
@@ -29,7 +29,7 @@ struct CubbyApp: App {
         #endif
         // Before anything else so a crash during model setup is still reported.
         Diagnostics.start(baseURL: serverURL ?? AppModel.persistedBaseURL)
-        #if DEBUG && os(iOS)
+        #if DEBUG
             let model =
                 serverURL.map {
                     AppModel(
@@ -98,7 +98,7 @@ struct CubbyApp: App {
             .tint(FieldGuideTokens.interaction)
             .task {
                 await model.restoreSession()
-                #if DEBUG && os(iOS)
+                #if DEBUG
                     if Self.e2eServerURL != nil {
                         // This uses the normal AuthFlow and credential store against the
                         // disposable loopback workerd server selected at launch.
@@ -140,7 +140,7 @@ struct CubbyApp: App {
             }
     }
 
-    #if DEBUG && os(iOS)
+    #if DEBUG
         private static var e2eServerURL: URL? {
             serverURL(argument: "--cubby-e2e-server")
         }

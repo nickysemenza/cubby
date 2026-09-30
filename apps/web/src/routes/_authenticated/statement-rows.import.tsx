@@ -1,9 +1,10 @@
 import {
-  financialTransactionCreateInput,
   financialTransactionKind,
   type FinancialStatementImportPreviewOut,
   type FinancialTransactionKind,
 } from "@cubby/schemas/financial-transaction";
+import { financialTransactionShortcode } from "@cubby/schemas/identifiers";
+import type { StatementCsvFileInput } from "@cubby/schemas/statement-row";
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
@@ -22,10 +23,10 @@ import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { NativeSelect } from "~/components/ui/native-select";
 import { useHydrationGate } from "~/hooks/useHydrated";
 import {
   financialTransaction,
-  entityMutation,
   statementRow,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
@@ -38,6 +39,7 @@ type RecordStatementRowsOut = Awaited<
 >;
 type Review = {
   fileName: string;
+  fileInput: StatementCsvFileInput;
   parsed: ParsedImport;
   preview: FinancialStatementImportPreviewOut | null;
   dryRun: RecordStatementRowsOut;
@@ -61,8 +63,24 @@ function statusLabel(
     case "unresolved_account":
       return "Account needs review";
     case "indistinguishable_duplicate":
-      return "Duplicate rows in file";
+      return "Provider identity needs review";
   }
+}
+
+function confirmationLabel(
+  busy: boolean,
+  progress: string | null,
+  missingKinds: boolean,
+  attachments: number,
+  selected: number,
+  rows: number,
+) {
+  if (busy) return progress ?? "Saving…";
+  if (missingKinds) return "Choose transaction kinds";
+  if (attachments)
+    return `Save rows and attach ${attachments} reviewed observations`;
+  if (selected) return `Save rows and create ${selected} reviewed transactions`;
+  return `Save ${formatCount(rows)} source rows`;
 }
 
 function StatementImportPage() {
@@ -94,21 +112,24 @@ function StatementImportPage() {
   const [kinds, setKinds] = useState<Record<string, FinancialTransactionKind>>(
     {},
   );
-  const createTransaction = useMutation(
-    entityMutation.mutate.forEntity("financialTransaction").mutationOptions(),
-  );
-  const recordRows = useMutation(statementRow.record.mutationOptions());
+  const [attachments, setAttachments] = useState<Record<string, string>>({});
+  const commitCsv = useMutation(statementRow.commitCsv.mutationOptions());
   const [busy, setBusy] = useState(false);
   const fileGate = useHydrationGate(busy);
   const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [result, setResult] = useState<{
     transactions: number;
+    attached: number;
     evidence: number;
-    alreadyPresentOrIndistinguishable: number;
+    alreadyPresent: number;
   } | null>(null);
 
-  async function prepareReview(parsed: ParsedImport, fileName: string) {
+  async function prepareReview(
+    parsed: ParsedImport,
+    fileName: string,
+    fileInput: StatementCsvFileInput,
+  ) {
     const firstPreview = previewStatementBatch(parsed);
     const [preview, dryRun] = await Promise.all([
       firstPreview
@@ -119,7 +140,8 @@ function StatementImportPage() {
         dryRun: true,
       }),
     ]);
-    setReview({ fileName, parsed, preview, dryRun });
+    setReview({ fileName, fileInput, parsed, preview, dryRun });
+    setAttachments({});
     setSelected([]);
     setMappingFile(null);
   }
@@ -139,6 +161,7 @@ function StatementImportPage() {
         await prepareReview(
           parseStatementCsv(text, file.name, fingerprint),
           file.name,
+          { fileName: file.name, text },
         );
       } else {
         setMappingFile({ text, fileName: file.name, fingerprint, headers });
@@ -186,6 +209,7 @@ function StatementImportPage() {
           mapping,
         ),
         mappingFile.fileName,
+        { fileName: mappingFile.fileName, text: mappingFile.text, mapping },
       );
     } catch (cause) {
       setError(cause);
@@ -200,64 +224,29 @@ function StatementImportPage() {
     setBusy(true);
     setError(null);
     try {
-      let evidence = 0;
-      for (
-        let offset = 0;
-        offset < review.parsed.recordRows.length;
-        offset += 500
-      ) {
-        setProgress(
-          `Saving source rows ${offset + 1}–${Math.min(offset + 500, review.parsed.recordRows.length)} of ${review.parsed.recordRows.length}`,
-        );
-        const recorded = await recordRows.mutateAsync(
-          recordStatementBatch(review.parsed, offset),
-        );
-        evidence += recorded.inserted;
-      }
-      // A second preview catches a transaction written since the file was
-      // opened. Source refs make a retry after a partial failure resumable.
-      const firstPreview = previewStatementBatch(review.parsed);
-      const current =
-        selected.length && firstPreview
-          ? await financialTransaction.previewStatementImport.call(firstPreview)
-          : null;
-      let transactions = 0;
-      for (const row of current?.rows ?? []) {
-        if (row.status !== "ready_to_create" || !selected.includes(row.key))
-          continue;
-        if (!row.accountId) throw new Error(`No account for row ${row.key}`);
-        const proposed = row.proposed;
-        const kind = kinds[row.key];
-        if (!kind) throw new Error(`Choose a transaction kind for ${row.key}`);
-        const data = financialTransactionCreateInput.parse({
-          accountId: row.accountId,
-          purchaseId: null,
-          kind,
-          status: proposed.status,
-          amount: proposed.amount,
-          transactionDate: proposed.transactionDate,
-          postedDate: proposed.postedDate,
-          merchant: proposed.merchant,
-          rawDescription: proposed.rawDescription,
-          sourceCategory: proposed.sourceCategory,
-          sourceRefs: [proposed.sourceRef],
-          notes: proposed.notes,
-        });
-        await createTransaction.mutateAsync({
-          entity: "financialTransaction",
-          action: "create",
-          data,
-        });
-        transactions++;
-        setProgress(
-          `Creating reviewed transactions ${transactions} of ${selected.length}`,
-        );
-      }
+      setProgress("Saving reviewed statement decisions…");
+      const committed = await commitCsv.mutateAsync({
+        ...review.fileInput,
+        selected: [
+          ...selected.map((key) => ({ key, kind: kinds[key] })),
+          ...Object.entries(attachments).flatMap(([key, transactionId]) =>
+            transactionId
+              ? [
+                  {
+                    key,
+                    transactionId:
+                      financialTransactionShortcode.parse(transactionId),
+                  },
+                ]
+              : [],
+          ),
+        ],
+      });
       setResult({
-        transactions,
-        evidence,
-        alreadyPresentOrIndistinguishable:
-          review.parsed.recordRows.length - evidence,
+        transactions: committed.transactions,
+        attached: committed.attached,
+        evidence: committed.evidence,
+        alreadyPresent: committed.alreadyPresent,
       });
       setReview(null);
     } catch (cause) {
@@ -376,7 +365,7 @@ function StatementImportPage() {
                   {["date", "amount", "description"].includes(field)
                     ? " *"
                     : ""}
-                  <select
+                  <NativeSelect
                     aria-label={`${field === "accountColumn" ? "Account" : field[0]!.toUpperCase() + field.slice(1)} column`}
                     className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
                     value={mapping[field]}
@@ -397,12 +386,13 @@ function StatementImportPage() {
                         {header}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </label>
               ))}
-              <label className="text-sm">
+              <label className="text-sm" htmlFor="statement-amount-convention">
                 Amount convention
-                <select
+                <NativeSelect
+                  id="statement-amount-convention"
                   aria-label="Amount convention"
                   className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-2"
                   value={mapping.sign}
@@ -421,7 +411,7 @@ function StatementImportPage() {
                   <option value="direction-column">
                     Direction column says charge or credit
                   </option>
-                </select>
+                </NativeSelect>
               </label>
               {mapping.sign === "direction-column" && (
                 <div className="flex gap-2">
@@ -480,8 +470,8 @@ function StatementImportPage() {
             <p className="text-sm font-semibold">Statement recorded</p>
             <p className="mt-1 text-sm text-muted-foreground">
               {result.transactions} transactions created · {result.evidence} new
-              source rows · {result.alreadyPresentOrIndistinguishable} already
-              present or indistinguishable
+              source rows · {result.attached} observations attached ·{" "}
+              {result.alreadyPresent} already present or indistinguishable
             </p>
             <Button
               className="mt-3"
@@ -517,7 +507,7 @@ function StatementImportPage() {
                       need review
                     </>
                   ) : (
-                    "No posted rows; pending rows can be saved as evidence."
+                    "No nonzero posted rows; all rows can be saved as evidence."
                   )}
                 </p>
                 {review.parsed.pending > 0 && (
@@ -528,8 +518,8 @@ function StatementImportPage() {
                 )}
                 {review.parsed.zeroValueRows > 0 && (
                   <p className="text-xs text-warning-ink">
-                    {review.parsed.zeroValueRows} zero-value rows cannot be
-                    stored as financial statement rows and will be skipped.
+                    {review.parsed.zeroValueRows} zero-value rows will be
+                    retained as source evidence without creating transactions.
                   </p>
                 )}
               </div>
@@ -537,13 +527,14 @@ function StatementImportPage() {
                 onClick={() => void confirm()}
                 disabled={busy || selected.some((key) => !kinds[key])}
               >
-                {busy
-                  ? (progress ?? "Saving…")
-                  : selected.some((key) => !kinds[key])
-                    ? "Choose transaction kinds"
-                    : selected.length > 0
-                      ? `Save rows and create ${selected.length} reviewed transactions`
-                      : `Save ${formatCount(review.parsed.recordRows.length)} source rows`}
+                {confirmationLabel(
+                  busy,
+                  progress,
+                  selected.some((key) => !kinds[key]),
+                  Object.values(attachments).filter(Boolean).length,
+                  selected.length,
+                  review.parsed.recordRows.length,
+                )}
               </Button>
             </div>
             {review.dryRun.signWarning && (
@@ -591,7 +582,7 @@ function StatementImportPage() {
                         {row.proposed.sourceCategory || "Uncategorized"}
                       </span>
                       {ready && (
-                        <select
+                        <NativeSelect
                           aria-label={`Transaction kind for ${row.proposed.rawDescription ?? row.key}`}
                           value={kinds[row.key] ?? ""}
                           disabled={busy || !selected.includes(row.key)}
@@ -611,8 +602,36 @@ function StatementImportPage() {
                               {kind.replaceAll("_", " ")}
                             </option>
                           ))}
-                        </select>
+                        </NativeSelect>
                       )}
+                      {row.status === "possible_existing" &&
+                        row.existingTransactionIds.length > 0 && (
+                          <NativeSelect
+                            aria-label={`Attach existing transaction for ${row.proposed.rawDescription ?? row.key}`}
+                            value={attachments[row.key] ?? ""}
+                            disabled={busy}
+                            onChange={(event) =>
+                              setAttachments((before) => ({
+                                ...before,
+                                [row.key]: event.target.value,
+                              }))
+                            }
+                            className="mt-2 w-full max-w-sm"
+                          >
+                            <option value="">
+                              Keep unresolved; save evidence only
+                            </option>
+                            {row.existingTransactions.map((candidate) => (
+                              <option key={candidate.id} value={candidate.id}>
+                                {candidate.id} ·{" "}
+                                {candidate.postedDate ??
+                                  candidate.transactionDate}{" "}
+                                · {formatCurrency(candidate.amount)} ·{" "}
+                                {candidate.status}
+                              </option>
+                            ))}
+                          </NativeSelect>
+                        )}
                       {!ready && row.existingTransactionIds.length > 0 && (
                         <span className="block text-xs text-muted-foreground">
                           Possible transaction:{" "}
@@ -635,10 +654,12 @@ function StatementImportPage() {
               })}
             </div>
             <p className="text-xs text-muted-foreground">
-              Nonzero source rows are saved in bounded, retryable batches. Only
-              checked rows with an explicit kind become transactions. For large
-              files, use the statement worklist to review the remaining rows.
-              Purchases and settlement matches are reviewed separately.
+              Source rows are saved in bounded, retryable batches. Only checked
+              rows with an explicit kind become transactions. For large files,
+              use the statement worklist to review the remaining rows. Attaching
+              an observation preserves existing source references and canonical
+              transaction facts. Purchases and expense booking are reviewed
+              separately.
             </p>
           </section>
         )}

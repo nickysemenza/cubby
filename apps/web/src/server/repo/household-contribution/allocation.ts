@@ -54,6 +54,7 @@ export type ExpenseAllocationRow = {
 };
 
 export type ExpenseAllocationScope = {
+  expenseIds?: readonly ExpenseId[];
   asOf?: string;
   projectIds?: readonly ProjectId[];
   includeFuture?: boolean;
@@ -66,6 +67,9 @@ type RawAllocationRow = Omit<ExpenseAllocationRow, "cents"> & {
 const scopeCondition = (scope: ExpenseAllocationScope): SQL =>
   and(
     notDeleted(expense),
+    scope.expenseIds
+      ? sql`${expense.id} = ANY(${uuidArrayParam(scope.expenseIds)})`
+      : undefined,
     scope.asOf ? lte(expense.date, scope.asOf) : undefined,
     scope.includeFuture ? undefined : sql`${expense.future} = false`,
     scope.projectIds
@@ -104,6 +108,7 @@ export async function loadExpenseAllocations(
   scope: ExpenseAllocationScope,
 ): Promise<ExpenseAllocationRow[]> {
   if (scope.projectIds?.length === 0) return [];
+  if (scope.expenseIds?.length === 0) return [];
   const settlementKinds = sql.raw(
     purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", "),
   );

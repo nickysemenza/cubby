@@ -84,6 +84,7 @@ export const ENTITY_EDGE_SEMANTICS = {
   ledgerParty: projectSemantics(ENTITY_EDGES.ledgerParty),
   product: projectSemantics(ENTITY_EDGES.product),
   productCategory: projectSemantics(ENTITY_EDGES.productCategory),
+  spendingCategory: projectSemantics(ENTITY_EDGES.spendingCategory),
   location: projectSemantics(ENTITY_EDGES.location),
   project: projectSemantics(ENTITY_EDGES.project),
   task: projectSemantics(ENTITY_EDGES.task),

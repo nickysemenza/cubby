@@ -74,6 +74,8 @@ export const purchaseSettlementKinds = [
   "purchase",
   "refund",
   "adjustment",
+  "fee",
+  "interest",
   "income",
 ] as const satisfies readonly FinancialTransactionKind[];
 
@@ -92,6 +94,8 @@ const purchaseSettlementSignRules = {
   purchase: { sign: "positive", binds: "always" },
   refund: { sign: "negative", binds: "always" },
   adjustment: { sign: "any", binds: "always" },
+  fee: { sign: "positive", binds: "always" },
+  interest: { sign: "positive", binds: "always" },
   income: { sign: "negative", binds: "linked" },
 } as const satisfies Record<
   PurchaseSettlementKind,
@@ -399,6 +403,10 @@ export const KNOWN_STATEMENT_SOURCES = [
  * upload: parsing and export handling belong to the MCP client.
  */
 export const financialStatementImportRow = z.strictObject({
+  importFingerprint: z.string().min(1).optional(),
+  rowPosition: z.number().int().positive().optional(),
+  providerTransactionId: z.string().min(1).nullable().optional(),
+  providerStatus: z.enum(["pending", "posted"]).optional(),
   key: z.string().min(1),
   source: externalIdSource
     .default("monarch")
@@ -474,6 +482,19 @@ export const financialStatementImportPreviewRow = z.object({
   provisionalAccount: financialStatementProvisionalAccount.nullable(),
   proposed: financialStatementImportProposedTransaction,
   existingTransactionIds: z.array(financialTransactionShortcode),
+  existingTransactions: z
+    .array(
+      z.object({
+        id: financialTransactionShortcode,
+        amount: z.number(),
+        status: financialTransactionStatus,
+        postedDate: plainDate.nullable(),
+        transactionDate: plainDate.nullable(),
+        merchant: z.string().nullable(),
+        rawDescription: z.string().nullable(),
+      }),
+    )
+    .default([]),
   vendorInference: merchantVendorInference
     .nullable()
     .default(null)

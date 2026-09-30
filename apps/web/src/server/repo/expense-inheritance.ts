@@ -154,6 +154,11 @@ export const expenseInheritanceReadExtras = (alias = '"expense"') => {
     ELSE 'none'
   END`;
   return {
+    spendingCategoryShortcode: sql<
+      string | null
+    >`(SELECT c."shortcode" FROM "SpendingCategory" c WHERE c."id" = ${column(alias, "spendingCategoryId")} AND c."deletedAt" IS NULL)`.as(
+      "spendingCategoryShortcode",
+    ),
     effectiveProjectId: projectId.as("effectiveProjectId"),
     effectiveProjectShortcode: sql<
       string | null

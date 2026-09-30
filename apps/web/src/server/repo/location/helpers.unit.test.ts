@@ -132,6 +132,7 @@ const product = {
   category: categorySummaryFixture("food"),
   price: 4.5,
   usdaUnavailable: null,
+  acquisitionOrigin: "unknown" as const,
   stockTracked: null,
   labelNutrition: null,
   createdAt: CREATED_AT,

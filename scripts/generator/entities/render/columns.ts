@@ -6,6 +6,7 @@ import type {
 } from "../declarations.ts";
 
 export const identifierTypeNames = {
+  spendingCategory: "SpendingCategoryId",
   cookbook: "CookbookId",
   device: "DeviceId",
   plant: "PlantId",
@@ -60,6 +61,14 @@ const enumColumnExpression = (
   const column = JSON.stringify(field.column);
   const key = `${entity}.${field.key}`;
   const expressions = {
+    "expense.economicRole": `text(${column},{enum:["vendor", "reimbursement"]})`,
+    "product.acquisitionOrigin": `text(${column},{enum:["unknown", "purchased", "gift", "previously_owned"]})`,
+    "spendingCategory.evidenceExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
+    "vendor.evidenceExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
+    "purchase.evidenceExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
+    "financialTransaction.evidenceExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
+    "spendingCategory.productExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
+
     "expense.costType": `text(${column},{enum:costTypeValues})`,
     "expense.lineBasis": `text(${column},{enum:expenseLineBasisValues})`,
     "expense.lineKind": `text(${column},{enum:expenseLineKindValues})`,

@@ -1,7 +1,4 @@
-import {
-  primaryPurchaseDocumentKinds,
-  RECONCILIATION_TOLERANCE,
-} from "@cubby/schemas/purchase";
+import { RECONCILIATION_TOLERANCE } from "@cubby/schemas/purchase";
 import { getTableName, sql } from "drizzle-orm";
 
 import { purchase } from "~/server/db/schema";
@@ -12,7 +9,16 @@ import {
   settleableExpenseTotalSql,
   settleableUnpricedExpenseCountSql,
   settlementReferenceAbsentSql,
+  vendorExpenseTotalSql,
+  vendorExpenseCountSql,
+  vendorUnpricedExpenseCountSql,
 } from "~/server/repo/financial-reconciliation";
+import {
+  purchaseEvidenceExpectationSql,
+  purchaseEvidenceFingerprintSql,
+  purchaseHasItemizationSql,
+  purchaseHasPrimaryDocumentSql,
+} from "~/server/repo/purchase-evidence-policy";
 
 import { defineEntityChecks } from "../registry";
 
@@ -21,31 +27,16 @@ type Purchase = typeof purchase;
 /** The quoted alias the reconciliation raw-SQL helpers correlate on. */
 const aliasOf = (t: Purchase) => `"${getTableName(t)}"`;
 
-const orderEvidence = (t: Purchase) => sql`(
-  SELECT v."orderEvidence" FROM "Vendor" v
-  WHERE v."id" = ${t.vendorId} AND v."deletedAt" IS NULL
-)`;
-
-/**
- * The two import-driven checks apply only when the vendor can supply them:
- * `online_account` expects a document and lines, `receipt_only` a document,
- * `not_expected` neither. An unclassified vendor (`null`) expects both so it
- * stays visible until explicitly classified.
- */
-const expectsDocument = (t: Purchase) =>
-  sql`(${orderEvidence(t)} IS NULL OR ${orderEvidence(t)} IN ('online_account', 'receipt_only'))`;
-const expectsExpenses = (t: Purchase) =>
-  sql`(${orderEvidence(t)} IS NULL OR ${orderEvidence(t)} = 'online_account')`;
-
-const primaryDocumentKinds = sql.raw(
-  primaryPurchaseDocumentKinds.map((kind) => `'${kind}'`).join(", "),
-);
-
-const hasPrimaryDocument = (t: Purchase) => sql`EXISTS (
-  SELECT 1 FROM "EntityAttachment" dq_pi
-  JOIN "Image" dq_i ON dq_i."id" = dq_pi."imageId" AND dq_i."deletedAt" IS NULL
-  WHERE dq_pi."entityId" = ${t.id} AND dq_pi."deletedAt" IS NULL
-    AND dq_pi."documentKind" IN (${primaryDocumentKinds})
+const expectation = (t: Purchase) =>
+  purchaseEvidenceExpectationSql(getTableName(t));
+const expectsDocument = (t: Purchase) => sql`(${expectation(t)} = 'required')`;
+const hasPrimaryDocument = (t: Purchase) =>
+  purchaseHasPrimaryDocumentSql(getTableName(t));
+const hasItemization = (t: Purchase) =>
+  purchaseHasItemizationSql(getTableName(t));
+const expectsOrderId = (t: Purchase) => sql`EXISTS (
+  SELECT 1 FROM "ImportSourceClaim" dq_order_source
+  WHERE dq_order_source."purchaseId" = ${t.id} AND dq_order_source.kind = 'browser_order'
 )`;
 
 const hasExpenses = (t: Purchase) => sql`EXISTS (
@@ -63,10 +54,12 @@ const unpricedExpenseCount = (t: Purchase) => sql`(
   WHERE dq_e."purchaseId" = ${t.id} AND dq_e."deletedAt" IS NULL AND dq_e."cost" IS NULL
 )`;
 
-const expenseCents = (t: Purchase) => sql`floor((COALESCE((
-  SELECT sum(dq_e."cost") FROM "Expense" dq_e
-  WHERE dq_e."purchaseId" = ${t.id} AND dq_e."deletedAt" IS NULL
-), 0) * 100)::numeric + 0.5)`;
+const expenseCents = (t: Purchase) =>
+  sql`floor((${sql.raw(vendorExpenseTotalSql(aliasOf(t)))} * 100)::numeric + 0.5)`;
+const vendorExpenseCount = (t: Purchase) =>
+  sql.raw(vendorExpenseCountSql(aliasOf(t)));
+const vendorUnpricedExpenseCount = (t: Purchase) =>
+  sql.raw(vendorUnpricedExpenseCountSql(aliasOf(t)));
 
 const moneyCents = (value: ReturnType<typeof sql>) =>
   sql`CASE WHEN ${value} IS NULL THEN NULL ELSE floor((${value} * 100)::numeric + 0.5) END`;
@@ -85,15 +78,11 @@ const tolerance = sql.raw(String(Math.round(RECONCILIATION_TOLERANCE * 100)));
  */
 const paperworkMismatch = (t: Purchase) => {
   const delta = sql`(${expenseCents(t)} - floor((${t.statedTotal} * 100)::numeric + 0.5))`;
-  const fullyPriced = sql`NOT EXISTS (
-    SELECT 1 FROM "Expense" dq_unpriced
-    WHERE dq_unpriced."purchaseId" = ${t.id}
-      AND dq_unpriced."cost" IS NULL AND dq_unpriced."deletedAt" IS NULL
-  )`;
+  const fullyPriced = sql`${vendorUnpricedExpenseCount(t)} = 0`;
   const refundAdjusted = sql`(${fullyPriced} AND ${delta} < ${sql.raw(`-${Math.round(RECONCILIATION_TOLERANCE * 100)}`)}
     AND floor((${sql.raw(postedRefundTotalSql(aliasOf(t)))} * 100)::numeric + 0.5) = ${delta})`;
   return sql`(${t.statedTotal} IS NOT NULL
-    AND ${hasExpenses(t)}
+    AND ${vendorExpenseCount(t)} > 0
     AND abs(${delta}) > ${tolerance}
     AND NOT ${refundAdjusted})`;
 };
@@ -115,12 +104,16 @@ export const purchaseChecks = defineEntityChecks({
       fingerprint: (t) => [sql`${t.date}`],
     },
     order_id: {
+      // A statement booking or orderless receipt has no vendor order identity
+      // to invent. Browser-order provenance establishes that one was expected.
+      expected: expectsOrderId,
       missing: (t) => sql`${t.orderId} IS NULL`,
-      fingerprint: (t) => [sql`${t.orderId}`],
+      fingerprint: (t) => [expectsOrderId(t), sql`${t.orderId}`],
     },
     stated_total: {
+      expected: hasPrimaryDocument,
       missing: (t) => sql`${t.statedTotal} IS NULL`,
-      fingerprint: (t) => [statedCents(t)],
+      fingerprint: (t) => [hasPrimaryDocument(t), statedCents(t)],
     },
     primary_document: {
       expected: expectsDocument,
@@ -128,9 +121,24 @@ export const purchaseChecks = defineEntityChecks({
       fingerprint: (t) => [expectsDocument(t), hasPrimaryDocument(t)],
     },
     empty_expenses: {
-      expected: expectsExpenses,
       missing: (t) => sql`NOT ${hasExpenses(t)}`,
-      fingerprint: (t) => [expectsExpenses(t), expenseCount(t)],
+      fingerprint: (t) => [expenseCount(t)],
+    },
+    purchase_spending_category: {
+      missing: (t) => sql`${t.spendingCategoryId} IS NULL`,
+      fingerprint: (t) => [sql`${t.spendingCategoryId}`],
+    },
+    purchase_evidence_expectation: {
+      missing: (t) => sql`${expectation(t)} = 'unknown'`,
+      fingerprint: (t) => [expectation(t)],
+    },
+    purchase_itemization: {
+      expected: expectsDocument,
+      missing: (t) => sql`NOT ${hasItemization(t)}`,
+      fingerprint: (t) => [
+        purchaseEvidenceFingerprintSql(getTableName(t)),
+        hasItemization(t),
+      ],
     },
     unpriced_expense: {
       missing: (t) => sql`${unpricedExpenseCount(t)} > 0`,
@@ -141,8 +149,8 @@ export const purchaseChecks = defineEntityChecks({
       fingerprint: (t) => [
         statedCents(t),
         expenseCents(t),
-        expenseCount(t),
-        unpricedExpenseCount(t),
+        vendorExpenseCount(t),
+        vendorUnpricedExpenseCount(t),
         refundCents(t),
       ],
     },

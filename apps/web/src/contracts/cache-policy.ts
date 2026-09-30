@@ -72,6 +72,7 @@ export type RippleKey =
   | "projectResource"
   | "task"
   | "taskProject"
+  | "spendingCategory"
   | "expense"
   | "vendor"
   | "vendorMerge"

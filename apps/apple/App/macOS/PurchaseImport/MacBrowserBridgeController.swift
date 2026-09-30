@@ -146,7 +146,7 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         for account in listedAccounts {
             // There is exactly one executor for each account connection. Its owned window and
             // active tab are consequently never shared with another VendorAccount.
-            let executor = MacBrowserCommandExecutor(
+            let executor = try MacBrowserCommandExecutor(
                 browser: browser, accountID: account.id, evidenceUploader: uploader)
             let replayStore = try FileBrowserBridgeReplayStore.applicationSupport(
                 namespace: "\(CubbyBaseURL.host(of: baseURL))-\(account.id)")

@@ -78,6 +78,7 @@ export const makeProduct = (
     partial: false,
   },
   usdaUnavailable: null,
+  acquisitionOrigin: "unknown",
   stockTracked: null,
   labelNutrition: opts.labelNutrition ?? null,
   images: [],

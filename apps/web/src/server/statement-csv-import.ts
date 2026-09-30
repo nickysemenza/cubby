@@ -21,7 +21,11 @@ import {
 import type { Database } from "~/server/db";
 import { previewFinancialStatementImport } from "~/server/repo/financial-statement-preview";
 import { createFinancialTransaction } from "~/server/repo/financial-transaction";
-import { recordStatementRows } from "~/server/repo/statement-row";
+import {
+  recordStatementRows,
+  attachStatementObservation,
+  updateStatementRows,
+} from "~/server/repo/statement-row";
 
 async function parseFile(input: StatementCsvFileInput) {
   const headers = statementCsvHeaders(input.text);
@@ -81,53 +85,87 @@ export async function previewStatementCsv(
   };
 }
 
-export async function commitStatementCsv(
-  db: Database,
-  actor: ActorContext,
-  input: StatementCsvCommitInput,
+function validateDecisions(
+  decisions: StatementCsvCommitInput["selected"],
+  previewRows: FinancialStatementImportPreviewOut["rows"],
 ) {
-  const { parsed } = await parseFile(input);
-  if (!parsed)
-    throw new Error("Map the CSV columns before confirming the import.");
-  const selected = new Map(input.selected.map((row) => [row.key, row.kind]));
-  if (selected.size !== input.selected.length)
+  const selected = new Map(decisions.map((row) => [row.key, row]));
+  if (selected.size !== decisions.length)
     throw new Error("A statement row was selected more than once.");
-  const previewRows: FinancialStatementImportPreviewOut["rows"] = [];
-  for (
-    let offset = 0;
-    offset < parsed.rows.length;
-    offset += FINANCIAL_STATEMENT_IMPORT_MAX_ROWS
-  ) {
-    const batch = previewStatementBatch(parsed, offset);
-    if (!batch) continue;
-    const preview = await previewFinancialStatementImport(db, batch);
-    previewRows.push(...preview.rows);
-  }
+  const attachTargets = decisions.flatMap((row) =>
+    row.transactionId ? [row.transactionId] : [],
+  );
+  if (new Set(attachTargets).size !== attachTargets.length)
+    throw new Error(
+      "Two occurrences in one file cannot attach to the same transaction. Review each purchase separately.",
+    );
   for (const key of selected.keys()) {
     const row = previewRows.find((candidate) => candidate.key === key);
     if (!row)
       throw new Error(
         `Statement row ${key} is unavailable for transaction creation.`,
       );
-    if (row.status !== "ready_to_create" && row.status !== "already_recorded")
+    const decision = selected.get(key)!;
+    if (decision.transactionId) {
+      if (
+        !row.existingTransactionIds.includes(decision.transactionId) ||
+        (row.status !== "possible_existing" &&
+          row.status !== "already_recorded")
+      )
+        throw new Error(
+          `Statement row ${key} needs review: selected transaction is unavailable.`,
+        );
+    } else if (
+      row.status !== "ready_to_create" &&
+      row.status !== "already_recorded"
+    ) {
       throw new Error(`Statement row ${key} needs review: ${row.status}.`);
+    } else if (row.status === "ready_to_create" && !decision.kind) {
+      throw new Error(`Choose a transaction kind for statement row ${key}.`);
+    }
   }
-  let evidence = 0;
-  for (
-    let offset = 0;
-    offset < parsed.recordRows.length;
-    offset += STATEMENT_ROW_RECORD_MAX_ROWS
-  ) {
-    const result = await recordStatementRows(
-      db,
-      recordStatementBatch(parsed, offset),
-      actor,
-    );
-    evidence += result.inserted;
-  }
+  return selected;
+}
+
+async function commitPreviewRows(
+  db: Database,
+  actor: ActorContext,
+  parsed: ReturnType<typeof parseStatementCsv>,
+  previewRows: FinancialStatementImportPreviewOut["rows"],
+  selected: Map<string, StatementCsvCommitInput["selected"][number]>,
+) {
   let transactions = 0;
+  let attached = 0;
   for (const row of previewRows) {
-    const kind = selected.get(row.key);
+    const decision = selected.get(row.key);
+    const observation = parsed.rows.find(
+      (inputRow) => inputRow.key === row.key,
+    );
+    const target =
+      decision?.transactionId ??
+      (row.status === "already_recorded" &&
+      row.existingTransactionIds.length === 1
+        ? row.existingTransactionIds[0]
+        : undefined);
+    if (row.accountId && (target || decision?.kind)) {
+      await updateStatementRows(
+        db,
+        {
+          selector: {
+            source: row.proposed.sourceRef.source,
+            externalIds: [row.proposed.sourceRef.externalId],
+          },
+          data: { accountId: row.accountId },
+        },
+        actor,
+      );
+    }
+    if (target && observation) {
+      if (await attachStatementObservation(db, observation, target, actor))
+        attached++;
+      continue;
+    }
+    const kind = decision?.kind;
     if (!kind || row.status !== "ready_to_create") continue;
     if (!row.accountId)
       throw new Error(`No account for statement row ${row.key}.`);
@@ -152,8 +190,52 @@ export async function commitStatementCsv(
     );
     transactions++;
   }
+  return { transactions, attached };
+}
+
+export async function commitStatementCsv(
+  db: Database,
+  actor: ActorContext,
+  input: StatementCsvCommitInput,
+) {
+  const { parsed } = await parseFile(input);
+  if (!parsed)
+    throw new Error("Map the CSV columns before confirming the import.");
+  const previewRows: FinancialStatementImportPreviewOut["rows"] = [];
+  for (
+    let offset = 0;
+    offset < parsed.rows.length;
+    offset += FINANCIAL_STATEMENT_IMPORT_MAX_ROWS
+  ) {
+    const batch = previewStatementBatch(parsed, offset);
+    if (!batch) continue;
+    const preview = await previewFinancialStatementImport(db, batch);
+    previewRows.push(...preview.rows);
+  }
+  const selected = validateDecisions(input.selected, previewRows);
+  let evidence = 0;
+  for (
+    let offset = 0;
+    offset < parsed.recordRows.length;
+    offset += STATEMENT_ROW_RECORD_MAX_ROWS
+  ) {
+    const result = await recordStatementRows(
+      db,
+      recordStatementBatch(parsed, offset),
+      actor,
+    );
+    evidence += result.inserted;
+  }
+  const { transactions, attached } = await commitPreviewRows(
+    db,
+    actor,
+    parsed,
+    previewRows,
+    selected,
+  );
   return {
     transactions,
+    attached,
     evidence,
     alreadyPresent: parsed.recordRows.length - evidence,
   };

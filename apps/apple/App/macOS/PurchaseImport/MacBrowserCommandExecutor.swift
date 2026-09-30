@@ -34,6 +34,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
     }
 
     private let browser: BrowserChoice
+    private let targetBundleIdentifier: String
     /// The executor is instantiated once per VendorAccount. Keeping this identity on the executor
     /// makes every window lifecycle event attributable without ever logging page content or URLs.
     private let accountID: String
@@ -47,12 +48,35 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
     init(
         browser: BrowserChoice, accountID: String,
         evidenceUploader: any BrowserEvidenceUploading
-    ) {
-        self.browser = browser
+    ) throws {
+        let fixtureTarget = try Self.fixtureBrowserTarget()
+        self.browser = fixtureTarget == nil ? browser : .chrome
+        targetBundleIdentifier =
+            fixtureTarget ?? (browser == .safari ? "com.apple.Safari" : "com.google.Chrome")
         self.accountID = accountID
         self.evidenceUploader = evidenceUploader
         appleScript = SerializedAppleScriptExecutor(
-            targetBundleIdentifier: browser == .safari ? "com.apple.Safari" : "com.google.Chrome")
+            targetBundleIdentifier: targetBundleIdentifier)
+    }
+
+    private static func fixtureBrowserTarget() throws -> String? {
+        #if DEBUG
+            let arguments = ProcessInfo.processInfo.arguments
+            guard let index = arguments.firstIndex(of: "--cubby-e2e-browser-bundle") else { return nil }
+            guard arguments.indices.contains(index + 1),
+                let serverIndex = arguments.firstIndex(of: "--cubby-e2e-server"),
+                arguments.indices.contains(serverIndex + 1),
+                let server = URL(string: arguments[serverIndex + 1]),
+                ["127.0.0.1", "localhost", "::1"].contains(server.host ?? ""),
+                Bundle.main.bundleIdentifier?.hasPrefix("com.nickysemenza.cubby.e2e.") == true,
+                arguments[index + 1].range(
+                    of: "^com\\.cubby\\.fixture\\.browser\\.[a-f0-9]{16}$", options: .regularExpression)
+                    != nil
+            else { throw ExecutionFailure.invalidFixtureBrowser }
+            return arguments[index + 1]
+        #else
+            return nil
+        #endif
     }
 
     /// A rendered PDF is only advertised when the OS has granted the window-capture permission
@@ -69,7 +93,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         switch browser {
         case .safari:
             script = """
-                tell application "Safari"
+                tell application id \(Self.appleScriptLiteral(targetBundleIdentifier))
                 activate
                 set visible of window id \(ownedWindowID) to true
                 set minimized of window id \(ownedWindowID) to false
@@ -78,7 +102,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 """
         case .chrome:
             script = """
-                tell application "Google Chrome"
+                tell application id \(Self.appleScriptLiteral(targetBundleIdentifier))
                 activate
                 set visible of window id \(ownedWindowID) to true
                 set minimized of window id \(ownedWindowID) to false
@@ -86,7 +110,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 end tell
                 """
         }
-        Task { [appleScript, browser, accountID] in
+        Task { [appleScript, browser, accountID, targetBundleIdentifier] in
             do {
                 _ = try await appleScript.execute(script, action: "raise_auth_window")
                 BrowserBridgeDebugLog.emit(
@@ -95,7 +119,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 BrowserBridgeDebugLog.emit(
                     .windowRaiseFailed, browser: browser, accountID: accountID, error: error)
             }
-            let bundleIdentifier = browser == .safari ? "com.apple.Safari" : "com.google.Chrome"
+            let bundleIdentifier = targetBundleIdentifier
             NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first?
                 .activate(options: [.activateAllWindows])
         }
@@ -109,7 +133,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         switch browser {
         case .safari:
             script = """
-                tell application "Safari"
+                tell application id \(Self.appleScriptLiteral(targetBundleIdentifier))
                 set visible of window id \(ownedWindowID) to true
                 set minimized of window id \(ownedWindowID) to false
                 set index of window id \(ownedWindowID) to (count of windows)
@@ -117,7 +141,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 """
         case .chrome:
             script = """
-                tell application "Google Chrome"
+                tell application id \(Self.appleScriptLiteral(targetBundleIdentifier))
                 set visible of window id \(ownedWindowID) to true
                 set minimized of window id \(ownedWindowID) to false
                 set index of window id \(ownedWindowID) to (count of windows)
@@ -138,9 +162,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
     func minimizeOwnedWindow() {
         guard let ownedWindowID else { return }
         let script =
-            browser == .safari
-            ? "tell application \"Safari\" to set minimized of window id \(ownedWindowID) to true"
-            : "tell application \"Google Chrome\" to set minimized of window id \(ownedWindowID) to true"
+            "tell application id \(Self.appleScriptLiteral(targetBundleIdentifier)) to set minimized of window id \(ownedWindowID) to true"
         Task { [appleScript, browser, accountID] in
             do {
                 _ = try await appleScript.execute(script, action: "minimize_window")
@@ -230,27 +252,27 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         switch (browser, ownedWindowID) {
         case (.safari, .some(let existingWindowID)):
             let script =
-                "tell application \"Safari\" to set URL of current tab of window id \(existingWindowID) to \(target)\nreturn \(existingWindowID)"
+                "tell application id \(Self.appleScriptLiteral(targetBundleIdentifier)) to set URL of current tab of window id \(existingWindowID) to \(target)\nreturn \(existingWindowID)"
             windowID = try await browserWindowID(from: script, action: "navigate")
         case (.safari, .none):
             let script =
-                "tell application \"Safari\"\nmake new document with properties {URL:\(target)}\nreturn id of front window\nend tell"
+                "tell application id \(Self.appleScriptLiteral(targetBundleIdentifier))\nmake new document with properties {URL:\(target)}\nreturn id of front window\nend tell"
             windowID = try await browserWindowID(from: script, action: "navigate")
         case (.chrome, .some(let existingWindowID)):
             let script =
-                "tell application \"Google Chrome\" to set URL of active tab of window id \(existingWindowID) to \(target)\nreturn \(existingWindowID)"
+                "tell application id \(Self.appleScriptLiteral(targetBundleIdentifier)) to set URL of active tab of window id \(existingWindowID) to \(target)\nreturn \(existingWindowID)"
             windowID = try await browserWindowID(from: script, action: "navigate")
         case (.chrome, .none):
             let newWindowID = try await createChromeWindow()
             ownedWindowID = newWindowID
             let navigateScript =
-                "tell application \"Google Chrome\" to set URL of active tab of window id \(newWindowID) to \(target)\nreturn \(newWindowID)"
+                "tell application id \(Self.appleScriptLiteral(targetBundleIdentifier)) to set URL of active tab of window id \(newWindowID) to \(target)\nreturn \(newWindowID)"
             windowID = try await browserWindowID(from: navigateScript, action: "navigate")
         }
         await returnOwnedWindowToBackground()
         if let foregroundApplicationBeforeBrowserWork,
             foregroundApplicationBeforeBrowserWork.bundleIdentifier
-                != (browser == .safari ? "com.apple.Safari" : "com.google.Chrome")
+                != targetBundleIdentifier
         {
             foregroundApplicationBeforeBrowserWork.activate()
         }
@@ -273,7 +295,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         let previous = try await chromeWindowIDs()
         let script = """
             ignoring application responses
-            tell application "Google Chrome" to make new window
+            tell application id \(Self.appleScriptLiteral(targetBundleIdentifier)) to make new window
             end ignoring
             return "requested"
             """
@@ -289,7 +311,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
 
     private func chromeWindowIDs() async throws -> Set<Int> {
         let script = """
-            tell application "Google Chrome"
+            tell application id \(Self.appleScriptLiteral(targetBundleIdentifier))
             set output to ""
             repeat with browserWindow in every window
             set output to output & (id of browserWindow as text) & ","
@@ -349,10 +371,10 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         switch browser {
         case .safari:
             script =
-                "tell application \"Safari\" to do JavaScript \(source) in current tab of window id \(ownedWindowID)"
+                "tell application id \(Self.appleScriptLiteral(targetBundleIdentifier)) to do JavaScript \(source) in current tab of window id \(ownedWindowID)"
         case .chrome:
             script =
-                "tell application \"Google Chrome\" to execute active tab of window id \(ownedWindowID) javascript \(source)"
+                "tell application id \(Self.appleScriptLiteral(targetBundleIdentifier)) to execute active tab of window id \(ownedWindowID) javascript \(source)"
         }
         return try await appleScript.execute(script, action: "fixed_javascript")
     }
@@ -471,7 +493,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         guard let ownedCaptureWindowID else { throw ExecutionFailure.captureUnavailable }
         let content = try await SCShareableContent.excludingDesktopWindows(
             false, onScreenWindowsOnly: true)
-        let bundleIdentifier = browser == .safari ? "com.apple.Safari" : "com.google.Chrome"
+        let bundleIdentifier = targetBundleIdentifier
         guard
             let window = content.windows.first(where: {
                 $0.windowID == ownedCaptureWindowID
@@ -535,7 +557,7 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
         guard CGPreflightScreenCaptureAccess() else { return nil }
         let content = try? await SCShareableContent.excludingDesktopWindows(
             false, onScreenWindowsOnly: true)
-        let bundleIdentifier = browser == .safari ? "com.apple.Safari" : "com.google.Chrome"
+        let bundleIdentifier = targetBundleIdentifier
         return content.map {
             Set(
                 $0.windows.lazy.filter {
@@ -698,7 +720,8 @@ private actor SerializedAppleScriptExecutor {
     }
 }
 
-private enum ExecutionFailure: Error, Sendable {
+private enum ExecutionFailure: Error, LocalizedError, Sendable {
+    case invalidFixtureBrowser
     case invalidCommand
     case unknownLink
     case browserUnavailable
@@ -710,8 +733,11 @@ private enum ExecutionFailure: Error, Sendable {
     case executionFailed
     case cancelled
 
+    var errorDescription: String? { message }
+
     var code: BrowserBridgeFailureCode {
         switch self {
+        case .invalidFixtureBrowser: .invalidCommand
         case .invalidCommand: .invalidCommand
         case .unknownLink: .unknownLink
         case .browserUnavailable: .browserUnavailable
@@ -729,7 +755,7 @@ private enum ExecutionFailure: Error, Sendable {
         case .browserUnavailable, .permissionDenied, .captureUnavailable, .uploadFailed,
             .executionFailed:
             true
-        case .invalidCommand, .unknownLink, .authenticationRequired,
+        case .invalidFixtureBrowser, .invalidCommand, .unknownLink, .authenticationRequired,
             .javascriptAutomationDisabled,
             .cancelled:
             false
@@ -738,6 +764,7 @@ private enum ExecutionFailure: Error, Sendable {
 
     var message: String {
         switch self {
+        case .invalidFixtureBrowser: "Invalid isolated fixture browser configuration."
         case .invalidCommand: "The browser command was invalid."
         case .unknownLink: "The captured link is no longer available."
         case .browserUnavailable: "The selected browser or Cubby-owned window is unavailable."

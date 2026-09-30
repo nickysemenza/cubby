@@ -132,6 +132,7 @@ import {
   photoGroupProposal,
   product,
   productCategory,
+  spendingCategory,
   productConversionCoverage,
   productMatchCandidate,
   productUnitMappings,
@@ -801,6 +802,36 @@ export const ENTITY_EDGES = {
     ...linkEdgesFor("product"),
     ...externalIdEdgesFor("product"),
   },
+  spendingCategory: edges({
+    "SpendingCategory.parentId": {
+      column: spendingCategory.parentId,
+      role: "hierarchy",
+      label: "Spending category",
+      description: "The spending classification selected for this record.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Purchase.spendingCategoryId": {
+      column: purchase.spendingCategoryId,
+      role: "reference",
+      label: "Spending category",
+      description: "The spending classification selected for this record.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Expense.spendingCategoryId": {
+      column: expense.spendingCategoryId,
+      role: "reference",
+      label: "Spending category",
+      description: "The spending classification selected for this record.",
+      liveness: { kind: "must-target-live" },
+    },
+    "FinancialTransaction.spendingCategoryId": {
+      column: financialTransaction.spendingCategoryId,
+      role: "reference",
+      label: "Spending category",
+      description: "The spending classification selected for this record.",
+      liveness: { kind: "must-target-live" },
+    },
+  }),
   productCategory: edges({
     "PhotoGroupProposal.productCreateCategoryId": {
       column: photoGroupProposal.productCreateCategoryId,
@@ -1020,6 +1051,18 @@ export const ENTITY_EDGES = {
   }),
   purchase: {
     ...edges({
+      "ImportPreparedOrder.targetPurchaseId": {
+        column: importPreparedOrder.targetPurchaseId,
+        role: "history",
+        label: "prepared purchase targets",
+        description:
+          "The explicitly reviewed target captured during import preparation.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Preparation retains its original target tombstone. Deletion or merge invalidates commit and requires preparation against the current Purchase.",
+        },
+      },
       "OrderMailCandidateDecision.purchaseId": {
         column: orderMailCandidateDecision.purchaseId,
         role: "history",

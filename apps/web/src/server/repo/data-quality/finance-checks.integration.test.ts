@@ -314,10 +314,11 @@ describe("data quality: finance and project entities", () => {
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("financial_transaction_allocation");
     expect(gapChecks).toContain("financial_transaction_merchant");
-    expect(hydrated.get(complete.entityId)).toMatchObject({
-      status: "complete",
-      gaps: [],
-    });
+    const linkedChecks = hydrated
+      .get(complete.entityId)
+      ?.gaps.map((g) => g.check);
+    expect(linkedChecks).not.toContain("financial_transaction_allocation");
+    expect(linkedChecks).not.toContain("financial_transaction_merchant");
   });
 
   it("expense: cost (only when not future)", async () => {
@@ -351,10 +352,9 @@ describe("data quality: finance and project entities", () => {
     ]);
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("expense_cost");
-    expect(hydrated.get(complete.entityId)).toMatchObject({
-      status: "complete",
-      gaps: [],
-    });
+    expect(
+      hydrated.get(complete.entityId)?.gaps.map((g) => g.check),
+    ).not.toContain("expense_cost");
   });
 
   it("wish: candidate (only while not yet acquired)", async () => {

@@ -167,10 +167,15 @@ export const productChecks = defineEntityChecks({
       fingerprint: (t) => [hasExternalIdCollision(t)],
     },
     product_unpurchased: {
-      expected: hasInventory,
+      expected: (t) =>
+        sql`${hasInventory(t)} AND ${t.acquisitionOrigin} NOT IN ('gift', 'previously_owned')`,
       missing: (t) =>
         sql`NOT (${hasExpenses(t)} OR ${hasPurchaseProductLink(t)})`,
-      fingerprint: (t) => [hasExpenses(t), hasPurchaseProductLink(t)],
+      fingerprint: (t) => [
+        sql`${t.acquisitionOrigin}`,
+        hasExpenses(t),
+        hasPurchaseProductLink(t),
+      ],
     },
   },
 });

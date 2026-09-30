@@ -1,16 +1,15 @@
-import { sql } from "drizzle-orm";
+import { getTableName, sql } from "drizzle-orm";
 
 import { expense } from "~/server/db/schema";
+import {
+  effectiveExpenseSpendingCategorySql,
+  expenseProductExpectedSql,
+} from "~/server/repo/purchase-evidence-policy";
 
 import { defineEntityChecks } from "../registry";
 
 type Expense = typeof expense;
 
-// `costType` is `NOT NULL` at the DB level (entity-tables.gen.ts) and
-// required (non-nullable, no default) in the create schema — every line,
-// regardless of `lineKind`, always carries one of materials/tools/services.
-// A `costType`-missing check can never fire for any live row, so this entity
-// declares only the `expense_cost` check.
 export const expenseChecks = defineEntityChecks({
   entity: "expense",
   table: expense,
@@ -20,6 +19,23 @@ export const expenseChecks = defineEntityChecks({
       // no longer future a cost is expected.
       expected: (t: Expense) => sql`${t.future} = false`,
       missing: (t: Expense) => sql`${t.cost} IS NULL`,
+      fingerprint: (t) => [sql`${t.future}`, sql`${t.cost}`],
+    },
+    expense_spending_category: {
+      expected: (t) => sql`${t.future} = false`,
+      missing: (t) =>
+        sql`${effectiveExpenseSpendingCategorySql(getTableName(t))} IS NULL`,
+      fingerprint: (t) => [
+        effectiveExpenseSpendingCategorySql(getTableName(t)),
+      ],
+    },
+    expense_product_resolution: {
+      expected: (t) => expenseProductExpectedSql(getTableName(t)),
+      missing: (t) => sql`${t.productId} IS NULL`,
+      fingerprint: (t) => [
+        expenseProductExpectedSql(getTableName(t)),
+        sql`${t.productId}`,
+      ],
     },
   },
 });

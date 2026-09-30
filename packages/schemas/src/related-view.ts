@@ -521,6 +521,8 @@ type RelatedViewSource = (typeof relatedViewRegistry)[number]["source"];
  * same empty `.filter()` result.
  */
 const ENTITIES_WITHOUT_RELATED_VIEWS = {
+  spendingCategory:
+    "Spending classification links are rendered on each financial record.",
   cookbook: "the cookbook page IS its recipe list",
   ledgerTransfer:
     "ledger transfer relationships are rendered in the household ledger",

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { statementRowExternalId } from "./statement-row-identity";
+import {
+  statementRowExternalId,
+  statementRowOccurrenceId,
+} from "./statement-row-identity";
 
 /**
  * Frozen input/output pairs. The values are synthetic on purpose — these
@@ -73,5 +76,23 @@ describe("statementRowExternalId", () => {
     await expect(
       statementRowExternalId({ ...fixture.row, ...patch }),
     ).resolves.toBe(fixture.externalId);
+  });
+});
+
+// Identical purchases must remain distinct even when every provider field is
+// identical. These pins protect the identity seam independently of UI choices.
+describe("statement occurrence identity", () => {
+  it("replays one file position but never collapses another occurrence", async () => {
+    const first = await statementRowOccurrenceId("monarch", "synthetic-fp", 2);
+    expect(await statementRowOccurrenceId("monarch", "synthetic-fp", 2)).toBe(
+      first,
+    );
+    expect(
+      await statementRowOccurrenceId("monarch", "synthetic-fp", 3),
+    ).not.toBe(first);
+    expect(await statementRowOccurrenceId("monarch", "other-fp", 2)).not.toBe(
+      first,
+    );
+    expect(first).toMatch(/^v2:[0-9a-f]{64}$/);
   });
 });
