@@ -70,7 +70,7 @@ swift format lint --strict --configuration apps/apple/.swift-format --recursive 
 # `ci` mode skips this: hosted CI runs CubbyKit's package tests separately,
 # on the host, in the `Apple package tests` job.
 if [ "$mode" = "full" ]; then
-  swift test --package-path apps/apple/CubbyKit --force-resolved-versions
+  swift test --package-path apps/apple/CubbyKit --force-resolved-versions --disable-index-store
   # Hosted CI runs this in the `Apple package tests` job instead.
   apps/apple/scripts/check-openapi-warnings.sh
 fi

@@ -207,7 +207,15 @@ const productPath = (platformDirectory: string) =>
 
 const cli = (options: Options) => {
   ensureFfi();
-  run("swift", ["build", "--package-path", KIT, "--product", "cubby", FROZEN]);
+  run("swift", [
+    "build",
+    "--package-path",
+    KIT,
+    "--product",
+    "cubby",
+    FROZEN,
+    "--disable-index-store",
+  ]);
   const binary = join(KIT, ".build/debug/cubby");
   const result = spawnSync(binary, options.rest, { stdio: "inherit" });
   if (result.error) throw result.error;
@@ -376,7 +384,13 @@ const gen = () => {
 
 const test = () => {
   ensureFfi();
-  run("swift", ["test", "--package-path", KIT, FROZEN]);
+  run("swift", [
+    "test",
+    "--package-path",
+    KIT,
+    FROZEN,
+    "--disable-index-store",
+  ]);
 };
 
 // ---------------------------------------------------------------------------

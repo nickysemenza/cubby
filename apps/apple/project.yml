@@ -15,6 +15,17 @@ options:
     iOS: "26.0"
     macOS: "26.0"
   xcodeVersion: "26.0"
+  # Keep GUI build data inside the checkout so retiring a worktree removes it.
+  # Xcode reads these location keys from user settings, not xcshareddata.
+  postGenCommand: |
+    settings_dir="Cubby.xcodeproj/project.xcworkspace/xcuserdata/$(id -un).xcuserdatad"
+    mkdir -p "$settings_dir"
+    settings="$settings_dir/WorkspaceSettings.xcsettings"
+    if [ ! -f "$settings" ]; then
+      plutil -create xml1 "$settings"
+    fi
+    plutil -replace DerivedDataLocationStyle -string WorkspaceRelativePath "$settings"
+    plutil -replace DerivedDataCustomLocation -string DerivedData "$settings"
 
 settings:
   base:

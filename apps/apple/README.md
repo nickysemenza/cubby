@@ -74,6 +74,15 @@ time, and then:
 Add `--timing` to `mac`, `ios`, or `sim` for the full build log and Xcode's task timing
 summary. Without it, each command still prints the wall-clock time of each build/install step.
 
+XcodeGen configures Xcode's GUI DerivedData location inside each checkout at
+`apps/apple/DerivedData/Cubby`, so removing a worktree also removes its GUI build
+artifacts. The command-line app builds retain `apps/apple/DerivedData`; GUI and
+command-line outputs are separate, and compiled outputs stay isolated between
+worktrees. Existing global DerivedData is not moved or deleted by generation.
+Local Swift package commands disable the index store, matching CI; Xcode GUI
+indexing stays enabled. Regenerating the project applies the location setting
+while preserving other workspace preferences.
+
 None of these attach a debugger; for breakpoints use the Xcode schemes below.
 
 ## Verification
