@@ -98,7 +98,7 @@ export function FormFieldResolution<TValues extends FieldValues>({
   };
   const actions = (
     <span className="inline-flex items-center gap-2">
-      {!resolution?.canReset ? null : (
+      {resolution && !resolution.canReset ? null : (
         <Button
           type="button"
           size="xs"
@@ -106,7 +106,7 @@ export function FormFieldResolution<TValues extends FieldValues>({
           className={resolutionActionClassName}
           onClick={() => applyPatch(policy.reset)}
         >
-          {resolution.fallbackValue === null
+          {resolution?.fallbackValue === null
             ? "Clear override"
             : "Use inherited"}
         </Button>

@@ -562,7 +562,6 @@ export default defineEntity({
           ruleId: "product.effective-valuation-price",
           description:
             "A manual valuation price wins; otherwise Cubby derives a per-unit price from live priced expenses and their recorded quantities.",
-          resolver: "productValuation",
           projections: {
             list: "fieldResolutions.price.value",
             detail: "fieldResolutions.price.value",
