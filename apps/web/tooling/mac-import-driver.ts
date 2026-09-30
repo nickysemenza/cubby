@@ -473,10 +473,10 @@ export class MacImportDriver {
   async clickSidebar(label: "Browse" | "Photos"): Promise<void> {
     await this.click('label="View" role=MenuBarItem');
     await this.click(`label="${label}" role=MenuItem`);
-    await this.wait(`label="${label}" role=cell selected=true`);
+    await this.wait(`label="${label}" role=window`);
   }
   async openStatementImport(): Promise<void> {
-    await this.click('label="Import statement CSV" role=cell');
+    await this.click("id=browse.importStatement");
     await this.wait("id=statement.csv.chooseFile");
   }
   async chooseFile(file: string): Promise<void> {
