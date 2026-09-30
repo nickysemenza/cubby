@@ -151,7 +151,7 @@ export async function createMacBrowserScenario(input: Input) {
         await appDriver.click(
           `id=settings.purchaseImport.openSignIn.${account.id}`,
         );
-        await browserDriver.open(input.retailer.bundleID);
+        await browserDriver.open(input.retailer.bundleID, input.retailer.pid);
         await browserDriver.click('label="Sign in to fixture retailer"');
         await browserDriver.wait('text="Your orders"');
         await browserDriver.screenshot("retailer-signed-in");

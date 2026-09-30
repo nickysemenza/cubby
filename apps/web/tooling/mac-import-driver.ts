@@ -1,13 +1,52 @@
-import { execFileSync, spawn } from "node:child_process";
-import { appendFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
+import { setTimeout } from "node:timers/promises";
+import { z } from "zod";
 
-/** Actual macOS accessibility actions; callers own the app/server/database lifecycle. */
+const nodeSchema = z.object({
+  index: z.number(),
+  type: z.string().nullish(),
+  role: z.string().nullish(),
+  label: z.string().nullish(),
+  value: z.string().nullish(),
+  identifier: z.string().nullish(),
+  rect: z
+    .object({
+      x: z.number(),
+      y: z.number(),
+      width: z.number(),
+      height: z.number(),
+    })
+    .nullish(),
+  enabled: z.boolean().nullish(),
+  selected: z.boolean().nullish(),
+  bundleId: z.string().nullish(),
+});
+type Node = z.infer<typeof nodeSchema>;
+const role = (node: Node) =>
+  (node.type ?? node.role ?? "")
+    .replace(/^AX/, "")
+    .replaceAll("-", "")
+    .toLowerCase();
+
+/** Native agent-device AX/CGEvent backend preserves the already-launched fixture process. */
 export class MacImportDriver {
   private sequence = 0;
+  private generation = 0;
   private bundleID: string | undefined;
-  private child: ReturnType<typeof spawn> | undefined;
+  private pid: number | undefined;
+  private nodes: Node[] = [];
+  private aborted = false;
   readonly evidence: string[] = [];
+  private readonly helper =
+    process.env.AGENT_DEVICE_MACOS_HELPER_BIN ??
+    path.join(
+      homedir(),
+      ".agent-device/macos-helper/current/agent-device-macos-helper",
+    );
 
   constructor(
     readonly repoRoot: string,
@@ -15,143 +54,329 @@ export class MacImportDriver {
     readonly session: string,
   ) {}
 
-  async action(args: string[]): Promise<string> {
-    const command = [
-      "exec",
-      "agent-device",
-      ...args,
-      "--platform",
-      "macos",
-      "--session",
-      this.session,
-      "--state-dir",
-      path.join(this.artifacts, "agent-device-state"),
-    ];
-    const output = await new Promise<string>((resolve, reject) => {
-      const child = spawn("pnpm", command, {
-        cwd: this.repoRoot,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      this.child = child;
-      let stdout = "";
-      let stderr = "";
-      child.stdout.on("data", (chunk: Buffer) => {
-        stdout += chunk.toString();
-      });
-      child.stderr.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString();
-      });
-      child.once("error", reject);
-      child.once("close", (code) => {
-        this.child = undefined;
-        const file = path.join(
-          this.artifacts,
-          `${String(++this.sequence).padStart(3, "0")}-${args[0]}.txt`,
-        );
-        writeFileSync(file, stdout + stderr);
-        this.evidence.push(file);
-        appendFileSync(
-          path.join(this.artifacts, "actions.jsonl"),
-          JSON.stringify({ args, status: code }) + "\n",
-        );
-        if (code !== 0)
-          reject(
-            new Error(`agent-device ${args[0]} failed: ${stdout}${stderr}`),
-          );
-        else resolve(stdout);
-      });
+  private invoke<T>(args: string[], schema: z.ZodType<T>): T {
+    const output = execFileSync(this.helper, args, {
+      encoding: "utf8",
+      timeout: 10000,
+      maxBuffer: 4 * 1024 * 1024,
     });
-    return output;
+    const envelope = z
+      .object({
+        ok: z.boolean(),
+        data: z.unknown().optional(),
+        error: z.unknown().optional(),
+      })
+      .parse(JSON.parse(output));
+    if (!envelope.ok)
+      throw new Error(
+        `Native Mac helper ${args[0]} failed: ${JSON.stringify(envelope.error)}`,
+      );
+    return schema.parse(envelope.data);
+  }
+
+  private guardForeground(): void {
+    if (this.aborted) throw new Error("Mac driver interrupted");
+    if (!this.bundleID) throw new Error("No owned Mac fixture session");
+    execFileSync(
+      "osascript",
+      [
+        "-e",
+        "on run argv\n tell application id (item 1 of argv) to activate\nend run",
+        this.bundleID,
+      ],
+      { timeout: 10000 },
+    );
+    const front = this.invoke(
+      ["app", "frontmost"],
+      z.object({ bundleId: z.string(), pid: z.number() }),
+    );
+    if (
+      front.bundleId !== this.bundleID ||
+      (this.pid !== undefined && front.pid !== this.pid)
+    )
+      throw new Error(
+        "Owned fixture is not the foreground process; refusing native input",
+      );
+    this.pid = front.pid;
+  }
+
+  private observe(
+    surface: "frontmost-app" | "menubar" = "frontmost-app",
+  ): string {
+    this.guardForeground();
+    const data = this.invoke(
+      [
+        "snapshot",
+        "--surface",
+        surface,
+        ...(surface === "menubar" ? ["--bundle-id", this.bundleID!] : []),
+      ],
+      z.object({ nodes: z.array(nodeSchema) }),
+    );
+    if (
+      !data.nodes.length ||
+      data.nodes.some(
+        (node) => node.bundleId && node.bundleId !== this.bundleID,
+      )
+    )
+      throw new Error(
+        "Native AX snapshot did not belong exclusively to the owned fixture",
+      );
+    this.nodes = data.nodes;
+    this.generation++;
+    return this.nodes
+      .map((node) => {
+        const type = role(node) === "row" ? "cell" : role(node);
+        const text = node.label ?? node.value ?? "";
+        return `@e${node.index + 1}~s${this.generation} [${type}] ${JSON.stringify(text)}${node.identifier ? ` id=${node.identifier}` : ""}${node.selected ? " [selected]" : ""}${node.enabled === false ? " [disabled]" : ""}`;
+      })
+      .join("\n");
+  }
+
+  private matching(selector: string): Node[] {
+    const ref = selector.match(/^@e(\d+)(?:~s(\d+))?$/);
+    if (ref) {
+      if (ref[2] && Number(ref[2]) !== this.generation)
+        throw new Error("Stale native snapshot reference");
+      return this.nodes.filter((node) => node.index + 1 === Number(ref[1]));
+    }
+    const parts = [...selector.matchAll(/(\w+)=(?:"([^"]*)"|(\S+))/g)];
+    if (!parts.length)
+      throw new Error(`Unsupported native selector: ${selector}`);
+    return this.nodes.filter((node) =>
+      parts.every((part) => {
+        const key = part[1],
+          value = part[2] ?? part[3];
+        switch (key) {
+          case "id":
+            return node.identifier === value;
+          case "text":
+          case "label":
+            return node.label === value || node.value === value;
+          case "role":
+            return (
+              role(node) === value?.replaceAll("-", "").toLowerCase() ||
+              (value?.toLowerCase() === "cell" && role(node) === "row")
+            );
+          case "editable":
+            return (
+              value === "true" &&
+              ["textfield", "searchfield", "textview"].includes(role(node))
+            );
+          case "selected":
+            return Boolean(node.selected) === (value === "true");
+          default:
+            throw new Error(`Unsupported native selector key: ${key}`);
+        }
+      }),
+    );
+  }
+
+  private press(selector: string): string {
+    const surface = /role=Menu/.test(selector) ? "menubar" : "frontmost-app";
+    if (!selector.startsWith("@")) {
+      const before = this.observe(surface);
+      this.record(["before-click", selector], 0, before);
+    }
+    const matches = this.matching(selector).filter(
+      (node) =>
+        !["statictext", "text", "group", "application", "window"].includes(
+          role(node),
+        ) &&
+        node.enabled !== false &&
+        node.rect &&
+        node.rect.width > 0 &&
+        node.rect.height > 0,
+    );
+    const node = matches[0];
+    if (matches.length !== 1 || !node?.rect)
+      throw new Error(
+        `Expected one finite actionable native target: ${selector} (${matches.length})`,
+      );
+    this.guardForeground();
+    const x = node.rect.x + node.rect.width / 2,
+      y = node.rect.y + node.rect.height / 2;
+    if (!Number.isFinite(x) || !Number.isFinite(y))
+      throw new Error("Native target has invalid bounds");
+    this.invoke(
+      [
+        "press",
+        "--x",
+        String(x),
+        "--y",
+        String(y),
+        "--bundle-id",
+        this.bundleID!,
+      ],
+      z.object({}).passthrough(),
+    );
+    return this.observe(surface);
+  }
+
+  private keyboard(text: string, replace: boolean): string {
+    this.observe();
+    if (
+      !this.nodes.some((node) => role(node) === "sheet") &&
+      !this.nodes.some(
+        (node) => node.label === "Open" && role(node) === "button",
+      )
+    )
+      throw new Error("Native keyboard entry requires the owned file picker");
+    this.guardForeground();
+    const script =
+      text === "\n"
+        ? 'on run argv\n tell application "System Events" to key code 36\nend run'
+        : `on run argv\n tell application "System Events"\n ${replace ? 'keystroke "a" using command down\n' : ""} keystroke (item 1 of argv)\n end tell\nend run`;
+    execFileSync("osascript", ["-e", script, text], { timeout: 10000 });
+    return this.observe();
+  }
+
+  async action(args: string[]): Promise<string> {
+    const started = Date.now();
+    let output = "",
+      status = 0;
+    try {
+      switch (args[0]) {
+        case "snapshot":
+          output = this.observe();
+          break;
+        case "click":
+          output = this.press(args[1]!);
+          break;
+        case "type":
+          output = this.keyboard(args[1]!, false);
+          break;
+        case "fill":
+          this.press(args[1]!);
+          output = this.keyboard(args[2]!, true);
+          break;
+        default:
+          throw new Error(`Unsupported native action: ${args[0]}`);
+      }
+      return output;
+    } catch (error) {
+      status = 1;
+      output = String(error);
+      throw error;
+    } finally {
+      this.record(args, status, output, started);
+    }
+  }
+
+  private record(
+    args: string[],
+    status: number,
+    output: string,
+    started = Date.now(),
+  ): void {
+    const file = path.join(
+      this.artifacts,
+      `${String(++this.sequence).padStart(3, "0")}-${args[0]}.txt`,
+    );
+    writeFileSync(file, output);
+    this.evidence.push(file);
+    appendFileSync(
+      path.join(this.artifacts, "actions.jsonl"),
+      JSON.stringify({
+        args,
+        status,
+        durationMs: Date.now() - started,
+        backend: "agent-device-native-macos",
+        ownedPID: this.pid,
+      }) + "\n",
+    );
+  }
+
+  helperFingerprint(): string {
+    return createHash("sha256").update(readFileSync(this.helper)).digest("hex");
   }
 
   interrupt(): void {
-    this.child?.kill("SIGTERM");
+    this.aborted = true;
   }
-
-  async open(bundleID: string): Promise<string> {
+  async open(bundleID: string, expectedPID: number): Promise<string> {
+    if (
+      !/^(?:com\.nickysemenza\.cubby\.e2e|com\.cubby\.fixture\.browser)\.[a-f\d]{16}$/.test(
+        bundleID,
+      )
+    )
+      throw new Error("Native driver requires a unique fixture bundle");
+    if (!Number.isInteger(expectedPID) || expectedPID <= 0)
+      throw new Error("Native driver requires a verified fixture PID");
+    this.pid = expectedPID;
     this.bundleID = bundleID;
-    return this.action(["open", bundleID, "--foreground"]);
+    return this.snapshot();
   }
-
-  async wait(selector: string): Promise<string> {
-    return this.action(["wait", selector, "30000"]);
-  }
-
-  async click(selector: string): Promise<string> {
-    return this.action(["click", selector, "--settle"]);
-  }
-
   async snapshot(): Promise<string> {
     return this.action(["snapshot", "-i"]);
   }
-
-  async screenshot(name: string): Promise<void> {
-    const output = path.join(this.artifacts, `${name}.png`);
-    await this.action(["screenshot", "--out", output]);
-    this.evidence.push(output);
+  async click(selector: string): Promise<string> {
+    return this.action(["click", selector]);
   }
-
-  async clickSidebar(label: "Browse" | "Photos"): Promise<void> {
-    if (!this.bundleID) throw new Error("No owned Mac app session is open");
-    const activate = () => {
-      execFileSync("osascript", [
-        "-e",
-        "on run argv\n tell application id (item 1 of argv) to activate\nend run",
-        this.bundleID!,
-      ]);
-    };
-    const cell = (snapshot: string) => {
-      const candidates = [
-        ...snapshot.matchAll(
-          new RegExp(
-            `^\\s*(@e\\d+(?:~s\\d+)?)\\s+\\[cell\\]\\s+"${label}"(?:\\s+\\[selected\\])?\\s*$`,
-            "gm",
-          ),
-        ),
-      ];
-      const reference = candidates[0]?.[1];
-      if (candidates.length !== 1 || !reference)
-        throw new Error(`Expected one actionable ${label} sidebar cell`);
-      return { reference, selected: candidates[0]![0].includes("[selected]") };
-    };
-    activate();
-    let target = cell(await this.snapshot());
-    for (let attempt = 0; attempt < 2 && !target.selected; attempt++) {
-      await this.click(target.reference);
-      target = cell(await this.snapshot());
-      if (!target.selected) activate();
+  async wait(selector: string): Promise<string> {
+    const started = Date.now(),
+      deadline = started + 30000;
+    let output = "";
+    while (Date.now() < deadline) {
+      output = this.observe();
+      if (this.matching(selector).length) {
+        this.record(["wait", selector], 0, output, started);
+        return output;
+      }
+      await setTimeout(250);
     }
-    if (!target.selected)
-      throw new Error(`Actual Mac sidebar did not select ${label}`);
+    this.record(["wait", selector], 1, output, started);
+    throw new Error(`Native wait timed out: ${selector}`);
   }
-
-  /** NSOpenPanel's slash shortcut opens Go to Folder without hardcoded coordinates. */
+  async screenshot(name: string): Promise<void> {
+    this.guardForeground();
+    const script =
+      'ObjC.import("CoreGraphics"); function run(argv) { const pid=Number(argv[0]); const windows=ObjC.deepUnwrap($.CGWindowListCopyWindowInfo(1, 0)); const own=windows.filter(w => Number(w.kCGWindowOwnerPID)===pid && Number(w.kCGWindowLayer)===0); own.sort((a,b)=>b.kCGWindowBounds.Width*b.kCGWindowBounds.Height-a.kCGWindowBounds.Width*a.kCGWindowBounds.Height); if (!own.length) throw Error("No owned fixture window"); return String(own[0].kCGWindowNumber); }';
+    const windowID = execFileSync(
+      "osascript",
+      ["-l", "JavaScript", "-e", script, String(this.pid)],
+      { encoding: "utf8", timeout: 10000 },
+    ).trim();
+    if (!/^\d+$/.test(windowID))
+      throw new Error("Invalid owned fixture window identity");
+    const file = path.join(this.artifacts, `${name}.png`);
+    execFileSync("screencapture", ["-x", "-o", "-l", windowID, file], {
+      timeout: 10000,
+    });
+    this.evidence.push(file);
+    this.record(
+      ["screenshot", name],
+      0,
+      JSON.stringify({ ownedPID: this.pid, windowID }),
+    );
+  }
+  async clickSidebar(label: "Browse" | "Photos"): Promise<void> {
+    await this.click('label="View" role=MenuBarItem');
+    await this.click(`label="${label}" role=MenuItem`);
+    await this.wait(`label="${label}" role=cell selected=true`);
+  }
+  async openStatementImport(): Promise<void> {
+    await this.click('label="Import statement CSV" role=cell');
+    await this.wait("id=statement.csv.chooseFile");
+  }
   async chooseFile(file: string): Promise<void> {
     await this.wait('label="Open" role=Button');
     await this.action(["type", "/"]);
     await this.wait("role=TextField editable=true");
-    await this.action([
-      "fill",
-      "role=TextField editable=true",
-      file,
-      "--settle",
-    ]);
+    await this.action(["fill", "role=TextField editable=true", file]);
     await this.action(["type", "\n"]);
     await this.click('label="Open" role=Button');
   }
-
   async openSettings(): Promise<void> {
     await this.click('label="Cubby" role=MenuBarItem');
     await this.click('label="Settings…" role=MenuItem');
     await this.wait("id=settings.purchaseImport.syncNow");
   }
-
   async importStatement(file: string): Promise<void> {
     await this.click("id=statement.csv.chooseFile");
     await this.chooseFile(file);
     await this.wait("id=statement.csv.confirm");
   }
-
   async addPhotoToImportRun(file: string): Promise<void> {
     await this.clickSidebar("Photos");
     await this.click("id=photo.source.files");
@@ -160,21 +385,20 @@ export class MacImportDriver {
     await this.wait("id=photos.run.startNew");
     await this.click("id=photos.run.startNew");
   }
-
   async approveAllPhotoGroups(): Promise<void> {
     await this.wait("id=review.workspace");
     await this.click('label="Approve all"');
-    const snapshot = await this.snapshot();
-    const approval = snapshot.match(
-      /(@e\d+(?:~s\d+)?)\s+[^\n]*Approve \d+ items/,
-    );
-    if (!approval?.[1])
-      throw new Error("Photo approval confirmation is missing");
-    await this.click(approval[1]);
+    const snapshot = await this.snapshot(),
+      target = snapshot.match(/(@e\d+(?:~s\d+)?)\s+[^\n]*Approve \d+ items/);
+    if (!target?.[1]) throw new Error("Photo approval confirmation missing");
+    await this.click(target[1]);
   }
-
   async close(): Promise<void> {
     if (!this.bundleID) return;
-    await this.action(["close", this.bundleID]);
+    this.invoke(
+      ["app", "quit", "--bundle-id", this.bundleID],
+      z.object({}).passthrough(),
+    );
+    this.record(["close", this.bundleID], 0, "Owned fixture closed");
   }
 }

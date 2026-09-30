@@ -143,6 +143,10 @@ export async function createMacRetailerFixture(
     origin,
     profile,
     appPath,
+    get pid() {
+      if (!browser?.pid) throw new Error("Fixture browser has not launched");
+      return browser.pid;
+    },
     historyURL: `${origin}/order-history`,
     async launch() {
       const executable = path.join(

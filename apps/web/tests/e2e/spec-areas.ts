@@ -208,6 +208,16 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
+    file: "database-socket-lifecycle.spec.ts",
+    globs: [
+      `${WEB}/src/server/db.ts`,
+      `${WEB}/src/server/db-runtime-resolver.ts`,
+      `${WEB}/src/server/database-freshness/**`,
+      `${WEB}/src/server/background-tasks/**`,
+      `${WEB}/src/server/services/mutation-side-effects.ts`,
+    ],
+  },
+  {
     file: "declared-record-lists.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/purchases.index.tsx`,

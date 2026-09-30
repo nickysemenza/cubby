@@ -347,6 +347,8 @@ function saveArtifact(): void {
       ...(existsSync(runnerLog) ? [runnerLog] : []),
     ],
     runtime: {
+      nativeHelperSHA256: driver.helperFingerprint(),
+      uiBackend: "agent-device-native-macos",
       agentDevice: execFileSync("pnpm", ["exec", "agent-device", "--version"], {
         cwd: repoRoot,
         encoding: "utf8",
@@ -640,24 +642,30 @@ async function main(): Promise<void> {
       ...(retailer ? ["--cubby-e2e-browser-bundle", retailer.bundleID] : []),
     ]);
     opened = true;
-    await driver.open(bundleID);
-    const processes = execFileSync("ps", ["-axo", "command="], {
-      encoding: "utf8",
-    });
     const executable = path.join(appPath, "Contents/MacOS/Cubby");
-    if (
-      !processes
-        .split("\n")
-        .some(
-          (line) =>
-            line.startsWith(executable) &&
-            line.includes(`--cubby-e2e-server ${url.origin}`),
-        )
-    ) {
-      throw new Error(
-        "The built Mac app process is not running against the fixture server",
-      );
+    function launchedProcess() {
+      const lines = execFileSync("ps", ["-axo", "pid=,command="], {
+        encoding: "utf8",
+      }).split("\n");
+      const matches = lines.flatMap((line) => {
+        const parsed = line.trim().match(/^(\d+)\s+(.+)$/);
+        return parsed &&
+          parsed[2]?.startsWith(`${executable} `) &&
+          parsed[2].includes(`--cubby-e2e-server ${url.origin}`)
+          ? [Number(parsed[1])]
+          : [];
+      });
+      if (matches.length !== 1 || !matches[0])
+        throw new Error(
+          "Expected exactly one built Mac app process using the isolated fixture launch arguments",
+        );
+      return matches[0];
     }
+    const beforePID = launchedProcess();
+    await driver.open(bundleID, beforePID);
+    const afterPID = launchedProcess();
+    if (afterPID !== beforePID)
+      throw new Error("Native UI adapter changed the verified fixture process");
     milestones.launched = true;
     const launchEvidence = path.join(artifacts, "app-launch.json");
     writeFileSync(
@@ -668,6 +676,9 @@ async function main(): Promise<void> {
           executable: "Cubby.app/Contents/MacOS/Cubby",
           fixtureServer: true,
           running: true,
+          beforeAdapterPID: beforePID,
+          afterAdapterPID: afterPID,
+          launchArgumentsPreserved: true,
         },
         null,
         2,
@@ -679,8 +690,7 @@ async function main(): Promise<void> {
     milestones.fixtureUIObserved = true;
     phase = "file-import";
     await driver.clickSidebar("Browse");
-    await driver.wait("id=browse.importStatement");
-    await driver.click("id=browse.importStatement");
+    await driver.openStatementImport();
     await driver.importStatement(
       path.join(webRoot, "tests/e2e/fixtures/synthetic-monarch-wardrobe.csv"),
     );

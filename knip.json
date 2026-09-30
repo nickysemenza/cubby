@@ -90,7 +90,8 @@
         "apple",
         "openssl",
         "ditto",
-        "osascript"
+        "osascript",
+        "screencapture"
       ],
       "ignoreDependencies": [
         "@fontsource-variable/inter",
