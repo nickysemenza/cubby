@@ -78,20 +78,46 @@ export class MacImportDriver {
     if (this.aborted) throw new Error("Mac driver interrupted");
     if (!this.bundleID) throw new Error("No owned Mac fixture session");
     if (!this.pid) throw new Error("No verified fixture PID");
-    const activation = execFileSync(
-      "osascript",
-      [
-        "-l",
-        "JavaScript",
-        "-e",
-        'ObjC.import("AppKit"); function run(argv) { const app=$.NSRunningApplication.runningApplicationWithProcessIdentifier(Number(argv[0])); if (!app || app.isTerminated || ObjC.unwrap(app.bundleIdentifier)!==argv[1]) throw Error("Owned fixture PID/bundle is not running"); return String(app.activateWithOptions(3)); }',
-        String(this.pid),
-        this.bundleID,
-      ],
-      { encoding: "utf8", timeout: 10000 },
-    ).trim();
-    if (activation !== "true")
-      throw new Error("Owned fixture AppKit activation was refused");
+    const activation = z
+      .object({
+        accepted: z.boolean(),
+        bundleId: z.string(),
+        pid: z.number(),
+        appName: z.string(),
+      })
+      .parse(
+        JSON.parse(
+          execFileSync(
+            "osascript",
+            [
+              "-l",
+              "JavaScript",
+              "-e",
+              'ObjC.import("AppKit"); function run(argv) { const expectedPID=Number(argv[0]); const app=$.NSRunningApplication.runningApplicationWithProcessIdentifier(expectedPID); if (!app || app.isTerminated || ObjC.unwrap(app.bundleIdentifier)!==argv[1]) throw Error("Owned fixture PID/bundle is not running"); const accepted=app.activateWithOptions(3); const deadline=Date.now()+3000; let front; do { front=$.NSWorkspace.sharedWorkspace.frontmostApplication; if (Number(front.processIdentifier)===expectedPID && ObjC.unwrap(front.bundleIdentifier)===argv[1]) break; $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.05)); } while(Date.now()<deadline); return JSON.stringify({accepted:Boolean(accepted),bundleId:ObjC.unwrap(front.bundleIdentifier)||"",pid:Number(front.processIdentifier),appName:ObjC.unwrap(front.localizedName)||""}); }',
+              String(this.pid),
+              this.bundleID,
+            ],
+            { encoding: "utf8", timeout: 10000 },
+          ),
+        ),
+      );
+    this.record(
+      ["foreground-activation"],
+      activation.accepted &&
+        activation.pid === this.pid &&
+        activation.bundleId === this.bundleID
+        ? 0
+        : 1,
+      JSON.stringify(activation),
+    );
+    if (
+      !activation.accepted ||
+      activation.pid !== this.pid ||
+      activation.bundleId !== this.bundleID
+    )
+      throw new Error(
+        `Owned fixture AppKit activation did not reach verified PID; observed ${activation.appName} (${activation.bundleId}) PID ${activation.pid}`,
+      );
     const front = this.invoke(
       ["app", "frontmost"],
       z.object({ bundleId: z.string(), pid: z.number() }),
@@ -101,7 +127,7 @@ export class MacImportDriver {
       (this.pid !== undefined && front.pid !== this.pid)
     )
       throw new Error(
-        "Owned fixture is not the foreground process; refusing native input",
+        `Owned fixture is not the foreground process; observed ${front.bundleId} PID ${front.pid}; refusing native input`,
       );
     this.pid = front.pid;
   }
