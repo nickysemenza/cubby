@@ -36,6 +36,7 @@ const observeConnectionSetup = (
   let lastMilestone = "connect-called";
   let ready = false;
   let authRequested = false;
+  let socketOpeningStartedAt: number | undefined;
   let startupWritePending = false;
   let startupWriteOrdinal: number | undefined;
   let startupWriteStartedAt: number | undefined;
@@ -70,14 +71,22 @@ const observeConnectionSetup = (
     cleanup.push(() => emitter.removeListener(event, listener));
   };
   const stream = client.connection.stream;
-  listen(stream, "socketOpened", () => {
-    milestone("socket_opened");
-    span.setAttribute("db.connect.socket_open.complete", true);
-  });
-  listen(stream, "socketOpenFailed", () => {
-    milestone("socket_open_failed");
+  listen(stream, "socketOpening", () => {
+    socketOpeningStartedAt = performance.now();
+    milestone("socket_open_started");
     span.setAttribute("db.connect.socket_open.complete", false);
   });
+  const finishSocketOpen = (complete: boolean) => {
+    milestone(complete ? "socket_opened" : "socket_open_failed");
+    span.setAttribute("db.connect.socket_open.complete", complete);
+    if (socketOpeningStartedAt !== undefined)
+      span.setAttribute(
+        "db.connect.socket_open.duration_ms",
+        Math.round(performance.now() - socketOpeningStartedAt),
+      );
+  };
+  listen(stream, "socketOpened", () => finishSocketOpen(true));
+  listen(stream, "socketOpenFailed", () => finishSocketOpen(false));
   // Patched pg-cloudflare events carry ordinals only, never protocol bytes.
   const writeStarted = (ordinal: number) => {
     if (!startupWritePending) return;
