@@ -55,6 +55,7 @@ export default defineEntity({
           "purchaseId",
           "ledgerTransferId",
           "accountName",
+          "spendingCategoryName",
           "allocations",
           "sourceRefs",
         ],
@@ -64,6 +65,7 @@ export default defineEntity({
           "itemizationCoverage",
           "productsCoverage",
           "coverage",
+          "effectiveEvidenceExpectation",
           "itemization",
           "vendorInference",
         ],
@@ -238,7 +240,38 @@ export default defineEntity({
         },
       },
       {
+        key: "effectiveEvidenceExpectation",
+        labelOverride: "Evidence expectation",
+        kind: "enum",
+        provenance: {
+          kind: "derived",
+          sources: [
+            {
+              label:
+                "Transaction, linked purchase, vendor, and category policy",
+            },
+          ],
+        },
+        control: {
+          kind: "select",
+          options: [
+            { value: "unknown", label: "Unclassified" },
+            { value: "required", label: "Expected" },
+            { value: "not_expected", label: "Not expected" },
+          ],
+        },
+        display: { list: true, width: "sm" },
+        validation: {
+          read: financialTransactionCoverage.shape.expectation,
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "evidenceExpectation",
+        labelOverride: "Evidence override",
+        description:
+          "Leave blank to use the effective policy from linked records and the spending category.",
         kind: "enum",
         nullable: true,
         control: {
@@ -258,7 +291,7 @@ export default defineEntity({
             { value: "not_expected", label: "Not expected" },
           ],
         },
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, listHidden: true },
         validation: {
           read: z
             .enum(["unknown", "required", "not_expected"])
@@ -591,6 +624,16 @@ export default defineEntity({
         },
       },
       {
+        key: "spendingCategoryName",
+        kind: "text",
+        nullable: true,
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "accountName",
         kind: "text",
         nullable: true,
@@ -812,6 +855,8 @@ export default defineEntity({
       "productsCoverage",
       "coverage",
       "spendingCategoryId",
+      "spendingCategoryName",
+      "effectiveEvidenceExpectation",
       "evidenceExpectation",
       "id",
       "accountId",

@@ -141,6 +141,9 @@ const columns = {
   spendingCategoryShortcode: sql<
     string | null
   >`(SELECT shortcode FROM "SpendingCategory" WHERE id = "FinancialTransaction"."spendingCategoryId" AND "deletedAt" IS NULL)`,
+  spendingCategoryName: sql<
+    string | null
+  >`(SELECT name FROM "SpendingCategory" WHERE id = "FinancialTransaction"."spendingCategoryId" AND "deletedAt" IS NULL)`,
   evidenceExpectation: financialTransaction.evidenceExpectation,
   coverage: financialTransactionCoverageSql("FinancialTransaction"),
   sourceCategory: financialTransaction.sourceCategory,
@@ -217,6 +220,8 @@ const toOut = (
     spendingCategoryId: row.spendingCategoryShortcode
       ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
       : null,
+    spendingCategoryName: row.spendingCategoryName,
+    effectiveEvidenceExpectation: row.coverage.expectation,
     evidenceExpectation: row.evidenceExpectation,
     bookingCoverage: row.coverage.booking,
     documentCoverage: row.coverage.document,
@@ -254,6 +259,7 @@ const selectTransactionsRead = (
     accountShortcode,
     allocations,
     accountName,
+    spendingCategoryName,
     itemization,
     ...core
   } = columns;
@@ -263,6 +269,7 @@ const selectTransactionsRead = (
       ...listGroupFields(projection, "relations", () => ({
         accountShortcode,
         accountName,
+        spendingCategoryName,
       })),
       ...listGroupFields(projection, ["relations", "derived"], () => ({
         ledgerTransferShortcode,
@@ -291,6 +298,7 @@ const hydrateTransactionsRead = async (
     }));
     return {
       ...row,
+      effectiveEvidenceExpectation: row.coverage.expectation,
       bookingCoverage: row.coverage.booking,
       documentCoverage: row.coverage.document,
       itemizationCoverage: row.coverage.itemization,

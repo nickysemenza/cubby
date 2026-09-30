@@ -515,14 +515,24 @@ export const renderEntityArtifacts = (
     )
     .join(",\n");
   const listEnrichmentVariants = browserCrudEntitySpecs
-    .map(
-      ({
-        key,
-      }) => `z.object({entity:z.literal(${JSON.stringify(key)}),groups:z.array(z.discriminatedUnion("state",[
-    z.object({id:z.enum(["media","quality","relations","derived"]),state:z.literal("ready"),data:z.array(z.object(${key}ListItem.shape).partial().required({id:true}))}),
-    z.object({id:z.enum(["media","quality","relations","derived"]),state:z.literal("error"),error:publicStartOperationErrorSchema})
-  ])),missingIds:z.array(z.string())})`,
-    )
+    .map(({ key, inspector }) => {
+      // A deferred patch may carry only fields owned by its group. A partial
+      // full-row schema applies defaults to absent core fields and erases them.
+      const readyGroups = (
+        ["media", "quality", "relations", "derived"] as const
+      )
+        .map((group) => {
+          const pick = Object.fromEntries(
+            ["id", ...inspector.list.read[group]].map((field) => [field, true]),
+          );
+          return `z.object({id:z.literal(${JSON.stringify(group)}),state:z.literal("ready"),data:z.array(z.object(${key}ListItem.shape).pick(${compactLiteral(pick)}).partial().required({id:true}))})`;
+        })
+        .join(",\n");
+      return `z.object({entity:z.literal(${JSON.stringify(key)}),groups:z.array(z.discriminatedUnion("state",[
+        z.discriminatedUnion("id",[${readyGroups}]),
+        z.object({id:z.enum(["media","quality","relations","derived"]),state:z.literal("error"),error:publicStartOperationErrorSchema})
+      ])),missingIds:z.array(z.string())})`;
+    })
     .join(",\n");
   const progressiveListSchemas = `
 export const entityListGroupSchema = z.object({id:z.enum(["media","quality","relations","derived"]),fields:z.array(z.string())});

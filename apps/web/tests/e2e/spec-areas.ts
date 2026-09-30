@@ -500,6 +500,19 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
+    file: "finance-category-display.spec.ts",
+    globs: [
+      `${WEB}/src/entities/**`,
+      `${WEB}/src/app/_components/hooks/progressive-list.ts`,
+      `${WEB}/src/app/_components/data-table/**`,
+      `${WEB}/src/server/entity-list-runtime.server.ts`,
+      `${WEB}/src/server/repo/financial-transaction.ts`,
+      `${WEB}/src/server/repo/spending-category.ts`,
+      "packages/schemas/src/entity-definitions/14-financialTransaction.entity.ts",
+      "scripts/generator/entities/**",
+    ],
+  },
+  {
     file: "finance-evidence-journey.spec.ts",
     globs: [
       `${WEB}/src/app/finance/**`,
