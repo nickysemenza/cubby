@@ -87,6 +87,7 @@ let cacheBinaryFingerprint: string | null = null;
 let sourceFingerprint: string | undefined;
 let signingTeam: string | undefined;
 let failure: Error | undefined;
+const cleanupFailures: Array<{ stage: string; message: string }> = [];
 let interrupted = false;
 const milestones = {
   built: false,
@@ -315,6 +316,7 @@ function saveArtifact(): void {
         durationMs: Math.round(performance.now() - started),
         milestones,
         failure: failure ? scrubErrorMessage(failure.message) : null,
+        cleanupFailures,
       },
       null,
       2,
@@ -415,6 +417,7 @@ async function cleanupNativeProcess(): Promise<void> {
   if (!nativeProcessExpectation) return;
   const evidence = path.join(artifacts, "native-process-cleanup.json");
   let result;
+  let cleanupError: string | null = null;
   try {
     result = await stopOwnedMacProcess(
       nativeProcessExpectation,
@@ -422,7 +425,7 @@ async function cleanupNativeProcess(): Promise<void> {
     );
   } catch (error) {
     ownedProcessCleanupFailed = true;
-    retainCleanupFailure(error);
+    cleanupError = retainCleanupFailure(error, "native process cleanup");
   }
   writeFileSync(
     evidence,
@@ -431,6 +434,7 @@ async function cleanupNativeProcess(): Promise<void> {
         verifiedPID: verifiedLaunchedPID ?? null,
         exited: !ownedProcessCleanupFailed,
         result: result ?? null,
+        error: cleanupError,
       },
       null,
       2,
@@ -451,12 +455,17 @@ function finishFixtureLease(
       );
     lease.release();
   } catch (error) {
-    retainCleanupFailure(error);
+    const cleanupError = retainCleanupFailure(error, "fixture lease cleanup");
     const evidence = path.join(artifacts, "fixture-lease-retained.json");
     writeFileSync(
       evidence,
       JSON.stringify(
-        { retained: true, cleanupSucceeded, ownedProcessCleanupFailed },
+        {
+          retained: true,
+          cleanupSucceeded,
+          ownedProcessCleanupFailed,
+          error: cleanupError,
+        },
         null,
         2,
       ) + "\n",
@@ -499,16 +508,16 @@ async function cleanupResources(input: {
   } = input;
   if (opened)
     await driver.close().catch((error) => {
-      failure ??= error;
+      retainCleanupFailure(error, "native adapter cleanup");
     });
   await cleanupNativeProcess();
   await browserScenario?.close().catch((error) => {
-    failure ??= error;
+    retainCleanupFailure(error, "browser scenario cleanup");
   });
   if (browserScenario) driver.evidence.push(...browserScenario.evidence);
   await retailer?.close().catch((error) => {
     ownedProcessCleanupFailed = true;
-    failure ??= error;
+    retainCleanupFailure(error, "retailer process cleanup");
   });
   if (retailer) {
     driver.evidence.push(
@@ -517,26 +526,33 @@ async function cleanupResources(input: {
     );
   }
   await harness?.close().catch((error) => {
-    failure ??= error;
+    retainCleanupFailure(error, "Worker cleanup");
   });
   await storage?.close().catch((error) => {
-    failure ??= error;
+    retainCleanupFailure(error, "object storage cleanup");
   });
   restoreEnvironment();
   if (created)
     await admin
       .query(`DROP DATABASE "${databaseName}" WITH (FORCE)`)
       .catch((error) => {
-        failure ??= error;
+        retainCleanupFailure(error, "database cleanup");
       });
   await admin.end();
 }
 
-function retainCleanupFailure(error: unknown): void {
+function retainCleanupFailure(
+  error: unknown,
+  stage = "fixture resource cleanup",
+): string {
   const parsed = z.instanceof(Error).safeParse(error);
-  failure ??= parsed.success
+  const diagnostic = parsed.success
     ? parsed.data
     : new Error("Non-Error Mac fixture cleanup failure");
+  const message = scrubErrorMessage(diagnostic.message);
+  cleanupFailures.push({ stage, message });
+  failure ??= diagnostic;
+  return message;
 }
 
 async function main(): Promise<void> {
