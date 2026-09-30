@@ -155,8 +155,9 @@ export class MacImportDriver {
       ],
       z.object({ nodes: z.array(nodeSchema) }),
     );
+    // A newly launched SwiftUI window can publish its AX tree after activation.
+    // Empty snapshots are readiness observations; foreign nodes still fail closed.
     if (
-      !data.nodes.length ||
       data.nodes.some(
         (node) => node.bundleId && node.bundleId !== this.bundleID,
       )
