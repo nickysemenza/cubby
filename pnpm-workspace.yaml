@@ -94,6 +94,30 @@ packageExtensions:
         optional: true
       react:
         optional: true
+  "@phosphor-icons/react":
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+  "@tanstack/react-router":
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+  "@tanstack/react-table":
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
+  "cmdk":
+    peerDependencies:
+      "@types/react": "*"
+    peerDependenciesMeta:
+      "@types/react":
+        optional: true
   "@nivo/annotations":
     peerDependencies:
       "@types/react": "*"
@@ -434,7 +458,7 @@ peerDependencyRules:
     typescript: ">=5 <8"
 
 # Reuse completed dependency graphs across fresh worktrees.
-enableGlobalVirtualStore: false
+virtualStoreType: global
 
 configDependencies:
   "@pnpm/plugin-types-fixer": 0.1.0
