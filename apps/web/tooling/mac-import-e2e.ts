@@ -883,8 +883,6 @@ async function main(): Promise<void> {
           "Native review did not expose the synthetic charge selector",
         );
       await driver.click(toggle[1]);
-      await driver.click("label=Kind");
-      await driver.click('label="Purchase"');
       await driver.click("id=statement.csv.confirm");
       await driver.wait('text="2 source rows · 1 transactions"');
       milestones.savedObserved = true;
@@ -895,10 +893,15 @@ async function main(): Promise<void> {
         const count = await checkPool.query<{
           rows: string;
           transactions: string;
+          purchases: string;
         }>(
-          'SELECT (SELECT count(*) FROM "StatementRow")::text AS rows, (SELECT count(*) FROM "FinancialTransaction")::text AS transactions',
+          `SELECT (SELECT count(*) FROM "StatementRow")::text AS rows, (SELECT count(*) FROM "FinancialTransaction")::text AS transactions, (SELECT count(*) FROM "FinancialTransaction" WHERE kind = 'purchase')::text AS purchases`,
         );
-        if (count.rows[0]?.rows !== "2" || count.rows[0]?.transactions !== "1")
+        if (
+          count.rows[0]?.rows !== "2" ||
+          count.rows[0]?.transactions !== "1" ||
+          count.rows[0]?.purchases !== "1"
+        )
           throw new Error(
             `Native CSV readback differs: ${JSON.stringify(count.rows)}`,
           );
