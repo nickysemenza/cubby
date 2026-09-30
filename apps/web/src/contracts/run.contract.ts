@@ -7,7 +7,10 @@ import {
 } from "@cubby/schemas/identifiers";
 import { vendorSearchMailOut } from "@cubby/schemas/order-mail-review";
 import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
-import { confirmMerchantVendorRuleInput } from "@cubby/schemas/purchase-import";
+import {
+  proposedImportFix,
+  confirmMerchantVendorRuleInput,
+} from "@cubby/schemas/purchase-import";
 import {
   runBrowserListInput,
   runListResponse,
@@ -126,6 +129,7 @@ const runDetail = z.object({
       kind: z.string().min(1),
       summary: z.string().min(1),
       status: z.string().min(1),
+      proposedFix: proposedImportFix.nullable(),
       autoApplied: z.boolean(),
       probability: z.number().nullable(),
       createdAt: z.iso.datetime(),
@@ -365,6 +369,7 @@ export const runContract = defineContract("run", {
       imported: z.number().int(),
       updated: z.number().int(),
       skipped: z.number().int(),
+      findings: runDetail.shape.findings,
       targetsTotal: z.number().int(),
       targetsCompleted: z.number().int(),
       progress: z.array(

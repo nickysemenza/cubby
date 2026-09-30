@@ -126,6 +126,7 @@
     "./financial-account": "./src/financial-account.ts",
     "./financial-account-fields": "./src/financial-account-fields.ts",
     "./financial-reconciliation": "./src/financial-reconciliation.ts",
+    "./financial-booking": "./src/financial-booking.ts",
     "./financial-transaction": "./src/financial-transaction.ts",
     "./financial-transaction-fields": "./src/financial-transaction-fields.ts",
     "./filter-options": "./src/filter-options.ts",
@@ -142,7 +143,9 @@
     "./device-fields": "./src/device-fields.ts",
     "./image-sighting": "./src/image-sighting.ts",
     "./image-sighting-fields": "./src/image-sighting-fields.ts",
-    "./image-capture-fields": "./src/image-capture-fields.ts"
+    "./image-capture-fields": "./src/image-capture-fields.ts",
+    "./spending-category": "./src/spending-category.ts",
+    "./purchase-evidence-policy": "./src/purchase-evidence-policy.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/generator/ensure.ts && tsc --noEmit",

@@ -1,6 +1,6 @@
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import type { ColumnFiltersState } from "@tanstack/react-table";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   type Filter,
@@ -30,20 +30,34 @@ export function useFilterBarDraft({
   fields,
   commit,
 }: UseFilterBarDraftArgs) {
-  const [draftFilters, setDraftFilters] = useState<Filter[]>(externalFilters);
+  const externalKey = filterStateKey(externalFilters);
+  const [state, setState] = useState<{
+    draftFilters: Filter[];
+    externalKey: string;
+    pendingKeys: string[];
+  }>(() => ({
+    draftFilters: externalFilters,
+    externalKey,
+    pendingKeys: [],
+  }));
+  const { draftFilters, pendingKeys } = state;
   const [debouncedDraftFilters] = useDebouncedValue(draftFilters, {
     wait: 500,
   });
-  const lastExternalKeyRef = useRef(filterStateKey(externalFilters));
 
-  const externalKey = filterStateKey(externalFilters);
   const draftKey = filterStateKey(draftFilters);
   const debouncedDraftKey = filterStateKey(debouncedDraftFilters);
-  if (externalKey !== lastExternalKeyRef.current) {
-    lastExternalKeyRef.current = externalKey;
-    if (externalKey !== draftKey) {
-      setDraftFilters(externalFilters);
-    }
+  if (externalKey !== state.externalKey) {
+    const acknowledged = pendingKeys.indexOf(externalKey);
+    // An owner acknowledgement can trail another keystroke. Only an actual
+    // external change replaces the draft; unchanged props during a deferred
+    // table transition cannot roll it back. State stays render-local when a
+    // concurrent render is discarded.
+    setState({
+      externalKey,
+      draftFilters: acknowledged < 0 ? externalFilters : draftFilters,
+      pendingKeys: acknowledged < 0 ? [] : pendingKeys.slice(acknowledged + 1),
+    });
   }
 
   useEffect(() => {
@@ -60,9 +74,16 @@ export function useFilterBarDraft({
     // `[]` and then removed by the external-state sync.
     const { columnFilters: nextColumnFilters, externalKey: nextExternalKey } =
       normalizeBarFilters(debouncedDraftFilters, fields);
-    if (nextExternalKey === externalKey) return;
+    if (
+      pendingKeys.at(-1) === nextExternalKey ||
+      (pendingKeys.length === 0 && nextExternalKey === externalKey)
+    )
+      return;
 
-    lastExternalKeyRef.current = nextExternalKey;
+    setState((previous) => ({
+      ...previous,
+      pendingKeys: [...previous.pendingKeys, nextExternalKey],
+    }));
     commit(nextColumnFilters);
   }, [
     commit,
@@ -71,6 +92,7 @@ export function useFilterBarDraft({
     draftKey,
     externalKey,
     fields,
+    pendingKeys,
   ]);
 
   const handleChange = (nextFilters: Filter[]) => {
@@ -99,14 +121,24 @@ export function useFilterBarDraft({
       return !next || field?.type !== "text";
     });
 
-    setDraftFilters(nextFilters);
     if (commitImmediately) {
       const { columnFilters: nextColumnFilters, externalKey: nextExternalKey } =
         normalizeBarFilters(nextFilters, fields);
-      lastExternalKeyRef.current = nextExternalKey;
-      if (nextExternalKey !== externalKey) {
+      const shouldCommit =
+        pendingKeys.at(-1) !== nextExternalKey &&
+        (pendingKeys.length > 0 || nextExternalKey !== externalKey);
+      setState((previous) => ({
+        ...previous,
+        draftFilters: nextFilters,
+        pendingKeys: shouldCommit
+          ? [...previous.pendingKeys, nextExternalKey]
+          : previous.pendingKeys,
+      }));
+      if (shouldCommit) {
         commit(nextColumnFilters);
       }
+    } else {
+      setState((previous) => ({ ...previous, draftFilters: nextFilters }));
     }
   };
 

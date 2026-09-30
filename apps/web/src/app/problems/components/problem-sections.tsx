@@ -39,6 +39,7 @@ import {
   ReconciliationStatus,
   reconciliationDelta,
 } from "~/app/purchases/purchase-reconciliation";
+import { RunFindingActions } from "~/app/purchases/run-finding-actions";
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -57,7 +58,6 @@ import { problemQuery } from "~/entities/problem-registry";
 import {
   product as productOperations,
   maintenance,
-  problems as problemOperations,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay, formatInstant } from "~/lib/date-format";
 import { countLabel } from "~/lib/pluralize";
@@ -426,44 +426,6 @@ function UpcApplyAction({
       <DownloadIcon className="mr-1 size-3" />
       {apply.isPending ? "Applying…" : "Apply"}
     </Button>
-  );
-}
-
-function RunFindingActions({
-  finding,
-}: {
-  finding: ProblemItem<"runFindings">;
-}) {
-  const resolve = useActionMutation({
-    mutationFn: problemOperations.resolveRunFinding.mutationOptions,
-    success: (result) =>
-      result.status === "applied"
-        ? "Applied import correction"
-        : "Dismissed import finding",
-  });
-  const canApply =
-    finding.proposedFix !== null &&
-    finding.proposedFix.kind !== "receive_purchase";
-  return (
-    <Row className="gap-2">
-      {canApply ? (
-        <Button
-          size="sm"
-          onClick={() => resolve.mutate({ id: finding.id, action: "apply" })}
-          disabled={resolve.isPending}
-        >
-          {resolve.isPending ? "Applying…" : "Apply fix"}
-        </Button>
-      ) : null}
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => resolve.mutate({ id: finding.id, action: "dismiss" })}
-        disabled={resolve.isPending}
-      >
-        Dismiss
-      </Button>
-    </Row>
   );
 }
 

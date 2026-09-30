@@ -354,6 +354,7 @@ export const buildProductWrite = (
     return {
       kind: "create",
       input: {
+        acquisitionOrigin: "unknown",
         name: row.name,
         aliases: [],
         tags: [],

@@ -1,3 +1,5 @@
+import { financialTransactionShortcode } from "../identifier-fields";
+import { spendingCategoryShortcode } from "../identifier-fields";
 import { defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -84,6 +86,7 @@ export default defineEntity({
           "beneficiaries",
           "funders",
           "sourceClaims",
+          "spendingCategoryId",
           "projectAllocations",
         ],
         media: ["vendorLogo", "displayImages"],
@@ -134,6 +137,74 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        key: "bookingTransactionCode",
+        kind: "text",
+        nullable: true,
+        validation: {
+          read: financialTransactionShortcode.nullable().default(null),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "spendingCategoryId",
+        kind: "identifier",
+        nullable: true,
+        reference: { entity: "spendingCategory" },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { list: true, detail: true },
+        resolution: {
+          reset: { spendingCategoryId: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "expense.effective-spending-category",
+          description:
+            "An Expense spending category override wins; otherwise the Expense uses its Purchase's spending category.",
+          projections: {
+            list: "fieldResolutions.spendingCategoryId.value",
+            detail: "fieldResolutions.spendingCategoryId.value",
+            summary: "fieldResolutions.spendingCategoryId.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.spendingCategoryId.sourceEntity",
+              label: "Source",
+            },
+            {
+              path: "fieldResolutions.spendingCategoryId.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.spendingCategoryId.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
+        },
+        validation: {
+          read: spendingCategoryShortcode.nullable().default(null),
+          create: spendingCategoryShortcode.nullable().default(null),
+          update: spendingCategoryShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "economicRole",
+        kind: "enum",
+        control: {
+          kind: "select",
+          options: [
+            { value: "vendor", label: "Vendor charge" },
+            { value: "reimbursement", label: "Reimbursement" },
+          ],
+        },
+        display: { list: true, detail: true },
+        validation: {
+          read: z.enum(["vendor", "reimbursement"]).default("vendor"),
+          create: z.enum(["vendor", "reimbursement"]).default("vendor"),
+          update: z.enum(["vendor", "reimbursement"]).optional(),
+        },
+      },
       {
         key: "fieldResolutions",
         kind: "json",
@@ -717,6 +788,13 @@ export default defineEntity({
       },
     ],
     storage: [
+      "bookingTransactionCode",
+      { key: "spendingCategoryId", reference: "spendingCategory" },
+      {
+        key: "economicRole",
+        specialized: "enum:economicRole",
+        defaultValue: "vendor",
+      },
       {
         key: "id",
         specialized: "primary-key:ExpenseId",
@@ -749,6 +827,8 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "spendingCategoryId",
+      "economicRole",
       "name",
       "cost",
       "date",
@@ -770,6 +850,8 @@ export default defineEntity({
       "sourceClaims",
     ],
     update: [
+      "spendingCategoryId",
+      "economicRole",
       "name",
       "cost",
       "date",
@@ -792,6 +874,8 @@ export default defineEntity({
     ],
     bulk: ["projectId", "trade", "costType"],
     audit: [
+      "spendingCategoryId",
+      "economicRole",
       "name",
       "cost",
       "date",
@@ -845,6 +929,8 @@ export default defineEntity({
           "funders",
         ],
         full: [
+          "spendingCategoryId",
+          "economicRole",
           "name",
           "lineKind",
           "lineBasis",
@@ -896,6 +982,9 @@ export default defineEntity({
       ],
     },
     output: [
+      "bookingTransactionCode",
+      "spendingCategoryId",
+      "economicRole",
       "fieldResolutions",
       "projectAllocations",
       "id",
@@ -1367,6 +1456,19 @@ export default defineEntity({
   },
   relations: [
     {
+      key: "spendingCategory",
+      label: "Category override",
+      target: "spendingCategory",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Expense.spendingCategoryId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Expense.spendingCategoryId", direction: "incoming" }],
+      },
+    },
+    {
       key: "purchase",
       label: "Purchase",
       target: "purchase",
@@ -1499,6 +1601,7 @@ export default defineEntity({
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "search", "create", "update", "delete", "bulkUpdate"],
     dataQuality: {
+      exceptions: true,
       checks: [
         {
           id: "expense_cost",
@@ -1506,6 +1609,21 @@ export default defineEntity({
           weight: 2,
           label: "Cost",
           message: "No cost is recorded for this expense.",
+        },
+        {
+          id: "expense_spending_category",
+          facet: "identity",
+          weight: 1,
+          label: "Spending category",
+          message:
+            "Expense has no spending category of its own or inherited from its Purchase.",
+        },
+        {
+          id: "expense_product_resolution",
+          facet: "identity",
+          weight: 1,
+          label: "Product identity",
+          message: "This merchandise line needs its Product identity resolved.",
         },
       ],
     },

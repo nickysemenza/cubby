@@ -269,6 +269,7 @@
         "packages/schemas/src/external-id.ts",
         "packages/schemas/src/field-resolution.ts",
         "packages/schemas/src/financial-reconciliation.ts",
+        "packages/schemas/src/purchase-evidence-policy.ts",
         "packages/schemas/src/garden-guide.ts",
         "packages/schemas/src/garden-guides.ts",
         "packages/schemas/src/garden-practice.ts",

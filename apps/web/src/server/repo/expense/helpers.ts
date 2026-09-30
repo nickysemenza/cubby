@@ -4,6 +4,7 @@ import type {
   ProductId,
   ProjectId,
   PurchaseId,
+  SpendingCategoryId,
   VendorId,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -103,6 +104,13 @@ export type ExpenseRow = {
   name: string;
   cost: number | null;
   date: string | null;
+  spendingCategoryId?: SpendingCategoryId | null;
+  spendingCategoryShortcode?: string | null;
+  spendingCategoryName?: string | null;
+  storedSpendingCategoryShortcode?: string | null;
+  fallbackSpendingCategoryShortcode?: string | null;
+  economicRole?: ExpenseOut["economicRole"];
+  bookingTransactionCode?: string | null;
   lineKind: ExpenseOut["lineKind"];
   lineBasis: ExpenseOut["lineBasis"];
   costType: ExpenseOut["costType"];
@@ -216,6 +224,41 @@ const expenseSourceClaims = (row: ExpenseRow): ExpenseOut["sourceClaims"] =>
       createdAt: value.createdAt,
       updatedAt: value.updatedAt,
     }));
+
+const expenseSpendingCategoryFieldResolution = (
+  row: ExpenseRow,
+  purchaseRow: ExpenseRow["purchase"],
+): NonNullable<ExpenseOut["fieldResolutions"]>[string] => {
+  const value = row.spendingCategoryShortcode ?? null;
+  const storedValue = row.storedSpendingCategoryShortcode ?? null;
+  const fallbackValue = row.fallbackSpendingCategoryShortcode ?? null;
+  return {
+    mode: storedValue ? "explicit" : value ? "inherit" : "none",
+    storedValue,
+    value,
+    fallbackValue,
+    source: storedValue
+      ? "expense override"
+      : value
+        ? "purchase default"
+        : "none",
+    sourceEntity: storedValue
+      ? {
+          entityKind: "spendingCategory",
+          entityId: storedValue,
+          name: row.spendingCategoryName ?? null,
+        }
+      : value && purchaseRow
+        ? {
+            entityKind: "purchase",
+            entityId: purchaseRow.shortcode,
+            name: purchaseRow.displayLabel ?? purchaseRow.orderId ?? null,
+          }
+        : null,
+    matchesFallback: value === fallbackValue,
+    canReset: storedValue !== null,
+  };
+};
 
 const expenseProjectFieldResolution = (
   row: ExpenseRow,
@@ -348,6 +391,16 @@ const expenseProjectName = (row: ExpenseRow) =>
     ? resolveLiveJoinName(row.project)
     : row.effectiveProjectName;
 
+const expenseEvidenceFields = (row: ExpenseRow) => ({
+  spendingCategoryId: row.spendingCategoryShortcode
+    ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
+    : null,
+  economicRole: row.economicRole ?? "vendor",
+  bookingTransactionCode: row.bookingTransactionCode
+    ? parseShortcodeFor("financialTransaction", row.bookingTransactionCode)
+    : null,
+});
+
 export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
   row: ExpenseRow,
   dataQuality: Q,
@@ -370,6 +423,7 @@ export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
     name: row.name,
     cost: row.cost,
     date: row.date,
+    ...expenseEvidenceFields(row),
     lineKind: row.lineKind,
     lineBasis: row.lineBasis,
     costType: row.costType,
@@ -422,6 +476,10 @@ export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
       row.effectiveProjectShortcode === undefined
         ? undefined
         : {
+            spendingCategoryId: expenseSpendingCategoryFieldResolution(
+              row,
+              purchaseRow,
+            ),
             projectId: expenseProjectFieldResolution(
               row,
               purchaseRow,

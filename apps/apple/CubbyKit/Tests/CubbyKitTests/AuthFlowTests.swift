@@ -15,6 +15,7 @@ import Testing
 private final class AuthStubURLProtocol: URLProtocol, @unchecked Sendable {
     typealias Handler = @Sendable (URLRequest) -> (Int, [String: String], Data)
     static let handler = Mutex<Handler?>(nil)
+    static let responseURL = Mutex<URL?>(nil)
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -28,7 +29,8 @@ private final class AuthStubURLProtocol: URLProtocol, @unchecked Sendable {
         var fields = headers
         fields["Content-Type"] = fields["Content-Type"] ?? "application/json"
         let response = HTTPURLResponse(
-            url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: fields
+            url: Self.responseURL.withLock { $0 } ?? request.url!, statusCode: status,
+            httpVersion: "HTTP/1.1", headerFields: fields
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
@@ -60,7 +62,76 @@ struct AuthFlowTests {
 
     private func resetHandlerAfterTest() {
         AuthStubURLProtocol.handler.withLock { $0 = nil }
+        AuthStubURLProtocol.responseURL.withLock { $0 = nil }
     }
+
+    #if DEBUG
+        @Test func developmentSignInStoresOnlyTheSignedCredentialAndSessionCache() async throws {
+            defer { resetHandlerAfterTest() }
+            AuthStubURLProtocol.handler.withLock { handler in
+                handler = { request in
+                    #expect(request.httpMethod == "GET")
+                    #expect(request.url?.path == "/__dev/login")
+                    #expect(request.url?.query == "native=true")
+                    #expect(request.value(forHTTPHeaderField: "Origin") == "cubby-mobile://")
+                    return (
+                        200,
+                        [
+                            "set-auth-token": "signed-development-session",
+                            "Set-Cookie": "better-auth.session_data=development-cache; Path=/; HttpOnly",
+                        ],
+                        Data(#"{"token":"raw-development-session"}"#.utf8)
+                    )
+                }
+            }
+            let (flow, credentials) = try makeFlow()
+            #expect(try await flow.signInForDevelopment() == .bearer("signed-development-session"))
+            #expect(await credentials.current() == .bearer("signed-development-session"))
+            #expect(
+                await credentials.currentState()?.sessionDataCookies == [
+                    "better-auth.session_data": "development-cache"
+                ])
+        }
+
+        @Test(arguments: [
+            "https://auth.example.test", "http://localhost.example.test:3000",
+            "http://localhost@auth.example.test:3000", "http://localhost:3000/remote",
+        ])
+        func developmentSignInRejectsNonLoopbackServersBeforeAnyRequest(server: String) async throws {
+            defer { resetHandlerAfterTest() }
+            AuthStubURLProtocol.handler.withLock { handler in
+                handler = { _ in
+                    Issue.record("Development sign-in must reject this URL before sending a request")
+                    return (200, ["set-auth-token": "unexpected"], Data("{}".utf8))
+                }
+            }
+            let (_, credentials) = try makeFlow()
+            let flow = AuthFlow(
+                baseURL: try #require(URL(string: server)), credentials: credentials,
+                session: AuthStubURLProtocol.session())
+            await #expect(throws: AuthError.developmentServerRequired) {
+                _ = try await flow.signInForDevelopment()
+            }
+            #expect(await credentials.current() == nil)
+        }
+
+        @Test func developmentSignInRejectsAResponseFromOutsideTheLoopbackOrigin() async throws {
+            defer { resetHandlerAfterTest() }
+            AuthStubURLProtocol.responseURL.withLock {
+                $0 = URL(string: "https://auth.example.test/__dev/login?native=true")
+            }
+            AuthStubURLProtocol.handler.withLock { handler in
+                handler = { _ in
+                    (200, ["set-auth-token": "untrusted-development-session"], Data("{}".utf8))
+                }
+            }
+            let (flow, credentials) = try makeFlow()
+            await #expect(throws: AuthError.developmentServerRequired) {
+                _ = try await flow.signInForDevelopment()
+            }
+            #expect(await credentials.current() == nil)
+        }
+    #endif
 
     private func googleCallback(identifier: String, state: String) throws -> URL {
         let payload = try JSONSerialization.data(withJSONObject: [

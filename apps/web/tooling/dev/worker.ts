@@ -196,6 +196,11 @@ export default {
           `Development sign-in failed: ${signIn.status} ${await signIn.text()}`,
           { status: 502 },
         );
+      if (url.searchParams.get("native") === "true") {
+        const headers = new Headers(signIn.headers);
+        headers.set("Cache-Control", "no-store");
+        return new Response(signIn.body, { status: signIn.status, headers });
+      }
       const headers = new Headers({
         Location: destination.pathname + destination.search + destination.hash,
         "Cache-Control": "no-store",

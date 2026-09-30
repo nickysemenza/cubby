@@ -252,6 +252,8 @@ function productConfig(
 }
 
 const manifestConfigs = {
+  ledgerTransfer: manifestConfig("ledgerTransfer"),
+  spendingCategory: manifestConfig("spendingCategory"),
   ingredient: manifestConfig("ingredient", "dialog"),
   ledgerParty: manifestConfig("ledgerParty"),
   recipe: manifestConfig("recipe"),

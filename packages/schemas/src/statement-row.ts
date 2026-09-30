@@ -53,13 +53,18 @@ export const statementCsvPreviewOut = z.object({
 
 export const statementCsvCommitInput = statementCsvFileInput.extend({
   selected: z.array(
-    z.object({ key: z.string(), kind: financialTransactionKind }),
+    z.object({
+      key: z.string(),
+      kind: financialTransactionKind.optional(),
+      transactionId: financialTransactionShortcode.optional(),
+    }),
   ),
 });
 export type StatementCsvCommitInput = z.infer<typeof statementCsvCommitInput>;
 
 export const statementCsvCommitOut = z.object({
   transactions: z.number().int(),
+  attached: z.number().int(),
   evidence: z.number().int(),
   alreadyPresent: z.number().int(),
 });
@@ -126,11 +131,14 @@ export const statementImportOut = z.object({
 export type StatementImportOut = z.infer<typeof statementImportOut>;
 
 export const statementRowOut = z.object({
-  // A statement row's public identity is (source, externalId) — the content
-  // hash — not its uuid primary key, which stays inside the repo layer.
+  // Public identity is (source, externalId). v2 names a file occurrence; v1
+  // references remain valid for historical evidence. UUIDs stay internal.
   source: z.string(),
   externalId: z.string(),
   importFingerprint: z.string(),
+  rowPosition: z.number().int().positive().nullable().default(null),
+  providerTransactionId: z.string().nullable().default(null),
+  legacyExternalId: z.string().nullable().default(null),
 
   accountDescriptor: z.string(),
   statementDate: plainDate,
@@ -209,24 +217,25 @@ export type StatementImportInput = z.infer<typeof statementImportInput>;
  * with the one `sourceRefs` matching depends on.
  */
 export const statementRowInput = z.strictObject({
+  rowPosition: z.number().int().positive().optional(),
+  providerTransactionId: z.string().min(1).nullable().optional(),
   accountDescriptor: z.string().min(1),
   statementDate: plainDate,
   /**
-   * The charge as the export stated it, normalized to CHARGES-NEGATIVE.
+   * The provider amount, normalized to CHARGES-NEGATIVE. Zero-value occurrences
+   * are retained as evidence and never become FinancialTransactions.
    *
    * Providers disagree — Monarch signs charges negative, Copilot signs them
    * positive, Mint leaves them unsigned with the sign in a separate column, and
    * Apple Card signs them positive — so the client must normalize before
-   * submitting. This is load-bearing rather than cosmetic: the row's identity
+   * submitting. This is load-bearing rather than cosmetic: the legacy identity
    * hash is computed over this value, so submitting an un-normalized export
    * does not merely flip a sign, it mints a SECOND identity for a charge
    * already recorded and the row can never match.
    */
-  providerAmount: z.number().refine((value) => value !== 0, {
-    message: "providerAmount must be non-zero",
-  }),
+  providerAmount: z.number().finite(),
   merchant: z.string().nullable().default(null),
-  rawDescription: z.string().min(1),
+  rawDescription: z.string(),
   sourceCategory: z.string().nullable().default(null),
   providerStatus: statementRowProviderStatus.nullable().default(null),
   providerNotes: z.string().nullable().default(null),
@@ -235,7 +244,16 @@ export type StatementRowInput = z.infer<typeof statementRowInput>;
 
 export const recordStatementRowsInput = z.strictObject({
   import: statementImportInput,
-  rows: z.array(statementRowInput).min(1).max(STATEMENT_ROW_RECORD_MAX_ROWS),
+  rows: z
+    .array(statementRowInput)
+    .min(1)
+    .max(STATEMENT_ROW_RECORD_MAX_ROWS)
+    .refine((rows) => {
+      const positions = rows.flatMap((row) =>
+        row.rowPosition === undefined ? [] : [row.rowPosition],
+      );
+      return new Set(positions).size === positions.length;
+    }, "Physical row positions must be unique within a batch"),
   /**
    * Derive every identity and report what a real call would do, then write
    * nothing — no batch, no rows.
@@ -258,11 +276,8 @@ export const recordStatementRowsOut = z.object({
   alreadyInThisBatch: z.number().int(),
   alreadyInAnotherBatch: z.number().int(),
   /**
-   * Present more than once inside this payload. Two provider rows that hash
-   * identically are indistinguishable, so only the first can ever be stored —
-   * `financial-statement-preview` calls the same state
-   * `indistinguishable_duplicate`. A real same-amount-same-day pair (two $4.50
-   * coffees) lands here and needs a distinguishing `rawDescription`.
+   * Repeated identities in a legacy payload with no physical row positions.
+   * CSV occurrences use v2 identities and preserve identical purchases.
    */
   indistinguishableDuplicates: z.number().int(),
   rowsOmitted: z.number().int().nullable(),

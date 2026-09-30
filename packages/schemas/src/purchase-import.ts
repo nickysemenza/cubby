@@ -9,6 +9,7 @@ import { runPurpose, runStatus, runTrigger } from "./run-fields";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import {
   imageShortcode,
+  expenseShortcode,
   productShortcode,
   projectShortcode,
   runEntityId,
@@ -375,6 +376,42 @@ export type RunFindingKind = z.infer<typeof runFindingKind>;
 
 export const runFindingStatus = z.enum(["open", "applied", "dismissed"]);
 
+export const replacementLineIdentity = z.object({
+  productId: z.uuid().nullable(),
+  promote: z.boolean(),
+  variantDoubt: z.boolean(),
+  unresolvedReason: z.string().nullable(),
+  probability: z.number(),
+  lineKind: expenseLineKindSchema,
+  kitKind: z.enum(["kit_with_components", "single", "n_pack"]),
+  reversalKind: z
+    .enum(["return", "concession", "cancellation", "replacement"])
+    .nullable(),
+});
+
+export const replacementLineAttribution = z.object({
+  lineIndex: z.number().int().nonnegative(),
+  role: z.enum(["beneficiary", "funder"]),
+  partyId: z.uuid().nullable(),
+  partyCode: z.string(),
+  amount: money,
+  weight: z.number().int().positive().safe(),
+});
+
+export const aggregateReplacementSnapshot = z.object({
+  fingerprint: z.string(),
+  expenseCode: expenseShortcode,
+  title: z.string(),
+  amount: money,
+  notes: z.string().nullable(),
+  date: z.string().nullable(),
+  projectName: z.string().nullable(),
+  categoryName: z.string().nullable(),
+  costType: z.string(),
+  trade: z.string().nullable(),
+  bookingTransactionCode: z.string().nullable(),
+});
+
 export const proposedImportFix = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("replace_aggregate_line"),
@@ -383,6 +420,11 @@ export const proposedImportFix = z.discriminatedUnion("kind", [
     // structured outputs reject array bounds. `applyFix` refuses an empty
     // roster instead.
     lines: z.array(extractedPurchaseLine),
+    // Auditor suggestions cannot authorize replacing a live ledger row. The
+    // server adds the review snapshot and cent-preserving attribution preview.
+    reviewSnapshot: aggregateReplacementSnapshot.optional(),
+    reviewedLineIdentities: z.array(replacementLineIdentity).optional(),
+    reviewedLineAttributions: z.array(replacementLineAttribution).optional(),
   }),
   z.object({
     kind: z.literal("relink_product"),
@@ -719,6 +761,7 @@ export const runScope = z.object({
 export type RunScope = z.infer<typeof runScope>;
 
 export const importWriterInput = z.object({
+  targetPurchaseId: z.uuid().nullable().optional(),
   defaultTrade: tradeSchema.optional(),
   defaultProjectId: z.uuid().optional(),
   runId: z.uuid(),
@@ -762,6 +805,7 @@ export type ImportWriterOutput = z.infer<typeof importWriterOutput>;
 
 const preparedImportOrderInput = z
   .object({
+    targetPurchaseId: purchaseShortcode.nullable().optional(),
     stableOrderId: stableImportItemId,
     itemOperationId: importItemOperationId,
     source: importSourceIdentity,
@@ -835,6 +879,7 @@ export const preparePurchaseImportOut = z.object({
   status: z.literal("running"),
   orders: z.array(
     z.object({
+      targetPurchaseId: purchaseShortcode.nullable().optional(),
       stableOrderId: stableImportItemId,
       itemOperationId: importItemOperationId,
       source: importSourceIdentity,

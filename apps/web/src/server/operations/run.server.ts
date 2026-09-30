@@ -87,6 +87,7 @@ export const runHandlers = implementOperationDomain(runContract, {
       imported: run.imported,
       updated: run.updated,
       skipped: run.skipped,
+      findings: run.findings,
       targetsTotal: run.targets.length,
       targetsCompleted: run.targets.filter(
         (target) => target.state === "completed" || target.state === "skipped",

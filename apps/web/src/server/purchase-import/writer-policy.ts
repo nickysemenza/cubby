@@ -18,7 +18,7 @@ export type ExistingExpenseSnapshot = {
 export type LineWriteDecision =
   | { kind: "insert"; lines: ExtractedPurchaseLine[] }
   | {
-      kind: "replace_aggregate";
+      kind: "review_aggregate";
       aggregate: ExistingExpenseSnapshot;
       lines: ExtractedPurchaseLine[];
     }
@@ -52,7 +52,7 @@ export const decideLineWrite = (
     aggregate.amount !== null &&
     cents(aggregate.amount) === linesTotal(extracted)
   ) {
-    return { kind: "replace_aggregate", aggregate, lines: extracted };
+    return { kind: "review_aggregate", aggregate, lines: extracted };
   }
 
   return { kind: "conflict", reason: "duplicate_lines" };

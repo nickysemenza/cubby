@@ -159,6 +159,7 @@ describe("computeAffected", () => {
     expect(ranEverything).toBe(false);
     expect(specs).toEqual([
       "entity-editor-lifecycle.spec.ts",
+      "import-order-convergence.spec.ts",
       "vendor-order-mail-review.spec.ts",
     ]);
   });

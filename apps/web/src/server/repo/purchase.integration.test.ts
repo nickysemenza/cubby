@@ -316,7 +316,7 @@ describe("purchase repository — findOrCreatePurchase", () => {
 describe("purchase repository — splitExpense", () => {
   const ctx = withTestDb();
 
-  it("files the parts against the same charge, soft-deletes the original, and seeds statedTotal", async () => {
+  it("files the parts against the same charge without inventing a vendor stated total", async () => {
     const { output: project } = await createProject(
       ctx.db,
       projectCreateInput.parse({ name: "split project" }),
@@ -403,9 +403,9 @@ describe("purchase repository — splitExpense", () => {
     );
 
     const charge = await getPurchaseByID(ctx.db, chargeUuid);
-    expect(charge.statedTotal).toBe(100);
+    expect(charge.statedTotal).toBeNull();
     expect(charge.expenseTotal).toBe(100);
-    expect(reconcilePurchase(charge)).toBe("match");
+    expect(reconcilePurchase(charge)).toBe("unknown");
   });
 
   it("refuses a split that would change the source amount", async () => {

@@ -8,6 +8,8 @@ import {
 } from "@playwright/test";
 import { z } from "zod";
 
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
+
 import {
   NAVIGATION_ANNOTATION,
   NAVIGATION_PHASES_ANNOTATION,
@@ -43,7 +45,10 @@ export async function readExpense<Schema extends z.ZodType>(
   schema: Schema,
 ): Promise<z.output<Schema>> {
   const response = await page.request.get(`/api/v1/expenses/${id}`);
-  expect(response.ok(), `GET /api/v1/expenses/${id}`).toBe(true);
+  expect(
+    response.ok(),
+    `GET /api/v1/expenses/${id}: ${response.status()}${response.ok() ? "" : ` ${scrubErrorMessage(await response.text())}`}`,
+  ).toBe(true);
   return schema.parse(await response.json());
 }
 
@@ -117,7 +122,14 @@ export async function gotoAuthenticatedPage(
     await page.goto(path, { waitUntil: "domcontentloaded" });
     await waitForAppHydration(page);
   });
-  if (ready) await expect(ready).toBeVisible({ timeout: 15000 });
+  if (ready)
+    await expect(ready)
+      .toBeVisible({ timeout: 15000 })
+      .catch(async (error: Error) => {
+        throw new Error(
+          `${error.message}\n${JSON.stringify({ path: new URL(page.url()).pathname, headings: await page.getByRole("heading").allTextContents() })}`,
+        );
+      });
 }
 
 async function timedNavigation(page: Page, step: () => Promise<void>) {
@@ -227,6 +239,7 @@ export async function selectComboboxItem(
   page: Page,
   combobox: Locator,
   itemName: string,
+  typedSearch?: { query: string; code: string },
 ) {
   await expect(combobox).toBeVisible({ timeout: 10000 });
 
@@ -236,19 +249,63 @@ export async function selectComboboxItem(
     await expect(combobox).toHaveAttribute("aria-expanded", "true");
   }).toPass({ timeout: 5000 });
 
-  await combobox.fill(itemName);
+  const typedResult = typedSearch
+    ? page.waitForResponse((response) => {
+        if (!response.url().includes("/api/browser/dispatch")) return false;
+        const request = response.request().postDataJSON();
+        return (
+          request.json?.operation === "search.find" &&
+          request.json?.input?.query === typedSearch.query
+        );
+      })
+    : null;
+  await combobox.fill(typedSearch?.query ?? itemName);
+  let optionLabel = itemName;
+  if (typedResult) {
+    const response = await typedResult;
+    expect(response.ok(), await response.text()).toBe(true);
+    expect(await response.json()).toMatchObject({
+      json: {
+        ok: true,
+        data: expect.arrayContaining([
+          expect.objectContaining({ id: typedSearch?.code }),
+        ]),
+      },
+    });
+    const hits = z
+      .object({
+        json: z.object({
+          data: z.array(z.object({ id: z.string(), title: z.string() })),
+        }),
+      })
+      .parse(await response.json()).json.data;
+    const matched = hits.find((hit) => hit.id === typedSearch?.code);
+    if (!matched)
+      throw new Error(
+        "Reviewed purchase was absent from the typed search response",
+      );
+    optionLabel = matched.title;
+  }
 
-  // Wait for and click the option whose label is exactly itemName. An option's
-  // accessible name is its label plus a description and shortcode, so match
+  // Typed search labels come from SearchDocument and can format dates
+  // differently from blank-list labels. Bind the label to the reviewed code
+  // in the actual response; codes remain searchable metadata in this picker.
+  // An option's accessible name includes its label and description, so match
   // the label text exactly (excluding another record whose name merely starts
   // with itemName) and anchor the name to its start (excluding the "Create new
   // <label>: <itemName>" item the popup shows while the debounced search is
   // loading — clicking it opens the quick-create dialog and wedges the form
   // behind aria-hidden).
   const option = page
-    .getByRole("option", { name: new RegExp(`^${escapeRegExp(itemName)}`) })
-    .filter({ has: page.getByText(itemName, { exact: true }) });
-  await expect(option).toBeVisible({ timeout: 10000 });
+    .getByRole("option", { name: new RegExp(`^${escapeRegExp(optionLabel)}`) })
+    .filter({ has: page.getByText(optionLabel, { exact: true }) });
+  await expect(option)
+    .toBeVisible({ timeout: 10000 })
+    .catch(async (error: Error) => {
+      throw new Error(
+        `${error.message}\n${JSON.stringify({ path: new URL(page.url()).pathname, query: await combobox.inputValue(), options: await page.getByRole("option").allTextContents() })}`,
+      );
+    });
 
   // Click, then verify the selection actually registered (popup closed). The
   // option's onClick is a React handler — a click can silently no-op if the

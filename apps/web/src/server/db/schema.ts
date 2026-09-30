@@ -1325,6 +1325,9 @@ export const importPreparedOrder = pgTable(
     runId: uuid("runId")
       .notNull()
       .references(() => run.id),
+    targetPurchaseId: uuid("targetPurchaseId")
+      .$type<PurchaseId>()
+      .references(() => purchase.id),
     prepareOperationId: text("prepareOperationId").notNull(),
     itemOperationId: text("itemOperationId").notNull(),
     stableOrderId: text("stableOrderId").notNull(),
@@ -1825,6 +1828,9 @@ export const statementRow = pgTable(
       .notNull()
       .references(() => externalSource.slug, { onUpdate: "cascade" }),
     externalId: text("externalId").notNull(),
+    rowPosition: integer("rowPosition"),
+    providerTransactionId: text("providerTransactionId"),
+    legacyExternalId: text("legacyExternalId"),
 
     accountDescriptor: text("accountDescriptor").notNull(),
     statementDate: date("statementDate", { mode: "string" }).notNull(),
@@ -1866,6 +1872,13 @@ export const statementRow = pgTable(
     uniqueIndex("StatementRow_source_externalId_key")
       .on(table.source, table.externalId)
       .where(sql`${table.deletedAt} IS NULL`),
+    uniqueIndex("StatementRow_batch_position_key")
+      .on(table.batchId, table.rowPosition)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("StatementRow_source_providerTransactionId_idx").on(
+      table.source,
+      table.providerTransactionId,
+    ),
     index("StatementRow_batchId_idx").on(table.batchId),
     index("StatementRow_statementDate_idx").on(table.statementDate),
     index("StatementRow_worklist_idx")
@@ -1894,16 +1907,20 @@ export const statementRow = pgTable(
       sql`${table.rawDescription} gin_trgm_ops`,
     ),
     check(
+      "StatementRow_position_check",
+      sql`${table.rowPosition} IS NULL OR ${table.rowPosition} > 0`,
+    ),
+    check(
       "StatementRow_source_slug_check",
       sql`${table.source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND ${table.source} = lower(trim(${table.source}))`,
     ),
     check(
       "StatementRow_amount_whole_cent_check",
-      sql`${table.amount} <> 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
+      sql`abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
     ),
     check(
       "StatementRow_providerAmount_whole_cent_check",
-      sql`${table.providerAmount} <> 0 AND abs(${table.providerAmount} * 100 - round(${table.providerAmount} * 100)) < 0.0000001`,
+      sql`abs(${table.providerAmount} * 100 - round(${table.providerAmount} * 100)) < 0.0000001`,
     ),
     check(
       "StatementRow_providerStatus_check",
@@ -1927,7 +1944,7 @@ export const statementRow = pgTable(
     ),
     check(
       "StatementRow_externalId_format_check",
-      sql`${table.externalId} ~ '^v1:[0-9a-f]{64}$'`,
+      sql`${table.externalId} ~ '^v[12]:[0-9a-f]{64}$'`,
     ),
   ],
 );

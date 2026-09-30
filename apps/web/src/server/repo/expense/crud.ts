@@ -15,6 +15,7 @@ import type {
   ProjectShortcode,
   PurchaseId,
   PurchaseShortcode,
+  SpendingCategoryId,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
@@ -112,6 +113,7 @@ const assertExpenseDate = (cost: number | null, date: string | null) => {
 
 type ResolvedExpenseUpdate = Omit<
   ExpenseUpdateData,
+  | "spendingCategoryId"
   | "vendor"
   | "orderId"
   | "projectId"
@@ -121,6 +123,7 @@ type ResolvedExpenseUpdate = Omit<
   | "funders"
   | "sourceClaims"
 > & {
+  spendingCategoryId?: SpendingCategoryId | null;
   projectId?: ProjectId | null;
   productId?: ProductId | null;
   purchaseId?: PurchaseId | null;
@@ -220,6 +223,8 @@ const expenseCrud = createEntityCrud({
   },
   toUpdate: (data: ResolvedExpenseUpdate) =>
     buildPartialUpdateValues({
+      spendingCategoryId: data.spendingCategoryId,
+      economicRole: data.economicRole,
       name: data.name,
       cost: data.cost,
       date: data.date,
@@ -621,7 +626,19 @@ export const updateExpense = async (
           : data.productQuantity,
       cost: state.nextCost,
     });
-    const update: ResolvedExpenseUpdate = { ...restColumns };
+    const update: ResolvedExpenseUpdate = {
+      ...restColumns,
+      spendingCategoryId:
+        data.spendingCategoryId === undefined
+          ? undefined
+          : data.spendingCategoryId === null
+            ? null
+            : await resolveOrThrow(
+                tx,
+                "spendingCategory",
+                data.spendingCategoryId,
+              ),
+    };
     if (resolvedProductId === null && data.productQuantity === undefined) {
       update.productQuantity = null;
     }
@@ -924,6 +941,10 @@ export const createExpense = async (
     );
 
     const created = await insertWithShortcode(tx, "expense", {
+      spendingCategoryId: data.spendingCategoryId
+        ? await resolveOrThrow(tx, "spendingCategory", data.spendingCategoryId)
+        : null,
+      economicRole: data.economicRole,
       name: data.name,
       cost: data.cost,
       date: data.date,

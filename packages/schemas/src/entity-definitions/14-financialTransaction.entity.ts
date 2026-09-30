@@ -1,3 +1,5 @@
+import { financialTransactionCoverage } from "../purchase-evidence-policy";
+import { spendingCategoryShortcode } from "../identifier-fields";
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
@@ -56,7 +58,15 @@ export default defineEntity({
           "allocations",
           "sourceRefs",
         ],
-        derived: ["itemization", "vendorInference"],
+        derived: [
+          "bookingCoverage",
+          "documentCoverage",
+          "itemizationCoverage",
+          "productsCoverage",
+          "coverage",
+          "itemization",
+          "vendorInference",
+        ],
         media: ["displayImages"],
         quality: ["dataQuality"],
       },
@@ -85,6 +95,164 @@ export default defineEntity({
   },
   model: {
     fields: [
+      { key: "bookingDecisionFingerprint", kind: "text", nullable: true },
+      { key: "bookingExpenseFingerprint", kind: "text", nullable: true },
+      { key: "bookingCorrectionReceipt", kind: "json", nullable: true },
+      {
+        key: "bookingCoverage",
+        kind: "enum",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Source evidence and booked expenses" }],
+        },
+        control: {
+          kind: "select",
+          options: [
+            { value: "missing", label: "Missing" },
+            { value: "partial", label: "Partial" },
+            { value: "recorded", label: "Recorded" },
+            { value: "not_applicable", label: "Not applicable" },
+            { value: "unclassified", label: "Unclassified" },
+          ],
+        },
+        display: { list: true, detail: true, width: "sm" },
+        validation: {
+          read: financialTransactionCoverage.shape.booking,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "documentCoverage",
+        kind: "enum",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Source evidence and booked expenses" }],
+        },
+        control: {
+          kind: "select",
+          options: [
+            { value: "missing", label: "Missing" },
+            { value: "partial", label: "Partial" },
+            { value: "present", label: "Present" },
+            { value: "not_expected", label: "Not expected" },
+            { value: "unknown", label: "Unclassified" },
+          ],
+        },
+        display: { list: true, detail: true, width: "sm" },
+        validation: {
+          read: financialTransactionCoverage.shape.document,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "itemizationCoverage",
+        kind: "enum",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Source evidence and booked expenses" }],
+        },
+        control: {
+          kind: "select",
+          options: [
+            { value: "missing", label: "Missing" },
+            { value: "partial", label: "Partial" },
+            { value: "present", label: "Present" },
+            { value: "not_expected", label: "Not expected" },
+            { value: "unknown", label: "Unclassified" },
+          ],
+        },
+        display: { list: true, detail: true, width: "sm" },
+        validation: {
+          read: financialTransactionCoverage.shape.itemization,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "productsCoverage",
+        kind: "enum",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Source evidence and booked expenses" }],
+        },
+        control: {
+          kind: "select",
+          options: [
+            { value: "missing", label: "Missing" },
+            { value: "partial", label: "Partial" },
+            { value: "present", label: "Present" },
+            { value: "not_expected", label: "Not expected" },
+            { value: "unknown", label: "Unclassified" },
+          ],
+        },
+        display: { list: true, detail: true, width: "sm" },
+        validation: {
+          read: financialTransactionCoverage.shape.products,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "coverage",
+        kind: "json",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Source evidence and booked expenses" }],
+        },
+        explanation: {
+          ruleId: "financialTransaction.coverage",
+          description:
+            "Booking, receipt, itemization, and Product coverage are evaluated independently against household expectations.",
+        },
+        validation: {
+          read: financialTransactionCoverage,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "spendingCategoryId",
+        kind: "identifier",
+        nullable: true,
+        reference: { entity: "spendingCategory" },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { list: true, detail: true },
+        validation: {
+          read: spendingCategoryShortcode.nullable().default(null),
+          create: spendingCategoryShortcode.nullable().default(null),
+          update: spendingCategoryShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "evidenceExpectation",
+        kind: "enum",
+        nullable: true,
+        control: {
+          kind: "select",
+          options: [
+            { value: "unknown", label: "Unclassified" },
+            { value: "required", label: "Expected" },
+            { value: "not_expected", label: "Not expected" },
+          ],
+        },
+        display: { list: true, detail: true },
+        validation: {
+          read: z
+            .enum(["unknown", "required", "not_expected"])
+            .nullable()
+            .default(null),
+          create: z
+            .enum(["unknown", "required", "not_expected"])
+            .nullable()
+            .default(null),
+          update: z
+            .enum(["unknown", "required", "not_expected"])
+            .nullable()
+            .optional(),
+        },
+      },
       {
         key: "accountId",
         kind: "identifier",
@@ -484,6 +652,11 @@ export default defineEntity({
       },
     ],
     storage: [
+      "bookingDecisionFingerprint",
+      "bookingExpenseFingerprint",
+      "bookingCorrectionReceipt",
+      { key: "spendingCategoryId", reference: "spendingCategory" },
+      { key: "evidenceExpectation", specialized: "enum:evidenceExpectation" },
       {
         key: "id",
         specialized: "primary-key:FinancialTransactionId",
@@ -505,6 +678,8 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "spendingCategoryId",
+      "evidenceExpectation",
       "accountId",
       "purchaseId",
       "kind",
@@ -520,6 +695,8 @@ export default defineEntity({
       "allocations",
     ],
     update: [
+      "spendingCategoryId",
+      "evidenceExpectation",
       "accountId",
       "purchaseId",
       "kind",
@@ -536,6 +713,8 @@ export default defineEntity({
     ],
     bulk: [],
     audit: [
+      "spendingCategoryId",
+      "evidenceExpectation",
       "accountId",
       "kind",
       "status",
@@ -577,6 +756,8 @@ export default defineEntity({
           "notes",
         ],
         full: [
+          "spendingCategoryId",
+          "evidenceExpectation",
           "accountId",
           "purchaseId",
           "kind",
@@ -604,6 +785,13 @@ export default defineEntity({
       update: ["full", "settlement"],
     },
     output: [
+      "bookingCoverage",
+      "documentCoverage",
+      "itemizationCoverage",
+      "productsCoverage",
+      "coverage",
+      "spendingCategoryId",
+      "evidenceExpectation",
       "id",
       "accountId",
       "purchaseId",
@@ -940,6 +1128,29 @@ export default defineEntity({
   },
   relations: [
     {
+      key: "spendingCategory",
+      label: "Spending category",
+      target: "spendingCategory",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          {
+            edge: "FinancialTransaction.spendingCategoryId",
+            direction: "outgoing",
+          },
+        ],
+      },
+      inverse: {
+        steps: [
+          {
+            edge: "FinancialTransaction.spendingCategoryId",
+            direction: "incoming",
+          },
+        ],
+      },
+    },
+    {
       key: "account",
       label: "Financial account",
       target: "financialAccount",
@@ -1172,7 +1383,16 @@ export default defineEntity({
     operationOwners: { delete: "kernel", merge: null },
     mcp: ["get", "list", "search", "create", "update", "delete"],
     dataQuality: {
+      exceptions: true,
       checks: [
+        {
+          id: "financial_transaction_classification",
+          facet: "identity",
+          weight: 1,
+          label: "Transaction classification",
+          message:
+            "Review whether this transaction is spending, income, or a transfer.",
+        },
         {
           id: "financial_transaction_allocation",
           facet: "ledger",
@@ -1186,6 +1406,49 @@ export default defineEntity({
           weight: 1,
           label: "Merchant",
           message: "No merchant is recorded for this transaction.",
+        },
+        {
+          id: "financial_transaction_spending_category",
+          facet: "identity",
+          weight: 1,
+          label: "Spending category",
+          message:
+            "This spending transaction has no reviewed spending category.",
+        },
+        {
+          id: "financial_transaction_evidence_expectation",
+          facet: "paperwork",
+          weight: 1,
+          label: "Receipt expectation",
+          message: "Whether this transaction needs a receipt is unclassified.",
+        },
+        {
+          id: "financial_transaction_booking",
+          facet: "ledger",
+          weight: 2,
+          label: "Expense booking",
+          message:
+            "This spending transaction has missing or unpriced Expense booking.",
+        },
+        {
+          id: "financial_transaction_document",
+          facet: "paperwork",
+          label: "Expected receipt",
+          message:
+            "An expected receipt is missing from this transaction's linked Purchases.",
+        },
+        {
+          id: "financial_transaction_itemization",
+          facet: "ledger",
+          label: "Receipt itemization",
+          message:
+            "Expected receipt lines have not been reviewed for this transaction.",
+        },
+        {
+          id: "financial_transaction_products",
+          facet: "identity",
+          label: "Goods identity",
+          message: "Purchased goods have unresolved Product identities.",
         },
       ],
     },

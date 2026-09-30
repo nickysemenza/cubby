@@ -188,6 +188,7 @@ export const mealShortcode = SHORTCODE_SCHEMA.meal;
 export const plantingShortcode = SHORTCODE_SCHEMA.planting;
 export const gardenEntryShortcode = SHORTCODE_SCHEMA.gardenEntry;
 export const productCategoryShortcode = SHORTCODE_SCHEMA.productCategory;
+export const spendingCategoryShortcode = SHORTCODE_SCHEMA.spendingCategory;
 export const productShortcode = SHORTCODE_SCHEMA.product;
 export const projectShortcode = SHORTCODE_SCHEMA.project;
 export const purchaseShortcode = SHORTCODE_SCHEMA.purchase;
@@ -288,6 +289,7 @@ const shortcodeParser =
  * literal-keyed list; `satisfies` fails to compile when an entity is missing.
  */
 const PARSE_CANONICAL_SHORTCODE = {
+  spendingCategory: shortcodeParser("spendingCategory"),
   cookbook: shortcodeParser("cookbook"),
   expense: shortcodeParser("expense"),
   financialAccount: shortcodeParser("financialAccount"),
@@ -377,3 +379,5 @@ export function extractShortcodeFromScan(
 export function getShortcodeUrl(shortcode: string): string {
   return `https://cubby.nickysemenza.com/${shortcode}`;
 }
+
+export type SpendingCategoryShortcode = ShortcodeFor<"spendingCategory">;

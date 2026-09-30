@@ -287,6 +287,7 @@ const vendorColumns = {
   name: vendor.name,
   website: vendor.website,
   orderUrlTemplate: vendor.orderUrlTemplate,
+  evidenceExpectation: vendor.evidenceExpectation,
   orderEvidence: vendor.orderEvidence,
   orderEmailSenders: vendor.orderEmailSenders,
   browserDomains: vendor.browserDomains,
@@ -336,6 +337,7 @@ type VendorRow = {
   name: string;
   website: string | null;
   orderUrlTemplate: string | null;
+  evidenceExpectation: VendorOut["evidenceExpectation"];
   orderEvidence: string | null;
   orderEmailSenders: string[];
   browserDomains: string[];
@@ -420,6 +422,7 @@ const dbVendorToAPI = (
   name: row.name,
   website: row.website,
   orderUrlTemplate: row.orderUrlTemplate,
+  evidenceExpectation: row.evidenceExpectation,
   orderEvidence: vendorOrderEvidence.nullable().parse(row.orderEvidence),
   orderEmailSenders: row.orderEmailSenders,
   browserDomains: row.browserDomains,
@@ -664,6 +667,7 @@ export const createVendor = async (
       name: data.name.trim(),
       website: data.website,
       orderUrlTemplate: data.orderUrlTemplate,
+      evidenceExpectation: data.evidenceExpectation,
       orderEvidence: data.orderEvidence,
       orderEmailSenders: data.orderEmailSenders,
       browserDomains: data.browserDomains,

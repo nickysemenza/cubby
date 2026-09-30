@@ -108,6 +108,13 @@ function fixtureUserId(page: Page): Promise<FixtureUserId> {
   return pending;
 }
 
+/** Authenticated binding for production import writers in convergence scenarios.
+ * Economic records are created by those writers, never fixture inserts. */
+export async function createEvidenceHarnessContext(page: Page) {
+  const userId = await fixtureUserId(page);
+  return { db: getFixtureDb(), actor: buildActorContext(userId, "web") };
+}
+
 /** Parallel fixture writes; bounded so a large seed does not queue on the pool. */
 const FIXTURE_CONCURRENCY = 4;
 

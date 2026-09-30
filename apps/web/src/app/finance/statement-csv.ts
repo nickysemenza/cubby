@@ -162,17 +162,50 @@ function mappedValue(row: Record<string, string>, column: string): string {
   return column ? (row[column] ?? "").trim() : "";
 }
 
+// csv-parse includes blank lines in raw; strip those before counting the
+// physical starting line so multiline cells do not shift later identities.
+function positionedRecords(text: string) {
+  return z
+    .array(
+      z.object({
+        record: z.record(z.string(), z.string()),
+        raw: z.string(),
+        info: z.object({ lines: z.number().int() }),
+      }),
+    )
+    .nonempty()
+    .parse(
+      parse(text, {
+        columns: true,
+        bom: true,
+        skip_empty_lines: true,
+        info: true,
+        raw: true,
+      }),
+    )
+    .map(({ record, raw, info }) => {
+      const content = raw.replace(/^(?:\r\n|\n|\r)+/, "");
+      const breaks = content.match(/\r\n|\n|\r/g)?.length ?? 0;
+      const terminated = /(?:\r\n|\n|\r)$/.test(content);
+      return {
+        record,
+        rowPosition: info.lines - breaks + (terminated ? 1 : 0),
+      };
+    });
+}
+
+function providerId(source: string, record: Record<string, string>) {
+  return source === "monarch" ? record.Id?.trim() || null : null;
+}
+
 export function parseMappedStatementCsv(
   text: string,
   label: string,
   fingerprint: string,
   mapping: CsvColumnMapping,
 ): ParsedStatementCsv {
-  const records = z
-    .array(z.record(z.string(), z.string()))
-    .nonempty()
-    .parse(parse(text, { columns: true, bom: true, skip_empty_lines: true }));
-  const headers = Object.keys(records[0]!);
+  const records = positionedRecords(text);
+  const headers = Object.keys(records[0]!.record);
   for (const column of [
     mapping.date,
     mapping.amount,
@@ -202,7 +235,7 @@ export function parseMappedStatementCsv(
     throw new Error(
       "Choose a direction column and its charge and credit values",
     );
-  const normalized = records.map((record, index) => {
+  const normalized = records.map(({ record, rowPosition }, index) => {
     const account = mapping.accountColumn
       ? mappedValue(record, mapping.accountColumn)
       : mapping.account.trim();
@@ -224,9 +257,9 @@ export function parseMappedStatementCsv(
       providerAmount =
         mapping.sign === "charges-positive" ? -signedAmount : signedAmount;
     }
-    if (providerAmount === 0) return null;
     const rawDescription = mappedValue(record, mapping.description);
-    if (!rawDescription) throw new Error(`Row ${index + 1} has no description`);
+    if (!rawDescription && providerAmount !== 0)
+      throw new Error(`Row ${index + 1} has no description`);
     const merchant = mappedValue(record, mapping.merchant) || null;
     const category = mappedValue(record, mapping.category) || null;
     const notes = mappedValue(record, mapping.notes) || null;
@@ -239,6 +272,10 @@ export function parseMappedStatementCsv(
     return {
       preview: {
         key: String(index + 1),
+        importFingerprint: fingerprint,
+        rowPosition,
+        providerTransactionId: providerId(source, record),
+        providerStatus: pending ? ("pending" as const) : ("posted" as const),
         source,
         account,
         date,
@@ -249,6 +286,8 @@ export function parseMappedStatementCsv(
         notes,
       },
       record: {
+        rowPosition,
+        providerTransactionId: providerId(source, record),
         accountDescriptor: account,
         statementDate: date,
         providerAmount,
@@ -261,17 +300,13 @@ export function parseMappedStatementCsv(
       pending,
     };
   });
-  const nonzero = normalized.filter(
-    (row): row is NonNullable<typeof row> => row !== null,
-  );
-  if (!nonzero.length)
-    throw new Error("This CSV has no nonzero statement rows to save");
+  const nonzero = normalized.filter((row) => row.record.providerAmount !== 0);
   return {
     source,
     label,
     fingerprint,
     rows: nonzero.filter((row) => !row.pending).map((row) => row.preview),
-    recordRows: nonzero.map((row) => row.record),
+    recordRows: normalized.map((row) => row.record),
     pending: nonzero.filter((row) => row.pending).length,
     zeroValueRows: records.length - nonzero.length,
     dateKind: "unknown",
@@ -390,12 +425,9 @@ export function parseStatementCsv(
   label: string,
   fingerprint: string,
 ): ParsedStatementCsv {
-  const records = z
-    .array(z.record(z.string(), z.string()))
-    .nonempty()
-    .parse(parse(text, { columns: true, bom: true, skip_empty_lines: true }));
-  const source = detectSource(Object.keys(records[0]!));
-  const normalized = records.map((record, index) => {
+  const records = positionedRecords(text);
+  const source = detectSource(Object.keys(records[0]!.record));
+  const normalized = records.map(({ record, rowPosition }, index) => {
     const {
       date,
       providerAmount,
@@ -406,12 +438,15 @@ export function parseStatementCsv(
       notes,
       pending,
     } = normalizeKnownRow(source, record, index);
-    if (providerAmount === 0) return null;
-    if (!rawDescription)
+    if (!rawDescription && providerAmount !== 0)
       throw new Error(`Row ${index + 1} has no statement description`);
     return {
       preview: {
         key: String(index + 1),
+        importFingerprint: fingerprint,
+        rowPosition,
+        providerTransactionId: providerId(source, record),
+        providerStatus: pending ? ("pending" as const) : ("posted" as const),
         source,
         account,
         date,
@@ -422,6 +457,8 @@ export function parseStatementCsv(
         notes,
       },
       record: {
+        rowPosition,
+        providerTransactionId: providerId(source, record),
         accountDescriptor: account,
         statementDate: date,
         providerAmount,
@@ -434,17 +471,13 @@ export function parseStatementCsv(
       pending,
     };
   });
-  const nonzero = normalized.filter(
-    (row): row is NonNullable<typeof row> => row !== null,
-  );
-  if (!nonzero.length)
-    throw new Error("This CSV has no nonzero statement rows to save");
+  const nonzero = normalized.filter((row) => row.record.providerAmount !== 0);
   return {
     source,
     label,
     fingerprint,
     rows: nonzero.filter((row) => !row.pending).map((row) => row.preview),
-    recordRows: nonzero.map((row) => row.record),
+    recordRows: normalized.map((row) => row.record),
     pending: nonzero.filter((row) => row.pending).length,
     zeroValueRows: records.length - nonzero.length,
     dateKind:
@@ -493,7 +526,7 @@ export function recordStatementBatch(
 export async function fingerprintStatementCsv(file: File): Promise<string> {
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    await file.arrayBuffer(),
+    new TextEncoder().encode(await file.text()),
   );
   return Array.from(new Uint8Array(digest), (byte) =>
     byte.toString(16).padStart(2, "0"),

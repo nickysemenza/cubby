@@ -53,6 +53,8 @@ enum DetailSlotRegistry {
         case .inventory:
             guard let detail = try? row.decode(InventoryDetail.self) else { return nil }
             return AnyView(InventoryOwnershipControl(detail: detail, onChanged: onChanged))
+        case .financialTransaction:
+            return AnyView(FinancialTransactionEvidenceView(row: row, onChanged: onChanged))
         case .product:
             guard let detail = try? row.decode(ProductDetail.self) else { return nil }
             return AnyView(ProductJourneySummaryView(product: detail))

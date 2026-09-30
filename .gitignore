@@ -134,3 +134,6 @@ artifacts/flue-model-eval/
 artifacts/local-dev-smoke/
 artifacts/local-dev-native/
 artifacts/local-dev-fixtures/
+
+# Isolated macOS import acceptance runs, including failed milestones.
+artifacts/mac-import-e2e/

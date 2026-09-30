@@ -535,6 +535,7 @@ export const runFindingProblemSchema = z.object({
 });
 
 export const resolveRunFindingInput = z.object({
+  reviewedFingerprint: z.string().optional(),
   id: z.uuid(),
   action: z.enum(["apply", "dismiss"]),
 });

@@ -2,7 +2,13 @@ import { z } from "zod";
 import { projectShortcode } from "./identifier-fields";
 
 export const fieldResolutionSourceSchema = z.object({
-  entityKind: z.enum(["project", "task", "purchase", "productCategory"]),
+  entityKind: z.enum([
+    "project",
+    "task",
+    "purchase",
+    "productCategory",
+    "spendingCategory",
+  ]),
   entityId: z.string(),
   name: z.string().nullable(),
 });

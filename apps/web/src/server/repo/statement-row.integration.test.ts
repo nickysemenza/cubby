@@ -73,6 +73,241 @@ const record = (
 describe("statement row ledger", () => {
   const ctx = withTestDb();
 
+  // This exercises the real PostgreSQL identity/ref constraints and shared
+  // web/native CSV writer; a browser cannot expose duplicate ref ownership.
+  it("retains identical and zero CSV occurrences, then reviews date/provider drift without another charge", async () => {
+    await createFinancialAccount(
+      ctx.db,
+      financialAccountCreateInput.parse({
+        name: "Occurrence card",
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        sourceAliases: [
+          {
+            source: "monarch",
+            alias: "Occurrence Visa",
+            externalAccountId: null,
+          },
+          { source: "mint", alias: "Occurrence Visa", externalAccountId: null },
+        ],
+      }),
+      ctx.actor,
+    );
+    const header =
+      "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Id";
+    const file = {
+      fileName: "occurrences.csv",
+      text: `${header}\n2026-08-16,Synthetic Cafe,Food,Occurrence Visa,CAFE,,-4.50,one\n2026-08-16,Synthetic Cafe,Food,Occurrence Visa,CAFE,,-4.50,two\n2026-08-16,Synthetic Cafe,Food,Occurrence Visa,ZERO,,0,zero`,
+    };
+    const preview = await previewStatementCsv(ctx.db, ctx.actor, file);
+    expect(preview.totalRows).toBe(3);
+    expect(preview.preview?.rows.map((row) => row.status)).toEqual([
+      "ready_to_create",
+      "ready_to_create",
+    ]);
+    const committed = await commitStatementCsv(ctx.db, ctx.actor, {
+      ...file,
+      selected: [
+        { key: "1", kind: "purchase" },
+        { key: "2", kind: "purchase" },
+      ],
+    });
+    expect(committed).toMatchObject({ transactions: 2, evidence: 3 });
+    const savedOccurrences = await getDb(ctx.db).execute(sql`
+      SELECT "externalId", "accountId", "updatedAt", xmin::text AS version
+      FROM "StatementRow" ORDER BY "externalId"
+    `);
+    expect(
+      await commitStatementCsv(ctx.db, ctx.actor, {
+        ...file,
+        selected: [
+          { key: "1", kind: "purchase" },
+          { key: "2", kind: "purchase" },
+        ],
+      }),
+    ).toMatchObject({ transactions: 0, evidence: 0 });
+    // Exact-file retry must preserve both observation metadata and the row's
+    // MVCC version; unchanged economic totals alone would miss a hidden UPDATE.
+    expect(
+      (
+        await getDb(ctx.db).execute(sql`
+        SELECT "externalId", "accountId", "updatedAt", xmin::text AS version
+        FROM "StatementRow" ORDER BY "externalId"
+      `)
+      ).rows,
+    ).toEqual(savedOccurrences.rows);
+    const drift = {
+      fileName: "drift.csv",
+      text: `${header}\n2026-08-18,Synthetic Cafe,Food,Occurrence Visa,CAFE,,-4.50,one`,
+    };
+    const driftPreview = await previewStatementCsv(ctx.db, ctx.actor, drift);
+    const candidate = driftPreview.preview?.rows[0];
+    expect(candidate?.status).toBe("possible_existing");
+    expect(candidate?.existingTransactionIds).toHaveLength(1);
+    await expect(
+      commitStatementCsv(ctx.db, ctx.actor, {
+        ...drift,
+        selected: [{ key: "1", kind: "purchase" }],
+      }),
+    ).rejects.toThrow("needs review");
+    const transactionId = candidate?.existingTransactionIds[0];
+    if (!transactionId) throw new Error("Expected stable-provider candidate");
+    expect(
+      await commitStatementCsv(ctx.db, ctx.actor, {
+        ...drift,
+        selected: [{ key: "1", transactionId }],
+      }),
+    ).toMatchObject({ transactions: 0, attached: 1, evidence: 1 });
+    expect(
+      (await previewStatementCsv(ctx.db, ctx.actor, drift)).preview?.rows[0]
+        ?.status,
+    ).toBe("already_recorded");
+    const mint = {
+      fileName: "mint-observation.csv",
+      text: "Date,Description,Original Description,Amount,Transaction Type,Category,Account Name\n2026-08-17,Synthetic Cafe,CAFE,4.50,debit,Food,Occurrence Visa",
+    };
+    const mintPreview = await previewStatementCsv(ctx.db, ctx.actor, mint);
+    expect(mintPreview.preview?.rows[0]?.status).toBe("possible_existing");
+    expect(mintPreview.preview?.rows[0]?.existingTransactionIds).toHaveLength(
+      2,
+    );
+    await expect(
+      commitStatementCsv(ctx.db, ctx.actor, {
+        ...mint,
+        selected: [{ key: "1", kind: "purchase" }],
+      }),
+    ).rejects.toThrow("needs review");
+    expect(
+      await commitStatementCsv(ctx.db, ctx.actor, {
+        ...mint,
+        selected: [{ key: "1", transactionId }],
+      }),
+    ).toMatchObject({ transactions: 0, attached: 1 });
+  });
+
+  it("reviews no-ID pending-to-posted amount drift and preserves the canonical charge", async () => {
+    const { output: account } = await createFinancialAccount(
+      ctx.db,
+      financialAccountCreateInput.parse({
+        name: "Synthetic tip card",
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        sourceAliases: [
+          {
+            source: "copilot",
+            alias: "Synthetic Tip Visa",
+            externalAccountId: null,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const header =
+      "date,name,amount,status,category,type,account,account mask,note";
+    const pending = {
+      fileName: "pending-tip.csv",
+      text: `${header}\n2026-08-16,Synthetic Tip Cafe,20,pending,Dining,regular,Synthetic Tip Visa,,`,
+    };
+    expect(
+      await commitStatementCsv(ctx.db, ctx.actor, { ...pending, selected: [] }),
+    ).toMatchObject({ transactions: 0, evidence: 1 });
+    const observation = (await listStatementRows(ctx.db, {})).data[0];
+    if (!observation) throw new Error("Pending source observation missing");
+    const original = (
+      await createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId: account.id,
+          kind: "purchase",
+          status: "pending",
+          amount: 20,
+          transactionDate: "2026-08-16",
+          postedDate: null,
+          merchant: "Synthetic Tip Cafe",
+          rawDescription: "Synthetic Tip Cafe",
+          sourceRefs: [
+            { source: "copilot", externalId: observation.externalId },
+          ],
+        }),
+        ctx.actor,
+      )
+    ).output;
+    const posted = {
+      fileName: "posted-tip.csv",
+      text: `${header}\n2026-08-18,Synthetic Tip Cafe,24,posted,Dining,regular,Synthetic Tip Visa,,`,
+    };
+    const preview = await previewStatementCsv(ctx.db, ctx.actor, posted);
+    expect(preview.preview?.rows[0]).toMatchObject({
+      status: "possible_existing",
+      existingTransactionIds: [original.id],
+      existingTransactions: [
+        {
+          id: original.id,
+          amount: 20,
+          status: "pending",
+          transactionDate: "2026-08-16",
+        },
+      ],
+    });
+    await expect(
+      commitStatementCsv(ctx.db, ctx.actor, {
+        ...posted,
+        selected: [{ key: "1", kind: "purchase" }],
+      }),
+    ).rejects.toThrow("needs review");
+    const second = (
+      await createFinancialTransaction(
+        ctx.db,
+        financialTransactionCreateInput.parse({
+          accountId: account.id,
+          kind: "purchase",
+          status: "posted",
+          amount: 22,
+          postedDate: "2026-08-17",
+          merchant: "Synthetic Tip Cafe",
+          rawDescription: "Synthetic Tip Cafe",
+        }),
+        ctx.actor,
+      )
+    ).output;
+    expect(
+      (await previewStatementCsv(ctx.db, ctx.actor, posted)).preview?.rows[0]
+        ?.existingTransactionIds,
+    ).toEqual(expect.arrayContaining([original.id, second.id]));
+    for (const text of [
+      `${header}\n2026-08-18,Synthetic Tip Cafe,-24,posted,Dining,regular,Synthetic Tip Visa,,`,
+      `${header}\n2026-08-18,Unrelated Synthetic Store,24,posted,Dining,regular,Synthetic Tip Visa,,`,
+      `${header}\n2026-08-25,Synthetic Tip Cafe,24,posted,Dining,regular,Synthetic Tip Visa,,`,
+    ])
+      expect(
+        (
+          await previewStatementCsv(ctx.db, ctx.actor, {
+            fileName: "separate.csv",
+            text,
+          })
+        ).preview?.rows[0]?.status,
+      ).toBe("ready_to_create");
+    expect(
+      await commitStatementCsv(ctx.db, ctx.actor, {
+        ...posted,
+        selected: [{ key: "1", transactionId: original.id }],
+      }),
+    ).toMatchObject({ transactions: 0, attached: 1, evidence: 1 });
+    const saved = await getDb(ctx.db).execute(sql`
+      SELECT amount, status, "transactionDate", "postedDate" FROM "FinancialTransaction" WHERE shortcode = ${original.id}
+    `);
+    expect(saved.rows[0]).toMatchObject({
+      amount: 20,
+      status: "pending",
+      transactionDate: "2026-08-16",
+      postedDate: null,
+    });
+    expect((await listStatementRows(ctx.db, {})).count).toBe(2);
+    const refs = await getDb(ctx.db).execute(sql`
+      SELECT count(*)::int AS count FROM "EntityExternalId" r JOIN "FinancialTransaction" t ON t.id = r."entityId"
+      WHERE t.shortcode = ${original.id} AND r.kind = 'settlement_ref' AND r."deletedAt" IS NULL
+    `);
+    expect(refs.rows[0]?.count).toBe(2);
+  });
+
   it("previews, confirms and safely replays a synthetic CSV through the native intake contract", async () => {
     await createFinancialAccount(
       ctx.db,

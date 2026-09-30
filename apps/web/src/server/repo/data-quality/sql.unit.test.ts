@@ -184,16 +184,6 @@ describe("aliased evaluation", () => {
 });
 
 describe("purchase import expectations", () => {
-  it("gates receipt and line checks by the vendor's order-evidence policy", () => {
-    const documentSql = render(gapCondition("purchase", "primary_document"));
-    const expenseSql = render(gapCondition("purchase", "empty_expenses"));
-    expect(documentSql).toContain('"orderEvidence"');
-    expect(documentSql).toContain("receipt_only");
-    expect(expenseSql).toContain('"orderEvidence"');
-    expect(expenseSql).toContain("online_account");
-    expect(expenseSql).not.toContain("receipt_only");
-  });
-
   it("uses check inputs, not target timestamps, to keep an exception active", () => {
     const productSql = render(gapCondition("product", "product_manufacturer"));
     const purchaseSql = render(gapCondition("purchase", "paperwork_mismatch"));

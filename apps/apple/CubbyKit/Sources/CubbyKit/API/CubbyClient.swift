@@ -123,6 +123,7 @@ public actor CubbyClient {
             switch subject.entity {
             case .product: .product
             case .productCategory: .productCategory
+            case .spendingCategory: .spendingCategory
             case .recipe: .recipe
             case .ingredient: .ingredient
             case .cookbook: .cookbook

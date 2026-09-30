@@ -493,6 +493,7 @@ export const connectedViews = {
       routes: [["purchases", "projects"]],
     },
   ],
+  spendingCategory: [],
   productCategory: [
     {
       key: "inventory",

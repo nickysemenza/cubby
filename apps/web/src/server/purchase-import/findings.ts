@@ -24,6 +24,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { isEqual } from "es-toolkit";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
@@ -31,7 +32,7 @@ import {
   auditLog,
   runFinding,
   importHunt,
-  importSourceClaim,
+  expenseAttribution,
   inventoryEntry,
   ledgerParty,
   orderMail,
@@ -45,40 +46,17 @@ import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { cascadeRemoval } from "~/server/repo/removal";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { decideLineWrite, type ExistingExpenseSnapshot } from "./writer-policy";
-
-const loadExpenses = async (
-  tx: DrizzleTransaction,
-  purchaseId: string,
-): Promise<ExistingExpenseSnapshot[]> => {
-  const rows = await tx
-    .select({
-      id: expense.id,
-      title: expense.name,
-      amount: expense.cost,
-      lineKind: expense.lineKind,
-      productId: expense.productId,
-      tradeId: expense.trade,
-      projectId: expense.projectId,
-      costType: expense.costType,
-      sourceClaimId: importSourceClaim.id,
-    })
-    .from(expense)
-    .leftJoin(
-      importSourceClaim,
-      eq(importSourceClaim.purchaseId, expense.purchaseId),
-    )
-    .where(
-      and(
-        eq(expense.purchaseId, parseEntityId("purchase", purchaseId)),
-        notDeleted(expense),
-      ),
-    );
-  return rows.map(({ sourceClaimId, ...row }) => ({
-    ...row,
-    sourceClaimed: sourceClaimId !== null,
-  }));
-};
+import {
+  aggregateReplacementApprovalFingerprint,
+  loadAggregateReplacementSnapshot,
+  redistributeReplacementAttributions,
+} from "./aggregate-replacement";
+import {
+  existingExpenses,
+  resolveLineProduct,
+  receiptProductQuantity,
+} from "./writer";
+import { decideLineWrite } from "./writer-policy";
 
 /**
  * Refund Expenses of this amount already on the Purchase, and refund mails
@@ -106,6 +84,7 @@ export async function refundTally(
     .where(
       and(
         eq(expense.purchaseId, purchaseId),
+        eq(expense.economicRole, "vendor"),
         sql`round(${expense.cost} * 100) = ${-refundCents}`,
         notDeleted(expense),
       ),
@@ -264,6 +243,7 @@ async function applyFix(
       id: purchase.id,
       date: purchase.date,
       displayLabel: purchase.displayLabel,
+      vendorId: purchase.vendorId,
     })
     .from(purchase)
     .where(and(eq(purchase.id, purchaseId), notDeleted(purchase)))
@@ -298,59 +278,143 @@ async function applyFix(
     return;
   }
 
+  await applyAggregateReplacement(tx, fix, actor, targetPurchase);
+}
+
+async function applyAggregateReplacement(
+  tx: DrizzleTransaction,
+  fix: Extract<ProposedImportFix, { kind: "replace_aggregate_line" }>,
+  actor: ActorContext,
+  targetPurchase: Pick<
+    typeof purchase.$inferSelect,
+    "id" | "date" | "displayLabel" | "vendorId"
+  >,
+) {
+  const purchaseId = targetPurchase.id;
   if (fix.lines.length === 0)
     throw new Error("The proposed replacement has no lines.");
-  const current = await loadExpenses(tx, purchaseId);
-  const decision = decideLineWrite(current, fix.lines);
-  if (decision.kind !== "replace_aggregate") {
+  if (
+    !fix.reviewSnapshot ||
+    !fix.reviewedLineIdentities ||
+    !fix.reviewedLineAttributions
+  )
     throw new Error(
-      "The Purchase changed after this finding was created; its aggregate can no longer be replaced safely.",
+      "This replacement needs a fresh receipt preview before approval.",
     );
-  }
-  const aggregate = decision.aggregate;
-  await tx
-    .update(expense)
-    .set({ deletedAt: new Date() })
-    .where(
-      and(
-        eq(expense.id, parseEntityId("expense", aggregate.id)),
-        notDeleted(expense),
-      ),
+  const current = await existingExpenses(tx, purchaseId);
+  const decision = decideLineWrite(current, fix.lines);
+  if (decision.kind !== "review_aggregate")
+    throw new Error(
+      "The Purchase changed after this preview; prepare the receipt again.",
     );
+  const preview = await loadAggregateReplacementSnapshot(
+    tx,
+    purchaseId,
+    decision.aggregate.id,
+  );
+  if (preview.snapshot.expenseCode !== fix.reviewSnapshot.expenseCode)
+    throw new Error(
+      "The Purchase changed after this preview; prepare the receipt again.",
+    );
+  const allocations = await redistributeReplacementAttributions(
+    tx,
+    preview.allocations,
+    fix.lines,
+  );
+  if (
+    (await aggregateReplacementApprovalFingerprint(
+      preview.snapshot.fingerprint,
+      fix.lines,
+      fix.reviewedLineIdentities,
+      allocations,
+    )) !== fix.reviewSnapshot.fingerprint ||
+    !isEqual(allocations, fix.reviewedLineAttributions) ||
+    fix.reviewedLineIdentities.length !== fix.lines.length
+  )
+    throw new Error(
+      "The booking or its attribution changed after this preview; prepare the receipt again.",
+    );
+  const aggregate = preview.row;
   const audit = [];
-  for (const line of decision.lines) {
+  const productsByExternalIdentity = new Map<string, string>();
+  for (const [lineIndex, line] of fix.lines.entries()) {
+    const identity = fix.reviewedLineIdentities[lineIndex]!;
+    const productId = await resolveLineProduct(
+      tx,
+      line,
+      identity,
+      targetPurchase.vendorId,
+      productsByExternalIdentity,
+    );
+    const quantity = receiptProductQuantity(productId, line, identity);
     const row = await insertWithShortcode(tx, "expense", {
       purchaseId,
       name: line.title,
-      notes: line.seller ? `Seller: ${line.seller}` : null,
+      notes:
+        [aggregate.notes, line.seller ? `Seller: ${line.seller}` : null]
+          .filter(Boolean)
+          .join("\n") || null,
       cost: line.amount,
-      date: targetPurchase.date,
-      lineKind: line.lineKind,
+      date: aggregate.date,
+      future: aggregate.future,
+      lineKind: identity.lineKind,
       lineBasis: "item_line",
-      costType: costTypeSchema.parse(aggregate.costType ?? "materials"),
-      trade: tradeSchema.nullable().parse(aggregate.tradeId ?? null),
-      projectId:
-        line.lineKind === "principal" && aggregate.projectId
-          ? parseEntityId("project", aggregate.projectId)
-          : null,
+      economicRole: "vendor",
+      costType: costTypeSchema.parse(aggregate.costType),
+      trade: tradeSchema.nullable().parse(aggregate.trade),
+      projectId: identity.lineKind === "principal" ? aggregate.projectId : null,
+      spendingCategoryId: aggregate.spendingCategoryId,
+      bookingTransactionCode: aggregate.bookingTransactionCode,
+      productId,
+      productQuantity: quantity,
     });
+    const lineAllocations = allocations.filter(
+      (allocation) => allocation.lineIndex === lineIndex,
+    );
+    if (lineAllocations.length)
+      await tx.insert(expenseAttribution).values(
+        lineAllocations.map((allocation) => ({
+          expenseId: row.id,
+          role: allocation.role,
+          ledgerPartyId: allocation.partyId
+            ? parseEntityId("ledgerParty", allocation.partyId)
+            : null,
+          weight: allocation.weight,
+        })),
+      );
     await validateExpenseInheritance(tx, row);
     audit.push({
       entityKind: "expense" as const,
       entityId: row.id,
       action: "create" as const,
+      changes: { supersedesExpense: { from: aggregate.id, to: row.id } },
     });
   }
+  await tx
+    .update(expense)
+    .set({ deletedAt: new Date() })
+    .where(eq(expense.id, aggregate.id));
   await cascadeRemoval(tx, {
     entity: "expense",
-    ids: [parseEntityId("expense", aggregate.id)],
+    ids: [aggregate.id],
     audit: { into: audit },
   });
   await logAuditEntries(tx, actor, audit);
   await tx
     .update(purchase)
-    .set({ displayLabel: targetPurchase.displayLabel ?? aggregate.title })
+    .set({
+      displayLabel: targetPurchase.displayLabel ?? aggregate.name,
+      itemizationEvidence: true,
+    })
     .where(and(eq(purchase.id, purchaseId), isNull(purchase.deletedAt)));
+  await logAuditEntries(tx, actor, [
+    {
+      entityKind: "purchase",
+      entityId: purchaseId,
+      action: "update",
+      changes: { itemizationEvidence: { from: false, to: true } },
+    },
+  ]);
 }
 
 export async function resolveRunFinding(
@@ -417,6 +481,14 @@ export async function resolveRunFinding(
     }
     if (input.action === "apply") {
       const fix = proposedImportFix.parse(finding.proposedFix);
+      if (
+        fix.kind === "replace_aggregate_line" &&
+        (!fix.reviewSnapshot ||
+          input.reviewedFingerprint !== fix.reviewSnapshot.fingerprint)
+      )
+        throw new Error(
+          "Review the current replacement preview before applying it.",
+        );
       assertFixTargetsFinding(finding, fix);
       await assertRunProvenance(tx, finding);
       await applyFix(tx, fix, actor, finding.ledgerPartyId);

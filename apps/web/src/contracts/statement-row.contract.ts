@@ -31,6 +31,7 @@ export const statementRowContract = defineContract("statementRow", {
     native: "Confirm statement CSV rows from Apple apps",
     input: statementCsvCommitInput,
     output: statementCsvCommitOut,
+    invalidates: ["statementRow", "financialTransaction"],
   }),
   record: mutation({
     input: recordStatementRowsInput,

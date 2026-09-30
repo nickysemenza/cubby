@@ -31,6 +31,14 @@ const EXCEPTION_REASONS = {
   stated_total: ["not_issued", "unavailable"],
   primary_document: ["not_issued", "unavailable", "history_expired"],
   empty_expenses: ["unavailable", "history_expired"],
+  purchase_itemization: ["unavailable", "history_expired"],
+  financial_transaction_document: [
+    "not_issued",
+    "unavailable",
+    "history_expired",
+  ],
+  financial_transaction_itemization: ["unavailable", "history_expired"],
+  financial_transaction_products: ["unavailable", "insufficient_detail"],
   settlement_reference: ["not_applicable", "insufficient_detail"],
   // Settlement evidence and the expense ledger can both be correct while a
   // source leaves a small residual. This is never a tolerance: it requires a

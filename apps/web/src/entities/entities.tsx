@@ -244,6 +244,10 @@ const withEntityNames = <
   ) as never;
 
 const entityDefinitions = withEntityNames({
+  spendingCategory: {
+    ...generatedBrowserRoutes.spendingCategory,
+    color: INK.slate,
+  },
   ingredient: {
     ...generatedBrowserRoutes.ingredient,
     color: {

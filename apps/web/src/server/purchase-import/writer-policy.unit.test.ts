@@ -12,7 +12,7 @@ describe("purchase import writer policy", () => {
     { title: "Shipping", amount: 2, lineKind: "shipping" as const },
   ];
 
-  it("replaces only an exact, unlinked, unclaimed principal aggregate", () => {
+  it("requires explicit review of even an exact, unlinked, unclaimed principal aggregate", () => {
     const decision = decideLineWrite(
       [
         {
@@ -31,7 +31,7 @@ describe("purchase import writer policy", () => {
     );
 
     expect(decision).toMatchObject({
-      kind: "replace_aggregate",
+      kind: "review_aggregate",
       aggregate: { title: "House supplies", projectId: "project-1" },
     });
   });

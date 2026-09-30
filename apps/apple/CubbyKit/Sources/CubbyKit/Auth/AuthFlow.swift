@@ -40,6 +40,28 @@ public actor AuthFlow {
         return try await completeSignIn(data: data, response: response, for: authentication)
     }
 
+    #if DEBUG
+        public func signInForDevelopment() async throws -> CubbyCredential {
+            guard baseURL.scheme == "http",
+                ["localhost", "127.0.0.1", "::1", "[::1]"].contains(baseURL.host?.lowercased() ?? ""),
+                baseURL.user == nil, baseURL.password == nil,
+                baseURL.path.isEmpty || baseURL.path == "/",
+                baseURL.query == nil, baseURL.fragment == nil
+            else { throw AuthError.developmentServerRequired }
+            let authentication = await credentials.requestState()
+            let url = baseURL.appending(path: "/__dev/login")
+                .appending(queryItems: [URLQueryItem(name: "native", value: "true")])
+            var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+            request.httpMethod = "GET"
+            request.setValue("cubby-mobile://", forHTTPHeaderField: "Origin")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            let (data, response) = try await session.data(
+                for: request, delegate: DevelopmentSignInRedirectGuard())
+            guard response.url == request.url else { throw AuthError.developmentServerRequired }
+            return try await completeSignIn(data: data, response: response, for: authentication)
+        }
+    #endif
+
     /// Signs in through Google's system-browser flow, then exchanges the PKCE-bound transfer code
     /// for the same signed Better Auth session bearer used by password sign-in.
     public func signInWithGoogle(
@@ -202,6 +224,19 @@ private struct SignInBody: Encodable {
     let rememberMe: Bool
 }
 
+#if DEBUG
+    /// The native development endpoint returns a signed session directly; redirects never leave it.
+    private final class DevelopmentSignInRedirectGuard: NSObject, URLSessionTaskDelegate {
+        func urlSession(
+            _ session: URLSession, task: URLSessionTask,
+            willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+            completionHandler: @escaping @Sendable (URLRequest?) -> Void
+        ) {
+            completionHandler(nil)
+        }
+    }
+#endif
+
 private struct GoogleTokenExchangeBody: Encodable {
     let token: String
     let state: String
@@ -240,6 +275,9 @@ public enum AuthError: Error, Sendable, Equatable {
     case randomGenerationFailed
     case browserUnavailable
     case http(status: Int, body: String)
+    #if DEBUG
+        case developmentServerRequired
+    #endif
 
     public var message: String {
         switch self {
@@ -265,6 +303,10 @@ public enum AuthError: Error, Sendable, Equatable {
             return "Google sign-in could not open the system browser."
         case .http(let status, let body):
             return "HTTP \(status): \(body)"
+        #if DEBUG
+            case .developmentServerRequired:
+                return "Development sign-in requires an HTTP loopback server without redirects."
+        #endif
         }
     }
 }

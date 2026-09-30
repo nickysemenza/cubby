@@ -387,8 +387,13 @@ describe("financial repositories — critical invariants", () => {
     });
     expect(possibleExisting.rows[0]).toMatchObject({
       status: "possible_existing",
-      existingTransactionIds: [manualEvidence.id],
     });
+    // The manual description and the nearby Amazon merchant are separate
+    // plausible matches, including the latter's amount change. Review keeps
+    // both candidates instead of silently selecting or creating a charge.
+    expect(
+      [...(possibleExisting.rows[0]?.existingTransactionIds ?? [])].sort(),
+    ).toEqual([manualEvidence.id, createdEvidence.output.id].sort());
 
     const identityAccount = (
       await createFinancialAccount(
@@ -498,15 +503,16 @@ describe("financial repositories — critical invariants", () => {
       },
     });
 
-    // The identical charge as a *second* provider sees it. The ref is namespaced
-    // by source, so this is a distinguishable row rather than a false
-    // `already_recorded` — 19% of charges present in two exports carry different
-    // dates, so collapsing them would destroy the cross-corroboration that makes
-    // "absent from both" usable evidence.
+    // Another provider keeps its distinct source observation. The canonical
+    // charge already exists within the date window, so attaching that evidence
+    // requires review rather than creating another charge.
     const otherProvider = await previewFinancialStatementImport(ctx.db, {
       rows: [{ ...row, key: "copilot-view", source: "copilot" }],
     });
-    expect(otherProvider.rows[0]?.status).toBe("ready_to_create");
+    expect(otherProvider.rows[0]?.status).toBe("possible_existing");
+    expect(otherProvider.rows[0]?.existingTransactionIds).toEqual([
+      createdEvidence.output.id,
+    ]);
     expect(otherProvider.rows[0]?.proposed.sourceRef).toMatchObject({
       source: "copilot",
     });

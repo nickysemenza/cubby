@@ -93,6 +93,7 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { parseCompleteListRead } from "./list-read-adapters";
+import { financialTransactionCoverageSql } from "./purchase-evidence-policy";
 
 /** "This transaction settles at least one Purchase" — allocation-aware. */
 const hasAnyAllocation = () => sql`EXISTS (
@@ -137,6 +138,11 @@ const columns = {
   postedDate: financialTransaction.postedDate,
   merchant: financialTransaction.merchant,
   rawDescription: financialTransaction.rawDescription,
+  spendingCategoryShortcode: sql<
+    string | null
+  >`(SELECT shortcode FROM "SpendingCategory" WHERE id = "FinancialTransaction"."spendingCategoryId" AND "deletedAt" IS NULL)`,
+  evidenceExpectation: financialTransaction.evidenceExpectation,
+  coverage: financialTransactionCoverageSql("FinancialTransaction"),
   sourceCategory: financialTransaction.sourceCategory,
   notes: financialTransaction.notes,
   createdAt: financialTransaction.createdAt,
@@ -208,6 +214,15 @@ const toOut = (
     postedDate: row.postedDate,
     merchant: row.merchant,
     rawDescription: row.rawDescription,
+    spendingCategoryId: row.spendingCategoryShortcode
+      ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
+      : null,
+    evidenceExpectation: row.evidenceExpectation,
+    bookingCoverage: row.coverage.booking,
+    documentCoverage: row.coverage.document,
+    itemizationCoverage: row.coverage.itemization,
+    productsCoverage: row.coverage.products,
+    coverage: row.coverage,
     sourceCategory: row.sourceCategory,
     sourceRefs,
     notes: row.notes,
@@ -276,6 +291,13 @@ const hydrateTransactionsRead = async (
     }));
     return {
       ...row,
+      bookingCoverage: row.coverage.booking,
+      documentCoverage: row.coverage.document,
+      itemizationCoverage: row.coverage.itemization,
+      productsCoverage: row.coverage.products,
+      spendingCategoryId: row.spendingCategoryShortcode
+        ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
+        : null,
       id: parseShortcodeFor("financialTransaction", row.shortcode),
       displayName:
         row.merchant?.trim() ||
@@ -501,14 +523,22 @@ const getFinancialTransactionByShortcode =
 
 async function resolveForeignKeys(
   db: Database | DrizzleTransaction,
-  data: Pick<FinancialTransactionCreateInput, "accountId" | "purchaseId">,
+  data: Pick<
+    FinancialTransactionCreateInput,
+    "accountId" | "purchaseId" | "spendingCategoryId"
+  >,
 ) {
   const accountId = await resolveOrThrow(
     db,
     "financialAccount",
     data.accountId,
   );
-  return { accountId };
+  return {
+    accountId,
+    spendingCategoryId: data.spendingCategoryId
+      ? await resolveOrThrow(db, "spendingCategory", data.spendingCategoryId)
+      : null,
+  };
 }
 
 export async function createFinancialTransaction(
@@ -766,6 +796,30 @@ export async function updateFinancialTransaction(
         `Financial transaction not found: ${shortcode}`,
       );
     assertLedgerTransferUpdateAllowed(before, data);
+    if (
+      data.kind !== undefined &&
+      ![
+        "purchase",
+        "refund",
+        "adjustment",
+        "fee",
+        "interest",
+        "income",
+      ].includes(data.kind)
+    ) {
+      const liveBooking = await tx.query.expense.findFirst({
+        where: (expense, { eq, isNull }) =>
+          and(
+            eq(expense.bookingTransactionCode, shortcode),
+            isNull(expense.deletedAt),
+          ),
+      });
+      if (liveBooking)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "This transaction has booked Expenses. Review its spending correction before changing it to a non-spending kind.",
+        );
+    }
     const accountId =
       data.accountId === undefined
         ? before.accountId
@@ -786,7 +840,20 @@ export async function updateFinancialTransaction(
       sourceRefs: _references,
       ...writableData
     } = data;
-    const values = buildPartialUpdateValues({ ...writableData, accountId });
+    const values = buildPartialUpdateValues({
+      ...writableData,
+      accountId,
+      spendingCategoryId:
+        data.spendingCategoryId === undefined
+          ? undefined
+          : data.spendingCategoryId === null
+            ? null
+            : await resolveOrThrow(
+                tx,
+                "spendingCategory",
+                data.spendingCategoryId,
+              ),
+    });
 
     // The create input rejects a purchaseId/allocations pair that disagrees;
     // deriveUpdateData drops that refinement, so the same check belongs here

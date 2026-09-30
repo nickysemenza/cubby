@@ -43,6 +43,7 @@ const WRAPPERS = {
   planting: "create update updateInput out+ listItem filtersBase",
   product: "create+ update updateInput+ filtersBase",
   productCategory: "create+ update+ updateInput out+ filters+",
+  spendingCategory: "create+ update+ updateInput out+ filters+",
   project: "create+ update+ updateInput+ out+ listItem+ filtersBase",
   purchase: "out+ listItem+ filtersBase",
   recipe: "create+ update updateInput+ filtersBase",
@@ -57,6 +58,7 @@ const WRAPPERS = {
 const SHORT_FILTERS_NAME: ReadonlySet<string> = new Set([
   "device",
   "productCategory",
+  "spendingCategory",
   "run",
   "vendorAccount",
 ]);

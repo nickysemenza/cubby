@@ -7,10 +7,7 @@ import {
   financialAccountCreateInput,
   financialAccountUpdateData,
 } from "./financial-account";
-import {
-  financialTransactionCreateInput,
-  purchaseSettlementCheckExpression,
-} from "./financial-transaction";
+import { financialTransactionCreateInput } from "./financial-transaction";
 
 const card = (
   last4: string,
@@ -189,7 +186,7 @@ describe("financial transaction contracts", () => {
         ...transaction,
         kind: "fee",
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("accepts income as sale-proceeds settlement, inflow only", () => {
@@ -216,20 +213,5 @@ describe("financial transaction contracts", () => {
         amount: 152.57,
       }).success,
     ).toBe(true);
-  });
-
-  // Pinned deliberately. `drizzle-kit push` does NOT diff CHECK constraints, so
-  // a change here will never reach a live database on its own — this test is the
-  // tripwire telling whoever changes the sign rules to apply the ALTER by hand.
-  it("generates a settlement CHECK matching the TypeScript sign rules", () => {
-    expect(
-      purchaseSettlementCheckExpression({
-        purchaseId: `"purchaseId"`,
-        kind: `"kind"`,
-        amount: `"amount"`,
-      }),
-    ).toBe(
-      `"purchaseId" IS NULL OR ("kind" IN ('purchase', 'refund', 'adjustment', 'income') AND (("kind" IN ('purchase') AND "amount" > 0) OR ("kind" IN ('refund', 'income') AND "amount" < 0) OR "kind" IN ('adjustment')))`,
-    );
   });
 });

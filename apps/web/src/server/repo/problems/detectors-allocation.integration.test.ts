@@ -137,7 +137,10 @@ describe("findFinancialTransactionAllocationDefects", () => {
 
   it("flags a non-settlement kind carrying allocations", async () => {
     const purchase = await mkPurchase(ctx.db);
-    const txn = await mkTransaction(ctx.db, { kind: "fee", amount: 12 });
+    const txn = await mkTransaction(ctx.db, {
+      kind: "credit_card_payment",
+      amount: 12,
+    });
     await allocate(ctx.db, txn.id, purchase.id, 12);
 
     const [defect] = await findFinancialTransactionAllocationDefects(ctx.db);

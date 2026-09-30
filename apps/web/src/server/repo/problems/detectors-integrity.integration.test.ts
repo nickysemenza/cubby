@@ -469,6 +469,10 @@ const mkRecipeSection = async (db: Database) => {
 /** One live-row factory per entity that appears as a `targetEntity` among the
  * must-target-live edges below. */
 const TARGET_FACTORIES = {
+  spendingCategory: (db: Database) =>
+    insertWithShortcode(db, "spendingCategory", {
+      name: uniq("Spending category"),
+    }),
   productCategory: (db: Database) =>
     insertWithShortcode(db, "productCategory", { name: uniq("Category") }),
   cookbook: mkCookbook,
@@ -523,6 +527,35 @@ const SOURCE_FACTORIES = {
       .returning({ id: externalSource.slug });
     return row!;
   },
+
+  "SpendingCategory.parentId": (db, targetId) =>
+    insertWithShortcode(db, "spendingCategory", {
+      name: uniq("Child spending category"),
+      parentId: parseEntityId("spendingCategory", targetId),
+    }),
+  "Purchase.spendingCategoryId": async (db, targetId) =>
+    insertWithShortcode(db, "purchase", {
+      vendorId: (await mkVendor(db)).id,
+      date: "2026-09-01",
+      spendingCategoryId: parseEntityId("spendingCategory", targetId),
+    }),
+  "Expense.spendingCategoryId": (db, targetId) =>
+    insertWithShortcode(db, "expense", {
+      name: uniq("Classified expense"),
+      costType: "materials",
+      trade: "other",
+      date: "2026-09-01",
+      spendingCategoryId: parseEntityId("spendingCategory", targetId),
+    }),
+  "FinancialTransaction.spendingCategoryId": async (db, targetId) =>
+    insertWithShortcode(db, "financialTransaction", {
+      accountId: (await mkFinancialAccount(db)).id,
+      kind: "purchase",
+      status: "posted",
+      amount: 1,
+      postedDate: "2026-09-01",
+      spendingCategoryId: parseEntityId("spendingCategory", targetId),
+    }),
 
   "ProductCategory.parentId": (db, targetId) =>
     insertWithShortcode(db, "productCategory", {

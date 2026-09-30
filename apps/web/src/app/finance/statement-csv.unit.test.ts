@@ -11,6 +11,35 @@ const monarchHeader =
   "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Tags,Owner,Reviewed,Id";
 
 describe("statement CSV normalization", () => {
+  // CSV physical positions cannot be exercised by DB fixtures: quoted multiline
+  // cells, blank lines, and zero rows must not shift occurrence identity.
+  it("preserves physical row positions and Monarch provider IDs across identical rows", () => {
+    const parsed = parseStatementCsv(
+      `${monarchHeader}\n\n9/21/2026,Synthetic Shop,Clothing,Fixture Visa,ORDER 1,"first\nsecond",-4.50,,,,provider-a\n9/21/2026,Synthetic Shop,Clothing,Fixture Visa,ORDER 1,,-4.50,,,,provider-b`,
+      "physical.csv",
+      "physical-fp",
+    );
+    expect(
+      parsed.recordRows.map((row) => [
+        row.rowPosition,
+        row.providerTransactionId,
+      ]),
+    ).toEqual([
+      [3, "provider-a"],
+      [5, "provider-b"],
+    ]);
+    expect(
+      previewStatementBatch(parsed)?.rows.map((row) => [
+        row.importFingerprint,
+        row.rowPosition,
+        row.providerTransactionId,
+      ]),
+    ).toEqual([
+      ["physical-fp", 3, "provider-a"],
+      ["physical-fp", 5, "provider-b"],
+    ]);
+  });
+
   it("keeps Monarch preview and durable source evidence aligned", () => {
     const parsed = parseStatementCsv(
       `${monarchHeader}\n9/21/2026,Synthetic Outfitters,Clothing,Fixture Visa (...4242),SYNTHETIC ORDER 1,,-29.99,,Fixture Member,1,row-1`,
@@ -172,6 +201,6 @@ describe("statement CSV normalization", () => {
       "amount-fp",
     );
     expect(parsed.zeroValueRows).toBe(1);
-    expect(recordStatementBatch(parsed).rows).toHaveLength(1);
+    expect(recordStatementBatch(parsed).rows).toHaveLength(2);
   });
 });

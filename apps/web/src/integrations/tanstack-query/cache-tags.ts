@@ -387,7 +387,7 @@ export const ripple = {
     // and its vendor's `spend`/`purchaseCount` — all three are rollups over
     // this table. Without these, a charge's reconciliation cue keeps showing
     // a stale total.
-    [["vendor"], ["purchase"]],
+    [["vendor"], ["purchase"], ["financialTransaction"]],
     // Beneficiary/funder attribution and cost both feed the contribution
     // report, which is otherwise never invalidated from this client.
     [["householdContribution"]],
@@ -397,7 +397,16 @@ export const ripple = {
   // has to refresh the charge queries too — otherwise the ledger keeps showing
   // the old name until a hard reload. No expense/project tags: a vendor holds
   // identity only, and every dollar lives on `Expense`.
+  spendingCategory: rippleTags([
+    ["spendingCategory"],
+    ["purchase"],
+    ["expense"],
+    ["financialTransaction"],
+    ["problems"],
+  ]),
   vendor: rippleTags([
+    ["expense"],
+    ["financialTransaction"],
     ["vendor"],
     ["purchase"],
     ["relatedData"],

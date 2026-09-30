@@ -1,3 +1,5 @@
+import { FinancialBookingCorrectionReview } from "~/app/finance/financial-booking-correction-review";
+import { FinancialBookingReview } from "~/app/finance/financial-booking-review";
 import { PossibleVendor } from "~/app/finance/possible-vendor";
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
@@ -22,9 +24,10 @@ export const financialTransactionDetailFields = {
     label: transaction.allocations.length > 1 ? "Settles" : "Purchase",
     value:
       transaction.allocations.length === 0 ? (
-        <NoneValue />
+        <FinancialBookingReview transaction={transaction} />
       ) : (
         <Stack gap="tight">
+          <FinancialBookingCorrectionReview transaction={transaction} />
           {transaction.allocations.map((allocation) => (
             <Row key={allocation.purchaseId} justify="between" gap="sm">
               <Row align="center" gap="tight">

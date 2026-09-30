@@ -51,7 +51,7 @@ final class RunReviewModel {
             try await operation()
             await refresh(runID: runID, client: client)
         } catch {
-            Diagnostics.report(error, context: "Update photo import run")
+            Diagnostics.report(error, context: "Update import run")
             actionError = error.localizedDescription
         }
     }
@@ -187,6 +187,7 @@ struct RunReviewView: View {
                 if snapshot.purpose == .photoInventory {
                     photoReview
                 }
+                findingsSection(snapshot)
                 workTimeline(snapshot)
             } else if let error = model.error {
                 Section {
@@ -253,6 +254,24 @@ struct RunReviewView: View {
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder private func findingsSection(_ snapshot: RunWorkSnapshotOutput) -> some View {
+        if let value = try? JSONValue(encoding: snapshot.findings),
+            let findings = value.arrayValue, !findings.isEmpty
+        {
+            RunFindingReviewSection(findings: findings, busy: model.busy, onResolve: resolveFinding)
+        }
+    }
+
+    private func resolveFinding(_ id: String, apply: Bool, fingerprint: String?) {
+        Task {
+            await model.act(runID: runID, client: appModel.client) {
+                _ = try await appModel.client.resolveRunFinding(
+                    .init(reviewedFingerprint: fingerprint, id: id, action: apply ? .apply : .dismiss))
+            }
+            appModel.recordEntityMutation(keys: [.expense, .purchase, .product, .run])
         }
     }
 
@@ -1171,7 +1190,7 @@ private struct PhotoGroupDraftEditView: View {
                 runId: runID, purpose: .photoInventory, status: .running,
                 startedAt: .now.addingTimeInterval(-12), endedAt: nil,
                 coordinatorModel: "gpt-6-sol", agentModelMs: 4_200,
-                ordersSeen: 0, imported: 0, updated: 0, skipped: 0,
+                ordersSeen: 0, imported: 0, updated: 0, skipped: 0, findings: [],
                 targetsTotal: 2, targetsCompleted: 0,
                 progress: [
                     .init(phase: "grouping", detail: "Identified one shirt and its label", createdAt: .now)

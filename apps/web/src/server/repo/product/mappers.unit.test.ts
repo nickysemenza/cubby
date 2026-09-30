@@ -121,6 +121,7 @@ const baseProduct = {
   classificationEvidence: "",
   price: 4.5,
   usdaUnavailable: null,
+  acquisitionOrigin: "unknown" as const,
   stockTracked: null,
   labelNutrition: null,
   expenseCount: 0,

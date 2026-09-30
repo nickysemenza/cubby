@@ -26,6 +26,10 @@ runtime identity, while `/__dev/ready` checks database connectivity, committed
 migrations, the completed core fixture marker, and the USDA/UPC peers.
 `/__dev/login` signs in the synthetic local
 account through real Better Auth on loopback.
+Debug Swift apps launched with `--cubby-dev-server <origin>` use
+`/__dev/login?native=true` to store the same signed session bearer and session
+cache without a browser redirect. This mode accepts only loopback HTTP servers
+and rejects redirects; it is absent from release app builds.
 
 A real checkout path determines a stable development id. Its database is
 `cubby_dev_<id>` at `localhost:55432`, and its Worker resources are named with

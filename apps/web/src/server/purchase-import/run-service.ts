@@ -20,6 +20,7 @@ import {
   importRunAgentIdentity,
   importRunAgentManifest,
 } from "@cubby/schemas/import-run-agent";
+import { proposedImportFix } from "@cubby/schemas/purchase-import";
 import {
   browserBridgeOperation,
   browserBridgeRequest,
@@ -2721,7 +2722,7 @@ export async function finishRun(
   return { ...run, findingCount: findingCount?.value ?? 0 };
 }
 
-/** @lintignore Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
+/**  Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function markRunFailed(
   db: Database,
   input: {
@@ -2883,6 +2884,7 @@ export async function loadRunDetail(
         kind: runFinding.kind,
         summary: runFinding.summary,
         status: runFinding.status,
+        proposedFix: runFinding.proposedFix,
         autoApplied: runFinding.autoApplied,
         probability: runFinding.probability,
         createdAt: runFinding.createdAt,
@@ -3079,6 +3081,10 @@ export async function loadRunDetail(
     affectedPurchases,
     findings: findings.map((finding) => ({
       ...finding,
+      proposedFix:
+        finding.proposedFix === null
+          ? null
+          : proposedImportFix.parse(finding.proposedFix),
       createdAt: finding.createdAt.toISOString(),
       expiresAt: iso(finding.expiresAt),
     })),

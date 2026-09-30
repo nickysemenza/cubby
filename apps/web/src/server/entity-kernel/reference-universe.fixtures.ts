@@ -298,6 +298,7 @@ export async function seedReferenceUniverse(
   await seed("product");
   const project = await seed("project");
   const vendor = await seed("vendor");
+  await seed("spendingCategory", { parentId: null });
   await seed("ingredient");
   // Before planting: a planting's required plantId resolves through it.
   await seed("plant");

@@ -1,5 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type { FinancialStatementImportRow } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { buildTakeSkip } from "@cubby/schemas/pagination";
 import type {
@@ -15,11 +17,12 @@ import {
   statementImportOut,
   statementRowOut,
 } from "@cubby/schemas/statement-row";
-import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   financialAccount,
+  financialTransaction,
   statementImport,
   statementRow,
 } from "~/server/db/schema";
@@ -30,13 +33,27 @@ import {
   rangeConditions,
   unwrapDb,
   withTransaction,
+  databaseForTransaction,
 } from "~/server/repo/database-helpers";
-import { ensureExternalSources } from "~/server/repo/entity-external-ids";
+import {
+  ensureExternalSources,
+  assertSettlementRefsAvailable,
+  replaceSettlementRefs,
+  settlementRefsFor,
+} from "~/server/repo/entity-external-ids";
 import {
   merchantVendorInferences,
   normalizeMerchant,
 } from "~/server/repo/merchant-vendor-inference";
-import { statementRowExternalId } from "~/server/repo/statement-row-identity";
+import {
+  statementRowExternalId,
+  statementRowOccurrenceId,
+} from "~/server/repo/statement-row-identity";
+
+import { logAuditEntry } from "./audit-log";
+import { lockFinancialEvidenceKeys } from "./financial-evidence";
+import { previewFinancialStatementImport } from "./financial-statement-preview";
+import { resolveOrThrow } from "./shortcode-resolver";
 
 /**
  * Every live settlement reference with its transaction's shortcode — the
@@ -103,6 +120,9 @@ const importFingerprint = sql<string>`(
 const columns = {
   source: statementRow.source,
   externalId: statementRow.externalId,
+  rowPosition: statementRow.rowPosition,
+  providerTransactionId: statementRow.providerTransactionId,
+  legacyExternalId: statementRow.legacyExternalId,
   accountDescriptor: statementRow.accountDescriptor,
   statementDate: statementRow.statementDate,
   amount: statementRow.amount,
@@ -335,6 +355,40 @@ const storedRowCount = async (
   return Number(row?.count ?? 0);
 };
 
+function assertImmutableStatementOccurrence(
+  saved: Pick<
+    typeof statementRow.$inferSelect,
+    | "externalId"
+    | "accountDescriptor"
+    | "statementDate"
+    | "providerAmount"
+    | "rawDescription"
+    | "providerTransactionId"
+    | "providerStatus"
+    | "merchant"
+    | "sourceCategory"
+    | "providerNotes"
+  >,
+  incoming: RecordStatementRowsInput["rows"][number],
+) {
+  if (
+    incoming.rowPosition !== undefined &&
+    (saved.accountDescriptor !== incoming.accountDescriptor ||
+      saved.statementDate !== incoming.statementDate ||
+      saved.providerAmount !== incoming.providerAmount ||
+      saved.rawDescription !== incoming.rawDescription ||
+      saved.providerTransactionId !== incoming.providerTransactionId ||
+      saved.providerStatus !== incoming.providerStatus ||
+      saved.merchant !== incoming.merchant ||
+      saved.sourceCategory !== incoming.sourceCategory ||
+      saved.providerNotes !== incoming.providerNotes)
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Statement occurrence ${saved.externalId} has conflicting immutable evidence. Review the file mapping.`,
+    );
+}
+
 /**
  * Record provider rows verbatim. Not an importer: it creates no account, no
  * transaction and no link, and makes no match. The server derives every
@@ -354,8 +408,23 @@ export async function recordStatementRows(
   const rows = await Promise.all(
     input.rows.map(async (row) => ({
       ...row,
+      providerTransactionId: row.providerTransactionId ?? null,
       source,
-      externalId: await statementRowExternalId({
+      externalId:
+        row.rowPosition !== undefined
+          ? await statementRowOccurrenceId(
+              source,
+              input.import.fingerprint,
+              row.rowPosition,
+            )
+          : await statementRowExternalId({
+              source,
+              account: row.accountDescriptor,
+              date: row.statementDate,
+              amount: row.providerAmount,
+              originalStatement: row.rawDescription,
+            }),
+      legacyExternalId: await statementRowExternalId({
         source,
         account: row.accountDescriptor,
         date: row.statementDate,
@@ -367,9 +436,8 @@ export async function recordStatementRows(
     })),
   );
 
-  // Two provider rows that hash identically are indistinguishable, so only the
-  // first can ever be stored. Counted here rather than inferred from the insert
-  // count, which cannot tell this apart from "already recorded".
+  // Legacy callers without physical positions retain the frozen v1 contract.
+  // CSV positions distinguish identical purchases in the same export.
   const idCounts = new Map<string, number>();
   for (const row of rows)
     idCounts.set(row.externalId, (idCounts.get(row.externalId) ?? 0) + 1);
@@ -416,6 +484,15 @@ export async function recordStatementRows(
       .select({
         externalId: statementRow.externalId,
         batchId: statementRow.batchId,
+        accountDescriptor: statementRow.accountDescriptor,
+        statementDate: statementRow.statementDate,
+        providerAmount: statementRow.providerAmount,
+        rawDescription: statementRow.rawDescription,
+        providerTransactionId: statementRow.providerTransactionId,
+        providerStatus: statementRow.providerStatus,
+        merchant: statementRow.merchant,
+        sourceCategory: statementRow.sourceCategory,
+        providerNotes: statementRow.providerNotes,
       })
       .from(statementRow)
       .where(
@@ -425,6 +502,10 @@ export async function recordStatementRows(
           notDeleted(statementRow),
         ),
       );
+    for (const saved of stored) {
+      const incoming = rows.find((row) => row.externalId === saved.externalId);
+      if (incoming) assertImmutableStatementOccurrence(saved, incoming);
+    }
     const alreadyInThisBatch = stored.filter(
       (row) => row.batchId === existingBatch?.id,
     ).length;
@@ -744,7 +825,19 @@ export async function updateStatementRows(
     const updated = await unwrapDb(tx)
       .update(statementRow)
       .set(values)
-      .where(selectorConditions(selector))
+      .where(
+        and(
+          selectorConditions(selector),
+          // A repeated reviewed assignment must preserve observation metadata
+          // and its row version, including nullable judgments.
+          or(
+            ...Object.entries(values).map(
+              ([column, value]) =>
+                sql`${sql.identifier(column)} IS DISTINCT FROM ${value}`,
+            ),
+          ),
+        ),
+      )
       .returning({ id: statementRow.id });
     return { affected: updated.length };
   });
@@ -805,4 +898,79 @@ export async function listStatementImports(db: Database, source?: string) {
     data: rows.map((row) => statementImportOut.parse(row)),
     count: rows.length,
   };
+}
+
+/** A reviewed observation adds evidence without replacing any existing source
+ * reference or changing canonical date, amount, or posting status. */
+export async function attachStatementObservation(
+  db: Database,
+  row: FinancialStatementImportRow,
+  transactionCode: FinancialTransactionShortcode,
+  actor: ActorContext,
+) {
+  return withTransaction(db, async (tx) => {
+    const scopedDb = databaseForTransaction(tx);
+    const transactionId = await resolveOrThrow(
+      scopedDb,
+      "financialTransaction",
+      transactionCode,
+    );
+    const externalId =
+      row.importFingerprint && row.rowPosition !== undefined
+        ? await statementRowOccurrenceId(
+            row.source,
+            row.importFingerprint,
+            row.rowPosition,
+          )
+        : await statementRowExternalId(row);
+    await lockFinancialEvidenceKeys(tx, "transaction-ref", [
+      `${row.source}\0${externalId}`,
+    ]);
+    await tx
+      .select({ id: financialTransaction.id })
+      .from(financialTransaction)
+      .where(
+        and(
+          eq(financialTransaction.id, transactionId),
+          notDeleted(financialTransaction),
+        ),
+      )
+      .for("update");
+    const preview = await previewFinancialStatementImport(scopedDb, {
+      rows: [row],
+    });
+    const candidate = preview.rows[0];
+    if (
+      !candidate?.existingTransactionIds.includes(transactionCode) ||
+      (candidate.status !== "possible_existing" &&
+        candidate.status !== "already_recorded")
+    )
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "The selected transaction is no longer a candidate for this statement observation. Review again.",
+      );
+    const ref = candidate.proposed.sourceRef;
+    const existing =
+      (await settlementRefsFor(tx, [transactionId])).get(transactionId) ?? [];
+    if (
+      existing.some(
+        (saved) =>
+          saved.source === ref.source && saved.externalId === ref.externalId,
+      )
+    )
+      return false;
+    await assertSettlementRefsAvailable(tx, [ref], transactionId);
+    await replaceSettlementRefs(tx, transactionId, [...existing, ref]);
+    await tx
+      .update(financialTransaction)
+      .set({ updatedAt: new Date() })
+      .where(eq(financialTransaction.id, transactionId));
+    await logAuditEntry(tx, actor, {
+      entityKind: "financialTransaction",
+      entityId: transactionId,
+      action: "update",
+      changes: { sourceRefs: { from: existing, to: [...existing, ref] } },
+    });
+    return true;
+  });
 }

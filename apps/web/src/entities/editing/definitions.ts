@@ -975,6 +975,9 @@ const productUnitMappingsValidate: NonNullable<
  * than the declaration.
  */
 export const entityEditRegistry: EntityEditRegistry = {
+  spendingCategory: buildDefinition("spendingCategory", (f) => ({
+    fields: f.fieldsFrom(["full"]),
+  })),
   productCategory: buildDefinition("productCategory", (f) => ({
     fields: f.fieldsFrom(["full"]),
   })),

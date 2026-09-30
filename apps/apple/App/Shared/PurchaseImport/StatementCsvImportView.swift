@@ -14,6 +14,7 @@ struct StatementCsvImportView: View {
     @State private var busy = false
     @State private var selected = Set<String>()
     @State private var kinds: [String: FinancialTransactionKind] = [:]
+    @State private var attachments: [String: String] = [:]
     @State private var usesMapping = false
 
     @State private var source = "bank-csv"
@@ -37,6 +38,7 @@ struct StatementCsvImportView: View {
             Section {
                 Button("Choose CSV file", systemImage: "doc.badge.plus") { choosingFile = true }
                     .disabled(busy)
+                    .accessibilityIdentifier("statement.csv.chooseFile")
                 if !fileName.isEmpty {
                     LabeledContent("File", value: fileName)
                 }
@@ -57,6 +59,9 @@ struct StatementCsvImportView: View {
                         systemImage: "checkmark.circle.fill"
                     )
                     .foregroundStyle(FieldGuideTokens.positive)
+                    if result.attached > 0 {
+                        Text("\(result.attached) source rows attached to existing transactions.")
+                    }
                     if result.alreadyPresent > 0 {
                         Text("\(result.alreadyPresent) source rows were already present.")
                             .foregroundStyle(.secondary)
@@ -158,6 +163,41 @@ struct StatementCsvImportView: View {
                         .foregroundStyle(
                             row.status == .readyToCreate
                                 ? FieldGuideTokens.positive : FieldGuideTokens.warning)
+                    if row.status == .possibleExisting {
+                        Toggle(
+                            "Attach source to existing transaction",
+                            isOn: Binding(
+                                get: { selected.contains(row.key) },
+                                set: { enabled in
+                                    if enabled {
+                                        selected.insert(row.key)
+                                    } else {
+                                        selected.remove(row.key)
+                                        attachments.removeValue(forKey: row.key)
+                                    }
+                                }
+                            )
+                        )
+                        .accessibilityIdentifier("statement.csv.attach.\(row.key)")
+                        if selected.contains(row.key) {
+                            Picker(
+                                "Existing transaction",
+                                selection: Binding(
+                                    get: { attachments[row.key] ?? "" },
+                                    set: { attachments[row.key] = $0 }
+                                )
+                            ) {
+                                Text("Choose transaction").tag("")
+                                ForEach(row.existingTransactionIds, id: \.self) { id in
+                                    Text(id).tag(id)
+                                }
+                            }
+                            Text(
+                                "Keeps the existing transaction's amount, date, and status. This source row remains available as evidence."
+                            )
+                            .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
                     if row.status == .readyToCreate {
                         Toggle(
                             "Record transaction",
@@ -171,7 +211,9 @@ struct StatementCsvImportView: View {
                                         selected.remove(row.key)
                                     }
                                 }
-                            ))
+                            )
+                        )
+                        .accessibilityIdentifier("statement.csv.select.\(row.key)")
                         if selected.contains(row.key) {
                             Picker(
                                 "Kind",
@@ -194,16 +236,24 @@ struct StatementCsvImportView: View {
                 Button("Review next rows") { Task { await loadMore() } }
                     .disabled(busy)
             }
-            Button("Confirm \(selected.count) transactions and save source rows") {
+            Button("Confirm \(selected.count) decisions and save source rows") {
                 Task { await commit() }
             }
-            .disabled(busy)
+            .disabled(busy || hasUnresolvedAttachment)
+            .accessibilityIdentifier("statement.csv.confirm")
         } header: {
             Text("Review statement")
         } footer: {
             Text(
                 "\(reviewRows.count) transaction candidates reviewed. Unselected rows remain as source evidence; all source rows are saved in bounded batches."
             )
+        }
+    }
+
+    private var hasUnresolvedAttachment: Bool {
+        reviewRows.contains { row in
+            row.status == .possibleExisting && selected.contains(row.key)
+                && (attachments[row.key] ?? "").isEmpty
         }
     }
 
@@ -230,6 +280,7 @@ struct StatementCsvImportView: View {
         usesMapping = false
         selected = []
         kinds = [:]
+        attachments = [:]
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         do {
@@ -300,6 +351,9 @@ struct StatementCsvImportView: View {
         do {
             let file = fileInput()
             let choices: StatementCsvCommitInput.SelectedPayload = selected.sorted().compactMap { key in
+                if let transactionId = attachments[key], !transactionId.isEmpty {
+                    return .init(key: key, transactionId: transactionId)
+                }
                 guard let kind = kinds[key] else { return nil }
                 return .init(key: key, kind: kind)
             }
@@ -307,6 +361,7 @@ struct StatementCsvImportView: View {
             input.mapping = file.mapping
             result = try await appModel.client.commitStatementCsv(input)
             selected = []
+            attachments = [:]
             let value = try await appModel.client.previewStatementCsv(file)
             preview = value
             reviewRows = value.preview?.rows ?? []

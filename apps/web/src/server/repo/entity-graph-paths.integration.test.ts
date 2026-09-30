@@ -39,6 +39,7 @@ describe("entity graph path repository", () => {
         name: "Path vendor",
         website: null,
         orderUrlTemplate: null,
+        evidenceExpectation: null,
         orderEvidence: null,
         orderEmailSenders: [],
         browserDomains: [],

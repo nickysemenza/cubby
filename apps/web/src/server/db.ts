@@ -81,9 +81,9 @@ export const withRequestDb = async <T>(
 
 /**
  * Background-invocation scope. One connected client is shared by one Queue
- * invocation or one Workflow step; Hyperdrive and the Worker runtime retain
- * responsibility for socket cleanup. Never carry this scope across Workflow
- * steps.
+ * invocation or one Workflow step. Release the client when its awaited work
+ * finishes, including inside long-lived Durable Objects; Hyperdrive keeps its
+ * origin pool. Never carry this scope across Workflow steps.
  */
 export const withRequestDbClient = async <T>(
   connectionString: string,
@@ -94,17 +94,21 @@ export const withRequestDbClient = async <T>(
     new Client({ connectionString }),
     "strong",
   );
-  await client.connect();
-  const runtime = runtimeForClient(drizzleNodePostgres({ client, schema }));
-  const holder: RequestDatabaseRuntimeScope = {
-    connections: {
-      strong: connectionString,
-      boundedStale: connectionString,
-    },
-    runtimes: { strong: runtime },
-    clientOrdinal: 1,
-  };
-  return requestDbStore.run(holder, fn);
+  try {
+    await client.connect();
+    const runtime = runtimeForClient(drizzleNodePostgres({ client, schema }));
+    const holder: RequestDatabaseRuntimeScope = {
+      connections: {
+        strong: connectionString,
+        boundedStale: connectionString,
+      },
+      runtimes: { strong: runtime },
+      clientOrdinal: 1,
+    };
+    return await requestDbStore.run(holder, fn);
+  } finally {
+    await client.end();
+  }
 };
 
 declare const __CF_WORKERS__: boolean | undefined;

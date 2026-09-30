@@ -114,6 +114,11 @@ const NON_ENTITY_FK_TARGETS = {
  * once its edge becomes graph-visible.
  */
 const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
+  "ImportPreparedOrder.targetPurchaseId": {
+    classification: "metadata",
+    reason:
+      "an immutable reviewed import target is shown in Run findings; preparations are operational captures, not navigable entities",
+  },
   "OrderMailCandidateDecision.purchaseId": {
     classification: "metadata",
     reason:

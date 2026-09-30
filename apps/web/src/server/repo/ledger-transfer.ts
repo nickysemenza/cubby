@@ -305,6 +305,7 @@ async function assertEvidenceSet(
       amount: financialTransaction.amount,
       status: financialTransaction.status,
       ledgerPartyId: financialAccount.ledgerPartyId,
+      bookingLineCount: sql<number>`(SELECT count(*)::int FROM "Expense" booked_expense WHERE booked_expense."bookingTransactionCode" = "FinancialTransaction".shortcode AND booked_expense."deletedAt" IS NULL)`,
       allocationCount: sql<number>`(
         SELECT count(*)::int FROM "FinancialTransactionAllocation" allocation
         WHERE allocation."transactionId" = "FinancialTransaction".id
@@ -334,12 +335,13 @@ async function assertEvidenceSet(
       (row) =>
         row.status !== "posted" ||
         cents(Math.abs(row.amount)) !== cents(transfer.amount) ||
-        row.allocationCount > 0,
+        row.allocationCount > 0 ||
+        row.bookingLineCount > 0,
     )
   )
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "Transfer evidence must be posted, unallocated, and match the transfer amount.",
+      "Transfer evidence must be posted, unallocated, have no live booked Expenses, and match the transfer amount. Review a booked spending conversion before attaching transfer evidence.",
     );
   if (
     rows.some(
