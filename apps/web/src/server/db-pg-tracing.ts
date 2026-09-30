@@ -8,6 +8,7 @@ import {
   beginDatabaseClientQueue,
   nextDatabaseAcquireOrdinal,
 } from "./db-observability";
+import { databaseClientOrdinal } from "./db-pg-client";
 import { TraceNames, withTrace } from "./tracing";
 
 export type RequestDbRole = "strong" | "bounded-stale";
@@ -372,6 +373,7 @@ export const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
       const finishAcquire = beginDatabaseAcquire(startedAt);
       try {
         const client = await rawConnect();
+        span.setAttribute("db.client.ordinal", databaseClientOrdinal(client));
         span.setAttribute(
           "db.acquire.client_reused",
           tracedClients.has(client),
@@ -382,7 +384,6 @@ export const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
           "db.pool.after.waiting_count": pool.waitingCount,
         });
         const durationMs = Math.round(performance.now() - startedAt);
-        span.setAttribute("db.acquire.duration_ms", durationMs);
         if (durationMs > 500) {
           console.warn(
             `[db-acquire] transaction=${inTransaction} duration_ms=${durationMs}`,
@@ -391,6 +392,10 @@ export const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
         transactionState.set(client, inTransaction);
         return traceClient(client, role);
       } finally {
+        span.setAttribute(
+          "db.acquire.duration_ms",
+          Math.round(performance.now() - startedAt),
+        );
         finishAcquire();
       }
     });
