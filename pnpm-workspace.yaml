@@ -465,3 +465,6 @@ virtualStoreType: global
 
 configDependencies:
   "@pnpm/plugin-types-fixer": 0.1.0
+# Observation events preserve pg-cloudflare startup ordering; port when upgrading.
+patchedDependencies:
+  pg-cloudflare@1.4.0: patches/pg-cloudflare@1.4.0.patch

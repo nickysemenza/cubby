@@ -197,6 +197,9 @@ overrides:
 
 packageExtensionsChecksum: sha256-MGTJ8xU2ACpZSCyw2W/TwXtoqKqZ3q4lmU6DVjfeU2s=
 
+patchedDependencies:
+  pg-cloudflare@1.4.0: b30decd05372fc377cee8f2ebe68f94ab1b213dc8e3f28ba7a32c0bf49675dd0
+
 importers:
 
   .:
@@ -19636,7 +19639,7 @@ snapshots:
   perfect-debounce@1.0.0:
     optional: true
 
-  pg-cloudflare@1.4.0:
+  pg-cloudflare@1.4.0(patch_hash=b30decd05372fc377cee8f2ebe68f94ab1b213dc8e3f28ba7a32c0bf49675dd0):
     optional: true
 
   pg-connection-string@2.14.0: {}
@@ -19665,7 +19668,7 @@ snapshots:
       pg-types: 2.2.0
       pgpass: 1.0.5
     optionalDependencies:
-      pg-cloudflare: 1.4.0
+      pg-cloudflare: 1.4.0(patch_hash=b30decd05372fc377cee8f2ebe68f94ab1b213dc8e3f28ba7a32c0bf49675dd0)
 
   pgpass@1.0.5:
     dependencies:

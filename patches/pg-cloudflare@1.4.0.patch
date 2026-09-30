@@ -1,0 +1,86 @@
+diff --git a/dist/index.js b/dist/index.js
+index 7f0933ec1b3a5f3ce4a0d7d5b8fa00f9a1fe553e..2517008a7cd74d71f17ee256479374e18b6e9ed9 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -11,6 +11,7 @@ class CloudflareSocket extends events_1.EventEmitter {
+         this.ssl = ssl;
+         this.writable = false;
+         this.destroyed = false;
++        this._writeOrdinal = 0;
+         this._upgrading = false;
+         this._upgraded = false;
+         this._cfSocket = null;
+@@ -38,6 +39,13 @@ class CloudflareSocket extends events_1.EventEmitter {
+             const mod = await import('cloudflare:sockets');
+             const connect = mod.connect;
+             this._cfSocket = connect(`${host}:${port}`, options);
++            // Observe native opening without delaying the existing pipelined startup.
++            if (this.listenerCount('socketOpened') || this.listenerCount('socketOpenFailed')) {
++                void this._cfSocket.opened.then(
++                    () => this.emit('socketOpened'),
++                    () => this.emit('socketOpenFailed')
++                );
++            }
+             this._cfWriter = this._cfSocket.writable.getWriter();
+             this._addClosedHandler();
+             this._cfReader = this._cfSocket.readable.getReader();
+@@ -82,11 +90,15 @@ class CloudflareSocket extends events_1.EventEmitter {
+         if (typeof data === 'string')
+             data = Buffer.from(data, encoding);
+         log('sending data direct:', data);
++        const ordinal = ++this._writeOrdinal;
++        this.emit('writeStarted', ordinal);
+         this._cfWriter.write(data).then(() => {
+             log('data sent');
++            this.emit('writeCompleted', ordinal);
+             callback();
+         }, (err) => {
+             log('send error', err);
++            this.emit('writeFailed', ordinal);
+             callback(err);
+         });
+         return true;
+diff --git a/src/index.ts b/src/index.ts
+index 9b1e517ba3881462144cd1f9ecb825b957094327..e5652b764194b38485e459cf1d8c51ed4054e8f9 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -8,6 +8,7 @@ export class CloudflareSocket extends EventEmitter {
+   writable = false
+   destroyed = false
+ 
++  private _writeOrdinal = 0
+   private _upgrading = false
+   private _upgraded = false
+   private _cfSocket: Socket | null = null
+@@ -40,6 +41,13 @@ export class CloudflareSocket extends EventEmitter {
+       const mod = await import('cloudflare:sockets')
+       const connect = mod.connect
+       this._cfSocket = connect(`${host}:${port}`, options)
++      // Observe native opening without delaying the existing pipelined startup.
++      if (this.listenerCount('socketOpened') || this.listenerCount('socketOpenFailed')) {
++        void this._cfSocket.opened.then(
++          () => this.emit('socketOpened'),
++          () => this.emit('socketOpenFailed')
++        )
++      }
+       this._cfWriter = this._cfSocket.writable.getWriter()
+       this._addClosedHandler()
+ 
+@@ -91,13 +99,17 @@ export class CloudflareSocket extends EventEmitter {
+     if (typeof data === 'string') data = Buffer.from(data, encoding)
+ 
+     log('sending data direct:', data)
++    const ordinal = ++this._writeOrdinal
++    this.emit('writeStarted', ordinal)
+     this._cfWriter!.write(data).then(
+       () => {
+         log('data sent')
++        this.emit('writeCompleted', ordinal)
+         callback()
+       },
+       (err) => {
+         log('send error', err)
++        this.emit('writeFailed', ordinal)
+         callback(err)
+       }
+     )
