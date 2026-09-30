@@ -66,6 +66,7 @@ export default defineEntity({
         nullable: true,
         control: {
           kind: "select",
+          suggest: { basis: ["name", "website", "notes"] },
           options: [
             { value: "unknown", label: "Unclassified" },
             { value: "required", label: "Expected" },

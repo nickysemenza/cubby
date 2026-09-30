@@ -217,7 +217,19 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "spendingCategory" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: {
+            basis: [
+              "merchant",
+              "rawDescription",
+              "sourceCategory",
+              "kind",
+              "notes",
+            ],
+          },
+        },
         display: { list: true, detail: true },
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
@@ -231,6 +243,15 @@ export default defineEntity({
         nullable: true,
         control: {
           kind: "select",
+          suggest: {
+            basis: [
+              "merchant",
+              "rawDescription",
+              "sourceCategory",
+              "kind",
+              "notes",
+            ],
+          },
           options: [
             { value: "unknown", label: "Unclassified" },
             { value: "required", label: "Expected" },
