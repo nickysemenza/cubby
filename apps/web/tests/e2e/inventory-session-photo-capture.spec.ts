@@ -15,6 +15,7 @@ import { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
+import { toWire } from "~/lib/http-api/wire";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
 
 import { createFixture, seedProductPrerequisite } from "./e2e-fixtures";
@@ -186,7 +187,9 @@ test("Photo item uploads a staged image and commits one Product with one each at
       ? undefined
       : scrubErrorMessage(await productResponse.text()),
   ).toBe(200);
-  const product = productWithFoodOut.parse(await productResponse.json());
+  const product = toWire(productWithFoodOut, "output").parse(
+    await productResponse.json(),
+  );
   const inventoryResponse = await page.request.get(
     `/api/v1/inventory/${committed.inventory.id}`,
   );
@@ -196,7 +199,7 @@ test("Photo item uploads a staged image and commits one Product with one each at
       ? undefined
       : scrubErrorMessage(await inventoryResponse.text()),
   ).toBe(200);
-  const inventory = inventoryWithLocationAndProductOut.parse(
+  const inventory = toWire(inventoryWithLocationAndProductOut, "output").parse(
     await inventoryResponse.json(),
   );
   expect(product.images.map((image) => image.id)).toEqual([staged.imageId]);
