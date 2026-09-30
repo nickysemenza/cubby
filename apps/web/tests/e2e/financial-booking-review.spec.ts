@@ -167,6 +167,7 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     page,
     page.getByRole("combobox", { name: "Existing purchase", exact: true }),
     purchase.displayName,
+    { query: vendorName, code: result.purchaseId },
   );
   await page
     .getByRole("button", { name: "Review Expense", exact: true })

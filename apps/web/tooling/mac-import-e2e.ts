@@ -1,14 +1,9 @@
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { setTimeout } from "node:timers/promises";
 import { request } from "@playwright/test";
 import { z } from "zod";
 import { createMacRetailerFixture } from "./mac-retailer-fixture";
@@ -20,6 +15,10 @@ import { writeE2ERunBundle } from "./e2e-run-bundle";
 import { MacImportDriver } from "./mac-import-driver";
 import { assertSimulatorAdminUrl } from "./sim-db-guard";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
+import {
+  rustFingerprint,
+  sourceDigest,
+} from "../../../scripts/rust-fingerprint";
 
 const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -45,13 +44,14 @@ const derivedData = path.join(
   repoRoot,
   "apps/apple/DerivedData/mac-import-e2e",
 );
-const appPath = path.join(derivedData, "Build/Products/Debug/Cubby.app");
+let appPath = path.join(derivedData, "Build/Products/Debug/Cubby.app");
 const driver = new MacImportDriver(repoRoot, artifacts, `cubby-mac-${nonce}`);
 const started = performance.now();
 let phase = "setup";
 let binaryFingerprint: string | null = null;
 let sourceFingerprint: string | undefined;
 let failure: Error | undefined;
+let interrupted = false;
 const milestones = {
   built: false,
   signed: false,
@@ -66,10 +66,45 @@ const milestones = {
 let activeChild: ReturnType<typeof spawn> | undefined;
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
+    interrupted = true;
     failure = new Error(`Mac import E2E interrupted by ${signal}`);
     activeChild?.kill("SIGTERM");
     driver.interrupt();
   });
+}
+
+async function holdFailedFixture(fixtureUIReady: boolean): Promise<void> {
+  if (
+    !fixtureUIReady ||
+    interrupted ||
+    process.env.CUBBY_E2E_DIAGNOSTIC_HOLD !== "1"
+  )
+    return;
+  const release = path.join(artifacts, "diagnostic-release");
+  const state = path.join(artifacts, "diagnostic-state.json");
+  writeFileSync(
+    state,
+    JSON.stringify(
+      {
+        bundleID,
+        session: driver.session,
+        ownedFixture: true,
+        timeoutSeconds: 180,
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  driver.evidence.push(state);
+  saveArtifact();
+  console.log(
+    `[mac-import-e2e] Failed fixture held for at most 180 seconds: ${state}; create ${release} to clean up early`,
+  );
+  const deadline = Date.now() + 180_000;
+  while (Date.now() < deadline) {
+    if (interrupted || existsSync(release)) break;
+    await setTimeout(1000);
+  }
 }
 
 async function run(
@@ -121,20 +156,86 @@ function installScenarioEnvironment(storageURL: string): () => void {
 
 function nativeSourceFingerprint(): string {
   const hash = createHash("sha256");
-  for (const root of ["App", "CubbyKit/Sources"]) {
-    const folder = path.join(repoRoot, "apps/apple", root);
-    for (const relative of readdirSync(folder, {
-      recursive: true,
-      encoding: "utf8",
-    })
-      .filter((entry) => entry.endsWith(".swift"))
-      .sort()) {
-      hash.update(`${root}/${relative}\0`);
-      hash.update(readFileSync(path.join(folder, relative)));
-    }
+  hash.update("native-inputs-v2\0");
+  for (const root of [
+    "App",
+    "CubbyKit/Sources",
+    "CubbyKit/Frameworks",
+    "scripts",
+  ]) {
+    hash.update(
+      `${root}\0${sourceDigest(path.join(repoRoot, "apps/apple", root))}\0`,
+    );
   }
-  hash.update(readFileSync(path.join(repoRoot, "apps/apple/project.yml")));
+  for (const relative of [
+    "project.yml",
+    "CubbyKit/Package.swift",
+    "CubbyKit/Package.resolved",
+    "Cubby.xcodeproj/project.pbxproj",
+    "Cubby.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+  ]) {
+    const file = path.join(repoRoot, "apps/apple", relative);
+    hash.update(`${relative}\0`);
+    hash.update(existsSync(file) ? readFileSync(file) : "absent");
+    hash.update("\0");
+  }
+  hash.update(
+    rustFingerprint(path.join(repoRoot, "cubby-ffi/Cargo.toml"), [
+      execFileSync("xcodebuild", ["-version"], { encoding: "utf8" }),
+      process.arch,
+      `profile=${process.env.CUBBY_FFI_PROFILE ?? "release"}`,
+      `targets=${process.env.CUBBY_FFI_TARGETS ?? "all"}`,
+    ]),
+  );
   return hash.digest("hex");
+}
+
+async function reuseNativeBuild(reuseManifest: string): Promise<void> {
+  const previous = z
+    .object({
+      source: z.object({ commit: z.string() }),
+      build: z.object({
+        fingerprint: z.string(),
+        matchesSource: z.literal(true),
+        details: z.object({
+          sourceFingerprintVersion: z.literal(2),
+          sourceFingerprint: z.string(),
+        }),
+      }),
+    })
+    .parse(JSON.parse(readFileSync(reuseManifest, "utf8")));
+  const fingerprint = createHash("sha256")
+    .update(readFileSync(path.join(appPath, "Contents/MacOS/Cubby")))
+    .digest("hex");
+  if (
+    previous.build.details.sourceFingerprint !== sourceFingerprint ||
+    previous.build.fingerprint !== fingerprint
+  )
+    throw new Error(
+      "Cached native app differs from the verified manifest or current native source",
+    );
+  const evidence = path.join(artifacts, "native-build-reuse.json");
+  writeFileSync(
+    evidence,
+    JSON.stringify(
+      {
+        sourceCommit: previous.source.commit,
+        sourceFingerprint,
+        fingerprint,
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  driver.evidence.push(evidence);
+  const fixtureAppPath = path.join(artifacts, "native-fixture/Cubby.app");
+  await run("ditto", [appPath, fixtureAppPath]);
+  appPath = fixtureAppPath;
+  await run("/usr/libexec/PlistBuddy", [
+    "-c",
+    `Set :CFBundleIdentifier ${bundleID}`,
+    path.join(appPath, "Contents/Info.plist"),
+  ]);
 }
 
 function saveArtifact(): void {
@@ -232,6 +333,7 @@ function saveArtifact(): void {
         bundleID,
         sandboxed: true,
         sourceFingerprint: sourceFingerprint ?? "unbuilt",
+        sourceFingerprintVersion: 2,
         webFingerprint: webBuild.fingerprint ?? "unbuilt",
       },
     },
@@ -432,25 +534,31 @@ async function main(): Promise<void> {
       milestones.browserFixturePrepared = true;
     }
     phase = "native-build";
-    await run("pnpm", ["apple", "gen"]);
     sourceFingerprint = nativeSourceFingerprint();
-    await run("xcodebuild", [
-      "-project",
-      "apps/apple/Cubby.xcodeproj",
-      "-scheme",
-      "Cubby-macOS",
-      "-configuration",
-      "Debug",
-      "-destination",
-      "platform=macOS",
-      "-derivedDataPath",
-      derivedData,
-      "-skipPackagePluginValidation",
-      "COMPILER_INDEX_STORE_ENABLE=NO",
-      "CODE_SIGNING_ALLOWED=NO",
-      `PRODUCT_BUNDLE_IDENTIFIER=${bundleID}`,
-      "build",
-    ]);
+    const reuseManifest = process.env.CUBBY_E2E_REUSE_NATIVE_MANIFEST;
+    if (reuseManifest) {
+      await reuseNativeBuild(reuseManifest);
+    } else {
+      await run("pnpm", ["apple", "gen"]);
+      sourceFingerprint = nativeSourceFingerprint();
+      await run("xcodebuild", [
+        "-project",
+        "apps/apple/Cubby.xcodeproj",
+        "-scheme",
+        "Cubby-macOS",
+        "-configuration",
+        "Debug",
+        "-destination",
+        "platform=macOS",
+        "-derivedDataPath",
+        derivedData,
+        "-skipPackagePluginValidation",
+        "COMPILER_INDEX_STORE_ENABLE=NO",
+        "CODE_SIGNING_ALLOWED=NO",
+        `PRODUCT_BUNDLE_IDENTIFIER=${bundleID}`,
+        "build",
+      ]);
+    }
     milestones.built = true;
     const entitlements = path.join(artifacts, "Cubby-e2e.entitlements");
     let fixtureEntitlements = readFileSync(
@@ -532,6 +640,7 @@ async function main(): Promise<void> {
     milestones.fixtureUIObserved = true;
     phase = "file-import";
     await driver.clickSidebar("Browse");
+    await driver.wait("id=browse.importStatement");
     await driver.click("id=browse.importStatement");
     await driver.importStatement(
       path.join(webRoot, "tests/e2e/fixtures/synthetic-monarch-wardrobe.csv"),
@@ -590,6 +699,7 @@ async function main(): Promise<void> {
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
     if (fixtureUIReady) await driver.screenshot("failure").catch(() => {});
+    await holdFailedFixture(fixtureUIReady);
   } finally {
     await cleanupResources({
       opened,

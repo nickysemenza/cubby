@@ -387,8 +387,13 @@ describe("financial repositories — critical invariants", () => {
     });
     expect(possibleExisting.rows[0]).toMatchObject({
       status: "possible_existing",
-      existingTransactionIds: [manualEvidence.id],
     });
+    // The manual description and the nearby Amazon merchant are separate
+    // plausible matches, including the latter's amount change. Review keeps
+    // both candidates instead of silently selecting or creating a charge.
+    expect(possibleExisting.rows[0]?.existingTransactionIds.toSorted()).toEqual(
+      [manualEvidence.id, createdEvidence.output.id].toSorted(),
+    );
 
     const identityAccount = (
       await createFinancialAccount(

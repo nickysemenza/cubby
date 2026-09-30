@@ -99,7 +99,13 @@ export const problemsContract = defineContract("problems", {
     native: "Review and apply import corrections",
     input: resolveRunFindingInput,
     output: resolveRunFindingOut,
-    invalidates: ["problems"],
+    invalidates: [
+      "problems",
+      "runOnly",
+      "purchase",
+      "expense",
+      "financialTransaction",
+    ],
   }),
   resolveArrivedFindings: mutation({
     input: resolveArrivedFindingsInput,

@@ -1,5 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import type { ColumnFiltersState } from "@tanstack/react-table";
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+} from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { FilterFieldConfig } from "./filter-bar-core";
 import {
@@ -8,6 +15,7 @@ import {
 } from "./filter-bar-core";
 import { LedgerFilters } from "./LedgerFilters";
 import { createCubbyColumnHelper, useCubbyTable } from "./table-features";
+import { useFilterBarDraft } from "./useFilterBarDraft";
 
 type LedgerRow = { id: string; name: string; trade: string };
 
@@ -118,6 +126,50 @@ const adapterFields: TestField[] = [
   { key: "status", label: "Status", type: "multiselect" },
   { key: "project", label: "Project", type: "select" },
 ];
+
+describe("deferred filter ownership", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("keeps a typed search through old-owner renders and delayed acknowledgements without masking an external reset", async () => {
+    vi.useFakeTimers();
+    const filters = (value: string) =>
+      filterStateToBarFilters([{ id: "name", value }], adapterFields);
+    const writes: ColumnFiltersState[] = [];
+    const commit = (value: ColumnFiltersState) => writes.push(value);
+    const { result, rerender } = renderHook(
+      ({ value }) =>
+        useFilterBarDraft({
+          externalFilters: filters(value),
+          fields: adapterFields,
+          commit,
+        }),
+      { initialProps: { value: "all" } },
+    );
+    // The table accepts writes in startTransition. A foreground render can
+    // still carry its old filters; a later acknowledgement can also arrive
+    // after the user has started typing their next search.
+    act(() => result.current.handleChange(filters("credit")));
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(writes).toEqual([[{ id: "name", value: "credit" }]]);
+    rerender({ value: "all" });
+    expect(result.current.draftFilters).toEqual(filters("credit"));
+    expect(writes).toHaveLength(1);
+
+    act(() => result.current.handleChange(filters("zero")));
+    rerender({ value: "credit" });
+    expect(result.current.draftFilters).toEqual(filters("zero"));
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(writes).toEqual([
+      [{ id: "name", value: "credit" }],
+      [{ id: "name", value: "zero" }],
+    ]);
+
+    rerender({ value: "saved view" });
+    expect(result.current.draftFilters).toEqual(filters("saved view"));
+    await act(() => vi.advanceTimersByTimeAsync(500));
+    expect(writes).toHaveLength(2);
+  });
+});
 
 describe("LedgerFilters adapters", () => {
   it("preserves scalar and multiselect table state", () => {

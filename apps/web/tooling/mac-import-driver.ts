@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { appendFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
@@ -92,19 +92,37 @@ export class MacImportDriver {
   }
 
   async clickSidebar(label: "Browse" | "Photos"): Promise<void> {
-    const snapshot = await this.snapshot();
-    const candidates = [
-      ...snapshot.matchAll(
-        new RegExp(
-          `^\\s*(@e\\d+(?:~s\\d+)?)\\s+\\[cell\\]\\s+"${label}"(?:\\s+\\[selected\\])?\\s*$`,
-          "gm",
+    if (!this.bundleID) throw new Error("No owned Mac app session is open");
+    const activate = () => {
+      execFileSync("osascript", [
+        "-e",
+        "on run argv\n tell application id (item 1 of argv) to activate\nend run",
+        this.bundleID!,
+      ]);
+    };
+    const cell = (snapshot: string) => {
+      const candidates = [
+        ...snapshot.matchAll(
+          new RegExp(
+            `^\\s*(@e\\d+(?:~s\\d+)?)\\s+\\[cell\\]\\s+"${label}"(?:\\s+\\[selected\\])?\\s*$`,
+            "gm",
+          ),
         ),
-      ),
-    ];
-    const reference = candidates[0]?.[1];
-    if (candidates.length !== 1 || !reference)
-      throw new Error(`Expected one actionable ${label} sidebar cell`);
-    await this.click(reference);
+      ];
+      const reference = candidates[0]?.[1];
+      if (candidates.length !== 1 || !reference)
+        throw new Error(`Expected one actionable ${label} sidebar cell`);
+      return { reference, selected: candidates[0]![0].includes("[selected]") };
+    };
+    activate();
+    let target = cell(await this.snapshot());
+    for (let attempt = 0; attempt < 2 && !target.selected; attempt++) {
+      await this.click(target.reference);
+      target = cell(await this.snapshot());
+      if (!target.selected) activate();
+    }
+    if (!target.selected)
+      throw new Error(`Actual Mac sidebar did not select ${label}`);
   }
 
   /** NSOpenPanel's slash shortcut opens Go to Folder without hardcoded coordinates. */

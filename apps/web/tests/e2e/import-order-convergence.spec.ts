@@ -17,6 +17,19 @@ for (const order of sourcePermutations(EVIDENCE_SOURCES)) {
       .replaceAll(/[^a-zA-Z0-9-]/g, "-")
       .toLowerCase();
     const harness = await createConvergenceHarness(page, baseURL!, token);
+    if (order.join(",") === "csv,photo,retailer,gmail") {
+      // The Problems overview samples twelve findings. A Run must retain its
+      // reviewed action after earlier receipt arrivals fill that sample.
+      for (let index = 0; index < 13; index++) {
+        const earlier = await createConvergenceHarness(
+          page,
+          baseURL!,
+          `${token}-earlier-${index}`,
+        );
+        await earlier.sources.retailer();
+        expect(await earlier.openFindingCount()).toBeGreaterThanOrEqual(1);
+      }
+    }
     for (const source of order)
       await test.step(`${source} source arrival`, () =>
         harness.sources[source]());

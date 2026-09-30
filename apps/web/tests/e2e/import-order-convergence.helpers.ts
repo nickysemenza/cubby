@@ -319,7 +319,10 @@ export async function createConvergenceHarness(
     );
     expect(committed.items[0]?.outcome).toMatch(/created|updated|replayed/);
     if (bookedPurchaseCode) {
-      await gotoAuthenticatedPage(page, "/problems");
+      await gotoAuthenticatedPage(
+        page,
+        `/runs/${run.publicId}#import-findings`,
+      );
       const apply = page.getByRole("button", {
         name: "Apply fix",
         exact: true,
@@ -331,6 +334,10 @@ export async function createConvergenceHarness(
       await apply.click();
       await expect(
         page.getByText("Applied import correction", { exact: true }),
+      ).toBeVisible();
+      await expect(apply).toHaveCount(0);
+      await expect(
+        page.locator("#import-findings").getByText("applied", { exact: true }),
       ).toBeVisible();
     }
     retailerDone = true;
@@ -639,7 +646,21 @@ export async function createConvergenceHarness(
     if (!purchase || !transaction)
       throw new Error("Imported settlement evidence missing");
     await gotoAuthenticatedPage(page, `/vendors/${vendor.id}`);
-    await page.getByRole("button", { name: "Link", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Link", exact: true })
+      .click()
+      .catch(async (error: Error) => {
+        const { rows } = await database.execute(sql`
+          SELECT e.event, e."orderId", d.decision, p.shortcode AS "purchaseCode"
+          FROM "OrderMailEvent" e JOIN "OrderMail" m ON m.id = e."orderMailId"
+          LEFT JOIN "OrderMailCandidateDecision" d ON d."eventId" = e.id
+          LEFT JOIN "Purchase" p ON p.id = d."purchaseId"
+          WHERE m."messageId" = ${`synthetic-message-${token}`}
+        `);
+        throw new Error(
+          `${error.message}\n${JSON.stringify({ path: new URL(page.url()).pathname, headings: await page.getByRole("heading").allTextContents(), candidates: rows })}`,
+        );
+      });
     await expect(page.getByText("linked", { exact: true })).toBeVisible();
     expect(purchase.shortcode).toBe(bookedPurchaseCode);
     return { purchaseCode: purchase.shortcode, productCode, photoRunId };
@@ -672,5 +693,13 @@ export async function createConvergenceHarness(
     projection,
     productName,
     orderId,
+    async openFindingCount() {
+      const { rows } = await database.execute(sql`
+        SELECT count(*)::int AS count FROM "RunFinding" f
+        JOIN "Purchase" p ON p.id = f."entityId"
+        WHERE p."vendorId" = ${vendorId} AND f.status = 'open'
+      `);
+      return rows[0]?.count;
+    },
   };
 }

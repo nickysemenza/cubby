@@ -65,6 +65,7 @@ import {
   summarizePhotoDescriptions,
   type AgentWorkItem,
 } from "./agent-work-summary";
+import { RunFindingActions } from "./run-finding-actions";
 
 const ACTIVE_RUN_STATUSES = new Set([
   "running",
@@ -1520,6 +1521,9 @@ export function RunImportFindings({ record }: { record: RunOut }) {
                     ? ` · expires ${formatMoment(finding.expiresAt)}`
                     : ""}
                 </p>
+                {finding.status === "open" ? (
+                  <RunFindingActions finding={finding} />
+                ) : null}
               </>
             ),
           })}
