@@ -14,6 +14,34 @@ import {
 
 describe("standard progressive list composition", () => {
   const ctx = withTestDb();
+  // Core reads must survive an unavailable deferred inheritance dependency.
+  it("reads expense core without evaluating deferred inheritance", async () => {
+    await seedReferenceUniverse(ctx.db);
+    const context = buildKernelContext(ctx.db);
+    const operation = ENTITY_LIST_READ_OPERATIONS.expense;
+    await getDb(ctx.db).execute(
+      sql`ALTER TABLE "Project" RENAME TO "UnavailableProject"`,
+    );
+    try {
+      const base = await operation.base(context, {
+        filters: {},
+        pagination: { pageIndex: 0, pageSize: 25 },
+      });
+      expect(base.data.length).toBeGreaterThan(0);
+      expect(base.meta.totalCount).toBeGreaterThan(0);
+      const enrichment = await operation.enrich(context, {
+        ids: base.data.map((row) => String(row.id)),
+        groups: ["derived"],
+      });
+      expect(
+        enrichment.groups.find((group) => group.id === "derived")?.state,
+      ).toBe("error");
+    } finally {
+      await getDb(ctx.db).execute(
+        sql`ALTER TABLE "UnavailableProject" RENAME TO "Project"`,
+      );
+    }
+  });
   // A failed database-only quality lookup must not fail independent media work.
   it("retains successful groups when one enrichment query fails", async () => {
     await seedReferenceUniverse(ctx.db);
