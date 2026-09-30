@@ -50,6 +50,20 @@ async function parseFile(input: StatementCsvFileInput) {
   return { headers, parsed };
 }
 
+function duplicateProviderIds(parsed: ReturnType<typeof parseStatementCsv>) {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  // Include evidence-only rows: filtering or pagination cannot make a
+  // repeated provider identity safe to book. Each CSV has one source.
+  for (const row of parsed.recordRows) {
+    const id = row.providerTransactionId;
+    if (!id) continue;
+    if (seen.has(id)) duplicates.add(id);
+    seen.add(id);
+  }
+  return duplicates;
+}
+
 export async function previewStatementCsv(
   db: Database,
   _actor: ActorContext,
@@ -71,7 +85,11 @@ export async function previewStatementCsv(
   const offset = input.previewOffset ?? 0;
   const batch = previewStatementBatch(parsed, offset);
   const preview = batch
-    ? await previewFinancialStatementImport(db, batch)
+    ? await previewFinancialStatementImport(
+        db,
+        batch,
+        duplicateProviderIds(parsed),
+      )
     : null;
   return {
     headers,
@@ -214,6 +232,7 @@ export async function commitStatementCsv(
   const { parsed } = await parseFile(input);
   if (!parsed)
     throw new Error("Map the CSV columns before confirming the import.");
+  const duplicates = duplicateProviderIds(parsed);
   const previewRows: FinancialStatementImportPreviewOut["rows"] = [];
   for (
     let offset = 0;
@@ -222,7 +241,11 @@ export async function commitStatementCsv(
   ) {
     const batch = previewStatementBatch(parsed, offset);
     if (!batch) continue;
-    const preview = await previewFinancialStatementImport(db, batch);
+    const preview = await previewFinancialStatementImport(
+      db,
+      batch,
+      duplicates,
+    );
     previewRows.push(...preview.rows);
   }
   const selected = validateDecisions(input.selected, previewRows);
