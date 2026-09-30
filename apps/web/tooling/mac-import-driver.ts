@@ -451,7 +451,7 @@ export class MacImportDriver {
   async screenshot(name: string): Promise<void> {
     this.guardForeground();
     const script =
-      'ObjC.import("CoreGraphics"); function run(argv) { const pid=Number(argv[0]); const windows=ObjC.deepUnwrap($.CGWindowListCopyWindowInfo(1, 0)); const own=windows.filter(w => Number(w.kCGWindowOwnerPID)===pid && Number(w.kCGWindowLayer)===0); own.sort((a,b)=>b.kCGWindowBounds.Width*b.kCGWindowBounds.Height-a.kCGWindowBounds.Width*a.kCGWindowBounds.Height); if (!own.length) throw Error("No owned fixture window"); return String(own[0].kCGWindowNumber); }';
+      'ObjC.import("CoreGraphics"); function run(argv) { const pid=Number(argv[0]); const windows=ObjC.deepUnwrap($.NSArray.arrayWithArray($.CGWindowListCopyWindowInfo(1, 0))); const own=windows.filter(w => Number(w.kCGWindowOwnerPID)===pid && Number(w.kCGWindowLayer)===0); own.sort((a,b)=>b.kCGWindowBounds.Width*b.kCGWindowBounds.Height-a.kCGWindowBounds.Width*a.kCGWindowBounds.Height); if (!own.length) throw Error("No owned fixture window"); return String(own[0].kCGWindowNumber); }';
     const windowID = execFileSync(
       "osascript",
       ["-l", "JavaScript", "-e", script, String(this.pid)],
@@ -482,8 +482,8 @@ export class MacImportDriver {
   async chooseFile(file: string): Promise<void> {
     await this.wait('label="Open" role=Button');
     await this.action(["type", "/"]);
-    await this.wait("role=TextField editable=true");
-    await this.action(["fill", "role=TextField editable=true", file]);
+    await this.wait("id=PathTextField");
+    await this.action(["fill", "id=PathTextField", file]);
     await this.action(["type", "\n"]);
     await this.click('label="Open" role=Button');
   }
