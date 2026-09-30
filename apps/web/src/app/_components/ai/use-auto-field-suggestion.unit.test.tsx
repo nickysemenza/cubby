@@ -68,6 +68,16 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function deferredFinanceApply() {
+  let resolve!: (value: z.output<typeof financeCategoryApplyOut>) => void;
+  const promise = new Promise<z.output<typeof financeCategoryApplyOut>>(
+    (complete) => {
+      resolve = complete;
+    },
+  );
+  return { promise, resolve };
+}
+
 /** Reads the DOM-rendered `isDirty` indicator a `Probe` mounts for `target`. */
 function isDirtyText(target: string): string | null {
   return screen.getByTestId(`dirty-${target}`).textContent;
@@ -696,8 +706,7 @@ describe("useAutoFieldSuggestion", () => {
         fingerprint: "a".repeat(64),
       },
     };
-    const pending =
-      Promise.withResolvers<z.input<typeof financeCategoryApplyOut>>();
+    const pending = deferredFinanceApply();
     const transport = vi.fn(async () => await pending.promise);
     const operations = {
       ...operationsReturning(() => ({
@@ -738,12 +747,14 @@ describe("useAutoFieldSuggestion", () => {
       target: { value: "SPC-8K7M" },
     });
     await act(async () =>
-      pending.resolve({
-        entity: "expense",
-        entityId: "EXP-4K7M",
-        spendingCategoryId: "SPC-4K7M",
-        sideEffects: {},
-      }),
+      pending.resolve(
+        financeCategoryApplyOut.parse({
+          entity: "expense",
+          entityId: "EXP-4K7M",
+          spendingCategoryId: "SPC-4K7M",
+          sideEffects: {},
+        }),
+      ),
     );
     await waitFor(() =>
       expect(form.getValues("spendingCategoryId")).toBe("SPC-8K7M"),
@@ -774,8 +785,7 @@ describe("useAutoFieldSuggestion", () => {
           fingerprint: "a".repeat(64),
         },
       };
-      const pending =
-        Promise.withResolvers<z.input<typeof financeCategoryApplyOut>>();
+      const pending = deferredFinanceApply();
       const transport = vi.fn(async () => await pending.promise);
       const operations = {
         ...operationsReturning(() => ({
@@ -824,12 +834,14 @@ describe("useAutoFieldSuggestion", () => {
         />,
       );
       await act(async () =>
-        pending.resolve({
-          entity: "expense",
-          entityId: "EXP-4K7M",
-          spendingCategoryId: "SPC-4K7M",
-          sideEffects: {},
-        }),
+        pending.resolve(
+          financeCategoryApplyOut.parse({
+            entity: "expense",
+            entityId: "EXP-4K7M",
+            spendingCategoryId: "SPC-4K7M",
+            sideEffects: {},
+          }),
+        ),
       );
       expect(form.getValues("spendingCategoryId")).toBe("");
       expect(isDirtyText("spendingCategoryId")).toBe("false");

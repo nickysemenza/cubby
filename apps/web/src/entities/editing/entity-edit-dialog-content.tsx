@@ -398,7 +398,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
             request.entity,
             request.operation,
             request.intent,
-            request.surface,
+            "dialog",
           ])}
         >
           <presentation.Fields

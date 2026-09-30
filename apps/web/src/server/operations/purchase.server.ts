@@ -4,6 +4,7 @@ import { expenseOut } from "@cubby/schemas/project";
 import {
   type linkExpensesToPurchaseInput,
   type purchaseProductsInput,
+  type purchaseSettlementCandidatesOut,
   splitExpenseDelta,
   type splitExpenseInput,
 } from "@cubby/schemas/purchase";
@@ -132,7 +133,7 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
           };
         }),
       ),
-    };
+    } satisfies typeof purchaseSettlementCandidatesOut._output;
   },
   orderMail: (context, input) => listPurchaseOrderMail(context.db, input),
   products: (context, input) => purchaseProductsWorkflow(context, input),

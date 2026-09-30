@@ -51,11 +51,12 @@ const operationResult = async <Schema extends z.ZodType>(
     response.status(),
     response.ok() ? undefined : scrubErrorMessage(await response.text()),
   ).toBe(200);
-  return z
-    .object({ ok: z.literal(true), data: schema })
+  const envelope = z
+    .object({ ok: z.literal(true), data: z.unknown() })
     .parse(
       superjson.deserialize(superJsonResultSchema.parse(await response.json())),
-    ).data;
+    );
+  return schema.parse(envelope.data);
 };
 
 // Rollback/refused-placement retry belongs to the real-PG command regression.

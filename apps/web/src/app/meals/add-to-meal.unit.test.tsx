@@ -1,7 +1,6 @@
 import {
   type MealCreateInput,
   type MealOut,
-  type MealUpdateInput,
   mealAddRecipeInput,
   mealOut,
 } from "@cubby/schemas/meal";
@@ -23,9 +22,7 @@ import { type AddToMealOperations, AddToMeal } from "./add-to-meal";
 
 const recipeId = testShortcode("recipe", "RCP-4K7M");
 const createdMeals: MealCreateInput[] = [];
-const updatedMeals: MealUpdateInput[] = [];
 const addedRecipes: Array<z.output<typeof mealAddRecipeInput>> = [];
-const mutationOrder: string[] = [];
 let mealRequests = 0;
 const emptyTotals = withMacros({
   cost: { status: "unavailable" as const, reason: "empty" as const },
@@ -84,14 +81,12 @@ const testOperations: AddToMealOperations = {
   addRecipe: meal.addRecipe.withTransport(async ({ input }) => {
     const command = meal.addRecipe.definition.input.parse(input);
     addedRecipes.push(command);
-    mutationOrder.push("add recipe");
     return tuesdayDinner;
   }),
   mealMutation: entityMutation.mutate.withTransport(async ({ input }) => {
     const command = entityBrowserMutationCommandSchema.parse(input);
     if (command.action === "create" && command.entity === "meal") {
       createdMeals.push(command.data);
-      mutationOrder.push("create meal");
       return {
         action: "create" as const,
         entity: "meal" as const,
@@ -99,17 +94,7 @@ const testOperations: AddToMealOperations = {
         sideEffects: {},
       };
     }
-    if (command.action === "update" && command.entity === "meal") {
-      updatedMeals.push({ id: command.id, data: command.data });
-      mutationOrder.push("update meal");
-      return {
-        action: "update" as const,
-        entity: "meal" as const,
-        item: { ...cornerDeli, mealKind: "cooked" as const },
-        sideEffects: {},
-      };
-    }
-    throw new Error("Add to meal only issues meal create and update commands.");
+    throw new Error("Add to meal only issues a meal create command.");
   }),
 };
 
@@ -117,9 +102,7 @@ let harness: ReturnType<typeof createBrowserTestHarness>;
 
 beforeEach(() => {
   createdMeals.length = 0;
-  updatedMeals.length = 0;
   addedRecipes.length = 0;
-  mutationOrder.length = 0;
   mealRequests = 0;
   harness = createBrowserTestHarness();
 });
@@ -176,7 +159,12 @@ describe("AddToMeal", () => {
 
     await waitFor(() =>
       expect(addedRecipes).toEqual([
-        { mealId: tuesdayDinner.id, recipeId, scale: 1 },
+        {
+          mealId: tuesdayDinner.id,
+          recipeId,
+          scale: 1,
+          convertToCooked: false,
+        },
       ]),
     );
     expect(createdMeals).toEqual([]);
@@ -198,7 +186,7 @@ describe("AddToMeal", () => {
     expect(addedRecipes).toEqual([]);
   });
 
-  it("re-kinds a selected eating-out meal before adding its recipe", async () => {
+  it("submits the reviewed conversion with recipe addition in one command", async () => {
     renderAddToMeal();
     const picker = await openMealPicker();
 
@@ -214,12 +202,8 @@ describe("AddToMeal", () => {
     );
 
     await waitFor(() => expect(addedRecipes).toHaveLength(1));
-    expect(updatedMeals).toEqual([
-      { id: cornerDeli.id, data: { mealKind: "cooked" } },
-    ]);
     expect(addedRecipes).toEqual([
-      { mealId: cornerDeli.id, recipeId, scale: 1 },
+      { mealId: cornerDeli.id, recipeId, scale: 1, convertToCooked: true },
     ]);
-    expect(mutationOrder).toEqual(["update meal", "add recipe"]);
   });
 });

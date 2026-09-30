@@ -251,6 +251,8 @@ export async function applyFinanceCategorySuggestion(
           data: { spendingCategoryId: input.spendingCategoryId },
         }),
       );
+      if (result.action !== "update")
+        throw new Error("Finance category Apply requires an update result.");
       return {
         entity: review.entity,
         entityId: review.entityId,

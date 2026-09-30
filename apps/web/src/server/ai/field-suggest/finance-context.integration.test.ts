@@ -81,7 +81,6 @@ describe("reviewed linked finance category suggestions", () => {
       status: "posted",
       amount: 29.99,
       postedDate: "2026-09-01",
-      purchaseId: purchase.id,
       spendingCategoryId: explicit.id,
     });
     const [allocation] = await getDb(ctx.db)
@@ -121,7 +120,7 @@ describe("reviewed linked finance category suggestions", () => {
         | "financialTransaction"
         | "purchase"
         | "expense" = "financialTransaction",
-      entityId = charge.shortcode,
+      entityId: string = charge.shortcode,
     ) =>
       suggestFields(
         ctx.db,
@@ -215,7 +214,7 @@ describe("reviewed linked finance category suggestions", () => {
       name: "Fixture shipment tax",
       cost: 2,
       date: "2026-09-01",
-      costType: "other",
+      costType: "materials",
       purchaseId: f.purchase.id,
       lineKind: "tax",
     });
@@ -223,7 +222,7 @@ describe("reviewed linked finance category suggestions", () => {
       name: "Fixture friend reimbursement",
       cost: -8,
       date: "2026-09-01",
-      costType: "other",
+      costType: "materials",
       purchaseId: f.purchase.id,
       economicRole: "reimbursement",
     });
