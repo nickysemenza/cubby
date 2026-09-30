@@ -33,6 +33,7 @@ import { updateImageProcessingSettings } from "~/server/repo/image-processing-ma
 import { assignImageProcessingExecutor } from "~/server/repo/image-processing-history";
 import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
 import { photoImportContract } from "~/contracts/photo-import.contract";
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import * as schema from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
@@ -553,7 +554,16 @@ export async function createConvergenceHarness(
     ).toBeVisible();
     const reviewResponse = await page.request.get(
       `/api/v1/photoImport/review?runId=${run.runId}`,
+      // The pooled API socket can reset while browser approval runs. Playwright
+      // retries only ECONNRESET here; HTTP failures still reach the assertions.
+      { maxRetries: 1 },
     );
+    expect(
+      reviewResponse.status(),
+      reviewResponse.status() === 200
+        ? undefined
+        : scrubErrorMessage(await reviewResponse.text()),
+    ).toBe(200);
     const review = photoRunReviewResponse.parse(await reviewResponse.json());
     productCode = review.review.proposals[0]?.committedProduct?.id;
     expect(productCode).toBeTruthy();
