@@ -109,6 +109,48 @@ export default defineEntity({
       ],
     },
     list: {
+      read: {
+        media: [
+          "images",
+          "labelImages",
+          "itemImageCount",
+          "labelImageCount",
+          "displayImages",
+        ],
+        quality: [
+          "dataQuality",
+          "classificationEvidence",
+          "dataGaps",
+          "modelPresence",
+          "notesPresence",
+        ],
+        relations: [
+          "categoryId",
+          "growsPlantId",
+          "category",
+          "ingredient",
+          "inventoryEntry",
+          "externalIds",
+          "unitMappings",
+          "primaryGtin",
+          "upcPresence",
+        ],
+        derived: [
+          "price",
+          "pricing",
+          "usdaUnavailable",
+          "unitPrice",
+          "unitPriceMappings",
+          "food",
+          "expenseCount",
+          "componentCount",
+          "expenseTotal",
+          "purchaseDate",
+          "quantityLedger",
+          "onHandUnits",
+          "quantityVariance",
+        ],
+      },
       totalOverrides: [
         { id: "price", label: "Prices", keys: ["price"], format: "currency" },
         {

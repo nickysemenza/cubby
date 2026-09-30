@@ -3,10 +3,40 @@ import { describe, expect, it } from "vitest";
 import {
   beginDatabaseAcquire,
   beginDatabaseQuery,
+  withDatabaseRequestMetrics,
   withDatabaseOperationMetrics,
 } from "./db-observability";
 
+// Failures: a request collector may omit auth/setup SQL, count nested phase
+// totals twice, or lose summaries when the request throws.
 describe("database operation metrics", () => {
+  it("summarizes nested operation work once even when a request fails", async () => {
+    const attributes: Record<string, string | number | boolean | undefined> =
+      {};
+    const span = {
+      setAttributes: (values: typeof attributes) =>
+        Object.assign(attributes, values),
+    };
+    const sentinel = new Error("request sentinel");
+    await expect(
+      withDatabaseRequestMetrics(span, async () => {
+        beginDatabaseAcquire(0)(2);
+        await withDatabaseOperationMetrics(async () => {
+          beginDatabaseQuery(10)(15);
+          await withDatabaseOperationMetrics(async () => {
+            beginDatabaseQuery(20)(27);
+          });
+        });
+        throw sentinel;
+      }),
+    ).rejects.toBe(sentinel);
+    expect(attributes).toMatchObject({
+      "db.query.count": 2,
+      "db.query.duration_sum_ms": 12,
+      "db.acquire.count": 1,
+    });
+  });
+
   it("distinguishes summed work from overlapping active wall time", async () => {
     await withDatabaseOperationMetrics(async (metrics) => {
       const finishQueryA = beginDatabaseQuery(10);

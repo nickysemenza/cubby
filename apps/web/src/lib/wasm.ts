@@ -103,9 +103,9 @@ const resultCache = new LRUCache<string, NonNullable<WasmResult>>({
 });
 
 /**
- * WASM module with OpenTelemetry tracing + a result cache for pure methods.
+ * WASM module with execution timing and a result cache for pure methods.
  * WASM is guaranteed loaded at module init. Most methods are synchronous;
- * driver methods retain tracing until their returned Promise settles.
+ * driver methods measure completion when their returned Promise settles.
  */
 const instrumentedWasm = new Proxy(instance, {
   get(target, prop) {

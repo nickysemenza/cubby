@@ -18,6 +18,8 @@ import {
   VENDOR_DELETE_EDGE_POLICY,
   VENDOR_MERGE_EDGE_POLICY,
   vendorList,
+  vendorListRead,
+  vendorListSummary,
 } from "./vendor";
 
 export const vendorRepository = defineRepository("vendor", {
@@ -27,6 +29,9 @@ export const vendorRepository = defineRepository("vendor", {
   },
   get: onDb(getVendorByShortcode),
   list: listOn(vendorList),
+  listRead: (ctx, filters, sorts, pagination, projection) =>
+    vendorListRead(ctx.db, filters, sorts, pagination, "page", projection),
+  listSummary: (ctx, filters) => vendorListSummary(ctx.db, filters),
   create: asActor(createVendor),
   update: asActor(updateVendor),
   delete: asActor(deleteVendors),

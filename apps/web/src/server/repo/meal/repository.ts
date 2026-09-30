@@ -12,6 +12,7 @@ import {
   getMealByShortcode,
   MEAL_DELETE_EDGE_POLICY,
   mealList,
+  mealListRead,
   updateMeal,
 } from "./crud";
 
@@ -21,6 +22,8 @@ export const mealRepository = defineRepository("meal", {
   lifecycle: { delete: MEAL_DELETE_EDGE_POLICY },
   get: onDb(getMealByShortcode),
   list: listOn(mealList),
+  listRead: (ctx, filters, sorts, pagination, projection) =>
+    mealListRead(ctx.db, filters, sorts, pagination, "page", projection),
   create: asActor(createMealWithEntityId),
   update: async (ctx, id, data) => {
     const entityId = await mealShortcodes.one(ctx.db, id);

@@ -16,12 +16,13 @@ import type {
   ProductId,
   ProductCategoryId,
 } from "@cubby/schemas/identifiers";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import {
   buildTakeSkip,
   type PaginationParams,
+  type ListGroupSummary,
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type {
@@ -54,6 +55,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
+import { projectListRows } from "~/entities/list-read-schema";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -125,6 +127,11 @@ import {
 } from "~/server/repo/inventory/valuation";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
 import { listScaffold } from "~/server/repo/list";
+import {
+  loadListGroup,
+  wantsListGroup,
+  type ListProjection,
+} from "~/server/repo/list-projection";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
 import {
   resolveProductCategory,
@@ -167,6 +174,13 @@ import {
 import { enrichProductListItems } from "./list-enrichment";
 import {
   dbProductToAPI,
+  deriveProductQuantitySummary,
+  splitProductImages,
+  mapProductExternalIds,
+  mapProductUnitMappings,
+  mapProductListInventoryEntries,
+  primaryGtinOf,
+  mapDbProductIngredient,
   dbProductToListAPI,
   dbProductToPickerItemAPI,
   dbProductToTopLevelAPI,
@@ -610,7 +624,7 @@ export const getProductsByShortcodes = async (
 
 const categoryFilterCondition = async (
   db: Database,
-  filters: ProductFilters,
+  filters: ProductListFilters,
 ) =>
   filters.categoryFilter?.length || filters.categoryFeatureFilter?.length
     ? or(
@@ -635,9 +649,11 @@ const categoryFilterCondition = async (
  * The complete WHERE for a product list. `getEntityCounts` calls it with `{}`
  * — see repo/dashboard.ts.
  */
+type ProductListFilters = ProductFilters & { ids?: readonly string[] };
+
 export const buildProductWhere = async (
   db: Database,
-  filters: ProductFilters,
+  filters: ProductListFilters,
 ) => {
   const dbClient = getDb(db);
 
@@ -1061,25 +1077,67 @@ export const buildProductWhere = async (
   return whereClause;
 };
 
-export const productList = async (
+const loadProductListSums = async (
   db: Database,
-  filters: ProductFilters,
+  whereClause: SQL | undefined,
+) => {
+  const [price, expenseRows] = await Promise.all([
+    loadProductPriceSum(db, whereClause),
+    // Money is the signed Expense sum over the complete filtered product set.
+    getDb(db)
+      .select({ expenseTotalSum: sum(expense.cost) })
+      .from(expense)
+      .where(
+        and(
+          notDeleted(expense),
+          inArray(
+            expense.productId,
+            getDb(db)
+              .select({ id: product.id })
+              .from(product)
+              .where(whereClause),
+          ),
+        ),
+      ),
+  ]);
+  const expenseTotal = Number(expenseRows[0]?.expenseTotalSum ?? 0);
+  return {
+    price: Number.isNaN(price) ? 0 : price,
+    expenseTotal: Number.isNaN(expenseTotal) ? 0 : expenseTotal,
+  };
+};
+
+export const productListSummary = async (
+  db: Database,
+  filters: ProductListFilters,
+) => loadProductListSums(db, await buildProductWhere(db, filters));
+
+type ProductSelectedPageRow = typeof product.$inferSelect &
+  Partial<
+    Pick<
+      ProductListDB,
+      | "category"
+      | "classificationEvidence"
+      | "ingredient"
+      | "growsPlant"
+      | "expenseCount"
+      | "componentCount"
+      | "expenseTotal"
+      | "purchaseDate"
+    >
+  >;
+
+/** The authoritative filtered, sorted page is shared by every projection. */
+const readProductListPage = async (
+  db: Database,
+  whereClause: SQL | undefined,
+  filters: ProductListFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-  groupBy?: string,
-  readIntent: ListReadIntent = "page",
-  usdaClient?: Pick<USDAClient, "findFoodsBatch">,
+  groupBy: string | undefined,
+  readIntent: ListReadIntent,
+  projection: ListProjection,
 ) => {
-  const whereClause = await buildProductWhere(db, filters);
-
-  if (readIntent === "count") {
-    return {
-      data: [],
-      count: await countWhere(db, product, whereClause),
-      sums: undefined,
-    };
-  }
-
   const groups =
     groupBy === PRODUCT_GROUPING.field && readIntent === "page"
       ? await loadProductCategoryGroups(db, whereClause, sorts)
@@ -1093,56 +1151,74 @@ export const productList = async (
       filters,
     ),
   ];
-
   const { take, skip } = productScaffold.page(pagination);
-  const skipAggregates = readIntent !== "page";
-
-  const [{ data: results, count: totalCount }, aggregates, expenseAggregates] =
-    await Promise.all([
-      executeListQueryWithCount({
-        kind: readIntent,
-        rows: () =>
-          getDb(db).query.product.findMany({
-            where: whereClause,
-            orderBy: orderByArray,
-            limit: take,
-            offset: skip,
-            ...relations.product.listBase,
-          }),
-        count: () => countWhere(db, product, whereClause),
+  const relationFields = wantsListGroup(projection, "relations");
+  const derivedFields = wantsListGroup(projection, "derived");
+  const extras = relations.product.listBase.extras;
+  type ProductListExtras = {
+    -readonly [K in keyof typeof extras]?: (typeof extras)[K];
+  };
+  const selectedExtras: ProductListExtras = {};
+  if (relationFields) selectedExtras.category = extras.category;
+  if (wantsListGroup(projection, "quality"))
+    selectedExtras.classificationEvidence = extras.classificationEvidence;
+  if (derivedFields)
+    Object.assign(selectedExtras, {
+      expenseCount: extras.expenseCount,
+      componentCount: extras.componentCount,
+      expenseTotal: extras.expenseTotal,
+      purchaseDate: extras.purchaseDate,
+    });
+  const page = await executeListQueryWithCount({
+    kind: readIntent,
+    rows: () =>
+      getDb(db).query.product.findMany({
+        where: whereClause,
+        orderBy: orderByArray,
+        limit: take,
+        offset: skip,
+        with: relationFields ? relations.product.listBase.with : undefined,
+        extras: selectedExtras,
       }),
-      skipAggregates
-        ? Promise.resolve(0)
-        : loadProductPriceSum(db, whereClause),
-      // Net-basis total for the Net basis column's footer, over the FULL filtered
-      // set — without it `createCurrencyColumn` falls back to reducing the loaded
-      // rows only, which silently under-reports on an infinite-scrolled list.
-      //
-      // An uncorrelated `IN` sub-select over the same where clause, NOT a
-      // correlated `sum((SELECT …))` in the select field: interpolating
-      // `product.id` there hits the `buildSelection` prefix-stripping trap that
-      // has cost this repo four bugs (see the warning block in repo/purchase.ts).
-      // Summing `Expense` directly also reads plainly — this is money, and money
-      // lives on `Expense`.
-      skipAggregates
-        ? Promise.resolve([{ expenseTotalSum: 0 }])
-        : getDb(db)
-            .select({ expenseTotalSum: sum(expense.cost) })
-            .from(expense)
-            .where(
-              and(
-                notDeleted(expense),
-                inArray(
-                  expense.productId,
-                  getDb(db)
-                    .select({ id: product.id })
-                    .from(product)
-                    .where(whereClause),
-                ),
-              ),
-            ),
-    ]);
+    count: () => countWhere(db, product, whereClause),
+  });
+  // SAFETY: SQL extras use the same contracts as ProductListDB. The projection
+  // gates select optional extras and joins, which Drizzle loses when `with`
+  // is conditional; stored Product columns are always selected.
+  const results = page.data as ProductSelectedPageRow[];
+  return { results, totalCount: page.count, groups };
+};
 
+export const productList = async (
+  db: Database,
+  filters: ProductListFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  groupBy?: string,
+  readIntent: ListReadIntent = "page",
+  usdaClient?: Pick<USDAClient, "findFoodsBatch">,
+) => {
+  const whereClause = await buildProductWhere(db, filters);
+  if (readIntent === "count")
+    return {
+      data: [],
+      count: await countWhere(db, product, whereClause),
+      sums: undefined,
+      groups: undefined,
+    };
+  const [{ results, totalCount, groups }, sums] = await Promise.all([
+    readProductListPage(
+      db,
+      whereClause,
+      filters,
+      sorts,
+      pagination,
+      groupBy,
+      readIntent,
+      { kind: "full" },
+    ),
+    readIntent === "page" ? loadProductListSums(db, whereClause) : undefined,
+  ]);
   const ids = results.map((row) => row.id);
   const [listRelations, qualities, priced, ledgered, displayImages] =
     await Promise.all([
@@ -1159,6 +1235,9 @@ export const productList = async (
   const ledgerById = new Map(
     ledgered.map((row) => [row.id, row.quantityLedger]),
   );
+  // SAFETY: the full page selects every ProductListDB extra and join; all
+  // required batched relations, quality, pricing and ledger values below
+  // are attached before the canonical mapper runs.
   const products = await hydrateImageReadProjection(
     db,
     results.map((row) =>
@@ -1169,8 +1248,17 @@ export const productList = async (
           pricing: pricingById.get(row.id)!,
           quantityLedger: ledgerById.get(row.id)!,
           dataQuality: qualities.get(row.id)!,
-        },
+        } as ProductListDB,
         displayImages.get(entityRefKey("product", row.id)) ?? [],
+      ),
+    ),
+    new Map(
+      [...displayImages.values()].flatMap((images) =>
+        images.flatMap((image) =>
+          image.representations
+            ? [[image.id, image.representations] as const]
+            : [],
+        ),
       ),
     ),
   );
@@ -1179,18 +1267,11 @@ export const productList = async (
     usdaClient,
   );
 
-  const priceSum = aggregates;
-  const expenseTotalSum = Number(expenseAggregates[0]?.expenseTotalSum ?? 0);
-
   const result = {
     data: productsWithUnitPrices,
     count: totalCount,
-    sums: skipAggregates
-      ? undefined
-      : {
-          price: Number.isNaN(priceSum) ? 0 : priceSum,
-          expenseTotal: Number.isNaN(expenseTotalSum) ? 0 : expenseTotalSum,
-        },
+    sums,
+    groups: undefined,
   };
   return groups
     ? {
@@ -1198,6 +1279,192 @@ export const productList = async (
         groups: groups.map(({ key, label, count }) => ({ key, label, count })),
       }
     : result;
+};
+
+type ProductListReadResult = {
+  data: ReturnType<typeof projectListRows>;
+  count: number;
+  groups?: ListGroupSummary[];
+};
+
+/** Deferred reads emit canonical patches, never placeholder full records. */
+export const listProductsRead = async (
+  db: Database,
+  filters: ProductListFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  groupBy?: string,
+  readIntent: ListReadIntent = "page",
+  usdaClient?: Pick<USDAClient, "findFoodsBatch">,
+  projection: ListProjection = { kind: "full" },
+): Promise<ProductListReadResult> => {
+  if (projection.kind === "full") {
+    const { data, count, groups } = await productList(
+      db,
+      filters,
+      sorts,
+      pagination,
+      groupBy,
+      readIntent,
+      usdaClient,
+    );
+    const result: ProductListReadResult = { data, count };
+    if (groups) result.groups = groups;
+    return result;
+  }
+  const whereClause = await buildProductWhere(db, filters);
+  const { results, totalCount, groups } = await readProductListPage(
+    db,
+    whereClause,
+    filters,
+    sorts,
+    pagination,
+    groupBy,
+    readIntent,
+    projection,
+  );
+  const rows = results.map(
+    ({
+      categoryId: _categoryId,
+      ingredientId: _ingredientId,
+      growsPlantId: _growsPlantId,
+      ...row
+    }) => ({
+      ...row,
+      id: parseShortcodeFor("product", row.shortcode),
+      modelPresence: Boolean(row.model),
+      notesPresence: Boolean(row.notes),
+    }),
+  );
+  const metadata: Pick<ProductListReadResult, "count" | "groups"> = {
+    count: totalCount,
+  };
+  if (groups)
+    metadata.groups = groups.map(({ key, label, count }) => ({
+      key,
+      label,
+      count,
+    }));
+  if (projection.kind === "base" || results.length === 0)
+    return { ...metadata, data: projectListRows("product", rows, projection) };
+  const ids = results.map((row) => row.id);
+  const [listRelations, qualities, priced, ledgered, displayImages] =
+    await Promise.all([
+      loadProductListRelations(db, ids, projection),
+      loadListGroup(projection, "quality", () =>
+        loadProductDataQualities(db, ids),
+      ),
+      loadListGroup(projection, "derived", () =>
+        enrichProductRowsWithPricing(db, results),
+      ),
+      loadListGroup(projection, "derived", () =>
+        enrichProductRowsWithQuantityLedger(db, results),
+      ),
+      loadListGroup(projection, "media", () =>
+        resolveEntityDisplayImageLists(
+          db,
+          ids.map((entityId) => ({ entityKind: "product", entityId })),
+        ),
+      ),
+    ]);
+  const pricingById = new Map(priced?.map((row) => [row.id, row.pricing]));
+  const ledgerById = new Map(
+    ledgered?.map((row) => [row.id, row.quantityLedger]),
+  );
+  const deferredRows: ReturnType<typeof projectListRows> = results.map(
+    (row, index) => {
+      const relations =
+        listRelations.get(row.id) ?? emptyProductListRelations();
+      const ingredient = row.ingredient;
+      const inventory = mapProductListInventoryEntries(
+        relations.inventoryEntry,
+      );
+      const patch = { ...rows[index] };
+      if (qualities)
+        Object.assign(patch, {
+          dataQuality: qualities.get(row.id),
+          dataGaps: qualities.get(row.id)?.gaps.map((gap) => gap.check),
+        });
+      if (wantsListGroup(projection, "media")) {
+        const { itemImages, ...imageGroups } = splitProductImages(
+          relations.images,
+        );
+        Object.assign(patch, {
+          ...imageGroups,
+          images: itemImages,
+          displayImages:
+            displayImages?.get(entityRefKey("product", row.id)) ?? [],
+        });
+      }
+      if (wantsListGroup(projection, "relations"))
+        Object.assign(patch, {
+          category: row.category,
+          categoryId: row.category?.id ?? null,
+          growsPlantId: row.growsPlant
+            ? parseShortcodeFor("plant", row.growsPlant.shortcode)
+            : null,
+          ingredient:
+            ingredient && ingredient.deletedAt === null
+              ? mapDbProductIngredient(ingredient)
+              : null,
+          inventoryEntry: inventory,
+          externalIds: mapProductExternalIds(relations.externalIds),
+          unitMappings: mapProductUnitMappings(
+            parseShortcodeFor("product", row.shortcode),
+            relations.unitMappings,
+          ),
+          primaryGtin: primaryGtinOf(relations.externalIds),
+          upcPresence: Boolean(primaryGtinOf(relations.externalIds)),
+        });
+      if (wantsListGroup(projection, "derived"))
+        Object.assign(patch, {
+          pricing: pricingById.get(row.id),
+          expenseCount: Number(row.expenseCount),
+          expenseTotal: Number(row.expenseTotal),
+          componentCount: Number(row.componentCount),
+          purchaseDate: row.purchaseDate,
+          ...deriveProductQuantitySummary(inventory, ledgerById.get(row.id)!),
+        });
+      return patch;
+    },
+  );
+  if (wantsListGroup(projection, "derived")) {
+    const seeds = results.map((row) => ({
+      id: parseShortcodeFor("product", row.shortcode),
+      primaryGtin: primaryGtinOf(listRelations.get(row.id)?.externalIds),
+      fdc_id: row.fdc_id,
+      price: row.price,
+      pricing: pricingById.get(row.id)!,
+      labelNutrition: row.labelNutrition,
+      unitMappings: mapProductUnitMappings(
+        parseShortcodeFor("product", row.shortcode),
+        listRelations.get(row.id)?.unitMappings ?? [],
+      ),
+    }));
+    const derived = await enrichProductListItems(seeds, usdaClient);
+    derived.forEach((values, index) =>
+      Object.assign(deferredRows[index]!, values),
+    );
+  }
+  const hydrated = wantsListGroup(projection, "media")
+    ? await hydrateImageReadProjection(
+        db,
+        deferredRows,
+        new Map(
+          [...(displayImages?.values() ?? [])].flatMap((images) =>
+            images.flatMap((image) =>
+              image.representations
+                ? [[image.id, image.representations] as const]
+                : [],
+            ),
+          ),
+        ),
+      )
+    : deferredRows;
+  return {
+    ...metadata,
+    data: projectListRows("product", hydrated, projection),
+  };
 };
 
 type ProductListRelations = Pick<
@@ -1222,6 +1489,7 @@ const emptyProductListRelations = (): ProductListRelations => ({
 const loadProductListRelations = async (
   db: Database,
   ids: readonly ProductId[],
+  projection: ListProjection = { kind: "full" },
 ): Promise<Map<ProductId, ProductListRelations>> => {
   const uniqueIds = uniq([...ids]);
   const result = new Map<ProductId, ProductListRelations>(
@@ -1231,50 +1499,58 @@ const loadProductListRelations = async (
 
   const [images, externalIds, unitMappings, inventoryEntries] =
     await Promise.all([
-      getDb(db).query.entityAttachment.findMany({
-        where: and(
-          inArray(entityAttachment.entityId, uniqueIds),
-          notDeleted(entityAttachment),
-        ),
-        orderBy: [
-          asc(entityAttachment.sortOrder),
-          asc(entityAttachment.createdAt),
-        ],
-        with: { image: true },
-      }),
-      getDb(db).query.entityExternalId.findMany({
-        where: and(
-          inArray(entityExternalId.entityId, uniqueIds),
-          notDeleted(entityExternalId),
-        ),
-      }),
-      getDb(db).query.productUnitMappings.findMany({
-        where: and(
-          inArray(productUnitMappings.productId, uniqueIds),
-          notDeleted(productUnitMappings),
-        ),
-      }),
-      getDb(db).query.inventoryEntry.findMany({
-        where: and(
-          inArray(inventoryEntry.productId, uniqueIds),
-          notDeleted(inventoryEntry),
-        ),
-        orderBy: inventoryEntry.createdAt,
-        with: { location: true },
-      }),
+      loadListGroup(projection, "media", () =>
+        getDb(db).query.entityAttachment.findMany({
+          where: and(
+            inArray(entityAttachment.entityId, uniqueIds),
+            notDeleted(entityAttachment),
+          ),
+          orderBy: [
+            asc(entityAttachment.sortOrder),
+            asc(entityAttachment.createdAt),
+          ],
+          with: { image: true },
+        }),
+      ),
+      loadListGroup(projection, ["relations", "derived"], () =>
+        getDb(db).query.entityExternalId.findMany({
+          where: and(
+            inArray(entityExternalId.entityId, uniqueIds),
+            notDeleted(entityExternalId),
+          ),
+        }),
+      ),
+      loadListGroup(projection, ["relations", "derived"], () =>
+        getDb(db).query.productUnitMappings.findMany({
+          where: and(
+            inArray(productUnitMappings.productId, uniqueIds),
+            notDeleted(productUnitMappings),
+          ),
+        }),
+      ),
+      loadListGroup(projection, ["relations", "derived"], () =>
+        getDb(db).query.inventoryEntry.findMany({
+          where: and(
+            inArray(inventoryEntry.productId, uniqueIds),
+            notDeleted(inventoryEntry),
+          ),
+          orderBy: inventoryEntry.createdAt,
+          with: { location: true },
+        }),
+      ),
     ]);
 
-  for (const row of images) {
+  for (const row of images ?? []) {
     result.get(parseEntityId("product", row.entityId))?.images.push(row);
   }
-  for (const row of externalIds) {
+  for (const row of externalIds ?? []) {
     result.get(parseEntityId("product", row.entityId))?.externalIds.push(row);
   }
-  for (const row of unitMappings) {
+  for (const row of unitMappings ?? []) {
     result.get(row.productId)?.unitMappings.push(row);
   }
-  const valuations = await loadInventoryValuations(db, inventoryEntries);
-  for (const row of inventoryEntries) {
+  const valuations = await loadInventoryValuations(db, inventoryEntries ?? []);
+  for (const row of inventoryEntries ?? []) {
     result.get(row.productId)?.inventoryEntry.push({
       ...row,
       valuation: valuations.get(row.id) ?? null,

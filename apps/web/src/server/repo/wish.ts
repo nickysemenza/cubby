@@ -13,10 +13,10 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   WishCreateInput,
   WishFilters,
-  WishListItemOut,
   WishOut,
   WishUpdateData,
 } from "@cubby/schemas/wish";
+import { wishListItemOut } from "@cubby/schemas/wish";
 import { wishPriceRange } from "@cubby/schemas/wish-fields";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -35,13 +35,18 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { withDisplayImages } from "~/server/repo/entity-display-image";
 import {
   attachLinks,
   liveLinks,
   replaceLinkSet,
 } from "~/server/repo/entity-links";
 import { listScaffold } from "~/server/repo/list";
+import {
+  listGroupFields,
+  hydrateListRead,
+  loadListGroup,
+  type ListProjection,
+} from "~/server/repo/list-projection";
 import {
   effectiveProductPriceSql,
   loadProductPricing,
@@ -51,6 +56,7 @@ import {
   asActor,
   defineRepository,
   listOn,
+  listReadOn,
   onDb,
 } from "~/server/repo/repository";
 import { createEntityReader } from "~/server/repo/repository";
@@ -59,6 +65,8 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { completeListReader } from "./list-read-adapters";
 
 type WishRow = typeof wish.$inferSelect;
 
@@ -129,12 +137,8 @@ const candidateRowsForWishes = async (
   return byWish;
 };
 
-const toWishOut = (
-  row: WishRow,
-  candidates: CandidateRow[],
-  dataQuality: DataQuality,
-): WishOut => {
-  const publicCandidates = candidates.map((candidate) => ({
+const publicWishCandidates = (candidates: CandidateRow[]) =>
+  candidates.map((candidate) => ({
     id: parseShortcodeFor("product", candidate.shortcode),
     name: candidate.name,
     manufacturer: candidate.manufacturer,
@@ -142,6 +146,13 @@ const toWishOut = (
     price: candidate.price,
     inventoried: candidate.inventoried,
   }));
+
+const toWishOut = (
+  row: WishRow,
+  candidates: CandidateRow[],
+  dataQuality: DataQuality,
+): WishOut => {
+  const publicCandidates = publicWishCandidates(candidates);
   return {
     id: parseShortcodeFor("wish", row.shortcode),
     name: row.name,
@@ -180,6 +191,34 @@ const hydrateWishes = async (
     ),
   );
 };
+
+const hydrateWishesRead = (
+  db: Database,
+  rows: WishRow[],
+  projection: ListProjection,
+) =>
+  hydrateListRead(db, "wish", rows, projection, {
+    media: true,
+    load: () =>
+      loadListGroup(projection, ["relations", "derived"], () =>
+        candidateRowsForWishes(
+          db,
+          rows.map((row) => row.id),
+        ),
+      ),
+    mapRow: (row, { loaded: candidates }) => {
+      const alternatives = publicWishCandidates(candidates?.get(row.id) ?? []);
+      return {
+        ...row,
+        id: parseShortcodeFor("wish", row.shortcode),
+        ...listGroupFields(projection, ["relations", "derived"], () => ({
+          candidates: alternatives,
+          candidateCount: alternatives.length,
+          priceRange: wishPriceRange(alternatives),
+        })),
+      };
+    },
+  });
 
 // The candidate subqueries use a SQL alias (`p`), so keep their field refs raw
 // rather than interpolate `product.name` (which would retain Product's table
@@ -304,55 +343,44 @@ export const buildWishWhere = async (
   ]);
 };
 
-export const wishList = async (
+export const wishListRead = async (
   db: Database,
   filters: WishFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-): Promise<{
-  data: WishListItemOut[];
-  count: number;
-  sums: { priceLow: number; priceHigh: number };
-}> => {
+  projection: ListProjection = { kind: "full" },
+) => {
   const where = await buildWishWhere(db, filters);
-  // Footer totals over the WHOLE filtered set, not the loaded page. Summing the
-  // returned rows instead would quietly under-report the moment the wishlist
-  // outgrows one page — a wrong number is worse than no number.
-  const [page, [totals]] = await Promise.all([
-    wishScaffold.list(
-      db,
-      { filters, sorts, pagination },
-      {
-        where,
-        resolveSort: resolveWishSort,
-        hydrate: async (rows) => {
-          const hydrated = await hydrateWishes(db, rows);
-          // Display images key on the row uuid; hydrated rows already carry
-          // the public shortcode as `id`, so pair each raw row with its output.
-          const paired = rows.map((row, index) => ({
-            id: row.id,
-            out: hydrated[index]!,
-          }));
-          return withDisplayImages(db, "wish", paired, (entry) => entry.out);
-        },
-      },
-    ),
-    getDb(db)
-      .select({
-        priceLow: sql<number>`COALESCE(sum(${wishPriceLow}), 0)::double precision`,
-        priceHigh: sql<number>`COALESCE(sum(${wishPriceHigh}), 0)::double precision`,
-      })
-      .from(wish)
-      .where(where),
-  ]);
-  return {
-    ...page,
-    sums: {
-      priceLow: Number(totals?.priceLow ?? 0),
-      priceHigh: Number(totals?.priceHigh ?? 0),
+  return wishScaffold.list(
+    db,
+    { filters, sorts, pagination, projection },
+    {
+      where,
+      resolveSort: resolveWishSort,
+      hydrate: (rows) => hydrateWishesRead(db, rows, projection),
     },
+  );
+};
+
+export const wishListSummary = async (db: Database, filters: WishFilters) => {
+  const [totals] = await getDb(db)
+    .select({
+      priceLow: sql<number>`COALESCE(sum(${wishPriceLow}), 0)::double precision`,
+      priceHigh: sql<number>`COALESCE(sum(${wishPriceHigh}), 0)::double precision`,
+    })
+    .from(wish)
+    .where(await buildWishWhere(db, filters));
+  return {
+    priceLow: Number(totals?.priceLow ?? 0),
+    priceHigh: Number(totals?.priceHigh ?? 0),
   };
 };
+
+export const wishList = completeListReader(
+  wishListItemOut,
+  wishListRead,
+  wishListSummary,
+);
 
 const wishReader = createEntityReader({
   entity: "wish",
@@ -493,6 +521,8 @@ export const wishRepository = defineRepository("wish", {
   lifecycle: { delete: WISH_DELETE_EDGE_POLICY },
   get: onDb(getWishByShortcode),
   list: listOn(wishList),
+  listRead: listReadOn(wishListRead),
+  listSummary: (ctx, filters) => wishListSummary(ctx.db, filters),
   create: asActor(createWish),
   update: asActor(updateWish),
 });

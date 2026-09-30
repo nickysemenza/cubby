@@ -23,7 +23,9 @@ public final class GenericEntityListModel {
     }
 
     public let descriptor: EntityDescriptor
-    public private(set) var rows: [EntityRow] = []
+    private var coreRows: [EntityRow] = []
+    public var rows: [EntityRow] { enrichment.project(coreRows) }
+    public let enrichment: EntityListEnrichmentModel
     public private(set) var meta: ListPageMeta?
     public private(set) var phase: Phase = .idle
     public private(set) var activity: Activity = .idle
@@ -54,6 +56,13 @@ public final class GenericEntityListModel {
     /// Metadata is only presented as current while its last refresh succeeded.
     public var summaryMeta: ListPageMeta? {
         guard activity == .idle, refreshError == nil else { return nil }
+        guard var meta else { return nil }
+        if enrichment.isLoadingSummary || enrichment.summaryError != nil {
+            meta.sums = nil
+            return meta
+        }
+        guard let sums = enrichment.sums else { return meta }
+        meta.sums = .init(additionalProperties: sums)
         return meta
     }
 
@@ -62,6 +71,7 @@ public final class GenericEntityListModel {
     private let client: CubbyClient
     private let pageSize: Int
     private let sort: String?
+    private let progressive: Bool
     private var requestGeneration = 0
     private var requestTask: Task<ListPage<EntityRow>, Error>?
     private var hasLoaded = false
@@ -74,21 +84,27 @@ public final class GenericEntityListModel {
         sort: String? = nil,
         filters: EntityFilterState = EntityFilterState(),
         view: ListView? = nil,
+        progressive: Bool = true,
         searchLoader: EntityListSearchModel.PageLoader? = nil
     ) {
         self.descriptor = descriptor
+        self.enrichment = EntityListEnrichmentModel(descriptor: descriptor)
         self.client = client
         self.pageSize = pageSize
         self.sort = sort
+        self.progressive = progressive
         self.filters = filters
-        self.view = view ?? descriptor.presentation.listViews.first ?? .table
+        let selectedView = view ?? descriptor.presentation.listViews.first ?? .table
+        self.view = selectedView
         self.searchModel =
-            searchLoader.map { EntityListSearchModel(loader: $0) }
+            searchLoader.map { EntityListSearchModel(descriptor: descriptor, loader: $0) }
             ?? descriptor.primarySearch.map { _ in
                 EntityListSearchModel(
+                    descriptor: descriptor,
                     loader: Self.searchLoader(
                         descriptor: descriptor, client: client, filters: filters,
-                        pageSize: pageSize, sort: sort))
+                        pageSize: pageSize, sort: sort,
+                        progressive: progressive && Self.supportsProgressiveSearch(selectedView)))
             }
     }
 
@@ -112,10 +128,13 @@ public final class GenericEntityListModel {
         guard newFilters != filters else { return }
         filters = newFilters
         meta = nil
+        coreRows = rows
+        enrichment.invalidate()
         searchModel?.setLoader(
             Self.searchLoader(
                 descriptor: descriptor, client: client, filters: newFilters,
-                pageSize: pageSize, sort: sort))
+                pageSize: pageSize, sort: sort,
+                progressive: progressive && Self.supportsProgressiveSearch(view)))
         await refresh()
     }
 
@@ -131,7 +150,15 @@ public final class GenericEntityListModel {
 
     /// Switches the declared view; the timeline loads on first selection and after filter changes.
     public func select(view newView: ListView) async {
+        let searchModeChanged =
+            Self.supportsProgressiveSearch(view) != Self.supportsProgressiveSearch(newView)
         view = newView
+        if searchModeChanged {
+            searchModel?.setLoader(
+                Self.searchLoader(
+                    descriptor: descriptor, client: client, filters: filters, pageSize: pageSize,
+                    sort: sort, progressive: progressive && Self.supportsProgressiveSearch(newView)))
+        }
         if newView == .timeline, timeline == nil, !isLoadingTimeline { await loadTimeline() }
     }
 
@@ -169,9 +196,10 @@ public final class GenericEntityListModel {
             let result = try await requestTask!.value
             guard generation == requestGeneration else { return }
             var ids = Set(rows.map(\.id))
-            rows.append(contentsOf: result.items.filter { ids.insert($0.id).inserted })
+            coreRows.append(contentsOf: result.items.filter { ids.insert($0.id).inserted })
             page = nextPage
             meta = result.meta
+            enrichment.accept(result, replacing: false)
             phase = .loaded
         } catch is CancellationError {
             // A refresh or newer request owns the state now.
@@ -210,15 +238,18 @@ public final class GenericEntityListModel {
         nextPageError = nil
         activity = requestedActivity
         if requestedActivity == .loadingInitial { phase = .loading }
+        coreRows = rows
+        enrichment.invalidate()
         let generation = beginRequest(page: 1)
 
         do {
             let result = try await requestTask!.value
             guard generation == requestGeneration else { return }
-            rows = result.items
+            coreRows = result.items
             page = 1
             meta = result.meta
             hasLoaded = true
+            enrichment.accept(result, replacing: true)
             phase = .loaded
         } catch is CancellationError {
             // A newer request owns the state now.
@@ -245,8 +276,13 @@ public final class GenericEntityListModel {
         let pageSize = pageSize
         let sort = sort
         let filters = filters
+        let standard = progressive && (view == .table || view == .shelf)
         requestTask = Task {
             try Task.checkCancellation()
+            if standard {
+                return try await client.progressiveList(
+                    descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
+            }
             return try await client.list(
                 descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
         }
@@ -268,7 +304,7 @@ public final class GenericEntityListModel {
 
     private static func searchLoader(
         descriptor: EntityDescriptor, client: CubbyClient, filters: EntityFilterState, pageSize: Int,
-        sort: String?
+        sort: String?, progressive: Bool
     ) -> EntityListSearchModel.PageLoader {
         { query, page in
             guard let primarySearch = descriptor.primarySearch else {
@@ -276,9 +312,18 @@ public final class GenericEntityListModel {
             }
             var scopedFilters = filters
             scopedFilters.set(.single(query), for: primarySearch.key)
+            if progressive {
+                return try await client.progressiveList(
+                    descriptor, page: page, pageSize: pageSize, sort: sort, filters: scopedFilters)
+            }
             return try await client.list(
                 descriptor, page: page, pageSize: pageSize, sort: sort, filters: scopedFilters)
         }
+    }
+
+    private static func supportsProgressiveSearch(_ view: ListView) -> Bool {
+        if case .slot = view { return false }
+        return true
     }
 
     static func describe(_ error: Error) -> String {

@@ -28,7 +28,6 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { product, productCategory } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   notDeleted,
   unwrapDb,
@@ -36,9 +35,17 @@ import {
 } from "~/server/repo/database-helpers";
 import { listScaffold } from "~/server/repo/list";
 import {
+  hydrateListRead,
+  loadListGroup,
+  type ListProjection,
+  type ListReadRow,
+  wantsListGroup,
+} from "~/server/repo/list-projection";
+import {
   asActor,
   defineRepository,
   listOn,
+  listReadOn,
   onDb,
 } from "~/server/repo/repository";
 import { createEntityReader } from "~/server/repo/repository";
@@ -48,6 +55,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { completeListReader } from "./list-read-adapters";
 import { categoryDescendantsSql } from "./product-category-sql";
 
 const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
@@ -235,55 +243,81 @@ const inheritedFeatureResolution = (
   };
 };
 
+const hydrateRead = async (
+  db: Database | DrizzleTransaction,
+  rows: CategoryRow[],
+  projection: ListProjection,
+): Promise<ListReadRow[]> => {
+  const ids = rows.map((row) => row.id);
+  return hydrateListRead(db, "productCategory", rows, projection, {
+    load: () =>
+      Promise.all([
+        loadListGroup(projection, ["relations", "derived"], () =>
+          pathsFor(db, ids),
+        ),
+        loadListGroup(projection, "derived", () => productCountsFor(db, ids)),
+        loadListGroup(projection, "relations", () =>
+          lookupEntityReferences(
+            db,
+            "productCategory",
+            rows.map((row) => row.parentId),
+          ),
+        ),
+      ]),
+    mapRow: (row, { loaded: [paths, productCounts, parents] }) => {
+      const path = paths?.get(row.id) ?? [];
+      const parent = row.parentId ? parents?.get(row.parentId) : undefined;
+      const result = {
+        ...row,
+        id: parseShortcodeFor("productCategory", row.shortcode),
+        feature: parseFeature(row.feature),
+      };
+      if (wantsListGroup(projection, "relations"))
+        Object.assign(result, {
+          parentId: parent?.id ?? null,
+          parentName: parent?.name ?? null,
+          path: path.map((part) => ({
+            id: parseShortcodeFor("productCategory", part.id),
+            name: part.name,
+          })),
+        });
+      if (wantsListGroup(projection, "derived"))
+        Object.assign(result, {
+          fieldResolutions: inheritedFeatureResolution(row, path),
+          productCount: productCounts?.get(row.id) ?? 0,
+        });
+      return result;
+    },
+  });
+};
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: CategoryRow[],
-): Promise<ProductCategoryOut[]> => {
-  const ids = rows.map((row) => row.id);
-  const [paths, productCounts, dataQualities, parents] = await Promise.all([
-    pathsFor(db, ids),
-    productCountsFor(db, ids),
-    loadDataQualities(db, "productCategory", ids),
-    lookupEntityReferences(
-      db,
-      "productCategory",
-      rows.map((row) => row.parentId),
-    ),
-  ]);
-  return rows.map((row) => {
-    const path = paths.get(row.id) ?? [];
-    const parent = row.parentId ? parents.get(row.parentId) : undefined;
-    return productCategoryOut.parse({
-      ...row,
-      fieldResolutions: inheritedFeatureResolution(row, path),
-      id: parseShortcodeFor("productCategory", row.shortcode),
-      parentId: parent?.id ?? null,
-      parentName: parent?.name ?? null,
-      feature: parseFeature(row.feature),
-      path: path.map((part) => ({
-        id: parseShortcodeFor("productCategory", part.id),
-        name: part.name,
-      })),
-      productCount: productCounts.get(row.id) ?? 0,
-      dataQuality: dataQualities.get(row.id),
-    });
-  });
-};
+): Promise<ProductCategoryOut[]> =>
+  (await hydrateRead(db, rows, { kind: "full" })).map((row) =>
+    productCategoryOut.parse(row),
+  );
 
 export const buildProductCategoryWhere = (filters: ProductCategoryFilters) =>
   scaffold.where(filters);
 
-export const listProductCategories = (
+export const listProductCategoriesRead = (
   db: Database,
   filters: ProductCategoryFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  projection: ListProjection = { kind: "full" },
 ) =>
   scaffold.list(
     db,
-    { filters, sorts, pagination },
-    { hydrate: (rows) => hydrate(db, rows) },
+    { filters, sorts, pagination, projection },
+    { hydrate: (rows, selected) => hydrateRead(db, rows, selected) },
   );
+
+export const listProductCategories = completeListReader(
+  productCategoryOut,
+  listProductCategoriesRead,
+);
 
 const reader = createEntityReader<
   CategoryRow,
@@ -627,6 +661,7 @@ export const productCategoryRepository = defineRepository("productCategory", {
   lifecycle: { delete: PRODUCT_CATEGORY_DELETE_EDGE_POLICY },
   get: onDb(getProductCategoryByShortcode),
   list: listOn(listProductCategories),
+  listRead: listReadOn(listProductCategoriesRead),
   create: asActor(createProductCategory),
   update: asActor(updateProductCategory),
   deleteHooks: { beforeDelete: refuseBoundCategories },

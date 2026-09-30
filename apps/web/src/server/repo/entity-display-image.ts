@@ -18,7 +18,10 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import type { EntityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { imageShortcode } from "@cubby/schemas/identifiers";
-import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
+import type {
+  ImageRepresentations,
+  ImageUrlSummary,
+} from "@cubby/schemas/image-summary";
 import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project";
 import { parseShortcode } from "@cubby/shared";
 import {
@@ -502,6 +505,25 @@ const publicEntityRowSchema = z.looseObject({ id: z.string() });
 const resolvedListMediaSchema = z.object({ displayImages: displayImagesField });
 type PublicEntityRow = z.output<typeof publicEntityRowSchema>;
 
+/** Reuse only the authoritative media resolved for this read batch. */
+const resolvedImageRepresentations = (
+  lists: ReadonlyMap<string, readonly DisplayImageSummary[]>,
+  attachments?: ReadonlyMap<string, readonly EntityAttachmentRead[]>,
+): Map<string, ImageRepresentations> => {
+  const representations = new Map<string, ImageRepresentations>();
+  for (const group of [lists, attachments]) {
+    if (!group) continue;
+    for (const images of group.values()) {
+      for (const image of images) {
+        if (image.representations) {
+          representations.set(image.id, image.representations);
+        }
+      }
+    }
+  }
+  return representations;
+};
+
 /** Every direct attachment of the given subjects, in display order. */
 const directAttachments = async (
   db: Database | DrizzleTransaction,
@@ -624,6 +646,7 @@ export async function withUniversalEntityMedia<
         ? { ...projected, images: projected.attachments }
         : projected;
     }),
+    resolvedImageRepresentations(lists, attachments),
   );
 }
 
@@ -683,16 +706,21 @@ export async function withDisplayImages<Row extends { id: string }, Out>(
   // Mappers that parse their row against the list schema take the images as
   // an argument so the parse sees them; the spread below covers the rest.
   toOut: (row: Row, displayImages: DisplayImageSummary[]) => Out,
+  // Only the authoritative resolver's result from this read may be reused.
+  preloaded?: ReadonlyMap<string, DisplayImageSummary[]>,
 ): Promise<Array<Out & { displayImages: DisplayImageSummary[] }>> {
-  const lists = await resolveEntityDisplayImageLists(
-    db,
-    rows.map((row) => ({ entityKind, entityId: row.id })),
-  );
+  const lists =
+    preloaded ??
+    (await resolveEntityDisplayImageLists(
+      db,
+      rows.map((row) => ({ entityKind, entityId: row.id })),
+    ));
   return hydrateImageReadProjection(
     db,
     rows.map((row) => {
       const displayImages = lists.get(entityRefKey(entityKind, row.id)) ?? [];
       return { ...toOut(row, displayImages), displayImages };
     }),
+    resolvedImageRepresentations(lists),
   );
 }

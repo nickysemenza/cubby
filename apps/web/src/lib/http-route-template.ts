@@ -21,6 +21,8 @@ const STATIC_TRACE_ROUTES = new Set([
   ).map(({ routes }) => `${routes.list}/new`),
   "/",
   "/.well-known/apple-app-site-association",
+  "/.well-known/caldav",
+  "/api/caldav",
   "/.well-known/oauth-authorization-server",
   "/.well-known/oauth-authorization-server/api/auth",
   "/.well-known/oauth-protected-resource",
@@ -95,6 +97,22 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
   pattern: RegExp;
   template: string;
 }> = [
+  {
+    pattern: /^\/api\/caldav\/principals\/[^/]+$/u,
+    template: "/api/caldav/principals/:principal",
+  },
+  {
+    pattern: /^\/api\/caldav\/calendars\/[^/]+$/u,
+    template: "/api/caldav/calendars/:principal",
+  },
+  {
+    pattern: /^\/api\/caldav\/calendars\/[^/]+\/[^/]+$/u,
+    template: "/api/caldav/calendars/:principal/:collection",
+  },
+  {
+    pattern: /^\/api\/caldav\/calendars\/[^/]+\/[^/]+\/[^/]+$/u,
+    template: "/api/caldav/calendars/:principal/:collection/:resource",
+  },
   {
     pattern: /^\/runs\/jobs\/[^/]+$/u,
     template: "/runs/jobs/:id",

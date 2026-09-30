@@ -72,6 +72,31 @@ export default defineEntity({
       ],
     },
     list: {
+      read: {
+        relations: [
+          "projectId",
+          "productId",
+          "purchaseId",
+          "vendorId",
+          "vendor",
+          "projectName",
+          "productName",
+          "beneficiaries",
+          "funders",
+          "sourceClaims",
+          "projectAllocations",
+        ],
+        media: ["vendorLogo", "displayImages"],
+        derived: [
+          "trade",
+          "fieldResolutions",
+          "purchaseDate",
+          "purchaseDisplayLabel",
+          "orderId",
+          "orderUrl",
+        ],
+        quality: ["dataQuality"],
+      },
       totalOverrides: [
         {
           id: "cost",

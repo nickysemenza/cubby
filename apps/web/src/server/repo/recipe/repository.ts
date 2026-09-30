@@ -12,6 +12,7 @@ import {
   getRecipeByShortcode,
   RECIPE_DELETE_EDGE_POLICY,
   recipeList,
+  recipeListRead,
   updateRecipe,
 } from "./crud";
 import { findParentRecipeIdsBatch } from "./totals";
@@ -45,6 +46,8 @@ export const recipeRepository = defineRepository("recipe", {
     return getRecipeByShortcode(repaired ? strongDb : ctx.db, id);
   },
   list: listOn(recipeList),
+  listRead: (ctx, filters, sorts, pagination, projection) =>
+    recipeListRead(ctx.db, filters, sorts, pagination, "page", projection),
   create: async (ctx, data) => {
     const output = await createRecipe(ctx.db, data, ctx.actorContext);
     const entityId = await recipeShortcodes.one(ctx.db, output.id);

@@ -141,7 +141,9 @@ const renderHttpContract = async (
       throw new Error(`Reserved HTTP client namespace: ${domain}`);
     const helper =
       declaration.kind === "query"
-        ? queryHelper(wire, declaration.input)
+        ? declaration.transport === "post"
+          ? "rpcQueryPost"
+          : queryHelper(wire, declaration.input)
         : "rpcMutation";
     const members = domains.get(domain) ?? [];
     members.push(

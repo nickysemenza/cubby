@@ -46,15 +46,17 @@ import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
 import { useEntityFieldSave } from "~/app/_components/hooks/useUpdateMutation";
 import { EntityTimeline } from "~/app/_components/timeline/entity-timeline";
+import { ErrorDetails } from "~/components/feedback/error-details";
 import { Stack } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
+import { Button } from "~/components/ui/button";
 import { entities } from "~/entities/entities";
 import type { StandardEntity } from "~/entities/entity-contracts";
 import {
   createEntityDisplayColumns,
   entityListHiddenColumns,
 } from "~/entities/entity-display";
-import { entityListFor } from "~/entities/entity-list";
+import { entityListBaseFor } from "~/entities/entity-list";
 import {
   type ListEntity,
   listEntities,
@@ -72,6 +74,7 @@ import {
   type ListOverrideContext,
   type ListOverrideWorkbenchProps,
 } from "~/entities/list-columns/types";
+import { getAppErrorDetails } from "~/lib/error-utils";
 
 import { EntityShelf } from "./entity-shelf";
 import { ListScopeChips } from "./list-scope-chips";
@@ -343,7 +346,7 @@ function ServerListBody({
     if (parts.source) return parts.source;
     if (!isListEntity(entity))
       throw new Error(`${entity} has no list read and no list override source`);
-    return entityListFor(entity).listQueryPlan;
+    return entityListBaseFor(entity).listQueryPlan;
   }, [entity, operations?.list, parts.source]);
 
   // `deletable` defaults ON: a top-level list page owns its entity's rows,
@@ -354,6 +357,38 @@ function ServerListBody({
     () => entityListHiddenColumns(entity),
     [entity],
   );
+  const additionalReadFields = useMemo(() => {
+    const parentField = entitySummary[entity].list.tree?.parentField;
+    const parentReadKey = parentField
+      ? entityFieldModels[entity].fields.find(
+          (field) => field.key === parentField,
+        )?.readKey
+      : undefined;
+    return [
+      ...(parts.wrapReadFields ?? []),
+      ...(listOptions?.additionalReadFields ?? []),
+      ...(renderedView === "shelf"
+        ? [
+            "displayImages",
+            ...(entitySummary[entity].list.shelf?.subtitle ?? []),
+          ]
+        : []),
+      ...(parts.tree
+        ? [
+            "componentCount",
+            "categoryId",
+            "candidates",
+            ...(parentReadKey ? [parentReadKey] : []),
+          ]
+        : []),
+    ];
+  }, [
+    entity,
+    parts.tree,
+    parts.wrapReadFields,
+    listOptions?.additionalReadFields,
+    renderedView,
+  ]);
   const list = useEntityList<BaseListRow, object, BaseListRow>({
     entity,
     queryOptions,
@@ -362,6 +397,7 @@ function ServerListBody({
     preview: DEFAULT_PREVIEW,
     initialColumnVisibility,
     ...listOptions,
+    additionalReadFields,
     filterOptions,
     // SAFETY: the flat and tree overloads only differ in whether `tree` is
     // present; the hook branches on it at runtime.
@@ -416,7 +452,29 @@ function ServerListBody({
       <ListTotalSummary
         totals={entitySummary[entity].list.totals}
         sums={list.sums}
+        state={list.summaryState}
+        onRetry={list.retrySummary}
       />
+      {list.enrichmentFailures?.map(({ pageIndex, group, state }) => (
+        <div key={`${pageIndex}:${group}`} className="min-w-0 text-sm">
+          <p role="alert" className="text-destructive">
+            {state.error}
+          </p>
+          {getAppErrorDetails(state.cause).code && (
+            <p className="font-mono text-xs">
+              {getAppErrorDetails(state.cause).code}
+            </p>
+          )}
+          <ErrorDetails error={state.cause} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void list.retryEnrichment?.(pageIndex, group)}
+          >
+            Retry {group}
+          </Button>
+        </div>
+      ))}
       <Stack gap="sm">
         {renderedView !== "table" && (
           <DataTableToolbar
@@ -456,6 +514,7 @@ function ServerListBody({
                   // tree nesting and synthetic grouping rows reach the table.
                   // A shelf must never turn either into cards.
                   items={list.data}
+                  enrichmentState={list.enrichmentState}
                   isLoading={list.workbench.isLoading}
                   error={list.workbench.error}
                   infiniteScroll={list.workbench.infiniteScroll}
@@ -527,7 +586,20 @@ function ServerListBody({
       {parts.below?.(list)}
     </>
   );
-  return <>{parts.wrap ? parts.wrap(body, list) : body}</>;
+  return (
+    <>
+      {parts.wrap
+        ? parts.wrap(body, {
+            data: list.data.filter((row) =>
+              (parts.wrapReadFields ?? []).every((field) => {
+                const state = list.enrichmentState?.(row.id, field);
+                return !state || state.state === "ready";
+              }),
+            ),
+          })
+        : body}
+    </>
+  );
 }
 
 /** The Timeline view: the entity's timeline over the current filters, window in the search keys. */

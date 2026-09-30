@@ -40,7 +40,8 @@ struct GenericEntityListModelTests {
                 return (200, payload)
             }
         }
-        let model = GenericEntityListModel(descriptor: EntityCatalog[.product], client: try makeClient())
+        let model = GenericEntityListModel(
+            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false)
         await model.loadInitial()
         await model.loadInitial()
         #expect(model.phase == .loaded)
@@ -65,7 +66,7 @@ struct GenericEntityListModelTests {
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1)
+            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1, progressive: false)
 
         await model.loadInitial()
         async let firstTrigger: Void = model.loadNextPage()
@@ -95,7 +96,7 @@ struct GenericEntityListModelTests {
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1)
+            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1, progressive: false)
 
         await model.loadInitial()
         await model.loadNextPage()
@@ -119,7 +120,7 @@ struct GenericEntityListModelTests {
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1)
+            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1, progressive: false)
 
         await model.loadInitial()
         #expect(model.hasMore)
@@ -144,7 +145,8 @@ struct GenericEntityListModelTests {
                 return call == 1 ? (200, first) : (503, failure)
             }
         }
-        let model = GenericEntityListModel(descriptor: EntityCatalog[.product], client: try makeClient())
+        let model = GenericEntityListModel(
+            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false)
 
         await model.loadInitial()
         await model.refresh()
@@ -171,7 +173,8 @@ struct GenericEntityListModelTests {
                 return call == 1 ? (200, first) : (503, failure)
             }
         }
-        let model = GenericEntityListModel(descriptor: EntityCatalog[.product], client: try makeClient())
+        let model = GenericEntityListModel(
+            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false)
         await model.loadInitial()
         #expect(model.meta?.sums?.additionalProperties["price"] == 25)
 
@@ -205,7 +208,7 @@ struct GenericEntityListModelTests {
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1)
+            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1, progressive: false)
         await model.loadInitial()
 
         let loadMore = Task { await model.loadNextPage() }

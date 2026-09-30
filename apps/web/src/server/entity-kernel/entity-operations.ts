@@ -65,7 +65,7 @@ const entityListSearchSchema = z
   .object({ searchQuery: z.string().trim().min(1).max(100).optional() })
   .passthrough();
 
-const parseSchema = <S extends z.ZodType, TInput>(
+export const parseSchema = <S extends z.ZodType, TInput>(
   schema: S,
   input: TInput,
 ): z.output<S> => schema.parse(input);
@@ -80,7 +80,7 @@ const presentSchema = <S extends z.ZodType | null>(
     )
     .parse(schema);
 
-const parseSorts = <
+export const parseSorts = <
   E extends EntityKernelEntity,
   S extends EntityBindingSchemas,
 >(
@@ -113,7 +113,7 @@ const parseSorts = <
   return normalized;
 };
 
-const parseGroupBy = <
+export const parseGroupBy = <
   E extends EntityKernelEntity,
   S extends EntityBindingSchemas,
 >(

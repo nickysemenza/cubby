@@ -1,16 +1,6 @@
-import { SpanStatusCode, trace } from "@opentelemetry/api";
-import * as tracing from "@opentelemetry/sdk-trace-base";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { recordWasmExec, reset, snapshot } from "~/lib/perf/perf-store";
-
-// Exercise the shared-worker case: application tracing may already be loaded.
-await import("~/server/tracing");
-const exporter = new tracing.InMemorySpanExporter();
-const provider = new tracing.BasicTracerProvider({
-  spanProcessors: [new tracing.SimpleSpanProcessor(exporter)],
-});
-trace.setGlobalTracerProvider(provider);
 
 const { executeWasm } = await import("./wasm-execution");
 const { wasm } = await import("./wasm");
@@ -30,68 +20,38 @@ const deferred = <T>() => {
 
 describe("WASM execution", () => {
   beforeEach(() => {
-    exporter.reset();
     reset();
     vi.restoreAllMocks();
   });
 
-  afterAll(async () => {
-    await provider.shutdown();
-    trace.disable();
-  });
-
-  it("finishes synchronous work immediately and preserves pure-result caching", () => {
+  it("preserves synchronous results and pure-result caching", () => {
     const value = executeWasm("sync", () => "done", []);
 
     expect(value).toBe("done");
-    expect(exporter.getFinishedSpans()).toHaveLength(1);
-    expect(exporter.getFinishedSpans()[0]?.attributes).toMatchObject({
-      "wasm.execution_mode": "sync",
-      "wasm.method": "sync",
-      "wasm.threw": false,
-    });
 
-    exporter.reset();
     const first = wasm.parse_ingredient("7 cachetestunits architecture flour");
     const second = wasm.parse_ingredient("7 cachetestunits architecture flour");
 
     expect(second).toBe(first);
-    expect(exporter.getFinishedSpans()).toHaveLength(1);
   });
 
-  it("keeps the span open until asynchronous work resolves", async () => {
+  it("preserves asynchronous resolution", async () => {
     const pending = deferred<string>();
     const result = executeWasm("async resolve", () => pending.promise, []);
 
-    expect(exporter.getFinishedSpans()).toHaveLength(0);
     pending.resolve("done");
 
     await expect(result).resolves.toBe("done");
-    expect(exporter.getFinishedSpans()).toHaveLength(1);
-    expect(exporter.getFinishedSpans()[0]?.attributes).toMatchObject({
-      "wasm.execution_mode": "async",
-      "wasm.method": "async resolve",
-      "wasm.threw": false,
-    });
   });
 
-  it("records an asynchronous rejection before preserving it", async () => {
+  it("preserves asynchronous rejection", async () => {
     const pending = deferred<string>();
     const error = new Error("extraction failed");
     const result = executeWasm("async reject", () => pending.promise, []);
 
-    expect(exporter.getFinishedSpans()).toHaveLength(0);
     pending.reject(error);
 
     await expect(result).rejects.toBe(error);
-    const span = exporter.getFinishedSpans()[0];
-    expect(span?.status.code).toBe(SpanStatusCode.ERROR);
-    expect(span?.attributes).toMatchObject({
-      "wasm.execution_mode": "async",
-      "wasm.method": "async reject",
-      "wasm.threw": true,
-    });
-    expect(span?.events[0]?.name).toBe("exception");
   });
 
   it("does not classify async elapsed time as UI blocking", () => {

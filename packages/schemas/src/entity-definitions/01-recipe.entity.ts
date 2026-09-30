@@ -47,6 +47,20 @@ export default defineEntity({
       ],
     },
     list: {
+      read: {
+        relations: ["forkedFromRecipeId", "forkedFromRecipeName", "meals"],
+        derived: [
+          "totals",
+          "cost",
+          "calories",
+          "protein",
+          "carbs",
+          "fat",
+          "sectionCount",
+        ],
+        media: ["displayImages"],
+        quality: ["dataQuality"],
+      },
       links: [
         { label: "Compare", path: "/recipes/compare" },
         { label: "Import", path: "/recipes/import" },

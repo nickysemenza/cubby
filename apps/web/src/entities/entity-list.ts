@@ -183,3 +183,64 @@ export function entityListFor<E extends ListEntity>(
 export type EntityListScoped<E extends ListEntity> = ReturnType<
   typeof entityListFor<E>
 >;
+
+/** Partial standard rows use the generated base schema, never the full parser. */
+export function entityListBaseFor<E extends ListEntity>(entity: E) {
+  const base = entityList.listBase.forEntity(entity);
+  const enrichment = entityList.listEnrichment.forEntity(entity);
+  const summary = entityList.listSummary.forEntity(entity);
+  const inputFor = (input: EntityListParams<E>) =>
+    parseEntityListInput(entity, entityListInputFor(entity, input));
+  const listQueryPlan = (input: EntityListParams<E>) => {
+    const parsed = inputFor(input);
+    const options = base.queryOptions(parsed);
+    return {
+      queryKey: options.queryKey,
+      meta: options.meta,
+      execute: async (signal: AbortSignal) => {
+        const result = await base.call(parsed, { signal });
+        return {
+          items: result.data,
+          meta: result.meta,
+          deferredGroups: result.groups,
+        };
+      },
+      progressive: {
+        enrich: (
+          ids: string[],
+          groups: import("~/app/_components/hooks/progressive-list").ListReadGroup[],
+          signal: AbortSignal,
+        ) => enrichment.call({ entity, ids, groups }, { signal }),
+        summary: async (signal: AbortSignal) =>
+          (await summary.call(parsed, { signal })).sums,
+      },
+    };
+  };
+  return {
+    listQueryPlan,
+    infiniteQueryOptions: (input: EntityListParams<E>) => {
+      const firstPage = {
+        ...input,
+        pagination: { ...input.pagination, pageIndex: 0 },
+      };
+      const plan = listQueryPlan(firstPage);
+      return infiniteQueryOptions({
+        queryKey: infiniteOperationQueryKey(plan.queryKey),
+        meta: plan.meta,
+        ...base.policy(inputFor(firstPage)).freshness,
+        queryFn: ({ pageParam, signal }) =>
+          listQueryPlan({
+            ...firstPage,
+            pagination: { ...firstPage.pagination, pageIndex: pageParam },
+          }).execute(signal),
+        initialPageParam: 0,
+        getNextPageParam: (lastPage) => {
+          const { pageIndex, pageSize, totalCount } = lastPage.meta;
+          return (pageIndex + 1) * pageSize < totalCount
+            ? pageIndex + 1
+            : undefined;
+        },
+      });
+    },
+  };
+}

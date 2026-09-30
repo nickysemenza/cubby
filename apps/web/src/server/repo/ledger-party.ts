@@ -37,7 +37,6 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   amountJsonSql,
   amountToColumns,
@@ -48,11 +47,18 @@ import {
 } from "~/server/repo/database-helpers";
 import { applyInventoryOwnershipInTransaction } from "~/server/repo/inventory/ownership-mutations";
 import { listScaffold } from "~/server/repo/list";
+import {
+  hydrateListRead,
+  type ListProjection,
+  type ListReadRow,
+} from "~/server/repo/list-projection";
 import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge/core";
 import { policyDelete } from "~/server/repo/removal";
 import { createEntityReader } from "~/server/repo/repository";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { completeListReader } from "./list-read-adapters";
 
 export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
   "VendorAccount.ledgerPartyId": {
@@ -263,23 +269,26 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
 
 type LedgerPartyRow = typeof ledgerParty.$inferSelect;
 
+const hydrateRead = (
+  db: Database | DrizzleTransaction,
+  rows: LedgerPartyRow[],
+  projection: ListProjection,
+): Promise<ListReadRow[]> =>
+  hydrateListRead(db, "ledgerParty", rows, projection, {
+    load: async () => undefined,
+    mapRow: (row) => ({
+      ...row,
+      id: parseShortcodeFor("ledgerParty", row.shortcode),
+    }),
+  });
+
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: LedgerPartyRow[],
-): Promise<LedgerPartyOut[]> => {
-  const dataQualities = await loadDataQualities(
-    db,
-    "ledgerParty",
-    rows.map((row) => row.id),
+): Promise<LedgerPartyOut[]> =>
+  (await hydrateRead(db, rows, { kind: "full" })).map((row) =>
+    ledgerPartyOut.parse(row),
   );
-  return rows.map((row) =>
-    ledgerPartyOut.parse({
-      ...row,
-      id: parseShortcodeFor("ledgerParty", row.shortcode),
-      dataQuality: dataQualities.get(row.id),
-    }),
-  );
-};
 
 const scaffold = listScaffold("ledgerParty", ledgerParty);
 
@@ -311,11 +320,12 @@ export const getLedgerPartyByShortcode = reader.getByShortcode;
 export const buildLedgerPartyWhere = (filters: LedgerPartyFilters) =>
   scaffold.where(filters, []);
 
-export const listLedgerParties = (
+export const listLedgerPartiesRead = (
   db: Database,
   filters: LedgerPartyFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  projection: ListProjection = { kind: "full" },
 ) =>
   scaffold.list(
     db,
@@ -323,12 +333,18 @@ export const listLedgerParties = (
       filters,
       sorts: sorts.length ? sorts : [{ orderBy: "name", direction: "asc" }],
       pagination,
+      projection,
     },
     {
       where: buildLedgerPartyWhere(filters),
-      hydrate: (rows) => hydrate(db, rows),
+      hydrate: (rows, selected) => hydrateRead(db, rows, selected),
     },
   );
+
+export const listLedgerParties = completeListReader(
+  ledgerPartyOut,
+  listLedgerPartiesRead,
+);
 
 export async function createLedgerParty(
   db: Database,

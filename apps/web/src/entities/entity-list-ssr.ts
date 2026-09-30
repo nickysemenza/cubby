@@ -2,7 +2,10 @@ import type { Entity } from "@cubby/schemas/entity";
 import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import type { QueryClient } from "@tanstack/react-query";
 
-import { compileEntityListInput, entityListFor } from "~/entities/entity-list";
+import {
+  compileEntityListInput,
+  entityListBaseFor,
+} from "~/entities/entity-list";
 
 import { defaultSortDirectionFor, defaultSortFor } from "./entities";
 import { getEntityFilters } from "./filter-manifest";
@@ -47,7 +50,7 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
   if (options.active === false) return;
   const defaultSort =
     options.defaultSort ?? entityListDefaultSort(options.entity);
-  const query = entityListFor(options.entity).infiniteQueryOptions(
+  const query = entityListBaseFor(options.entity).infiniteQueryOptions(
     compileEntityListInput(
       options.entity,
       searchWithInitialFilter(options.entity, options.search),

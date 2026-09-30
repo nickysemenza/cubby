@@ -39,6 +39,12 @@ export default defineEntity({
     icons: { phosphor: "Package", sfSymbol: "cube.box", emoji: "🗃️" },
     detail: {},
     list: {
+      read: {
+        relations: ["product", "location", "ownerLedgerPartyId"],
+        derived: ["valuation", "effectiveOwnership"],
+        media: ["displayImages"],
+        quality: ["dataQuality"],
+      },
       totalOverrides: [
         {
           id: "valuation",

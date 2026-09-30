@@ -23,7 +23,6 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { device, imageSighting } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   buildPartialUpdateValues,
   notDeleted,
@@ -31,11 +30,19 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { listScaffold } from "~/server/repo/list";
+import {
+  hydrateListRead,
+  loadListGroup,
+  type ListProjection,
+  type ListReadRow,
+  wantsListGroup,
+} from "~/server/repo/list-projection";
 import { currentMemberLedgerParty } from "~/server/repo/member-login";
 import {
   asActor,
   defineRepository,
   listOn,
+  listReadOn,
   onDb,
 } from "~/server/repo/repository";
 import { createEntityCrud } from "~/server/repo/repository";
@@ -45,6 +52,8 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { deriveAndStoreImageCapture } from "~/server/services/image-capture-derivation";
+
+import { completeListReader } from "./list-read-adapters";
 
 /** `ImageSighting.deviceId` cascades: a sighting reported by a device is
  * meaningless once that device is gone. `AuditLog.deviceId` and
@@ -74,56 +83,71 @@ type DeviceRow = typeof device.$inferSelect;
 
 const scaffold = listScaffold("device", device);
 
+const hydrateRead = async (
+  db: Database | DrizzleTransaction,
+  rows: DeviceRow[],
+  projection: ListProjection,
+): Promise<ListReadRow[]> => {
+  return hydrateListRead(db, "device", rows, projection, {
+    load: () =>
+      Promise.all([
+        loadListGroup(projection, "relations", () =>
+          lookupEntityReferences(
+            db,
+            "ledgerParty",
+            rows.map((row) => row.ledgerPartyId),
+          ),
+        ),
+        loadListGroup(projection, "relations", () =>
+          lookupEntityReferences(
+            db,
+            "product",
+            rows.map((row) => row.productId),
+          ),
+        ),
+      ]),
+    mapRow: (row, { loaded: [parties, products] }) => {
+      const party = row.ledgerPartyId ? parties?.get(row.ledgerPartyId) : null;
+      const hardware = row.productId ? products?.get(row.productId) : null;
+      const result = { ...row, id: parseShortcodeFor("device", row.shortcode) };
+      if (wantsListGroup(projection, "relations"))
+        Object.assign(result, {
+          ledgerPartyId: party?.id ?? null,
+          productId: hardware?.id ?? null,
+          ledgerPartyName: party?.name ?? null,
+          productName: hardware?.name ?? null,
+        });
+      return result;
+    },
+  });
+};
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: DeviceRow[],
-): Promise<DeviceOut[]> => {
-  const [parties, products, qualities] = await Promise.all([
-    lookupEntityReferences(
-      db,
-      "ledgerParty",
-      rows.map((row) => row.ledgerPartyId),
-    ),
-    lookupEntityReferences(
-      db,
-      "product",
-      rows.map((row) => row.productId),
-    ),
-    loadDataQualities(
-      db,
-      "device",
-      rows.map((row) => row.id),
-    ),
-  ]);
-  return rows.map((row) => {
-    const party = row.ledgerPartyId ? parties.get(row.ledgerPartyId) : null;
-    const hardware = row.productId ? products.get(row.productId) : null;
-    return deviceOut.parse({
-      ...row,
-      id: parseShortcodeFor("device", row.shortcode),
-      ledgerPartyId: party?.id ?? null,
-      productId: hardware?.id ?? null,
-      ledgerPartyName: party?.name ?? null,
-      productName: hardware?.name ?? null,
-      dataQuality: qualities.get(row.id),
-    });
-  });
-};
+): Promise<DeviceOut[]> =>
+  (await hydrateRead(db, rows, { kind: "full" })).map((row) =>
+    deviceOut.parse(row),
+  );
 
 export const buildDeviceWhere = (filters: DeviceFilters) =>
   scaffold.where(filters);
 
-const listDevices = (
+export const listDevicesRead = (
   db: Database,
   filters: DeviceFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  projection: ListProjection = { kind: "full" },
 ) =>
   scaffold.list(
     db,
-    { filters, sorts, pagination },
-    { hydrate: (rows) => hydrate(db, rows) },
+    { filters, sorts, pagination, projection },
+    {
+      hydrate: (rows, selected) => hydrateRead(db, rows, selected),
+    },
   );
+
+export const listDevices = completeListReader(deviceOut, listDevicesRead);
 
 const fetchById = async (
   db: Database | DrizzleTransaction,
@@ -258,6 +282,7 @@ export const deviceRepository = defineRepository("device", {
   lifecycle: { delete: DEVICE_DELETE_EDGE_POLICY },
   get: onDb(getDeviceByShortcode),
   list: listOn(listDevices),
+  listRead: listReadOn(listDevicesRead),
   create: asActor(createDevice),
   update: asActor(updateDevice),
   deleteHooks: {

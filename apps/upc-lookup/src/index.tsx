@@ -197,6 +197,7 @@ export default Sentry.withSentry(
     dsn: CUBBY_SENTRY_DSN,
     environment: import.meta.env.DEV ? "development" : "production",
     tracesSampleRate: 0,
+    tracesSampler: () => 0,
     initialScope: { tags: { service: "upc-lookup" } },
   }),
   // Sentry mutates its handler; local Wrangler peers use the raw export and

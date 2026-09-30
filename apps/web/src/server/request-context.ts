@@ -35,7 +35,6 @@ import {
 import { AvailabilityService } from "~/server/services/availability.service";
 import { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import { USDAService } from "~/server/services/usda.service";
-import { extractTraceContext } from "~/server/tracing";
 import type { RequestOrigin } from "~/server/workload";
 
 export const buildCrudServices = (
@@ -113,62 +112,55 @@ export const createRequestContext = async (opts: {
   headers: Headers;
   actor?: RequestActor;
 }) => {
-  const headersObj: Record<string, string> = {};
-  opts.headers.forEach((value, key) => {
-    headersObj[key] = value;
-  });
+  const crudServices = buildCrudServices(db);
+  const readConsistency: ReadConsistencyDecision = {
+    consistency: "strong",
+    reason: "authoritative-operation",
+  };
 
-  return await extractTraceContext(headersObj, async () => {
-    const crudServices = buildCrudServices(db);
-    const readConsistency: ReadConsistencyDecision = {
-      consistency: "strong",
-      reason: "authoritative-operation",
-    };
-
-    const deviceId = await resolveRequestDevice(crudServices.db, opts.headers);
-    if (opts.actor) {
-      const { userId, sessionId, channel, oauthClientId, runId } = opts.actor;
-      const requestOrigin: RequestOrigin = channel === "mcp" ? "mcp" : "api";
-      return {
-        ...crudServices,
-        readConsistency,
-        auth: { userId, sessionId },
-        currentParty: async () => await currentParty(crudServices.db, userId),
-        actorContext: buildActorContext(userId, channel, {
-          oauthClientId,
-          deviceId,
-          runId,
-        }),
-        requestOrigin,
-        ...opts,
-      };
-    }
-
-    const betterSession = await betterAuth.api.getSession({
-      headers: opts.headers,
-    });
-    const authenticatedUserId = betterSession?.user?.id
-      ? userId.parse(betterSession.user.id)
-      : null;
-
-    const requestOrigin: RequestOrigin = "ui";
+  const deviceId = await resolveRequestDevice(crudServices.db, opts.headers);
+  if (opts.actor) {
+    const { userId, sessionId, channel, oauthClientId, runId } = opts.actor;
+    const requestOrigin: RequestOrigin = channel === "mcp" ? "mcp" : "api";
     return {
       ...crudServices,
       readConsistency,
-      auth: {
-        userId: authenticatedUserId,
-        sessionId: betterSession?.session?.id ?? null,
-      },
-      currentParty: authenticatedUserId
-        ? async () => await currentParty(crudServices.db, authenticatedUserId)
-        : null,
-      actorContext: authenticatedUserId
-        ? buildActorContext(authenticatedUserId, "web", { deviceId })
-        : null,
+      auth: { userId, sessionId },
+      currentParty: async () => await currentParty(crudServices.db, userId),
+      actorContext: buildActorContext(userId, channel, {
+        oauthClientId,
+        deviceId,
+        runId,
+      }),
       requestOrigin,
       ...opts,
     };
+  }
+
+  const betterSession = await betterAuth.api.getSession({
+    headers: opts.headers,
   });
+  const authenticatedUserId = betterSession?.user?.id
+    ? userId.parse(betterSession.user.id)
+    : null;
+
+  const requestOrigin: RequestOrigin = "ui";
+  return {
+    ...crudServices,
+    readConsistency,
+    auth: {
+      userId: authenticatedUserId,
+      sessionId: betterSession?.session?.id ?? null,
+    },
+    currentParty: authenticatedUserId
+      ? async () => await currentParty(crudServices.db, authenticatedUserId)
+      : null,
+    actorContext: authenticatedUserId
+      ? buildActorContext(authenticatedUserId, "web", { deviceId })
+      : null,
+    requestOrigin,
+    ...opts,
+  };
 };
 
 type RequestContext = Awaited<ReturnType<typeof createRequestContext>>;

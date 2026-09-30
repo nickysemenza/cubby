@@ -61,6 +61,13 @@ export default defineEntity({
       ],
     },
     list: {
+      read: {
+        relations: ["recipes", "recipeNames"],
+        derived: ["totals", "cost", "calories"],
+        media: ["images", "displayImages"],
+        quality: ["dataQuality"],
+        dependencies: { derived: ["relations"] },
+      },
       viewOverrides: [
         {
           kind: "slot",

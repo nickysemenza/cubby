@@ -13,11 +13,25 @@ const imageReference = z.object({ id: imageShortcode, url: z.string() });
 export async function hydrateImageReadProjection<T>(
   db: Database | DrizzleTransaction,
   value: T,
+  // Only pass authoritative results resolved during this read, never values
+  // recovered from the input's optional representations fields.
+  preloaded?: ReadonlyMap<string, ImageRepresentations>,
 ): Promise<T> {
   const codes = new Set<string>();
+  function collect<Node>(input: Node): void {
+    if (Array.isArray(input)) {
+      input.forEach(collect);
+      return;
+    }
+    const object = record.safeParse(input);
+    if (!object.success) return;
+    const reference = imageReference.safeParse(input);
+    if (reference.success) codes.add(reference.data.id);
+    Object.values(object.data).forEach(collect);
+  }
   function visit<Node>(
     input: Node,
-    representations?: ReadonlyMap<string, ImageRepresentations>,
+    representations: ReadonlyMap<string, ImageRepresentations>,
   ): Node {
     if (Array.isArray(input)) {
       // SAFETY: recursive hydration preserves every element and its original shape.
@@ -26,7 +40,6 @@ export async function hydrateImageReadProjection<T>(
     const object = record.safeParse(input);
     if (!object.success) return input; // Date and scalar wire values retain their identity.
     const reference = imageReference.safeParse(input);
-    if (reference.success) codes.add(reference.data.id);
     const hydrated = Object.fromEntries(
       Object.entries(object.data).map(([key, child]) => [
         key,
@@ -35,7 +48,7 @@ export async function hydrateImageReadProjection<T>(
     );
     // SAFETY: all fields survive; only the optional declared Image representation is added.
     return (
-      reference.success && representations?.has(reference.data.id)
+      reference.success && representations.has(reference.data.id)
         ? {
             ...hydrated,
             representations: representations.get(reference.data.id),
@@ -43,9 +56,18 @@ export async function hydrateImageReadProjection<T>(
         : hydrated
     ) as Node;
   }
-  visit(value);
+  collect(value);
   if (!codes.size) return value;
-  const representations = await loadImageRepresentations(db, [...codes]);
+  const missing = [...codes].filter((code) => !preloaded?.has(code));
+  const representations = new Map(preloaded);
+  if (missing.length) {
+    for (const [code, representation] of await loadImageRepresentations(
+      db,
+      missing,
+    )) {
+      representations.set(code, representation);
+    }
+  }
   // SAFETY: the walk preserves every input field and only adds the declared
   // optional representations projection to valid public Image references.
   return visit(value, representations) as T;

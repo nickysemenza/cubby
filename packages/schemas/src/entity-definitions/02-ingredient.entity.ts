@@ -33,6 +33,12 @@ export default defineEntity({
       ],
     },
     list: {
+      read: {
+        relations: ["product", "appearsInRecipes"],
+        derived: ["ownRecipeCount"],
+        media: ["displayImages"],
+        quality: ["dataQuality"],
+      },
       actionOverrides: ["bulkEdit", "merge", "delete"],
       links: [
         { label: "Equivalences", path: "/ingredients/equivalences" },

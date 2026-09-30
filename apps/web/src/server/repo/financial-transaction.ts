@@ -24,6 +24,7 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { capitalize, sortBy, uniq } from "es-toolkit";
 
+import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -66,7 +67,16 @@ import {
   writeAllocationSet,
 } from "~/server/repo/financial-transaction-allocations";
 import { listScaffold } from "~/server/repo/list";
-import { enrichFinancialTransactionsWithVendorInference } from "~/server/repo/merchant-vendor-inference";
+import {
+  listGroupFields,
+  loadListGroup,
+  wantsListGroup,
+  type ListProjection,
+} from "~/server/repo/list-projection";
+import {
+  enrichFinancialTransactionsWithVendorInference,
+  enrichFinancialTransactionVendorRead,
+} from "~/server/repo/merchant-vendor-inference";
 import { cents } from "~/server/repo/money";
 import {
   asActor,
@@ -81,6 +91,8 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { parseCompleteListRead } from "./list-read-adapters";
 
 /** "This transaction settles at least one Purchase" — allocation-aware. */
 const hasAnyAllocation = () => sql`EXISTS (
@@ -218,6 +230,96 @@ const toOut = (
   });
 };
 
+const selectTransactionsRead = (
+  db: Database | DrizzleTransaction,
+  projection: ListProjection,
+) => {
+  const {
+    ledgerTransferShortcode,
+    accountShortcode,
+    allocations,
+    accountName,
+    itemization,
+    ...core
+  } = columns;
+  return unwrapDb(db)
+    .select({
+      ...core,
+      ...listGroupFields(projection, "relations", () => ({
+        accountShortcode,
+        accountName,
+      })),
+      ...listGroupFields(projection, ["relations", "derived"], () => ({
+        ledgerTransferShortcode,
+        allocations,
+      })),
+      ...listGroupFields(projection, "derived", () => ({ itemization })),
+    })
+    .from(financialTransaction);
+};
+const hydrateTransactionsRead = async (
+  db: Database,
+  rows: Awaited<ReturnType<typeof selectTransactionsRead>>,
+  projection: ListProjection,
+) => {
+  const ids = rows.map((row) => row.id);
+  const [qualities, refs] = await Promise.all([
+    loadListGroup(projection, "quality", () =>
+      loadDataQualities(db, "financialTransaction", ids),
+    ),
+    loadListGroup(projection, "relations", () => settlementRefsFor(db, ids)),
+  ]);
+  const values = rows.map((row) => {
+    const allocations = (row.allocations ?? []).map((value) => ({
+      purchaseId: parseShortcodeFor("purchase", value.purchaseId),
+      amount: Number(value.amount),
+    }));
+    return {
+      ...row,
+      id: parseShortcodeFor("financialTransaction", row.shortcode),
+      displayName:
+        row.merchant?.trim() ||
+        row.rawDescription?.trim() ||
+        capitalize(row.kind.replaceAll("_", " ")),
+      ...listGroupFields(projection, "relations", () => ({
+        accountId: parseShortcodeFor("financialAccount", row.accountShortcode!),
+        sourceRefs: refs?.get(row.id) ?? [],
+      })),
+      ...listGroupFields(projection, ["relations", "derived"], () => ({
+        allocations,
+        purchaseId:
+          allocations.length === 1 ? allocations[0]!.purchaseId : null,
+        ledgerTransferId: row.ledgerTransferShortcode
+          ? parseShortcodeFor("ledgerTransfer", row.ledgerTransferShortcode)
+          : null,
+      })),
+      ...listGroupFields(projection, "quality", () => ({
+        dataQuality: qualities!.get(row.id)!,
+      })),
+    };
+  });
+  if (wantsListGroup(projection, "derived")) {
+    const inferences = await enrichFinancialTransactionVendorRead(
+      db,
+      rows.map((row) => ({
+        id: parseShortcodeFor("financialTransaction", row.shortcode),
+        kind: financialTransactionKind.parse(row.kind),
+        status: financialTransactionOut.shape.status.parse(row.status),
+        amount: row.amount,
+        merchant: row.merchant,
+        allocations: row.allocations ?? [],
+        ledgerTransferId: row.ledgerTransferShortcode ?? null,
+      })),
+    );
+    values.forEach((value, index) =>
+      Object.assign(value, {
+        vendorInference: inferences[index]!.vendorInference,
+      }),
+    );
+  }
+  return projectListRows("financialTransaction", values, projection);
+};
+
 /**
  * "Carries a live settlement reference matching the filters". Both filters
  * constrain the SAME reference row, so a transaction that took its source
@@ -324,16 +426,17 @@ export async function buildFinancialTransactionWhere(
   ]);
 }
 
-export const listFinancialTransactions = async (
+export const listFinancialTransactionsRead = async (
   db: Database,
   filters: FinancialTransactionFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
+  projection: ListProjection = { kind: "full" },
 ) =>
   financialTransactionScaffold.list(
     db,
-    { filters, sorts, pagination, readIntent },
+    { filters, sorts, pagination, readIntent, projection },
     {
       where: await buildFinancialTransactionWhere(db, filters),
       resolveSort: (sort) =>
@@ -345,14 +448,34 @@ export const listFinancialTransactions = async (
             ]
           : null,
       select: (page) =>
-        selectTransactions(db)
+        selectTransactionsRead(db, projection)
           .where(page.where)
           .orderBy(...page.orderBy)
           .limit(page.limit)
           .offset(page.offset),
-      hydrate: (rows) => hydrate(db, rows),
+      hydrate: (rows) => hydrateTransactionsRead(db, rows, projection),
     },
   );
+
+export const listFinancialTransactions = async (
+  db: Database,
+  filters: FinancialTransactionFilters,
+  sorts: SortParams[],
+  pagination: PaginationParams,
+  readIntent: ListReadIntent = "page",
+) => {
+  const result = await listFinancialTransactionsRead(
+    db,
+    filters,
+    sorts,
+    pagination,
+    readIntent,
+  );
+  return parseCompleteListRead(
+    financialTransactionOut,
+    Promise.resolve(result),
+  );
+};
 
 const financialTransactionReader = createEntityReader<
   FinancialTransactionRow,
@@ -811,6 +934,15 @@ export const financialTransactionRepository = defineRepository(
     lifecycle: { delete: FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY },
     get: onDb(getFinancialTransactionByShortcode),
     list: listOn(listFinancialTransactions),
+    listRead: (ctx, filters, sorts, pagination, projection) =>
+      listFinancialTransactionsRead(
+        ctx.db,
+        filters,
+        sorts,
+        pagination,
+        "page",
+        projection,
+      ),
     create: asActor(createFinancialTransaction),
     update: asActor(updateFinancialTransaction),
     deleteHooks: {

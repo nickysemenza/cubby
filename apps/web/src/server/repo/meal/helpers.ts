@@ -4,6 +4,7 @@ import {
   parseShortcodeFor,
   type RecipeId,
 } from "@cubby/schemas/identifiers";
+import { mealOut } from "@cubby/schemas/meal";
 import type {
   MealKind,
   MealOut,
@@ -26,6 +27,10 @@ import {
   mapImages,
   type MappableImageRecord,
 } from "~/server/repo/database-helpers";
+import {
+  type ListProjection,
+  wantsListGroup,
+} from "~/server/repo/list-projection";
 
 const scaledRecipeTotals = (
   totals: StoredRecipeTotals | null,
@@ -105,11 +110,16 @@ type MealRow = {
   images: Array<{ image: MappableImageRecord; deletedAt: Date | null }>;
 };
 
-export const dbMealToAPI = (
+export const dbMealListReadProjection = (
   row: MealRow,
-  dataQuality: DataQuality,
-): MealOut => {
-  const recipes: MealRecipeOut[] = livePlannedRecipes(row.recipes)
+  projection: ListProjection,
+): Partial<MealOut> & Pick<MealOut, "id"> => {
+  const recipes: MealRecipeOut[] = livePlannedRecipes(
+    wantsListGroup(projection, "relations") ||
+      wantsListGroup(projection, "derived")
+      ? row.recipes
+      : [],
+  )
     // `relations.meal.full.recipes` already filters soft-deleted occurrences
     // (`where: notDeleted(mealRecipe)`); the to-one `recipe` join can't be
     // filtered in `with`, so `mr.recipe.deletedAt` is the backstop here.
@@ -137,26 +147,34 @@ export const dbMealToAPI = (
       updatedAt: mr.updatedAt,
     }));
 
-  const totals = aggregateTotals(recipes.map((recipe) => recipe.scaledTotals));
-  const { cost, calories } = totalsPreview(totals);
-  return {
+  const totals = wantsListGroup(projection, "derived")
+    ? aggregateTotals(recipes.map((recipe) => recipe.scaledTotals))
+    : undefined;
+  const result: Partial<MealOut> & Pick<MealOut, "id"> = {
     id: parseShortcodeFor("meal", row.shortcode),
     date: row.date,
     name: row.name,
     sortOrder: row.sortOrder,
     mealType: row.mealType,
     mealKind: row.mealKind,
-    recipes,
-    totals,
-    cost,
-    calories,
-    images: mapImages(row.images),
-    dataQuality,
-    // `name` is a nullable, user-editable label; an unnamed meal falls back to
-    // its date so every surface has a non-blank identity to show.
+    // An unnamed meal's identity is its date, as in the full projection.
     displayName: row.name?.trim() || row.date,
-    recipeNames: recipes.map((recipe) => recipe.recipe.name),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+  if (wantsListGroup(projection, "relations"))
+    Object.assign(result, {
+      recipes,
+      recipeNames: recipes.map((recipe) => recipe.recipe.name),
+    });
+  if (totals) Object.assign(result, { totals, ...totalsPreview(totals) });
+  if (wantsListGroup(projection, "media"))
+    result.images = mapImages(row.images);
+  return result;
 };
+
+export const dbMealToAPI = (row: MealRow, dataQuality: DataQuality): MealOut =>
+  mealOut.parse({
+    ...dbMealListReadProjection(row, { kind: "full" }),
+    dataQuality,
+  });

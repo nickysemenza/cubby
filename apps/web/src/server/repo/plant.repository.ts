@@ -9,6 +9,7 @@ import {
   asActor,
   defineRepository,
   listOn,
+  listReadOn,
   onDb,
 } from "~/server/repo/repository";
 import {
@@ -20,6 +21,7 @@ import {
   createPlant,
   getPlantByShortcode,
   listPlants,
+  listPlantsRead,
   mergePlants,
   PLANT_DELETE_EDGE_POLICY,
   PLANT_MERGE_EDGE_POLICY,
@@ -45,6 +47,7 @@ export const plantRepository = defineRepository("plant", {
   },
   get: onDb(getPlantByShortcode),
   list: listOn(listPlants),
+  listRead: listReadOn(listPlantsRead),
   create: asActor(createPlant),
   update: asActor(updatePlant),
   bulkUpdate: async (ctx, ids, data) => {

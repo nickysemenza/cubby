@@ -10,9 +10,12 @@ import {
   ShelfGrid,
 } from "~/app/_components/data-table/shelf";
 import type { GroupConfig } from "~/app/_components/data-table/useGroupedList";
+import type { ListGroupState } from "~/app/_components/hooks/progressive-list";
 import type { InfiniteScrollControls } from "~/app/_components/hooks/useInfiniteTableList";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { renderCompactFieldValue } from "~/entities/entity-display";
+
+import { DeferredListValue } from "./deferred-list-value";
 
 /**
  * A list row as the shelf reads it: its id, its server-resolved cover
@@ -51,12 +54,23 @@ function shelfImages(entity: BrowserRoutedEntity, row: ShelfRow) {
  * rendered through its declared format — a price reads as money, a category
  * as its label.
  */
-function shelfSubtitle(entity: BrowserRoutedEntity, row: ShelfRow): ReactNode {
+function shelfSubtitle(
+  entity: BrowserRoutedEntity,
+  row: ShelfRow,
+  enrichmentState?: (id: string, field: string) => ListGroupState | undefined,
+): ReactNode {
   const subtitle = entitySummary[entity].list.shelf?.subtitle ?? [];
   const fields = entityFieldModels[entity].fields;
   for (const key of subtitle) {
     const field = fields.find((candidate) => candidate.key === key);
     if (!field) continue;
+    const state = enrichmentState?.(row.id, field.readKey ?? field.key);
+    if (state && state.state !== "ready")
+      return (
+        <span className="block h-4 leading-4">
+          <DeferredListValue state={state} />
+        </span>
+      );
     const value = row[field.readKey ?? field.key];
     if (
       value == null ||
@@ -66,7 +80,9 @@ function shelfSubtitle(entity: BrowserRoutedEntity, row: ShelfRow): ReactNode {
       continue;
     return renderCompactFieldValue(entity, row, field);
   }
-  return undefined;
+  return enrichmentState && subtitle.length > 0 ? (
+    <span className="block h-4" />
+  ) : undefined;
 }
 
 /**
@@ -87,6 +103,7 @@ export function EntityShelf<TRow extends { id: string }>({
   onRowHoverEnd,
   currentRowId,
   onRetry,
+  enrichmentState,
 }: {
   entity: BrowserRoutedEntity;
   items: TRow[];
@@ -100,6 +117,7 @@ export function EntityShelf<TRow extends { id: string }>({
   onRowHoverEnd?: (record: TRow) => void;
   currentRowId?: string;
   onRetry?: () => void;
+  enrichmentState?: (id: string, field: string) => ListGroupState | undefined;
 }) {
   const { emptyState } = entitySummary[entity];
   return (
@@ -116,6 +134,7 @@ export function EntityShelf<TRow extends { id: string }>({
       renderCard={(record) => {
         const row = shelfRowSchema.parse(record);
         const images = shelfImages(entity, row);
+        const mediaState = enrichmentState?.(row.id, "displayImages");
         return (
           <ShelfCard
             key={row.id}
@@ -126,9 +145,30 @@ export function EntityShelf<TRow extends { id: string }>({
                 : entityDetailParams(row.id)
             }
             image={images[0]?.url}
+            media={
+              mediaState && mediaState.state !== "ready" ? (
+                <div
+                  className="absolute inset-0 flex items-center justify-center"
+                  aria-label={
+                    mediaState.state === "loading" ||
+                    mediaState.state === "pending"
+                      ? "Loading media"
+                      : "Media unavailable"
+                  }
+                >
+                  {mediaState.state === "error" ? (
+                    <span className="p-3 text-xs text-destructive">
+                      {mediaState.error}
+                    </span>
+                  ) : (
+                    <DeferredListValue state={mediaState} label="media" />
+                  )}
+                </div>
+              ) : undefined
+            }
             extraCount={images.length - 1}
             title={shelfTitle(entity, row)}
-            subtitle={shelfSubtitle(entity, row)}
+            subtitle={shelfSubtitle(entity, row, enrichmentState)}
             entity={entity}
             compact={compact}
             onInspect={onInspect ? () => onInspect(record) : undefined}

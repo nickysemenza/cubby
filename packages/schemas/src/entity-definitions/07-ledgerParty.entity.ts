@@ -10,6 +10,7 @@ export default defineEntity({
   table: "LedgerParty",
   identifiers: { brand: "LedgerPartyId", shortcode: "LPY-" },
   presentation: {
+    list: { read: { media: ["displayImages"], quality: ["dataQuality"] } },
     titleField: "name",
     domain: "finance",
     description: "People represented in the contribution ledger.",

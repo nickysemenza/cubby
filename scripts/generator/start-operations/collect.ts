@@ -43,6 +43,7 @@ export type ContractMember = {
   http?: false;
   /** Why the Apple app calls this operation (see contracts/define.ts). */
   native?: string;
+  transport?: "post";
   /** Keeps a query on the authoritative adapter (see contracts/define.ts). */
   readPolicy?: "strong";
   /** Browser cache tags / profile of a query (see contracts/cache-policy.ts). */
@@ -62,6 +63,7 @@ export type DeclaredOperation = {
   http: boolean;
   native: boolean;
   strongRead: boolean;
+  transport?: "post";
   input: z.ZodType | undefined;
   exportName: string;
   member: string;
@@ -302,6 +304,7 @@ export const collectDeclaredOperations = (): Promise<
             productPhases: [...(definition.observability?.productPhases ?? [])],
           },
           http: definition.http !== false,
+          transport: definition.transport,
           native: definition.native !== undefined,
           strongRead: definition.readPolicy === "strong",
           input: definition.input,

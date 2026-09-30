@@ -2,6 +2,7 @@ import type { DurableObjectState } from "@cloudflare/workers-types";
 import { userId, type UserId } from "@cubby/schemas/identifiers";
 import { DurableObject } from "cloudflare:workers";
 
+import { httpRouteTemplate } from "~/lib/http-route-template";
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { withTrace } from "~/server/tracing";
@@ -36,33 +37,53 @@ export class CalendarFeedDurableObject
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.store = new CalendarSqlStore(ctx.storage);
-    ctx.blockConcurrencyWhile(async () => {
-      await this.store.migrate();
-      if (!this.store.meta().generation && env.APP_ORIGIN)
-        await this.markDirty("initialize", env.APP_ORIGIN);
-      // Clean cutover: old subscription credentials and documents are disposable.
-      await ctx.storage.delete([
-        "calendar:meta",
-        "calendar:dirty",
-        "calendar:feed:meals",
-        "calendar:feed:tasks",
-        "calendar:feed:all",
-      ]);
-    });
+    ctx.blockConcurrencyWhile(() =>
+      withTrace("caldav.initialize", async () => {
+        await this.store.migrate();
+        if (!this.store.meta().generation && env.APP_ORIGIN)
+          await this.markDirty("initialize", env.APP_ORIGIN);
+        // Clean cutover: old subscription credentials and documents are disposable.
+        await ctx.storage.delete([
+          "calendar:meta",
+          "calendar:dirty",
+          "calendar:feed:meals",
+          "calendar:feed:tasks",
+          "calendar:feed:all",
+        ]);
+      }),
+    );
   }
   async fetch(request: Request) {
-    const origin = new URL(request.url).origin;
-    const backend: CalDavBackend = {
-      authenticate: (authorization) =>
-        authenticateCalendar(this.store, authorization),
-      ready: () => this.store.meta().generation > 0,
-      list: (collection, range) => this.store.list(collection, range),
-      get: (collection, filename) => this.store.get(collection, filename),
-      write: (input) =>
-        this.serializePublication(() => this.write(input, origin)),
-    };
-    const { createCalDavHandler } = await import("./caldav-http");
-    return createCalDavHandler(backend)(request);
+    return withTrace("caldav.request", async (span) => {
+      const url = new URL(request.url);
+      span.setAttributes({
+        "http.request.method": request.method,
+        "http.route": httpRouteTemplate(url.pathname),
+      });
+      const origin = new URL(request.url).origin;
+      const backend: CalDavBackend = {
+        authenticate: (authorization) =>
+          withTrace("caldav.authenticate", async (authSpan) => {
+            const actor = await authenticateCalendar(this.store, authorization);
+            authSpan.setAttribute("cubby.auth.authenticated", actor !== null);
+            return actor;
+          }),
+        ready: () => this.store.meta().generation > 0,
+        list: (collection, range) => this.store.list(collection, range),
+        get: (collection, filename) => this.store.get(collection, filename),
+        write: (input) =>
+          this.serializePublication(() => this.write(input, origin)),
+      };
+      const { createCalDavHandler } = await withTrace(
+        "caldav.importHandler",
+        () => import("./caldav-http"),
+      );
+      const response = await withTrace("caldav.response", () =>
+        createCalDavHandler(backend)(request),
+      );
+      span.setAttribute("http.response.status_code", response.status);
+      return response;
+    });
   }
   async getToken() {
     return this.store.meta().token;

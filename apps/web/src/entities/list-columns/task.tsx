@@ -34,6 +34,7 @@ export const taskListOverride = defineListOverride<TaskOut, TaskFilters>({
         deletable: true as const,
         filterOptions,
         nameSuffix: subtaskCountSuffix,
+        additionalReadFields: ["subtaskCount", "doneSubtaskCount"],
         initialColumnVisibility: TASK_INITIAL_COLUMN_VISIBILITY,
       }),
       [filterOptions],

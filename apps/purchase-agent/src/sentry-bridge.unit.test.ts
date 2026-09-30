@@ -2,7 +2,6 @@ import type { FlueObservation } from "@flue/runtime";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  clampRate,
   createSentryObservation,
   purchaseAgentSentryOptions,
   type SentryReporter,
@@ -186,23 +185,15 @@ describe("purchase-agent Sentry bridge", () => {
 
   it("disables reporting for the test environment and tags the service", () => {
     expect(
-      purchaseAgentSentryOptions({ SENTRY_ENVIRONMENT: "test" }, 0),
+      purchaseAgentSentryOptions({ SENTRY_ENVIRONMENT: "test" }),
     ).toMatchObject({ enabled: false, tracesSampleRate: 0 });
     expect(
-      purchaseAgentSentryOptions({ SENTRY_ENVIRONMENT: "production" }, 1),
+      purchaseAgentSentryOptions({ SENTRY_ENVIRONMENT: "production" }),
     ).toMatchObject({
       enabled: true,
       environment: "production",
       sendDefaultPii: false,
       initialScope: { tags: { service: "purchase-agent" } },
     });
-  });
-
-  it("clamps sample rates read from Worker vars", () => {
-    expect(clampRate("1", 0)).toBe(1);
-    expect(clampRate("0.25", 0)).toBe(0.25);
-    expect(clampRate(undefined, 0)).toBe(0);
-    expect(clampRate("2", 0)).toBe(0);
-    expect(clampRate("nope", 0)).toBe(0);
   });
 });

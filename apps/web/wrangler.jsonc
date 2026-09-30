@@ -29,10 +29,7 @@
     "traces": {
       "enabled": true,
       "persist": true,
-      "head_sampling_rate": 1,
-      // Named OTLP destination pointing at Grafana Cloud Tempo. Captures CF
-      // platform auto-spans + our cloudflare:workers custom spans.
-      "destinations": ["grafana-traces"]
+      "head_sampling_rate": 1
     }
   },
   "routes": [

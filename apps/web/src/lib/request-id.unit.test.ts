@@ -8,7 +8,7 @@ import {
 
 describe("request correlation header", () => {
   afterEach(() => vi.unstubAllGlobals());
-  it("uses a neutral request-id header rather than claiming an OTel trace id", () => {
+  it("uses a neutral request-id header", () => {
     expect(REQUEST_ID_HEADER).toBe("x-request-id");
   });
 

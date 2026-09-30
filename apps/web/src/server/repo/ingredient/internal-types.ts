@@ -10,16 +10,11 @@ import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { IngredientOut } from "@cubby/schemas/ingredient";
-import {
-  type IngredientListItem,
-  type IngredientWithRecipesAndProductOut,
-  ingredientListItemOut,
-} from "@cubby/schemas/ingredient";
+import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import type { RecipeRef } from "@cubby/schemas/recipe";
 import { inArray, isNull, or, sql } from "drizzle-orm";
 
-import { parseWithContext } from "~/lib/zod-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   ingredient,
@@ -128,10 +123,10 @@ type IngredientLeanDB = typeof ingredient.$inferSelect & {
   >;
 };
 
-export const dbIngredientToTopLevel = (
+export const dbIngredientToTopLevel = <Q extends DataQuality | undefined>(
   ingredientData: IngredientSelect,
-  dataQuality: DataQuality,
-): IngredientOut => {
+  dataQuality: Q,
+): Omit<IngredientOut, "dataQuality"> & { dataQuality: Q } => {
   return {
     id: parseShortcodeFor("ingredient", ingredientData.shortcode),
     name: ingredientData.name,
@@ -151,11 +146,11 @@ type IngredientListDB = IngredientSelect & {
   ownRecipeCount: number | string;
 };
 
-export const dbIngredientToListAPI = (
+export const dbIngredientToListValues = <Q extends DataQuality | undefined>(
   ingredientData: IngredientListDB,
   displayImages: DisplayImageSummary[],
-  dataQuality: DataQuality,
-): IngredientListItem => {
+  dataQuality: Q,
+) => {
   const result = {
     ...dbIngredientToTopLevel(ingredientData, dataQuality),
     displayImages,
@@ -164,10 +159,7 @@ export const dbIngredientToListAPI = (
     ownRecipeCount: Number(ingredientData.ownRecipeCount),
   };
 
-  return parseWithContext(ingredientListItemOut, result, {
-    entityKind: "Ingredient",
-    identifier: { id: ingredientData.id, name: ingredientData.name },
-  });
+  return result;
 };
 
 /**

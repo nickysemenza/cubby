@@ -31,7 +31,6 @@ import {
   resolveGardenGuideKey,
 } from "~/server/garden-guides/windows";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   buildPartialUpdateValues,
   notDeleted,
@@ -40,6 +39,13 @@ import {
 } from "~/server/repo/database-helpers";
 import { resolveOrCreateIngredients } from "~/server/repo/ingredient/crud";
 import { listScaffold } from "~/server/repo/list";
+import {
+  hydrateListRead,
+  loadListGroup,
+  type ListProjection,
+  type ListReadRow,
+  wantsListGroup,
+} from "~/server/repo/list-projection";
 import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge";
 import { applyMergePolicy } from "~/server/repo/removal";
 import { createEntityCrud } from "~/server/repo/repository";
@@ -48,6 +54,8 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { completeListReader } from "./list-read-adapters";
 
 /** A plant keeps its garden history and seed stock; both block a delete. */
 export const PLANT_DELETE_EDGE_POLICY = {
@@ -81,42 +89,56 @@ type PlantRow = typeof plant.$inferSelect;
 
 const scaffold = listScaffold("plant", plant);
 
+const hydrateRead = async (
+  db: Database | DrizzleTransaction,
+  rows: PlantRow[],
+  projection: ListProjection,
+): Promise<ListReadRow[]> => {
+  return hydrateListRead(db, "plant", rows, projection, {
+    load: () =>
+      loadListGroup(projection, "relations", () =>
+        lookupEntityReferences(
+          db,
+          "ingredient",
+          rows.map((row) => row.ingredientId),
+        ),
+      ),
+    mapRow: (row, { loaded: ingredients }) => {
+      const key = resolveGardenGuideKey(row.gardenGuideKey);
+      const linked = row.ingredientId
+        ? ingredients?.get(row.ingredientId)
+        : undefined;
+      const windows = wantsListGroup(projection, "derived")
+        ? guideWindowsFor(key)
+        : undefined;
+      const result = {
+        ...row,
+        id: parseShortcodeFor("plant", row.shortcode),
+        gardenGuideKey: key,
+        displayName: plantDisplayName(row.name, row.gardenGuideKey),
+      };
+      if (wantsListGroup(projection, "relations"))
+        Object.assign(result, {
+          ingredientId: linked?.id ?? null,
+          ingredientName: linked?.name ?? null,
+        });
+      if (windows)
+        Object.assign(result, {
+          guideSowWindow: windows.sow,
+          guideTransplantWindow: windows.transplant,
+          routes: plantRoutesFor(key, new Date().getUTCMonth() + 1),
+        });
+      return result;
+    },
+  });
+};
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: PlantRow[],
-): Promise<PlantOut[]> => {
-  const [ingredients, qualities] = await Promise.all([
-    lookupEntityReferences(
-      db,
-      "ingredient",
-      rows.map((row) => row.ingredientId),
-    ),
-    loadDataQualities(
-      db,
-      "plant",
-      rows.map((row) => row.id),
-    ),
-  ]);
-  return rows.map((row) => {
-    const key = resolveGardenGuideKey(row.gardenGuideKey);
-    const windows = guideWindowsFor(key);
-    const linked = row.ingredientId
-      ? ingredients.get(row.ingredientId)
-      : undefined;
-    return plantOut.parse({
-      ...row,
-      id: parseShortcodeFor("plant", row.shortcode),
-      gardenGuideKey: key,
-      ingredientId: linked?.id ?? null,
-      ingredientName: linked?.name ?? null,
-      displayName: plantDisplayName(row.name, row.gardenGuideKey),
-      guideSowWindow: windows.sow,
-      guideTransplantWindow: windows.transplant,
-      routes: plantRoutesFor(key, new Date().getUTCMonth() + 1),
-      dataQuality: qualities.get(row.id),
-    });
-  });
-};
+): Promise<PlantOut[]> =>
+  (await hydrateRead(db, rows, { kind: "full" })).map((row) =>
+    plantOut.parse(row),
+  );
 
 const buildWhere = (filters: PlantFilters) =>
   scaffold.where(filters, [
@@ -128,17 +150,23 @@ const buildWhere = (filters: PlantFilters) =>
         )`,
   ]);
 
-export const listPlants = (
+export const listPlantsRead = (
   db: Database,
   filters: PlantFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  projection: ListProjection = { kind: "full" },
 ) =>
   scaffold.list(
     db,
-    { filters, sorts, pagination },
-    { where: buildWhere(filters), hydrate: (rows) => hydrate(db, rows) },
+    { filters, sorts, pagination, projection },
+    {
+      where: buildWhere(filters),
+      hydrate: (rows, selected) => hydrateRead(db, rows, selected),
+    },
   );
+
+export const listPlants = completeListReader(plantOut, listPlantsRead);
 
 const fetchById = async (
   db: Database | DrizzleTransaction,

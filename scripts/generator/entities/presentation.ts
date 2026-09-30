@@ -460,6 +460,7 @@ export const compilePresentation = (
       ],
       viewAliases: list.viewAliases,
       totals: list.totals,
+      read: list.read,
       shelf: { subtitle: shelfSubtitle },
       initialFilter: list.initialFilter,
       primarySearch: list.primarySearch,

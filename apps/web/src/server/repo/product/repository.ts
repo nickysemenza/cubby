@@ -29,6 +29,8 @@ import {
   getProductByShortcode,
   getProductsByShortcodes,
   productList,
+  listProductsRead,
+  productListSummary,
   setProductsStockTracked,
 } from "./crud";
 import { readProductDetail } from "./detail";
@@ -71,6 +73,18 @@ export const productRepository = defineRepository("product", {
       "page",
       ctx.usdaClient,
     ),
+  listRead: (ctx, filters, sorts, pagination, projection, groupBy) =>
+    listProductsRead(
+      ctx.db,
+      filters,
+      sorts,
+      pagination,
+      groupBy,
+      "page",
+      ctx.usdaClient,
+      projection,
+    ),
+  listSummary: (ctx, filters) => productListSummary(ctx.db, filters),
   create: async (ctx, data) => {
     const result = await createProductWithSideEffects(
       {

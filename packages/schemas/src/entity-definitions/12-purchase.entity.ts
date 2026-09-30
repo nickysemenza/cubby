@@ -63,6 +63,25 @@ export default defineEntity({
       ],
     },
     list: {
+      read: {
+        relations: [
+          "vendorId",
+          "vendorAccountId",
+          "defaultProjectId",
+          "vendorName",
+          "orderUrl",
+        ],
+        media: ["vendorLogo", "images", "displayImages"],
+        derived: [
+          "expenseCount",
+          "unpricedExpenseCount",
+          "expenseTotal",
+          "reconciliation",
+          "financialReconciliation",
+          "documentCount",
+        ],
+        quality: ["dataQuality"],
+      },
       actionOverrides: ["merge", "delete"],
       totalOverrides: [
         {

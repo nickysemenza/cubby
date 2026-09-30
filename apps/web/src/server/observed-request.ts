@@ -5,7 +5,7 @@ import type {
   StartOperationDefinition,
 } from "~/lib/start-operation-observability";
 import {
-  type DatabaseOperationMetrics,
+  databaseMetricAttributes,
   withDatabaseOperationMetrics,
 } from "~/server/db-observability";
 import { isExpectedAppError } from "~/server/errors/app-error";
@@ -38,19 +38,6 @@ export function parseObservedFailure<TError>(error: TError): ObservedFailure {
   }
   return new Error("A non-serializable value was thrown", { cause: error });
 }
-
-const databaseMetricAttributes = (metrics: DatabaseOperationMetrics) => ({
-  "db.query.count": metrics.queryCount,
-  "db.query.duration_sum_ms": Math.round(metrics.queryDurationSumMs),
-  "db.query.active_wall_ms": Math.round(metrics.queryActiveWallMs),
-  "db.query.max_duration_ms": Math.round(metrics.queryMaxDurationMs),
-  "db.query.max_concurrency": metrics.queryMaxConcurrency,
-  "db.acquire.count": metrics.acquireCount,
-  "db.acquire.duration_sum_ms": Math.round(metrics.acquireDurationSumMs),
-  "db.acquire.active_wall_ms": Math.round(metrics.acquireActiveWallMs),
-  "db.acquire.max_duration_ms": Math.round(metrics.acquireMaxDurationMs),
-  "db.acquire.max_concurrency": metrics.acquireMaxConcurrency,
-});
 
 export function isObservedCancellation<TError>(error: TError): boolean {
   const failure = parseObservedFailure(error);

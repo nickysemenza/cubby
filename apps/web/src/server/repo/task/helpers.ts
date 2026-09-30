@@ -38,7 +38,7 @@ export const effectiveTaskDueDateSql = () =>
  * don't load the relation (e.g. actionable.ts's batch fetch) just get a null
  * `parentTaskName`, which is correct there since subtask rows never surface.
  */
-type TaskRow = {
+type TaskRow<T extends TaskOut["trade"] | null = TaskOut["trade"]> = {
   id: TaskId;
   shortcode: string;
   name: string;
@@ -48,7 +48,7 @@ type TaskRow = {
   parentTaskId: TaskId | null;
   dueDate: string | null;
   dueEndDate: string | null;
-  trade: TaskOut["trade"];
+  trade: T;
   fieldResolutions?: TaskOut["fieldResolutions"];
   sortOrder: number | null;
   createdAt: Date;
@@ -67,14 +67,17 @@ type TaskRow = {
   images: Array<{ image: MappableImageRecord; deletedAt: Date | null }>;
 };
 
-export const dbTaskToAPI = (
-  row: TaskRow,
+export const dbTaskToAPI = <
+  Q extends DataQuality | undefined,
+  T extends TaskOut["trade"] | null,
+>(
+  row: TaskRow<T>,
   blockedByIds: TaskShortcode[],
   blockingIds: TaskShortcode[],
   subtaskCount: number,
   doneSubtaskCount: number,
-  dataQuality: DataQuality,
-): TaskOut => ({
+  dataQuality: Q,
+): Omit<TaskOut, "dataQuality" | "trade"> & { dataQuality: Q; trade: T } => ({
   id: parseShortcodeFor("task", row.shortcode),
   name: row.name,
   status: row.status,

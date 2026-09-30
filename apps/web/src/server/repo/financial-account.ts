@@ -40,14 +40,22 @@ import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { lockLedgerPartiesForReference } from "~/server/repo/ledger-party-reference";
 import { listScaffold } from "~/server/repo/list";
 import {
+  listGroupFields,
+  hydrateListRead,
+  type ListProjection,
+} from "~/server/repo/list-projection";
+import {
   asActor,
   defineRepository,
   listOn,
+  listReadOn,
   onDb,
 } from "~/server/repo/repository";
 import { createEntityReader } from "~/server/repo/repository";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { completeListReader } from "./list-read-adapters";
 
 export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
   "FinancialTransaction.accountId": {
@@ -143,6 +151,52 @@ const toOut = (
     updatedAt: row.updatedAt,
   });
 
+const selectAccountsRead = (
+  db: Database | DrizzleTransaction,
+  projection: ListProjection,
+) => {
+  const {
+    ledgerPartyShortcode,
+    ledgerPartyName,
+    providerVendorShortcode,
+    providerVendorName,
+    transactionCount,
+    ...core
+  } = columns;
+  return unwrapDb(db)
+    .select({
+      ...core,
+      ...listGroupFields(projection, "relations", () => ({
+        ledgerPartyShortcode,
+        ledgerPartyName,
+        providerVendorShortcode,
+        providerVendorName,
+      })),
+      ...listGroupFields(projection, "derived", () => ({ transactionCount })),
+    })
+    .from(financialAccount);
+};
+const hydrateAccountsRead = async (
+  db: Database,
+  rows: Awaited<ReturnType<typeof selectAccountsRead>>,
+  projection: ListProjection,
+) =>
+  hydrateListRead(db, "financialAccount", rows, projection, {
+    load: async () => undefined,
+    mapRow: (row) => ({
+      ...row,
+      id: parseShortcodeFor("financialAccount", row.shortcode),
+      ...listGroupFields(projection, "relations", () => ({
+        ledgerPartyId: row.ledgerPartyShortcode
+          ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
+          : null,
+        providerVendorId: row.providerVendorShortcode
+          ? parseShortcodeFor("vendor", row.providerVendorShortcode)
+          : null,
+      })),
+    }),
+  });
+
 const aliasCondition = (
   sources: string[] | undefined,
   externalAccountIds: string[] | undefined,
@@ -199,15 +253,16 @@ export const buildFinancialAccountWhere = (filters: FinancialAccountFilters) =>
         : undefined,
   ]);
 
-export const listFinancialAccounts = (
+export const listFinancialAccountsRead = (
   db: Database,
   filters: FinancialAccountFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-): Promise<{ data: FinancialAccountOut[]; count: number }> =>
+  projection: ListProjection = { kind: "full" },
+) =>
   financialAccountScaffold.list(
     db,
-    { filters, sorts, pagination },
+    { filters, sorts, pagination, projection },
     {
       where: buildFinancialAccountWhere(filters),
       resolveSort: (sort) =>
@@ -219,14 +274,19 @@ export const listFinancialAccounts = (
             ]
           : null,
       select: (page) =>
-        selectAccounts(db)
+        selectAccountsRead(db, projection)
           .where(page.where)
           .orderBy(...page.orderBy)
           .limit(page.limit)
           .offset(page.offset),
-      hydrate: (rows) => hydrate(db, rows),
+      hydrate: (rows) => hydrateAccountsRead(db, rows, projection),
     },
   );
+
+export const listFinancialAccounts = completeListReader(
+  financialAccountOut,
+  listFinancialAccountsRead,
+);
 
 const financialAccountReader = createEntityReader<
   FinancialAccountRow,
@@ -502,6 +562,7 @@ export const financialAccountRepository = defineRepository("financialAccount", {
   lifecycle: { delete: FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY },
   get: onDb(getFinancialAccountByShortcode),
   list: listOn(listFinancialAccounts),
+  listRead: listReadOn(listFinancialAccountsRead),
   create: asActor(createFinancialAccount),
   update: asActor(updateFinancialAccount),
 });

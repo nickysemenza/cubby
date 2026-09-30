@@ -78,8 +78,7 @@ export function createAppError(
     }
   }
 
-  // Annotate the active tracing span (but don't mark expected errors as ERROR
-  // status). No-op in the CF backend, which exposes no out-of-band active span.
+  // Expected errors annotate the native span without marking it as failed.
   annotateActiveSpanError(
     { "error.reason": reason, "error.message": message },
     isExpectedError ? undefined : { message, exception: originalError },

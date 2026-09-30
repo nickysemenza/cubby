@@ -1,11 +1,18 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import type { AppSpan } from "./tracing";
+
 export type DatabaseOperationMetrics = {
   queryCount: number;
   queryDurationSumMs: number;
   queryActiveWallMs: number;
   queryMaxDurationMs: number;
   queryMaxConcurrency: number;
+  clientQueueCount: number;
+  clientQueueDurationSumMs: number;
+  clientQueueActiveWallMs: number;
+  clientQueueMaxDurationMs: number;
+  clientQueueMaxConcurrency: number;
   acquireCount: number;
   acquireDurationSumMs: number;
   acquireActiveWallMs: number;
@@ -19,9 +26,11 @@ type ActivityState = {
 };
 
 type StoredDatabaseOperationMetrics = DatabaseOperationMetrics & {
+  acquireStartedCount: number;
   activity: {
     query: ActivityState;
     acquire: ActivityState;
+    clientQueue: ActivityState;
   };
 };
 
@@ -30,11 +39,17 @@ const operationMetricsStore = new AsyncLocalStorage<
 >();
 
 const emptyMetrics = (): StoredDatabaseOperationMetrics => ({
+  acquireStartedCount: 0,
   queryCount: 0,
   queryDurationSumMs: 0,
   queryActiveWallMs: 0,
   queryMaxDurationMs: 0,
   queryMaxConcurrency: 0,
+  clientQueueCount: 0,
+  clientQueueDurationSumMs: 0,
+  clientQueueActiveWallMs: 0,
+  clientQueueMaxDurationMs: 0,
+  clientQueueMaxConcurrency: 0,
   acquireCount: 0,
   acquireDurationSumMs: 0,
   acquireActiveWallMs: 0,
@@ -43,6 +58,7 @@ const emptyMetrics = (): StoredDatabaseOperationMetrics => ({
   activity: {
     query: { activeCount: 0 },
     acquire: { activeCount: 0 },
+    clientQueue: { activeCount: 0 },
   },
 });
 
@@ -58,7 +74,7 @@ export const withDatabaseOperationMetrics = async <T>(
   return operationMetricsStore.run(collectors, () => fn(metrics));
 };
 
-type ActivityKind = "query" | "acquire";
+type ActivityKind = "query" | "acquire" | "clientQueue";
 type FinishActivity = (endedAt?: number) => void;
 
 const beginDatabaseActivity = (
@@ -73,17 +89,11 @@ const beginDatabaseActivity = (
     activity.activeCount += 1;
     if (activity.activeCount === 1) activity.activeStartedAt = startedAt;
 
-    if (kind === "query") {
-      metrics.queryMaxConcurrency = Math.max(
-        metrics.queryMaxConcurrency,
-        activity.activeCount,
-      );
-    } else {
-      metrics.acquireMaxConcurrency = Math.max(
-        metrics.acquireMaxConcurrency,
-        activity.activeCount,
-      );
-    }
+    const maxConcurrency = `${kind}MaxConcurrency` as const;
+    metrics[maxConcurrency] = Math.max(
+      metrics[maxConcurrency],
+      activity.activeCount,
+    );
   }
 
   let finished = false;
@@ -94,21 +104,12 @@ const beginDatabaseActivity = (
     const durationMs = Math.max(0, endedAt - startedAt);
     for (const metrics of collectors) {
       const activity = metrics.activity[kind];
-      if (kind === "query") {
-        metrics.queryCount += 1;
-        metrics.queryDurationSumMs += durationMs;
-        metrics.queryMaxDurationMs = Math.max(
-          metrics.queryMaxDurationMs,
-          durationMs,
-        );
-      } else {
-        metrics.acquireCount += 1;
-        metrics.acquireDurationSumMs += durationMs;
-        metrics.acquireMaxDurationMs = Math.max(
-          metrics.acquireMaxDurationMs,
-          durationMs,
-        );
-      }
+      const count = `${kind}Count` as const;
+      const durationSum = `${kind}DurationSumMs` as const;
+      const maxDuration = `${kind}MaxDurationMs` as const;
+      metrics[count] += 1;
+      metrics[durationSum] += durationMs;
+      metrics[maxDuration] = Math.max(metrics[maxDuration], durationMs);
 
       activity.activeCount -= 1;
       if (activity.activeCount !== 0) continue;
@@ -116,8 +117,8 @@ const beginDatabaseActivity = (
       const activeStartedAt = activity.activeStartedAt ?? startedAt;
       const activeWallMs = Math.max(0, endedAt - activeStartedAt);
       activity.activeStartedAt = undefined;
-      if (kind === "query") metrics.queryActiveWallMs += activeWallMs;
-      else metrics.acquireActiveWallMs += activeWallMs;
+      const activeWall = `${kind}ActiveWallMs` as const;
+      metrics[activeWall] += activeWallMs;
     }
   };
 };
@@ -131,3 +132,51 @@ export const beginDatabaseQuery = (
 export const beginDatabaseAcquire = (
   startedAt = performance.now(),
 ): FinishActivity => beginDatabaseActivity("acquire", startedAt);
+
+/** Client-side serialization is distinct from pool acquire and SQL execution. */
+export const beginDatabaseClientQueue = (
+  startedAt = performance.now(),
+): FinishActivity => beginDatabaseActivity("clientQueue", startedAt);
+
+export const databaseMetricAttributes = (
+  metrics: DatabaseOperationMetrics,
+) => ({
+  "db.query.count": metrics.queryCount,
+  "db.query.duration_sum_ms": Math.round(metrics.queryDurationSumMs),
+  "db.query.active_wall_ms": Math.round(metrics.queryActiveWallMs),
+  "db.query.max_duration_ms": Math.round(metrics.queryMaxDurationMs),
+  "db.query.max_concurrency": metrics.queryMaxConcurrency,
+  "db.client_queue.count": metrics.clientQueueCount,
+  "db.client_queue.duration_sum_ms": Math.round(
+    metrics.clientQueueDurationSumMs,
+  ),
+  "db.client_queue.active_wall_ms": Math.round(metrics.clientQueueActiveWallMs),
+  "db.client_queue.max_duration_ms": Math.round(
+    metrics.clientQueueMaxDurationMs,
+  ),
+  "db.client_queue.max_concurrency": metrics.clientQueueMaxConcurrency,
+  "db.acquire.count": metrics.acquireCount,
+  "db.acquire.duration_sum_ms": Math.round(metrics.acquireDurationSumMs),
+  "db.acquire.active_wall_ms": Math.round(metrics.acquireActiveWallMs),
+  "db.acquire.max_duration_ms": Math.round(metrics.acquireMaxDurationMs),
+  "db.acquire.max_concurrency": metrics.acquireMaxConcurrency,
+});
+
+/** Collect actual activity, not nested summaries, across the request boundary. */
+export const withDatabaseRequestMetrics = <T>(
+  span: Pick<AppSpan, "setAttributes">,
+  run: () => Promise<T>,
+): Promise<T> =>
+  withDatabaseOperationMetrics(async (metrics) => {
+    try {
+      return await run();
+    } finally {
+      span.setAttributes(databaseMetricAttributes(metrics));
+    }
+  });
+
+/** Request order stays shared across binding pools and nested collectors. */
+export const nextDatabaseAcquireOrdinal = (): number | undefined => {
+  const request = operationMetricsStore.getStore()?.[0];
+  return request ? ++request.acquireStartedCount : undefined;
+};

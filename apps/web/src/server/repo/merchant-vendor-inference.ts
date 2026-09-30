@@ -138,8 +138,13 @@ export const merchantVendorInferenceFor = async (
     normalizeMerchant(merchant),
   ) ?? noInference();
 
+type VendorInferenceTransaction = Pick<
+  FinancialTransactionOut,
+  "id" | "kind" | "amount" | "status" | "merchant"
+> & { allocations: readonly unknown[]; ledgerTransferId: string | null };
+
 const eligibleFinancialTransaction = (
-  transaction: FinancialTransactionOut,
+  transaction: VendorInferenceTransaction,
 ): boolean =>
   transaction.allocations.length === 0 &&
   transaction.ledgerTransferId === null &&
@@ -152,10 +157,9 @@ const eligibleFinancialTransaction = (
     amount: transaction.amount,
   }) === null;
 
-export async function enrichFinancialTransactionsWithVendorInference(
-  db: Database | DrizzleTransaction,
-  transactions: readonly FinancialTransactionOut[],
-): Promise<FinancialTransactionOut[]> {
+export async function enrichFinancialTransactionVendorRead<
+  T extends VendorInferenceTransaction,
+>(db: Database | DrizzleTransaction, transactions: readonly T[]) {
   const eligible = transactions.filter(eligibleFinancialTransaction);
   const inferences = await merchantVendorInferences(
     db,
@@ -172,4 +176,11 @@ export async function enrichFinancialTransactionsWithVendorInference(
           noInference())
         : null,
   }));
+}
+
+export async function enrichFinancialTransactionsWithVendorInference(
+  db: Database | DrizzleTransaction,
+  transactions: readonly FinancialTransactionOut[],
+): Promise<FinancialTransactionOut[]> {
+  return enrichFinancialTransactionVendorRead(db, transactions);
 }

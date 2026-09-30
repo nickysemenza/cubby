@@ -331,6 +331,7 @@ export const wishListOverride = defineListOverride<
       tree: WISH_TREE_CONFIG,
       list,
       useWorkbench: () => ({ getMobileDetailsHref: wishMobileDetailsHref }),
+      wrapReadFields: ["candidates"],
       wrap: (children, { data }) => (
         <WishCoverProvider data={data}>{children}</WishCoverProvider>
       ),

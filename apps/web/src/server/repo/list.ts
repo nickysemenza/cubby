@@ -57,6 +57,8 @@ import {
   unwrapDb,
 } from "./database-helpers";
 import { SHORTCODE_TABLE } from "./generated/shortcode-tables.gen";
+import type { ListProjection } from "./list-projection";
+import { withListReadTracing } from "./list-read-tracing";
 import { relatedWhereConditions } from "./related-view";
 import { lexicalEligibility, lexicalRelevance } from "./search-lexical";
 
@@ -294,6 +296,7 @@ interface ListRequest<Filters extends object> {
   sorts: SortParams[];
   pagination: PaginationParams;
   readIntent?: ListReadIntent;
+  projection?: ListProjection;
 }
 
 interface ListSpec<Row, Out> {
@@ -301,9 +304,9 @@ interface ListSpec<Row, Out> {
    * The row query. Omit for a flat `SELECT *` over the table; pass a
    * relational `findMany` (or a projection) when hydration needs relations.
    */
-  select?: (page: ListPage) => Promise<Row[]>;
+  select?: (page: ListPage, projection: ListProjection) => Promise<Row[]>;
   /** Rows → API items, batched over the page (quality, images, labels). */
-  hydrate: (rows: Row[]) => Promise<Out[]> | Out[];
+  hydrate: (rows: Row[], projection: ListProjection) => Promise<Out[]> | Out[];
   /** Pre-built where; defaults to `where(filters)` with no computed terms. */
   where?: SQL | undefined;
   resolveSort?: NonNullable<OrderByOpts>["resolve"];
@@ -435,6 +438,7 @@ export function listScaffold<
     ): Promise<{ data: Out[]; count: number }> {
       const where =
         "where" in spec ? spec.where : scaffold.where(request.filters);
+      const projection = request.projection ?? { kind: "full" };
       const { take, skip } = buildTakeSkip(request.pagination);
       const page: ListPage = {
         where,
@@ -457,13 +461,21 @@ export function listScaffold<
             .orderBy(...clauses.orderBy)
             .limit(clauses.limit)
             .offset(clauses.offset)) as Row[]);
-      const { data, count } = await executeListQueryWithCount({
-        kind: request.readIntent ?? "page",
-        rows: () => selectRows(page),
-        count: spec.count ?? (() => countWhere(db, table, where)),
-      });
-      if (request.readIntent === "count") return { data: [], count };
-      return { data: await spec.hydrate(data), count };
+      return withListReadTracing(
+        { entity, projection: projection.kind },
+        async () => {
+          const { data, count } = await executeListQueryWithCount({
+            kind: request.readIntent ?? "page",
+            rows: () => selectRows(page, projection),
+            count: spec.count ?? (() => countWhere(db, table, where)),
+          });
+          if (request.readIntent === "count") return { data: [], count };
+          return withListReadTracing({ rows: data.length }, async () => ({
+            data: await spec.hydrate(data, projection),
+            count,
+          }));
+        },
+      );
     },
   };
   return scaffold;

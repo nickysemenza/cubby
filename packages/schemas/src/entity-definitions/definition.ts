@@ -990,6 +990,29 @@ const buildMetadataSchemas = () => {
         ),
       list: z
         .object({
+          /** Deferred ownership; remaining canonical list fields are core. */
+          read: z
+            .object({
+              media: z.array(nonEmptyString()).default([]),
+              quality: z.array(nonEmptyString()).default([]),
+              relations: z.array(nonEmptyString()).default([]),
+              derived: z.array(nonEmptyString()).default([]),
+              dependencies: z
+                .partialRecord(
+                  z.enum(["media", "quality", "relations", "derived"]),
+                  z.array(z.enum(["media", "quality", "relations", "derived"])),
+                )
+                .default({}),
+            })
+            .strict()
+            .optional()
+            .default({
+              media: [],
+              quality: [],
+              relations: [],
+              derived: [],
+              dependencies: {},
+            }),
           /** The first view is the default; `table` when omitted. */
           viewOverrides: z
             .array(listViewSchema)
@@ -1109,6 +1132,7 @@ const buildMetadataSchemas = () => {
             viewOverrides,
             viewAliases,
             totalOverrides,
+            read,
             shelfSubtitleOverride,
             initialFilter,
             primarySearch,
@@ -1119,6 +1143,7 @@ const buildMetadataSchemas = () => {
             views: viewOverrides,
             viewAliases,
             totals: totalOverrides,
+            read,
             shelf:
               shelfSubtitleOverride === undefined
                 ? null

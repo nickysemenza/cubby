@@ -8,8 +8,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "main": "./src/worker.ts",
 
-  // Observability: logs + traces exported to Grafana via named OTLP destinations
-  // (configured in the CF dashboard → Workers Observability → Destinations).
+  // Traces stay in Workers Observability; logs also use the Grafana destination.
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,
@@ -23,8 +22,7 @@
     "traces": {
       "enabled": true,
       "head_sampling_rate": 1,
-      "persist": true,
-      "destinations": ["grafana-traces"]
+      "persist": true
     }
   },
   "placement": {

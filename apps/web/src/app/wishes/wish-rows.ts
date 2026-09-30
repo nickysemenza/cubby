@@ -49,7 +49,7 @@ export const buildWishRows = (wishes: readonly WishListItemOut[]): WishRow[] =>
     previewId: wish.id,
     name: wish.name,
     wish,
-    subRows: wish.candidates.map((candidate) => ({
+    subRows: (wish.candidates ?? []).map((candidate) => ({
       kind: "candidate",
       id: `${wish.id}:${candidate.id}`,
       entityKind: "product",

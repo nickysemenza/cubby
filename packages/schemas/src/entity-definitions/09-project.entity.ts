@@ -93,6 +93,28 @@ export default defineEntity({
       ],
     },
     list: {
+      read: {
+        relations: [
+          "locations",
+          "parentProjectId",
+          "parentProjectName",
+          "childProjectIds",
+          "blockedByIds",
+          "blockingIds",
+          "googleDriveFolderUrl",
+          "notionPageUrl",
+        ],
+        derived: [
+          "defaultTrade",
+          "fieldResolutions",
+          "rollup",
+          "spent",
+          "taskProgress",
+          "dates",
+        ],
+        media: ["displayImages"],
+        quality: ["dataQuality"],
+      },
       totalOverrides: [
         {
           id: "costEstimate",

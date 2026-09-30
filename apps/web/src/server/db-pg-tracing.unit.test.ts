@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { withDatabaseOperationMetrics } from "./db-observability";
 import {
   createPoolQueryOwnershipBoundary,
+  traceStandaloneClient,
   createPoolConnectAdapter,
   createPoolQueryAdapter,
   createObservedQuery,
@@ -22,7 +23,39 @@ const queryResult = (): pg.QueryResult => ({
   rows: [{ id: "row-1" }],
 });
 
+// Failures: queued work can look like database execution, a rejected query can
+// poison the client tail, or reused leases can inherit the wrong role/owner.
 describe("node-postgres tracing adapters", () => {
+  it("measures serialized client waits separately and continues after rejection", async () => {
+    let rejectFirst: (error: Error) => void = () => {};
+    const firstGate = new Promise<pg.QueryResult>((_resolve, reject) => {
+      rejectFirst = reject;
+    });
+    const rawQuery = vi
+      .fn()
+      .mockImplementationOnce(() => firstGate)
+      .mockResolvedValue(queryResult());
+    const client = traceStandaloneClient(
+      fromPartial<pg.Client>({ query: rawQuery }),
+      "strong",
+    );
+    await withDatabaseOperationMetrics(async (metrics) => {
+      const first = client.query("select first");
+      const rejected = first.catch((error: Error) => error);
+      const second = client.query("select second");
+      await vi.waitFor(() => expect(rawQuery).toHaveBeenCalledTimes(1));
+      rejectFirst(new Error("query sentinel"));
+      expect(await rejected).toEqual(new Error("query sentinel"));
+      await second;
+      expect(metrics).toMatchObject({
+        queryCount: 2,
+        queryMaxConcurrency: 1,
+        clientQueueCount: 2,
+      });
+      expect(metrics.clientQueueDurationSumMs).toBeGreaterThan(0);
+    });
+  });
+
   it("traces promise queries and records their returned rows", async () => {
     const result = queryResult();
     const rawQuery = vi.fn(async () => result);

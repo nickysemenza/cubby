@@ -29,6 +29,7 @@ import { listPage } from "~/app/_components/routing/entity-routes";
 import { entities } from "~/entities/entities";
 import {
   ledgerPartyListItem,
+  getEntityListOutputSchema,
   listEntities,
   mealListItem,
   parseEntityListInput,
@@ -36,6 +37,7 @@ import {
 } from "~/entities/generated/entity-lists.gen";
 import { listOverrides } from "~/entities/list-columns";
 import { mealNameUpdate } from "~/entities/list-columns/meal";
+import { listReadFields, projectListRows } from "~/entities/list-read-schema";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
@@ -79,10 +81,11 @@ async function renderListPage(
   entity: BrowserRoutedEntity,
   path: string,
   rows: { id: string }[],
+  operation?: ListQueryOptionsFn<object, { id: string }>,
 ) {
   const Page = listPage({
     entity,
-    operations: { list: listOperation(rows) },
+    operations: { list: operation ?? listOperation(rows) },
   });
   harness = createBrowserTestHarness({
     initialPath: path,
@@ -133,6 +136,44 @@ describe("resolveListView", () => {
       expect(resolveListView(entity, {}).view).toEqual(views[0]);
       expect(resolveListView(entity, { view: "no-such-view" }).view).toEqual(
         views[0],
+      );
+    },
+  );
+
+  // Provider hydration, subject menus, unit mapping and tree nesting execute
+  // before deferred cells. Each must tolerate a core-only page.
+  it.each(["inventory", "ingredient", "wish", "product"] as const)(
+    "renders %s core rows while relation enrichment is pending",
+    async (entity) => {
+      const fields = listReadFields(entity);
+      const full = mock(getEntityListOutputSchema(entity));
+      const rows = projectListRows(entity, full.items, { kind: "base" });
+      const operation: ListQueryOptionsFn<object, { id: string }> = (
+        params,
+      ) => ({
+        queryKey: ["deferred-provider", entity, params],
+        execute: async () => ({
+          items: rows,
+          meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },
+          deferredGroups: (
+            ["media", "quality", "relations", "derived"] as const
+          ).map((id) => ({ id, fields: fields[id] })),
+        }),
+        progressive: {
+          enrich: async () => new Promise(() => {}),
+          summary: async () => undefined,
+        },
+      });
+      await renderListPage(
+        entity,
+        `${entities[entity].routes.list}?view=table`,
+        rows,
+        operation,
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByRole("checkbox", { name: "Select row" }),
+        ).toBeInTheDocument(),
       );
     },
   );

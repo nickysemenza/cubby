@@ -25,7 +25,7 @@ const testModel = (
   }
 ).CUBBY_PURCHASE_AGENT_TEST_MODEL;
 
-// Native Workers Traces (Grafana Tempo). Flue's default install of this same
+// Native Cloudflare Workers Traces. Flue's default install of this same
 // instrumentation ships conversation content — messages, system instructions,
 // tool definitions, arguments, and results — as span attributes; the
 // wrangler.jsonc policy keeps that content in the authenticated Flue transcript

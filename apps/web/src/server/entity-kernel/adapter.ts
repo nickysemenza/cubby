@@ -1,13 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { EntityId } from "@cubby/schemas/identifiers";
-import type {
-  ListGroupSummary,
-  PaginationParams,
-  SortParams,
-} from "@cubby/schemas/pagination";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { type output as ZodOutput, type ZodSchema, z } from "zod";
 
+import type { ListReadRow } from "~/entities/list-read-fields";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
@@ -16,6 +13,10 @@ import {
   type EntitySchemaBindingEntity,
   type EntitySchemaBindingMap,
 } from "~/server/generated/entity-bindings.gen";
+import type {
+  ListProjection,
+  ListReadPage,
+} from "~/server/repo/list-projection";
 import type { MealMutationHooks } from "~/server/repo/meal/crud";
 import type { TaskMutationHooks } from "~/server/repo/task/crud";
 import {
@@ -198,6 +199,18 @@ export type EntityRepository<
   E extends EntitySchemaBindingEntity,
   S extends EntityBindingSchemas = SchemasFor<E>,
 > = {
+  listRead?(
+    ctx: EntityKernelContext,
+    filters: ZodOutput<S["filters"]>,
+    sorts: SortParams[],
+    pagination: PaginationParams,
+    projection: ListProjection,
+    groupBy?: string,
+  ): Promise<ListReadPage<ListReadRow>>;
+  listSummary?(
+    ctx: EntityKernelContext,
+    filters: ZodOutput<S["filters"]>,
+  ): Promise<Record<string, number>>;
   get(
     ctx: EntityKernelContext,
     id: ZodOutput<S["id"]>,
@@ -208,12 +221,7 @@ export type EntityRepository<
     sorts: SortParams[],
     pagination: PaginationParams,
     groupBy?: string,
-  ): Promise<{
-    data: ZodOutput<S["repositoryList"]>[];
-    count: number;
-    sums?: Record<string, number>;
-    groups?: ListGroupSummary[];
-  }>;
+  ): Promise<ListReadPage<ZodOutput<S["repositoryList"]>>>;
   create?(
     ctx: EntityKernelContext,
     data: PresentSchemaOutput<S["createInput"]>,

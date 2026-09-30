@@ -3,9 +3,11 @@ import type { QueryKey, QueryMeta } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import type { TableStateReturn } from "../data-table/useTableState";
+import type { DeferredListGroup, LoadListEnrichment } from "./progressive-list";
 
 export interface ListQueryResponse<TData> {
   items: TData[];
+  deferredGroups?: DeferredListGroup[];
   meta: {
     pageIndex: number;
     pageSize: number;
@@ -28,6 +30,12 @@ export interface ListQueryPlan<TData> {
   queryKey: QueryKey;
   meta?: QueryMeta;
   execute: (signal: AbortSignal) => Promise<ListQueryResponse<TData>>;
+  progressive?: {
+    enrich: LoadListEnrichment;
+    summary: (
+      signal: AbortSignal,
+    ) => Promise<Record<string, number> | undefined>;
+  };
 }
 
 /**

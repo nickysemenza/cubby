@@ -42,11 +42,17 @@ import {
   replaceLedgerSourceClaims,
 } from "~/server/repo/ledger-source-claim";
 import { listScaffold } from "~/server/repo/list";
+import {
+  listGroupFields,
+  hydrateListRead,
+  type ListProjection,
+} from "~/server/repo/list-projection";
 import { cents } from "~/server/repo/money";
 import {
   asActor,
   defineRepository,
   listOn,
+  listReadOn,
   onDb,
 } from "~/server/repo/repository";
 import { createEntityReader } from "~/server/repo/repository";
@@ -56,6 +62,8 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+
+import { completeListReader } from "./list-read-adapters";
 
 const LEDGER_TRANSFER_DELETE_EDGE_POLICY = {
   "FinancialTransaction.ledgerTransferId": {
@@ -177,6 +185,72 @@ const hydrate = async (
   // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
   return rows.map((row) => toOut(row, dataQualities.get(row.id)!));
 };
+
+const selectTransfersRead = (
+  db: Database | DrizzleTransaction,
+  projection: ListProjection,
+) => {
+  const {
+    fromPartyShortcode,
+    toPartyShortcode,
+    toPartyName,
+    fromPartyKind,
+    toPartyKind,
+    sourceClaims,
+    evidenceTransactionIds,
+    ...core
+  } = columns;
+  return unwrapDb(db)
+    .select({
+      ...core,
+      ...listGroupFields(projection, "relations", () => ({
+        fromPartyShortcode,
+        toPartyShortcode,
+        toPartyName,
+        sourceClaims,
+        evidenceTransactionIds,
+      })),
+      ...listGroupFields(projection, "derived", () => ({
+        fromPartyKind,
+        toPartyKind,
+      })),
+    })
+    .from(ledgerTransfer);
+};
+const hydrateTransfersRead = async (
+  db: Database,
+  rows: Awaited<ReturnType<typeof selectTransfersRead>>,
+  projection: ListProjection,
+) =>
+  hydrateListRead(db, "ledgerTransfer", rows, projection, {
+    load: async () => undefined,
+    mapRow: (row) => ({
+      ...row,
+      id: parseShortcodeFor("ledgerTransfer", row.shortcode),
+      ...listGroupFields(projection, "relations", () => ({
+        fromPartyId: parseShortcodeFor("ledgerParty", row.fromPartyShortcode!),
+        toPartyId: parseShortcodeFor("ledgerParty", row.toPartyShortcode!),
+        sourceClaims: row.sourceClaims?.map((claim) => ({
+          ...claim,
+          createdAt: new Date(claim.createdAt),
+          updatedAt: new Date(claim.updatedAt),
+        })),
+        evidenceTransactionIds: row.evidenceTransactionIds?.map((id) =>
+          parseShortcodeFor("financialTransaction", id),
+        ),
+      })),
+      ...listGroupFields(projection, "derived", () => ({
+        classification:
+          row.fromPartyId === row.toPartyId
+            ? "internal_move"
+            : row.toPartyKind === "household"
+              ? "contribution"
+              : row.fromPartyKind === "household"
+                ? "household_distribution"
+                : "reimbursement",
+      })),
+    }),
+  });
 
 const getById = async (
   db: Database | DrizzleTransaction,
@@ -488,32 +562,39 @@ export async function buildLedgerTransferWhere(
   ]);
 }
 
-const listLedgerTransfers = async (
+export const listLedgerTransfersRead = async (
   db: Database,
   filters: LedgerTransferFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
+  projection: ListProjection = { kind: "full" },
 ) =>
   ledgerTransferScaffold.list(
     db,
-    { filters, sorts, pagination },
+    { filters, sorts, pagination, projection },
     {
       where: await buildLedgerTransferWhere(db, filters),
       select: (page) =>
-        selectTransfers(db)
+        selectTransfersRead(db, projection)
           .where(page.where)
           .orderBy(...page.orderBy)
           .limit(page.limit)
           .offset(page.offset),
-      hydrate: (rows) => hydrate(db, rows),
+      hydrate: (rows) => hydrateTransfersRead(db, rows, projection),
     },
   );
+
+const listLedgerTransfers = completeListReader(
+  ledgerTransferOut,
+  listLedgerTransfersRead,
+);
 
 export const ledgerTransferRepository = defineRepository("ledgerTransfer", {
   sideEffects: false,
   lifecycle: { delete: LEDGER_TRANSFER_DELETE_EDGE_POLICY },
   get: onDb(getLedgerTransferByShortcode),
   list: listOn(listLedgerTransfers),
+  listRead: listReadOn(listLedgerTransfersRead),
   create: asActor(createLedgerTransfer),
   update: asActor(updateLedgerTransfer),
 });

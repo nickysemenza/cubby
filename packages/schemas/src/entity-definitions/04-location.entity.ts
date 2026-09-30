@@ -77,6 +77,12 @@ export default defineEntity({
       ],
     },
     list: {
+      read: {
+        relations: ["product", "children", "parent", "inventoryEntries"],
+        derived: ["valuation"],
+        media: ["images", "displayImages"],
+        quality: ["dataQuality"],
+      },
       viewOverrides: [
         { kind: "slot", id: "gallery", label: "Contents" },
         "table",

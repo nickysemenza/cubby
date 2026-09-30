@@ -192,6 +192,7 @@ private struct EntityBrowseRow: View {
             if let count { NativeCountBadge(count: count) }
         }
         .frame(minHeight: FieldGuideTokens.touchTarget)
+        .accessibilityIdentifier("browse.catalog.\(descriptor.key.rawValue)")
     }
 }
 

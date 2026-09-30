@@ -96,7 +96,7 @@ const mapProductImages = (
  * `dbProductToAPI`) keyed by image shortcode — never loaded here, so a list
  * read that never passes it stays a single query regardless of image count.
  */
-const splitProductImages = (
+export const splitProductImages = (
   rows: ProductImageRow[] | null | undefined,
   analysisSummaries?: Map<string, ImageAnalysisSummary>,
 ) => {
@@ -335,7 +335,7 @@ export const mapDbProductToInventoryList = (
   usdaUnavailable: productData.usdaUnavailable,
 });
 
-const mapDbProductIngredient = (
+export const mapDbProductIngredient = (
   ingredientData: typeof ingredient.$inferSelect,
 ) => ({
   id: parseShortcodeFor("ingredient", ingredientData.shortcode),
@@ -412,7 +412,7 @@ type ProductQuantitySummary = Pick<
   "quantityLedger" | "onHandUnits" | "quantityVariance"
 >;
 
-const deriveProductQuantitySummary = (
+export const deriveProductQuantitySummary = (
   entries: ReadonlyArray<{ amount: { value: number; unit: string } }>,
   quantityLedger: QuantityLedger,
 ): ProductQuantitySummary => {

@@ -13,11 +13,17 @@ import {
   flattenUniquePageItems,
   type IdentifiedListRow,
 } from "./infinite-page-utils";
+import type {
+  ListGroupState,
+  ListEnrichmentFailure,
+  ListReadGroup,
+} from "./progressive-list";
 import {
   type ListQueryOptionsFn,
   type ListQueryResponse,
   usePaginatedTableCore,
 } from "./usePaginatedTableCore";
+import { useProgressiveList } from "./useProgressiveList";
 
 interface UseInfiniteTableListOptions<
   TFilters,
@@ -29,6 +35,7 @@ interface UseInfiniteTableListOptions<
   tableState: TableStateReturn;
   /** DB column name to group by (prepends primary ORDER BY on server) */
   groupBy?: string;
+  visibleFields?: readonly string[];
 }
 
 export interface InfiniteScrollControls<
@@ -53,6 +60,13 @@ interface UseInfiniteTableListReturn<TData extends IdentifiedListRow> {
   totalCount: number;
   /** Server-computed full-filtered-set column sums (footer totals). */
   sums?: Record<string, number>;
+  deferredFields: readonly string[];
+  enrichmentVersion: number;
+  summaryState: ListGroupState;
+  enrichmentFailures: ListEnrichmentFailure[];
+  retryEnrichment: (pageIndex: number, group: ListReadGroup) => Promise<void>;
+  retrySummary: () => void;
+  enrichmentState: (id: string, field: string) => ListGroupState | undefined;
   groups?: ListGroupSummary[];
   isLoading: boolean;
   error: Error | null;
@@ -71,6 +85,7 @@ interface UseInfiniteTableListReturn<TData extends IdentifiedListRow> {
  * Uses useInfiniteQuery to accumulate pages client-side.
  * This is the sole server-backed entity-list data path.
  */
+// oxlint-disable-next-line complexity -- One pager combines base-page transitions, serialized pagination, and optional deferred reads without separate row owners.
 export function useInfiniteTableList<
   TFilters,
   TData extends IdentifiedListRow,
@@ -79,6 +94,7 @@ export function useInfiniteTableList<
   buildFilters,
   tableState,
   groupBy,
+  visibleFields,
 }: UseInfiniteTableListOptions<
   TFilters,
   TData
@@ -164,7 +180,7 @@ export function useInfiniteTableList<
 
   // Flatten all pages into a single array, with a row-identity backstop for an
   // overlapping or refetched page.
-  const data = useMemo(
+  const flatData = useMemo(
     () => flattenUniquePageItems(infiniteData?.pages),
     [infiniteData],
   );
@@ -174,6 +190,16 @@ export function useInfiniteTableList<
   const totalCount = infiniteData?.pages[0]?.meta?.totalCount ?? 0;
   const sums = infiniteData?.pages.at(-1)?.meta?.sums;
   const groups = infiniteData?.pages[0]?.meta?.groups;
+  const progressive = useProgressiveList({
+    pages: infiniteData?.pages,
+    scope: JSON.stringify(infiniteQueryKey),
+    queryKey: infiniteQueryKey,
+    plan: firstPageOptions,
+    paused: isPlaceholderData,
+    refreshing: isRefetching && !isFetchingNextPage,
+    visibleFields,
+  });
+  const data = firstPageOptions.progressive ? progressive.data : flatData;
 
   type FetchResult = Awaited<ReturnType<typeof fetchNextPage>>;
   const nextPageInFlightRef = useRef<Promise<FetchResult> | null>(null);
@@ -270,7 +296,20 @@ export function useInfiniteTableList<
   return {
     data,
     totalCount,
-    sums: isPlaceholderData ? undefined : sums,
+    sums: firstPageOptions.progressive
+      ? progressive.sums
+      : isPlaceholderData
+        ? undefined
+        : sums,
+    summaryState: firstPageOptions.progressive
+      ? progressive.summaryState
+      : { state: "ready" },
+    enrichmentState: progressive.enrichmentState,
+    enrichmentFailures: progressive.enrichmentFailures,
+    retryEnrichment: progressive.retryEnrichment,
+    retrySummary: progressive.retrySummary,
+    deferredFields: progressive.deferredFields,
+    enrichmentVersion: progressive.renderVersion,
     groups,
     isLoading,
     error: error instanceof Error ? error : null,

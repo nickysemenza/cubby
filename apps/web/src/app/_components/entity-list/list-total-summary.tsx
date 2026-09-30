@@ -1,7 +1,11 @@
 import type { EntitySummary } from "@cubby/schemas/entity-summary";
 
+import { ErrorDetails } from "~/components/feedback/error-details";
+import { Button } from "~/components/ui/button";
 import { formatCurrencyRange } from "~/lib/format-range";
 import { formatCount, formatCurrency } from "~/lib/utils";
+
+import type { ListGroupState } from "../hooks/progressive-list";
 
 type ListTotalDescriptor = Omit<
   EntitySummary["list"]["totals"][number],
@@ -32,19 +36,41 @@ function totalValue(
 export function ListTotalSummary({
   totals,
   sums,
+  state,
+  onRetry,
 }: {
   totals: readonly ListTotalDescriptor[];
   sums?: Record<string, number>;
+  state?: ListGroupState;
+  onRetry?: () => void;
 }) {
   const values = totals.map((total) => ({
     id: total.id,
     label: total.label,
-    value: totalValue(total, sums) ?? "Unavailable",
+    value:
+      state?.state === "pending" || state?.state === "loading"
+        ? "Loading…"
+        : (totalValue(total, sums) ?? "Unavailable"),
   }));
   if (values.length === 0) return null;
   return (
     <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm">
       <span className="text-muted-foreground">All matching</span>
+      {state?.state === "error" && (
+        <span role="alert" className="text-destructive">
+          {state.error}
+        </span>
+      )}
+      {state?.state === "error" && (
+        <>
+          <ErrorDetails error={state.cause} />
+          {onRetry && (
+            <Button variant="outline" size="sm" onClick={onRetry}>
+              Retry totals
+            </Button>
+          )}
+        </>
+      )}
       <dl className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
         {values.map(({ id, label, value }) => (
           <div key={id} className="flex min-w-0 items-baseline gap-1.5">
