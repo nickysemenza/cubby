@@ -136,7 +136,6 @@ export const renderKernelBindingsArtifacts = (
         'import type { TimelineEntity } from "~/entities/generated/entity-timelines.gen";\n' +
         'import type { EntityTimelineImplementation } from "~/server/entity-timeline/contracts";\n\n' +
         'import { defineEntityOperations } from "~/server/entity-kernel/entity-operations";\n' +
-        'import { defineProgressiveListOperations } from "~/server/entity-kernel/list-read";\n\n' +
         `${portTypeImports}\n\n` +
         "/** Each literal module/export source reference is checked without a runtime import. */\n" +
         `type EntityPortExportChecks = readonly [${portExportChecks
@@ -154,15 +153,28 @@ export const renderKernelBindingsArtifacts = (
         `export const ENTITY_KERNEL_BINDINGS = {\n${runtimeBindings}\n} as const satisfies CorrelatedEntityKernelBindings & { readonly __portExportChecks?: EntityPortExportChecks };\n` +
         "// Generated operation closures retain each binding's schema correlation.\n// oxfmt-ignore\n" +
         `export const ENTITY_KERNEL_OPERATIONS = {\n${runtimeOperations}\n} as const;\n` +
-        `export const ENTITY_LIST_READ_OPERATIONS = {\n${kernelEntities
-          .filter((entity) => hasGenericListOperation(entity))
-          .map(
-            (entity) =>
-              `  ${JSON.stringify(entity.key)}: defineProgressiveListOperations(${adapterName(entity)}),`,
-          )
-          .join("\n")}\n} as const;\n` +
         "// Custom timeline implementations, keyed by entity; default-timeline entities are absent.\n// oxfmt-ignore\n" +
         `export const ENTITY_TIMELINE_BINDINGS = {\n${timelineBindings}\n} as const satisfies { [E in TimelineEntity]?: EntityTimelineImplementation<E> };\n`,
+    },
+    {
+      relativePath:
+        "apps/web/src/server/generated/entity-list-read-bindings.gen.ts",
+      source:
+        generatedHeader +
+        'import { deferredService } from "~/server/deferred-service";\n' +
+        'import { defineProgressiveListOperations } from "~/server/entity-kernel/list-read";\n\n' +
+        "// Only the selected entity loads its authoritative repository. No context is retained.\n" +
+        `export const ENTITY_LIST_READ_OPERATIONS = {\n${kernelEntities
+          .filter((entity) => hasGenericListOperation(entity))
+          .map((entity) => {
+            const port = entity.ports.repository;
+            if (port === null)
+              throw new EntityDeclarationError(
+                `${entity.key}.ports.repository is required for a list reader.`,
+              );
+            return `  ${JSON.stringify(entity.key)}: deferredService(async () => defineProgressiveListOperations((await import(${JSON.stringify(port.module)})).${port.export}), () => ({})),`;
+          })
+          .join("\n")}\n} as const;\n`,
     },
   ];
 };

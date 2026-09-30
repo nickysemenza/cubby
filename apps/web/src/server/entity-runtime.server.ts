@@ -7,22 +7,12 @@ import { entityFilterOptionsContract } from "~/contracts/entity-filter-options.c
 import { entityGraphContract } from "~/contracts/entity-graph.contract";
 import { entityInspectorHealthContract } from "~/contracts/entity-inspector-health.contract";
 import { entityIntegrityContract } from "~/contracts/entity-integrity.contract";
-import { entityListContract } from "~/contracts/entity-list.contract";
 import { entityMutationContract } from "~/contracts/entity-mutation.contract";
 import { entityTimelineContract } from "~/contracts/entity-timeline.contract";
 import {
   entityDetailInputSchema,
   getEntityDetailOutputSchema,
 } from "~/entities/generated/entity-details.gen";
-import {
-  entityListInputSchema,
-  getEntityListOutputSchema,
-} from "~/entities/generated/entity-lists.gen";
-import {
-  entityListBaseOutputSchema,
-  entityListEnrichmentOutputSchema,
-  entityListSummaryOutputSchema,
-} from "~/entities/generated/entity-lists.gen";
 import { generatedEntityRelationListCommandSchema } from "~/entities/generated/entity-relation-lists.gen";
 import {
   entityTimelineInputSchema,
@@ -34,7 +24,6 @@ import {
   entityBrowserMutationResultSchema,
 } from "~/server/entity-kernel/contracts";
 import { runEntityTimeline } from "~/server/entity-timeline";
-import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-kernel-bindings.gen";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getConnectedRecords } from "~/server/repo/connected-records";
 import { getEntityCounts } from "~/server/repo/dashboard";
@@ -52,43 +41,6 @@ const searchDocumentCountRowSchema = z.object({
   entityKind: searchableEntitySchema,
   documents: z.number().int().nonnegative(),
   embeddings: z.number().int().nonnegative(),
-});
-
-/**
- * The client declares type-only `z.custom` schemas for the generic entity
- * operations; the server owns runtime validation via `input`/`output`
- * overrides, and the output schema depends on the parsed input's entity.
- */
-export const entityListHandlers = implementOperationDomain(entityListContract, {
-  listBase: async (context, input) =>
-    entityListBaseOutputSchema.parse(
-      await ENTITY_LIST_READ_OPERATIONS[input.entity].base(context, input),
-    ),
-  listEnrichment: async (context, input) =>
-    entityListEnrichmentOutputSchema.parse(
-      await ENTITY_LIST_READ_OPERATIONS[input.entity].enrich(context, input),
-    ),
-  listSummary: async (context, input) =>
-    entityListSummaryOutputSchema.parse(
-      await ENTITY_LIST_READ_OPERATIONS[input.entity].summary(context, input),
-    ),
-  list: {
-    input: entityListInputSchema,
-    output: (input) => getEntityListOutputSchema(input.entity),
-    run: async (context, input) => {
-      const result = await executeEntity(context, {
-        action: "list",
-        ...input,
-      });
-      if (result.action !== "list") {
-        throw new Error("Entity kernel returned the wrong action");
-      }
-      return getEntityListOutputSchema(input.entity).parse({
-        items: result.items,
-        meta: result.meta,
-      });
-    },
-  },
 });
 
 export const entityDetailHandlers = implementOperationDomain(

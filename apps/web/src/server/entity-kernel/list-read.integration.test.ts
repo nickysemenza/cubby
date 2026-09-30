@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { listEntities } from "~/entities/generated/entity-lists.gen";
 import { executeEntity } from "~/server/entity-kernel";
-import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-kernel-bindings.gen";
+import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import { getDb } from "~/server/repo/database-helpers";
 
 import {
