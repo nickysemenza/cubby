@@ -36,6 +36,11 @@ const observeConnectionSetup = (
   let lastMilestone = "connect-called";
   let ready = false;
   let authRequested = false;
+  let socketOpeningStartedAt: number | undefined;
+  let startupWritePending = false;
+  let startupWriteOrdinal: number | undefined;
+  let startupWriteStartedAt: number | undefined;
+  let startupWriteCompletedAt: number | undefined;
   const cleanup: Array<() => void> = [];
   const milestone = (name: string) => {
     lastMilestone = name;
@@ -65,12 +70,75 @@ const observeConnectionSetup = (
     emitter.once(event, listener);
     cleanup.push(() => emitter.removeListener(event, listener));
   };
+  const stream = client.connection.stream;
+  listen(stream, "socketOpening", () => {
+    socketOpeningStartedAt = performance.now();
+    milestone("socket_open_started");
+    span.setAttribute("db.connect.socket_open.complete", false);
+  });
+  const finishSocketOpen = (complete: boolean) => {
+    milestone(complete ? "socket_opened" : "socket_open_failed");
+    span.setAttribute("db.connect.socket_open.complete", complete);
+    if (socketOpeningStartedAt !== undefined)
+      span.setAttribute(
+        "db.connect.socket_open.duration_ms",
+        Math.round(performance.now() - socketOpeningStartedAt),
+      );
+  };
+  listen(stream, "socketOpened", () => finishSocketOpen(true));
+  listen(stream, "socketOpenFailed", () => finishSocketOpen(false));
+  // Patched pg-cloudflare events carry ordinals only, never protocol bytes.
+  const writeStarted = (ordinal: number) => {
+    if (!startupWritePending) return;
+    startupWritePending = false;
+    startupWriteOrdinal = ordinal;
+    startupWriteStartedAt = performance.now();
+    milestone("startup_write_started");
+    span.setAttribute("db.connect.startup_write.complete", false);
+  };
+  const finishWrite = (ordinal: number, complete: boolean) => {
+    if (ordinal !== startupWriteOrdinal || startupWriteStartedAt === undefined)
+      return;
+    if (complete) startupWriteCompletedAt = performance.now();
+    milestone(complete ? "startup_write_completed" : "startup_write_failed");
+    span.setAttributes({
+      "db.connect.startup_write.complete": complete,
+      "db.connect.startup_write.duration_ms": Math.round(
+        performance.now() - startupWriteStartedAt,
+      ),
+    });
+  };
+  const writeCompleted = (ordinal: number) => finishWrite(ordinal, true);
+  const writeFailed = (ordinal: number) => finishWrite(ordinal, false);
+  for (const [event, listener] of [
+    ["writeStarted", writeStarted],
+    ["writeCompleted", writeCompleted],
+    ["writeFailed", writeFailed],
+  ] as const) {
+    stream.on(event, listener);
+    cleanup.push(() => stream.removeListener(event, listener));
+  }
+  const observeStartupResponse = () => {
+    if (startupWriteStartedAt === undefined) return;
+    span.setAttribute(
+      "db.connect.startup_response.after_write_completion",
+      startupWriteCompletedAt !== undefined,
+    );
+    if (startupWriteCompletedAt !== undefined)
+      span.setAttribute(
+        "db.connect.startup_response.duration_ms",
+        Math.round(performance.now() - startupWriteCompletedAt),
+      );
+  };
   listen(client.connection, "connect", () => {
+    // CloudflareSocket connect means writer.ready, not native socket.opened.
+    startupWritePending = !client.ssl;
     milestone("socket_ready");
     advance("startup");
   });
   listen(client.connection, "sslconnect", () => {
     // pg emits sslconnect before TLS completion; it only signals stream creation.
+    startupWritePending = true;
     milestone("ssl_stream_created");
     listen(client.connection.stream, "secureConnect", () => {
       milestone("tls_ready");
@@ -85,6 +153,7 @@ const observeConnectionSetup = (
       if (authRequested) return;
       authRequested = true;
       span.setAttribute("db.connect.auth.mechanism", mechanism);
+      observeStartupResponse();
       milestone("auth_requested");
       advance("authentication");
     });
@@ -96,8 +165,10 @@ const observeConnectionSetup = (
     milestone("sasl_final");
   });
   listen(client.connection, "authenticationOk", () => {
-    if (!authRequested)
+    if (!authRequested) {
       span.setAttribute("db.connect.auth.mechanism", "no-challenge");
+      observeStartupResponse();
+    }
     milestone("auth_ok");
     advance("ready");
   });
