@@ -14,7 +14,6 @@ import {
   fingerprintStatementCsv,
   parseMappedStatementCsv,
   parseStatementCsv,
-  previewStatementBatch,
   recognizedStatementSource,
   recordStatementBatch,
   statementCsvHeaders,
@@ -25,10 +24,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
 import { useHydrationGate } from "~/hooks/useHydrated";
-import {
-  financialTransaction,
-  statementRow,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
 import { statusTone } from "~/lib/status-tone";
 import { formatCount, formatCurrency } from "~/lib/utils";
@@ -130,17 +126,20 @@ function StatementImportPage() {
     fileName: string,
     fileInput: StatementCsvFileInput,
   ) {
-    const firstPreview = previewStatementBatch(parsed);
-    const [preview, dryRun] = await Promise.all([
-      firstPreview
-        ? financialTransaction.previewStatementImport.call(firstPreview)
-        : Promise.resolve(null),
+    const [filePreview, dryRun] = await Promise.all([
+      statementRow.previewCsv.call(fileInput),
       statementRow.record.call({
         ...recordStatementBatch(parsed),
         dryRun: true,
       }),
     ]);
-    setReview({ fileName, fileInput, parsed, preview, dryRun });
+    setReview({
+      fileName,
+      fileInput,
+      parsed,
+      preview: filePreview.preview,
+      dryRun,
+    });
     setAttachments({});
     setSelected([]);
     setMappingFile(null);

@@ -222,3 +222,45 @@ test("identical purchases stay distinct and a changed provider date attaches rev
     page.getByText(/0 transactions created.*1 observations attached/),
   ).toBeVisible();
 });
+
+test("CSV review blocks a provider duplicate outside the first preview page", async ({
+  page,
+}) => {
+  const tag = `synthetic-paged-${Date.now()}`;
+  await gotoAuthenticatedPage(page, "/statement-rows/import");
+  await createFixture(
+    page,
+    "financialAccount",
+    financialAccountCreateInput.parse({
+      name: tag,
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      sourceAliases: [
+        { source: "monarch", alias: tag, externalAccountId: null },
+      ],
+    }),
+  );
+  const csv = [
+    "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Id",
+    ...Array.from(
+      { length: 201 },
+      (_, index) =>
+        `2026-08-25,Synthetic Page Store,Shopping,${tag},${tag}-${index},,-9.00,${index === 0 || index === 200 ? `${tag}-duplicate` : `${tag}-${index}`}`,
+    ),
+  ].join("\n");
+  await page.getByLabel("Statement CSV file").setInputFiles({
+    name: "synthetic-paged.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(csv),
+  });
+  await expect(
+    page.getByRole("checkbox", { name: `Record ${tag}-0`, exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("checkbox", { name: `Record ${tag}-1`, exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole("button", { name: "Save 201 source rows", exact: true })
+    .click();
+  await expect(page.getByText("201 new source rows")).toBeVisible();
+  await expect(page.getByText(/0 transactions created/)).toBeVisible();
+});

@@ -94,6 +94,7 @@ const provisionalAccountFor = (
 export async function previewFinancialStatementImport(
   db: Database,
   input: FinancialStatementImportPreviewInput,
+  duplicateProviderIds?: ReadonlySet<string>,
 ): Promise<FinancialStatementImportPreviewOut> {
   const legacyIds = await Promise.all(
     input.rows.map((row) => statementRowExternalId(row)),
@@ -292,11 +293,12 @@ export async function previewFinancialStatementImport(
     (!row.importFingerprint && (fingerprintCounts.get(externalId) ?? 0) > 1) ||
     Boolean(
       row.providerTransactionId &&
-      input.rows.filter(
-        (other) =>
-          other.source === row.source &&
-          other.providerTransactionId === row.providerTransactionId,
-      ).length > 1,
+      (duplicateProviderIds?.has(row.providerTransactionId) ||
+        input.rows.filter(
+          (other) =>
+            other.source === row.source &&
+            other.providerTransactionId === row.providerTransactionId,
+        ).length > 1),
     )
       ? "indistinguishable_duplicate"
       : recorded > 0
@@ -396,12 +398,15 @@ export async function previewFinancialStatementImport(
                 Math.sign(cents(normalizedAmount)))
           )
             return false;
-          const date = transaction.postedDate ?? transaction.transactionDate;
-          if (
-            !date ||
-            Math.abs(Date.parse(date) - Date.parse(row.date)) > 3 * 86400000
-          )
-            return false;
+          const nearbyDate = [
+            transaction.transactionDate,
+            transaction.postedDate,
+          ].some(
+            (date) =>
+              date !== null &&
+              Math.abs(Date.parse(date) - Date.parse(row.date)) <= 3 * 86400000,
+          );
+          if (!nearbyDate) return false;
           return (
             // A settled tip or other amount correction without a provider ID
             // is a review candidate only with matching source description.

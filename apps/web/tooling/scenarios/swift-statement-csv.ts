@@ -1,3 +1,4 @@
+import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import {
   statementCsvCommitInput,
@@ -87,7 +88,7 @@ export async function runSwiftStatementCsvScenario(input: ScenarioInput) {
     buildScenarioDatabase(pool),
     testUserId(input.userId),
   );
-  await createFixtureWithContext(
+  const account = await createFixtureWithContext(
     context,
     "financialAccount",
     financialAccountCreateInput.parse({
@@ -381,6 +382,223 @@ export async function runSwiftStatementCsvScenario(input: ScenarioInput) {
     after.expenses === before.expenses && after.inventory === before.inventory,
     "Native CSV import implicitly created Expense or stock records",
   );
+  const verifyPagedDuplicates = async () => {
+    const duplicateFile = {
+      fileName: "synthetic-cli-paged-duplicates.csv",
+      text: [
+        "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Id",
+        ...Array.from(
+          { length: 201 },
+          (_, index) =>
+            `2026-08-25,Synthetic Page Store,Shopping,Synthetic CLI Visa,PAGE STORE,,-9.00,${index === 0 || index === 200 ? "page-duplicate" : index === 1 ? "zero-duplicate" : `page-${index}`}`,
+        ),
+        "2026-08-25,Synthetic Page Store,Shopping,Synthetic CLI Visa,PAGE STORE,,0,zero-duplicate",
+      ].join("\n"),
+    };
+    const duplicatePath = path.join(artifacts, duplicateFile.fileName);
+    await writeFile(duplicatePath, duplicateFile.text);
+    const beforeDuplicates = await snapshot();
+    const firstPage = swiftStatementCsvPreviewOut.parse(
+      await native(["--file", duplicatePath]),
+    );
+    const lastPage = swiftStatementCsvPreviewOut.parse(
+      await native(["--file", duplicatePath, "--preview-offset", "200"]),
+    );
+    const duplicates = [
+      firstPage.preview?.rows[0],
+      firstPage.preview?.rows[1],
+      lastPage.preview?.rows[0],
+    ];
+    requireFact(
+      firstPage.hasMore &&
+        !lastPage.hasMore &&
+        firstPage.totalRows === 202 &&
+        firstPage.zeroValueRows === 1 &&
+        duplicates.every(
+          (row) => row?.status === "indistinguishable_duplicate",
+        ) &&
+        firstPage.preview?.summary.indistinguishableDuplicate === 2 &&
+        lastPage.preview?.summary.indistinguishableDuplicate === 1,
+      "Whole-file provider duplicates escaped pagination or zero-value filtering",
+    );
+    for (const [index, row] of duplicates.entries()) {
+      requireFact(row !== undefined, "Duplicate preview occurrence is absent");
+      const refusalPath = path.join(
+        artifacts,
+        `synthetic-page-refusal-${index}.json`,
+      );
+      await writeFile(
+        refusalPath,
+        JSON.stringify(
+          statementCsvCommitInput.parse({
+            ...duplicateFile,
+            selected: [{ key: row.key, kind: "purchase" }],
+          }),
+        ),
+      );
+      await invoke(
+        ["--file", duplicatePath, "--review-file", refusalPath],
+        `HTTP 400 BAD_REQUEST: Statement row ${row.key} needs review: indistinguishable_duplicate.`,
+      );
+      requireFact(
+        JSON.stringify(await snapshot()) === JSON.stringify(beforeDuplicates),
+        "Duplicate CSV refusal wrote transactions or source evidence",
+      );
+    }
+    const evidenceReviewPath = path.join(
+      artifacts,
+      "synthetic-page-evidence-review.json",
+    );
+    await writeFile(
+      evidenceReviewPath,
+      JSON.stringify(
+        statementCsvCommitInput.parse({
+          ...duplicateFile,
+          selected: [],
+        }),
+      ),
+    );
+    const evidenceOnly = statementCsvCommitOut.parse(
+      await native([
+        "--file",
+        duplicatePath,
+        "--review-file",
+        evidenceReviewPath,
+      ]),
+    );
+    requireFact(
+      evidenceOnly.evidence === 202 &&
+        evidenceOnly.transactions === 0 &&
+        evidenceOnly.attached === 0,
+      "Evidence-only import collapsed duplicate provider occurrences",
+    );
+    const duplicateRetry = statementCsvCommitOut.parse(
+      await native([
+        "--file",
+        duplicatePath,
+        "--review-file",
+        evidenceReviewPath,
+      ]),
+    );
+    requireFact(
+      duplicateRetry.evidence === 0 &&
+        duplicateRetry.alreadyPresent === 202 &&
+        duplicateRetry.transactions === 0,
+      "Evidence-only duplicate retry was not idempotent",
+    );
+  };
+  const verifyDateMatching = async () => {
+    for (const [name, transactionDate, postedDate, expected] of [
+      ["transaction-near", "2026-09-10", "2026-09-17", "possible_existing"],
+      ["posted-near", "2026-09-03", "2026-09-10", "possible_existing"],
+      ["both-far", "2026-09-03", "2026-09-17", "ready_to_create"],
+    ] as const) {
+      const merchant = `Synthetic date ${name}`;
+      const seeded = await createFixtureWithContext(
+        context,
+        "financialTransaction",
+        financialTransactionCreateInput.parse({
+          accountId: account.id,
+          purchaseId: null,
+          kind: "purchase",
+          status: "posted",
+          amount: 13,
+          transactionDate,
+          postedDate,
+          merchant,
+          rawDescription: merchant,
+          sourceCategory: null,
+          sourceRefs: [],
+          notes: null,
+        }),
+      );
+      const dateFile = {
+        fileName: `synthetic-${name}.csv`,
+        text: `Date,Description,Original Description,Amount,Transaction Type,Category,Account Name\n2026-09-10,${merchant},${merchant},13,debit,Shopping,Synthetic CLI Visa`,
+      };
+      const datePath = path.join(artifacts, dateFile.fileName);
+      await writeFile(datePath, dateFile.text);
+      const beforeDate = await snapshot();
+      const datePreview = swiftStatementCsvPreviewOut.parse(
+        await native(["--file", datePath]),
+      );
+      const row = datePreview.preview?.rows[0];
+      requireFact(
+        row?.status === expected &&
+          row.existingTransactionIds.length ===
+            (expected === "possible_existing" ? 1 : 0),
+        `CSV candidate matching lost either-date semantics: ${name}`,
+      );
+      requireFact(
+        JSON.stringify(await snapshot()) === JSON.stringify(beforeDate),
+        "Date candidate preview wrote data",
+      );
+      if (expected === "ready_to_create") continue;
+      requireFact(
+        row.existingTransactionIds[0] === seeded.id,
+        "CSV date preview selected a different charge",
+      );
+      const readCharge = async () =>
+        (
+          await pool.query(
+            'SELECT amount, status, "transactionDate", "postedDate" FROM "FinancialTransaction" WHERE shortcode = $1',
+            [seeded.id],
+          )
+        ).rows;
+      const savedCharge = await readCharge();
+      const dateReviewPath = path.join(
+        artifacts,
+        `synthetic-${name}-review.json`,
+      );
+      await writeFile(
+        dateReviewPath,
+        JSON.stringify(
+          statementCsvCommitInput.parse({
+            ...dateFile,
+            selected: [{ key: row.key, kind: "purchase" }],
+          }),
+        ),
+      );
+      await invoke(
+        ["--file", datePath, "--review-file", dateReviewPath],
+        `HTTP 400 BAD_REQUEST: Statement row ${row.key} needs review: possible_existing.`,
+      );
+      requireFact(
+        JSON.stringify(await snapshot()) === JSON.stringify(beforeDate),
+        "Date candidate creation refusal wrote data",
+      );
+      await writeFile(
+        dateReviewPath,
+        JSON.stringify(
+          statementCsvCommitInput.parse({
+            ...dateFile,
+            selected: [{ key: row.key, transactionId: seeded.id }],
+          }),
+        ),
+      );
+      const result = statementCsvCommitOut.parse(
+        await native(["--file", datePath, "--review-file", dateReviewPath]),
+      );
+      requireFact(
+        result.attached === 1 &&
+          result.transactions === 0 &&
+          result.evidence === 1 &&
+          JSON.stringify(await readCharge()) === JSON.stringify(savedCharge),
+        "Either-date attachment changed the canonical charge",
+      );
+    }
+    const final = await snapshot();
+    requireFact(
+      final.transactions === after.transactions + 3 &&
+        final.evidence === after.evidence + 204 &&
+        final.expenses === before.expenses &&
+        final.inventory === before.inventory,
+      "Paged duplicates and either-date review produced unexpected writes",
+    );
+    return final;
+  };
+  await verifyPagedDuplicates();
+  const final = await verifyDateMatching();
   console.log(
     "[headless-csv-e2e] Swift file preview, explicit review, exact retry, and ambiguous date attachment verified",
   );
@@ -401,9 +619,15 @@ export async function runSwiftStatementCsvScenario(input: ScenarioInput) {
           "canonical-refusal-wire-and-native-diagnostics",
           "reviewed-attachment-preserves-canonical-charge",
           "no-implicit-expense-or-inventory",
+          "whole-file-provider-duplicate-pages-and-zero-rows",
+          "duplicate-refusal-before-writes",
+          "duplicate-evidence-only-and-retry",
+          "either-date-explicit-attachment-preserves-charge",
+          "both-dates-outside-window-no-candidate",
         ],
         createdTransactions: after.transactions - before.transactions,
-        recordedEvidence: after.evidence - before.evidence,
+        seededCanonicalTransactions: 3,
+        recordedEvidence: final.evidence - before.evidence,
         nativeInvocations: invocation,
       },
       null,
