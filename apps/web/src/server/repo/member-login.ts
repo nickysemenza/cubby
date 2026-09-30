@@ -16,7 +16,6 @@ import {
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 export { currentMemberLedgerParty } from "./current-member-party";
-export type { CurrentParty } from "./current-member-party";
 
 export type MemberLoginUser = {
   id: string;
