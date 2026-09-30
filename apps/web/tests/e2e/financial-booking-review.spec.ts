@@ -154,6 +154,7 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     kind: "income",
     status: "posted",
     postedDate: "2026-09-12",
+    evidenceExpectation: "required",
   });
   await gotoAuthenticatedPage(
     page,
@@ -194,4 +195,60 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
       .object({ expenseTotal: z.number(), statedTotal: z.null() })
       .parse(await netResponse.json()),
   ).toEqual({ expenseTotal: 85, statedTotal: null });
+  const reviewed = await page.request.get(
+    `/api/v1/financial-transactions/${creditId}`,
+  );
+  expect(
+    z
+      .object({
+        evidenceExpectation: z.string(),
+        fieldResolutions: z.object({
+          evidenceExpectation: z.object({
+            mode: z.string(),
+            storedValue: z.string(),
+            value: z.string(),
+            fallbackValue: z.string(),
+            source: z.string(),
+            sourceEntity: z.null(),
+            canReset: z.boolean(),
+          }),
+        }),
+      })
+      .parse(await reviewed.json()),
+  ).toEqual({
+    evidenceExpectation: "required",
+    fieldResolutions: {
+      evidenceExpectation: {
+        mode: "allocated",
+        storedValue: "required",
+        value: "not_expected",
+        fallbackValue: "not_expected",
+        source: "reviewed reimbursement",
+        sourceEntity: null,
+        canReset: true,
+      },
+    },
+  });
+  const enrichment = page.waitForResponse(
+    (response) =>
+      response.request().headers()["x-cubby-operation"] ===
+        "entity.listEnrichment" && response.ok(),
+  );
+  await gotoAuthenticatedPage(
+    page,
+    "/financial-transactions?search=Synthetic%20friend%20contribution",
+  );
+  await enrichment;
+  const row = page
+    .getByRole("row")
+    .filter({ hasText: "Synthetic friend contribution" });
+  await expect(row.getByLabel("Loading field")).toHaveCount(0);
+  const headersText = await page.getByRole("columnheader").allTextContents();
+  await expect(
+    row
+      .getByRole("cell")
+      .nth(
+        headersText.findIndex((text) => text.includes("Evidence expectation")),
+      ),
+  ).toContainText("Not expected");
 });

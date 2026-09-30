@@ -1,9 +1,18 @@
+import type { FieldResolutions } from "@cubby/schemas/field-resolution";
+import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { primaryPurchaseDocumentKinds } from "@cubby/schemas/purchase";
+import { evidenceExpectation } from "@cubby/schemas/purchase-evidence-policy";
 import type {
   FinancialTransactionCoverage,
   PurchaseEvidenceCoverage,
 } from "@cubby/schemas/purchase-evidence-policy";
 import { sql, type SQL } from "drizzle-orm";
+import { z } from "zod";
+
+import type { Database } from "~/server/db";
+
+import { unwrapDb } from "./database-helpers";
+import { resolveLiveShortcode } from "./shortcode-resolver";
 
 // Alias-qualified columns preserve correlation when Drizzle compiles a
 // single-table selection and would otherwise strip its table qualifiers.
@@ -26,17 +35,63 @@ export const effectiveExpenseSpendingCategorySql = (
    WHERE ep_purchase.id = ${column(alias, "purchaseId")} AND ep_purchase."deletedAt" IS NULL)
 )`;
 
+const purchaseEvidenceFallbackSql = (alias: string): SQL => sql`COALESCE(
+  (SELECT ep_vendor."evidenceExpectation" FROM "Vendor" ep_vendor
+   WHERE ep_vendor.id = ${column(alias, "vendorId")} AND ep_vendor."deletedAt" IS NULL),
+  ${categoryPolicy(column(alias, "spendingCategoryId"), "evidenceExpectation")},
+  'unknown'
+)`;
+
 export const purchaseEvidenceExpectationSql = (
   alias: string,
   transactionOverride?: SQL,
 ): SQL => sql`COALESCE(
   ${transactionOverride ?? sql`NULL`},
   ${column(alias, "evidenceExpectation")},
-  (SELECT ep_vendor."evidenceExpectation" FROM "Vendor" ep_vendor
-   WHERE ep_vendor.id = ${column(alias, "vendorId")} AND ep_vendor."deletedAt" IS NULL),
-  ${categoryPolicy(column(alias, "spendingCategoryId"), "evidenceExpectation")},
-  'unknown'
+  ${purchaseEvidenceFallbackSql(alias)}
 )`;
+
+const categoryEvidenceSourceSql = (alias: string): SQL => sql`(
+  SELECT jsonb_build_object('entityKind','spendingCategory','entityId',ep_source_category.shortcode,'name',ep_source_category.name)
+  FROM "SpendingCategory" ep_source_category
+  WHERE ep_source_category.id = ${column(alias, "spendingCategoryId")}
+    AND ep_source_category."deletedAt" IS NULL AND ep_source_category."evidenceExpectation" IS NOT NULL
+)`;
+
+const evidenceFieldResolutionsSql = (values: {
+  stored: SQL;
+  value: SQL;
+  fallback: SQL;
+  source: SQL;
+  sourceEntity: SQL;
+  allocated?: SQL;
+}): SQL<FieldResolutions> => sql<FieldResolutions>`(
+  SELECT jsonb_build_object('evidenceExpectation',jsonb_build_object(
+    'mode',CASE WHEN policy.allocated THEN 'allocated' WHEN policy.stored IS NOT NULL THEN 'explicit' ELSE 'inherit' END,
+    'storedValue',policy.stored,'value',policy.value,'fallbackValue',policy.fallback,
+    'source',policy.source,'sourceEntity',policy."sourceEntity",
+    'matchesFallback',policy.value = policy.fallback,'canReset',policy.stored IS NOT NULL
+  )) FROM (SELECT ${values.stored} AS stored,${values.value} AS value,${values.fallback} AS fallback,
+    ${values.source} AS source,${values.sourceEntity} AS "sourceEntity",${values.allocated ?? sql`false`} AS allocated) policy
+)`;
+
+export const purchaseEvidenceFieldResolutionsSql = (
+  alias: string,
+): SQL<FieldResolutions> => {
+  const vendorSource = sql`(SELECT jsonb_build_object('entityKind','vendor','entityId',ep_source_vendor.shortcode,'name',ep_source_vendor.name)
+    FROM "Vendor" ep_source_vendor WHERE ep_source_vendor.id = ${column(alias, "vendorId")}
+      AND ep_source_vendor."deletedAt" IS NULL AND ep_source_vendor."evidenceExpectation" IS NOT NULL)`;
+  const inheritedSource = sql`COALESCE(${vendorSource},${categoryEvidenceSourceSql(alias)})`;
+  return evidenceFieldResolutionsSql({
+    stored: column(alias, "evidenceExpectation"),
+    value: purchaseEvidenceExpectationSql(alias),
+    fallback: purchaseEvidenceFallbackSql(alias),
+    source: sql`CASE WHEN ${column(alias, "evidenceExpectation")} IS NOT NULL THEN 'purchase override'
+      WHEN ${vendorSource} IS NOT NULL THEN 'vendor policy'
+      WHEN ${categoryEvidenceSourceSql(alias)} IS NOT NULL THEN 'spending category policy' ELSE 'unclassified policy' END`,
+    sourceEntity: inheritedSource,
+  });
+};
 
 export const purchaseHasPrimaryDocumentSql = (
   alias: string,
@@ -148,19 +203,62 @@ const financialTransactionIsReimbursementSql = (alias: string): SQL => sql`(
     AND ep_reimbursement."deletedAt" IS NULL
 )`;
 
-export const financialTransactionEvidenceExpectationSql = (
+const linkedPurchaseEvidenceExpectationSql = (
   alias: string,
-): SQL => sql`CASE WHEN ${financialTransactionIsReimbursementSql(alias)} THEN 'not_expected' ELSE COALESCE(
-  ${column(alias, "evidenceExpectation")},
-  (SELECT CASE
+  purchaseOverride?: SQL,
+): SQL =>
+  purchaseOverride !== undefined
+    ? sql`(SELECT ${purchaseEvidenceExpectationSql("ep_linked")} FROM "Purchase" ep_linked WHERE ep_linked.id = ${purchaseOverride} AND ep_linked."deletedAt" IS NULL)`
+    : sql`(SELECT CASE
     WHEN bool_or(${purchaseEvidenceExpectationSql("ep_linked")} = 'required') THEN 'required'
     WHEN bool_or(${purchaseEvidenceExpectationSql("ep_linked")} = 'unknown') THEN 'unknown'
     WHEN count(*) > 0 THEN 'not_expected' ELSE NULL END
    FROM "FinancialTransactionAllocation" ep_allocation
    JOIN "Purchase" ep_linked ON ep_linked.id = ep_allocation."purchaseId" AND ep_linked."deletedAt" IS NULL
-   WHERE ep_allocation."transactionId" = ${column(alias, "id")} AND ep_allocation."deletedAt" IS NULL),
-  ${categoryPolicy(column(alias, "spendingCategoryId"), "evidenceExpectation")}, 'unknown'
-) END`;
+   WHERE ep_allocation."transactionId" = ${column(alias, "id")} AND ep_allocation."deletedAt" IS NULL)`;
+
+const financialTransactionEvidenceFallbackSql = (
+  alias: string,
+  purchaseOverride?: SQL,
+): SQL => sql`CASE
+  WHEN ${financialTransactionIsReimbursementSql(alias)} THEN 'not_expected'
+  ELSE COALESCE(${linkedPurchaseEvidenceExpectationSql(alias, purchaseOverride)},${categoryPolicy(column(alias, "spendingCategoryId"), "evidenceExpectation")},'unknown') END`;
+
+export const financialTransactionEvidenceExpectationSql = (
+  alias: string,
+  purchaseOverride?: SQL,
+): SQL => sql`CASE
+  WHEN ${financialTransactionIsReimbursementSql(alias)} THEN 'not_expected'
+  ELSE COALESCE(${column(alias, "evidenceExpectation")},${financialTransactionEvidenceFallbackSql(alias, purchaseOverride)}) END`;
+
+export const financialTransactionEvidenceFieldResolutionsSql = (
+  alias: string,
+  purchaseOverride?: SQL,
+): SQL<FieldResolutions> => {
+  const reimbursed = financialTransactionIsReimbursementSql(alias);
+  const linked = linkedPurchaseEvidenceExpectationSql(alias, purchaseOverride);
+  // Aggregate policy has a single source link only when exactly one live
+  // Purchase participates; choosing one of several would misstate provenance.
+  const purchaseSource =
+    purchaseOverride !== undefined
+      ? sql`(SELECT jsonb_build_object('entityKind','purchase','entityId',ep_source_purchase.shortcode,'name',ep_source_purchase."displayLabel") FROM "Purchase" ep_source_purchase WHERE ep_source_purchase.id = ${purchaseOverride} AND ep_source_purchase."deletedAt" IS NULL)`
+      : sql`(SELECT CASE WHEN count(*) = 1 THEN
+    jsonb_build_object('entityKind','purchase','entityId',min(ep_source_purchase.shortcode),'name',min(ep_source_purchase."displayLabel")) ELSE NULL END
+    FROM "FinancialTransactionAllocation" ep_source_allocation
+    JOIN "Purchase" ep_source_purchase ON ep_source_purchase.id = ep_source_allocation."purchaseId" AND ep_source_purchase."deletedAt" IS NULL
+    WHERE ep_source_allocation."transactionId" = ${column(alias, "id")} AND ep_source_allocation."deletedAt" IS NULL)`;
+  return evidenceFieldResolutionsSql({
+    stored: column(alias, "evidenceExpectation"),
+    value: financialTransactionEvidenceExpectationSql(alias, purchaseOverride),
+    fallback: financialTransactionEvidenceFallbackSql(alias, purchaseOverride),
+    allocated: reimbursed,
+    source: sql`CASE WHEN ${reimbursed} THEN 'reviewed reimbursement'
+      WHEN ${column(alias, "evidenceExpectation")} IS NOT NULL THEN 'transaction override'
+      WHEN ${linked} IS NOT NULL THEN 'linked purchase policies'
+      WHEN ${categoryEvidenceSourceSql(alias)} IS NOT NULL THEN 'spending category policy' ELSE 'unclassified policy' END`,
+    sourceEntity: sql`CASE WHEN ${reimbursed} THEN NULL WHEN ${linked} IS NOT NULL THEN ${purchaseSource} ELSE ${categoryEvidenceSourceSql(alias)} END`,
+  });
+};
 
 export const financialTransactionBookingSql = (alias: string): SQL => sql`(CASE
   WHEN ${column(alias, "kind")} = 'other' AND ${column(alias, "status")} <> 'void' THEN 'unclassified'
@@ -240,3 +338,89 @@ export const financialTransactionCoverageSql = (
   'itemization', ${financialTransactionCoverageAxisSql(alias, "itemization")},
   'products', ${financialTransactionCoverageAxisSql(alias, "products")}
 )`;
+
+const draftEvidenceRow = z.object({
+  id: z.string(),
+  shortcode: z.string(),
+  vendorId: z.string().nullable(),
+  spendingCategoryId: z.string().nullable(),
+  evidenceExpectation: evidenceExpectation.nullable(),
+});
+
+/** Draft policy uses the same SQL resolver as persisted reads. It never
+ * mutates the source record or turns inherited policy into an override. */
+async function draftPurchaseId(
+  db: Database,
+  id: string | null,
+  basis: Readonly<Record<string, string | null | undefined>>,
+): Promise<string | null | undefined> {
+  const draftFields = basis.__draftFields
+    ? z.array(z.string()).parse(JSON.parse(basis.__draftFields))
+    : null;
+  // A singular form field can be null while the saved transaction has multiple
+  // allocations. Only a changed link replaces that graph during draft review.
+  if (id && draftFields && !draftFields.includes("purchaseId"))
+    return undefined;
+  if (!Object.hasOwn(basis, "purchaseId")) return undefined;
+  return basis.purchaseId
+    ? resolveLiveShortcode(db, basis.purchaseId, "purchase")
+    : null;
+}
+
+export async function resolveDraftEvidenceFields(
+  db: Database,
+  input: {
+    entity: "purchase" | "financialTransaction";
+    entityId?: string;
+    basis: Readonly<Record<string, string | null | undefined>>;
+  },
+): Promise<FieldResolutions> {
+  const purchase = input.entity === "purchase";
+  const id = input.entityId
+    ? await resolveLiveShortcode(db, input.entityId, input.entity)
+    : null;
+  const table = purchase ? "Purchase" : "FinancialTransaction";
+  const persisted = id
+    ? await unwrapDb(db).execute(sql`SELECT id,shortcode,
+    ${purchase ? sql`"vendorId"` : sql`NULL::uuid`} AS "vendorId","spendingCategoryId","evidenceExpectation"
+    FROM ${sql.identifier(table)} WHERE id=${id} AND "deletedAt" IS NULL`)
+    : null;
+  const baseline = persisted?.rows[0]
+    ? draftEvidenceRow.parse(persisted.rows[0])
+    : null;
+  const foreignId = async (
+    field: "vendorId" | "spendingCategoryId",
+    entity: "vendor" | "spendingCategory",
+  ) =>
+    Object.hasOwn(input.basis, field)
+      ? input.basis[field]
+        ? resolveLiveShortcode(db, input.basis[field]!, entity)
+        : null
+      : (baseline?.[field] ?? null);
+  const [vendorId, categoryId] = await Promise.all([
+    foreignId("vendorId", "vendor"),
+    foreignId("spendingCategoryId", "spendingCategory"),
+  ]);
+  const stored = evidenceExpectation
+    .nullable()
+    .parse(
+      Object.hasOwn(input.basis, "evidenceExpectation")
+        ? (input.basis.evidenceExpectation ?? null)
+        : (baseline?.evidenceExpectation ?? null),
+    );
+  const purchaseId = purchase
+    ? undefined
+    : await draftPurchaseId(db, id, input.basis);
+  const resolver = purchase
+    ? purchaseEvidenceFieldResolutionsSql("ep_draft")
+    : financialTransactionEvidenceFieldResolutionsSql(
+        "ep_draft",
+        purchaseId === undefined ? undefined : sql`${purchaseId}::uuid`,
+      );
+  const result = await unwrapDb(db)
+    .execute(sql`SELECT ${resolver} AS resolutions FROM (SELECT
+    ${id}::uuid AS id,${baseline?.shortcode ?? null}::text AS shortcode,${vendorId}::uuid AS "vendorId",
+    ${categoryId}::uuid AS "spendingCategoryId",${stored}::text AS "evidenceExpectation") ep_draft`);
+  return z.object({ resolutions: fieldResolutionsSchema }).parse(result.rows[0])
+    .resolutions;
+}

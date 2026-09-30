@@ -167,8 +167,51 @@ public final class GenericEntityEditModel {
     ) {
         guard case .update = mode, var saved = original?.objectValue else { return }
         saved[key] = value
+        if var resolutions = saved["fieldResolutions"]?.objectValue {
+            resolutions.removeValue(forKey: key)
+            saved["fieldResolutions"] = .object(resolutions)
+        }
         original = .object(saved)
         if (draft[key] ?? .null) == reviewedDraftValue { draft[key] = value }
+    }
+
+    /// The server projection describes the saved record. Resolver dependencies are not a
+    /// complete editable-key roster, so any changed draft invalidates this provenance.
+    public func resolutionForEditor(_ field: FieldDescriptor) -> FieldResolutionPresentation? {
+        guard let original,
+            draft.allSatisfy({ key, value in value == (original[key] ?? .null) })
+        else { return nil }
+        return FieldResolutionPresentation(raw: original, field: field)
+    }
+
+    /// Stage the declaration's ordinary update patch; Save owns persistence.
+    @discardableResult
+    public func stageResolutionReset(_ key: String) -> Bool {
+        guard let field = descriptor.field(key),
+            let resolved = resolutionForEditor(field),
+            let payload = resolved.resetPayload(field: field)
+        else { return false }
+        return stageResolutionPayload(payload)
+    }
+
+    @discardableResult
+    public func stageResolutionNone(_ key: String) -> Bool {
+        guard let payload = descriptor.field(key)?.resolution?.none else { return false }
+        return stageResolutionPayload(payload)
+    }
+
+    private func stageResolutionPayload(_ payload: [String: JSONValue]) -> Bool {
+        guard !isSaving, !isLoading, !payload.isEmpty,
+            payload.keys.allSatisfy({ key in
+                guard let field = descriptor.field(key) else { return false }
+                return (isCreate ? field.inCreate : field.inUpdate) && !readOnly(key)
+            })
+        else { return false }
+        for (key, value) in payload {
+            draft[key] = value
+            markEdited(key)
+        }
+        return true
     }
 
     // MARK: - Body
@@ -273,6 +316,13 @@ public final class GenericEntityEditModel {
     // MARK: - Seeding
 
     private func seed(original: JSONValue) {
+        var stored = original.objectValue ?? [:]
+        for field in visibleFields {
+            if let resolution = FieldResolutionPresentation(raw: original, field: field) {
+                stored[field.key] = resolution.storedValue
+            }
+        }
+        let original = JSONValue.object(stored)
         self.original = original
         var seeded: [String: JSONValue] = [:]
         for field in visibleFields {

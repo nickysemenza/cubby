@@ -1,5 +1,9 @@
 import type { NutritionBasis } from "@cubby/schemas/nutrition";
-import type { RecipeOut, RecipeTimes } from "@cubby/schemas/recipe";
+import type { RecipeTimes } from "@cubby/schemas/recipe";
+import {
+  recipeServingsForRead,
+  type RecipeServingBasis,
+} from "@cubby/schemas/recipe-shared";
 import { match } from "ts-pattern";
 
 import { scaleTotals } from "~/lib/nutrition-estimates";
@@ -31,14 +35,7 @@ export const formatMakes = (
   return batchWeightGrams != null ? gramText(batchWeightGrams) : null;
 };
 
-/** Effective servings: explicit servings, or the yield value when its unit is "servings". */
-export const getEffectiveServings = (
-  recipe: Pick<RecipeOut, "servings" | "yield">,
-): number | null => {
-  if (recipe.servings) return recipe.servings;
-  if (recipe.yield?.unit === "servings") return recipe.yield.value;
-  return null;
-};
+export const getEffectiveServings = recipeServingsForRead;
 
 /** How to express a per-portion figure: the count to divide totals by and the
  * noun to label it. Prefers an explicit servings count ("serving"); otherwise
@@ -51,18 +48,16 @@ export const getEffectiveServings = (
 export type ServingBasis = { divisor: number; noun: string };
 
 export const getServingBasis = (
-  recipe: Pick<RecipeOut, "servings" | "yield">,
+  recipe: RecipeServingBasis,
 ): ServingBasis | null => {
-  if (recipe.servings && recipe.servings > 1)
-    return { divisor: recipe.servings, noun: "serving" };
+  const servings = getEffectiveServings(recipe);
+  if (servings !== null && servings > 1)
+    return { divisor: servings, noun: "serving" };
   const y = recipe.yield;
+  if (y?.unit === "servings") return null;
   if (y?.value && y.value > 1) {
     const noun =
-      !y.unit || y.unit === "whole"
-        ? "each"
-        : y.unit === "servings"
-          ? "serving"
-          : wasm.singularize_unit(y.unit);
+      !y.unit || y.unit === "whole" ? "each" : wasm.singularize_unit(y.unit);
     return { divisor: y.value, noun };
   }
   return null;
@@ -77,7 +72,7 @@ export const perUnitSuffix = (
 
 /** Shared display basis, independent from the recipe's authored/scaled amounts. */
 export function getRecipeNutritionBasis(
-  recipe: Pick<RecipeOut, "servings" | "yield">,
+  recipe: RecipeServingBasis,
   requested: NutritionBasis = "whole",
   recipeScale = 1,
 ) {

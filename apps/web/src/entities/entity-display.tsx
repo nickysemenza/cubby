@@ -262,13 +262,10 @@ function readScalarField<TRecord extends object>(
   // SAFETY: The generated model owns the read key; its scalar schema checks the value
   // before rendering, including absent fields in partial detail responses.
   const stored = record[field.readKey as keyof TRecord];
-  // An empty stored value that the row reports as inherited displays the
-  // inherited value; its `FieldResolutionBadge` names where it came from.
-  const inherited = fieldResolutionFor(record, field.key);
-  const value =
-    (stored === undefined || stored === null) && inherited?.mode === "inherit"
-      ? inherited.value
-      : stored;
+  // Read surfaces display the canonical value, including system rules that
+  // supersede a stored override. Editors retain the stored assignment intent.
+  const resolution = fieldResolutionFor(record, field.key);
+  const value = resolution ? resolution.value : stored;
   if (value === undefined || value === null)
     return { kind: "empty", raw: value === undefined ? undefined : null };
   switch (field.kind) {
@@ -821,6 +818,17 @@ function renderEditableField<TRecord extends object>(
 ): ReactNode {
   const { key, control } = field;
   const format = field.display.format;
+  const resolution = fieldResolutionFor(record, field.key);
+  const editValue = resolution
+    ? (editableFieldValue.parse(resolution.storedValue) ?? null)
+    : value;
+  const displayField = entityDisplayFields(entity, surface).find(
+    (candidate) => candidate.key === field.key,
+  );
+  const displayed = (rendered: ReactNode) =>
+    resolution && displayField
+      ? renderCompactFieldValue(entity, record, displayField)
+      : rendered;
   const saveRow = (_row: TRecord, next: EditableFieldValue) => save(next);
   switch (control.kind) {
     case "text":
@@ -833,7 +841,7 @@ function renderEditableField<TRecord extends object>(
       );
       return (
         <EditableCell
-          value={asText(value)}
+          value={asText(editValue)}
           trigger={
             prose ? (surface === "detail" ? "pencil-wrap" : "pencil") : "wrap"
           }
@@ -845,16 +853,18 @@ function renderEditableField<TRecord extends object>(
           }
           onSave={save}
           renderValue={(v) =>
-            format === "external-link" || control.renderer === "url" ? (
-              v ? (
-                <ExternalLinkText href={v} />
+            displayed(
+              format === "external-link" || control.renderer === "url" ? (
+                v ? (
+                  <ExternalLinkText href={v} />
+                ) : (
+                  <NoneValue />
+                )
+              ) : v && prose ? (
+                <ShortcodeProse>{v}</ShortcodeProse>
               ) : (
-                <NoneValue />
-              )
-            ) : v && prose ? (
-              <ShortcodeProse>{v}</ShortcodeProse>
-            ) : (
-              (v ?? <NoneValue />)
+                (v ?? <NoneValue />)
+              ),
             )
           }
         />
@@ -870,19 +880,21 @@ function renderEditableField<TRecord extends object>(
       const clipboard = specFromCellData(cellData, record);
       return money ? (
         <EditableCell
-          value={asNumber(value)}
+          value={asNumber(editValue)}
           config={{ type: "currency" }}
           clipboard={clipboard}
           onSave={save}
-          renderValue={(v) => (v === null ? <NoneValue /> : formatCurrency(v))}
+          renderValue={(v) =>
+            displayed(v === null ? <NoneValue /> : formatCurrency(v))
+          }
         />
       ) : (
         <EditableCell
-          value={asNumber(value)}
+          value={asNumber(editValue)}
           config={{ type: "number" }}
           clipboard={clipboard}
           onSave={save}
-          renderValue={(v) => v ?? <NoneValue />}
+          renderValue={(v) => displayed(v ?? <NoneValue />)}
         />
       );
     }
@@ -890,7 +902,7 @@ function renderEditableField<TRecord extends object>(
       const cellData = dateCellData<TRecord>(() => asText(value), saveRow);
       return (
         <EditableCell
-          value={asText(value)}
+          value={asText(editValue)}
           config={{
             type: "date",
             ...recordFieldClearing(entity, key, field.nullable, record),
@@ -898,10 +910,12 @@ function renderEditableField<TRecord extends object>(
           clipboard={specFromCellData(cellData, record)}
           onSave={save}
           renderValue={(v) =>
-            v ? (
-              renderFormattedScalar(format, { kind: "date", raw: v }, surface)
-            ) : (
-              <NoneValue />
+            displayed(
+              v ? (
+                renderFormattedScalar(format, { kind: "date", raw: v }, surface)
+              ) : (
+                <NoneValue />
+              ),
             )
           }
         />
@@ -916,7 +930,7 @@ function renderEditableField<TRecord extends object>(
       );
       return (
         <EditableCell
-          value={asText(value)}
+          value={asText(editValue)}
           config={{
             type: "select",
             options,
@@ -925,7 +939,7 @@ function renderEditableField<TRecord extends object>(
           }}
           clipboard={specFromCellData(cellData, record)}
           onSave={save}
-          renderValue={(v) => renderOptionCell(v, options)}
+          renderValue={(v) => displayed(renderOptionCell(v, options))}
         />
       );
     }
@@ -971,14 +985,18 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
         throw new Error(`${entity}.${key} has no editable scalar control`);
       }
       const control = field.control;
+      const resolution = fieldResolutionFor(record, field.key);
       // SAFETY: `readKey` names a declared read projection on this same
       // record shape — the manifest is the contract this file already
       // trusts throughout (see `readScalarField` above); the parse turns
       // the untyped indexed read into the concrete `EditableFieldValue`
       // every generic control branch renders.
       const value =
-        editableFieldValue.parse(record[field.readKey as keyof TRecord]) ??
-        null;
+        editableFieldValue.parse(
+          resolution
+            ? resolution.storedValue
+            : record[field.readKey as keyof TRecord],
+        ) ?? null;
       const save = async (next: EditableFieldValue): Promise<void> => {
         await mutate({ id: record.id, data: { [key]: next } });
       };

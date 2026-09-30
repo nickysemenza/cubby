@@ -120,7 +120,7 @@ struct EntityShelfView: View {
     private func subtitle(for row: EntityRow) -> String? {
         let parts = descriptor.presentation.shelfSubtitle.compactMap { key -> String? in
             guard let field = descriptor.field(key) else { return nil }
-            return EntityFieldValue.text(row.raw[key], field: field)
+            return EntityFieldValue.text(in: row.raw, field: field, surface: "list")
         }
         if !parts.isEmpty { return parts.joined(separator: " · ") }
         return row.subtitle

@@ -201,6 +201,32 @@ export default defineEntity({
           width: "md",
           mobile: { slot: "meta", priority: 10 },
         },
+        explanation: {
+          ruleId: "productCategory.effective-feature",
+          description:
+            "A permanent feature binding wins; otherwise the nearest live ancestor supplies the feature. Moving a category changes its ancestor fallback without replacing its own binding.",
+          resolver: "field",
+          projections: {
+            list: "fieldResolutions.feature.value",
+            detail: "fieldResolutions.feature.value",
+            summary: "fieldResolutions.feature.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.feature.storedValue",
+              label: "Permanent feature binding",
+            },
+            {
+              path: "fieldResolutions.feature.fallbackValue",
+              label: "Ancestor feature",
+            },
+            {
+              path: "fieldResolutions.feature.sourceEntity",
+              label: "Source category",
+            },
+          ],
+          actions: ["editSource"],
+        },
         validation: {
           read: productCategoryFeature.nullable(),
           create: productCategoryFeature.nullable().default(null),

@@ -1,3 +1,4 @@
+import { optionalFieldResolutionsSchema } from "../field-resolution";
 import { purchaseEvidenceCoverage } from "../purchase-evidence-policy";
 import { spendingCategoryShortcode } from "../identifier-fields";
 import { defineEntity } from "./definition.js";
@@ -80,6 +81,7 @@ export default defineEntity({
           "itemizationCoverage",
           "productsCoverage",
           "coverage",
+          "fieldResolutions",
           "expenseCount",
           "unpricedExpenseCount",
           "expenseTotal",
@@ -236,12 +238,23 @@ export default defineEntity({
         },
       },
       {
+        key: "fieldResolutions",
+        kind: "json",
+        validation: {
+          read: optionalFieldResolutionsSchema,
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "evidenceExpectation",
         kind: "enum",
         nullable: true,
         control: {
           kind: "select",
-          suggest: { basis: ["displayLabel", "vendorId", "notes"] },
+          suggest: {
+            basis: ["displayLabel", "vendorId", "spendingCategoryId", "notes"],
+          },
           options: [
             { value: "unknown", label: "Unclassified" },
             { value: "required", label: "Expected" },
@@ -249,6 +262,34 @@ export default defineEntity({
           ],
         },
         display: { list: true, detail: true },
+        resolution: {
+          reset: { evidenceExpectation: null },
+          redundancy: "eligible",
+        },
+        explanation: {
+          ruleId: "purchase.effective-evidence-expectation",
+          description:
+            "An explicit Purchase receipt policy wins; otherwise the live Vendor policy supplies it, followed by the Purchase spending category.",
+          projections: {
+            list: "fieldResolutions.evidenceExpectation.value",
+            detail: "fieldResolutions.evidenceExpectation.value",
+            summary: "fieldResolutions.evidenceExpectation.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.evidenceExpectation.sourceEntity",
+              label: "Source",
+            },
+            {
+              path: "fieldResolutions.evidenceExpectation.storedValue",
+              label: "Stored override",
+            },
+            {
+              path: "fieldResolutions.evidenceExpectation.fallbackValue",
+              label: "Inherited value",
+            },
+          ],
+        },
         validation: {
           read: z
             .enum(["unknown", "required", "not_expected"])
@@ -908,6 +949,7 @@ export default defineEntity({
       "itemizationCoverage",
       "productsCoverage",
       "coverage",
+      "fieldResolutions",
       "spendingCategoryId",
       "evidenceExpectation",
       "itemizationEvidence",

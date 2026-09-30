@@ -13,6 +13,10 @@ nonisolated enum EntityFieldValue {
         let name: String?
     }
 
+    static func text(in raw: JSONValue, field: FieldDescriptor, surface: String) -> String? {
+        text(FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface), field: field)
+    }
+
     static func text(_ value: JSONValue?, field: FieldDescriptor) -> String? {
         guard let value, value != .null else { return nil }
         switch field.format {
@@ -49,14 +53,18 @@ nonisolated enum EntityFieldValue {
 
     /// A `reference` field's target read off the row: the id (`raw[key]`, or the nested
     /// `raw[stem].id` a list projection embeds instead) and its projected name when present.
-    static func reference(in raw: JSONValue, field: FieldDescriptor) -> Reference? {
+    static func reference(in raw: JSONValue, field: FieldDescriptor, surface: String = "detail") -> Reference?
+    {
         guard let target = field.reference, !target.multiple else { return nil }
         let stem = field.key.hasSuffix("Id") ? String(field.key.dropLast(2)) : field.key
-        if let id = raw[field.key]?.stringValue, !id.isEmpty {
+        if let id = FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface)?
+            .stringValue, !id.isEmpty
+        {
             return Reference(
                 entity: target.entity, id: id,
-                name: raw["\(stem)Name"]?.stringValue ?? raw[stem]?["name"]?.stringValue)
+                name: FieldResolutionPresentation.referenceName(in: raw, field: field, effectiveID: id))
         }
+        if FieldResolutionPresentation(raw: raw, field: field) != nil { return nil }
         if let nested = raw[stem], let id = nested["id"]?.stringValue, !id.isEmpty {
             return Reference(entity: target.entity, id: id, name: nested["name"]?.stringValue)
         }

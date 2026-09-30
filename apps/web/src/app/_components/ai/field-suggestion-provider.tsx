@@ -243,7 +243,7 @@ export function FieldSuggestionProvider({
   });
   const targetFormState = useFormState({
     control: form.control,
-    name: targetPaths,
+    name: [...targetPaths, ...watchedPaths],
   });
   const currentRecordResolutions = useMemo<FieldResolutions>(() => {
     const current: FieldResolutions = {};
@@ -291,31 +291,66 @@ export function FieldSuggestionProvider({
       const modeField = resolutionModeField(entity, field);
       if (modeField) snapshot[modeField] = "inherit";
     }
+    snapshot.__draftFields = JSON.stringify(
+      watchedKeys
+        .filter(
+          (key) =>
+            form.getFieldState(paths?.[key] ?? key, targetFormState).isDirty,
+        )
+        .sort(),
+    );
     return snapshot;
     // `autoFilledRef` is a ref: its mutations don't participate in React's
     // dependency comparison, but every mutation happens synchronously inside
     // an effect that also touches `watchedValues` (the auto-fill write
     // itself), so this recomputes whenever the ref could have changed.
-  }, [entity, watchedKeys, watchedValues, staticBasis]);
+  }, [
+    entity,
+    watchedKeys,
+    watchedValues,
+    staticBasis,
+    form,
+    paths,
+    targetFormState,
+  ]);
   const rawBasisKey = JSON.stringify(rawBasis);
   const [resolutionSnapshot, setResolutionSnapshot] = useState<{
     basisKey: string;
     resolutions: FieldResolutions;
   } | null>(null);
   const authoritativeResolutions = useMemo<FieldResolutions>(() => {
-    const resolutions = { ...currentRecordResolutions };
+    // A dependency edit invalidates displayed provenance. Untouched stored
+    // intent still travels separately so the server can resolve the draft.
+    const changedDependencies = watchedPaths.some((path) => {
+      const state = form.getFieldState(path, targetFormState);
+      return state.isDirty || state.isTouched;
+    });
+    const resolutions = changedDependencies
+      ? {}
+      : { ...currentRecordResolutions };
     if (resolutionSnapshot?.basisKey === rawBasisKey) {
       Object.assign(resolutions, resolutionSnapshot.resolutions);
     }
     return resolutions;
-  }, [currentRecordResolutions, resolutionSnapshot, rawBasisKey]);
+  }, [
+    currentRecordResolutions,
+    resolutionSnapshot,
+    rawBasisKey,
+    form,
+    watchedPaths,
+    targetFormState,
+  ]);
   const basis = useMemo<FieldSuggestionSource["basis"]>(() => {
-    if (Object.keys(authoritativeResolutions).length === 0) return rawBasis;
+    const storedContext = {
+      ...currentRecordResolutions,
+      ...authoritativeResolutions,
+    };
+    if (Object.keys(storedContext).length === 0) return rawBasis;
     return {
       ...rawBasis,
-      __resolutionContext: JSON.stringify(authoritativeResolutions),
+      __resolutionContext: JSON.stringify(storedContext),
     };
-  }, [rawBasis, authoritativeResolutions]);
+  }, [rawBasis, authoritativeResolutions, currentRecordResolutions]);
 
   const [debouncedBasis] = useDebouncedValue(basis, {
     wait: FIELD_SUGGEST_DEBOUNCE_MS,

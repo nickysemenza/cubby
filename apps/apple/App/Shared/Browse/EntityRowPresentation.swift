@@ -47,12 +47,14 @@ struct EntityRowPresentation: Sendable, Hashable {
         let label: String?
         let value: String
         let isDate: Bool
+        let source: String?
 
-        init(id: String, label: String? = nil, value: String, isDate: Bool = false) {
+        init(id: String, label: String? = nil, value: String, isDate: Bool = false, source: String? = nil) {
             self.id = id
             self.label = label
             self.value = value
             self.isDate = isDate
+            self.source = source
         }
     }
 
@@ -63,8 +65,9 @@ struct EntityRowPresentation: Sendable, Hashable {
 
     var factLine: String? {
         let values = facts.map { fact in
-            guard let label = fact.label, !label.isEmpty else { return fact.value }
-            return "\(label): \(fact.value)"
+            let value = fact.source.map { "\(fact.value) (\($0))" } ?? fact.value
+            guard let label = fact.label, !label.isEmpty else { return value }
+            return "\(label): \(value)"
         }
         return values.isEmpty ? nil : values.joined(separator: " · ")
     }
@@ -72,8 +75,9 @@ struct EntityRowPresentation: Sendable, Hashable {
     var accessibilityText: String {
         ([title]
             + facts.map { fact in
-                if let label = fact.label, !label.isEmpty { return "\(label), \(fact.value)" }
-                return fact.value
+                let value = fact.source.map { "\(fact.value), \($0)" } ?? fact.value
+                if let label = fact.label, !label.isEmpty { return "\(label), \(value)" }
+                return value
             }).joined(separator: ", ")
     }
 
@@ -99,16 +103,20 @@ struct EntityRowPresentation: Sendable, Hashable {
                 facts.append(Fact(id: key, label: label ?? field.label, value: source.label))
                 return
             }
-            if let reference = EntityFieldValue.reference(in: row.raw, field: field) {
+            let resolution = FieldResolutionPresentation(raw: row.raw, field: field)
+            if let reference = EntityFieldValue.reference(in: row.raw, field: field, surface: "list") {
                 facts.append(
                     Fact(
                         id: key, label: label ?? field.label,
-                        value: reference.name ?? reference.id))
-            } else if let value = EntityFieldValue.text(row.raw[key], field: field) {
+                        value: reference.name ?? reference.id, source: resolution?.sourceText))
+            } else if let value = EntityFieldValue.text(in: row.raw, field: field, surface: "list")
+                ?? (resolution == nil ? nil : "None")
+            {
                 facts.append(
                     Fact(
                         id: key, label: label ?? field.label, value: value,
-                        isDate: field.kind == .date || field.kind == .timestamp))
+                        isDate: field.kind == .date || field.kind == .timestamp,
+                        source: resolution?.sourceText))
             }
         }
 

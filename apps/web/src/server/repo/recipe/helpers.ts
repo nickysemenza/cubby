@@ -30,6 +30,7 @@ import type {
   SectionIngredientDB,
 } from "./internal-types";
 import { recipeMetaFromColumns } from "./meta";
+import { resolveRecipeServings } from "./servings";
 import { recipeSourceFromDb } from "./source";
 
 type RecipeSelect = typeof recipe.$inferSelect;
@@ -191,6 +192,7 @@ export const dbRecipeToTopLevel = (
     }),
     yield: recipeData.yield,
     servings: recipeData.servings,
+    fieldResolutions: resolveRecipeServings(recipeData),
     tags: recipeData.tags,
     notes: recipeData.notes,
     forkedFromRecipeId: recipeData.forkedFrom

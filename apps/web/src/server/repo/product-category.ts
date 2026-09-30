@@ -208,36 +208,37 @@ const productCountsFor = async (
   return new Map(rows.rows.map((row) => [row.root, row.count]));
 };
 
-/**
- * A category with no feature of its own takes the closest ancestor's
- * (`categoryFeatureSql`). Reported as an inherited resolution so the generic
- * table and detail badges show it, while `feature` keeps meaning the stored
- * binding for edits and MCP.
- */
-const inheritedFeatureResolution = (
+/** Keep permanent stored bindings separate from the live ancestor fallback. */
+const featureResolution = (
   row: CategoryRow,
   path: CategoryPathRow["path"],
-): FieldResolutions | undefined => {
-  if (row.feature !== null) return undefined;
+): FieldResolutions => {
   const source = path
     .slice(0, -1)
     .reverse()
     .find((ancestor) => ancestor.feature !== null);
-  if (!source) return undefined;
-  const feature = parseFeature(source.feature);
+  const storedValue = parseFeature(row.feature);
+  const fallbackValue = parseFeature(source?.feature ?? null);
+  const value = storedValue ?? fallbackValue;
   return {
     feature: {
-      mode: "inherit",
-      storedValue: null,
-      value: feature,
-      fallbackValue: feature,
-      source: source.name,
-      sourceEntity: {
-        entityKind: "productCategory",
-        entityId: source.id,
-        name: source.name,
-      },
-      matchesFallback: true,
+      mode: storedValue === null ? "inherit" : "explicit",
+      storedValue,
+      value,
+      fallbackValue,
+      source:
+        storedValue !== null
+          ? "Permanent feature binding"
+          : (source?.name ?? "No ancestor feature"),
+      sourceEntity:
+        storedValue === null && source
+          ? {
+              entityKind: "productCategory",
+              entityId: source.id,
+              name: source.name,
+            }
+          : null,
+      matchesFallback: value === fallbackValue,
       canReset: false,
     },
   };
@@ -283,7 +284,7 @@ const hydrateRead = async (
         });
       if (wantsListGroup(projection, "derived"))
         Object.assign(result, {
-          fieldResolutions: inheritedFeatureResolution(row, path),
+          fieldResolutions: featureResolution(row, path),
           productCount: productCounts?.get(row.id) ?? 0,
         });
       return result;

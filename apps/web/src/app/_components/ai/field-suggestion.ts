@@ -67,10 +67,11 @@ export function suggestionContextKeys(
         ? INHERITANCE_CONTEXT_KEYS.task
         : [];
   const financeKeys =
-    entity === "financialTransaction" &&
-    targets.targets.some((target) => target.key === "spendingCategoryId")
-      ? ["purchaseId"]
-      : [];
+    entity === "financialTransaction"
+      ? ["purchaseId", "spendingCategoryId", "evidenceExpectation"]
+      : entity === "purchase"
+        ? ["vendorId", "spendingCategoryId", "evidenceExpectation"]
+        : [];
   return [...new Set([...targets.basisKeys, ...inheritedKeys, ...financeKeys])];
 }
 

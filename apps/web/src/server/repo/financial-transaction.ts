@@ -93,7 +93,10 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { parseCompleteListRead } from "./list-read-adapters";
-import { financialTransactionCoverageSql } from "./purchase-evidence-policy";
+import {
+  financialTransactionCoverageSql,
+  financialTransactionEvidenceFieldResolutionsSql,
+} from "./purchase-evidence-policy";
 
 /** "This transaction settles at least one Purchase" — allocation-aware. */
 const hasAnyAllocation = () => sql`EXISTS (
@@ -146,6 +149,9 @@ const columns = {
   >`(SELECT name FROM "SpendingCategory" WHERE id = "FinancialTransaction"."spendingCategoryId" AND "deletedAt" IS NULL)`,
   evidenceExpectation: financialTransaction.evidenceExpectation,
   coverage: financialTransactionCoverageSql("FinancialTransaction"),
+  fieldResolutions: financialTransactionEvidenceFieldResolutionsSql(
+    "FinancialTransaction",
+  ),
   sourceCategory: financialTransaction.sourceCategory,
   notes: financialTransaction.notes,
   createdAt: financialTransaction.createdAt,
@@ -221,7 +227,7 @@ const toOut = (
       ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
       : null,
     spendingCategoryName: row.spendingCategoryName,
-    effectiveEvidenceExpectation: row.coverage.expectation,
+    fieldResolutions: row.fieldResolutions,
     evidenceExpectation: row.evidenceExpectation,
     bookingCoverage: row.coverage.booking,
     documentCoverage: row.coverage.document,
@@ -260,6 +266,7 @@ const selectTransactionsRead = (
     allocations,
     accountName,
     spendingCategoryName,
+    fieldResolutions,
     itemization,
     ...core
   } = columns;
@@ -271,6 +278,7 @@ const selectTransactionsRead = (
         accountName,
         spendingCategoryName,
       })),
+      ...listGroupFields(projection, "derived", () => ({ fieldResolutions })),
       ...listGroupFields(projection, ["relations", "derived"], () => ({
         ledgerTransferShortcode,
         allocations,
@@ -298,7 +306,7 @@ const hydrateTransactionsRead = async (
     }));
     return {
       ...row,
-      effectiveEvidenceExpectation: row.coverage.expectation,
+      fieldResolutions: row.fieldResolutions,
       bookingCoverage: row.coverage.booking,
       documentCoverage: row.coverage.document,
       itemizationCoverage: row.coverage.itemization,

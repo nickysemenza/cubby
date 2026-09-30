@@ -9,6 +9,30 @@ import { ResolutionExplanation } from "./field-resolution-explanation";
 const purchaseId = testShortcode("purchase", "fixture-purchase");
 
 describe("ResolutionExplanation", () => {
+  it("explains a system-derived reimbursement without inventing a purchase allocation", () => {
+    render(
+      <ResolutionExplanation
+        entity="financialTransaction"
+        field="evidenceExpectation"
+        resolution={{
+          mode: "allocated",
+          storedValue: "required",
+          value: "not_expected",
+          fallbackValue: "not_expected",
+          source: "reviewed reimbursement",
+          sourceEntity: null,
+          matchesFallback: true,
+          canReset: true,
+        }}
+      />,
+    );
+    expect(screen.getByText("Not expected")).toBeInTheDocument();
+    expect(screen.getByText(/Reviewed reimbursement/)).toBeInTheDocument();
+    expect(screen.getByText("Expected")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Allocated across the purchase"),
+    ).not.toBeInTheDocument();
+  });
   it("flags a redundant override and shows the enum label, not the raw key", () => {
     render(
       <ResolutionExplanation

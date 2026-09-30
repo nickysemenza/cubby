@@ -50,6 +50,7 @@ export default defineEntity({
       read: {
         relations: ["forkedFromRecipeId", "forkedFromRecipeName", "meals"],
         derived: [
+          "fieldResolutions",
           "totals",
           "cost",
           "calories",
@@ -69,6 +70,15 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        key: "fieldResolutions",
+        kind: "json",
+        validation: {
+          read: recipeTopLevelFields.fieldResolutions,
+          create: null,
+          update: null,
+        },
+      },
       {
         key: "name",
         kind: "text",
@@ -118,6 +128,30 @@ export default defineEntity({
           detail: true,
           width: "xs",
           mobile: { slot: "trailing", priority: 5, interactive: true },
+        },
+        resolution: { reset: { servings: null }, redundancy: "eligible" },
+        explanation: {
+          ruleId: "recipe.effective-servings",
+          description:
+            "An explicit serving count wins; otherwise a recipe yield measured in servings supplies the count. Clearing servings resumes the live yield fallback.",
+          resolver: "field",
+          projections: {
+            list: "fieldResolutions.servings.value",
+            detail: "fieldResolutions.servings.value",
+            summary: "fieldResolutions.servings.value",
+          },
+          sourceDependencies: [
+            {
+              path: "fieldResolutions.servings.storedValue",
+              label: "Stored servings",
+            },
+            {
+              path: "fieldResolutions.servings.fallbackValue",
+              label: "Serving yield",
+            },
+            { path: "yield", label: "Recipe yield" },
+          ],
+          actions: ["editSource"],
         },
         validation: {
           read: recipeTopLevelFields.servings,
@@ -656,6 +690,7 @@ export default defineEntity({
       "source",
       "yield",
       "servings",
+      "fieldResolutions",
       "tags",
       "notes",
       "sections",

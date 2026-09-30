@@ -73,12 +73,15 @@ public final class FieldSuggestionReviewModel {
         reviewedValues = Dictionary(uniqueKeysWithValues: keys.map { ($0, currentValue($0)) })
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        let basis: [String: String?] = try Dictionary(
+        var basis: [String: String?] = try Dictionary(
             uniqueKeysWithValues: reviewedValues.map { key, value in
                 if value == .null { return (key, nil) }
                 if let string = value.stringValue { return (key, string) }
                 return (key, String(decoding: try encoder.encode(value), as: UTF8.self))
             })
+        let patch = try editor.patch()
+        let draftFields = Set(patch.values.keys).union(patch.cleared).sorted()
+        basis["__draftFields"] = String(decoding: try encoder.encode(draftFields), as: UTF8.self)
         isLoading = true
         defer { if scope.accepts(next) { isLoading = false } }
         do {

@@ -585,7 +585,8 @@ struct EntityDetailContent: View {
                             LabeledContent("Code", value: row.id)
                             ForEach(descriptor.presentation.heroStats, id: \.self) { key in
                                 if let field = descriptor.field(key),
-                                    let value = EntityFieldValue.text(row.raw[key], field: field)
+                                    let value = EntityFieldValue.text(
+                                        in: row.raw, field: field, surface: "detail")
                                 {
                                     LabeledContent(field.label, value: value)
                                 }

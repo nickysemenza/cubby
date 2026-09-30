@@ -43,7 +43,6 @@ function transactionResponse({
         itemizationCoverage: "unknown",
         productsCoverage: "unknown",
         spendingCategoryName: null,
-        effectiveEvidenceExpectation: "unknown",
         coverage: {
           expectation: "unknown",
           booking: "missing",
