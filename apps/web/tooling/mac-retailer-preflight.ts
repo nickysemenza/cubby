@@ -99,7 +99,7 @@ try {
         "tooling/mac-retailer-preflight.ts",
       ],
       scenario:
-        "HTTPS retailer and unique signed browser setup only; native ingress not run",
+        "HTTPS retailer and stable Developer ID browser setup only; native ingress not run",
       fixture: "synthetic-black-crew-shirt",
       fixtureVersion: 1,
       build: {
@@ -114,7 +114,7 @@ try {
       ],
       cases: [
         {
-          name: "HTTPS certificate and unique signed fixture browser setup",
+          name: "HTTPS certificate and stable signed fixture browser setup",
           status: failure ? "failed" : "passed",
           durationMs: Math.round(performance.now() - started),
         },

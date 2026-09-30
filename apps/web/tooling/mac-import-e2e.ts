@@ -1,18 +1,20 @@
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  readlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout } from "node:timers/promises";
 import { request } from "@playwright/test";
 import { z } from "zod";
+import {
+  acquireMacFixtureLease,
+  assertMacFixturesIdle,
+  macFixtureBundleID,
+  macFixturePaths,
+  macFixtureSigningIdentity,
+  nativeBundleFingerprint,
+  prepareMacFixtureApp,
+} from "./mac-fixture-identity";
 import { createMacRetailerFixture } from "./mac-retailer-fixture";
 import { macImportOrder } from "./mac-import-orders";
 import type { createMacComposedScenario } from "./mac-import-composed-scenario";
@@ -63,8 +65,9 @@ assertSimulatorAdminUrl(adminURL);
 const databaseURL = adminURL.replace(/\/postgres$/u, `/${databaseName}`);
 const artifacts = path.join(repoRoot, "artifacts/mac-import-e2e", databaseName);
 mkdirSync(artifacts, { recursive: true });
-// Unique bundle identifier isolates UserDefaults, sandbox files and auth from the installed app.
-const bundleID = `com.nickysemenza.cubby.e2e.${nonce}`;
+// Stable fixture identity is distinct from the installed app; DEBUG launch configuration resets run state.
+const bundleID = macFixtureBundleID;
+const fixturePaths = macFixturePaths();
 const derivedData = path.join(
   repoRoot,
   "apps/apple/DerivedData/mac-import-e2e",
@@ -76,6 +79,7 @@ let phase = "setup";
 let binaryFingerprint: string | null = null;
 let cacheBinaryFingerprint: string | null = null;
 let sourceFingerprint: string | undefined;
+let signingTeam: string | undefined;
 let failure: Error | undefined;
 let interrupted = false;
 const milestones = {
@@ -93,6 +97,7 @@ const milestones = {
   retailerCommitted: false,
   composedGraphVerified: false,
 };
+let verifiedLaunchedPID: number | undefined;
 let activeChild: ReturnType<typeof spawn> | undefined;
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
@@ -103,9 +108,10 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 
-async function holdFailedFixture(fixtureUIReady: boolean): Promise<void> {
+async function holdFailedFixture(): Promise<void> {
   if (
-    !fixtureUIReady ||
+    !milestones.launched ||
+    verifiedLaunchedPID === undefined ||
     interrupted ||
     process.env.CUBBY_E2E_DIAGNOSTIC_HOLD !== "1"
   )
@@ -117,6 +123,8 @@ async function holdFailedFixture(fixtureUIReady: boolean): Promise<void> {
     JSON.stringify(
       {
         bundleID,
+        appPath,
+        ownedPID: verifiedLaunchedPID,
         session: driver.session,
         ownedFixture: true,
         timeoutSeconds: 180,
@@ -186,7 +194,7 @@ function installScenarioEnvironment(storageURL: string): () => void {
 
 function nativeSourceFingerprint(): string {
   const hash = createHash("sha256");
-  hash.update("native-inputs-v2\0");
+  hash.update("native-inputs-v2\0fixture-build:ENABLE_DEBUG_DYLIB=NO\0");
   for (const root of [
     "App",
     "CubbyKit/Sources",
@@ -217,28 +225,6 @@ function nativeSourceFingerprint(): string {
       `targets=${process.env.CUBBY_FFI_TARGETS ?? "all"}`,
     ]),
   );
-  return hash.digest("hex");
-}
-
-function nativeBundleFingerprint(directory: string): string {
-  const hash = createHash("sha256");
-  for (const entry of readdirSync(directory, { withFileTypes: true }).sort(
-    (a, b) => a.name.localeCompare(b.name),
-  )) {
-    if (entry.name === ".DS_Store") continue;
-    const file = path.join(directory, entry.name);
-    const kind = entry.isSymbolicLink()
-      ? "link"
-      : entry.isDirectory()
-        ? "directory"
-        : "file";
-    const content = entry.isSymbolicLink()
-      ? readlinkSync(file)
-      : entry.isDirectory()
-        ? nativeBundleFingerprint(file)
-        : createHash("sha256").update(readFileSync(file)).digest("hex");
-    hash.update(JSON.stringify([entry.name, kind, content]));
-  }
   return hash.digest("hex");
 }
 
@@ -280,18 +266,6 @@ async function reuseNativeBuild(reuseManifest: string): Promise<void> {
     ) + "\n",
   );
   driver.evidence.push(evidence);
-}
-
-async function stageNativeApp(): Promise<void> {
-  cacheBinaryFingerprint = nativeBundleFingerprint(appPath);
-  const fixtureAppPath = path.join(artifacts, "native-fixture/Cubby.app");
-  await run("ditto", [appPath, fixtureAppPath]);
-  appPath = fixtureAppPath;
-  await run("/usr/libexec/PlistBuddy", [
-    "-c",
-    `Set :CFBundleIdentifier ${bundleID}`,
-    path.join(appPath, "Contents/Info.plist"),
-  ]);
 }
 
 function composedCases() {
@@ -414,6 +388,9 @@ function saveArtifact(): void {
         app: "Cubby.app",
         bundleID,
         sandboxed: true,
+        signingTeam: signingTeam ?? "unselected",
+        certificateKind: "Developer ID Application",
+        debugDylib: false,
         sourceFingerprint: sourceFingerprint ?? "unbuilt",
         sourceFingerprintVersion: 2,
         binaryFingerprintFormat: "app-bundle-v1",
@@ -490,6 +467,13 @@ async function cleanupResources(input: {
   await admin.end();
 }
 
+function retainCleanupFailure(error: unknown): void {
+  const parsed = z.instanceof(Error).safeParse(error);
+  failure ??= parsed.success
+    ? parsed.data
+    : new Error("Non-Error Mac fixture cleanup failure");
+}
+
 async function main(): Promise<void> {
   const bootstrapEnvironment = { ...process.env };
   process.env.DATABASE_URL = databaseURL;
@@ -521,7 +505,33 @@ async function main(): Promise<void> {
         >
       >
     | undefined;
+  let fixtureLease: ReturnType<typeof acquireMacFixtureLease> | undefined;
   try {
+    phase = "fixture-identity-preflight";
+    fixtureLease = acquireMacFixtureLease(fixturePaths.root, nonce);
+    assertMacFixturesIdle();
+    const signingIdentity = macFixtureSigningIdentity(repoRoot);
+    signingTeam = signingIdentity.team;
+    const identityEvidence = path.join(
+      artifacts,
+      "fixture-identity-preflight.json",
+    );
+    writeFileSync(
+      identityEvidence,
+      JSON.stringify(
+        {
+          bundleID,
+          browserBundleID: "com.cubby.fixture.browser",
+          certificateKind: "Developer ID Application",
+          signingTeam,
+          serializedHostLease: true,
+          runningFixturesAbsent: true,
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+    driver.evidence.push(identityEvidence);
     phase = "web-build";
     await ensureWebBuild(
       repoRoot,
@@ -605,7 +615,10 @@ async function main(): Promise<void> {
     }
     if (browserMode) {
       phase = "browser-fixture";
-      retailer = await createMacRetailerFixture(artifacts, nonce);
+      retailer = await createMacRetailerFixture(artifacts, nonce, {
+        identity: signingIdentity,
+        lease: fixtureLease,
+      });
       const { createMacBrowserScenario } =
         await import("./mac-browser-import-scenario");
       browserScenario = await createMacBrowserScenario({
@@ -659,12 +672,12 @@ async function main(): Promise<void> {
         "-skipPackagePluginValidation",
         "COMPILER_INDEX_STORE_ENABLE=NO",
         "CODE_SIGNING_ALLOWED=NO",
+        "ENABLE_DEBUG_DYLIB=NO",
         `PRODUCT_BUNDLE_IDENTIFIER=${bundleID}`,
         "build",
       ]);
     }
     milestones.built = true;
-    await stageNativeApp();
     const entitlements = path.join(artifacts, "Cubby-e2e.entitlements");
     let fixtureEntitlements = readFileSync(
       path.join(repoRoot, "apps/apple/App/macOS/Cubby.entitlements"),
@@ -683,17 +696,20 @@ async function main(): Promise<void> {
         "",
       ),
     );
-    await run("codesign", [
-      "--force",
-      "--deep",
-      "--sign",
-      "-",
-      "--entitlements",
+    cacheBinaryFingerprint = nativeBundleFingerprint(appPath);
+    const prepared = prepareMacFixtureApp({
+      source: appPath,
+      target: fixturePaths.app,
+      bundleID,
+      identity: signingIdentity,
       entitlements,
-      appPath,
-    ]);
+    });
+    appPath = fixturePaths.app;
+    const signatureEvidence = path.join(artifacts, "native-signature.json");
+    writeFileSync(signatureEvidence, JSON.stringify(prepared, null, 2) + "\n");
+    driver.evidence.push(signatureEvidence);
     milestones.signed = true;
-    binaryFingerprint = nativeBundleFingerprint(appPath);
+    binaryFingerprint = prepared.signedFingerprint;
     phase = "native-launch";
     await run(
       "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
@@ -728,6 +744,7 @@ async function main(): Promise<void> {
       return matches[0];
     }
     const beforePID = launchedProcess();
+    verifiedLaunchedPID = beforePID;
     milestones.launched = true;
     const beforeEvidence = path.join(
       artifacts,
@@ -841,18 +858,24 @@ async function main(): Promise<void> {
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
     if (fixtureUIReady) await driver.screenshot("failure").catch(() => {});
-    await holdFailedFixture(fixtureUIReady);
+    await holdFailedFixture();
   } finally {
-    await cleanupResources({
-      opened,
-      browserScenario,
-      retailer,
-      harness,
-      storage,
-      restoreEnvironment,
-      created,
-      admin,
-    });
+    try {
+      await cleanupResources({
+        opened,
+        browserScenario,
+        retailer,
+        harness,
+        storage,
+        restoreEnvironment,
+        created,
+        admin,
+      });
+    } catch (error) {
+      retainCleanupFailure(error);
+    } finally {
+      fixtureLease?.release();
+    }
     saveArtifact();
   }
   if (failure) throw failure;

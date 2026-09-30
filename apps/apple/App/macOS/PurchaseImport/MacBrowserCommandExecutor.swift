@@ -68,10 +68,12 @@ final class MacBrowserCommandExecutor: BrowserCommandExecuting {
                 arguments.indices.contains(serverIndex + 1),
                 let server = URL(string: arguments[serverIndex + 1]),
                 ["127.0.0.1", "localhost", "::1"].contains(server.host ?? ""),
-                Bundle.main.bundleIdentifier?.hasPrefix("com.nickysemenza.cubby.e2e.") == true,
-                arguments[index + 1].range(
-                    of: "^com\\.cubby\\.fixture\\.browser\\.[a-f0-9]{16}$", options: .regularExpression)
-                    != nil
+                (Bundle.main.bundleIdentifier == "com.nickysemenza.cubby.e2e"
+                    || Bundle.main.bundleIdentifier?.hasPrefix("com.nickysemenza.cubby.e2e.") == true),
+                (arguments[index + 1] == "com.cubby.fixture.browser"
+                    || arguments[index + 1].range(
+                        of: "^com\\.cubby\\.fixture\\.browser\\.[a-f0-9]{16}$", options: .regularExpression)
+                        != nil)
             else { throw ExecutionFailure.invalidFixtureBrowser }
             return arguments[index + 1]
         #else

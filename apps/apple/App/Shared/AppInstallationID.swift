@@ -77,7 +77,12 @@ enum AppInstallationID {
     private static let browserKey = "purchaseImport.browserBridge.deviceID"
     private static let imageWorkerKey = "cubby.companionImageProcessing.deviceID"
 
-    static let current = current(in: .standard, store: KeychainInstallationIDStore())
+    static let current: UUID = {
+        #if DEBUG && os(macOS)
+            if CubbyApp.isMacImportFixture { return UUID() }
+        #endif
+        return current(in: .standard, store: KeychainInstallationIDStore())
+    }()
 
     static func current(in defaults: UserDefaults, store: any InstallationIDStore) -> UUID {
         let keychainID: UUID?
