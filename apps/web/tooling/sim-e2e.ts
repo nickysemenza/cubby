@@ -33,6 +33,7 @@ const flags = process.argv.slice(2).filter((argument) => argument !== "--");
 const headless = flags.includes("--headless");
 const photo = flags.includes("--photo");
 const purchase = flags.includes("--purchase");
+const statementCsv = flags.includes("--statement-csv");
 const watch = flags.includes("--watch");
 const video = flags.includes("--video");
 const layout = flags.includes("--layout");
@@ -42,6 +43,7 @@ if (
   (layout && (headless || photo || purchase || watch)) ||
   (photo && (!headless || watch)) ||
   (purchase && !photo) ||
+  (statementCsv && (!headless || photo || purchase || watch)) ||
   flags.some(
     (argument) =>
       ![
@@ -51,23 +53,26 @@ if (
         "--photo",
         "--purchase",
         "--layout",
+        "--statement-csv",
       ].includes(argument),
   )
 )
   throw new Error(
-    "Usage: sim-e2e.ts [--video | --layout [--video] | --watch | --headless [--watch | --photo [--purchase]]]",
+    "Usage: sim-e2e.ts [--video | --layout [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
   );
-const lane = layout
-  ? "sim-layout-e2e"
-  : purchase
-    ? "headless-wardrobe-e2e"
-    : photo
-      ? "headless-photo-e2e"
-      : headless
-        ? "headless-e2e"
-        : watch
-          ? "sim-dev"
-          : "sim-e2e";
+const lane = statementCsv
+  ? "headless-statement-csv-e2e"
+  : layout
+    ? "sim-layout-e2e"
+    : purchase
+      ? "headless-wardrobe-e2e"
+      : photo
+        ? "headless-photo-e2e"
+        : headless
+          ? "headless-e2e"
+          : watch
+            ? "sim-dev"
+            : "sim-e2e";
 // Database bootstrap validates the caller's environment before simulation-only overrides.
 const bootstrapEnvironment = { ...process.env };
 for (const [key, value] of Object.entries({
@@ -94,6 +99,7 @@ let nativeBuildBinary: string | undefined;
 let nativeBuildSourceVersion: string | undefined;
 let currentNativeSourceVersion: (() => string) | undefined;
 let nativeBuildReady = false;
+const scenarioEvidence: string[] = [];
 let xcodebuildVersion: string | undefined;
 let simulatorName: string | undefined;
 let simulatorRuntime: string | undefined;
@@ -1077,6 +1083,31 @@ async function runHeadlessProductScenario(
   }
 }
 
+async function runHeadlessStatementCsvScenario(url: URL, userId: string) {
+  nativeBuildSourceVersion = nativeSourceFingerprint(false);
+  currentNativeSourceVersion = () => nativeSourceFingerprint(false);
+  // Build output stays in the runner log; each scenario invocation needs JSON-only stdout.
+  await run("pnpm", ["apple", "cli", "version"]);
+  nativeBuildBinary = path.join(kitRoot, ".build/debug/cubby");
+  nativeBuildReady = true;
+  const binary = nativeBuildBinary;
+  const pool = new Pool({ connectionString: databaseURL });
+  try {
+    const { runSwiftStatementCsvScenario } =
+      await import("./scenarios/swift-statement-csv");
+    const evidence = await runSwiftStatementCsvScenario({
+      pool,
+      origin: url.origin,
+      artifacts,
+      userId,
+      runNative: (args, outputPath) => run(binary, args, repoRoot, outputPath),
+    });
+    scenarioEvidence.push(evidence);
+  } finally {
+    await pool.end();
+  }
+}
+
 function nativeBuildMetadata() {
   const web = readWebBuildProvenance(repoRoot);
   const fingerprint =
@@ -1127,18 +1158,20 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
     const manifest = writeE2ERunBundle({
       repoRoot,
       outputDir: artifacts,
-      evidence: [resultsPath],
+      evidence: [resultsPath, ...scenarioEvidence],
       kind: "native",
       status,
       command: ["pnpm", "test:e2e:sim", "--", ...flags],
       cases: [{ name: lane, status, durationMs }],
       profile: "worker",
       scenario: lane,
-      fixture: layout
-        ? "synthetic-layout"
-        : photo
-          ? "synthetic-wardrobe"
-          : "synthetic-product",
+      fixture: statementCsv
+        ? "synthetic-statement-csv"
+        : layout
+          ? "synthetic-layout"
+          : photo
+            ? "synthetic-wardrobe"
+            : "synthetic-product",
       fixtureVersion: 1,
       phase,
       phases,
@@ -1172,7 +1205,10 @@ async function seedNativeScenario(userId: string): Promise<{
     } = await import("./scenarios/simulator");
     await seedSimulatorPhotoActor(seedPool, userId);
     return {
-      productId: photo ? "" : await seedSimulatorScenario(seedPool, userId),
+      productId:
+        photo || statementCsv
+          ? ""
+          : await seedSimulatorScenario(seedPool, userId),
       layoutRunID: layout
         ? await seedSimulatorLayoutRun(seedPool, userId)
         : undefined,
@@ -1374,7 +1410,9 @@ async function main(): Promise<void> {
     });
     const scenarioStarted = performance.now();
     if (headless) {
-      if (photo) {
+      if (statementCsv) {
+        await runHeadlessStatementCsvScenario(url, userId);
+      } else if (photo) {
         await runHeadlessPhotoScenario(url, objectStorage.url, userId);
         if (purchase) {
           const { runWardrobeConvergenceScenario } =

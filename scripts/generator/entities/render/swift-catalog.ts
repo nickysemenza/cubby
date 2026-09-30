@@ -342,6 +342,7 @@ const fieldControlJSON = (
   controlSection: control?.section ?? null,
   controlWidth: control?.width ?? null,
   controlOptions: options(control?.options ?? null),
+  suggestion: control?.suggest ?? null,
   placeholder: control?.placeholder ?? null,
   initial: control?.initial ?? null,
 });

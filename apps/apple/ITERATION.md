@@ -17,6 +17,13 @@ booted and the relevant build artifacts warm while working on one feature.
 | Device-only behavior (camera, permissions, performance, installed app) | `pnpm apple ios` on a paired iPhone                                                                | Real device behavior; use Xcode/agent-device for interaction and diagnostics.                                             |
 | Mac-specific UI                                                        | `pnpm apple mac` and Mac previews/tests                                                            | The native macOS shell and window behavior.                                                                               |
 
+Run `pnpm test:e2e:sim -- --headless --statement-csv` for Swift CSV file preview
+and reviewed import through generated OpenAPI calls. The disposable Worker
+journey checks physical occurrences, exact retry, ambiguous date matches,
+canonical charge preservation, and no implicit Expense or stock creation. Its
+sanitized results and replay command are checksummed under
+`artifacts/headless-statement-csv-e2e/`.
+
 ## Recommended loop
 
 1. Edit a `CubbyKit` algorithm or model and run its focused Swift test. For a

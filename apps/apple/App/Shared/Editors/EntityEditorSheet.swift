@@ -20,6 +20,8 @@ struct EntityEditorSheet: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     @State private var model: GenericEntityEditModel?
+    @State private var suggestions: FieldSuggestionReviewModel?
+    @State private var initializedIdentity: EditorIdentity?
     @State private var initialDraft: [String: JSONValue] = [:]
     @State private var selections: [PhotoSelectionItem] = []
     @State private var pickedTitles: [String: String] = [:]
@@ -28,7 +30,13 @@ struct EntityEditorSheet: View {
     @State private var draftDismissal = DraftDismissalState()
     @State private var saveTask: Task<Void, Never>?
 
+    private struct EditorIdentity: Hashable {
+        let key: EntityKey
+        let mode: GenericEntityEditModel.Mode
+    }
+
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
+    private var editorIdentity: EditorIdentity { EditorIdentity(key: key, mode: mode) }
 
     private var isCreate: Bool {
         if case .create = mode { return true }
@@ -86,8 +94,11 @@ struct EntityEditorSheet: View {
             $draftDismissal, isDirty: isDirty, isSaving: isSaving,
             onDiscard: { dismiss() }
         )
-        .onDisappear { saveTask?.cancel() }
-        .task { await setup() }
+        .onDisappear {
+            saveTask?.cancel()
+            suggestions?.invalidate()
+        }
+        .task(id: editorIdentity) { await setup() }
     }
 
     private var title: String {
@@ -97,7 +108,9 @@ struct EntityEditorSheet: View {
         }
     }
 
-    private var isSaving: Bool { isUploading || (model?.isSaving ?? false) }
+    private var isSaving: Bool {
+        isUploading || (model?.isSaving ?? false) || (suggestions?.isApplying ?? false)
+    }
 
     private var isDirty: Bool {
         guard let model else { return false }
@@ -139,6 +152,14 @@ struct EntityEditorSheet: View {
                             }
                         }
                     }
+                }
+            }
+            if let suggestions, !suggestions.fields.isEmpty {
+                EntityFieldSuggestionSection(review: suggestions, pickedTitles: pickedTitles) {
+                    field, value, label in
+                    initialDraft[field] = value
+                    if let id = value.stringValue, let label { pickedTitles[id] = label }
+                    appModel.recordEntityMutation(keys: [.financialTransaction, .purchase, .expense])
                 }
             }
             if descriptor.acceptsImages {
@@ -189,13 +210,30 @@ struct EntityEditorSheet: View {
     }
 
     private func setup() async {
-        guard model == nil else { return }
+        if initializedIdentity == editorIdentity, let model {
+            suggestions = suggestionReview(for: model)
+            return
+        }
+        suggestions?.invalidate()
+        initializedIdentity = editorIdentity
+        selections = []
+        pickedTitles = [:]
+        let identity = editorIdentity
         let created = GenericEntityEditModel(
             descriptor: descriptor, mode: mode, client: appModel.client, original: original)
         model = created
         await created.load()
+        guard !Task.isCancelled, initializedIdentity == identity, model === created else { return }
         initialDraft = created.draft
         seedPickedTitles(created)
+        suggestions = suggestionReview(for: created)
+    }
+
+    private func suggestionReview(for model: GenericEntityEditModel) -> FieldSuggestionReviewModel {
+        let client = appModel.client
+        return FieldSuggestionReviewModel(
+            editor: model, fetch: { try await client.suggestFieldsReview($0) },
+            saveCategory: { try await client.applyFinanceCategorySuggestion($0) })
     }
 
     /// Names the server projected beside reference ids (`<stem>Name` / `<stem>.name`), so an
