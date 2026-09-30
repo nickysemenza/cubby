@@ -125,6 +125,7 @@ export async function createMacBrowserScenario(input: Input) {
       return result(operationId);
     }
     return {
+      context: { db, kernel, member, vendor, account, run },
       evidence: browserDriver.evidence,
       async run(appDriver: MacImportDriver) {
         const deadline = Date.now() + 30_000;
@@ -188,6 +189,24 @@ export async function createMacBrowserScenario(input: Input) {
             "Actual Mac order capture is missing the exact shirt variant",
           );
         results.push({ stage: "order capture", state: order.state });
+        const product = await capture(
+          "mac:product",
+          `${input.retailer.origin}/products/black-crew-shirt`,
+        );
+        if (
+          product.state !== "completed" ||
+          product.result.outcome.status !== "completed" ||
+          !product.result.outcome.capture?.readableText.includes(
+            "00012345678905",
+          )
+        )
+          throw new Error(
+            "Actual Mac exact product capture is missing GTIN evidence",
+          );
+        const orderCapture = order.result.outcome.capture;
+        const productCapture = product.result.outcome.capture;
+        if (!orderCapture || !productCapture)
+          throw new Error("Actual browser captures are unavailable");
         const evidence = path.join(
           input.artifacts,
           "native-browser-results.json",
@@ -205,6 +224,7 @@ export async function createMacBrowserScenario(input: Input) {
           ) + "\n",
         );
         appDriver.evidence.push(evidence);
+        return { orderCapture, productCapture };
       },
       async close() {
         await browserDriver.close().catch(() => {});

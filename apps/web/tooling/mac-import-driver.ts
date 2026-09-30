@@ -10,6 +10,7 @@ const nodeSchema = z.object({
   index: z.number(),
   type: z.string().nullish(),
   role: z.string().nullish(),
+  subrole: z.string().nullish(),
   label: z.string().nullish(),
   value: z.string().nullish(),
   identifier: z.string().nullish(),
@@ -185,6 +186,10 @@ export class MacImportDriver {
           case "text":
           case "label":
             return node.label === value || node.value === value;
+          case "contains":
+            return Boolean(
+              (node.label ?? node.value ?? "").includes(value ?? ""),
+            );
           case "role":
             return (
               role(node) === value?.replaceAll("-", "").toLowerCase() ||
@@ -230,6 +235,23 @@ export class MacImportDriver {
       y = node.rect.y + node.rect.height / 2;
     if (!Number.isFinite(x) || !Number.isFinite(y))
       throw new Error("Native target has invalid bounds");
+    const hit = this.invoke(
+      [
+        "read",
+        "--x",
+        String(x),
+        "--y",
+        String(y),
+        "--bundle-id",
+        this.bundleID!,
+      ],
+      z.object({ text: z.string() }),
+    );
+    this.record(
+      ["owned-point", selector],
+      0,
+      JSON.stringify({ x, y, text: hit.text, ownedPID: this.pid }),
+    );
     this.invoke(
       [
         "press",
@@ -245,15 +267,31 @@ export class MacImportDriver {
     return this.observe(surface);
   }
 
-  private keyboard(text: string, replace: boolean): string {
+  private keyboard(text: string, replace: boolean, picker = false): string {
     this.observe();
-    if (
-      !this.nodes.some((node) => role(node) === "sheet") &&
-      !this.nodes.some(
+    const filePicker =
+      this.nodes.some((node) => role(node) === "sheet") &&
+      this.nodes.some(
         (node) => node.label === "Open" && role(node) === "button",
-      )
-    )
-      throw new Error("Native keyboard entry requires the owned file picker");
+      );
+    const entityPicker =
+      this.nodes.some((node) =>
+        [
+          "choose vendor",
+          "choose purchase",
+          "choose spending category",
+        ].includes((node.label ?? "").toLowerCase()),
+      ) &&
+      this.nodes.some(
+        (node) =>
+          role(node) === "searchfield" || node.subrole === "AXSearchField",
+      );
+    if (!(picker ? entityPicker : filePicker))
+      throw new Error(
+        picker
+          ? "Native text entry requires the owned booking picker"
+          : "Native keyboard entry requires the owned file picker",
+      );
     this.guardForeground();
     const script =
       text === "\n"
@@ -277,6 +315,37 @@ export class MacImportDriver {
           break;
         case "type":
           output = this.keyboard(args[1]!, false);
+          break;
+        case "picker-search":
+          this.press("role=SearchField editable=true");
+          output = this.keyboard(args[1]!, true, true);
+          break;
+        case "select-files":
+          this.observe();
+          if (
+            !this.nodes.some(
+              (node) => node.label === "Open" && role(node) === "button",
+            ) ||
+            !this.nodes.some((node) =>
+              (node.label ?? "").includes("synthetic-shirt.png"),
+            ) ||
+            !this.nodes.some((node) =>
+              (node.label ?? "").includes("synthetic-label.png"),
+            )
+          )
+            throw new Error(
+              "Expected the owned two-image fixture directory in NSOpenPanel",
+            );
+          this.guardForeground();
+          execFileSync(
+            "osascript",
+            [
+              "-e",
+              'tell application "System Events" to keystroke "a" using command down',
+            ],
+            { timeout: 10000 },
+          );
+          output = this.observe();
           break;
         case "fill":
           this.press(args[1]!);
@@ -409,10 +478,55 @@ export class MacImportDriver {
     await this.chooseFile(file);
     await this.wait("id=statement.csv.confirm");
   }
-  async addPhotoToImportRun(file: string): Promise<void> {
+  async openEntity(code: string, appPath: string): Promise<void> {
+    if (!/^[A-Z]+-[A-Z0-9]+$/.test(code))
+      throw new Error("Invalid fixture entity deep link");
+    this.guardForeground();
+    const before = execFileSync(
+      "ps",
+      ["-p", String(this.pid), "-o", "command="],
+      { encoding: "utf8" },
+    );
+    if (
+      !before.startsWith(`${appPath}/Contents/MacOS/Cubby `) ||
+      !before.includes("--cubby-e2e-server http://127.0.0.1:")
+    )
+      throw new Error(
+        "Fixture deep link requires preserved app launch arguments",
+      );
+    execFileSync("open", ["-a", appPath, `cubby://entity/${code}`], {
+      timeout: 10000,
+    });
+    this.guardForeground();
+    const after = execFileSync(
+      "ps",
+      ["-p", String(this.pid), "-o", "command="],
+      { encoding: "utf8" },
+    );
+    if (before !== after)
+      throw new Error(
+        "Fixture deep link changed the owned app process arguments",
+      );
+    this.record(["production-deep-link", code], 0, await this.snapshot());
+  }
+  async pickBookingEntity(control: string, title: string): Promise<void> {
+    await this.click(`id=${control}`);
+    await this.action(["picker-search", title]);
+    await this.wait(`contains="${title}" role=Button`);
+    await this.click(`contains="${title}" role=Button`);
+  }
+  async addPhotosToImportRun(directory: string): Promise<void> {
     await this.clickSidebar("Photos");
     await this.click("id=photo.source.files");
-    await this.chooseFile(file);
+    await this.wait('label="Open" role=Button');
+    await this.action(["type", "/"]);
+    await this.wait("role=TextField editable=true");
+    await this.action(["fill", "role=TextField editable=true", directory]);
+    await this.action(["type", "\n"]);
+    await this.wait('contains="synthetic-shirt.png"');
+    await this.action(["select-files"]);
+    await this.click('label="Open" role=Button');
+    await this.wait('label="Add to import run…"');
     await this.click('label="Add to import run…"');
     await this.wait("id=photos.run.startNew");
     await this.click("id=photos.run.startNew");
