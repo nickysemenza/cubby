@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { entityListEnrichmentOutputSchema } from "./generated/entity-lists.gen";
 import { compileListReadSchema } from "./list-read-schema";
 
 describe("list field ownership", () => {
@@ -45,4 +46,48 @@ describe("list field ownership", () => {
       ),
     ).toThrow("cycle");
   });
+});
+
+// Partial full-row schemas must not default core fields into unrelated patches.
+it("enrichment wire parsing keeps group ownership and explicit nullable values", () => {
+  const input = {
+    entity: "financialTransaction",
+    missingIds: [],
+    groups: [
+      { id: "media", state: "ready", data: [{ id: "FTX-4K7M" }] },
+      {
+        id: "relations",
+        state: "ready",
+        data: [{ id: "FTX-4K7M", ledgerTransferId: null }],
+      },
+      {
+        id: "derived",
+        state: "ready",
+        data: [{ id: "FTX-4K7M", itemization: "bare" }],
+      },
+    ],
+  };
+  const parsed = entityListEnrichmentOutputSchema.parse(input);
+  for (const group of parsed.groups) {
+    if (group.state !== "ready") throw new Error("Expected ready enrichment");
+    expect(group.data[0]).not.toHaveProperty("spendingCategoryId");
+    expect(group.data[0]).not.toHaveProperty("evidenceExpectation");
+  }
+  expect(parsed.groups[1]).toMatchObject({
+    id: "relations",
+    state: "ready",
+    data: [{ id: "FTX-4K7M", ledgerTransferId: null }],
+  });
+  expect(
+    entityListEnrichmentOutputSchema.safeParse({
+      ...input,
+      groups: [
+        {
+          id: "relations",
+          state: "ready",
+          data: [{ id: "FTX-4K7M", ledgerTransferId: 7 }],
+        },
+      ],
+    }).success,
+  ).toBe(false);
 });
