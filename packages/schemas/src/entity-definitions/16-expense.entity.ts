@@ -152,7 +152,13 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "spendingCategory" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: {
+            basis: ["name", "vendor", "productId", "notes", "lineKind"],
+          },
+        },
         display: { list: true, detail: true },
         resolution: {
           reset: { spendingCategoryId: null },

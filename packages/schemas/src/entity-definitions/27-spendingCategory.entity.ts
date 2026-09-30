@@ -57,6 +57,7 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
+          suggest: { basis: ["name", "parentId"] },
           options: [
             { value: "unknown", label: "Unclassified" },
             { value: "required", label: "Expected" },
@@ -75,6 +76,7 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
+          suggest: { basis: ["name", "parentId"] },
           options: [
             { value: "unknown", label: "Unclassified" },
             { value: "required", label: "Expected" },

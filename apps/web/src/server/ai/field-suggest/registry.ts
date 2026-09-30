@@ -27,6 +27,7 @@ import {
   mealKindValues,
   mealTypeValues,
 } from "@cubby/schemas/meal-classification";
+import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import {
   type ProductCategoryFeature,
   productCategoryFeatureValues,
@@ -41,6 +42,14 @@ import {
   type ProjectKind,
   projectKindValues,
 } from "@cubby/schemas/project-fields";
+import {
+  evidenceExpectationValues,
+  type EvidenceExpectation,
+} from "@cubby/schemas/purchase-evidence-policy";
+import {
+  spendingCategoryFilters,
+  type SpendingCategoryOut,
+} from "@cubby/schemas/spending-category";
 import { isCollectionTag } from "@cubby/shared/collection-tag";
 import {
   redundantTokens,
@@ -79,6 +88,7 @@ import {
 } from "~/server/repo/product-category";
 import { projectNameOptions } from "~/server/repo/project/lookup";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { listSpendingCategories } from "~/server/repo/spending-category";
 import { vendorOptions } from "~/server/repo/vendor";
 import { locationSuggestionSpec } from "~/server/services/ai-enrichment/location-suggest";
 import {
@@ -365,7 +375,107 @@ function pruneCandidates(raw: RawBasis, arrayKey: string): readonly string[] {
 const productTagPruneSubject = (basis: ResolvedBasis, value: string): string =>
   `${renderSubject("product", basis)}\nCandidate tag: "${value}"`;
 
+type SpendingCategoryCandidate = SpendingCategoryOut & { path: string };
+
+async function spendingCategoryRoster(
+  db: Database,
+): Promise<SpendingCategoryCandidate[]> {
+  const rows: SpendingCategoryOut[] = [];
+  for (let pageIndex = 0; ; pageIndex++) {
+    const page = await listSpendingCategories(
+      db,
+      spendingCategoryFilters.parse({}),
+      [{ orderBy: "name", direction: "asc" }],
+      { pageIndex, pageSize: MAX_PAGE_SIZE },
+    );
+    rows.push(...page.data);
+    if (rows.length >= page.count || page.data.length === 0) break;
+  }
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return rows.map((row) => {
+    const names = [row.name];
+    const seen = new Set([row.id]);
+    let parentId = row.parentId;
+    while (parentId !== null && !seen.has(parentId)) {
+      seen.add(parentId);
+      const parent = byId.get(parentId);
+      if (!parent) break;
+      names.unshift(parent.name);
+      parentId = parent.parentId;
+    }
+    return { ...row, path: names.join(" > ") };
+  });
+}
+
+function spendingCategorySpec(
+  entity: "financialTransaction" | "purchase" | "expense",
+): ReferenceSuggestSpec<SpendingCategoryCandidate> {
+  return {
+    kind: "reference",
+    entity: "spendingCategory",
+    maxCandidates: Number.MAX_SAFE_INTEGER,
+    rules:
+      "Choose the most specific existing spending category supported by the transaction or purchase evidence. Compare the full tree and parent names. The imported bank/CSV Source Category is a clue, not an authoritative household category. Never create or invent categories. Choose none when the roster or evidence does not support a choice. Return a reviewed proposal only; preserve any explicit category until the user applies a change.",
+    roster: spendingCategoryRoster,
+    idOf: (c) => c.id,
+    labelOf: (c) => c.name,
+    detailOf: (c) => c.path,
+    renderLine: (c) => `${c.id} | ${c.path}`,
+    parentIdOf: (c) => c.parentId,
+    subject: (basis) => renderSubject(entity, basis),
+  };
+}
+
+function expectationSpec(
+  entity: "vendor" | "purchase" | "financialTransaction" | "spendingCategory",
+  products = false,
+): EnumSuggestSpec<EvidenceExpectation> {
+  return {
+    kind: "enum",
+    values: evidenceExpectationValues,
+    labelOf: (value) =>
+      ({
+        unknown: "Unclassified",
+        required: "Expected",
+        not_expected: "Not expected",
+      })[value],
+    describe: (value) =>
+      products
+        ? {
+            unknown: "Insufficient evidence for durable Product records",
+            required: "Durable purchased goods should have Product records",
+            not_expected:
+              "Services, meals, groceries, reimbursements or other non-durable spending do not require Product records",
+          }[value]
+        : {
+            unknown:
+              "Insufficient or mixed evidence; leave receipt expectation unclassified",
+            required: "Household expects a receipt or order evidence",
+            not_expected: "Household does not expect receipt or order evidence",
+          }[value],
+    rules: products
+      ? "Suggest Product expectation independently from receipt expectation using the spending category and parent context. Durable goods such as tools, furniture and clothing require Product records. Restaurant meals, groceries, services and friend reimbursements do not. A mixed or unclear category must remain unknown. Do not infer that every receipted purchase requires Products. Return a reviewed proposal only; never overwrite explicit decisions."
+      : "Suggest the household's receipt/order evidence expectation, not whether a merchant is capable of issuing receipts. Amazon and Home Depot purchases are expected (required). Restaurant meals, BiRite groceries and friend reimbursements are not_expected. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Missing receipt evidence alone never means not_expected. Return a reviewed proposal only; never overwrite explicit decisions.",
+    subject: (basis) => renderSubject(entity, basis),
+  };
+}
+
 export const FIELD_SUGGEST_REGISTRY = {
+  "financialTransaction.spendingCategoryId": spendingCategorySpec(
+    "financialTransaction",
+  ),
+  "purchase.spendingCategoryId": spendingCategorySpec("purchase"),
+  "expense.spendingCategoryId": spendingCategorySpec("expense"),
+  "vendor.evidenceExpectation": expectationSpec("vendor"),
+  "purchase.evidenceExpectation": expectationSpec("purchase"),
+  "financialTransaction.evidenceExpectation": expectationSpec(
+    "financialTransaction",
+  ),
+  "spendingCategory.evidenceExpectation": expectationSpec("spendingCategory"),
+  "spendingCategory.productExpectation": expectationSpec(
+    "spendingCategory",
+    true,
+  ),
   "planting.status": {
     kind: "enum",
     values: plantingStatus.options,

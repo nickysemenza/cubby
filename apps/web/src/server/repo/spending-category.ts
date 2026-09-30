@@ -68,6 +68,7 @@ const listRead = (
     { hydrate: (rows, selected) => hydrate(db, rows, selected) },
   );
 const list = completeListReader(spendingCategoryOut, listRead);
+export const listSpendingCategories = list;
 const crud = createEntityCrud({
   table: spendingCategory,
   entity: "spendingCategory",
