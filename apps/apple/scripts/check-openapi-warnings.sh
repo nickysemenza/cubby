@@ -10,7 +10,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 KIT="$ROOT/apps/apple/CubbyKit"
 API="$KIT/Sources/CubbyAPI"
 
-swift build --package-path "$KIT" --force-resolved-versions --product swift-openapi-generator >/dev/null
+swift build --package-path "$KIT" --force-resolved-versions --disable-index-store --product swift-openapi-generator >/dev/null
 BIN="$(swift build --package-path "$KIT" --show-bin-path)/swift-openapi-generator"
 
 OUT="$(mktemp -d)"

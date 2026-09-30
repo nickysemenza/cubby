@@ -111,7 +111,12 @@ retained boundaries are:
   worktrees was rejected because intermediates encode absolute source paths
   and concurrent builds contend for one build database. A shared clone
   directory reduced disk use but did not improve build time reliably; a shared
-  compilation cache likewise stayed within measurement noise.
+  compilation cache likewise stayed within measurement noise. XcodeGen now
+  places GUI DerivedData under `apps/apple/DerivedData/Cubby` so its lifetime
+  follows the checkout rather than leaving a global orphan. Command-line app
+  outputs retain `apps/apple/DerivedData`; they do not reuse the GUI build graph.
+  Local SwiftPM build/test and OpenAPI warning checks disable indexing, as
+  hosted package tests already do. Xcode GUI indexing remains available.
 
 These measurements came from an 8-core ARM Mac under varying load. They are
 comparative evidence for the retained choices, not setup-time promises.
