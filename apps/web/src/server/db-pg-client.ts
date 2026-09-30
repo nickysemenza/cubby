@@ -1,3 +1,5 @@
+import type { EventEmitter } from "node:events";
+
 import pg from "pg";
 import { z } from "zod";
 
@@ -56,7 +58,7 @@ const observeConnectionSetup = (
     phaseStartedAt = performance.now();
   };
   const listen = (
-    emitter: pg.Connection | pg.Connection["stream"],
+    emitter: EventEmitter,
     event: string,
     listener: () => void,
   ) => {
