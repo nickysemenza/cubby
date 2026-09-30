@@ -588,6 +588,14 @@ NULL`, the embedding text hash, the AI fingerprint cache), so duplicate,
   snapshot refreshed behind a read once a mutation marks it dirty; abandoned
   uploads are culled on the next presign.
 - **Worker tracing** runs through Cloudflare platform spans; local telemetry is opt-in.
+  `db.client.connect` records `db.connect.phase.{socket,startup,authentication,ready}.duration_ms`:
+  socket setup, socket-ready to authentication challenge (or acceptance), challenge to
+  authentication acceptance, and acceptance to `ReadyForQuery`. Each phase has a
+  `complete` flag; failed attempts retain the unfinished duration and last milestone.
+  Milestone `elapsed_ms` attributes include SASL continuation/final messages and optional
+  TLS readiness. `ssl_stream_created` is not TLS completion. These driver boundaries
+  include scheduling waits and do not identify Neon wake-up or Hyperdrive pool internals;
+  Worker elapsed clocks also omit synchronous CPU, so consult request CPU separately.
 - Secrets via `wrangler secret put BETTER_AUTH_SECRET` (etc.) — see `wrangler.jsonc` for the full list.
 
 ## 🔐 Authentication
