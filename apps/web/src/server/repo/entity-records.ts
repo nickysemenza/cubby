@@ -30,29 +30,52 @@ const privateRowSchema = entityRecordSchema
     quality: z.coerce.number().min(0).max(100).nullable(),
   });
 
-/** SQL projects the complete roster before filtering, ordering, or paging. */
-export async function listEntityRecords(
-  db: Database,
-  input: EntityRecordsInput,
-) {
+/** Compute costly display fields before paging only when query semantics need them. */
+export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
   const kinds = shortcodeEntities.filter(
     (kind) => !input.kind || kind === input.kind,
   );
-  if (kinds.length === 0) return { items: [], totalCount: 0 };
+  if (kinds.length === 0)
+    return sql`SELECT 0 AS "totalCount", '[]'::json AS items`;
+  const earlyName = Boolean(input.q) || input.orderBy === "name";
+  const earlyQuality =
+    input.orderBy === "quality" ||
+    input.qualityMin !== undefined ||
+    input.qualityMax !== undefined;
+  const earlyImage = input.orderBy === "hasImage" || Boolean(input.image);
+  const qualityFor = (kind: Entity) =>
+    scored(kind) ? scoreSql(kind, entryFor(kind).table) : sql`NULL::numeric`;
+  const pageBranches: SQL[] = [];
   const branches = kinds.map((kind) => {
     const table = entityManifest[kind].dbTable;
     if (!table)
       throw new Error(`Shortcode entity ${kind} has no payload table`);
     const payload = sql.identifier(table);
     const id = sql`${payload}."id"`;
-    const quality = scored(kind)
-      ? scoreSql(kind, entryFor(kind).table)
-      : sql`NULL::numeric`;
+    const fields = {
+      name: sql`${labelSql(kind, `"${table}"`)} AS name`,
+      quality: sql`${qualityFor(kind)} AS quality`,
+      image: sql`${entityDisplayImagePresenceSql(kind, id)} AS "hasImage"`,
+    };
+    const early: SQL[] = [];
+    const late: SQL[] = [];
+    for (const [field, needed] of [
+      [fields.name, earlyName],
+      [fields.quality, earlyQuality],
+      [fields.image, earlyImage],
+    ] as const) {
+      (needed ? early : late).push(sql`, ${field}`);
+    }
+    if (late.length)
+      pageBranches.push(sql`
+        SELECT page.* ${sql.join(late, sql``)}
+        FROM page JOIN ${payload} ON ${id} = page."dbId"::uuid
+        WHERE page.kind = ${kind}
+      `);
     return sql`
       SELECT identity.id::text AS "dbId", identity.shortcode AS id,
-        identity.kind, ${labelSql(kind, `"${table}"`)} AS name,
-        ${quality} AS quality, ${entityDisplayImagePresenceSql(kind, id)} AS "hasImage",
-        identity."createdAt", ${payload}."updatedAt"
+        identity.kind, identity."createdAt", ${payload}."updatedAt"
+        ${sql.join(early, sql``)}
       FROM "Entity" identity JOIN ${payload} ON ${id} = identity.id
       WHERE identity.kind = ${kind} AND identity."deletedAt" IS NULL
         AND identity."mergedIntoId" IS NULL AND ${payload}."deletedAt" IS NULL
@@ -85,16 +108,24 @@ export async function listEntityRecords(
   const order = sql.identifier(input.orderBy);
   const direction = input.direction === "asc" ? sql`ASC` : sql`DESC`;
   // One snapshot supplies both rows and count, including empty/out-of-range pages.
-  const result = await unwrapDb(db).execute(sql`
+  return sql`
     WITH roster AS (${sql.join(branches, sql` UNION ALL `)}),
     filtered AS (SELECT * FROM roster ${where}),
-    page AS (
+    page AS MATERIALIZED (
       SELECT * FROM filtered ORDER BY ${order} ${direction} NULLS LAST, id ASC
       LIMIT ${input.pageSize} OFFSET ${(input.page - 1) * input.pageSize}
-    )
+    ),
+    enriched AS (${pageBranches.length ? sql.join(pageBranches, sql` UNION ALL `) : sql`SELECT * FROM page`})
     SELECT (SELECT count(*)::int FROM filtered) AS "totalCount",
-      COALESCE((SELECT json_agg(page ORDER BY ${order} ${direction} NULLS LAST, id ASC) FROM page), '[]'::json) AS items
-  `);
+      COALESCE((SELECT json_agg(enriched ORDER BY ${order} ${direction} NULLS LAST, id ASC) FROM enriched), '[]'::json) AS items
+  `;
+}
+
+export async function listEntityRecords(
+  db: Database,
+  input: EntityRecordsInput,
+) {
+  const result = await unwrapDb(db).execute(buildEntityRecordsQuery(input));
   const parsed = z
     .object({
       totalCount: z.coerce.number().int().nonnegative(),
