@@ -8,7 +8,7 @@ pnpm --dir apps/web exec tsx tooling/mac-import-e2e.ts
 
 The runner builds the real `Cubby-macOS` Debug app, stages it at a unique artifact path, signs it with sandbox/file/network/browser entitlements and a unique fixture bundle identifier, and registers that exact path before launch against a disposable local Worker, object-storage service and `cubby_sim_*` database. A synthetic member signs in through the normal auth endpoints. The installed `agent-device` native macOS helper activates the verified running fixture PID, selects the synthetic Monarch CSV through the native file picker, reviews the charge, approves it, and verifies the Saved screen. SQL readback asserts two source rows and one transaction after the UI action.
 
-The driver uses native AX snapshots and finite CGEvent coordinates against the exact bundle and launched PID. It never asks XCTest to open or relaunch the app. Each action retains its observed state; launch evidence verifies the same process and fixture arguments before and after adapter binding. System Events types only into the owned native file picker, after the native helper confirms foreground ownership. Screenshots capture only that process’s window. The manifest includes the helper binary SHA-256.
+The driver uses native AX snapshots and finite CGEvent coordinates against the exact bundle and launched PID. AppKit activates the verified PID directly without sending the app an AppleEvent. It never asks XCTest to open or relaunch the app. Each action retains its observed state; launch evidence verifies the same process and fixture arguments before and after adapter binding. System Events types only into the owned native file picker, after the native helper confirms foreground ownership. Screenshots capture only that process’s window. The manifest includes the helper binary SHA-256.
 
 The unique bundle identifier isolates preferences and sandboxed auth files. Only associated-domain entitlements are omitted from the ad-hoc fixture build. The installed app and production configuration are unchanged. Ctrl-C cleans up the owned helper, local services and disposable database; a database watchdog also handles abrupt runner exit.
 
@@ -31,5 +31,7 @@ pnpm --dir apps/web exec tsx tooling/mac-retailer-preflight.ts
 ```
 
 That preflight verifies the unique signed browser bundle and HTTPS certificate/authentication page. Its artifact explicitly records that native capture was not run.
+
+The nonce Chromium process uses `--use-mock-keychain` and disables DialMediaRouteProvider, following [Chromium’s macOS developer instructions](https://chromium.googlesource.com/chromium/src/+/main/docs/mac_build_instructions.md#avoiding-system-permissions-dialogs-after-each-build). These flags avoid requesting the real login Keychain and media-discovery network consent for the disposable fixture profile. The fixture metadata records these choices.
 
 `MacImportDriver` also exposes photo upload into a new import run and photo approval helpers for composed journeys. These helpers require unlocked-host verification. CSV/photo/receipt ordering permutations are not exercised by this runner.

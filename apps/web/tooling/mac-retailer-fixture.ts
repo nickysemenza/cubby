@@ -129,7 +129,14 @@ export async function createMacRetailerFixture(
     writeFileSync(
       path.join(root, "fixture.json"),
       JSON.stringify(
-        { bundleID, origin, certificateSPKI: spki, isolatedProfile: true },
+        {
+          bundleID,
+          origin,
+          certificateSPKI: spki,
+          isolatedProfile: true,
+          mockKeychain: true,
+          mediaRouteDiscovery: false,
+        },
         null,
         2,
       ) + "\n",
@@ -161,6 +168,8 @@ export async function createMacRetailerFixture(
           `--ignore-certificate-errors-spki-list=${spki}`,
           "--host-resolver-rules=MAP shop.example.test 127.0.0.1",
           "--no-proxy-server",
+          "--use-mock-keychain",
+          "--disable-features=DialMediaRouteProvider",
           "--no-first-run",
           "--no-default-browser-check",
           "about:blank",

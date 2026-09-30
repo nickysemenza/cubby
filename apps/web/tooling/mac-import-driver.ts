@@ -77,15 +77,21 @@ export class MacImportDriver {
   private guardForeground(): void {
     if (this.aborted) throw new Error("Mac driver interrupted");
     if (!this.bundleID) throw new Error("No owned Mac fixture session");
-    execFileSync(
+    if (!this.pid) throw new Error("No verified fixture PID");
+    const activation = execFileSync(
       "osascript",
       [
+        "-l",
+        "JavaScript",
         "-e",
-        "on run argv\n tell application id (item 1 of argv) to activate\nend run",
+        'ObjC.import("AppKit"); function run(argv) { const app=$.NSRunningApplication.runningApplicationWithProcessIdentifier(Number(argv[0])); if (!app || app.isTerminated || ObjC.unwrap(app.bundleIdentifier)!==argv[1]) throw Error("Owned fixture PID/bundle is not running"); return String(app.activateWithOptions(3)); }',
+        String(this.pid),
         this.bundleID,
       ],
-      { timeout: 10000 },
-    );
+      { encoding: "utf8", timeout: 10000 },
+    ).trim();
+    if (activation !== "true")
+      throw new Error("Owned fixture AppKit activation was refused");
     const front = this.invoke(
       ["app", "frontmost"],
       z.object({ bundleId: z.string(), pid: z.number() }),

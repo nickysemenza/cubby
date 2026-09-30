@@ -662,6 +662,25 @@ async function main(): Promise<void> {
       return matches[0];
     }
     const beforePID = launchedProcess();
+    milestones.launched = true;
+    const beforeEvidence = path.join(
+      artifacts,
+      "app-launch-before-adapter.json",
+    );
+    writeFileSync(
+      beforeEvidence,
+      JSON.stringify(
+        {
+          bundleID,
+          fixtureServer: true,
+          ownedPID: beforePID,
+          launchArgumentsVerified: true,
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+    driver.evidence.push(beforeEvidence);
     await driver.open(bundleID, beforePID);
     const afterPID = launchedProcess();
     if (afterPID !== beforePID)

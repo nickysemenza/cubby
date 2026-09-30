@@ -73,9 +73,9 @@ export const withRequestDb = async <T>(
 
 /**
  * Background-invocation scope. One connected client is shared by one Queue
- * invocation or one Workflow step; Hyperdrive and the Worker runtime retain
- * responsibility for socket cleanup. Never carry this scope across Workflow
- * steps.
+ * invocation or one Workflow step. Release the client when its awaited work
+ * finishes, including inside long-lived Durable Objects; Hyperdrive keeps its
+ * origin pool. Never carry this scope across Workflow steps.
  */
 export const withRequestDbClient = async <T>(
   connectionString: string,
@@ -85,24 +85,28 @@ export const withRequestDbClient = async <T>(
     new pg.Client({ connectionString }),
     "strong",
   );
-  const startedAt = performance.now();
-  await withTrace(TraceNames.db("connect"), async (span) => {
-    await client.connect();
-    span.setAttributes({
-      "db.system.name": "postgresql",
-      "db.namespace": "cubby",
-      "db.connect.duration_ms": Math.round(performance.now() - startedAt),
+  try {
+    const startedAt = performance.now();
+    await withTrace(TraceNames.db("connect"), async (span) => {
+      await client.connect();
+      span.setAttributes({
+        "db.system.name": "postgresql",
+        "db.namespace": "cubby",
+        "db.connect.duration_ms": Math.round(performance.now() - startedAt),
+      });
     });
-  });
-  const runtime = runtimeForClient(drizzleNodePostgres({ client, schema }));
-  const holder: RequestDatabaseRuntimeScope = {
-    connections: {
-      strong: connectionString,
-      boundedStale: connectionString,
-    },
-    runtimes: { strong: runtime },
-  };
-  return requestDbStore.run(holder, fn);
+    const runtime = runtimeForClient(drizzleNodePostgres({ client, schema }));
+    const holder: RequestDatabaseRuntimeScope = {
+      connections: {
+        strong: connectionString,
+        boundedStale: connectionString,
+      },
+      runtimes: { strong: runtime },
+    };
+    return await requestDbStore.run(holder, fn);
+  } finally {
+    await client.end();
+  }
 };
 
 declare const __CF_WORKERS__: boolean | undefined;
