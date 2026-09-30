@@ -89,7 +89,8 @@
         "magick",
         "apple",
         "openssl",
-        "ditto"
+        "ditto",
+        "osascript"
       ],
       "ignoreDependencies": [
         "@fontsource-variable/inter",

@@ -20,6 +20,7 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { refreshDerivedSearchRefs } from "~/server/services/mutation-side-effects";
 
 import {
   getDb,
@@ -428,6 +429,25 @@ export async function commitFinancialBooking(
           ),
         })
         .where(eq(financialTransaction.id, id));
+      await refreshDerivedSearchRefs(
+        txDb,
+        [
+          {
+            entityKind: "purchase",
+            entityId: await resolveOrThrow(txDb, "purchase", target),
+          },
+          { entityKind: "financialTransaction", entityId: id },
+          ...(expenseId
+            ? [
+                {
+                  entityKind: "expense" as const,
+                  entityId: await resolveOrThrow(txDb, "expense", expenseId),
+                },
+              ]
+            : []),
+        ],
+        "financialTransaction.commitBooking",
+      );
       return { purchaseId: target, expenseId, replayed: false };
     },
     { isolationLevel: "serializable" },

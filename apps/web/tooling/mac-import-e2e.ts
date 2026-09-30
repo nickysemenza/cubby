@@ -1,6 +1,13 @@
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout } from "node:timers/promises";
@@ -49,6 +56,7 @@ const driver = new MacImportDriver(repoRoot, artifacts, `cubby-mac-${nonce}`);
 const started = performance.now();
 let phase = "setup";
 let binaryFingerprint: string | null = null;
+let cacheBinaryFingerprint: string | null = null;
 let sourceFingerprint: string | undefined;
 let failure: Error | undefined;
 let interrupted = false;
@@ -190,6 +198,28 @@ function nativeSourceFingerprint(): string {
   return hash.digest("hex");
 }
 
+function nativeBundleFingerprint(directory: string): string {
+  const hash = createHash("sha256");
+  for (const entry of readdirSync(directory, { withFileTypes: true }).sort(
+    (a, b) => a.name.localeCompare(b.name),
+  )) {
+    if (entry.name === ".DS_Store") continue;
+    const file = path.join(directory, entry.name);
+    const kind = entry.isSymbolicLink()
+      ? "link"
+      : entry.isDirectory()
+        ? "directory"
+        : "file";
+    const content = entry.isSymbolicLink()
+      ? readlinkSync(file)
+      : entry.isDirectory()
+        ? nativeBundleFingerprint(file)
+        : createHash("sha256").update(readFileSync(file)).digest("hex");
+    hash.update(JSON.stringify([entry.name, kind, content]));
+  }
+  return hash.digest("hex");
+}
+
 async function reuseNativeBuild(reuseManifest: string): Promise<void> {
   const previous = z
     .object({
@@ -200,16 +230,16 @@ async function reuseNativeBuild(reuseManifest: string): Promise<void> {
         details: z.object({
           sourceFingerprintVersion: z.literal(2),
           sourceFingerprint: z.string(),
+          binaryFingerprintFormat: z.literal("app-bundle-v1"),
+          cacheBinaryFingerprint: z.string(),
         }),
       }),
     })
     .parse(JSON.parse(readFileSync(reuseManifest, "utf8")));
-  const fingerprint = createHash("sha256")
-    .update(readFileSync(path.join(appPath, "Contents/MacOS/Cubby")))
-    .digest("hex");
+  const fingerprint = nativeBundleFingerprint(appPath);
   if (
     previous.build.details.sourceFingerprint !== sourceFingerprint ||
-    previous.build.fingerprint !== fingerprint
+    previous.build.details.cacheBinaryFingerprint !== fingerprint
   )
     throw new Error(
       "Cached native app differs from the verified manifest or current native source",
@@ -228,6 +258,10 @@ async function reuseNativeBuild(reuseManifest: string): Promise<void> {
     ) + "\n",
   );
   driver.evidence.push(evidence);
+}
+
+async function stageNativeApp(): Promise<void> {
+  cacheBinaryFingerprint = nativeBundleFingerprint(appPath);
   const fixtureAppPath = path.join(artifacts, "native-fixture/Cubby.app");
   await run("ditto", [appPath, fixtureAppPath]);
   appPath = fixtureAppPath;
@@ -334,6 +368,8 @@ function saveArtifact(): void {
         sandboxed: true,
         sourceFingerprint: sourceFingerprint ?? "unbuilt",
         sourceFingerprintVersion: 2,
+        binaryFingerprintFormat: "app-bundle-v1",
+        cacheBinaryFingerprint: cacheBinaryFingerprint ?? "unbuilt",
         webFingerprint: webBuild.fingerprint ?? "unbuilt",
       },
     },
@@ -560,6 +596,7 @@ async function main(): Promise<void> {
       ]);
     }
     milestones.built = true;
+    await stageNativeApp();
     const entitlements = path.join(artifacts, "Cubby-e2e.entitlements");
     let fixtureEntitlements = readFileSync(
       path.join(repoRoot, "apps/apple/App/macOS/Cubby.entitlements"),
@@ -588,10 +625,12 @@ async function main(): Promise<void> {
       appPath,
     ]);
     milestones.signed = true;
-    binaryFingerprint = createHash("sha256")
-      .update(readFileSync(path.join(appPath, "Contents/MacOS/Cubby")))
-      .digest("hex");
+    binaryFingerprint = nativeBundleFingerprint(appPath);
     phase = "native-launch";
+    await run(
+      "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
+      ["-f", appPath],
+    );
     await run("open", [
       "-n",
       appPath,

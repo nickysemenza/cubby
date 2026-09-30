@@ -260,6 +260,7 @@ export async function selectComboboxItem(
       })
     : null;
   await combobox.fill(typedSearch?.query ?? itemName);
+  let optionLabel = itemName;
   if (typedResult) {
     const response = await typedResult;
     expect(response.ok(), await response.text()).toBe(true);
@@ -271,22 +272,33 @@ export async function selectComboboxItem(
         ]),
       },
     });
+    const hits = z
+      .object({
+        json: z.object({
+          data: z.array(z.object({ id: z.string(), title: z.string() })),
+        }),
+      })
+      .parse(await response.json()).json.data;
+    const matched = hits.find((hit) => hit.id === typedSearch?.code);
+    if (!matched)
+      throw new Error(
+        "Reviewed purchase was absent from the typed search response",
+      );
+    optionLabel = matched.title;
   }
 
-  // Wait for and click the option whose label is exactly itemName. An option's
-  // accessible name is its label plus a description and shortcode, so match
+  // Typed search labels come from SearchDocument and can format dates
+  // differently from blank-list labels. Bind the label to the reviewed code
+  // in the actual response; codes remain searchable metadata in this picker.
+  // An option's accessible name includes its label and description, so match
   // the label text exactly (excluding another record whose name merely starts
   // with itemName) and anchor the name to its start (excluding the "Create new
   // <label>: <itemName>" item the popup shows while the debounced search is
   // loading — clicking it opens the quick-create dialog and wedges the form
   // behind aria-hidden).
-  const option = typedSearch
-    ? page.getByRole("option", {
-        name: new RegExp(escapeRegExp(typedSearch.code)),
-      })
-    : page
-        .getByRole("option", { name: new RegExp(`^${escapeRegExp(itemName)}`) })
-        .filter({ has: page.getByText(itemName, { exact: true }) });
+  const option = page
+    .getByRole("option", { name: new RegExp(`^${escapeRegExp(optionLabel)}`) })
+    .filter({ has: page.getByText(optionLabel, { exact: true }) });
   await expect(option)
     .toBeVisible({ timeout: 10000 })
     .catch(async (error: Error) => {
