@@ -23,6 +23,7 @@ export {
   getUpcomingMealSummary,
   mealList,
   removeMealRecipeWithEntityId,
+  updateMeal,
   updateMealRecipeWithEntityId,
 } from "./crud";
 export { getMealPreparations, saveMealRecipePreparation } from "./portions";

@@ -47,3 +47,5 @@ export {
   getProductStockRows,
   markInventoryEntryVerified,
 } from "./scan";
+
+export { receiveExpenseInventory } from "./receive";
