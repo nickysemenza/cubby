@@ -267,6 +267,37 @@ const DISPLAY_BRANCHES: readonly DisplayBranch[] = [
   })),
 ];
 
+/** Filter/order mixed lists by the same direct and borrowed media as thumbnails. */
+export const entityDisplayImagePresenceSql = (entity: Entity, id: SQL): SQL => {
+  const selected = DISPLAY_BRANCHES.filter(
+    (branch) => branch.entity === entity,
+  );
+  const expenseRelation = selected.some(
+    (branch) => branch.usesExpenseProjectRelation,
+  )
+    ? sql`, "${sql.raw(EXPENSE_PROJECT_RELATION)}" AS (
+        SELECT e.*, ${effectiveExpenseProjectSql("e")} AS "effectiveProjectId"
+        FROM "Expense" e WHERE e."deletedAt" IS NULL
+          AND e."lineKind" = 'principal' AND e."productId" IS NOT NULL
+      )`
+    : sql``;
+  const branches = selected.map(({ branch }) => branch);
+  if (entity === "image")
+    branches.push(sql`
+    SELECT i.key, i.shortcode, 0 AS priority, NULL::timestamptz AS "groupCreatedAt",
+      NULL::uuid AS "groupId", 0 AS "sortOrder", i."createdAt", i.id AS "imageId"
+    FROM "Image" i WHERE i.id = refs."entityId" AND i."deletedAt" IS NULL
+      AND ${displayableImageSql("i")}`);
+  if (branches.length === 0) return sql`false`;
+  return sql`EXISTS (
+    WITH refs AS (SELECT ${entity}::text AS "entityKind", ${id} AS "entityId")
+    ${expenseRelation}
+    SELECT 1 FROM refs JOIN LATERAL (
+      ${sql.join(branches, sql` UNION ALL `)}
+    ) candidates ON true
+  )`;
+};
+
 const displayImageRowSchema = z.object({
   entityKind: entitySchema,
   entityId: z.string(),

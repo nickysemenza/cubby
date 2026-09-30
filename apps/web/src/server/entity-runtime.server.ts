@@ -42,6 +42,7 @@ import { getEntityConnections } from "~/server/repo/entity-edge-source";
 import { getEntityGraph } from "~/server/repo/entity-graph";
 import { getEntityGraphExplore } from "~/server/repo/entity-graph-explore";
 import { getEntityGraphPaths } from "~/server/repo/entity-graph-paths";
+import { listEntityRecords } from "~/server/repo/entity-records";
 import { getFilterOptions } from "~/server/repo/filter-options";
 import { executeSearchDocumentSql } from "~/server/repo/search-document";
 import { buildIntegrityCatalog } from "~/server/services/entity-integrity.service";
@@ -143,6 +144,7 @@ export const entityFilterOptionsHandlers = implementOperationDomain(
 export const entityGraphHandlers = implementOperationDomain(
   entityGraphContract,
   {
+    records: (context, input) => listEntityRecords(context.db, input),
     connectedRecords: (context, input) =>
       getConnectedRecords(context.db, input),
     explore: (context, input) => getEntityGraphExplore(context.db, input),

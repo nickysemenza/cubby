@@ -3,6 +3,7 @@ import {
   type Entity,
   type EntityRef,
 } from "@cubby/schemas/entity";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   type EntityGraphEdge,
   type EntityGraphInput,
@@ -15,6 +16,7 @@ import {
   entityInspectorMetadata,
   entityManifest,
 } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 import { z } from "zod";
@@ -263,6 +265,11 @@ export const labelSql = (entity: Entity, alias: string) => {
       return sql`COALESCE(${column("name")}::text, ${column("shortcode")})`;
     case "image":
       return sql`COALESCE(${column("filename")}::text, ${column("shortcode")})`;
+    case "inventory":
+      return sql`COALESCE((SELECT p."name" FROM "Product" p WHERE p."id" = ${column("productId")}), ${column("shortcode")})`;
+    case "ledgerTransfer":
+      // includes-deleted: a transfer retains the name of its historical party.
+      return sql`COALESCE((SELECT p."name" FROM "LedgerParty" p WHERE p."id" = ${column("fromPartyId")}), ${column("shortcode")})`;
     // `name || date` — mirrors `displayName` in
     // `server/repo/meal/helpers.ts` (an unnamed meal is identified by its
     // date, not by falling through to the shortcode).
@@ -310,8 +317,15 @@ export const labelSql = (entity: Entity, alias: string) => {
           || ' · ' || (SELECT l."name" FROM "Location" l WHERE l."id" = ${column("locationId")}),
         ${column("shortcode")}
       )`;
-    default:
-      return column("shortcode");
+    default: {
+      const title = entitySummary[entity].titleField;
+      const stored = entityFieldModels[entity].storage.find(
+        (field) => field.key === title,
+      );
+      return stored
+        ? sql`COALESCE(${column(stored.column)}::text, ${column("shortcode")})`
+        : column("shortcode");
+    }
   }
 };
 

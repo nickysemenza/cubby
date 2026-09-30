@@ -4,9 +4,60 @@ import {
   seedRecordListDisplayPrerequisite,
   seedRunHistoryDefaults,
   seedVendorDisplayPrerequisite,
+  seedLocationPrerequisite,
+  seedProductPrerequisite,
 } from "./e2e-fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+
+test("combined records retain server sorting, pagination, and filters after reload", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const prefix = `Combined records ${Date.now()}`;
+  const location = await seedLocationPrerequisite(page, `${prefix} Alpha`);
+  const product = await seedProductPrerequisite(page, {
+    name: `${prefix} Zulu`,
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/entities?tab=records&q=${encodeURIComponent(prefix)}&orderBy=name&recordsDirection=asc&pageSize=1`,
+  );
+  const alpha = page.getByRole("link", {
+    name: `${prefix} Alpha`,
+    exact: true,
+  });
+  const zulu = page.getByRole("link", { name: `${prefix} Zulu`, exact: true });
+  await expect(alpha).toHaveAttribute("href", `/locations/${location.id}`);
+  await expect(zulu).toHaveCount(0);
+  await page.getByRole("button", { name: "Sort by Name", exact: true }).click();
+  await expect(zulu).toBeVisible();
+  await expect(page).toHaveURL(/recordsDirection=desc/);
+  await page.getByRole("button", { name: "Sort by Name", exact: true }).click();
+  await expect(alpha).toBeVisible();
+  await page.getByRole("button", { name: "Go to next page" }).click();
+  await expect(zulu).toHaveAttribute("href", `/products/${product.id}`);
+  await expect(alpha).toHaveCount(0);
+  await page.getByLabel("Filter entity type").selectOption("location");
+  await expect(alpha).toBeVisible();
+  await expect(page).toHaveURL(/page=1/);
+  await page.reload();
+  await expect(page.getByLabel("Filter entity type")).toHaveValue("location");
+  await expect(alpha).toBeVisible();
+  await page.getByLabel("Maximum quality").fill("0");
+  await expect(alpha).toHaveCount(0);
+  await page.getByLabel("Maximum quality").fill("");
+  await expect(alpha).toBeVisible();
+  await page.getByLabel("Filter image presence").selectOption("none");
+  await expect(alpha).toBeVisible();
+  await page.getByLabel("Filter image presence").selectOption("has");
+  await expect(alpha).toHaveCount(0);
+  await page.getByLabel("Filter image presence").selectOption("");
+  await page.getByLabel("Updated through").fill("2000-01-01");
+  await expect(alpha).toHaveCount(0);
+  await page.getByLabel("Updated through").fill("");
+  await expect(alpha).toBeVisible();
+});
 
 // Desktop-only: this is the SSR + cross-page navigation proof for declared
 // record-list columns. Per-column rendering itself is guarded by
