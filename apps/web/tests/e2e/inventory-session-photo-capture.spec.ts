@@ -100,7 +100,7 @@ test("Photo item uploads a staged image and commits one Product with one each at
     .click();
   const chooser = await fileChooser;
   const input = chooser.element();
-  await expect(input).toHaveAttribute("capture", "environment");
+  expect(await input.getAttribute("capture")).toBe("environment");
   await input.setInputFiles(itemPhoto);
   const naming = page.getByRole("dialog", {
     name: "Name this item",
