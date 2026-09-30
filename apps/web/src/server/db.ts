@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import pg from "pg";
 
+import { createDatabaseClientConstructor } from "./db-pg-client";
 import {
   acquireTracedConnection,
   type RequestDbRole,
@@ -20,7 +21,6 @@ import {
   type DatabaseRuntime,
 } from "./db/database";
 import * as schema from "./db/schema";
-import { TraceNames, withTrace } from "./tracing";
 
 export { Database };
 export type { RequestDbConnections };
@@ -55,8 +55,16 @@ const createPoolRuntime = (
   connectionString: string,
   max: number,
   role: RequestDbRole,
+  nextClientOrdinal?: () => number,
 ): DatabaseRuntime =>
-  runtimeForPool(new pg.Pool({ connectionString, max }), role);
+  runtimeForPool(
+    new pg.Pool({
+      connectionString,
+      max,
+      Client: createDatabaseClientConstructor(role, nextClientOrdinal),
+    }),
+    role,
+  );
 
 /**
  * Run a function with per-request strong and bounded-stale database bindings.
@@ -81,19 +89,12 @@ export const withRequestDbClient = async <T>(
   connectionString: string,
   fn: () => Promise<T>,
 ): Promise<T> => {
+  const Client = createDatabaseClientConstructor("strong");
   const client = traceStandaloneClient(
-    new pg.Client({ connectionString }),
+    new Client({ connectionString }),
     "strong",
   );
-  const startedAt = performance.now();
-  await withTrace(TraceNames.db("connect"), async (span) => {
-    await client.connect();
-    span.setAttributes({
-      "db.system.name": "postgresql",
-      "db.namespace": "cubby",
-      "db.connect.duration_ms": Math.round(performance.now() - startedAt),
-    });
-  });
+  await client.connect();
   const runtime = runtimeForClient(drizzleNodePostgres({ client, schema }));
   const holder: RequestDatabaseRuntimeScope = {
     connections: {
@@ -101,6 +102,7 @@ export const withRequestDbClient = async <T>(
       boundedStale: connectionString,
     },
     runtimes: { strong: runtime },
+    clientOrdinal: 1,
   };
   return requestDbStore.run(holder, fn);
 };

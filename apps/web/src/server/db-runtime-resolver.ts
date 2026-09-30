@@ -9,12 +9,14 @@ export interface RequestDbConnections {
 export interface RequestDatabaseRuntimeScope {
   connections: RequestDbConnections;
   runtimes: Partial<Record<RequestDbRole, DatabaseRuntime>>;
+  clientOrdinal?: number;
 }
 
 type DatabaseRuntimeFactory = (
   connectionString: string,
   maxConnections: number,
   role: RequestDbRole,
+  nextClientOrdinal?: () => number,
 ) => DatabaseRuntime;
 
 /**
@@ -54,6 +56,7 @@ export class DatabaseRuntimeResolver {
         connectionString,
         role === "strong" ? 5 : 1,
         role,
+        () => (scope.clientOrdinal = (scope.clientOrdinal ?? 0) + 1),
       );
       scope.runtimes[role] = runtime;
       return runtime;
