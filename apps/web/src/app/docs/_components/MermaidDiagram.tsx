@@ -9,6 +9,8 @@ export function MermaidDiagram({ source }: { source: string }) {
   const [error, setError] = useState<string>();
 
   useEffect(() => {
+    // Diagram rendering is browser-only; exclude its engine from Worker uploads.
+    if (import.meta.env.SSR) return;
     let active = true;
 
     void import("mermaid")
