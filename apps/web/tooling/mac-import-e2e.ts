@@ -94,6 +94,31 @@ async function run(
   });
 }
 
+function installScenarioEnvironment(storageURL: string): () => void {
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries({
+    NODE_ENV: "test",
+    R2_ACCESS_KEY_ID: "dummy",
+    R2_SECRET_ACCESS_KEY: "dummy",
+    R2_ENDPOINT: storageURL,
+    R2_BUCKET_NAME: "e2e-bucket",
+    R2_PUBLIC_URL: storageURL,
+    R2_KEY_PREFIX: "e2e",
+    UPC_LOOKUP_API_URL: "http://127.0.0.1:9/",
+    USDA_API_URL: "http://127.0.0.1:9/",
+    AI_GATEWAY_API_KEY: "",
+  })) {
+    previous.set(key, process.env[key]);
+    process.env[key] = value;
+  }
+  return () => {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  };
+}
+
 function nativeSourceFingerprint(): string {
   const hash = createHash("sha256");
   for (const root of ["App", "CubbyKit/Sources"]) {
@@ -359,6 +384,12 @@ async function main(): Promise<void> {
     restoreEnvironment = runtime.installDatabaseEnvironment(databaseURL);
     const { createE2EObjectStorage } = await import("./local-object-storage");
     storage = await createE2EObjectStorage();
+    const restoreScenarioEnvironment = installScenarioEnvironment(storage.url);
+    const restoreDatabaseEnvironment = restoreEnvironment;
+    restoreEnvironment = () => {
+      restoreScenarioEnvironment();
+      restoreDatabaseEnvironment();
+    };
     harness = runtime.createLocalWorkerdHarness(databaseURL, storage.url);
     const { url } = await harness.listen();
     const context = await request.newContext({
