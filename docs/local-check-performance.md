@@ -87,10 +87,12 @@ retained boundaries are:
   available only through project-local hoisting need narrow package extensions.
   Measure reclaimed space using the filesystem's available space before and
   after cleanup, rather than adding up worktree `node_modules` sizes.
-  The shared virtual store remains disabled: a pnpm 12.4.1 compatibility check
-  found that `@phosphor-icons/react` cannot resolve `@types/react` from its
-  published declarations in that layout. Enabling it requires an explicit type
-  dependency through a package extension and the corresponding lockfile update.
+  Cubby uses `virtualStoreType: global` with pnpm 12.4.1, sharing graphs under
+  `<pnpm store path>/links`. Package extensions supply the missing optional
+  `@types/react` peers for Phosphor, TanStack Router/Table, and cmdk, preserving
+  icon props, event types, and table subscription inference without relying on
+  checkout-local hoisting. Frozen installs, web type checking, and local web
+  startup passed in two fresh worktrees with this layout.
 - Nx targets own checks and their declared inputs. The repository-wide static
   checks exclude Markdown and other files those tools do not inspect; Markdown
   changes receive their own link/format validation. The validation policy in
