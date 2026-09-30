@@ -169,7 +169,13 @@ test("Photo item uploads a staged image and commits one Product with one each at
     exact: true,
   });
   await expect(stocked).toBeVisible();
-  await reloadAuthenticatedPage(page, stocked);
+  const resume = page.getByRole("button", {
+    name: "Resume recount",
+    exact: true,
+  });
+  await reloadAuthenticatedPage(page, resume);
+  await resume.click();
+  await expect(stocked).toBeVisible();
 
   const productResponse = await page.request.get(
     `/api/v1/products/${committed.product.id}`,
