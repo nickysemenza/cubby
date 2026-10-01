@@ -176,7 +176,13 @@ export async function createMacBrowserScenario(input: Input) {
               input.artifacts,
               "browser-connect-failure.txt",
             );
-            writeFileSync(file, await appDriver.snapshot());
+            writeFileSync(
+              file,
+              (await appDriver.snapshot()).replace(
+                /Session token \([^)]*\)/gu,
+                "Session token (fixture credential)",
+              ),
+            );
             appDriver.evidence.push(file);
             throw new Error(
               "Actual Mac app did not connect to the fixture broker",

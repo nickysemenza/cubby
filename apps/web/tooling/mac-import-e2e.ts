@@ -781,6 +781,15 @@ async function main(): Promise<void> {
         /(<key>com\.apple\.security\.temporary-exception\.apple-events<\/key>\s*)<array>[\s\S]*?<\/array>/u,
         `$1<array><string>${retailer.bundleID}</string></array>`,
       );
+      const browserPath = `${retailer.appPath}/`
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+      // Signature validation reads exactly the signed fixture browser, never a broad cache directory.
+      fixtureEntitlements = fixtureEntitlements.replace(
+        /<\/dict>\s*<\/plist>/u,
+        `<key>com.apple.security.temporary-exception.files.absolute-path.read-only</key><array><string>${browserPath}</string></array></dict></plist>`,
+      );
     }
     writeFileSync(
       entitlements,
@@ -803,6 +812,8 @@ async function main(): Promise<void> {
     driver.evidence.push(signatureEvidence);
     milestones.signed = true;
     binaryFingerprint = prepared.signedFingerprint;
+    phase = "native-backend-preparation";
+    await driver.prepareBackend();
     phase = "native-launch";
     await run(
       "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",

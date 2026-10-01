@@ -27,6 +27,8 @@ const nodeSchema = z.object({
   bundleId: z.string().nullish(),
 });
 type Node = z.infer<typeof nodeSchema>;
+const macAppIdentity = z.object({ bundleId: z.string(), pid: z.number() });
+type MacAppIdentity = z.infer<typeof macAppIdentity>;
 const role = (node: Node) =>
   (node.type ?? node.role ?? "")
     .replace(/^AX/, "")
@@ -63,6 +65,39 @@ export class MacImportDriver {
     readonly artifacts: string,
     readonly session: string,
   ) {}
+
+  async prepareBackend(): Promise<void> {
+    if (!process.env.AGENT_DEVICE_MACOS_HELPER_BIN) {
+      const entry = import.meta.resolve("agent-device");
+      // The pinned SDK owns its Swift-source fingerprint and helper build/cache.
+      // This metadata-only call avoids opening or relaunching an app session.
+      const helper = z
+        .object({
+          t: z.object({
+            resolveFrontmostMacOsApp: z
+              .instanceof(Function)
+              .transform(
+                (resolve) => async (): Promise<MacAppIdentity> =>
+                  macAppIdentity.parse(await resolve()),
+              ),
+          }),
+        })
+        .parse(await import(new URL("helper.js", entry).href));
+      await helper.t.resolveFrontmostMacOsApp();
+    }
+    const file = path.join(this.artifacts, "native-helper-build.json");
+    writeFileSync(
+      file,
+      JSON.stringify({
+        backend: "agent-device-native-macos",
+        helperSHA256: createHash("sha256")
+          .update(readFileSync(this.helper))
+          .digest("hex"),
+        explicitOverride: Boolean(process.env.AGENT_DEVICE_MACOS_HELPER_BIN),
+      }),
+    );
+    this.evidence.push(file);
+  }
 
   private invoke<T>(args: string[], schema: z.ZodType<T>, attempt = 0): T {
     let output: string;

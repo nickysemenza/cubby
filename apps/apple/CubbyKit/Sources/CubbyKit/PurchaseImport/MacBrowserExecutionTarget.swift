@@ -52,21 +52,9 @@
                             of: "^com\\.cubby\\.fixture\\.browser\\.[a-f0-9]{16}$",
                             options: .regularExpression) != nil,
                     applicationURL.isFileURL, processID > 0,
-                    teamID.range(of: "^[A-Z0-9]{10}$", options: .regularExpression) != nil,
-                    Bundle(url: applicationURL)?.bundleIdentifier == bundleIdentifier
+                    teamID.range(of: "^[A-Z0-9]{10}$", options: .regularExpression) != nil
                 else { throw Failure.invalidFixtureConfiguration }
                 let applicationURL = applicationURL.resolvingSymlinksInPath().standardizedFileURL
-                var code: SecStaticCode?
-                guard SecStaticCodeCreateWithPath(applicationURL as CFURL, [], &code) == errSecSuccess,
-                    let code
-                else { throw Failure.invalidSignature }
-                var requirement: SecRequirement?
-                let expression =
-                    "anchor apple generic and identifier \"\(bundleIdentifier)\" and certificate leaf[subject.OU] = \"\(teamID)\""
-                guard
-                    SecRequirementCreateWithString(expression as CFString, [], &requirement) == errSecSuccess,
-                    SecStaticCodeCheckValidity(code, [], requirement) == errSecSuccess
-                else { throw Failure.invalidSignature }
                 let target = Self(browser: .chrome, bundleIdentifier: bundleIdentifier) {
                     let running = NSRunningApplication.runningApplications(
                         withBundleIdentifier: bundleIdentifier)
@@ -76,6 +64,24 @@
                     else { throw Failure.ownershipChanged }
                 }
                 try target.verifyOwnership()
+                // The signed fixture app grants read access only to this isolated browser bundle.
+                var code: SecStaticCode?
+                let guestStatus = SecStaticCodeCreateWithPath(applicationURL as CFURL, [], &code)
+                guard guestStatus == errSecSuccess, let code else {
+                    throw Failure.signatureCheck("SecStaticCodeCreateWithPath", guestStatus)
+                }
+                var requirement: SecRequirement?
+                let expression =
+                    "anchor apple generic and identifier \"\(bundleIdentifier)\" and certificate leaf[subject.OU] = \"\(teamID)\""
+                let requirementStatus = SecRequirementCreateWithString(
+                    expression as CFString, [], &requirement)
+                guard requirementStatus == errSecSuccess else {
+                    throw Failure.signatureCheck("SecRequirementCreateWithString", requirementStatus)
+                }
+                let validationStatus = SecStaticCodeCheckValidity(code, [], requirement)
+                guard validationStatus == errSecSuccess else {
+                    throw Failure.signatureCheck("SecStaticCodeCheckValidity", validationStatus)
+                }
                 return target
             #else
                 throw Failure.invalidFixtureConfiguration
@@ -88,6 +94,7 @@
         public enum Failure: Error, LocalizedError, Equatable, Sendable {
             case invalidFixtureConfiguration
             case invalidSignature
+            case signatureCheck(String, OSStatus)
             case ownershipChanged
 
             public var errorDescription: String? {
@@ -96,6 +103,8 @@
                     "The isolated browser requires a DEBUG build, loopback server and explicit fixture identity."
                 case .invalidSignature:
                     "The isolated browser does not have the expected Apple-issued code signature."
+                case .signatureCheck(let operation, let status):
+                    "\(operation) refused the isolated browser signature (OSStatus \(status))."
                 case .ownershipChanged:
                     "The isolated browser's exact process and application path no longer match."
                 }
