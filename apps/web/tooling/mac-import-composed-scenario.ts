@@ -530,7 +530,11 @@ export async function createMacComposedScenario(input: Input) {
       );
     receiptCommitted = true;
     const findings = await database
-      .select({ id: schema.runFinding.id })
+      .select({
+        id: schema.runFinding.id,
+        kind: schema.runFinding.kind,
+        proposedFix: schema.runFinding.proposedFix,
+      })
       .from(schema.runFinding)
       .where(
         and(
@@ -541,7 +545,7 @@ export async function createMacComposedScenario(input: Input) {
     if (bookedPurchaseCode) {
       if (findings.length !== 1 || !findings[0])
         throw new Error(
-          "CSV-first native receipt must offer exactly one reviewed aggregate replacement",
+          `CSV-first native receipt must offer exactly one reviewed aggregate replacement: ${JSON.stringify({ committed, findings })}`,
         );
       input.onStage("native-receipt-replacement-review");
       await input.driver.openEntity(run.publicId, input.appPath());
