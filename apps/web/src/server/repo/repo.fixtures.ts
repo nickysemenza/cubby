@@ -17,10 +17,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
-import {
-  type LocationCreateInput,
-  locationCreateInput,
-} from "@cubby/schemas/location";
+import type { LocationCreateInput } from "@cubby/schemas/location";
 import type { PlantCreateInput } from "@cubby/schemas/plant";
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import type { ExpenseCreateInput } from "@cubby/schemas/project";
@@ -28,9 +25,9 @@ import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { eq, inArray, sql } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
 import { z } from "zod";
 
-import { mock } from "~/lib/test/mock-schema";
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
@@ -103,22 +100,15 @@ export const makeProductInput = <
   } = {},
 ): ProductFixtureInput<Ingredient, GrowsPlant, Category> => {
   const { ingredientId, growsPlantId, categoryId, ...rest } = overrides;
+  // The three id fields are re-attached after the parse: this builder serves
+  // both the UUID-only repo boundary and the shortcode-only router, so it must
+  // not run them through the shortcode schema.
   return {
-    acquisitionOrigin: "unknown",
-    name: "Test Product",
-    aliases: [],
-    tags: [],
-    manufacturer: "Test Manufacturer",
-    model: "TEST-123",
-    upc: null,
-    fdc_id: null,
-    expectedQuantity: null,
+    ...buildEntity("product", { model: "TEST-123" }),
+    ...rest,
     ingredientId: ingredientId ?? null,
     growsPlantId: growsPlantId ?? null,
     categoryId: categoryId ?? null,
-    unitMappings: [],
-    externalIds: [],
-    ...rest,
   };
 };
 
@@ -360,46 +350,17 @@ export const createInventoryFixture = retainEntityId(
  * unchanged input shape is the point of the split. */
 export const makeExpenseInput = (
   overrides: Partial<ExpenseCreateInput> = {},
-): ExpenseCreateInput => {
-  const input: ExpenseCreateInput = {
-    economicRole: "vendor",
-    spendingCategoryId: null,
-    name: "Test Expense",
-    cost: 100,
-    date: "2024-01-15",
-    lineBasis: "item_line",
-    costType: "materials",
-    trade: "other",
-    url: null,
-    notes: null,
-    future: false,
-    beneficiaries: [],
-    funders: [],
-    sourceClaims: [],
-    projectId: null,
-    productId: null,
-    productQuantity: null,
-    purchaseId: null,
-    vendor: null,
-    orderId: null,
-    ...overrides,
-  };
-  return input;
-};
+): ExpenseCreateInput =>
+  // Overrides are applied after the parse on purpose: write-boundary tests feed
+  // this builder inputs the schema refuses (an unknown date with a cost).
+  ({ ...buildEntity("expense", { cost: 100, trade: "other" }), ...overrides });
 
-/** A location create input; `mock()` fills the scaffolding (parentId/images) so a
- * call site need only spell out the name (and type, when it matters). */
+/** A location create input; the factory fills the scaffolding so a call site
+ * need only spell out the name (and type, when it matters). */
 export const makeLocationInput = (
   overrides: Partial<LocationCreateInput> = {},
 ): LocationCreateInput =>
-  mock(locationCreateInput, {
-    overrides: {
-      name: "Test Location",
-      type: "room",
-      parentId: null,
-      ...overrides,
-    },
-  });
+  buildEntity("location", { type: "room", parentId: null, ...overrides });
 
 export const ingredientRef = (
   id: string,
