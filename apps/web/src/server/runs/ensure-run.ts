@@ -57,10 +57,22 @@ export async function ensureRun(
 ): Promise<RunId> {
   if (actor.runId) return actor.runId;
   const database = getDb(db);
+  const now = new Date();
+  // A keyed run usually exists already (every row a page suggests for shares
+  // its `jev:` key), so touch-and-return it in one statement. The actor
+  // snapshot and insert below cost three more round trips per call, which a
+  // table's per-row suggestions multiplied into Hyperdrive pool starvation.
+  if (input.clientKey) {
+    const [existing] = await database
+      .update(runTable)
+      .set({ endedAt: now })
+      .where(eq(runTable.clientKey, input.clientKey))
+      .returning({ id: runTable.id });
+    if (existing) return existing.id;
+  }
   const trigger = input.trigger ?? "ephemeral";
   const completed = trigger === "ephemeral" || input.status === "completed";
   const snapshot = await actorSnapshot(database, actor.userId);
-  const now = new Date();
   const values = {
     id: runEntityId.parse(crypto.randomUUID()),
     // Only import runs carry a member scope. Ephemeral runs have none, so

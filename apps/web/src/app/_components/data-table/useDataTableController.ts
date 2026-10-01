@@ -1,6 +1,6 @@
 import { useElementScrollRestoration } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useDebug } from "~/hooks/useDebug";
 import { useHydrated } from "~/hooks/useHydrated";
@@ -11,6 +11,7 @@ import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { columnWidthVariables } from "./column-layout";
 import { ROW_DENSITY } from "./density";
 import { useTableVirtualizer } from "./hooks/useTableVirtualizer";
+import { useInfinitePrefetch } from "./infinite-prefetch";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
 import { useCellSelection } from "./useCellSelection";
 import { useDesktopGroupedRows } from "./useDesktopGroupedRows";
@@ -42,9 +43,6 @@ export function useDataTableController<TItem extends RowData>({
   const hydrated = useHydrated();
   const dConfig = ROW_DENSITY;
 
-  const desktopInfiniteObserverRef = useRef<IntersectionObserver | null>(null);
-
-  const fetchNextPage = infiniteScroll?.fetchNextPage;
   const hasNextPage = infiniteScroll?.hasNextPage ?? false;
   const isFetchingNextPage = infiniteScroll?.isFetchingNextPage ?? false;
   const isTransitioning = infiniteScroll?.isTransitioning ?? false;
@@ -54,54 +52,6 @@ export function useDataTableController<TItem extends RowData>({
     hasInfiniteScroll &&
     !isTransitioning &&
     (hasNextPage || isFetchingNextPage);
-
-  const handleDesktopInfiniteIntersect = useCallback(
-    (entries: IntersectionObserverEntry[]) => {
-      if (
-        entries[0]?.isIntersecting &&
-        hasNextPage &&
-        !isFetchingNextPage &&
-        !isTransitioning
-      ) {
-        fetchNextPage?.();
-      }
-    },
-    [fetchNextPage, hasNextPage, isFetchingNextPage, isTransitioning],
-  );
-
-  const setDesktopInfiniteSentinel = useCallback(
-    (sentinel: HTMLDivElement | null) => {
-      desktopInfiniteObserverRef.current?.disconnect();
-      desktopInfiniteObserverRef.current = null;
-      if (isMobile || !hasInfiniteScroll || isTransitioning || !sentinel)
-        return;
-
-      // Root is the scroll pane, not the viewport: the rows scroll inside the
-      // pane, and against the default root the pane's overflow clip would hide
-      // the sentinel until it was actually on screen — defeating the 600px
-      // prefetch margin and stalling infinite scroll into a visible hitch.
-      const observer = new IntersectionObserver(
-        handleDesktopInfiniteIntersect,
-        {
-          root: tableContainerRef.current,
-          rootMargin: "600px",
-        },
-      );
-      observer.observe(sentinel);
-      desktopInfiniteObserverRef.current = observer;
-    },
-    // oxlint-disable-next-line react/exhaustive-deps -- tableContainerRef.current is read when the sentinel mounts; a ref mutation never re-renders, so listing it would be inert.
-    [
-      isMobile,
-      hasInfiniteScroll,
-      isTransitioning,
-      handleDesktopInfiniteIntersect,
-    ],
-  );
-
-  useEffect(() => {
-    return () => desktopInfiniteObserverRef.current?.disconnect();
-  }, []);
 
   const { rows } = table.getRowModel();
   const rowKeys = useMemo(() => rows.map((row) => row.id), [rows]);
@@ -127,6 +77,8 @@ export function useDataTableController<TItem extends RowData>({
     tableContainerRef,
     paneWrapperRef,
     paneMaxHeight,
+    paneRows,
+    virtualRowCount,
     virtualRows,
     totalSize,
     resolveIndex,
@@ -140,6 +92,14 @@ export function useDataTableController<TItem extends RowData>({
     isMobile,
     trailingSentinel: hasDesktopInfiniteSentinel,
     initialOffset: restorationEntry?.scrollY,
+  });
+
+  useInfinitePrefetch({
+    infiniteScroll,
+    isMobile,
+    virtualRows,
+    rowCount: virtualRowCount,
+    visibleRows: paneRows,
   });
 
   // The table owns its horizontal scroll pane, so it is the only honest
@@ -244,7 +204,6 @@ export function useDataTableController<TItem extends RowData>({
     resolveIndex,
     rows,
     rowContentVersion,
-    setDesktopInfiniteSentinel,
     scrollRestorationId,
     styles,
     tableContainerRef,

@@ -12,11 +12,15 @@
  */
 
 import superjson from "superjson";
+import { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { seedProductPrerequisite } from "./e2e-fixtures";
 import { createProduct } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+import { dispatchOperations, unbatchFor } from "./dispatch-wire";
+
+const batchedEntity = z.object({ entity: z.string() });
 
 type BrowserOperationRequest = {
   body: string;
@@ -40,16 +44,28 @@ test("core entity list, detail, and mutation ride named browser operations", asy
     const url = request.url();
     if (new URL(url).pathname !== BROWSER_OPERATION_PATH) return;
     const body = request.postData() ?? "";
-    const payload = superjson.deserialize<{
-      operation: string;
-      input: unknown;
-    }>(JSON.parse(body));
+    const operations = dispatchOperations(request);
+    // A batch carries only queries and names each one in its body; a single
+    // operation also labels itself in its trace headers.
+    if (operations.length > 1) {
+      for (const item of operations)
+        starts.push({
+          body,
+          entity: batchedEntity.safeParse(item.input).data?.entity,
+          kind: "query",
+          method: request.method(),
+          input: item.input,
+          operation: item.operation,
+          url,
+        });
+      return;
+    }
     starts.push({
       body,
       entity: request.headers()["x-cubby-operation-entity"],
       kind: request.headers()["x-cubby-operation-kind"],
       method: request.method(),
-      input: payload.input,
+      input: operations[0]?.input,
       operation: request.headers()["x-cubby-operation"],
       url,
     });
@@ -166,6 +182,7 @@ test("server error references remain usable on desktop", async ({
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/");
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+    if (await unbatchFor(route, ["entity.listBase"])) return;
     if (route.request().headers()["x-cubby-operation"] !== "entity.listBase") {
       await route.continue();
       return;
@@ -237,6 +254,7 @@ test("base list keeps row identity, selection and card space while enrichment fa
     requested = resolve;
   });
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+    if (await unbatchFor(route, ["entity.listEnrichment"])) return;
     if (
       route.request().headers()["x-cubby-operation"] !== "entity.listEnrichment"
     ) {

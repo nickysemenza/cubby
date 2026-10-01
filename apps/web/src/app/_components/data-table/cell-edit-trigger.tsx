@@ -15,6 +15,7 @@ import {
   type CellEditEventDetail,
   CellSelectionContext,
 } from "./cell-selection-context";
+import { useRowActive } from "./row-activity";
 
 interface CellEditTriggerProps<
   TSaved,
@@ -121,6 +122,8 @@ export function CellEditTrigger<TSaved>({
   }, [hasClipboard, cellSelectionMode]);
 
   const gate = useHydrationGate(rest.disabled);
+  // Idle table rows skip the hover pencil entirely; see row-activity.
+  const rowActive = useRowActive();
   return (
     <button
       type="button"
@@ -176,12 +179,14 @@ export function CellEditTrigger<TSaved>({
           </span>
           {/* Overlays the value's trailing edge on hover rather than reserving
               width it only uses on hover; touch keeps it in flow. */}
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-0.5 my-auto flex size-5 items-center justify-center rounded-sm bg-muted opacity-0 shadow-[-6px_0_6px_var(--muted)] transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 pointer-coarse:static pointer-coarse:bg-transparent pointer-coarse:opacity-100 pointer-coarse:shadow-none"
-          >
-            <PencilIcon className="size-3 text-muted-foreground" />
-          </span>
+          {rowActive && (
+            <span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 right-0.5 my-auto flex size-5 items-center justify-center rounded-sm bg-muted opacity-0 shadow-[-6px_0_6px_var(--muted)] transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 pointer-coarse:static pointer-coarse:bg-transparent pointer-coarse:opacity-100 pointer-coarse:shadow-none"
+            >
+              <PencilIcon className="size-3 text-muted-foreground" />
+            </span>
+          )}
         </>
       )}
     </button>

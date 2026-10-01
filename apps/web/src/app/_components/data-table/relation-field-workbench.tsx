@@ -19,6 +19,8 @@ import {
 } from "~/entities/field-provenance";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
 
+import { CellFrame } from "./cell-frame";
+import { useRowActive } from "./row-activity";
 import { TableCellWorkbench } from "./table-cell-workbench";
 
 type RelationWorkbenchOperations = Pick<typeof entityGraph, "graph">;
@@ -139,7 +141,15 @@ export function RelationFieldWorkbench({
   summary: ReactNode;
   operations?: RelationWorkbenchOperations;
 }) {
+  const rowActive = useRowActive();
   if (!isInspectableFieldProvenance(provenance)) return summary;
+  // An idle table row keeps the rail slot, not the popover; see row-activity.
+  if (!rowActive)
+    return (
+      <CellFrame trailing={<span aria-hidden className="size-5 shrink-0" />}>
+        {summary}
+      </CellFrame>
+    );
 
   const relationKeys = provenance.sources.flatMap((source) =>
     source.relation ? [source.relation] : [],

@@ -13,6 +13,7 @@ import {
 } from "./e2e-fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+import { unbatchFor } from "./dispatch-wire";
 
 test("reviews a vendor email match and shows the linked conversation on Purchase", async ({
   page,
@@ -81,6 +82,13 @@ test("queues a local synthetic Gmail search, shows progress, and continues to ol
   };
   let status: VendorSearchMailOut | null = null;
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+    if (
+      await unbatchFor(route, [
+        "vendor.searchOrderMail",
+        "vendor.orderMailSearchStatus",
+      ])
+    )
+      return;
     const operation = route.request().headers()["x-cubby-operation"];
     if (operation === "vendor.searchOrderMail") {
       const payload = superjson.deserialize<{

@@ -13,6 +13,7 @@ import {
   uniqueName,
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+import { dispatchOperations, unbatchFor } from "./dispatch-wire";
 
 test("recount is current-pass scoped, resumable, and completes with a summary", async ({
   page,
@@ -46,6 +47,15 @@ test("recount is current-pass scoped, resumable, and completes with a summary", 
   let unknownRequested = false;
   await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
     const request = route.request();
+    if (
+      await unbatchFor(
+        route,
+        dispatchOperations(request)
+          .map((item) => item.operation)
+          .filter((operation) => operation.includes("ensureGlobalUnknown")),
+      )
+    )
+      return;
     const operation = request.headers()["x-cubby-operation"] ?? "";
     if (`${request.url()} ${operation}`.includes("ensureGlobalUnknown")) {
       unknownRequested = true;

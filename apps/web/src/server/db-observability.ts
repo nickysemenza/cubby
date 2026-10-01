@@ -27,6 +27,8 @@ type ActivityState = {
 
 type StoredDatabaseOperationMetrics = DatabaseOperationMetrics & {
   acquireStartedCount: number;
+  /** Operations the request ran, for `Server-Timing`; request collector only. */
+  operations: string[];
   activity: {
     query: ActivityState;
     acquire: ActivityState;
@@ -40,6 +42,7 @@ const operationMetricsStore = new AsyncLocalStorage<
 
 const emptyMetrics = (): StoredDatabaseOperationMetrics => ({
   acquireStartedCount: 0,
+  operations: [],
   queryCount: 0,
   queryDurationSumMs: 0,
   queryActiveWallMs: 0,
@@ -175,8 +178,43 @@ export const withDatabaseRequestMetrics = <T>(
     }
   });
 
+/** Name an operation this request ran, so `Server-Timing` can say which. */
+export const noteRequestOperation = (
+  operation: string,
+  entity?: string,
+): void => {
+  operationMetricsStore
+    .getStore()?.[0]
+    ?.operations.push(entity ? `${operation}:${entity}` : operation);
+};
+
 /** Request order stays shared across binding pools and nested collectors. */
 export const nextDatabaseAcquireOrdinal = (): number | undefined => {
   const request = operationMetricsStore.getStore()?.[0];
   return request ? ++request.acquireStartedCount : undefined;
+};
+
+/**
+ * `Server-Timing` value for the request collector, so a browser can read the
+ * DB split without trace access. Workers clocks only advance across I/O, so
+ * these durations exclude synchronous CPU (render, parse); `handler` is the
+ * same clock and must not be read as total server time.
+ */
+export const serverTimingHeader = (
+  handlerMs: number,
+  invocationOrdinal: number,
+): string => {
+  const metrics = operationMetricsStore.getStore()?.[0];
+  const entries = [`handler;dur=${Math.round(handlerMs)}`];
+  if (metrics) {
+    entries.push(
+      `db-acquire;dur=${Math.round(metrics.acquireActiveWallMs)};desc="n=${metrics.acquireCount} max=${Math.round(metrics.acquireMaxDurationMs)} conc=${metrics.acquireMaxConcurrency}"`,
+      `db-query;dur=${Math.round(metrics.queryActiveWallMs)};desc="n=${metrics.queryCount} max=${Math.round(metrics.queryMaxDurationMs)} conc=${metrics.queryMaxConcurrency}"`,
+      `db-queue;dur=${Math.round(metrics.clientQueueActiveWallMs)}`,
+    );
+  }
+  if (metrics?.operations.length)
+    entries.push(`op;desc="${metrics.operations.join(" ")}"`);
+  entries.push(`invocation;desc="${invocationOrdinal}"`);
+  return entries.join(", ");
 };

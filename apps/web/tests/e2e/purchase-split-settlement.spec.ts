@@ -1,9 +1,6 @@
 import { sql } from "drizzle-orm";
 import { purchaseSettlementCandidatesOut } from "@cubby/schemas/purchase";
-import superjson from "superjson";
-import { z } from "zod";
 
-import { superJsonResultSchema } from "~/lib/superjson-wire";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -13,6 +10,7 @@ import {
 } from "./e2e-fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+import { dispatchesOperation, operationResult } from "./dispatch-wire";
 
 test("finds settlement beyond 200 newer nonmatches and allocates only after review", async ({
   page,
@@ -100,25 +98,20 @@ test("finds settlement beyond 200 newer nonmatches and allocates only after revi
     page.getByRole("button", { name: "Match statement activity" }),
   );
   const advisoryResponse = page.waitForResponse((response) => {
-    const request = response.request();
-    return (
-      response.url().endsWith("/api/browser/dispatch") &&
-      request.method() === "POST" &&
-      z
-        .object({ json: z.object({ operation: z.string() }) })
-        .parse(request.postDataJSON()).json.operation ===
-        "purchase.settlementCandidates"
+    return dispatchesOperation(
+      response.request(),
+      "purchase.settlementCandidates",
     );
   });
   await page.getByRole("button", { name: "Match statement activity" }).click();
   const response = await advisoryResponse;
   expect(response.status()).toBe(200);
-  const body = z
-    .object({ ok: z.literal(true), data: purchaseSettlementCandidatesOut })
-    .parse(
-      superjson.deserialize(superJsonResultSchema.parse(await response.json())),
-    );
-  expect(body.data.advisory).toBe(true);
+  const data = await operationResult(
+    response,
+    "purchase.settlementCandidates",
+    purchaseSettlementCandidatesOut,
+  );
+  expect(data.advisory).toBe(true);
   const dialog = page.getByRole("dialog", { name: "Match statement activity" });
   await expect(dialog.getByText("$91.00")).toBeVisible();
   await expect(

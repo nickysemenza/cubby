@@ -974,7 +974,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     resolveIndex,
     rows,
     rowContentVersion,
-    setDesktopInfiniteSentinel,
     styles,
     totalSize,
     virtualRows,
@@ -1110,7 +1109,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
                   colSpan={colSpan}
                   className="text-center text-xs text-muted-foreground"
                 >
-                  <div ref={setDesktopInfiniteSentinel} className="h-px" />
                   {isFetchingNextPage ? "Loading more..." : null}
                 </TableCell>
               </TableRow>

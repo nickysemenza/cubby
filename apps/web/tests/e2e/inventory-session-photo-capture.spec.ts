@@ -13,10 +13,11 @@ import type { Request, Response } from "@playwright/test";
 import superjson from "superjson";
 import { z } from "zod";
 
-import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { toWire } from "~/lib/http-api/wire";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
+
+import { dispatchOperations } from "./dispatch-wire";
 
 import { createFixture, seedProductPrerequisite } from "./e2e-fixtures";
 import {
@@ -29,19 +30,11 @@ import { expect, test } from "./e2e-test";
 const itemPhoto = fileURLToPath(
   new URL("./fixtures/synthetic-wardrobe-shirt.png", import.meta.url),
 );
-const dispatchInput = z.object({
-  operation: z.string(),
-  input: z.unknown().optional(),
-});
-const operationRequest = (request: Request) =>
-  request.method() === "POST" &&
-  new URL(request.url()).pathname === BROWSER_OPERATION_PATH
-    ? dispatchInput.parse(
-        superjson.deserialize(
-          superJsonResultSchema.parse(request.postDataJSON()),
-        ),
-      )
-    : null;
+// The operations observed here are mutations, which always travel alone.
+const operationRequest = (request: Request) => {
+  const operations = dispatchOperations(request);
+  return operations.length === 1 ? operations[0]! : null;
+};
 
 const operationResult = async <Schema extends z.ZodType>(
   response: Response,
@@ -113,8 +106,8 @@ test("Photo item uploads a staged image and commits one Product with one each at
 
   const operations: string[] = [];
   const recordOperation = (request: Request) => {
-    const command = operationRequest(request);
-    if (command) operations.push(command.operation);
+    for (const command of dispatchOperations(request))
+      operations.push(command.operation);
   };
   page.on("request", recordOperation);
   const stagedResponse = page.waitForResponse(

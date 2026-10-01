@@ -34,6 +34,7 @@ import { entityDetailFor } from "~/entities/entity-detail";
 import { readReferenceField } from "~/entities/entity-references";
 import { enumFieldLabel } from "~/entities/enum-field-display";
 import { generatedBrowserCrudEntities } from "~/entities/generated/entity-routes.gen";
+import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 
 import {
   fieldSuggestionBasisFromRecord,
@@ -54,7 +55,6 @@ import {
   SuggestionVisitProvider,
   useSuggestionVisit,
 } from "./suggestion-review";
-import { createSuggestionScheduler } from "./suggestion-scheduler";
 import {
   SuggestionStatus,
   type SuggestionStatusField,
@@ -62,7 +62,7 @@ import {
 import { useFinanceCategoryApply } from "./use-finance-category-apply";
 
 const SuggestionSchedulerContext = createContext<ReturnType<
-  typeof createSuggestionScheduler
+  typeof createConcurrencyLimiter
 > | null>(null);
 
 const recordSchema = z.looseObject({ id: z.string() });
@@ -541,7 +541,13 @@ function BoundRecordSuggestions({
 }) {
   const visit = useSuggestionVisit();
   const parentScheduler = useContext(SuggestionSchedulerContext);
-  const [ownScheduler] = useState(() => createSuggestionScheduler());
+  // A page keeps its limiter across input changes; obsolete work cannot open a
+  // second pool. Each in-flight row pins a Neon backend and an AI Gateway call:
+  // on 2026-09-21 a 32-wide burst from one page pinned enough backends to OOM
+  // the 0.25 CU compute for ~80s and produced 135 AI Gateway 429s. Batched
+  // transport does not relax this — Hyperdrive's origin slots are the limit,
+  // and 16 in flight measurably starved the list's own page reads (3.4 s).
+  const [ownScheduler] = useState(() => createConcurrencyLimiter(4));
   const scheduler = parentScheduler ?? ownScheduler;
   const financeApply = useFinanceCategoryApply(operations);
   const update = useEntityCommands(entity, { mutationPort });

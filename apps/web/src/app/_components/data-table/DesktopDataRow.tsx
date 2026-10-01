@@ -8,6 +8,7 @@ import {
   memo,
   type PointerEvent,
   type ReactNode,
+  useState,
 } from "react";
 import { z } from "zod";
 
@@ -27,6 +28,7 @@ import { NON_SELECTABLE_COLUMN_IDS } from "./cell-selection-context";
 import { columnWidthValue } from "./column-layout";
 import { DebugDialog } from "./DebugDialog";
 import { RelationFieldWorkbench } from "./relation-field-workbench";
+import { RowActiveProvider, useCoarsePointer } from "./row-activity";
 import type { CubbyRow as Row } from "./table-features";
 import { type CubbyColumnMeta, resolveColumnExplanation } from "./table-meta";
 
@@ -233,7 +235,7 @@ function isInteractiveEventTarget(target: EventTarget | null) {
   return (
     target instanceof HTMLElement &&
     target.closest(
-      "a, button, input, select, textarea, [role=button], [role=link]",
+      "a, button, input, select, textarea, [role=button], [role=link], [role=checkbox]",
     ) !== null
   );
 }
@@ -253,6 +255,11 @@ function DesktopDataRowInner<TItem extends RowData>({
   height,
   suppressCellRowClick,
 }: DesktopDataRowProps<TItem>) {
+  const [hovered, setHovered] = useState(false);
+  const [focusWithin, setFocusWithin] = useState(false);
+  const coarsePointer = useCoarsePointer();
+  const active =
+    hovered || focusWithin || isCurrent || isFocused || coarsePointer;
   const handleRowClick = onRowClick
     ? (e: MouseEvent<HTMLTableRowElement>) => {
         if (isInteractiveEventTarget(e.target)) return;
@@ -287,74 +294,66 @@ function DesktopDataRowInner<TItem extends RowData>({
           "bg-primary/[0.035] [&>td:first-child]:shadow-[inset_2px_0_0_var(--row-accent,var(--primary))]",
       )}
       onClick={handleRowClick}
-      onPointerEnter={
-        onRowHover
-          ? (event: PointerEvent<HTMLTableRowElement>) => {
-              if (
-                event.pointerType !== "touch" &&
-                !isInteractiveEventTarget(event.target)
-              ) {
-                onRowHover(row);
-              }
-            }
-          : undefined
-      }
-      onPointerLeave={
-        onRowHoverEnd
-          ? (event: PointerEvent<HTMLTableRowElement>) => {
-              if (event.pointerType !== "touch") onRowHoverEnd(row);
-            }
-          : undefined
-      }
-      onFocus={
-        onRowHover
-          ? (event) => {
-              if (!isInteractiveEventTarget(event.target)) onRowHover(row);
-            }
-          : undefined
-      }
-      onBlur={
-        onRowHoverEnd
-          ? (event: FocusEvent<HTMLTableRowElement>) => {
-              if (!event.currentTarget.contains(event.relatedTarget)) {
-                onRowHoverEnd(row);
-              }
-            }
-          : undefined
-      }
+      onPointerEnter={(event: PointerEvent<HTMLTableRowElement>) => {
+        if (event.pointerType === "touch") return;
+        setHovered(true);
+        if (onRowHover && !isInteractiveEventTarget(event.target))
+          onRowHover(row);
+      }}
+      onPointerLeave={(event: PointerEvent<HTMLTableRowElement>) => {
+        if (event.pointerType === "touch") return;
+        setHovered(false);
+        onRowHoverEnd?.(row);
+      }}
+      onFocus={(event) => {
+        if (isInteractiveEventTarget(event.target)) return;
+        // Only the row or a selected cell activates on focus (the keyboard
+        // path). Flipping activity while a control inside the row held focus
+        // remounted the selection checkbox between mousedown and mouseup, so
+        // the click never toggled; pointer users activate on hover first.
+        setFocusWithin(true);
+        onRowHover?.(row);
+      }}
+      onBlur={(event: FocusEvent<HTMLTableRowElement>) => {
+        if (event.currentTarget.contains(event.relatedTarget)) return;
+        setFocusWithin(false);
+        onRowHoverEnd?.(row);
+      }}
       style={height ? { height } : undefined}
     >
-      {[...row.getStartVisibleCells(), ...row.getCenterVisibleCells()].map(
-        (cell) => (
+      <RowActiveProvider value={active}>
+        {[...row.getStartVisibleCells(), ...row.getCenterVisibleCells()].map(
+          (cell) => (
+            <DesktopDataCell
+              key={cell.id}
+              cell={cell}
+              cellClassName={cellClassName}
+            />
+          ),
+        )}
+        <TableCell data-spacer aria-hidden className={cellClassName} />
+        {row.getEndVisibleCells().map((cell) => (
           <DesktopDataCell
             key={cell.id}
             cell={cell}
             cellClassName={cellClassName}
           />
-        ),
-      )}
-      <TableCell data-spacer aria-hidden className={cellClassName} />
-      {row.getEndVisibleCells().map((cell) => (
-        <DesktopDataCell
-          key={cell.id}
-          cell={cell}
-          cellClassName={cellClassName}
-        />
-      ))}
-      {isDebugEnabled && (
-        <TableCell className={cellClassName}>
-          <DebugDialog
-            data={row.original}
-            title={`Debug Data - Row ${row.id}`}
-            trigger={
-              <Button variant="ghost" size="icon-sm">
-                <BugIcon className="size-4" />
-                <span className="sr-only">Debug row data</span>
-              </Button>
-            }
-          />
-        </TableCell>
-      )}
+        ))}
+        {isDebugEnabled && (
+          <TableCell className={cellClassName}>
+            <DebugDialog
+              data={row.original}
+              title={`Debug Data - Row ${row.id}`}
+              trigger={
+                <Button variant="ghost" size="icon-sm">
+                  <BugIcon className="size-4" />
+                  <span className="sr-only">Debug row data</span>
+                </Button>
+              }
+            />
+          </TableCell>
+        )}
+      </RowActiveProvider>
     </TableRow>
   );
 }

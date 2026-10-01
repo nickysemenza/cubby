@@ -23,6 +23,7 @@ import { z } from "zod";
 
 import {
   createImageColumn,
+  isImageColumnId,
   hasDisplayImages,
 } from "~/app/_components/data-table/columnHelpers";
 import { DataTablePagination } from "~/app/_components/data-table/data-table-pagination";
@@ -239,7 +240,7 @@ function useListColumns(
       ? "images"
       : "image";
     const hasImageColumn = composed
-      .visit((column) => column.id === "image" || column.id === "images")
+      .visit((column) => isImageColumnId(column.id))
       .some(Boolean);
     if (hasImageColumn) return composed;
     return createCubbyColumnCollection<BaseListRow>((add) => {

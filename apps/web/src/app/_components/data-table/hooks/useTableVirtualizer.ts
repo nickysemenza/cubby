@@ -1,5 +1,11 @@
 import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 // Estimated height for section headers (smaller than data rows).
 const SECTION_HEADER_HEIGHT = 28;
@@ -79,6 +85,16 @@ export function flatRowToVirtualIndex(
   );
 }
 
+/**
+ * Rows rendered beyond each edge of the pane: about a third of the pane's own
+ * height, so a fast fling stays covered without mounting a whole table. Sized
+ * from the pane, not the window — a 60vh related table used to overscan by a
+ * full window each side, which mounted every row of every table on a page.
+ */
+export function tableOverscan(paneHeight: number, rowHeight: number): number {
+  return Math.min(16, Math.max(6, Math.ceil(paneHeight / rowHeight / 3)));
+}
+
 /** Stable virtualizer key for a row, group header, or infinite sentinel. */
 export function tableVirtualItemKey(
   index: number,
@@ -128,6 +144,10 @@ interface UseTableVirtualizerResult {
    * null before the first measurement (and on mobile).
    */
   paneMaxHeight: number | null;
+  /** Rows that fit in the pane's measured height. */
+  paneRows: number;
+  /** Size of the index space: rows plus any interleaved group headers. */
+  virtualRowCount: number;
   /** Currently virtualized rows. */
   virtualRows: VirtualItem[];
   /** Total scroll height the spacer rows must fill. */
@@ -195,11 +215,21 @@ export function useTableVirtualizer({
   // Always virtualize for consistent rendering
   const baseCount = groupedItems ? groupedItems.length : rowCount;
   const virtualizerCount = baseCount + (trailingSentinel ? 1 : 0);
-  // Buffer ~one viewport of rows above/below so a fast fling doesn't outrun the
-  // rendered range and flash blank. Rows are cheap to render (profiled), so the
-  // extra DOM is affordable; clamped to keep tiny/huge viewports sane.
-  const viewportH = globalThis.window?.innerHeight ?? 800;
-  const overscan = Math.min(40, Math.max(12, Math.ceil(viewportH / rowHeight)));
+  // The pane's measured height drives overscan; before the first measurement
+  // assume an embedded table's 60vh cap.
+  const [paneHeight, setPaneHeight] = useState(
+    () => (globalThis.window?.innerHeight ?? 800) * 0.6,
+  );
+  useEffect(() => {
+    const pane = tableContainerRef.current;
+    if (isMobile || !pane || !globalThis.ResizeObserver) return;
+    const measure = () => setPaneHeight(pane.clientHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(pane);
+    return () => observer.disconnect();
+  }, [isMobile]);
+  const overscan = tableOverscan(paneHeight, rowHeight);
   const getItemKey = useCallback(
     (index: number) =>
       tableVirtualItemKey(index, rowKeys, groupedItems, trailingSentinel),
@@ -229,10 +259,39 @@ export function useTableVirtualizer({
   const virtualRows = rowVirtualizer.getVirtualItems();
   const totalSize = rowVirtualizer.getTotalSize();
 
+  // `initialOffset` only seeds the virtualizer. The pane itself can reach that
+  // offset only once enough rows exist — until then the browser clamps it, and
+  // a pane at 0 with a virtualizer at the restored offset renders blank. Apply
+  // the offset to the pane as soon as it fits; a person scrolling first wins.
+  const pendingRestore = useRef(isMobile ? 0 : initialOffset);
+  useEffect(() => {
+    const pane = tableContainerRef.current;
+    if (!pane || pendingRestore.current <= 0) return;
+    const cancel = () => {
+      pendingRestore.current = 0;
+    };
+    const events = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+    for (const event of events)
+      pane.addEventListener(event, cancel, { once: true, passive: true });
+    return () => {
+      for (const event of events) pane.removeEventListener(event, cancel);
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const pane = tableContainerRef.current;
+    const target = pendingRestore.current;
+    if (!pane || target <= 0) return;
+    if (pane.scrollHeight - pane.clientHeight < target) return;
+    pendingRestore.current = 0;
+    pane.scrollTop = target;
+  }, [totalSize]);
+
   return {
     tableContainerRef,
     paneWrapperRef,
     paneMaxHeight,
+    paneRows: Math.ceil(paneHeight / rowHeight),
+    virtualRowCount: baseCount,
     virtualRows,
     totalSize,
     resolveIndex: (index) =>

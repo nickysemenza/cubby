@@ -285,7 +285,12 @@ function SectionCard({
         hidden={!visible}
         className={cn(
           "scroll-mt-[calc(var(--app-chrome-top)+3rem)] px-3 py-3 focus:outline-none md:px-3 md:py-2",
-          section.overflowVisible && "overflow-visible",
+          // Offscreen sections skip layout and paint (a vendor page stacks
+          // several related tables). Paint containment clips overflow, so a
+          // section that must overflow opts out.
+          section.overflowVisible
+            ? "overflow-visible"
+            : "[contain-intrinsic-size:auto_320px] [content-visibility:auto]",
           className,
         )}
       >

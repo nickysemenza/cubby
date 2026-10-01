@@ -302,7 +302,14 @@ describe("GenericEntityList", () => {
     "compiles the %s list columns from its manifest field keys",
     async (entity) => {
       await renderListPage(entity, entities[entity].routes.list, []);
-      expect(await screen.findByRole("table")).toBeInTheDocument();
+      const table = await screen.findByRole("table");
+      // Regression: product lists its field as `images`, and the standard
+      // column prepend only recognized `image`, so it rendered two image lanes.
+      expect(
+        table.querySelectorAll(
+          'th[data-column-id="image"], th[data-column-id="images"]',
+        ).length,
+      ).toBeLessThanOrEqual(1);
     },
   );
 

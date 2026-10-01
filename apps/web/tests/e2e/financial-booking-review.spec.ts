@@ -9,6 +9,7 @@ import { spendingCategoryCreateInput } from "@cubby/schemas/spending-category";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { gotoAuthenticatedPage, selectComboboxItem } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+import { dispatchesOperation } from "./dispatch-wire";
 
 // A stale screen must not book changed bank evidence. Retries must preserve the
 // approved decision, and negative income must expose reimbursement review.
@@ -18,14 +19,11 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
 }) => {
   const headers = { Origin: baseURL! };
   const waitForOperation = (operation: "previewBooking" | "commitBooking") =>
-    page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/api/browser/dispatch") &&
-        response.request().method() === "POST" &&
-        z
-          .object({ json: z.object({ operation: z.string() }) })
-          .parse(response.request().postDataJSON()).json.operation ===
-          `financialTransaction.${operation}`,
+    page.waitForResponse((response) =>
+      dispatchesOperation(
+        response.request(),
+        `financialTransaction.${operation}`,
+      ),
     );
   const create = async (
     path: string,
@@ -231,8 +229,8 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
   });
   const enrichment = page.waitForResponse(
     (response) =>
-      response.request().headers()["x-cubby-operation"] ===
-        "entity.listEnrichment" && response.ok(),
+      dispatchesOperation(response.request(), "entity.listEnrichment") &&
+      response.ok(),
   );
   await gotoAuthenticatedPage(
     page,

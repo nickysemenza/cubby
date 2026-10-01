@@ -22,6 +22,7 @@ import {
   useEditorCommit,
   useOptimisticDisplayValue,
 } from "./editable-cell";
+import { useRowActive } from "./row-activity";
 
 const itemIdEquals = <TId extends string>(
   a: ComboboxItem<TId> | null,
@@ -82,6 +83,7 @@ export function EditableEntityCell<TId extends string>({
     itemIdEquals,
   );
   const edit = useCellEditState(clipboard, setOptimisticValue);
+  const rowActive = useRowActive();
 
   const editor = edit.isEditing && (
     <CellEditorOverlay
@@ -117,7 +119,8 @@ export function EditableEntityCell<TId extends string>({
           aria-label={`Edit ${label}`}
           className={CELL_EDIT_PENCIL_CLASS}
         >
-          <PencilIcon className="size-3 text-muted-foreground" />
+          {/* Idle rows keep the trigger (editor anchor, clipboard) but not its glyph. */}
+          {rowActive && <PencilIcon className="size-3 text-muted-foreground" />}
         </CellEditTrigger>
         {editor}
       </span>

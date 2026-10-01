@@ -14,6 +14,7 @@ import {
   NAVIGATION_ANNOTATION,
   NAVIGATION_PHASES_ANNOTATION,
 } from "./navigation-timing";
+import { dispatchesOperation, operationResult } from "./dispatch-wire";
 
 /** A public shortcode body, for composing route and id patterns. */
 export const SHORTCODE = SHORTCODE_BODY_PATTERN;
@@ -250,35 +251,25 @@ export async function selectComboboxItem(
   }).toPass({ timeout: 5000 });
 
   const typedResult = typedSearch
-    ? page.waitForResponse((response) => {
-        if (!response.url().includes("/api/browser/dispatch")) return false;
-        const request = response.request().postDataJSON();
-        return (
-          request.json?.operation === "search.find" &&
-          request.json?.input?.query === typedSearch.query
-        );
-      })
+    ? page.waitForResponse((response) =>
+        dispatchesOperation(
+          response.request(),
+          "search.find",
+          (item) =>
+            searchInput.safeParse(item.input).data?.query === typedSearch.query,
+        ),
+      )
     : null;
   await combobox.fill(typedSearch?.query ?? itemName);
   let optionLabel = itemName;
   if (typedResult) {
     const response = await typedResult;
     expect(response.ok(), await response.text()).toBe(true);
-    expect(await response.json()).toMatchObject({
-      json: {
-        ok: true,
-        data: expect.arrayContaining([
-          expect.objectContaining({ id: typedSearch?.code }),
-        ]),
-      },
-    });
-    const hits = z
-      .object({
-        json: z.object({
-          data: z.array(z.object({ id: z.string(), title: z.string() })),
-        }),
-      })
-      .parse(await response.json()).json.data;
+    const hits = await operationResult(
+      response,
+      "search.find",
+      z.array(z.object({ id: z.string(), title: z.string() })),
+    );
     const matched = hits.find((hit) => hit.id === typedSearch?.code);
     if (!matched)
       throw new Error(
@@ -382,6 +373,8 @@ function cellEditorInput(page: Page): Locator {
  * Detail pages need none of this: they are never in cell-selection mode and have
  * no transition curtain, so a single click opens the editor.
  */
+const searchInput = z.object({ query: z.string() });
+
 export async function editListCell(
   page: Page,
   trigger: Locator,
