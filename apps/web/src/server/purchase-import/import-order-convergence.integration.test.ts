@@ -731,7 +731,9 @@ async function createConvergenceHarness(
   };
 }
 
-describe("import order convergence", () => {
+// Each permutation drives four writers end to end (~2s on CI) and the last
+// one has run 6–11s, so the 10s default flakes on slower runners.
+describe("import order convergence", { timeout: 30_000 }, () => {
   const ctx = withTestDb();
   let queue: ReturnType<typeof captureBackgroundQueue>;
 
