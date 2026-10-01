@@ -4,7 +4,7 @@
     {
       "name": "web-local",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@cubby/web", "dev:local"],
+      "runtimeArgs": ["--filter", "@cubby/web", "dev"],
       "port": 3000
     },
     {

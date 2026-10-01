@@ -34,17 +34,23 @@ and rejects redirects; it is absent from release app builds.
 A real checkout path determines a stable development id. Its database is
 `cubby_dev_<id>` at `localhost:55432`, and its Worker resources are named with
 that id. PostgreSQL's container is shared; databases, D1/R2/DO/queue state, and
-session files belong to each checkout. An optional `CUBBY_DEV_INSTANCE` creates
-another isolated instance within the same checkout. Unset inherited application
+session files belong to each checkout. Four settings are meant for people:
+`PORT` (default 3000), `CUBBY_DEV_PROFILE` (`offline`, or `integrations` with
+`CUBBY_DEV_AI_GATEWAY_ID` and `CUBBY_DEV_VECTORIZE_INDEX`), `CUBBY_DEV_INSTANCE`
+(another isolated instance within the same checkout), and `CUBBY_DEV_DB_NAME`
+(a branch's own `cubby_dev_<name>` database). Everything else, including
+`CUBBY_DEV_ID` and the database name the Worker verifies, is derived by one
+resolved profile (`scripts/lib/dev-profile.ts`) and should not be set by hand.
+Unset inherited application
 database and storage overrides before starting; the supervisor rejects values
 that target another database or origin. Local startup ignores production `.env`
 and `.dev.vars` files and supplies its own auth/storage values.
 
 Ctrl-C stops the owned runtime and keeps persistent data. `pnpm dev:down` stops
 that checkout's supervisor. `pnpm dev:reset` stops it and resets its database and
-Worker state; start `pnpm dev` again to recreate the corpus. The older
-`dev:local` and `db:dev:seed`/`reset` commands remain aliases. Low-level
-`db:dev:up`, `migrate`, and `down` manage the shared PostgreSQL service.
+Worker state; start `pnpm dev` again to recreate the corpus (`pnpm dev:seed`
+reseeds without resetting). Low-level `db:dev:up`, `migrate`, and `down` manage
+the shared PostgreSQL service.
 
 ## Tooling layout
 

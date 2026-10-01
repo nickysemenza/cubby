@@ -15,7 +15,7 @@ owning their test databases and replay artifacts.
 
 Run one affected E2E scenario when it exposes the behavior. For an isolated web
 contract, run `pnpm test:file src/...` from the repository root; paths are
-relative to `apps/web`. For PostgreSQL contracts use `pnpm test:file:postgres
+relative to `apps/web`. For PostgreSQL contracts use `pnpm test:postgres
 src/...`. Read a failed run's ending and
 `apps/web/.vitest-failures.txt` before deciding what to change; do not rerun an
 unchanged tier to rediscover its failures.

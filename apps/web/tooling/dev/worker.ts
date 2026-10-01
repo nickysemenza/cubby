@@ -17,7 +17,7 @@ export * from "../../src/cf-server";
 type LocalDevEnv = Env &
   LocalStorageEnv & {
     CUBBY_DEV_ID: string;
-    CUBBY_DEV_DATABASE: string;
+    CUBBY_DEV_DB_NAME: string;
     CUBBY_DEV_PROFILE: "offline" | "integrations";
     CUBBY_DEV_MIGRATION_COUNT: string;
     CUBBY_DEV_MIGRATION_HASH: string;
@@ -37,15 +37,15 @@ function assertLocalEnvironment(request: Request, env: LocalDevEnv) {
     env.E2E_AUTH_TEST_MODE === "true" ||
     !loopback.has(origin.hostname) ||
     new URL(request.url).origin !== origin.origin ||
-    database.pathname.slice(1) !== env.CUBBY_DEV_DATABASE ||
+    database.pathname.slice(1) !== env.CUBBY_DEV_DB_NAME ||
     !(
       loopback.has(hyperdrive.hostname) ||
       /^[a-f0-9]+\.hyperdrive\.local$/u.test(hyperdrive.hostname)
     ) ||
-    hyperdrive.pathname.slice(1) !== env.CUBBY_DEV_DATABASE
+    hyperdrive.pathname.slice(1) !== env.CUBBY_DEV_DB_NAME
   ) {
     throw new Error(
-      `Local Worker identity mismatch: request=${new URL(request.url).origin}, configured=${origin.origin}, database=${database.pathname.slice(1)}, Hyperdrive=${hyperdrive.hostname}/${hyperdrive.pathname.slice(1)}, expected=${env.CUBBY_DEV_DATABASE}`,
+      `Local Worker identity mismatch: request=${new URL(request.url).origin}, configured=${origin.origin}, database=${database.pathname.slice(1)}, Hyperdrive=${hyperdrive.hostname}/${hyperdrive.pathname.slice(1)}, expected=${env.CUBBY_DEV_DB_NAME}`,
     );
   }
 }
@@ -64,9 +64,9 @@ async function readiness(env: LocalDevEnv, fixturesRequired: boolean) {
     await client.connect();
     const result = await client.query("SELECT current_database() AS database");
     database = databaseRow.parse(result.rows[0]).database;
-    if (database !== env.CUBBY_DEV_DATABASE) {
+    if (database !== env.CUBBY_DEV_DB_NAME) {
       throw new Error(
-        `Connected database ${database} does not match ${env.CUBBY_DEV_DATABASE}`,
+        `Connected database ${database} does not match ${env.CUBBY_DEV_DB_NAME}`,
       );
     }
     if (fixturesRequired) {
