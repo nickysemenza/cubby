@@ -1,22 +1,20 @@
 # Cubby — Work List
 
-The canonical backlog, organized by the kind of work needed next rather than
-priority. Items are not ranked within or across sections. Choose among sections
-based on the work that fits the moment.
+The canonical backlog, grouped by area. Items are not ranked. Each item starts
+with one status marker naming its next blocker:
 
-**Easy fixes** are contained, decision-ready changes without schema work.
-**Ready projects** are larger decision-ready implementations without schema
-changes. **Requires database changes** is reserved for work that needs schema,
-migration, or compatibility planning. **Requires thought or evidence** holds
-unresolved decisions, investigations, external triggers, and long-term
-directions. **Dormant schema** lists tables and columns that exist but hold
-little or no data, kept on purpose for a later decision. **Next pass** holds the
-follow-ups deferred from the last large refactor. **Deferred: deploy surface** holds work that changes what gets
-deployed. **Probably not anytime soon** parks wanted-but-unpulled work. **Operational passes** are household data work, not software
-projects.
+| Marker | Meaning                                                   |
+| ------ | --------------------------------------------------------- |
+| 🟢     | Ready: decided, no schema change                          |
+| 🧱     | Ready once schema, migration, or compatibility is planned |
+| 🤔     | Needs a decision, investigation, or evidence              |
+| ⏳     | Waiting on a named trigger; promote only when it fires    |
+| 🔭     | Long-term direction                                       |
 
-Each item lives in one primary section based on its next blocker: an unresolved
-decision or missing evidence takes precedence over an eventual database change.
+An unresolved decision or missing evidence outranks an eventual schema change.
+**Probably not anytime soon** parks wanted-but-unpulled work, **Dormant
+schema** lists built-but-unused tables, and **Operational passes** are
+household data work rather than software; those three carry no markers.
 
 Keep entries concise and outcome-oriented. Record only constraints that would
 change selection or implementation, with a pointer to the code or focused doc
@@ -26,1162 +24,829 @@ history is the archive. Permanent product constraints live in the
 
 ---
 
-## Easy fixes
+## Images & photos
 
-- **Retire the canvas NEXT SESSION note.** The canvas
-  (<https://claude.ai/artifact/A45j5qz24RjRK6KzKmKLWL>) still describes the
-  conformance pass as upcoming; retire it on the next canvas edit.
+- 🟢 **Stop recording attempts while a job waits for a device.** The
+  "retry storm" (production: 4,804 `ImageProcessingAttempt` and 9,629
+  `ImageProcessingEvent` rows across 68 jobs; the worst three at 784 attempts
+  each) is the dispatcher re-checking `subject_lift` jobs roughly every 20
+  minutes while no companion device is connected: every row is `state:
+waiting`, no executor, ~0.4 s. Record an attempt only when a device actually
+  leases the job, then prune the executor-less `waiting` attempts and their
+  events. Prerequisite for automatic description and background companion
+  work below.
 
-- **Audit recipe cookbook re-points.** The recipe form can now move a recipe
-  to another cookbook (`resolveCookbookRepoint` in
-  `server/repo/recipe/update-helpers.ts`), but `cookbookId` is not in the
-  recipe audit roster, so the move leaves no before/after trail
-  (`server/repo/recipe/crud.ts`).
+- 🟢 **Turn on automatic image description.** Decided: yes, once the attempt
+  fix lands. Image-processing settings still ship `enabled: false, paused:
+true` (`repo/image-processing-maintenance.ts`), so new uploads stay
+  undescribed and category suggestions see only text. Measured about $1.10 per
+  1,000 images at ~7 s each; `backfillImageProcessing` with `kinds:
+["describe_image"]` covers existing images. Unblocks the label-nutrition
+  extraction, the suggestion sweep, and a useful image search backfill.
 
-- **Photo-flow leftovers from #1084/#1086.** Small, independent:
-  - The classification sweep and the review sheet's `LocalPhotoAnalyzer` share no Vision
-    gate (sweep 2 concurrent, analyzer 4); if a review-sheet analysis measurably slows while the
-    sweep runs, add a `PhotoVisionGate` actor both acquire, with the sheet yielding the sweep.
-  - The `createSelf` compile check verifies "target is creatable" via
-    `contract.create !== null`, not the runtime kernel binding's
-    `createInput` (the generator runs before that file exists); if the two
-    ever disagree the route fails at commit time with `CONSTRAINT_VIOLATION`
-    instead of at generation.
+- 🟢 **Label photo → `labelNutrition`.** Reuse the existing Product attachment
+  `purpose: "label"` (no new purpose): when the description pass finds a
+  Nutrition Facts panel on a label photo, propose `labelNutrition` for review
+  and record the image shortcode in its `source`. A Product may carry several
+  label photos (front, panel, ingredients). Pairs with inferred-zero nutrients
+  in Ingredients, recipes & nutrition.
 
-- **Test the photo-approval `lastError` guard.** The `state='proposed'` guard
-  on the approval failure's `lastError` write
-  (`apps/web/src/server/photo-import-run/proposals.ts`) protects a group frozen
-  by a concurrent commit between read and write; exercising it needs a
-  deterministic race harness (a trigger or advisory lock).
+- 🧱 **Full capture metadata from the Photos library.** The library match path
+  (`LibraryMetadataSync` → `image.recordSightings`) already backfills
+  `capturedAt` and location for every strong perceptual-hash match across the
+  whole library, including photos never uploaded from that device, but sends
+  `camera`, `capturedAtOffsetMinutes`, and `placeName` as nil
+  (`PHAsset+LibraryAssetFacts.swift`, `LibrarySighting.swift`); production has
+  0 of 6,292 Images with `captureDeviceLabel` or `capturePlaceName`. For strong
+  matches, load the asset's image data (may download the iCloud original) and:
+  fill those gaps; store the raw ImageIO EXIF/TIFF/GPS dictionaries (minus
+  MakerNote and binary values) in one jsonb on `ImageSighting`, since edits
+  differ per library copy; and have server extraction
+  (`services/image-metadata.ts`, `embeddedMetadata`) keep the same raw
+  dictionaries for uploads that still carry EXIF. Nothing reads shutter,
+  aperture, or ISO yet; they are kept so the bytes never need refetching.
 
-- **`location.tags` has no redundant-token prune target.** `product.tags`
-  gets `control.suggest.mode: "prune"` (`redundant-tokens.ts`); the mechanism
-  is generic but `location.tags` holds only `collection:*` entries in
-  practice today, so its registry entry is deferred until locations actually
-  accumulate restating tags worth pruning.
+- 🟢 **Background library sync and companion work.** Library scan and sighting
+  sync run only in the foreground with Automatic work on
+  (`LibraryMetadataSync.shouldRun`). Phase 1: a `BGProcessingTask` with
+  `requiresExternalPower` resumes the hash scan and sync from the existing
+  50-item pages, keyed on `modificationDate`. Phase 2: run companion jobs
+  (subject lift, on-device description) in the same window; today they are
+  pushed over a live websocket, so the background path needs to pull leased
+  work and finish or release it before expiry. Depends on the attempt fix.
 
-- **Project/Task parent pickers stay flat.** `task.projectId`'s and any
-  project-parent picker's rosters are shallow enough that hierarchical
-  grouping (`treePickerItems`) is not worth the wiring yet — revisit if
-  either roster grows deep nesting.
+- 🟢 **Identify what is in a photo.** Photo import stops at the entity type,
+  and web location detection matches by name only. In order:
+  1. 🟢 Product declares `visualEvidence` (cover and inventory photos) so
+     `PhotoVisualEvidenceMatcher` — which already follows manifest
+     `visualEvidence` paths and takes the best of several references — works
+     for products, not only recipes and plantings.
+  2. 🟢 A native photo routed to a Location runs the existing
+     `location-inventory-detection` feature (`services/ai-enrichment/location-vision.ts`,
+     today only on the web inventory session) and offers its detected
+     products and proposed inventory for review.
+  3. 🤔 Compare detected items visually against Product covers and
+     subject-lift cutouts, not only by exact name then semantic name
+     similarity. Needs an eval set like `inventory-detection-evals.ts`.
+  4. ⏳ Server vision ranking of a single record (`photo-import.identify`, a
+     `defineFeature` sibling of `product-identification`, fed into
+     `PhotoEvidenceScorer` as an identity score) when deterministic evidence
+     still leaves the chooser in default order often enough to matter.
 
----
+- 🟢 **Photo-flow leftovers from #1084/#1086.**
+  - The classification sweep (2 concurrent) and the review sheet's
+    `LocalPhotoAnalyzer` (4) share no Vision gate; if a review-sheet analysis
+    measurably slows while the sweep runs, add a `PhotoVisionGate` actor both
+    acquire, with the sheet yielding the sweep.
+  - The `createSelf` compile check (`scripts/generator/entities/compile.ts`)
+    verifies creatability via `contract.create !== null`, not the runtime
+    binding's `createInput`; if they disagree the route fails at commit time
+    with `CONSTRAINT_VIOLATION` instead of at generation.
 
-## Ready projects
-
-- **Maintenance mode.** A minimal switch exists: the `MAINTENANCE_MODE` Worker
-  secret makes the web Worker answer 503 and skips the cron
-  (`apps/web/src/server/maintenance.ts`); queues are paused by hand with
-  `wrangler queues pause-delivery`. Still wanted: a status held in a Durable Object that the web Worker checks per request
-  (503 with a short page except health and the switch itself), every queue
-  consumer checks before consuming (leave messages unacked so they redeliver
-  afterwards), and Flue run workflows check before each step (pause cleanly,
-  resumable). Toggle it from Settings → Maintenance and over MCP. The
-  2026-09 run-rename cutover accepted a few minutes of errors instead.
-
-- **Finish the input-first retailer and statement journey.** Make a saved
-  synthetic order-history and product HTML page drive the actual browser capture
-  and purchase prepare/commit path, then confirm the order in the web UI. Cover
-  both statement-before-order and order-before-statement allocation using a
-  synthetic Monarch CSV; keep account identity and Product merge as explicit
-  review decisions. Extend the same journey to native CSV/photo review and a
-  Gmail connect-to-order approval check. Track the exercised boundaries in
-  [core journey E2E](agents/core-journey-e2e.md), with only account/login
-  prerequisites seeded.
-
-- **Extend source-neutral statement import beyond CSV.** Accept PDF and OFX
-  exports after the CSV path, preserving source text, date semantics, and
-  account evidence. Use frontier AI to propose extraction or column mappings
-  for unfamiliar layouts, but require a visible preview before storing rows.
-  Use Jev only for bounded choices among existing account, transaction, or
-  Purchase candidates, with reasons and human confirmation. Add resumable
-  file-level progress and a category-aware bulk kind decision; never infer
-  payment, transfer, income, or purchase solely from the amount's sign. Make
-  import coverage count rows already present in overlapping exports, rather
-  than treating every unattached row as missing.
-
-- **Decide on automatic image description.** `backfillImageProcessing` now
-  takes `kinds: ["describe_image"]` for a description-only sweep with the
-  existing pause and coverage readout, but image-processing settings still
-  ship `enabled: false, paused: true`, so new uploads stay undescribed and
-  category suggestions see only text. Decide whether to turn automatic
-  scheduling on. Measured cost is about $1.10 per 1,000 images at ~7 s each.
-
-- **Bounded shelf-triage worklists.** `/inventory/triage` walks the
-  `unlocated` view (optionally `?run=`, scoped through the run's affected
-  purchases, so photo runs yield nothing). Extend it to accept a value- or
-  category-bounded worklist, and let the general "Add to inventory" action
-  default its amount from the quantity ledger as triage does.
-
-- **One-call identity resolve.** `entity_read.resolve` now ranks name
-  candidates with the lexical engine. Remaining: one call taking `{name,
-externalIds[]}` per line and returning exact-id hits, alias hits, and
-  lexical candidates together (grocery ASINs split across Fresh / Whole Foods
-  / in-store, so the name fallback is load-bearing).
-
-- **Meal-suggestion shortfalls to the shopping list.** Missing ingredients
-  now link to the workbench and Inventory links to suggestions; adding a
-  shortfall to the shopping list waits on durable manual shopping items.
-
-- **Coverage diagnostics on product writes.** MCP recipe create/update now
-  return per-line `lineCoverage` (`missing: price|weight|nutrients`); batched
-  `entity.commands` and `recipe_import` do not. Product updates should report
-  which recipe lines the change closed: one corrected package-weight mapping
-  can repair many recipes.
-
-- **Import extracted cookbook bundles.** Accept ingredient-parser's `.cookbook`
-  archives with extracted recipes and images through the existing cookbook
-  review/import flow (`recipe/cookbook-import/cookbook-dropzone.tsx`). Read ZIP entries
-  incrementally in a Web Worker and upload selected assets with bounded
-  concurrency; keep validation and recipe creation on the server. Large bundles
-  must not require loading the entire archive into memory. The first version
-  requires an open tab; add R2 staging or Workflows only when unattended or
-  resumable imports become a demonstrated need.
-
-- **Identify the specific record a photo belongs to, not just its type.** Photo
-  import (app and `cubby photo analyze`) stops at the entity type: for a first
-  photo of a plant the per-record ranking has no signal — OCR needs a label in
-  frame, the date match needs a same-day `sowedOn`/`transplantedOn`, the Vision
-  feature print only matches photos _already attached_ to that record, and the
-  classifier label (`plant 0.9`) is identical for every candidate — so the
-  chooser is in default order and the household picks by hand. The on-device
-  Foundation Model is text-only (it sees `classifications: plant, foliage;
-text: none` plus candidate names and passes through as "Deterministic local
-  evidence"), and Vision ships no species classifier, so on-device cannot close
-  this. Two pieces, both generic over the routing policy's `candidateFields`:
-  - **Server vision identification.** A `photo-import.identify` op (native
-    flagged) running a `defineFeature` sibling of `product-identification`
-    (`server/ai/features.ts`, fast tier, cached, persisted as `aiAnalysis`)
-    over the staged R2 bytes plus the loaded candidate rows; returns ranked
-    ids with confidence and a one-line rationale. The app feeds it into
-    `PhotoEvidenceScorer` as an identity-class score, shows it as a seventh
-    section in the Diagnostics tab and the CLI (`--identify` needs auth), and
-    calls it only when the deterministic pass found no identity signal. Needs
-    an eval set like `inventory-detection-evals.ts` before it ranks anything.
-  - **Widen the on-device visual match.** `PhotoVisualEvidenceMatcher` compares
-    against each candidate's directly owned gallery attachments one at a time;
-    let it use every image reachable through the manifest's `visualEvidence`
-    paths (a planting's garden-entry photos, a recipe's meal photos) and take
-    the best of several references, so the second photo of a plant matches
-    even when the first was filed on an entry rather than the planting.
-    Owners: `apps/web/src/server/ai`, `services/photo-import-*`,
-    `apps/apple/CubbyKit/Sources/CubbyKit/Photo/PhotoEvidenceScorer.swift`,
-    `App/Shared/Photo/Library/PhotoVisualEvidenceMatcher.swift`.
-
-- **Label photo → `labelNutrition`.** The Brami panel was transcribed by hand
-  from a photo pasted into chat. Accept an attached image on the product and
-  extract the Nutrition Facts panel into `labelNutrition` with the image as
-  provenance.
-
----
-
-## Requires database changes
-
-- **Attribute Flue provider calls to their run.** Queued image processing,
-  background tasks and search-query embeddings now carry the causing run;
-  inbound purchase-mail classification keeps `systemActor()` because no member
-  is present. The Flue provider
-  (`apps/purchase-agent/src/cubby-ai-provider.ts`) still tags gateway metadata
-  with `jobKind: "purchase_import_run"`; send the run id once Flue exposes the
-  current run to module-scope providers.
-
-- **Cookbook identity merge.** Stop same-title collisions and renamed-EPUB forks
-  by giving cookbooks durable identity plus a merge/repoint path.
-
-- **Count units resolve on the ingredient, never via product `each`.** `1 whole
-example vegetable` must not resolve to the weight of an entire linked bag
-  because its `each` satisfies `whole`. Product `each` means _package_; recipe
-  `whole/bunch/crown/clove` means _piece_. A USDA portion can supply the
-  ingredient-specific piece-to-gram mapping. Rule: piece units come from USDA
-  `portionInfo` or an ingredient-level mapping, and product `each` prices the
-  package only — it must never satisfy a piece unit.
-
-- **Line-level discounts with a Product link.** Whole Foods promos and Amazon
-  Buy-Again are per line, but a `discount` row cannot carry `productId`, so
-  they are booked order-level and every promoted grocery's cost basis is list
-  price (synthetic example: a $10 item discounted to $8). Allow `productId` (no quantity) on
-  `discount` rows and fold linked discounts into derived cost basis without
-  changing `SUM(Expense.cost)`.
-
-- **Manual shopping items with durable checks.** Give the shopping list
-  server-backed item identity so ad-hoc entries such as milk or paper towels and
-  checked state persist across date ranges and devices. Keep the list independent
-  of inventory writes.
-
-- **Measured quantity on Expense lines.** A receipt can state `0.5 lb @ $4/lb`
-  (synthetic example); the current legal booking is `productQuantity: null`,
-  which discards the measured quantity. Booking variable-weight purchases as
-  individual "units" instead produces a meaningless derived unit price. Let
-  `productQuantity` carry `{value, unit}` (lb, oz, each) and normalize through
-  the Product's `unitMappings`, so derived pricing becomes price-per-measure
-  for weight lines and stays per-unit for packaged ones.
-
-- **Portion shares alongside grams.** Once a household stops weighing and
-  serves by eye ("one diner ~40% of the pot"), grams are a proxy that goes stale
-  when `estimatedYieldGrams` changes. Accept `{share}` per portion in
-  `meal_recipe.save_preparation` and derive grams at read time from the
-  current yield.
-
-- **Project materials and shortfalls.** Add a project-material edge with quantity,
-  free-text unit, optional Product resolution, and durable/consumable semantics;
-  derive have/need/buy through the availability engine without reservations or
-  automatic inventory decrement.
-
-- **Saved user-created views.** Persist named filter and sort sets using the
-  versioned external-state pattern, and render them alongside the
-  manifest-defined `presentation.list.views` without creating a second query
-  language.
-
----
-
-## Requires thought or evidence
-
-- **Bulk product re-categorization sweep.** Re-running the `product.categoryId`
-  suggestion over the catalog has no run record, progress, pause, or review
-  surface; past sweeps were ad-hoc agent batches. Build a sweep that records
-  each product's suggestion (target, branch-rolled confidence, runner-up), applies only
-  high-confidence changes, and queues the rest for review. Decide where the
-  run lives: a `Run` purpose, the activity `runProjection`, or a
-  shared sweep primitive also used by the image-description backfill. Run it
-  after that backfill, since the basis is mostly text until then. Measured:
-  about $0.10 per 1,000 Jev calls at a 2.3k-token roster; bursts near
-  600/min see ~6% throttling, so pace at a few hundred per minute. The
-  response cache keys on the taxonomy revision, so any category edit
-  invalidates a completed sweep.
-
-- **Measure the delegate-less routing change.** Around 2026-10-06, re-measure
-  30 days of Claude session transcripts against the baseline in
-  [model routing](agents/model-routing.md#delegate-or-not): share of sessions
-  that spawn subagents (about half), subagent share of context tokens (47%),
-  and subagent output on Opus/Fable. Keep the rule if the shares fell without
-  slower or lower-quality sessions; otherwise revise it.
-- **Jev suggestion for `product.ingredientId`.** The manifest and registry
-  already support it (`readKey: null` reference targets work in
-  `scripts/generator/entities/compile.ts` and `readReferenceField` in
-  `entities/entity-references.ts`); the open question is the roster.
-  `findLexicalSearchCandidates` ANDs every prefix term (`buildPrefixTsQuery` in
-  `repo/search-lexical.ts`), so a full product name never matches a short
-  ingredient, and per-word fan-out still misses abbreviations and synonyms.
-  Decide between semantic candidates (`services/semantic-search.service.ts`),
-  the whole ingredient list if it stays small, or lexical fan-out plus aliases.
-  Basis `name, manufacturer, categoryId, notes` — the category lets Jev return
-  none for non-food. `entity.resolve` already offers `candidateProducts` by
-  lexical rank; a Jev pick would sit on top of that roster.
-  Other fields without `suggest` (`location.parentId`,
-  `productCategory.parentId`, `recipe.cookbookId`, `ledgerParty.kind`,
-  `product.growsIngredientId`) stay manual: rare, deliberate edits.
-
-- **Completeness scores for every entity — exceptions still to come.** Every
-  scored household entity now declares `capabilities.dataQuality` in its
-  manifest (see `docs/entities.md` → "Data quality") and gets a computed
-  0–100 score, `dataStatus`/`dataGap` list filters, and a `sort=dataQuality`
-  worklist ordering (ascending = weakest first); see `docs/entities.md` for
-  the current scoring contract.
-  What remains: durable "not available" exceptions still only exist for
-  Product and Purchase (the `dataExceptions` jsonb column and
-  `data_exception.set`/`data_exception.clear` are hardcoded to those two —
-  generic durable exceptions are not yet designed); the per-check weights shipped
-  are a first cut and may need tuning once worklists are used in anger;
-  `projectsMissingBudget` remains a Problems tracker rule, not a `dataQuality`
-  check, because its subtree spend rollup is not a per-row predicate.
-
-- **Incremental import cursors and paced backfill.** The account cursor declares
-  newest-date/order-ID and backfill bounds, but imports do not advance them;
-  only the oldest available history boundary is recorded. Restore incremental
-  sync and backfill:
-  advance cursors after successful processing and resume newest-first backfill
-  with the planned 20–30 orders/hour pacing. This is durable progress and pacing,
-  separate from the conditional vendor-pagination evidence item below.
-
-- **Vendor evidence classification.** `orderEvidence` has a manual editor and
-  drives checks, but suggested classification and batch review are absent.
-  Use vendor identity, website, charge descriptors,
-  and order-mail evidence to suggest classifications; decide confidence
-  thresholds and fit accepted writes into the current approval model.
-
-- **Complete charge-to-order discovery.** Gmail discovery handles unique exact
-  amounts and order subsets, but lacks the next matching steps:
-  consult retained shipment-payment evidence before mailbox matching, then use
-  a bounded Jev tie-break for ambiguous mail candidates. Preserve member/vendor
-  scoping and unresolved outcomes when evidence cannot support a match.
-
-- **Import decision evaluation.** Offline evaluation needs representative,
-  sanitized identity, line-role, and reversal cases with
-  known outcomes and measured provider decisions. The current static Product
-  reuse fixture checks a result shape; it does not establish decision accuracy
-  or calibrate confidence thresholds. Evaluate the current shared-agent path
-  and its bounded decisions without committing private source material. Include
-  GPT-6 Luna/Sol and Opus 5.5 on a fixed purchase extraction, audit, and
-  coordinator corpus; compare task success, latency, and total cost per run
-  before changing the automatic tier choices again.
-
-- **Cookbook fallback evaluation.** Run the six-book answer-key corpus against
-  GPT-6 Luna as the second ladder reader and compare its full-book recall,
-  escalation rate, latency, and cost with the former second reader. Keep Gemini 2.5 Flash
-  as the evaluated first reader until a broader test supports a change.
-
-- **CalDAV event deletion.** The HTTP adapter returns 405 for DELETE and directs
-  users to Cubby. Resolve the [deferred client-precondition policy](caldav.md#storage-and-writes)
-  for clients that omit `If-Match`, then implement canonical conditional deletion
-  through the adapter and Durable Object. Keep deletion in Cubby until then.
-
-- **Review suggestions across a full filtered list.** The inline suggestion
-  pass checks opened pages only. Design an explicit interactive scan with
-  progress and individual acceptance before expanding beyond loaded records.
-
-- **Apply a reviewed purchase-validation diff.** Targeted validation now
-  records a read-only semantic diff and stops for review. Design the explicit
-  human confirmation, stale-target revalidation, and transactional application
-  path before allowing any proposed validation change to touch Purchases,
-  Expenses, Product assignments, settlement, or shared evidence.
-
-- **Generalize evidence-backed Product enrichment beyond Amazon.** Add fixed
-  source adapters for retailer SKU, catalog/item number, and GTIN evidence;
-  each batch declares each field's expected current and replacement values, and
-  applies only those proven corrections. Preserve current values unless an
-  explicit correction is evidenced.
-  Readable page text and free-text source hints are not write authority.
-
-- **Dependent batch program.** Define a bounded program of named operations
-  whose results feed later inputs. Specify input/result limits, dependency
-  failure propagation, ordered partial outcomes, and retries that preserve
-  completed writes. Carry an explicit continuation for unfinished work.
-
-- **Manual purchase lifecycle.** Define one compact run that expands selected
-  candidates into evidence, automatic receipt outcomes with attachment ids and
-  classifications, replay-safe writes, and multi-order handling. Keep a
-  multi-order export as run evidence. Record the run evidence and terminal
-  outcomes so interruption resumes rather than duplicating work. Close grouped
-  settlement:
-  Gmail can identify several orders for one charge, but the writer matches
-  separate exact-amount transactions per Purchase. Turn a confirmed group into
-  the corresponding allocations atomically and without duplication; leave
-  ambiguous or incomplete groups for review.
-
-- **Conditional purchase-import browser extension.** Promote only if the
-  Apple-event browser bridge repeatedly fails to background its owned window,
-  cannot avoid Chrome's JavaScript-from-Apple-Events setting, or otherwise
-  cannot provide reliable capture plumbing. Tab grouping alone does not justify
-  the extension. Keep it thin: window ownership and capture plumbing only; it
-  must not gain Cubby credentials or business-write access.
-
-- **True full-page image-rich browser evidence.** The shipped rendered PDF is
-  an honest snapshot of Cubby's dedicated browser viewport, paired with the
-  searchable normalized PDF. Promote a stitched/print-quality full-page capture
-  only when the viewport misses evidence needed for a real import; do not label
-  viewport capture as full-page in the meantime.
-
-- **Gmail discovery re-authentication.** Promote when a production Gmail
-  request returns 401/403 after a refresh-token expiry or consent revocation.
-  Show an actionable reconnect path, preserve the resumable Problem, and avoid
-  silently treating authorization failure as an empty mailbox.
-
-- **Finish terminal browser cleanup.** Promote when production logs show
-  browser commands surviving a completed, failed, or needs-review run, or an
-  owned browser window remaining visible after failure/review. Terminalize or
-  reject queued commands by run generation, send one terminal client signal,
-  minimize only Cubby's window, and surface discarded work in the run log
-  without touching a successor run.
-
-- **Typed pagination and final grocery evidence.** Promote when a real vendor
-  exposes pagination or grocery pages whose last page is not represented by
-  the current hints. Add typed pagination state and an explicit exhausted
-  result, then capture final item/settlement evidence rather than relying on
-  an intermediate list response.
-
-### Needs a decision or investigation
-
-- **Spike Drizzle 1.0 RC for test factories.** `drizzle-orm@1.0` RC exports
-  `./zod` (table to Zod schema) and the separate `drizzle-seed` package can
-  generate seeded rows. Evaluate both as the backing for test data factories.
-  `server/db/create-shape-drift.unit.test.ts` records a decision against deriving
-  create shapes with drizzle-zod, so adopting `drizzle-orm/zod` would reverse
-  it; weigh that against the declaration spine (`entity-definitions`) before
-  pulling the RC, and do not bump drizzle outside the spike.
-
-- **Offer a Docker path for local development.** `pnpm dev` and the local test
-  services need macOS with Apple `container` (`scripts/lib/apple-container.ts`);
-  Linux runs only the external-service mode CI uses. Decide whether a Docker
-  backend for the supervisor and `scripts/test-services.ts` is worth supporting
-  for non-macOS contributors and agent sandboxes.
-
-- **Diagnose the image-processing retry storm.** Production averages about 190
-  `ImageProcessingAttempt` rows and 380 `ImageProcessingEvent` rows per job (the
-  worst job has 756 attempts). Find why jobs re-lease that often before adding
-  any retention to those tables.
-
-- **GardenEntry as a dated journal.** Almost every `GardenEntry` is a note, with
-  a handful of harvests. Decide whether it becomes a generic dated journal on
-  Location and Planting or stays garden-specific.
-
-- **Project locations as Locations.** `Project.locations` is free text with three
-  distinct values (street addresses) that match no Location. Decide whether
-  properties become Locations with a project-site link, or stay free-form.
-
-- **Make narrow web layouts device agnostic.** `useIsMobile` already follows
-  viewport width, but the compact shell still uses phone-style tabs and
-  overlays. Design a simpler compact navigation and overlay pattern that works
-  at the same narrow width on a resized desktop window and on iPhone, keeps
-  every ordinary route reachable, and uses width rather than device identity
-  for layout. Keep safe-area, virtual-keyboard, and touch behavior where the
-  browser exposes those capabilities; update the web design language and
-  responsive checks with the chosen pattern.
-
-- **Detail ledger dates.** Task Overview shows `Due` and `Due end` as two
-  identical ISO rows (`2026-09-22` twice) for a single-day task, while the
-  header reads `Added Sep 18, 2026`. Decide whether a same-day range
-  collapses to one `Due` row (keeping `Due end` editable from the edit
-  sheet) and whether detail facts use the human date format; both are
-  manifest `display.format`/field decisions, not ledger CSS.
-
-- **Phone hit areas as pseudo-elements, app-wide.** Button's default
-  `mobileSize: "touch"` grows icon controls to 44px _layout_ boxes, which
-  wraps dense rows on phones. The detail ledger now keeps the 44px target as
-  an `::after` (suggestion glyph, cohort filter link, field-explanation
-  trigger; the `checkbox.tsx` pattern). Decide whether `touch` itself should
-  become a pseudo-element target so other dense surfaces (phone cards,
-  relation section headers) get the same density without per-call-site
-  classes.
-
-- **Fixture-backed web preview route.** `pnpm dev` now runs the full app in
-  workerd with a persistent synthetic corpus and optional domain packs. What
-  remains is a dev-only component route that renders arbitrary loading, error,
-  and edge states from schema-backed fixtures without navigating the full app.
-  The production bundle must exclude faker and the preview route. Promote when
-  driving individual states through full app flows repeatedly slows iteration.
-
-- **E2E against the HMR session.** `pnpm --filter @cubby/web test:e2e:watch`
-  retains a `vite build --watch` Worker bundle and disposable warm PostgreSQL
-  services. The persistent `pnpm dev` session now also runs in workerd; an
-  optional Playwright lane could reuse its discovered origin for interactive
-  iteration. It still needs isolated fixtures, cleanup, and sanitized replay
-  artifacts before replacing any existing local lane. CI continues to own the
-  exact-head merge gate through its disposable harness.
-
-- **Declarative "many, clamped to one" cardinality.** The image-provenance
-  work chose a many-row `ImageSighting` child table plus derived declared-`one`
-  Image fields over turning scalar relations into arrays with a runtime
-  clamp. Cardinality is a compile-time `one|many` literal
-  (`packages/schemas/src/entity-definitions/definition.ts`, relation
-  metadata) consumed by the editor branches, `image-policy.gen.ts`'s
-  `source-id` vs `source-id-list` bindings, Swift `FieldReference.multiple`,
-  every scalar FK column, and ADR 0007's rule that only payload-free pairings
-  of two entities are `EntityLink` kinds. Revisit only
-  when a second entity needs multi-evidence provenance; the existing
-  relation `provenance.sources[]` is the declarative construct to extend
+- 🤔 **Receiving an already-photographed purchase.** Purchase import raises a
+  receive finding for every order; receiving an item already stocked from
+  photos double-counts it, and the match card only warns that merge sums both
+  sides. Decide whether the receive finding checks for a pending match pair
   first.
 
-- **Generic HTTP `resources.<entity>.batch` route.** MCP `entity.commands` runs
-  up to 50 create/update commands per call, but the HTTP surface is one row
-  per request, so a native bulk write (library sighting backfill, PR 5 of
-  the provenance plan) issued one generated `create` per row; sightings now
-  have the native `image.recordSightings` page instead. Promote if a
-  5k-asset library makes that measurably slow; the route should mirror
-  `entity.commands`'s independent-item semantics and benefit every entity.
-
-- **One FROM context per entity list.** Every list repo pairs a Drizzle
-  relational `findMany` rows query (root table aliased to its lowercase name;
-  Column objects rewritten, `sql.raw` strings and nested `PgSelect` builders
-  not) with an unaliased `$count` on the same where clause, so any predicate
-  that references the outer row by raw table name or through a correlated
-  sub-select compiles on one leg and throws `invalid reference to FROM-clause
-entry` on the other — six shipped occurrences so far (#456, #462, #481,
-  #762, #785, CUBBY-11R). The sanctioned workarounds (uncorrelated `IN`
-  sub-selects, dual-alias where builders, string alias parameters on
-  `effective*Sql` fragments) are guarded by
-  `server/entity-kernel/list-smoke.integration.test.ts`, which exercises every
-  declared filter and sort per entity. Decide the durable shape: plain-select
-  rows with explicit relation joins, one `alias(table, name)` shared by every
-  leg, or Drizzle relations v2 — each removes the string alias contract from
-  `expense-inheritance.ts`, `task/lookup.ts`, and `image.ts`.
-
-- **Evaluate Cloudflare Workflows across durable background work.** Compare
-  vendor Gmail discovery first: one durable instance per Run, bounded Gmail
-  pages, a persisted cursor and counts after each page, and a timed wait for
-  AI Gateway 429s that resumes without replaying saved mail. Define how a
-  Run exposes the Workflow instance, current step, next retry time, attempt
-  count, inputs, progress events, and final failure chain through the same
-  generic detail view used by queue and Flue work. Test deployment/version
-  changes, cancellation, duplicate delivery, and terminal exhaustion before
-  migration; keep the existing queue path until the Workflow can recover a
-  paused Run. Also compare image description/eligibility/companion processing,
-  purchase import and
-  targeted validation/enrichment, and bounded backfills/maintenance against
-  their existing queue, lease, and Flue orchestration; use search-index repair's
-  existing Workflow as a concrete reference. Include cookbook imports only if
-  unattended/resumable execution becomes necessary. Reverse-connected clients
-  can complete external-event waits through the authenticated server; retain
-  the device bridge, authorization, idempotency, and output validation. For each
-  candidate identify orchestration code replaced, retry/state ownership,
-  recovery behavior, operational cost, and test/deployment impact before
-  adopting it. Keep shared run history independent of the execution engine.
-  See `docs/infrastructure.md` for the current purchase-agent runtime boundary.
-  Include device-local work (library scan,
-  classification sweep, sighting backfill): the native
-  `BackgroundActivity` shape mirrors `ActivityRun` so posting those runs into
-  the `runProjection` union (`apps/web/src/server/repo/activity.ts`) is a
-  transport addition, giving cross-device history without a remodel.
-
-- **Live Activities for server runs started on this device.** Record the initiating
-  install separately from `ActivityRun.executors` (which identifies where work
-  ran), then send per-activity ActivityKit push updates for state changes so
-  the originating phone can show progress after Cubby is suspended. Keep the
-  native Live Activity's local-work feed separate from server run history.
-
-- **MCP staged-file storage.** Before sharing a local upload beyond its signed
-  grant, define no-copy activation, replay behavior for a signed grant,
-  activation fencing, delete-before-grant-expiry handling for a recreated
-  orphan, and ownership of workflow evidence. Build on the `EntityAttachment`
-  and file-liveness model in ADR 0006.
-
-- **Host-provided MCP file references.** Adapt client-owned file handles and
-  download URLs through capability-specific input metadata and the existing
-  validated URL-fetch path. Downloadable URLs remain the fallback; no upload UI.
-
-- **Durable MCP transfer telemetry.** Persist call duration, serialized response
-  bytes, and per-item outcomes when repeated measurements justify it. Expand
-  telemetry storage and queue consumers compatibly before new producers; the
-  current lightweight tracing does not require this migration.
-
-- **Cluster and reproduce the native app-hang corpus before changing code.**
-  Collect sanitized release, duration, foreground state, and the top symbolicated
-  main-thread frames for each Sentry family; group by shared app frames rather
-  than issue id. Reproduce each surviving family in a Release build without
-  LLDB and use Time Profiler for busy-main-thread work or System Trace for
-  waits/locks. Keep hang tracking enabled and make one repair per demonstrated
-  root cause rather than treating repeated samples as independent bugs.
-
-- **Make generated native response decoding forward-compatible.** The current
-  image-detail failure may be either a missing required `useOriginal` field or
-  an older strict client rejecting additive representation fields. Capture the
-  sanitized decoding path first, then fix the generator so output projections
-  tolerate additive server fields while request/input schemas remain strict;
-  keep this lane exclusive over OpenAPI and generated Swift, and deploy the
-  backward-compatible server behavior before distributing the client.
-
-- **Reproduce macOS photo-match export inside the sandbox.** Capture the
-  underlying error chain and sandbox denial for Downloads, Desktop, and an
-  iCloud Drive/file-provider destination before choosing between exact-file
-  authorization, coordinated writes, or per-file copying. Keep the existing
-  user-selected entitlement; do not add broad access or persistent bookmarks
-  for an immediate export.
-
-- **Capture exact runtime error shapes before broadening suppression.** The
-  remaining client-disconnected cancellation, missing update-result, opaque
-  database failure, and pathological LIKE/GLOB reports need sanitized
-  name/message/stack/route evidence and an event-shaped regression test before
-  changing global filters or contracts. Archive expected noise only after the
-  narrow classifier is proved; do not hide unrelated transport or query errors.
-
-- **Trial `@cf/baai/bge-base-en-v1.5` via AI Gateway alongside OpenAI.**
-  Vectorize's per-vector cost is model-agnostic, so a cheaper/faster
-  Workers AI embedding model is worth comparing against the OpenAI adapter
-  for recall quality before committing to it as the default. Use these
-  query/expected-top-result pairs as the eval set (moved here from the
-  deleted `server/semantic/search-evals.ts`):
-  `"plastic tarp"` → `blue plastic tarp` (product); `"drop cloth"` →
-  `plastic drop cloth` (product); `"where are tarps"` →
-  `tarps cloths blankets` (location); `"packout"` → `packout organizer`
-  (product); `"parchment"` → `parchment paper` (product); `"tarpaulin"` →
-  `blue plastic tarp` (product); `"cling film"` → `plastic wrap` (product);
-  `"adjustable spanner"` → `adjustable wrench` (product); `"wet dry vac"` →
-  `shop vacuum` (product); `"painters cover"` → `painters drop cloth`
-  (product). Trap: `bge-base-en-v1.5` embeds at a different dimension than
-  OpenAI's model, and `EntityEmbedding`/Vectorize rows are keyed on
-  `(provider, model, dimensions)` — `findRelatedSearchCandidates`
-  (`server/services/search.service.ts`) must resolve the active
-  `SemanticEmbeddingConfig` before embedding the query text, not embed with
-  a stale/hardcoded dimension and silently miss every stored vector.
-  `refreshEntityEmbeddings` (`server/background-tasks/embedding.ts`) now
-  embeds a whole queue batch in one call, so this eval set can be run
-  against production-shaped 10-text batches instead of one query at a time.
-
-- **Dev Vectorize REST client, if semantic search in plain-Node dev is ever
-  wanted.** The vite Node dev server has no `VECTORIZE` binding, so
-  `semanticEmbeddingsConfigured()` (`server/semantic/embeddings.ts`)
-  degrades to unavailable there today — that's a deliberate simplification,
-  not a bug. If local semantic search becomes worth the cost, add a
-  `VectorStorePort` implementation over Cloudflare's Vectorize REST API
-  (account id + API token) instead of loosening the gate.
-
-- **`AiUsage` rows for `entityEmbeddingRefresh` are now per batch, not per
-  entity.** Since `refreshEntityEmbeddings` embeds a whole queue batch in one
-  provider call, the recorded row carries `inputCount` for the batch but no
-  `entityId` — attributing gateway spend back to a single entity needs a
-  different aggregation if that's ever wanted.
-
-- **Cloudflare AI Search (managed RAG over R2 files) for a future
-  document-Q&A feature.** Evaluated and rejected for entity similarity
-  search (this pass's problem): it ingests files from R2 rather than rows,
-  re-indexes on a schedule rather than per-write, and returns chunk results
-  rather than entity refs — none of which fit "find the Product/Location/…
-  this query means." Worth a second look only if Cubby ever wants
-  free-text Q&A over uploaded documents (receipts, manuals) as its own
-  feature, which is a different problem than entity search.
-
-- **List-route SSR payloads are large.** Unauthenticated probes measured
-  `/projects` at 826 KB, `/locations` 655 KB, `/recipes` 579 KB of HTML.
-  Find what the generic list loader and the slot views dehydrate (a full
-  first page plus the calendar/dashboard data is the likely answer) before
-  deciding whether to trim the loader, defer slot data, or leave it.
-
-- **Eyeball `/graph` after the canonical-owner change.** #1067 made the
-  foreign-key side own a physical path shared by two declared relations
-  (`entity-graph.ts` `canonicalPaths`), so arrows that used to read
-  `product → inventory` now read `inventory → product`; the tests were
-  updated but the Relationships tab and `/graph` were not inspected for
-  relations declared on both sides.
-
-- **Narrow the `e2e` Nx target's inputs, then cache it.** `nx affected`
-  treats all of `apps/web/src/**` as an e2e input. The target is uncached
-  (container side effects), so explicit `verify:local` runs always pay for
-  Playwright; pushes run no validation. `apps/web/tests/e2e/spec-areas.ts` now
-  maps every spec to the routes/feature dirs/contracts it exercises for local
-  selection (`pnpm --dir apps/web test:e2e:affected`), but that's a
-  developer-loop narrowing, not an Nx input — deciding whether a cache hit on
-  an unchanged tree is acceptable evidence for the Nx target, and whether to
-  reuse this same manifest for it, is still open.
-
-- **Consumable vs durable as a Product attribute.** The distinction is
-  currently encoded by convention as "expense on `PRJ-HSHD` vs no project",
-  living only in the purchase-import skill notes; `stockTracked` half-encodes
-  it. A first-class `Product.kind` (or consumable flag) would let the import
-  default the project, the shelf worklists filter, and the convention stop
-  needing rediscovery per importer.
-
-- **Inferred-zero nutrients for label data.** USDA `branded_food` records and
-  household `labelNutrition` carry only what the label prints (11 nutrients
-  for chicken, panko, parm, chilies), so macro coverage read 11/12 with the
-  only "missing" line being salt's protein. FDA labels must declare calories,
-  total/saturated/trans fat, cholesterol, sodium, carbs, fiber, sugars, added
-  sugars, protein, vitamin D, calcium, iron, potassium; a manufacturer may omit
-  one only as "not a significant source" (below rounding). So for label-sourced
-  records a missing _mandatory_ nutrient is an inferred zero and a missing
-  micronutrient (zinc, B12, magnesium, folate…) stays unknown. Model nutrient
-  values as `measured | inferred-zero | unknown`; count inferred zeros as
-  covered but flag them. Manual override: extend ingredient `naKinds` with
-  nutrient keys for true edge cases — but not salt, which is the largest sodium
-  source, and whose unmeasured "to taste" line is currently planned at 1% of
-  pot weight (13.6 g salt ≈ 5 g sodium in a 1.3 kg pot), worth a sanity check.
-
-- **Ingredient as the grocery dedupe hub.** Product is SKU-grade and
-  Ingredient is the commodity layer, but imports never fill `ingredientId`,
-  so the catalog now holds `Cauliflower` / `Organic Cauliflower, 1 Each`,
-  `Organic Kiwi` / `Organic Green Kiwi, 16 oz`, `Broccoli Crowns` /
-  `Broccoli Crowns (Conventional)`, and three ground-beef 80/20s with nothing
-  tying them together — each a defensible SKU, none reachable from the
-  others. Suggest or require an Ingredient on grocery Product creation and
-  make `entity_read.resolve` search ingredient aliases, so "banana" resolves
-  regardless of which storefront's ASIN the receipt carries.
-
-- **Meal nutrition goals.** Let meal planning compare planned nutrition with
-  explicit household goals using the existing recipe nutrition totals.
-
-- **Meal templates.** Save reusable meal compositions without coupling them to
-  recurrence.
-
-- **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
-  `nutrition.shopping_list` is a plain structured/text tool. The remaining USDA
-  Picker template is 352,004 bytes raw / 83,655 gzip and builds in 132 ms on
-  the local M3 development machine. Keep it only while refinement and explicit
-  selection materially outperform a plain `usda_food.search` result.
-
-- **Server-backed table intelligence.** Extend exact facet counts and honest
-  aggregate summaries from Expenses to one justified server-paginated surface at
-  a time; never analyze a partially loaded client page as the full population.
-
-- **Swift 6.4 / OS 27 readiness pass on the Apple app.** Before a toolchain or
-  deployment-floor change, audit state initialization, concurrency boundaries,
-  availability, and resizing against the actual SDK. Verify custom initializers and
-  Sendable assumptions with focused behavior tests.
-  Preserve the supported OS 26 path until a floor bump is explicitly chosen. Owners:
-  `apps/apple/project.yml`, `apps/apple/App`, and `CubbyKit`.
-
-- **Product match queue recall and cost.** A full queue read makes up to 60
+- 🤔 **Product match queue recall and cost.** A full queue read makes up to 60
   vector lookups (top 20 neighbours each), and a photo↔purchase pair is missed
   when the purchase Product is outside that neighbourhood and shares no name
   token. Measure misses on real wardrobe imports before widening, caching, or
   moving detection to write time
   (`apps/web/src/server/services/product-match.service.ts`).
 
-- **Cross-vendor style-number matching.** Purchase prep reports an exact match
-  for a vendor-sourced `retailer_sku`/`asin` or a GTIN, so a brand style number
-  recorded from a tag matches only the brand's own shop, not a department
-  store selling the same item. Decide whether a manufacturer part-number kind
-  is worth adding or whether barcodes plus the match queue suffice.
+- 🤔 **Reproduce macOS photo-match export inside the sandbox.** Capture the
+  error chain and sandbox denial for Downloads, Desktop, and an iCloud
+  Drive/file-provider destination before choosing between exact-file
+  authorization, coordinated writes, or per-file copying. Keep the existing
+  user-selected entitlement; no broad access or persistent bookmarks.
 
-- **Receiving an already-photographed purchase.** Purchase import raises a
-  receive finding for every order; receiving an item already stocked from
-  photos double-counts it, and the match card only warns that merge sums both
-  sides. Decide whether the receive finding should check for a pending match
-  pair first.
-
-- **Photo-group approval racing a concurrent save.** A stale approval can
-  commit a photo that a concurrent save moved to another group, which then
-  fails with "inconsistent target state" until removed. The failed-operation
-  retry's compare-and-set takeover also lacks a regression test (it did not
-  interleave reliably on one test connection). Decide whether either needs
-  more than the current recovery path.
-
-### Waiting for a trigger
-
-- **Retire native-owned web fieldwork and PWA installation.** After native
-  workflow parity (below) ships and its flows pass real-device validation, remove
-  web barcode/QR camera controls, `/scan`, the sweep UI, the superseded recount
-  and location photo-pass routes, and PWA manifest/share-target/icons/splash
-  assets. Account for unfinished browser-local passes and old entry links
-  before removing their routes. Keep the responsive website, ordinary record
-  links, photo capture/upload, and the scan/reconcile APIs used by native.
-
-- **Image provenance follow-ups.** Each promotes on its own trigger:
+- ⏳ **Image provenance follow-ups.** Each promotes on its own trigger:
   - _Geolocated photo → nearest Location suggestion_ in import review, once
-    Locations carry coordinates (the coordinate field renderer from PR 3b is
-    reusable).
-  - _Capture date as inventory evidence_: a sighting's `capturedAt` says a
-    product existed / was at a Location on that day; emit it as a timeline
-    event when the inventory timeline next needs external evidence.
-  - _Cross-member duplicate review_: the same pixels in two members'
-    libraries already produce two sightings; a review queue reusing
-    `PhotoMatchStore` candidates is worth it once ambiguous attributions
-    accumulate.
-  - _Per-feature participation sub-switches_ (companion jobs vs library
-    processing) if the single master switch proves too coarse.
-  - _`MenuBarExtra` companion status on macOS_: the app works in the
-    background unconditionally today; an always-visible indicator is honest
-    once the sidebar rows from PR 4 exist.
-  - _Hash-repair egress budget_: repair downloads full originals
-    (`PhotoMatchStore.repair`); cap per session and prefer Wi-Fi when cellular
-    use is observed.
-  - _Shortcuts App Intent "Log this photo to Cubby"_: on-device, keeps
-    location; depends on the import path carrying the `library` block.
-  - _Map / per-place / per-trip photo filters_ once GPS is stored.
+    Locations carry coordinates.
+  - _Capture date as inventory evidence_: emit a sighting's `capturedAt` as a
+    timeline event when the inventory timeline next needs external evidence.
+  - _Cross-member duplicate review_ reusing `PhotoMatchStore` candidates once
+    ambiguous attributions accumulate.
+  - _Per-feature participation sub-switches_ if the single Automatic work
+    switch proves too coarse.
+  - _`MenuBarExtra` companion status on macOS_ once background work is
+    visible elsewhere.
+  - _Hash-repair egress budget_: `PhotoMatchStore.repair` downloads full
+    originals; cap per session and prefer Wi-Fi when cellular use is observed.
+  - _Shortcuts App Intent "Log this photo to Cubby"_, once the import path
+    carries the `library` block.
+  - _Map / per-place / per-trip photo filters_ over `captureLocation`.
 
-- **Trace the web Worker's AI calls into Sentry's Agents view.** The purchase
-  agent reports `gen_ai` spans through Flue's Sentry blueprint, but the web
-  Worker's structured AI features (`server/ai/run-feature.ts`, embeddings) do
-  not: Sentry's Workers AI integration only wraps `env.AI.run()`, never the
-  `env.AI.gateway("cubby").run()` transport Cubby uses, and the TanStack AI
-  adapters bypass Sentry's provider integrations. Adding it means a
-  `@tanstack/ai` `ChatMiddleware` (next to `ai-gateway-usage.ts`) that opens a
-  `gen_ai.chat` span with the request model and token usage. Do it when a
-  web-side AI feature needs per-call latency or cost debugging that the AI
-  Gateway dashboard cannot answer.
+- ⏳ **Decode bytes in image verification.** Promote when a corrupt or fully
+  transparent cover is next found by eye. `inspectImageFile`
+  (`services/image-integrity.ts`) never rasterizes, so
+  `product_enrichment.verify_images` reports `verified` for files that will not
+  render; a subagent citing it is not proof of a good image.
 
-- **`imports_read.vendor_coverage` per account** — Promote when two members hold
-  accounts at the same vendor. Coverage and `needs_data` are per Vendor
-  today, which would conflate their histories.
+- ⏳ **Exact entity attribution for `image.attach_files`.** Promote if
+  mixed-entity batches distort the MCP usage dashboard; telemetry attributes a
+  batch to its first item's entity.
 
-- **`PurchaseLine` SKU annotation** — Promote when store SKU, quantity, or unit-price
-  detail is genuinely wanted. It is annotation only; `Expense` remains financial
-  truth.
+- ⏳ **Apparel photo routing and size/color fields.** Routing categories are
+  plants, food, documents, and home; size and color live in the Product name
+  and notes, one Product per variant. Revisit an apparel category once the
+  hosted coordinator routes photos, and structured size/color once wardrobe
+  filtering by size is wanted.
 
-- **Aggregate range materiality** — Promote if always-on cost/calorie/weight ranges
-  create visible noise; keep authored line ranges and collapse only immaterial
-  aggregate spreads.
+- ⏳ **Driven simulator smoke for the photo flow.** Promote when the next
+  SwiftUI identity/state bug ships. `simctl addmedia` two fixture photos, drive
+  select A → Add to… → Cancel → Clear → select B → Add to… via Axiom `xcui`,
+  and assert the hero names B. Run from `apple-check.sh` behind a flag, outside
+  the pre-push gate.
 
-- **Before-drywall spatial capture** — Promote immediately when construction is
-  scheduled; define the smallest room/wall-indexed photo packet before walls close.
+See also the image operational passes at the end of this file.
 
-- **Budget-aware MCP pagination** — Promote when a real tool result hits an output
-  limit or is measurably too large. Define stable keyset cursors, explicit compact
-  JSON byte and aggregate-result limits, and a continuation that preserves the
-  chosen filters, sort, and budget. Mixed entity/action read batches need
-  explicit per-family bounds and result attribution.
+---
 
-- **Core native inventory experience.** Promote when everyday use of the native
-  redesign exposes a specific inventory bottleneck. Deepen location-first browsing,
-  stock comparison, capture/recount, and photo completion; introduce bulk actions
-  or drag/drop only for a demonstrated workflow. Owners:
-  `apps/apple/App/Shared/Browse`, `Capture`, and `Audit`; see [native design](../apps/apple/DESIGN.md).
+## Purchases, finance & household ledger
 
-- **Decode bytes in image verification** — Promote when a corrupt or fully transparent
-  cover is next found by eye. `inspectImageFile`
-  (`apps/web/src/server/services/image-integrity.ts`) checks magic bytes, header
-  dimensions, byte length and sha256 but never rasterizes, so `product_enrichment.verify_images`
-  reports `verified` for files that will not render. A subagent citing the verify tool
-  is therefore not proof of a good image.
+- 🟢 **Finish the input-first retailer and statement journey.** Make a saved
+  synthetic order-history and product HTML page drive the browser capture and
+  purchase prepare/commit path, then confirm the order in the web UI. Cover
+  statement-before-order and order-before-statement allocation with a
+  synthetic Monarch CSV; keep account identity and Product merge as explicit
+  review decisions. Extend to native CSV/photo review and a Gmail
+  connect-to-order approval check. Track boundaries in
+  [core journey E2E](agents/core-journey-e2e.md), seeding only account/login
+  prerequisites.
 
-- **Entity relation runtime dispatch** — Promote when attach/detach genericization
-  resumes. Generate dispatch only for declared runtime ports and make unsupported
-  semantic edges fail explicitly; catalog relationships must not imply executable
-  mutation behavior.
+- 🟢 **Attribution prefill.** First step toward actually using the
+  contribution ledger (`LedgerTransfer`, `ExpenseAttribution`, ownership
+  columns — kept on purpose, unused so far): default the expense editor's
+  beneficiaries/funders to the last set used with the same vendor.
 
-- **Estimated-allocation analytics caveat** — Promote when materials-versus-labor
-  analytics inform a real decision; disclose the allocation-basis portion without
-  excluding it from total spend.
+- 🤔 **Incremental import cursors and paced backfill.** The account cursor
+  declares newest-date/order-ID and backfill bounds, but imports do not advance
+  them. Advance cursors after successful processing and resume newest-first
+  backfill at the planned 20–30 orders/hour.
 
-- **Exact entity attribution for `image.attach_files`** — Promote if mixed-entity batches
-  distort the MCP usage dashboard. The batch attributes telemetry to its first item's
-  entity because one row has nowhere to put a set; a batch spanning entities
-  under-reports the rest.
+- 🤔 **Vendor evidence classification.** `orderEvidence` has a manual editor
+  and drives checks, but no suggested classification or batch review. Suggest
+  from vendor identity, website, charge descriptors, and order mail; decide
+  confidence thresholds and fit accepted writes into the approval model.
 
-- **Evaluate trade affinity in expense project suggestions** — Check once the
-  `expense.projectId` roster's per-project trade tallies (`renderLine` in
-  `server/ai/field-suggest/registry.ts`) have served real suggestions in
-  production: compare accept/override rates on `/ai-usage` against the
-  date-window-only roster, and drop the tallies if they add tokens without
-  better picks.
+- 🤔 **Complete charge-to-order discovery.** Gmail discovery handles unique
+  exact amounts and order subsets. Next: consult retained shipment-payment
+  evidence before mailbox matching, then a bounded Jev tie-break for ambiguous
+  mail candidates. Preserve member/vendor scoping and unresolved outcomes.
 
-- **Exact nutrition source tracing** — Resume when upstream conversion work is in
-  scope. Extend `ingredient-parser` reports to retain actual mapping identities,
-  directions, and competing mappings from the selected calculation path. Then
-  update Cubby and expose Product/USDA/manual-mapping provenance through nutrient
-  cells and nested recipes, including consumption and yield adjustments. Show
-  selected results with conflicting alternatives and repair links, preserving
-  existing resolution rules. Return inspected values and traces from the same
-  computation; never infer selected sources from matching values or linked-product
-  lists. The Cubby-only nutrition overhaul does not depend on this work.
+- 🤔 **Manual purchase lifecycle.** One compact run that expands selected
+  candidates into evidence, receipt outcomes with attachment ids and
+  classifications, replay-safe writes, and multi-order handling, recording
+  terminal outcomes so interruption resumes. Close grouped settlement: Gmail
+  can identify several orders for one charge, but the writer matches separate
+  exact-amount transactions per Purchase; turn a confirmed group into
+  allocations atomically and leave ambiguous groups for review.
 
-- **Explicit idempotency key for `meal_recipe.add`** — Promote if a re-sent agent
-  call actually duplicates a meal line in practice. A natural-key unique index is NOT
-  the answer: a meal repeating a recipe at different scales is intended behavior, and
-  each occurrence must stay a distinguishable shopping-list contribution. Retry-safety
-  needs a caller-supplied key. The guard test that named this as intentional was
-  deleted with the tRPC-era `meal.integration.test.ts` (#914) and never replaced, so
-  the first slice of this — or of any meal-line work — is a `operations/meal.server.ts`
-  integration test asserting one meal holds one recipe twice at different scales with
-  two independent shopping-list contributions.
+- 🤔 **Apply a reviewed purchase-validation diff.** Targeted validation
+  records a read-only semantic diff and stops. Design human confirmation,
+  stale-target revalidation, and transactional application before any change
+  touches Purchases, Expenses, Product assignments, settlement, or evidence.
 
-- **`stored` descriptor sweep per repository** — Promote when a hand-built
-  list drifts from its declared columns. Every list repository now composes
-  through `listScaffold`; what remains hand-written are predicates over
-  subqueries, OR-groups, array columns and shortcode resolution, plus single
-  stored-column `eq`/`ilike`/`inArray`/`gte`/`lte` calls that could be `stored`
-  descriptors (`product/crud.ts` and `purchase.ts` carry most). Convert per
-  repository and verify with the real-query matrix; leave joins alone.
+- 🤔 **Import decision evaluation.** Build sanitized identity, line-role, and
+  reversal cases with known outcomes; the static Product reuse fixture checks a
+  shape, not accuracy. Include GPT-6 Luna/Sol and Opus 5.5 on a fixed
+  extraction, audit, and coordinator corpus; compare success, latency, and cost
+  before changing automatic tier choices again.
 
-- **Let the negative-expected-quantity worklist converge** — Promote when the
-  `negativeExpectedQuantity` view is next worked. It reads the kit-projected quantity
-  (`kit-projection.ts`), and after triage most survivors are settled decisions —
-  big-ticket items whose acquisition predates ledger coverage — with nowhere to be
-  recorded: `dataException` has no such check, yet `view-manifest.ts` asserts the view
-  converges. Two designs were costed and the operator chose to leave the detector alone
-  (2026-08-18): book the missing unit as an Expense with `cost: null,
-productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
-  quantity's sign, but zero such rows exist today), or add a product data check with a
-  **ledger-derived** fingerprint — the obvious `updatedAt`-keyed version is unsafe,
-  because adding a real acquisition would not re-open the row.
+- 🤔 **Generalize evidence-backed Product enrichment beyond Amazon.** Fixed
+  source adapters for retailer SKU, catalog/item number, and GTIN; each batch
+  declares expected current and replacement values and applies only proven
+  corrections. Page text and free-text hints are not write authority.
 
-- **Location subtree filters** — Promote when direct-child filtering demonstrably
-  blocks a location or inventory workflow; use a scoped descendant-id helper rather
-  than the relation-heavy whole-tree CTE.
+- 🤔 **Cross-vendor style-number matching.** Prep reports an exact match only
+  for vendor-sourced `retailer_sku`/`asin` or a GTIN, so a brand style number
+  matches only the brand's own shop. Decide whether a manufacturer part-number
+  kind is worth adding or barcodes plus the match queue suffice.
 
-- **Driven simulator smoke for the photo flow** — Promote when the next
-  SwiftUI identity/state bug ships (the stale second `.sheet(item:)` in
-  #1084 was the first). `apple-check.sh` now gates the known pattern
-  (`State(initialValue:)` from init); the only thing that catches _unknown_
-  ones is a scripted run: `simctl addmedia` two fixture photos, then drive
-  select A → Add to… → Cancel → Clear → select B → Add to… via Axiom `xcui`
-  and assert the hero's identifier names B. Keep it out of the pre-push gate;
-  run it from `apple-check.sh` behind a flag.
+- ⏳ **Attribute Flue provider calls to their run.** The Flue provider
+  (`apps/purchase-agent/src/cubby-ai-provider.ts`) still tags gateway metadata
+  with `jobKind: "purchase_import_run"`; send the run id once Flue exposes the
+  current run to module-scope providers.
 
-- **Measured table-virtualizer investigation** — Revisit direct-DOM-write
-  virtualizer options only during a measured desktop table-virtualizer
-  investigation (re-check `@tanstack/react-virtual`'s current API for a
-  low-render-overhead update mode; the option this line previously named,
-  `directDomUpdates`, no longer exists in the installed version).
-
-- **Timeline notes carry links and product `usedOnProjects`** — Promote when
-  the "N products omitted" sentences in the product timeline need to be
-  clickable again or a project link is wanted on a lifecycle row:
-  `EntityTimelineOut.notes[]` are plain strings and `rows[]` has no project
-  slot, both dropped when `product-movement-views.tsx` became the generic
-  `EntityTimeline` in #1067.
-
-- **Multi-product Expense links** — Promote when one Expense genuinely needs several
-  Products and `splitExpense` cannot truthfully split the money.
-
-- **Named web fidelity losses from the manifest-rendering pass** — Promote a
-  follow-up if a household workflow misses one: the task subtask checklist is
-  now a relation table, not an interactive checklist; project's in-detail
-  tasks list/board toggle is gone; purchase lost its per-line
-  quantity/unit-cost columns; location's merged sub-locations+items surface
-  split into two sections; product's hero lost its stock-stats row.
-
-- **Native specialized-renderer editors** — Promote per field as a native
-  workflow needs to write it. The native generic editor has no control for
-  product `unitMappings`/`labelNutrition`, financialAccount `sourceAliases`,
-  financialTransaction `sourceRefs`, or any `structured-field` (recipe
-  `sections`/`yield`/`meta`, meal `recipes`, expense and ledgerTransfer
-  `sourceClaims`, financialAccount `identity`/`cardNumbers`).
-  `NativePresentationCoverage` classifies them as unsupported and
-  `EntityEditorSheet` shows "Additional fields are available on web", so they
-  are not dropped silently. Expense `beneficiaries`/`funders` are done
-  (`LedgerAttributionsControl`). On web, `cardNumbers` has no editor at all —
-  only the create form's "Last four" seeds a primary entry; the dated history
-  is MCP-only.
-
-- **Native workflow parity with web.** Promote when a recurring household task
-  still requires switching to the web. Native already renders every manifest
-  create/update through the generic editor: add generated editor focus order with
-  Next/Done only when keyboard entry demonstrates a repeated friction, and make
-  sheet state/lifecycle comprehensive only when a concrete re-presentation,
-  cancellation, or saving handoff fails. Port one complete detail/list slot or
-  action loop at a time, preserving existing contracts and specialized behavior.
-  The current concrete action gap is `NativePresentationCoverage.heroAction`:
-  add-to-inventory, bulk edit, delete, discard, mark-purchased, record-sale,
-  and set-status are declared but explicitly unsupported on native. Choose the
-  recurring verbs first, and preserve each web confirmation and impact preview.
-  Inventory ownership remains a native supplement.
-  Owners: `apps/apple/App/Shared` and the generated `EntityCatalog`; build/capability
-  context lives in [the native README](../apps/apple/README.md).
-
-- **Generated native list/detail parity.** Keep Swift on the existing generated
-  `EntityCatalog` and OpenAPI contracts. Revisit shared Rust only when a
-  concrete cross-client rule cannot be expressed by those surfaces; do not
-  create a second entity catalog pre-emptively. Add collapsed-section parity
-  only after a manifest-supported consumer needs it, with the same declared
-  section state and accessibility behavior on both clients.
-
-- **Native numeric entry and units.** Net-new work: promote fractional/numeric
-  text entry and unit steppers only after a concrete native amount workflow
-  shows that the existing decimal fields are insufficient. Define locale-aware
-  parsing, validation, display, and the unit contract before extending generic
-  number or amount controls; do not fold it into inventory work by default.
-
-- **Native system-surface expansion.** Promote one surface only after a recurring
-  household workflow names it: Quick Look for typed attachments, typed drag/drop,
-  additional App Intents, widgets, extensions, voice entry, or timers (Live
-  Activities for server runs are their own item). Each slice must retain explicit user-confirmed writes and use the
-  existing entity/link contracts rather than creating a parallel state model.
-
-- **Offline native writes and multiwindow.** Promote only when disconnected use
-  or concurrent native windows blocks a demonstrated household workflow. This
-  needs an explicit write/retry/conflict model and window ownership rules; it is
-  larger work than the current session-only navigation and immediate-write flows.
-
-- **Natural CI evidence** — Revisit sharding only when ordinary exact-head runs
-  show a repeatable tail imbalance or regression. Use native reporter output;
-  do not add duration databases, custom sequencers, or manufactured timing runs.
-
-- **On-device Apple Intelligence.** Promote when supported household devices and a
-  measured capture friction justify one concrete draft-assistance workflow. Evaluate
-  against representative fixtures, preserve manual entry and existing services, and
-  require confirmation before writes. Owners: `apps/apple/App/Shared/Identify`,
-  `Photo`, and `Intents`. Confirm actual SDK/device support before selecting APIs.
-
-- **Per-edge breakdown for purchase merges** — Promote if `merge_entity`'s empty
-  `moved` array on purchase is noticed in use. `foldChargeInto` moves expenses and
-  documents without counting them, so purchase reports a measured `merged` count but
-  no per-edge detail, unlike the other three merge entities.
-
-- **Persisted Collections and operational dashboard** — Temporary smart starters
-  now evaluate manufacturer, exact tags, Location/ancestor name substrings, and
-  historical actual Expense Trades, with editable OR rules and source evidence.
-  Promote when Collection tags need metadata, rename-safe empty identity,
-  durable rule editing, richer rules (for example, minimum effective price), or combined
-  Project/Task/Expense views; migrate `collection:*` tags into durable records
-  rather than layering on a parallel mapping. Smart membership should evaluate
-  a saved Product filter at read time rather than auto-tagging matching records.
-  Extend the existing historical Trade predicate with deterministic “primary
-  inferred Trade matches” by reusing Product-to-Trade inference. Trade remains
-  on the Product's linked Expense lines, not its parent Purchase. Dashboard
-  expansion still includes combined Project/Task/Expense views.
-
-- **Portion solver** — Promote if agent-side amount iteration remains painful after
-  the recipe nutrition MCP projection ships; solve component weights against macro
-  constraints in one call.
-
-- **Product external-ID collision worklist** — Promote a broader Problems surface if
-  auto-minting imports create a persistent operator queue beyond the existing
-  `product.externalIdCollisions` query.
-
-- **Production query-cost repair** — Promote the specific offender confirmed by a
-  fresh production trace, including a Problems count-only path or whole-catalog
-  purchase aggregates; remeasure before restructuring counters.
-
-- **Promote harvested equivalences into the unit graph** — Promote when the
-  ingredient equivalences report's suggestions are repeatedly re-applied by hand. The
-  report (`lib/harvest-equivalences.ts`, `ingredients/equivalences-report.tsx`)
-  harvests ingredient-scoped unit equivalences from recipe parentheticals on demand;
-  writing an accepted one into a durable ingredient-level unit mapping is the deferred
-  next step, and there is no such store yet.
-
-- **Purchase evidence references** — Promote when Gmail, Drive, or portal evidence
-  must be queried repeatedly beyond Purchase notes and attached documents.
-
-- **Purchase replacement/exchange relations** — Promote when those relationships
-  need navigation or querying rather than truthful Purchase notes.
-
-- **Push change feed for post-mutation refresh** — Promote only when a derived
-  value users actually wait on (an AI location description, a recipe total
-  cascade) reliably lands after the client's fixed +5 s / +30 s deferred
-  refetch (`lib/deferred-invalidation.ts`). The design is a Durable Object
-  change feed over the WebSocket Hibernation API: the queue consumer pings it
-  after each task, the browser subscribes once per session and invalidates the
-  task's cache tags on each event. Rejected for now because it is ~300–400
-  lines of new infrastructure (DO, binding, auth on the socket, reconnect, a
-  workerd test) in a repo whose direction is removing execution infrastructure,
-  and the fixed refetch covers the observed latencies for a single-user tool.
-
-- **Repeat-purchase ranking** — Promote when enough Products have genuine repeated
-  acquisitions to make a cross-product ranking useful.
-
-- **Residual N+1 repair** — Promote only when a fresh network trace finds a concrete
-  products, recipes, or inventory-detail query fan-out.
-
-- **Returned-unit price advisory** — Promote when another stocked Product has a
-  materially inflated derived price or a structural signal can distinguish returns
-  from sales. Keep the response advisory until that distinction is reliable; an
-  ambiguous heuristic must not silently rewrite valuation.
-
-- **Selection-control consolidation** — Promote a specific selector family when
-  visual or keyboard inconsistency becomes painful; preserve specialized interaction
-  contracts rather than forcing one universal control.
-
-- **Selective SSR expansion** — Promote another route family only if the
-  product-detail pilot wins a cold-cache browser comparison without an INP, CLS, or
-  Worker-error regression.
-
-- **Sentry lazy initialization** — Promote if a fresh bundle treemap shows Sentry is
-  still a material critical-path dependency.
-
-- **Services-with-product advisory** — Promote when the first live row appears or an
-  import repeatedly creates one; keep it advisory rather than a database constraint.
-
-- **Shopping pack rounding** — Promote when a real shopping workflow needs it and a
-  representative purchasable Product/pack mapping has an explicit selection rule.
-
-- **Split compound ingredient lines** — Promote when `ingredient-parser` can emit
-  two ingredients from one line. Blocked upstream, not locally: `parse_ingredient`
-  is singular and upstream deliberately keeps "Salt and pepper" whole (`usage.rs`
-  pins it as one `Seasoning` ingredient). Splitting stored rows first does not
-  hold — every affected row carries a `rawLine`, so the split reads as parse
-  drift and "Re-parse all" reverts it, and `ReparsedStaleLineWrite` is
-  one-row-in-one-row-out by contract. Scope when unblocked: 14 ingredients over
-  212 rows in 204 recipes, all with empty `amounts` — that emptiness is the
-  discriminator against single ingredients whose name merely contains "and"
-  (`cilantro leaves and stems`), which all carry amounts. Choose each split
-  target from the row's `rawLine`, not the ingredient name: the largest compound
-  absorbed several raw variants as aliases and they do not all name the same
-  salt. Route writes through `handleSectionUpdates` via the entity adapter so
-  `sortOrder` renumbering, totals staleness and embedding refresh come free, and
-  send each touched section's complete ingredient array — omitted lines are
-  hard-deleted. Repoint the existing row to the first child and insert only the
-  second, to limit `lineId` churn. MCP cannot drive it: the read projection
-  strips section and line ids, so an update omitting section `id` replaces every
-  section.
-
-- **Shared-expense export re-import dedupe** — Promote if a shared-expense
-  group export (such as a Splitwise CSV) is imported and later re-exported and
-  imported again. That export carries no row id, so source-claim provider ids
-  are derived from date + description + amount; a later export with an edited
-  description will not dedupe against the first import.
-
-- **Person-to-person repayment discovery** — Promote when entering Ledger
-  Transfers by hand becomes a chore. Two sources: already-imported aggregator
-  statement rows whose person-to-person payments (payment apps such as Venmo
-  or Zelle) were never promoted to Financial Transactions, and Gmail "paid you"
-  emails. Review-only: propose a transfer, a person confirms, and confirmation
-  creates the `LedgerTransfer` and its source claim. Never resolve a
-  counterparty automatically (`CONTEXT.md` avoids automatic matches). Context:
+- ⏳ **Person-to-person repayment discovery.** Promote once Ledger Transfers
+  entered by hand become a chore. Sources: imported statement rows for payment
+  apps never promoted to Financial Transactions, and Gmail "paid you" mail.
+  Review-only; never resolve a counterparty automatically. Context:
   `docs/plans/household-ledger-attribution-followups.md`.
 
-- **Project default beneficiaries** — Promote if shared-cost projects become
-  frequent. A fallback tier between an expense's explicit beneficiaries and the
-  assumed Household party (explicit, then project default, then household),
-  following the live-inheritance pattern in `expense-inheritance.ts`. Needs a
-  schema change and an allocation-SQL change.
+- ⏳ **Project default beneficiaries.** Promote if shared-cost projects become
+  frequent: explicit, then project default, then household, following
+  `expense-inheritance.ts`. Needs schema and allocation-SQL changes.
 
-- **Attribution prefill** — Promote with the same evidence as project default
-  beneficiaries: default the expense editor's beneficiaries/funders to the last
-  set used with the same vendor.
+- ⏳ **Conditional purchase-import browser extension.** Promote only if the
+  Apple-event browser bridge repeatedly fails to background its window, cannot
+  avoid Chrome's JavaScript-from-Apple-Events setting, or cannot provide
+  reliable capture. Thin: window ownership and capture only, no Cubby
+  credentials or business writes.
 
-- **RunFinding as a manifest entity** — Promote once a second parent needs
-  its list: today findings render as a slot on the run page and through the
-  Problems `runFindings` key. `Run` became the `run` entity (`RUN-`,
-  read-only) in 2026-09, and a finding's `(targetId, targetKind)` is already
-  anchored on `Entity`; the run's other children (targets, evidence,
-  operations, approvals, progress) stay internal rows with no life outside a
-  run. A finding is the one child with its own lifecycle (open → applied /
-  dismissed) and a Purchase relation, so it is the natural next promotion —
-  it costs a prefix, a backfill, an `AuditEntityKind`, and the delete/resolve
-  disposition decision the StatementRow item below also waits on.
+- ⏳ **True full-page browser evidence.** Promote a stitched full-page capture
+  only when the viewport snapshot misses evidence a real import needs; never
+  label viewport capture as full-page.
 
-- **StatementRow and StatementImport as manifest entities** — Promote once the
-  `supersededByRowId` disposition is decided (block, detach, or cascade for a live
-  predecessor pointing at a deleted row); "add an edge policy" is not the decision.
-  Unblocks the audit gap `deleteStatementRows` currently only documents: StatementRow
-  has no `AuditEntityKind`, so no truthful `logAuditEntry` call exists and all three
-  statement-row mutation paths write no audit trail. Also routes that delete through
-  `removeEntity` for cascade and locking. Costs shortcode prefixes, a batched backfill
-  of the whole `StatementRow` table, a detail route, and entries in roughly ten
-  exhaustive `Record<Entity, …>` tables. Backfill in batches with an in-memory
-  set of existing codes; `generateUniqueShortcode` does a SELECT per candidate
-  and is wrong for bulk.
+- ⏳ **Gmail discovery re-authentication.** Promote when production Gmail
+  returns 401/403 after refresh-token expiry or revocation: actionable
+  reconnect, resumable Problem, never an "empty mailbox".
 
-- **TanStack Start observability** — Remove Cubby's observability wrapper when
-  TanStack Start supplies equivalent named request/result/error events and trace
-  hooks: <https://tanstack.com/start/latest/docs/framework/react/guide/observability>.
-  Checked 2026-09-16: the guide still says OpenTelemetry support is coming, and
-  Sentry's global function middleware never sees a named operation because every
-  browser operation posts to one route, `/api/browser/dispatch`
-  (`browser-operation-dispatch.ts`, then `start-operation-dispatch.server.ts`),
-  not a Start function; `observed-request.ts` also carries DB metrics and
-  expected-error filtering. Revisit when Start exposes the dispatched operation
-  id to a request hook.
+- ⏳ **Finish terminal browser cleanup.** Promote when logs show browser
+  commands surviving a terminal run or an owned window left visible.
+  Terminalize queued commands by run generation, send one terminal signal,
+  minimize only Cubby's window, and log discarded work.
 
-- **USDA duplicate collapsing** — Promote if repeated UPC versions return to useful
-  search pages; reuse `dedupeUsdaFoodsByUpc` in the MCP handler rather than changing
-  usda-api pagination semantics.
+- ⏳ **Typed pagination and final grocery evidence.** Promote when a vendor
+  exposes pagination or grocery pages whose last page the hints miss.
 
-- **Apparel photo routing and size/color fields.** Photo-import routing
-  categories are plants, food, documents, and home; clothing is grouped by the
-  agent. Size and color live in the Product name and notes, one Product per
-  variant. Revisit an apparel photo category once the hosted coordinator
-  routes photos, and structured size/color once wardrobe filtering by size is
-  actually wanted.
+- ⏳ **`imports_read.vendor_coverage` per account.** Promote when two members
+  hold accounts at the same vendor.
 
-### Long-term visions
+- ⏳ **`PurchaseLine` SKU annotation.** Promote when store SKU, quantity, or
+  unit-price detail is genuinely wanted; `Expense` stays financial truth.
 
-- **Ambient capture.** Accept voice memos, forwarded email, shared photos, and NFC
-  entry points so reality reaches Cubby with minimal ceremony.
+- ⏳ **Purchase evidence references** when Gmail, Drive, or portal evidence
+  must be queried beyond notes and attachments; **purchase
+  replacement/exchange relations** when they need navigation, not notes.
 
-- **Cubby to Home Assistant.** Expose computed shopping shortfalls, maintenance due,
-  actionable weekend work, and tonight's meal for household display and voice.
+- ⏳ **Per-edge breakdown for purchase merges.** Promote if `merge_entity`'s
+  empty `moved` array on purchase is noticed; `foldChargeInto` does not count
+  moved expenses and documents.
 
-- **Digital twin and spatial memory.** Attach shutoffs, breaker maps, paint, hidden
-  utilities, and other building knowledge to the location tree.
+- ⏳ **Multi-product Expense links.** Promote when one Expense needs several
+  Products and `splitExpense` cannot truthfully split the money.
 
-- **Grow-to-table loop.** Model beds and plantings, receive harvests into pantry
-  inventory, and ask what the yard can supply this week.
+- ⏳ **Returned-unit price advisory.** Promote when another stocked Product
+  has a materially inflated derived price or returns become structurally
+  distinguishable from sales; stay advisory.
 
-- **Heirloom outputs.** Produce a future-owner house manual, project yearbooks, and a
-  durable archive/export format.
+- ⏳ **Services-with-product advisory.** Promote when the first live row
+  appears or an import repeatedly creates one; advisory, not a constraint.
 
-- **Home Assistant to Cubby.** Turn runtime, energy, fault, weather, and area/device
-  signals into maintenance, project evidence, and correctly scoped tasks.
+- ⏳ **Estimated-allocation analytics caveat.** Promote when
+  materials-versus-labor analytics inform a real decision; disclose the
+  allocation-basis portion without excluding it from total spend.
 
-- **Household balance sheet.** Generalize location valuation into replacement
-  forecasts, cost-per-project analysis, and insurance or cost-basis exports.
+- ⏳ **Evaluate trade affinity in expense project suggestions.** Once the
+  `expense.projectId` roster's per-project trade tallies
+  (`server/ai/field-suggest/registry.ts`) have served real suggestions, compare
+  accept/override rates on `/ai-usage` and drop the tallies if they do not help.
 
-- **Household cash-flow projection.** Planned in
-  [household finance synthesis](plans/household-finance-synthesis.md) Phase 2,
-  alongside category analytics, a funder-to-category Sankey, and transfer-pair
-  acceptance in Phase 1. Net worth and retirement stay out until the
-  trusted-household tenet is amended for a time-series table as an explicit
-  decision.
+- ⏳ **Shared-expense export re-import dedupe.** A Splitwise-style CSV has no
+  row id, so provider ids derive from date + description + amount; promote if
+  a re-export with edited descriptions is imported again.
 
-- **House timeline.** A chronological house journal with project milestones,
-  before/after photos, and an annual wrapped-style view over existing records.
-  Build on the generic `resources.<entity>.timeline` capability rather than a
-  bespoke aggregation.
+- 🔭 **Household cash-flow projection.** Planned in
+  [household finance synthesis](plans/household-finance-synthesis.md) Phase 2
+  with category analytics, a funder-to-category Sankey, and transfer-pair
+  acceptance. Net worth and retirement stay out until the trusted-household
+  tenet is amended for a time-series table.
 
-- **Recipe scaling extensions.** Explore pan-size targets, interactive parse
-  clarification, and baker's-percentage comparison without replacing Product-owned
-  density mappings with a global reference table.
+- 🔭 **Household balance sheet.** Generalize location valuation into
+  replacement forecasts, cost-per-project analysis, and insurance or
+  cost-basis exports.
 
-- **Seasonal garden planning and photo comparison.** The `garden-plan-import`
-  skill already turns a written seasonal plan into Locations/Project/Tasks/
-  planned Plantings; build past one-time ingest toward _revising_ a standing
-  plan season over season, comparing dated bed/tree photos with AI, and
-  explaining forecast changes and keep-versus-replace recommendations. Keep
-  the workflow occasional and lightweight; planting windows alone do not
-  establish maturity or harvest forecasts.
+---
 
-- **Standing household agents.** A registrar for records, quartermaster for
-  consumable shortfalls, and foreman for stale or blocked projects, with approval
-  before durable writes.
+## Ingredients, recipes & nutrition
+
+- 🧱 **Ingredient as the grocery hub.** Product is SKU-grade and Ingredient
+  the commodity layer, but imports never fill `ingredientId`, so
+  `Cauliflower` / `Organic Cauliflower, 1 Each` and three ground-beef 80/20s
+  stand unconnected. In order:
+  1. 🟢 Jev suggestion for `product.ingredientId` from semantic candidates
+     (`services/semantic-search.service.ts`); lexical prefix search ANDs every
+     term (`buildPrefixTsQuery`), so a full product name never matches a short
+     ingredient. Basis `name, manufacturer, categoryId, notes` so non-food
+     returns none. The registry already supports `readKey: null` references.
+  2. 🟢 One-call resolve: `entity_read.resolve` takes `{name, externalIds[]}`
+     per line and returns exact-id hits, ingredient-alias hits, and lexical
+     candidates together (grocery ASINs split across Fresh / Whole Foods /
+     in-store). Today `entityResolveCommandSchema` takes only names.
+  3. 🧱 Piece units resolve on the ingredient: `whole/bunch/crown/clove` come
+     from USDA `portionInfo` or an ingredient-level mapping; product `each`
+     prices the package and never satisfies a piece unit.
+  4. 🧱 A durable ingredient-level unit mapping store, which the harvested
+     equivalences report (`lib/harvest-equivalences.ts`) then writes accepted
+     suggestions into.
+
+- 🧱 **Inferred-zero nutrients for label data.** Decided: yes. Label-sourced
+  records (USDA `branded_food`, `labelNutrition`) print only FDA-mandatory
+  nutrients plus extras, and a mandatory one may be omitted only as "not a
+  significant source". Model values as `measured | inferred-zero | unknown`;
+  count inferred zeros as covered but flagged; micronutrients stay unknown.
+  Manual override: extend ingredient `naKinds` with nutrient keys, but not for
+  salt, whose "to taste" line is planned at 1% of pot weight (sanity-check it).
+
+- 🧱 **Cookbook identity merge.** Give cookbooks durable identity plus a
+  merge/repoint path to stop same-title collisions and renamed-EPUB forks. A
+  recipe changes cookbook only to fix an import, so merge/repoint is the
+  sanctioned path; record `cookbookId` changes in the recipe audit roster
+  (`server/repo/recipe/crud.ts`) and decide whether the recipe form's cookbook
+  picker (`recipe-cookbook-field.tsx`, `resolveCookbookRepoint`) stays.
+
+- 🟢 **Coverage diagnostics on product writes.** MCP recipe create/update
+  return per-line `lineCoverage`; `entity.commands` and `recipe_import` do not.
+  Product updates should report which recipe lines the change closed — one
+  corrected package-weight mapping can repair many recipes.
+
+- 🟢 **Import extracted cookbook bundles.** Accept ingredient-parser
+  `.cookbook` archives through the existing review/import flow
+  (`recipe/cookbook-import/cookbook-dropzone.tsx`). Read ZIP entries
+  incrementally in a Web Worker, upload assets with bounded concurrency, keep
+  validation and creation on the server; never load the whole archive into
+  memory. Requires an open tab; add R2 staging or Workflows only when
+  unattended imports are a demonstrated need.
+
+- 🧱 **Portion shares alongside grams.** Accept `{share}` per portion in
+  `meal_recipe.save_preparation` and derive grams at read time from the
+  current `estimatedYieldGrams`, so served-by-eye portions do not go stale.
+
+- 🤔 **Cookbook fallback evaluation.** Run the six-book answer-key corpus
+  against GPT-6 Luna as the second ladder reader; compare recall, escalation
+  rate, latency, and cost. Keep Gemini 2.5 Flash as first reader meanwhile.
+
+- 🤔 **Reconsider the remaining USDA MCP App.** The USDA Picker template
+  (`apps/mcp-apps/src/usda-picker.ts`) is 352,004 bytes raw / 83,655 gzip; keep
+  it only while refinement and explicit selection beat a plain
+  `usda_food.search`.
+
+- ⏳ **Explicit idempotency key for `meal_recipe.add`.** Promote if a re-sent
+  call duplicates a meal line. Not a natural-key index: one meal may repeat a
+  recipe at different scales. First slice is an `operations/meal.server.ts`
+  integration test asserting one meal holds one recipe twice with two
+  independent shopping-list contributions.
+
+- ⏳ **Exact nutrition source tracing.** Resume with upstream conversion work:
+  `ingredient-parser` reports retain actual mapping identities and competing
+  mappings; Cubby exposes Product/USDA/manual provenance through nutrient
+  cells and nested recipes from the same computation, never inferred from
+  matching values.
+
+- ⏳ **Split compound ingredient lines.** Blocked upstream: `parse_ingredient`
+  is singular and keeps "Salt and pepper" whole. Scope when unblocked: 14
+  ingredients over 212 rows in 204 recipes, all with empty `amounts` (the
+  discriminator). Choose split targets from `rawLine`; route writes through
+  `handleSectionUpdates` sending each section's complete array; repoint the
+  existing row to the first child. MCP cannot drive it (no line ids).
+
+- ⏳ **Portion solver.** Promote if agent-side amount iteration stays painful;
+  solve component weights against macro constraints in one call.
+
+- ⏳ **Aggregate range materiality.** Promote if always-on cost/calorie/weight
+  ranges create visible noise; collapse only immaterial aggregate spreads.
+
+- ⏳ **USDA duplicate collapsing.** Promote if repeated UPC versions return to
+  search pages; reuse `dedupeUsdaFoodsByUpc` in the MCP handler.
+
+- 🔭 **Recipe scaling extensions.** Pan-size targets, interactive parse
+  clarification, and baker's-percentage comparison without a global density
+  table.
+
+---
+
+## Inventory, products & locations
+
+- 🧱 **Consumable vs durable as a Product attribute.** Decided: add
+  `Product.kind: consumable | durable`. Today the distinction is "expense on
+  `PRJ-HSHD` vs no project", documented only in purchase-import notes, and
+  `stockTracked` half-encodes it — check whether `stockTracked` becomes
+  derivable before adding a second flag. Drives the import's default project,
+  shelf worklist filters, project materials, and household maintenance.
+
+- 🟢 **Bounded shelf-triage worklists.** `/inventory/triage` walks the
+  `unlocated` view (optionally `?run=`). Accept a value- or category-bounded
+  worklist, and let the general "Add to inventory" action default its amount
+  from the quantity ledger as triage does.
+
+- ⏳ **Let the negative-expected-quantity worklist converge.** Survivors are
+  mostly big-ticket items whose acquisition predates ledger coverage, with
+  nowhere to record that. The operator chose (2026-08-18) to leave the
+  detector alone. Options when worked: book the missing unit as an Expense with
+  `cost: null, productQuantity: 1`, or a product data check with a
+  ledger-derived fingerprint (an `updatedAt` key is unsafe).
+
+- ⏳ **Persisted Collections and operational dashboard.** Smart starters
+  evaluate manufacturer, tags, Location names, and historical Trades with
+  editable OR rules. Promote when Collection tags need metadata, rename-safe
+  identity, durable rules, or richer rules; migrate `collection:*` tags into
+  durable records, and evaluate smart membership from a saved Product filter at
+  read time. Extend the Trade predicate with "primary inferred Trade matches".
+
+- ⏳ **Location subtree filters.** Promote when direct-child filtering blocks a
+  workflow; use a scoped descendant-id helper, not the whole-tree CTE.
+
+- ⏳ **Product external-ID collision worklist.** Promote if auto-minting
+  imports create a persistent queue beyond `product.externalIdCollisions`.
+
+- ⏳ **Repeat-purchase ranking.** Promote when enough Products have genuine
+  repeated acquisitions.
+
+- ⏳ **Before-drywall spatial capture.** Promote immediately when construction
+  is scheduled; define the smallest room/wall-indexed photo packet before
+  walls close.
+
+- 🔭 **Digital twin and spatial memory.** Attach shutoffs, breaker maps,
+  paint, hidden utilities, and other building knowledge to the location tree.
+
+---
+
+## Tasks, projects & garden
+
+- 🟢 **Date spans for Task, Project, and Planting.** A task is usually one
+  day, a project usually spans several, and either may have an end. Declare a
+  manifest-level span (start, optional end) and render one detail/list row —
+  "Sep 22" or "Sep 22 – 25", collapsed when the end is null or equals the
+  start, in human date format — with both ends editable in the edit sheet.
+  Today Task's `dueEndDate` and Project's `startDate`/`endDate` have no
+  `display.format`, so they show raw ISO (Task Overview prints `2026-09-22`
+  twice). Task already declares the range (`dueDate` → `dueEndDate`); Planting
+  has `sowedOn`/`transplantedOn` → `finishedOn` plus the derived expected
+  harvest window. Calendar and timeline views read the same span.
+
+- 🧱 **Project materials and shortfalls.** A project-material edge with
+  quantity, free-text unit, optional Product, and durable/consumable semantics
+  (see `Product.kind`); derive have/need/buy through the availability engine
+  without reservations or automatic decrement.
+
+- 🔭 **House timeline.** A chronological journal with project milestones,
+  before/after photos, and an annual wrapped-style view, built on
+  `resources.<entity>.timeline`. First concrete step: generalize
+  `GardenEntry` (almost all notes, a handful of harvests) into a dated journal
+  on Location, Planting, and Project.
+
+- 🔭 **Grow-to-table loop.** Beds and plantings, harvests received into pantry
+  inventory, and what the yard can supply this week.
+
+- 🔭 **Seasonal garden planning and photo comparison.** Build past one-time
+  `garden-plan-import` toward revising a standing plan season over season,
+  comparing dated bed photos with AI, and explaining keep-versus-replace
+  recommendations. Planting windows alone do not establish harvest forecasts.
+
+- 🔭 **Heirloom outputs.** A future-owner house manual, project yearbooks, and
+  a durable archive/export format.
+
+---
+
+## Native app
+
+- 🤔 **Cluster and reproduce the native app-hang corpus before changing
+  code.** Collect sanitized release, duration, foreground state, and top
+  symbolicated main-thread frames per Sentry family; group by shared frames.
+  Reproduce each in a Release build without LLDB (Time Profiler or System
+  Trace) and make one repair per demonstrated root cause.
+
+- 🤔 **Swift 6.4 / OS 27 readiness pass.** Before a toolchain or floor change,
+  audit state initialization, concurrency, availability, and resizing against
+  the actual SDK with focused behavior tests. Preserve the OS 26 path until a
+  floor bump is chosen. Owners: `apps/apple/project.yml`, `App`, `CubbyKit`.
+
+- 🤔 **Live Activities for server runs started on this device.** Record the
+  initiating install separately from `ActivityRun.executors`, then send
+  ActivityKit push updates so the phone shows progress while suspended. Keep
+  the local-work Live Activity feed separate.
+
+- ⏳ **Native workflow parity with web.** Promote when a recurring household
+  task still needs the web. Concrete gap: `NativePresentationCoverage.heroAction`
+  marks add-to-inventory, bulk edit, delete, discard, mark-purchased,
+  record-sale, and set-status unsupported; port recurring verbs first,
+  preserving web confirmations and impact previews. Add editor focus order or
+  comprehensive sheet lifecycle only on demonstrated friction. Owners:
+  `apps/apple/App/Shared`, generated `EntityCatalog`.
+
+- ⏳ **Native specialized-renderer editors.** Promote per field as a native
+  workflow needs it: product `unitMappings`/`labelNutrition` (read-only today),
+  financialAccount `sourceAliases`, financialTransaction `sourceRefs`, and
+  every `structured-field`. They show "Additional fields are available on
+  web". On web, `cardNumbers` has no editor (MCP-only history).
+
+- ⏳ **Retire native-owned web fieldwork and PWA installation.** After native
+  parity ships and passes real-device validation, remove web barcode/QR
+  controls, `/scan`, the sweep UI, superseded recount and location photo-pass
+  routes, and PWA assets. Handle unfinished browser-local passes and old links
+  first; keep record links, photo upload, and the scan/reconcile APIs.
+
+- ⏳ **Core native inventory experience.** Promote when everyday use exposes a
+  specific bottleneck: location-first browsing, stock comparison,
+  capture/recount, photo completion. Owners: `App/Shared/Browse`, `Capture`,
+  `Audit`; see [native design](../apps/apple/DESIGN.md).
+
+- ⏳ **Generated native list/detail parity.** Stay on generated `EntityCatalog`
+  and OpenAPI; revisit shared Rust only for a rule those surfaces cannot
+  express. Add collapsed-section parity only for a manifest-supported consumer.
+
+- ⏳ **Native numeric entry and units.** Promote only when a native amount
+  workflow shows decimal fields are insufficient; define locale-aware parsing
+  and the unit contract first.
+
+- ⏳ **Native system-surface expansion.** One surface at a time once a
+  workflow names it: Quick Look, typed drag/drop, App Intents, widgets,
+  extensions, voice, timers. Keep confirmed writes and existing contracts.
+
+- ⏳ **On-device Apple Intelligence.** Promote when devices and a measured
+  capture friction justify one draft-assistance workflow; evaluate on
+  fixtures and confirm before writes. Owners: `App/Shared/Identify`, `Photo`,
+  `Intents`.
+
+- ⏳ **Offline native writes and multiwindow.** Promote only when disconnected
+  use or concurrent windows block a workflow; needs a write/retry/conflict
+  model and window ownership rules.
+
+- ⏳ **Expose recipebridge conversion, needs, costing, and nutrition via
+  cubby-ffi** alongside the first native screen that scales a recipe or prices
+  a meal. Until then the FFI stays `parse_ingredient`, `size_unit_aliases`,
+  `normalize_isbn`, `scan_code_gtin14`.
+
+---
+
+## Web UI
+
+- 🟢 **Refresh `apps/web/PRODUCT.md`.** It predates the manifest
+  consolidation.
+
+- 🟢 **Web `src/` layout.** UI code lives in `components/`,
+  `app/_components/`, `hooks/`, `app/_components/hooks/`, `lib/`, `misc/` and
+  `server-functions/`. Move to `ui/`, `features/<domain>/`, `entity/`, and
+  `lib/` in one codemod commit with nothing else in flight.
+
+- 🤔 **Make narrow web layouts device agnostic.** The compact shell still uses
+  phone-style tabs and overlays. Design one compact navigation and overlay
+  pattern for narrow widths on desktop and iPhone, keyed on width, keeping
+  safe-area, keyboard, and touch behavior where exposed; update the design
+  language and responsive checks.
+
+- 🤔 **Phone hit areas as pseudo-elements, app-wide.** Button's
+  `mobileSize: "touch"` grows icon controls to 44px layout boxes, wrapping
+  dense rows. The detail ledger keeps the target as an `::after` (the
+  `checkbox.tsx` pattern). Decide whether `touch` itself becomes a
+  pseudo-element target.
+
+- 🤔 **List-route SSR payloads are large.** `/projects` 826 KB, `/locations`
+  655 KB, `/recipes` 579 KB of HTML. Find what the list loader and slot views
+  dehydrate before trimming or deferring.
+
+- 🤔 **Eyeball `/graph` after the canonical-owner change.** #1067 made the
+  foreign-key side own a shared path, so `product → inventory` now reads
+  `inventory → product`; inspect the Relationships tab and `/graph` for
+  relations declared on both sides.
+
+- 🤔 **Server-backed table intelligence.** Extend exact facet counts and
+  aggregate summaries from Expenses to one justified server-paginated surface
+  at a time; never analyze a partial client page as the population.
+
+- ⏳ **Named web fidelity losses from the manifest-rendering pass.** Promote
+  if a workflow misses one: the interactive subtask checklist, project's
+  tasks list/board toggle, purchase per-line quantity/unit-cost columns,
+  location's merged sub-locations+items surface, product's stock-stats row.
+
+- ⏳ **Timeline notes carry links and product `usedOnProjects`.** Promote when
+  "N products omitted" needs to be clickable again or a lifecycle row needs a
+  project link; `EntityTimelineOut.notes[]` are plain strings.
+
+- ⏳ **Push change feed for post-mutation refresh.** Promote only when a
+  derived value users wait on reliably lands after the +5 s / +30 s deferred
+  refetch (`lib/deferred-invalidation.ts`). Design: a Durable Object change
+  feed over WebSocket Hibernation; rejected for now as ~300–400 lines of
+  infrastructure for a single-household tool.
+
+- ⏳ **Selective SSR expansion.** Promote another route family only if the
+  product-detail pilot wins a cold-cache comparison without INP, CLS, or
+  Worker-error regressions.
+
+- ⏳ **Selection-control consolidation.** Promote a selector family when
+  visual or keyboard inconsistency becomes painful.
+
+- ⏳ **Measured table-virtualizer investigation.** Revisit direct-DOM-write
+  options only during a measured investigation (`directDomUpdates` no longer
+  exists in the installed `@tanstack/react-virtual`).
+
+- ⏳ **Residual N+1 repair** when a fresh trace finds concrete fan-out;
+  **Sentry lazy initialization** if a fresh treemap shows Sentry on the
+  critical path.
+
+---
+
+## Entity platform & data model
+
+- 🟢 **One data-quality framework.** `repo/problems/detectors-*` and the
+  declared checks in `repo/data-quality/` are two systems for "this record is
+  wrong"; make detectors declared checks and have Problems read their results.
+
+- 🟢 **Declare non-entity child tables in the manifest (`children:`)** so
+  their DDL is generated like entity tables.
+
+- 🤔 **Completeness score exceptions.** Every scored entity declares
+  `capabilities.dataQuality` (see `docs/entities.md` → "Data quality").
+  Remaining: durable "not available" exceptions exist only for Product and
+  Purchase (`dataExceptions`, `data_exception.set/clear`); generic exceptions
+  are undesigned. Weights are a first cut. `projectsMissingBudget` stays a
+  Problems rule because its subtree spend rollup is not a per-row predicate.
+
+- 🤔 **One FROM context per entity list.** Each list repo pairs a relational
+  `findMany` (root aliased) with an unaliased `$count`, so a predicate
+  referencing the outer row compiles on one leg and fails on the other — six
+  shipped occurrences (#456, #462, #481, #762, #785, CUBBY-11R), guarded by
+  `server/entity-kernel/list-smoke.integration.test.ts`. Decide: plain-select
+  rows with explicit joins, one shared `alias(table, name)`, or Drizzle
+  relations v2.
+
+- 🤔 **Declarative "many, clamped to one" cardinality.** Image provenance
+  chose a many-row `ImageSighting` child plus derived `one` Image fields over
+  array relations with a runtime clamp. Revisit only when a second entity needs
+  multi-evidence provenance; extend relation `provenance.sources[]` first.
+
+- 🤔 **Dependent batch program.** A bounded program of named operations whose
+  results feed later inputs: limits, failure propagation, ordered partial
+  outcomes, retries preserving completed writes, explicit continuation.
+
+- 🤔 **MCP staged-file storage.** Before sharing a local upload beyond its
+  signed grant, define no-copy activation, grant replay, activation fencing,
+  delete-before-expiry for a recreated orphan, and evidence ownership, on the
+  `EntityAttachment` model in ADR 0006.
+
+- 🤔 **Host-provided MCP file references.** Adapt client-owned file handles
+  and download URLs through capability-specific input metadata and the
+  validated URL-fetch path; downloadable URLs remain the fallback.
+
+- ⏳ **Generic HTTP `resources.<entity>.batch` route.** Promote if a 5k-asset
+  library makes one-row-per-request writes measurably slow; mirror
+  `entity.commands`'s independent-item semantics.
+
+- ⏳ **Budget-aware MCP pagination.** Promote when a real tool result hits an
+  output limit: stable keyset cursors, byte and result limits, and a
+  continuation preserving filters, sort, and budget.
+
+- ⏳ **Durable MCP transfer telemetry.** Persist call duration, response
+  bytes, and per-item outcomes when repeated measurements justify it.
+
+- ⏳ **Entity relation runtime dispatch.** Promote when attach/detach
+  genericization resumes; generate dispatch only for declared runtime ports.
+
+- ⏳ **`stored` descriptor sweep per repository.** Promote when a hand-built
+  list drifts from its declared columns; convert per repository
+  (`product/crud.ts`, `purchase.ts`) and verify with the real-query matrix.
+
+- ⏳ **RunFinding as a manifest entity.** Promote once a second parent needs
+  its list. It is the one run child with its own lifecycle and a Purchase
+  relation; costs a prefix, a backfill, an `AuditEntityKind`, and the same
+  delete/resolve disposition decision as StatementRow.
+
+- ⏳ **StatementRow and StatementImport as manifest entities.** Promote once
+  the `supersededByRowId` disposition (block, detach, or cascade) is decided.
+  Unblocks auditing: all three statement-row mutation paths write no audit
+  trail. Backfill shortcodes in batches with an in-memory set of existing
+  codes (`generateUniqueShortcode` is per-candidate SELECT).
+
+- ⏳ **Put `deleteStatementRows` on policy-driven removal.** The last
+  hand-written cascade (`repo/statement-row.ts`); waits on the item above. The
+  image hard delete stays on `IMAGE_HARD_DELETE` on purpose
+  (`repo/removal/core.unit.test.ts`).
+
+---
+
+## AI & search
+
+- 🤔 **Suggestion sweep primitive.** One run shape for bulk suggestion passes:
+  record each suggestion (target, branch-rolled confidence, runner-up), apply
+  only high-confidence changes, queue the rest for review, with progress and
+  pause. Consumers: product re-categorization first (run after automatic
+  description, since the basis is mostly text until then), then reviewing
+  suggestions across a full filtered list instead of opened pages only.
+  Decide where the run lives: a `Run` purpose, the activity `runProjection`,
+  or a primitive shared with `backfillImageProcessing`. Measured: about $0.10
+  per 1,000 Jev calls at a 2.3k-token roster; ~6% throttling near 600/min, so
+  pace at a few hundred per minute. The response cache keys on taxonomy
+  revision, so any category edit invalidates a completed sweep.
+
+- 🤔 **Trial `@cf/baai/bge-base-en-v1.5` via AI Gateway alongside OpenAI.**
+  Compare recall against the OpenAI adapter with this eval set:
+  `"plastic tarp"` → `blue plastic tarp` (product); `"drop cloth"` →
+  `plastic drop cloth` (product); `"where are tarps"` → `tarps cloths
+blankets` (location); `"packout"` → `packout organizer` (product);
+  `"parchment"` → `parchment paper` (product); `"tarpaulin"` → `blue plastic
+tarp` (product); `"cling film"` → `plastic wrap` (product); `"adjustable
+spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
+  (product); `"painters cover"` → `painters drop cloth` (product). Trap: rows
+  are keyed on `(provider, model, dimensions)`, so `findRelatedSearchCandidates`
+  must resolve the active `SemanticEmbeddingConfig` before embedding the query.
+
+- ⏳ **Trace the web Worker's AI calls into Sentry's Agents view.** Sentry
+  wraps only `env.AI.run()`, not the `env.AI.gateway("cubby").run()` transport,
+  and TanStack AI adapters bypass provider integrations. Add a `@tanstack/ai`
+  `ChatMiddleware` next to `ai-gateway-usage.ts` opening a `gen_ai.chat` span
+  when a web AI feature needs per-call debugging the Gateway cannot answer.
+
+- 🔭 **Standing household agents.** A registrar for records, quartermaster for
+  consumable shortfalls, and foreman for stale or blocked projects, approving
+  durable writes.
+
+- 🔭 **Ambient capture.** Voice memos, forwarded email, shared photos, and NFC
+  entry points.
+
+- 🔭 **Cubby to Home Assistant** (maintenance due, weekend work, tonight's
+  meal for display and voice) and **Home Assistant to Cubby** (runtime,
+  energy, fault, and weather signals into maintenance, evidence, and tasks).
+
+---
+
+## Dev tooling, tests & CI
+
+- 🤔 **Measure the delegate-less routing change.** Around 2026-10-06,
+  re-measure 30 days of Claude session transcripts against the baseline in
+  [model routing](agents/model-routing.md#delegate-or-not): share of sessions
+  spawning subagents (about half), subagent share of context tokens (47%), and
+  subagent output on Opus/Fable. Keep the rule if shares fell without slower or
+  lower-quality sessions.
+
+- 🟢 **Profile test cost before another pruning pass.**
+  [PR #1273](https://github.com/nickysemenza/cubby/pull/1273) reduced test
+  declarations without an overall CI speed gain. Compare several exact-head
+  runs and per-suite timings, then consolidate costly duplicate coverage or
+  fixture setup without weakening the merge gate.
+
+- 🟢 **One Cargo workspace for `recipebridge` and `cubby-ffi`.** Trap: member
+  `[profile.*]` tables are ignored in a workspace and `wasm-pack` takes only
+  `--dev/--profiling/--release`, so recipebridge's `panic = "abort"` would
+  break UniFFI's `catch_unwind`; set wasm's panic strategy through the `wasm`
+  script's environment.
+
+- 🤔 **Spike Drizzle 1.0 RC for test factories.** `drizzle-orm@1.0` RC
+  exports `./zod` and `drizzle-seed` generates seeded rows; installed is
+  0.45.2. `server/db/create-shape-drift.unit.test.ts` records a decision
+  against drizzle-zod create shapes, so adoption reverses it; weigh against
+  `entity-definitions`. Do not bump drizzle outside the spike.
+
+- 🤔 **Offer a Docker path for local development.** `pnpm dev` and local test
+  services need macOS with Apple `container` (`scripts/lib/apple-container.ts`).
+  Decide whether a Docker backend is worth supporting for non-macOS
+  contributors and agent sandboxes.
+
+- 🤔 **Narrow the `e2e` Nx target's inputs, then cache it.** `nx affected`
+  treats all of `apps/web/src/**` as e2e input and the target is uncached.
+  `tests/e2e/spec-areas.ts` maps specs to what they exercise for
+  `test:e2e:affected`; decide whether a cache hit on an unchanged tree is
+  acceptable evidence and whether to reuse that manifest.
+
+- 🤔 **Capture exact runtime error shapes before broadening suppression.**
+  Client-disconnected cancellation, missing update-result, opaque database
+  failure, and pathological LIKE/GLOB reports need sanitized
+  name/message/stack/route evidence and an event-shaped regression test before
+  changing filters; never hide unrelated transport or query errors.
+
+- ⏳ **Fixture-backed web preview route.** A dev-only route rendering loading,
+  error, and edge states from schema-backed fixtures; the production bundle
+  excludes faker and the route. Promote when driving states through full app
+  flows repeatedly slows iteration.
+
+- ⏳ **E2E against the HMR session.** An optional Playwright lane reusing the
+  persistent `pnpm dev` workerd origin; needs isolated fixtures, cleanup, and
+  sanitized replay artifacts before replacing a local lane. CI keeps the
+  exact-head merge gate.
+
+- ⏳ **Natural CI evidence.** Revisit sharding only when exact-head runs show
+  a repeatable tail imbalance; no duration databases or custom sequencers.
+
+---
+
+## Infra & deploy
+
+- 🟢 **Maintenance mode.** The `MAINTENANCE_MODE` Worker secret makes the web
+  Worker answer 503 and skips the cron (`server/maintenance.ts`); queues are
+  paused by hand. Wanted: status in a Durable Object checked per request (503
+  page except health and the switch), by every queue consumer (leave messages
+  unacked), and by Flue run workflows before each step; toggle from Settings
+  and MCP.
+
+- 🟢 **Use Wrangler's local R2 binding for isolated object-storage tests.**
+  Local dev uses `apps/web/tooling/local-r2*`, not a binding; production
+  signing is `server/utils/s3.ts`. Switch only with an adapter that keeps
+  presigned browser and native upload/download URLs working alongside the
+  binding; exercise upload, direct read, image processing, and replay under
+  `wrangler dev`, keeping the workerd CI gate. Changes the deploy surface.
+
+- 🤔 **Evaluate Cloudflare Workflows across durable background work.** Start
+  with vendor Gmail discovery: one instance per Run, bounded pages, a
+  persisted cursor, and timed waits on AI Gateway 429s. Define how a Run
+  exposes instance, step, retry time, attempts, and failure chain through the
+  generic detail view. Test version changes, cancellation, duplicate delivery,
+  and exhaustion before migrating; keep the queue path until a Workflow can
+  recover a paused Run. Then compare image processing, purchase import,
+  validation/enrichment, and backfills (search-index repair is the reference).
+  Device-local work (library scan, classification sweep, sighting backfill)
+  can post into `runProjection` as a transport addition. See
+  `docs/infrastructure.md`.
+
+- ⏳ **TanStack Start observability.** Remove Cubby's wrapper when Start
+  supplies named request/result/error events and exposes the dispatched
+  operation id to a request hook (checked 2026-09-16: not yet).
+  <https://tanstack.com/start/latest/docs/framework/react/guide/observability>
+
+- ⏳ **Production query-cost repair.** Promote the specific offender a fresh
+  production trace confirms; remeasure before restructuring counters.
 
 ---
 
@@ -1190,28 +855,40 @@ productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
 Parked on purpose: wanted in principle, but nothing in current household use
 pulls them forward. Promote only with a concrete trigger.
 
-- **Accept recipe links from the iOS Share Sheet.** Route incoming recipe URLs
-  into the native recipe flow before retiring the remaining web intake.
-
-- **Recurring maintenance tasks.** Add simple every-N-weeks/months recurrence;
-  completing an instance creates the next one, which naturally enters Needs
-  Attention. Cover every completion path with one idempotent transactional rule,
-  not a scheduler or RRULE system.
-
-- **Recurring meals.** Add a focused recurrence model for meals as its own slice,
-  separate from templates and nutrition goals.
+- **Extend source-neutral statement import beyond CSV.** PDF and OFX with
+  source text, date semantics, and account evidence preserved; AI-proposed
+  mappings behind a visible preview; never infer kind from the amount's sign.
+- **Durable shopping list.** Server-backed manual items (milk, paper towels)
+  and checked state across date ranges and devices, independent of inventory.
+  Blocks sending meal-suggestion shortfalls to the list and shopping pack
+  rounding.
+- **Grocery cost basis.** Allow `productId` on `discount` rows (Whole Foods
+  promos, Buy-Again are per line) and let `productQuantity` carry `{value,
+unit}` for measured lines (`0.5 lb @ $4/lb`), folding both into derived cost
+  basis without changing `SUM(Expense.cost)`. Promote when per-serving or
+  per-unit cost numbers are actually used.
+- **Saved user-created views.** Named filter/sort sets via the versioned
+  external-state pattern, beside manifest `presentation.list.views`.
+- **Project locations as Locations.** `Project.locations` holds a few
+  free-text street addresses, mostly former residences.
+- **Recurring maintenance tasks.** Every-N-weeks/months; completing an
+  instance creates the next through one idempotent transactional rule.
+- **Recurring meals, meal templates, and meal nutrition goals.** Each its own
+  slice; goals would compare planned nutrition against explicit targets.
+- **Accept recipe links from the iOS Share Sheet.**
+- **`location.tags` redundant-token pruning.** Locations hold only
+  `collection:*` tags today.
+- **Hierarchical Project/Task parent pickers.** Rosters are shallow; revisit
+  on deep nesting.
 
 ---
 
 ## Dormant schema — revisit
 
 Built but barely used. Each stays until someone decides to use or remove it;
-counts are production rows at the 2026-09 consolidation.
+counts are production rows at the 2026-09 consolidation. (The contribution
+ledger left this list: it is kept for use, starting with attribution prefill.)
 
-- **Contribution ledger.** `LedgerTransfer` (0), `ExpenseAttribution` (0),
-  `LedgerSourceClaim` (2), `InventoryEntry.ownerLedgerPartyId` (always null) and
-  `InventoryEntry.ownershipMode` (one value). `LedgerParty` itself is in use.
-  Decide whether per-person attribution is still wanted under tenet 4.
 - **Run and import machinery.** `RunApproval`, `RunControlEvent`, `RunEvidence`,
   `RunOrderCandidate`, `ImportHunt` (all 0); `ImportPreparedOrder` /
   `ImportPreparedLine` (1 / 5).
@@ -1220,105 +897,48 @@ counts are production rows at the 2026-09 consolidation.
   `MerchantVendorRule`, `MailboxCursor` (all 0).
 - **Always-null columns.** `Plant.daysFrom*` and `Plant.breeding`,
   `Planting.outcome`, `Vendor.returnWindowDays` and `Vendor.orderEvidence`,
-  `Image` capture and source columns (`captureDeviceLabel`, `capturePlaceName`,
-  `capturedAtOffsetMinutes`, `sourcePageUrl`, `sourceAssetUrl`, `sourceName`),
+  Image `sourcePageUrl`, `sourceAssetUrl`, `sourceName`,
   `Run.historyCursorUrl` / `dispatchError` / `deviceId`, `Task.sortOrder`,
   `Meal.sortOrder`, `Wish.acquiredAt`, `Device.productId`, `Cookbook.report`.
+  Image `captureDeviceLabel`, `capturePlaceName`, and
+  `capturedAtOffsetMinutes` fill once the library path sends them (Images &
+  photos).
 
 ---
 
-## Next pass
-
-Deferred from the 2026-09 manifest-rendering, deletion/parity, and consolidation
-PRs; unordered.
-
-- **Web `src/` layout.** UI code lives in `components/`, `app/_components/`,
-  `hooks/`, `app/_components/hooks/`, `lib/`, `misc/` and `server-functions/`.
-  Move to `ui/` (primitives), `features/<domain>/`, `entity/` (generic shells)
-  and `lib/` (pure utilities) with one codemod commit and nothing else in flight.
-- **One Cargo workspace for `recipebridge` and `cubby-ffi`.** They keep separate
-  `Cargo.lock` files. Trap: member `[profile.*]` tables are ignored in a
-  workspace and `wasm-pack` takes only `--dev/--profiling/--release`, so
-  recipebridge's `panic = "abort"` would leak into the FFI release build and
-  break UniFFI's `catch_unwind`; set wasm's panic strategy through the `wasm`
-  script's environment instead of a profile.
-- **Refresh stale docs.** `apps/web/PRODUCT.md` predates the manifest
-  consolidation.
-
-- **One data-quality framework.** `repo/problems/detectors-*` and the declared
-  checks in `repo/data-quality/` are two systems for "this record is wrong";
-  make detectors declared checks and have Problems read their results.
-- **Declare non-entity child tables in the manifest (`children:`)** so their
-  DDL is generated like entity tables.
-- **Profile test cost before another pruning pass.** [PR #1273](https://github.com/nickysemenza/cubby/pull/1273) reduced literal
-  test declarations but did not show an overall CI speed gain: web node and
-  Apple checks ran longer while PostgreSQL ran faster than successful main
-  #1272. Compare several exact-head runs and per-suite timings, then
-  consolidate costly duplicate behavior coverage or fixture setup without
-  weakening the merge gate. The one-run comparison is in that PR's report.
-
-- **Put `deleteStatementRows` on policy-driven removal.** It is the last
-  hand-written cascade (`apps/web/src/server/repo/statement-row.ts`); it takes a
-  filter rather than ids and StatementRow has no `AuditEntityKind`, so it waits
-  on "StatementRow and StatementImport as manifest entities". The image hard
-  delete stays on its own `IMAGE_HARD_DELETE` path on purpose: images are not
-  auditable, and `removeEntity` must not run for them
-  (`repo/removal/core.unit.test.ts` pins this).
-
-- **Expose recipebridge conversion, needs, costing and nutrition via cubby-ffi**
-  only alongside the first native screen that scales a recipe or prices a meal.
-  Until then the FFI surface stays `parse_ingredient`, `size_unit_aliases`,
-  `normalize_isbn`, `scan_code_gtin14`. Owners: `cubby-ffi/src/lib.rs`,
-  `apps/apple/CubbyKit/Sources/CubbyKit/FFI`.
-
-## Deferred: deploy surface
-
-- **Use Wrangler's local R2 binding for isolated object-storage tests.** Replace
-  the local S3-compatible mini-server only after an adapter can keep Cubby's
-  presigned browser and native upload/download URLs working alongside the
-  Worker binding (`apps/web/src/server/utils/s3.ts`, `wrangler.jsonc`). Exercise
-  upload, direct read, image processing, and replay under `wrangler dev` with
-  local R2 bytes; retain the workerd-backed CI gate. [Wrangler supports local
-  R2 simulation](https://developers.cloudflare.com/workers/local-development/bindings-per-env/),
-  but a binding alone does not implement the current presigned-URL contract.
-
 ## Operational passes
 
-- **Finish image provenance rollout on existing photos.** Run
-  `classifyImageProvenance` in dry-run mode, review its proposed changes, then
-  apply the accepted sweep and run `backfillImageMetadata`. Confirm each native
-  install's automatic-work participation choice. The Device, ImageSighting,
-  and Image capture columns are already present in production.
+- **Project existing images into search.** Never run: 27 of 6,292 Images have
+  a `SearchDocument`. Runs entirely server-side (projection, then queued
+  embeddings through AI Gateway). Best after automatic description is on, so
+  documents carry description text; call `maintenance.backfillImageSearch`
+  until it reports `stopped: "complete"`.
 
-- **Project existing images into search.** Uploads created before the
-  embedding fix have no `SearchDocument`. After deploy, call
-  `maintenance.backfillImageSearch` until it reports `stopped: "complete"`.
+- **Finish image provenance rollout on existing photos.** 266 of 6,292 Images
+  carry provenance. Run `classifyImageProvenance` in dry-run mode, review,
+  apply the accepted sweep, then run `backfillImageMetadata`. Confirm each
+  native install's Automatic work choice.
 
-- **Fill ingredient density gaps.** Use the existing missing-weight list to add
-  Product `UnitMapping` data organically as ingredients need it.
+- **Fill ingredient density gaps.** Use the missing-weight list to add Product
+  `UnitMapping` data as ingredients need it.
 
-- **Fill missing acquisition quantities.** Work through Expenses → Missing quantities
-  and record known counts on existing Product-linked acquisition rows; do not freeze
-  a changing row count into this file.
+- **Fill missing acquisition quantities.** Work through Expenses → Missing
+  quantities and record known counts on Product-linked acquisition rows.
 
-- **Register missing payment instruments.** Every card or bank
-  account used to pay vendors belongs in Cubby as a
-  `FinancialAccount`, or its statement rows can never settle anything. Add the
-  missing ones with aliases before the next statement import.
+- **Register missing payment instruments.** Every card or bank account used
+  to pay vendors belongs in Cubby as a `FinancialAccount` with aliases before
+  the next statement import, or its rows can never settle.
 
-- **Settle bare card charges.** Work from `/finance` with the purchase-presence
-  filter set to none, matching existing Purchases before booking new ones
-  (`finance_read.expense_match`, `finance_read.transfer_pairs`). Itemize lump-line
-  orders only where a receipt is on hand.
+- **Settle bare card charges.** Work from `/finance` with purchase presence
+  set to none, matching existing Purchases before booking new ones
+  (`finance_read.expense_match`, `finance_read.transfer_pairs`). Itemize
+  lump-line orders only where a receipt is on hand.
 
-- **Ingest a seasonal garden plan with `garden-plan-import`.** Turn a
-  written seasonal plan into Locations, one season Project,
-  due-dated Tasks, and planned Plantings by following the skill's playbook.
+- **Ingest a seasonal garden plan with `garden-plan-import`.**
 
-- **Import the household wardrobe.** One member's clothes per capture session,
-  uploaded from the Apple app into a `photo_inventory` run with that member as
-  owner; an agent proposes groups with `photo_run.propose_groups` and a human
-  approves them on the run page. Then import the matching vendor orders and
-  work the product match queue (`/recommendations/workbench?kind=product-match`)
-  so photo- and purchase-created Products converge. Playbook:
+- **Import the household wardrobe.** One member's clothes per capture session
+  into a `photo_inventory` run with that member as owner; an agent proposes
+  groups with `photo_run.propose_groups` and a human approves them. Then import
+  the matching vendor orders and work the product match queue
+  (`/recommendations/workbench?kind=product-match`). Playbook:
   [photo-inventory pilot](runbooks/photo-inventory-pilot.md).
