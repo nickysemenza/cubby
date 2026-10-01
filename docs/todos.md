@@ -391,6 +391,20 @@ example vegetable` must not resolve to the weight of an entire linked bag
 
 ### Needs a decision or investigation
 
+- **Spike Drizzle 1.0 RC for test factories.** `drizzle-orm@1.0` RC exports
+  `./zod` (table to Zod schema) and the separate `drizzle-seed` package can
+  generate seeded rows. Evaluate both as the backing for test data factories.
+  `server/db/create-shape-drift.unit.test.ts` records a decision against deriving
+  create shapes with drizzle-zod, so adopting `drizzle-orm/zod` would reverse
+  it; weigh that against the declaration spine (`entity-definitions`) before
+  pulling the RC, and do not bump drizzle outside the spike.
+
+- **Offer a Docker path for local development.** `pnpm dev` and the local test
+  services need macOS with Apple `container` (`scripts/lib/apple-container.ts`);
+  Linux runs only the external-service mode CI uses. Decide whether a Docker
+  backend for the supervisor and `scripts/test-services.ts` is worth supporting
+  for non-macOS contributors and agent sandboxes.
+
 - **Diagnose the image-processing retry storm.** Production averages about 190
   `ImageProcessingAttempt` rows and 380 `ImageProcessingEvent` rows per job (the
   worst job has 756 attempts). Find why jobs re-lease that often before adding
