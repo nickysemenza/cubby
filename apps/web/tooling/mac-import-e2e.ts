@@ -812,6 +812,8 @@ async function main(): Promise<void> {
     driver.evidence.push(signatureEvidence);
     milestones.signed = true;
     binaryFingerprint = prepared.signedFingerprint;
+    phase = "native-backend-preparation";
+    await driver.prepareBackend();
     phase = "native-launch";
     await run(
       "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
