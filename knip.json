@@ -63,6 +63,7 @@
         "scripts/check-client-bundle.ts!",
         "scripts/check-server-closure.ts!",
         "scripts/e2e-affected.ts!",
+        "scripts/generate-spec-areas.ts!",
         "scripts/read-performance.ts!",
         "scripts/apple-preview-fixtures.ts!",
         "tooling/**/*.{ts,tsx}!",

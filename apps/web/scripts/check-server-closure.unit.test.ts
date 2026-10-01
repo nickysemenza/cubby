@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { measureServerClosure } from "./check-server-closure";
+import { findBundledFaker, measureServerClosure } from "./check-server-closure";
 
 let root: string | undefined;
 
@@ -62,5 +62,16 @@ describe("measureServerClosure", () => {
       "assets/run-service-1.js",
       "assets/ai-sdk-1.js",
     ]);
+  });
+});
+
+describe("findBundledFaker", () => {
+  it("flags a chunk carrying Faker's helpers but not ordinary chunks", () => {
+    const root = dist({
+      "index.js": "export const a=1;",
+      "assets/seed-1.js":
+        "const h={weightedArrayElement(){},fromRegExp(){}};export{h};",
+    });
+    expect(findBundledFaker(root)).toEqual(["assets/seed-1.js"]);
   });
 });
