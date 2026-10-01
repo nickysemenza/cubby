@@ -2,11 +2,11 @@ import { Pool } from "pg";
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
 import { testUserId } from "@cubby/schemas/testing";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   currentMemberLedgerParty,
   setMemberLoginParty,
 } from "../src/server/repo/member-login";
-import { resolveOrThrow } from "../src/server/repo/shortcode-resolver";
 import {
   buildKernelContext,
   buildScenarioDatabase,
@@ -35,7 +35,8 @@ export async function seedMacStatementAccount(
       await setMemberLoginParty(
         db,
         kernel.auth.userId,
-        await resolveOrThrow(db, "ledgerParty", created.id),
+        parseShortcodeFor("ledgerParty", created.id),
+        kernel.actorContext,
       );
       member = await currentMemberLedgerParty(db, kernel.actorContext);
     }
