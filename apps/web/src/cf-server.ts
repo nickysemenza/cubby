@@ -35,7 +35,10 @@ import type { BackgroundQueueBatch } from "./server/background-queue-types";
 import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
 import { recordDatabaseWrite } from "./server/database-freshness/client";
 import { withRequestDb, withRequestDbClient } from "./server/db";
-import { withDatabaseRequestMetrics } from "./server/db-observability";
+import {
+  serverTimingHeader,
+  withDatabaseRequestMetrics,
+} from "./server/db-observability";
 import {
   IMAGE_PROCESSING_SOCKET_PATH,
   PURCHASE_IMPORT_SOCKET_PATH,
@@ -361,6 +364,7 @@ const handler = {
                             // Scoped here rather than around the whole handler body: this
                             // is the only region where request-scoped work runs, and
                             // waitUntil must belong to THIS request's context.
+                            const handlerStartedAt = performance.now();
                             const response = await withTrace(
                               "cf.handler",
                               async () =>
@@ -423,6 +427,14 @@ const handler = {
                               correlatedResponse.headers.set(
                                 "x-sentry-event-id",
                                 fallbackEventId,
+                              );
+                            if (correlatedResponse.status !== 101)
+                              correlatedResponse.headers.set(
+                                "server-timing",
+                                serverTimingHeader(
+                                  performance.now() - handlerStartedAt,
+                                  invocationOrdinal,
+                                ),
                               );
                             if (request.method === "HEAD") {
                               span.setAttributes({

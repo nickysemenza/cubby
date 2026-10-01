@@ -14,6 +14,7 @@ import {
 } from "~/lib/start-operation-observability";
 import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
+import { noteRequestOperation } from "~/server/db-observability";
 import {
   appErrorFromUnknown,
   isExpectedAppError,
@@ -415,6 +416,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
                 ? entityInput.data.entity
                 : undefined;
             if (entity) span.setAttribute("cubby.entity", entity);
+            noteRequestOperation(options.operation, entity);
             throwIfStartOperationAborted(options.request.signal);
 
             stage = "run";

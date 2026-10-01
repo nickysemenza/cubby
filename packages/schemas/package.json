@@ -6,6 +6,7 @@
   "exports": {
     "./activity": "./src/activity.ts",
     "./availability": "./src/availability.ts",
+    "./batch": "./src/batch.ts",
     "./codec": "./src/codec.ts",
     "./collection": "./src/collection.ts",
     "./cookbook": "./src/cookbook.ts",

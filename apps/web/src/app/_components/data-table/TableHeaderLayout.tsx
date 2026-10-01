@@ -148,6 +148,7 @@ function SortableHeader<TData extends RowData>({
     <TableHead
       ref={setNodeRef}
       key={header.id}
+      data-column-id={header.column.id}
       colSpan={header.colSpan}
       aria-sort={ariaSort(sortDirection)}
       className={cn(

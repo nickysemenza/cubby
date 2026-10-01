@@ -485,6 +485,14 @@ type ImageColumnDef<T extends BaseRow> = CubbyColumnDef<
   Array<{ id: string; url: string; filename?: string }>
 >;
 
+/**
+ * An entity whose list field is `images` gets its image column under that id,
+ * everyone else under `image`. Every "does this table already have an image
+ * column?" check must accept both, or the standard prepend adds a second one.
+ */
+export const isImageColumnId = (id: string | null | undefined): boolean =>
+  id === "image" || id === "images";
+
 export function createImageColumn<T extends BaseRow & DisplayImagesRow>(
   columnHelper: ColumnHelper<T>,
   options: CreateImageColumnOptions<T>,

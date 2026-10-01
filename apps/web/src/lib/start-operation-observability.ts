@@ -15,6 +15,13 @@ const START_OPERATION_HEADER = "x-cubby-operation";
 const START_OPERATION_KIND_HEADER = "x-cubby-operation-kind";
 const START_OPERATION_ENTITY_HEADER = "x-cubby-operation-entity";
 
+/** Per-operation trace headers; a batched request names its operations in its body instead. */
+export const START_OPERATION_TRACE_HEADERS: readonly string[] = [
+  START_OPERATION_HEADER,
+  START_OPERATION_KIND_HEADER,
+  START_OPERATION_ENTITY_HEADER,
+];
+
 export type StartOperationKind = "query" | "mutation" | "subscription";
 export type { StartOperationId };
 

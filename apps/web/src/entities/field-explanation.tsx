@@ -12,6 +12,7 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { CELL_RAIL_BUTTON_CLASS } from "~/app/_components/data-table/cell-frame";
+import { useRowActive } from "~/app/_components/data-table/row-activity";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ErrorDisplay } from "~/components/feedback/error-display";
@@ -157,19 +158,30 @@ export function ExplanationEntityLink({
   );
 }
 
-export function FieldExplanation({
-  entity,
-  id,
-  field,
-  label,
-  surface = "detail",
-}: {
+type FieldExplanationProps = {
   entity: Entity;
   id: string;
   field: string;
   label: string;
   surface?: "list" | "detail" | "summary";
-}) {
+};
+
+export function FieldExplanation(props: FieldExplanationProps) {
+  const rowActive = useRowActive();
+  // An idle table row keeps the rail slot but not the control, its query
+  // observer, or its two mutations; see row-activity.
+  if (props.surface === "list" && !rowActive)
+    return <span aria-hidden className="size-5 shrink-0" />;
+  return <FieldExplanationControl {...props} />;
+}
+
+function FieldExplanationControl({
+  entity,
+  id,
+  field,
+  label,
+  surface = "detail",
+}: FieldExplanationProps) {
   const [open, setOpen] = useState(false);
   const inheritOwner = useActionMutation({
     mutationFn: inventory.setOwnership.mutationOptions,

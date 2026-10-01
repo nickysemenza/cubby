@@ -43,6 +43,7 @@ import { CellEditTrigger } from "./cell-edit-trigger";
 import { CellEditorOverlay } from "./cell-editor-overlay";
 import { CELL_EDIT_GROUP_CLASS, CELL_EDIT_PENCIL_CLASS } from "./cell-frame";
 import { CellSelectionContext } from "./cell-selection-context";
+import { useRowActive } from "./row-activity";
 
 export type { FilterableComboboxItem };
 
@@ -331,6 +332,7 @@ function EditableDisplay<TSaved>({
   clipboard?: CellClipboardSpec<TSaved>;
   children: React.ReactNode;
 }) {
+  const rowActive = useRowActive();
   if (mode !== "wrap") {
     return (
       <span className={CELL_EDIT_GROUP_CLASS}>
@@ -351,7 +353,10 @@ function EditableDisplay<TSaved>({
           aria-label="Edit value"
           className={CELL_EDIT_PENCIL_CLASS}
         >
-          <PencilIcon className="size-3 text-muted-foreground pointer-coarse:text-hairline" />
+          {/* Idle rows keep the trigger (editor anchor, clipboard) but not its glyph. */}
+          {rowActive && (
+            <PencilIcon className="size-3 text-muted-foreground pointer-coarse:text-hairline" />
+          )}
         </CellEditTrigger>
       </span>
     );

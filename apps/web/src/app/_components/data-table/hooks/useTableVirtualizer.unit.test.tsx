@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  tableOverscan,
   flatRowToVirtualIndex,
   type GroupedItem,
   resolveVirtualIndex,
@@ -64,6 +65,88 @@ function Harness() {
     </div>
   );
 }
+
+function RestoreHarness({
+  rowCount,
+  initialOffset,
+}: {
+  rowCount: number;
+  initialOffset: number;
+}) {
+  const virtualizer = useTableVirtualizer({
+    rowCount,
+    rowKeys: ROW_KEYS.slice(0, rowCount),
+    groupedItems: null,
+    rowHeight: 28,
+    isMobile: false,
+    initialOffset,
+  });
+  return (
+    <div ref={virtualizer.paneWrapperRef}>
+      <div
+        ref={virtualizer.tableContainerRef}
+        data-testid="restore-pane"
+        data-first-row={virtualizer.virtualRows[0]?.index ?? ""}
+        data-total={virtualizer.totalSize}
+      />
+    </div>
+  );
+}
+
+/** A pane whose scroll range follows its rendered total, like a real one. */
+function fakeScrollablePane(pane: HTMLElement) {
+  let top = 0;
+  Object.defineProperties(pane, {
+    clientHeight: { configurable: true, get: () => 300 },
+    scrollHeight: {
+      configurable: true,
+      get: () => Number(pane.dataset.total ?? 0),
+    },
+    scrollTop: {
+      configurable: true,
+      get: () => top,
+      set: (value: number) => {
+        top = Math.max(0, Math.min(value, pane.scrollHeight - 300));
+      },
+    },
+  });
+}
+
+// Regression: the router restored a deep offset while the pane was still one
+// page tall, so the browser clamped scrollTop to 0 while the virtualizer kept
+// rendering rows at the restored offset — a blank table, and range-driven
+// prefetch then loaded page after page.
+describe("useTableVirtualizer scroll restoration", () => {
+  beforeEach(() => {
+    vi.stubGlobal("ResizeObserver", TestResizeObserver);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("applies a restored offset once enough rows exist to reach it", () => {
+    const { rerender } = render(
+      <RestoreHarness rowCount={10} initialOffset={1400} />,
+    );
+    const pane = screen.getByTestId("restore-pane");
+    fakeScrollablePane(pane);
+    rerender(<RestoreHarness rowCount={20} initialOffset={1400} />);
+    expect(pane.scrollTop).toBe(0);
+    rerender(<RestoreHarness rowCount={100} initialOffset={1400} />);
+    expect(pane.scrollTop).toBe(1400);
+  });
+
+  it("drops a pending restore once the person scrolls", () => {
+    const { rerender } = render(
+      <RestoreHarness rowCount={10} initialOffset={1400} />,
+    );
+    const pane = screen.getByTestId("restore-pane");
+    fakeScrollablePane(pane);
+    fireEvent.wheel(pane);
+    rerender(<RestoreHarness rowCount={100} initialOffset={1400} />);
+    expect(pane.scrollTop).toBe(0);
+  });
+});
 
 describe("useTableVirtualizer pane scrolling", () => {
   let wrapperTop = 220;
@@ -167,6 +250,21 @@ const grouped: GroupedItem[] = [
   { kind: "header", title: "B", count: 1, color: "var(--chart-2)" },
   { kind: "row", rowIndex: 2, groupRowIndex: 0 },
 ];
+
+describe("tableOverscan", () => {
+  // Regression: overscan was sized from the window, so a 60vh related table
+  // (18 visible rows) rendered ~30 extra rows each side — every row of a
+  // 50-row table, in every table on a detail page.
+  it("sizes overscan from the pane, not the window", () => {
+    expect(tableOverscan(576, 32)).toBe(6);
+    expect(tableOverscan(1440, 32)).toBe(15);
+  });
+
+  it("keeps a floor for short panes and a ceiling for tall ones", () => {
+    expect(tableOverscan(0, 32)).toBe(6);
+    expect(tableOverscan(4000, 32)).toBe(16);
+  });
+});
 
 describe("resolveVirtualIndex", () => {
   it("maps virtual index directly to a flat row index when ungrouped", () => {

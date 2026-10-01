@@ -20,6 +20,7 @@ import { useIsMobile } from "~/hooks/useMobile";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
 import { CellFrame } from "../data-table/cell-frame";
+import { useRowActive } from "../data-table/row-activity";
 import { stringLabelOf } from "./field-suggestion";
 import type { SuggestionOutcomeSurface } from "./suggestion-outcome-mark";
 import { SuggestionOutcomeMark } from "./suggestion-outcome-mark";
@@ -464,12 +465,24 @@ export function SuggestionReview({
     pending,
   );
   const isMobile = useIsMobile();
+  const rowActive = useRowActive();
   const markCurrentLabel = stringLabelOf(currentLabel);
   // Cleared the bar or not is a fact about the proposal itself, independent
   // of whether the person went on to dismiss it — a dismissed-but-actionable
   // suggestion still reads "Suggested X", not "Leaning X … needs 85%".
   const meetsBar = actionableSuggestion(suggestion, currentValue, alternative);
   if (!meetsBar || dismissed) {
+    // A status-only mark (checking, unavailable, declined) is quiet on an idle
+    // table row; an actionable proposal below always shows. See row-activity.
+    if (surface === "cell" && !rowActive)
+      return (
+        <MarkedValue
+          surface={surface}
+          mark={<span aria-hidden className="size-5 shrink-0" />}
+        >
+          {children}
+        </MarkedValue>
+      );
     return (
       <MarkedValue
         surface={surface}

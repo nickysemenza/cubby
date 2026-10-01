@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { DesktopDataRow, type DesktopDataRowProps } from "./DesktopDataRow";
+import { useRowActive } from "./row-activity";
 import type { CubbyRow as Row } from "./table-features";
 import {
   createCubbyColumnCollection,
@@ -143,10 +144,11 @@ describe("DesktopDataRow", () => {
       </table>,
     );
 
+    expect(screen.getByText("Vendor count")).toBeVisible();
+    fireEvent.pointerEnter(screen.getByRole("row"), { pointerType: "mouse" });
     expect(
       screen.getByRole("button", { name: "Inspect related records" }),
     ).toBeVisible();
-    expect(screen.getByText("Vendor count")).toBeVisible();
   });
 
   it("re-renders memoized cells when external row content changes", () => {
@@ -282,5 +284,47 @@ describe("DesktopDataRow", () => {
     expect(renderedRow).toHaveAttribute("data-current", "true");
     expect(renderedRow).toHaveAttribute("aria-current", "true");
     expect(renderedRow).not.toHaveAttribute("data-state", "selected");
+  });
+
+  // Failures: every idle row mounting hover-only controls (the DOM weight that
+  // made long tables lag), hover/keyboard focus never revealing them, or the
+  // inspector's current row losing them.
+  it("mounts hover-only cell affordances only on the active row", () => {
+    function Affordance() {
+      return useRowActive() ? <button type="button">Edit</button> : null;
+    }
+    const { result } = renderHook(() => useTestTable(() => <Affordance />));
+    const row = result.current.getRow("PRD-TEST");
+    const view = (overrides: RowOverrides = {}) => (
+      <table>
+        <tbody>
+          <DesktopDataRow {...desktopRowProps(row, overrides)} />
+        </tbody>
+      </table>
+    );
+    const { rerender } = render(view());
+    const renderedRow = screen.getByRole("row");
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+
+    fireEvent.pointerEnter(renderedRow, { pointerType: "mouse" });
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    fireEvent.pointerLeave(renderedRow, { pointerType: "mouse" });
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+
+    fireEvent.focus(renderedRow);
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    fireEvent.blur(renderedRow);
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+
+    rerender(view({ isCurrent: true }));
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+  });
+
+  it("keeps affordances mounted outside a table row", () => {
+    function Affordance() {
+      return useRowActive() ? <button type="button">Edit</button> : null;
+    }
+    render(<Affordance />);
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
   });
 });

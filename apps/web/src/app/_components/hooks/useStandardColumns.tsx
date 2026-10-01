@@ -21,6 +21,7 @@ import {
   createActionsColumn,
   createCreatedAtColumn,
   createImageColumn,
+  isImageColumnId,
   createNameColumn,
   createUpdatedAtColumn,
   type FilterConfig,
@@ -278,7 +279,7 @@ export function useStandardColumns<TData extends BaseListRow>({
 
         // Prepend standard columns
         const hasExplicitImageColumn = customColumns
-          .visit((column) => columnIdentifier(column) === "image")
+          .visit((column) => isImageColumnId(columnIdentifier(column)))
           .some(Boolean);
         if (!hasExplicitImageColumn) {
           const imageField = standardColumns.find(

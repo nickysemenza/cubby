@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createSuggestionScheduler } from "./suggestion-scheduler";
+import { createConcurrencyLimiter } from "./concurrency-limiter";
 
 describe("page suggestion scheduler", () => {
   it("starts four rows concurrently, fills released slots, and removes obsolete queued work", async () => {
-    const scheduler = createSuggestionScheduler();
+    const scheduler = createConcurrencyLimiter(4);
     const controllers = Array.from({ length: 65 }, () => new AbortController());
     const releases: Array<() => void> = [];
     const started: number[] = [];
@@ -39,7 +39,7 @@ describe("page suggestion scheduler", () => {
   });
 
   it("a failed row releases its slot for the next request", async () => {
-    const scheduler = createSuggestionScheduler(1);
+    const scheduler = createConcurrencyLimiter(1);
     const signal = new AbortController().signal;
     const first = scheduler.run(async () => {
       throw new Error("unavailable");
