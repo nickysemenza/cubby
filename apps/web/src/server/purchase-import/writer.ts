@@ -70,6 +70,7 @@ import {
 } from "~/server/repo/financial-transaction-allocations";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { sha256Hex } from "~/server/semantic/hash";
+import { dateOnly } from "~/server/utils/date-only";
 
 import {
   aggregateReplacementApprovalFingerprint,
@@ -88,8 +89,8 @@ const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
 export const PRODUCT_IDENTITY_RULES =
   "Choose an existing product only when the title, model, size, count, and variant identify the same sellable item. Choose none for a distinct or uncertain variant.";
 
-const dateOnly = (value: string | null): string =>
-  (value ? new Date(value) : new Date()).toISOString().slice(0, 10);
+const orderedDate = (value: string | null): string =>
+  dateOnly(value ? new Date(value) : undefined);
 
 /**
  * Deterministic semantic projection shared by the writer and validation.
@@ -961,7 +962,7 @@ export async function importVendorOrder(
         runId: input.runId,
         orderId: candidate.orderId,
         displayLabel: candidate.merchant,
-        date: dateOnly(candidate.orderedAt),
+        date: orderedDate(candidate.orderedAt),
         statedTotal: candidate.printedGrandTotal,
       });
     } else if (!isSourceRefresh) {
@@ -1018,7 +1019,7 @@ export async function importVendorOrder(
             purchaseId,
             name: candidate.merchant ?? "Imported order",
             cost: candidate.printedGrandTotal,
-            date: dateOnly(candidate.orderedAt),
+            date: orderedDate(candidate.orderedAt),
             lineKind: "principal",
             lineBasis: "allocation",
             costType: "materials",
@@ -1117,7 +1118,7 @@ export async function importVendorOrder(
             name: line.title,
             notes: line.seller ? `Seller: ${line.seller}` : null,
             cost: line.amount,
-            date: dateOnly(candidate.orderedAt),
+            date: orderedDate(candidate.orderedAt),
             lineKind: identity.lineKind,
             lineBasis: "item_line",
             costType: "materials",

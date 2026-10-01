@@ -13,6 +13,7 @@ import {
   writeE2ERunBundle,
   type E2ERunIdentity,
 } from "../../tooling/e2e-run-bundle";
+import { FAKER_SEED_ANNOTATION } from "../../tooling/factories/faker";
 import { assertTestRunContract } from "../../tooling/test-run-contract";
 import {
   WORKERD_EXPLORER_ANNOTATION,
@@ -71,6 +72,15 @@ class E2EHarnessReporter implements Reporter {
           attachment.name === WORKERD_LOGS_ATTACHMENT && attachment.body,
       )?.body;
       if (logs) this.workerdLogs.push({ name, body: logs });
+    }
+    if (result.status === "failed" || result.status === "timedOut") {
+      const seed = result.annotations.find(
+        (annotation) => annotation.type === FAKER_SEED_ANNOTATION,
+      );
+      if (seed)
+        console.error(
+          `[faker] ${test.titlePath().join(" > ")} used seed ${seed.description} (fakerFromSeed(${seed.description}) replays it)`,
+        );
     }
     const loads = result.annotations
       .filter((annotation) => annotation.type === NAVIGATION_ANNOTATION)

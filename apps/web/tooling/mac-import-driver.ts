@@ -294,6 +294,43 @@ export class MacImportDriver {
       );
     }
     this.nodes = data.nodes;
+    if (
+      surface === "frontmost-app" &&
+      data.nodes.some((node) => role(node) === "popover")
+    ) {
+      const supplemental = z
+        .array(nodeSchema)
+        .parse(
+          JSON.parse(
+            execFileSync(
+              this.presentationHelper,
+              [
+                "snapshot",
+                String(this.pid),
+                path.join(
+                  homedir(),
+                  "Library/Caches/CubbyMacImportFixture/Cubby.app",
+                ),
+                "*",
+                "*",
+              ],
+              { timeout: 10000, encoding: "utf8" },
+            ),
+          ),
+        );
+      const key = (node: Node) =>
+        JSON.stringify([role(node), node.identifier, node.rect]);
+      const existing = new Set(this.nodes.map(key));
+      let index = Math.max(-1, ...this.nodes.map((node) => node.index)) + 1;
+      for (const node of supplemental) {
+        if (node.bundleId !== this.bundleID)
+          throw new Error("Supplemental AX snapshot ownership mismatch");
+        if (!existing.has(key(node))) {
+          this.nodes.push({ ...node, index: index++ });
+          existing.add(key(node));
+        }
+      }
+    }
     this.generation++;
     return this.nodes
       .map((node) => {

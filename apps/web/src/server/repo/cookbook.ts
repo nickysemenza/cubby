@@ -63,6 +63,7 @@ import {
   upsertCookbookRecipeFromCookbook,
 } from "~/server/repo/import-recipe-convert";
 import { type ListPage, listScaffold } from "~/server/repo/list";
+import { listAll } from "~/server/repo/list-all";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import {
   deleteRecipesByCookbookTx,
@@ -365,10 +366,9 @@ export const getCookbookSummary = async (
  */
 export const listCookbooks = async (db: Database): Promise<CookbookSummary[]> =>
   (
-    await cookbookList(db, {}, [{ orderBy: "name", direction: "asc" }], {
-      pageIndex: 0,
-      pageSize: 10_000,
-    })
+    await listAll((pagination) =>
+      cookbookList(db, {}, [{ orderBy: "name", direction: "asc" }], pagination),
+    )
   ).data;
 
 /**

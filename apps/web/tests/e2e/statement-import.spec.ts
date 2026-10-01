@@ -1,6 +1,5 @@
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { z } from "zod";
-import { createFixture } from "./e2e-fixtures";
+import { createEntityFixture } from "./fixtures-core";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
@@ -10,17 +9,11 @@ test("a no-ID posted tip requires reviewed attachment to the pending charge", as
 }) => {
   const tag = `synthetic-tip-${Date.now()}`;
   await gotoAuthenticatedPage(page, "/statement-rows/import");
-  const account = await createFixture(
-    page,
-    "financialAccount",
-    financialAccountCreateInput.parse({
-      name: tag,
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
-      sourceAliases: [
-        { source: "copilot", alias: tag, externalAccountId: null },
-      ],
-    }),
-  );
+  const account = await createEntityFixture(page, "financialAccount", {
+    name: tag,
+    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    sourceAliases: [{ source: "copilot", alias: tag, externalAccountId: null }],
+  });
   const pending = await page.request.post("/api/v1/financial-transactions", {
     headers: { Origin: baseURL! },
     data: {
@@ -158,17 +151,13 @@ test("identical purchases stay distinct and a changed provider date attaches rev
   const unique = `synthetic-${Date.now()}`;
   const account = `Occurrence Visa ${unique}`;
   await gotoAuthenticatedPage(page, "/statement-rows/import");
-  await createFixture(
-    page,
-    "financialAccount",
-    financialAccountCreateInput.parse({
-      name: account,
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
-      sourceAliases: [
-        { source: "monarch", alias: account, externalAccountId: null },
-      ],
-    }),
-  );
+  await createEntityFixture(page, "financialAccount", {
+    name: account,
+    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    sourceAliases: [
+      { source: "monarch", alias: account, externalAccountId: null },
+    ],
+  });
   const header =
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Id";
   const descriptor = `SYNTHETIC CAFE ${unique}`;
@@ -228,17 +217,11 @@ test("CSV review blocks a provider duplicate outside the first preview page", as
 }) => {
   const tag = `synthetic-paged-${Date.now()}`;
   await gotoAuthenticatedPage(page, "/statement-rows/import");
-  await createFixture(
-    page,
-    "financialAccount",
-    financialAccountCreateInput.parse({
-      name: tag,
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
-      sourceAliases: [
-        { source: "monarch", alias: tag, externalAccountId: null },
-      ],
-    }),
-  );
+  await createEntityFixture(page, "financialAccount", {
+    name: tag,
+    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    sourceAliases: [{ source: "monarch", alias: tag, externalAccountId: null }],
+  });
   const csv = [
     "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Id",
     ...Array.from(

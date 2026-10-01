@@ -1,4 +1,4 @@
-import { seedProductPrerequisite } from "./e2e-fixtures";
+import { seedProductPrerequisite } from "./fixtures-catalog";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

@@ -2,7 +2,7 @@ import type { fetchVendorLogoInput } from "@cubby/schemas/vendor";
 import { mergeVendorsOut } from "@cubby/schemas/vendor";
 
 import { vendorContract } from "~/contracts/vendor.contract";
-import { executeEntity } from "~/server/entity-kernel";
+import { executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
@@ -52,13 +52,10 @@ export const vendorHandlers = implementOperationDomain(vendorContract, {
   decideOrderMail: (context, input) =>
     decideOrderMailCandidate(context.db, input, context.actorContext),
   merge: async (context, input) => {
-    const merge = await executeEntity(context, {
-      action: "merge",
+    const merge = await executeEntityAs(context, "merge", {
       entity: "vendor",
       data: input,
     });
-    if (merge.action !== "merge")
-      throw new Error("Entity kernel returned the wrong action");
     return mergeVendorsOut.parse({
       vendor: merge.item,
       mergeSummary: merge.mergeSummary,

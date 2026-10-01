@@ -4,9 +4,9 @@
  * @cubby/worker-tracing
  *
  * Minimal custom-span helper over the `cloudflare:workers` `tracing.enterSpan`
- * API. For the downstream Workers (usda-api, upc-lookup),
- * which run on workerd in dev and prod. Mirrors the `wrapCf` shape in
- * apps/web/src/server/tracing.ts.
+ * API, plus a minimal structured logger. For the downstream Workers (usda-api,
+ * upc-lookup), which run on workerd in dev and prod; apps/web's `withTrace`
+ * delegates to the same span core (`./span`), so there is one implementation.
  *
  * Spans created here auto-nest under the request's root span (and, across a
  * service-binding subrequest, under the calling worker's trace — the CF platform
@@ -27,37 +27,50 @@
  * import from code that's also unit-tested in Node (e.g. usda-api's edge.ts).
  */
 
-export type SpanAttr = string | number | boolean | undefined;
+import {
+  type CfTracing,
+  enterSpan,
+  NOOP_TRACE_SPAN,
+  type SpanAttr,
+  type TraceSpan,
+} from "./span";
 
 export { CUBBY_SENTRY_DSN } from "./sentry-dsn";
+export {
+  type CfSpan,
+  type CfTracing,
+  enterManualSpan,
+  enterSpan,
+  enterSynchronousManualSpan,
+  type EnterSpanOptions,
+  NOOP_TRACE_SPAN,
+  type SpanAttr,
+  type TraceSpan,
+  wrapCfSpan,
+} from "./span";
+export { createLogger, type Logger, type LogLevel } from "./log";
 
-/** The subset of the CF `Span` surface our call sites use. */
-export interface WorkerSpan {
-  setAttribute(key: string, value: SpanAttr): void;
-  setAttributes(attrs: Record<string, SpanAttr>): void;
-}
-
-type CfTracing = typeof import("cloudflare:workers").tracing;
+/** The span surface `withSpan` callers use. */
+export type WorkerSpan = TraceSpan;
 
 // Cached after the first attempt; `null` = checked and absent (non-worker).
 let cfTracing: CfTracing | null | undefined;
 async function getCfTracing(): Promise<CfTracing | null> {
   if (cfTracing !== undefined) return cfTracing;
   try {
-    // Indirected via @vite-ignore so a Vite-built worker (upc-lookup) doesn't
-    // try to pre-bundle the runtime-only module; workerd resolves it at runtime.
-    const mod = await import(/* @vite-ignore */ "cloudflare:workers");
+    // A variable specifier plus @vite-ignore: Vite's import analysis (web UI
+    // tests, a Vite-built worker) must not try to resolve the runtime-only
+    // module; a string literal is still analyzed. workerd resolves it at runtime.
+    const specifier = "cloudflare:workers";
+    const mod: { tracing: CfTracing } = await import(
+      /* @vite-ignore */ specifier
+    );
     cfTracing = mod.tracing;
   } catch {
     cfTracing = null;
   }
   return cfTracing;
 }
-
-const NOOP_SPAN: WorkerSpan = {
-  setAttribute() {},
-  setAttributes() {},
-};
 
 /**
  * Run `fn` inside a custom trace span. Applies any `attributes`, and on throw
@@ -72,29 +85,17 @@ export async function withSpan<T>(
   attributes?: Record<string, SpanAttr>,
 ): Promise<T> {
   const tracing = await getCfTracing();
-  if (!tracing) return fn(NOOP_SPAN);
-  return tracing.enterSpan(name, async (cf): Promise<T> => {
-    const span: WorkerSpan = {
-      setAttribute: (k, v) => {
-        if (v !== undefined) cf.setAttribute(k, v);
-      },
-      setAttributes: (attrs) => {
-        for (const [k, v] of Object.entries(attrs)) {
-          if (v !== undefined) cf.setAttribute(k, v);
-        }
-      },
-    };
-    if (attributes) span.setAttributes(attributes);
-    try {
-      return await fn(span);
-    } catch (error) {
-      cf.setAttribute("error", true);
-      cf.setAttribute(
+  if (!tracing) return fn(NOOP_TRACE_SPAN);
+  return enterSpan(tracing, name, fn, {
+    attributes,
+    // Downstream workers keep the message too: they have no app-level
+    // redaction concern and it is the fastest way to read a failed span.
+    onError: (span, error) => {
+      span.setAttribute(
         "error.message",
         error instanceof Error ? error.message : String(error),
       );
-      throw error;
-    }
+    },
   });
 }
 

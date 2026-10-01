@@ -1,4 +1,5 @@
 import type { UserId } from "@cubby/schemas/identifiers";
+import { sleep } from "@cubby/shared/retry";
 
 import { enqueueBackgroundTask } from "~/server/background-tasks/publish";
 import { getCalendarFeedNamespace, getExecutionCtx } from "~/server/cf-env";
@@ -102,8 +103,6 @@ export async function handleCalDavRequest(request: Request): Promise<Response> {
 /** Delays between dirty-mark attempts; the RPC is idempotent (`markDirty` only sets a flag). */
 const DIRTY_MARK_RETRY_DELAYS_MS = [250, 750];
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 /**
  * Db-less sender: this runs from a `waitUntil` with no request `Database` in
  * scope, and the task carries everything its handler needs. Without a queue
@@ -171,7 +170,7 @@ export function scheduleCalendarFeedDirty(
         }
         // SILENT: not the last attempt — logged above only if every retry
         // below also fails.
-        await delay(retryDelay);
+        await sleep(retryDelay);
       }
     }
   })();

@@ -4,10 +4,8 @@ import { purchaseSettlementCandidatesOut } from "@cubby/schemas/purchase";
 import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import {
-  createEvidenceHarnessContext,
-  seedSplitSettlementPrerequisite,
-} from "./e2e-fixtures";
+import { createEvidenceHarnessContext } from "./fixtures-core";
+import { seedSplitSettlementPrerequisite } from "./fixtures-finance";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { dispatchesOperation, operationResult } from "./dispatch-wire";

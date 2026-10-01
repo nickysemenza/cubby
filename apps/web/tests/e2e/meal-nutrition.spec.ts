@@ -1,7 +1,7 @@
 import type { Route } from "@playwright/test";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
-import { seedMealNutritionPrerequisite } from "./e2e-fixtures";
+import { seedMealNutritionPrerequisite } from "./fixtures-recipes";
 import { selectComboboxItem, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

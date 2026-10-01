@@ -19,7 +19,7 @@ import {
 } from "../db/products";
 import { getImageUrl, storeImage, storeImageBlob } from "../storage/images";
 import type { Env } from "../types";
-import { UPC_REGEX } from "../util/upc";
+import { BARCODE_RE } from "@cubby/shared/upc";
 import {
   optionalString as str,
   parsePrice,
@@ -232,7 +232,7 @@ admin.post("/products", async (c) => {
   const upc = str(body.upc);
   const name = str(body.name);
 
-  if (!upc || !UPC_REGEX.test(upc)) {
+  if (!upc || !BARCODE_RE.test(upc)) {
     return c.render(
       <Layout title="New product" active="new">
         <FormError message="Invalid UPC. Must be 8, 12, 13, or 14 digits." />

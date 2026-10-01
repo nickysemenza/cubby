@@ -26,7 +26,7 @@ import {
   missingListSources,
 } from "./entities/render/routes.ts";
 import { writeRouteTree } from "./route-tree.ts";
-import { renderShortcodeRegistryArtifact } from "./entities/shortcode-registry.ts";
+import { renderShortcodeRegistryArtifacts } from "./entities/shortcode-registry.ts";
 import { renderSearchArtifacts } from "./entities/render/search.ts";
 import { renderTimelineArtifacts } from "./entities/render/entity-timelines.ts";
 import { validateEntityDeclarationImportBoundary } from "./entities/import-boundary.ts";
@@ -104,7 +104,7 @@ const main = async () => {
   };
 
   validateEntityDeclarationImportBoundary();
-  await settle([await renderShortcodeRegistryArtifact()]);
+  await settle(await renderShortcodeRegistryArtifacts());
   const { entities, declarations } = await loadEntityDeclarationBundle();
   validateConnectedViews(entities);
   await settle([await renderAgentPromptArtifact(ROOT)]);

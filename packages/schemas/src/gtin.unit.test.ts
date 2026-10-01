@@ -1,4 +1,6 @@
+import gtinVectors from "@cubby/shared/golden-vectors/gtin.json";
 import { describe, expect, it } from "vitest";
+
 import { displayGtin, gtin, isGtinKind, normalizeGtin } from "./external-id";
 
 describe("barcode canonicalization", () => {
@@ -17,13 +19,32 @@ describe("barcode canonicalization", () => {
   it("refuses anything that is not 8-14 digits rather than truncating", () => {
     expect(normalizeGtin("012345678901234")).toBeNull();
     expect(normalizeGtin("1234567")).toBeNull();
+    // 9-11 digits are no barcode encoding (EAN-8, UPC-A, EAN-13, GTIN-14 only).
+    expect(normalizeGtin("123456789")).toBeNull();
+    expect(normalizeGtin("1234567890")).toBeNull();
+    expect(normalizeGtin("12345678901")).toBeNull();
     expect(normalizeGtin("ABC123456789")).toBeNull();
     expect(normalizeGtin("")).toBeNull();
+  });
+
+  // The Rust side (`scan_code_gtin14`) reads the same file; see
+  // `packages/shared/golden-vectors/gtin.json` for what `schemaGtin14` means.
+  it("agrees with the canonical scan-code vectors", () => {
+    const actual = gtinVectors.vectors.map((vector) => [
+      vector.input,
+      normalizeGtin(vector.input),
+    ]);
+    const expected = gtinVectors.vectors.map((vector) => [
+      vector.input,
+      "schemaGtin14" in vector ? vector.schemaGtin14 : vector.gtin14,
+    ]);
+    expect(actual).toEqual(expected);
   });
 
   it("normalizes on the write boundary", () => {
     expect(gtin.parse(" 077089850017 ")).toBe("00077089850017");
     expect(gtin.safeParse("12345").success).toBe(false);
+    expect(gtin.safeParse("1234567890").success).toBe(false);
     expect(gtin.safeParse("not-a-barcode").success).toBe(false);
   });
 

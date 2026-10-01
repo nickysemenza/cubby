@@ -6,7 +6,7 @@ import {
   productSourceSchema,
 } from "@cubby/upc-contract";
 import { withSpan } from "@cubby/worker-tracing";
-import { upc as upcSchema } from "@cubby/shared/upc";
+import { BARCODE_RE, upc as upcSchema } from "@cubby/shared/upc";
 import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { uniq } from "es-toolkit";
@@ -18,7 +18,6 @@ import { getFreshMisses } from "../db/misses";
 import { resolveProduct, resolveProductOutcome } from "../services/products";
 import { getImageUrl } from "../storage/images";
 import type { Product } from "../db/schema";
-import { UPC_REGEX } from "../util/upc";
 
 const lookup = new Hono<{ Bindings: Env }>();
 
@@ -66,7 +65,7 @@ lookup.post("/batch", async (c) => {
   const db = createDb(c.env.DB);
 
   // Dedupe + drop malformed UPCs.
-  const upcs = uniq(parsed.data.upcs).filter((u) => UPC_REGEX.test(u));
+  const upcs = uniq(parsed.data.upcs).filter((u) => BARCODE_RE.test(u));
 
   // Read products and fresh misses concurrently over the full UPC set — they're
   // two independent D1 round-trips, and product PKs vs. miss PKs are effectively

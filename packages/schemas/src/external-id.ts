@@ -1,3 +1,4 @@
+import { BARCODE_RE } from "@cubby/shared/upc";
 import { z } from "zod";
 
 export const externalIdSource = z
@@ -44,13 +45,20 @@ export const isGtinKind = (kind: ExternalIdKind): boolean => kind === GTIN_KIND;
  * The canonical GTIN-14 form — the identity every encoding of one barcode
  * shares.
  *
- * Returns null for anything that is not 8-14 digits. That guard is
- * load-bearing on the SQL side: Postgres `lpad(x, 14, '0')` TRUNCATES longer
- * input rather than erroring, so a silently-truncated value would collide with
- * a real barcode under the global `(source, kind, externalId)` unique.
+ * Returns null for anything that is not an 8, 12, 13 or 14 digit barcode
+ * (`BARCODE_RE`). That guard is load-bearing on the SQL side: Postgres
+ * `lpad(x, 14, '0')` TRUNCATES longer input rather than erroring, so a
+ * silently-truncated value would collide with a real barcode under the global
+ * `(source, kind, externalId)` unique.
+ *
+ * Pure-TS half of one rule: `recipebridge`'s `scan_code_gtin14` (wasm, and FFI
+ * for Swift) is canonical and additionally resolves ISBN-10 and strips
+ * separators, which this package cannot do without wasm. Both read
+ * `packages/shared/golden-vectors/gtin.json`; a caller that may receive an
+ * ISBN-10 or a hyphenated code must use the wasm function, not this one.
  */
 export const normalizeGtin = (value: string): string | null =>
-  /^\d{8,14}$/.test(value) ? value.padStart(14, "0") : null;
+  BARCODE_RE.test(value) ? value.padStart(14, "0") : null;
 
 export const displayGtin = (value: string): string =>
   value.replace(/^0+/, "").padStart(12, "0");
@@ -71,7 +79,7 @@ export const displayGtin = (value: string): string =>
 export const gtin = z
   .string()
   .trim()
-  .regex(/^\d{8,14}$/, "a barcode is 8-14 digits")
+  .regex(BARCODE_RE, "a barcode is 8, 12, 13, or 14 digits")
   .transform((value) => value.padStart(14, "0"))
   .pipe(z.string().regex(/^\d{14}$/))
   .describe("Barcode (UPC/EAN/GTIN); stored canonically as GTIN-14");

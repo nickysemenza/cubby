@@ -76,6 +76,7 @@ import { entityLink, project, task } from "~/server/db/schema";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 import { liveLinks } from "~/server/repo/entity-links";
+import { listAll } from "~/server/repo/list-all";
 import {
   type EntityRef,
   lookupShortcodes,
@@ -289,11 +290,13 @@ export async function listActionableTasks(
   // Membership is delegated to the ordinary list predicate. The actionable
   // renderer then adds its disclosed open/top-level semantics while retaining
   // the full graph below to explain why a matching row is blocked.
-  const matching = await taskList(
-    db,
-    { ...filters, completion: "open", topLevelOnly: true },
-    [],
-    { pageIndex: 0, pageSize: 100_000 },
+  const matching = await listAll((pagination) =>
+    taskList(
+      db,
+      { ...filters, completion: "open", topLevelOnly: true },
+      [],
+      pagination,
+    ),
   );
   const matchingShortcodes = new Set<string>(
     matching.data.map((row) => row.id),

@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/mcp-detail";
 import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";
 import {
+  DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
   MAX_SORTS,
   mcpPaginationFields,
@@ -68,7 +69,12 @@ const listFields = {
   pagination: z
     .object({
       pageIndex: z.number().int().min(0).default(0),
-      pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE).default(10),
+      pageSize: z
+        .number()
+        .int()
+        .min(1)
+        .max(MAX_PAGE_SIZE)
+        .default(DEFAULT_PAGE_SIZE),
     })
     .optional(),
   groupBy: z.string().min(1).optional(),
@@ -77,8 +83,13 @@ const listFields = {
 const resultDetail = mcpResultDetail;
 const resultDetailFields = z.object(mcpResultDetailFields);
 const mcpListPagination = z
-  .object(mcpPaginationFields({ defaultPageSize: 10, maxPageSize: 500 }))
-  .default({ pageIndex: 0, pageSize: 10 });
+  .object(
+    mcpPaginationFields({
+      defaultPageSize: DEFAULT_PAGE_SIZE,
+      maxPageSize: MAX_PAGE_SIZE,
+    }),
+  )
+  .default({ pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE });
 
 const mcpListCommandCases = generatedMcpEntityActionEntities.list.map(
   (entity) => {
@@ -367,6 +378,21 @@ type ResultForCommand<Command extends EntityCommand> =
           : Result
       : never
     : never;
+
+/**
+ * The result a command of `Action` on `Entity` can return: the same
+ * action/entity correlation as {@link EntityResultFor}, from the two keys alone.
+ */
+export type EntityResultForAction<
+  Action extends string,
+  Entity extends string,
+> = EntityKernelResult extends infer Result
+  ? Result extends { action: Action; entity: EntityKernelEntity }
+    ? [Extract<Result["entity"], Entity>] extends [never]
+      ? never
+      : Result
+    : never
+  : never;
 
 /** Preserve action/entity correlation through the small executeEntity seam. */
 export type EntityResultFor<Command extends EntityCommand> =

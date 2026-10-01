@@ -26,6 +26,7 @@ import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { liveLinks } from "~/server/repo/entity-links";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
 import { sha256Hex } from "~/server/semantic/hash";
+import { dateOnly } from "~/server/utils/date-only";
 
 import {
   resolveBeneficiaryEvidence,
@@ -68,7 +69,7 @@ const isIndividual = <Party extends { kind: string }>(
 ): party is Party & { kind: "member" | "guest" } =>
   party?.kind === "member" || party?.kind === "guest";
 
-const today = (): string => new Date().toISOString().slice(0, 10);
+const today = (): string => dateOnly();
 
 const unresolvedCandidate = (): InheritedCandidate => ({
   owner: null,

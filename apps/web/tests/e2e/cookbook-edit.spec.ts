@@ -1,7 +1,7 @@
 import {
   seedCookbookSourcePrerequisite,
   seedStaplePlanningPrerequisite,
-} from "./e2e-fixtures";
+} from "./fixtures-recipes";
 import { gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

@@ -18,7 +18,7 @@ import { z } from "zod";
 
 import { fieldExplanationContract } from "~/contracts/field-explanation.contract";
 import {
-  executeEntity,
+  executeEntityAs,
   type EntityKernelContext,
 } from "~/server/entity-kernel";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
@@ -470,7 +470,7 @@ export function explainProjectionSources(
 }
 
 async function loadProjection(
-  context: Parameters<typeof executeEntity>[0],
+  context: Parameters<typeof executeEntityAs>[0],
   entity: Entity,
   entityId: string,
   surface: Surface,
@@ -494,25 +494,21 @@ async function loadProjection(
   if (!kernelEntities.has(entity))
     throw new Error(`Unsupported explanation entity ${entity}`);
   if (surface !== "detail") {
-    const result = await executeEntity(context, {
-      action: "list",
+    const result = await executeEntityAs(context, "list", {
       entity: z.enum(ENTITY_KERNEL_ENTITIES).parse(entity),
       filters: { ids: [entityId] },
       pagination: { pageIndex: 0, pageSize: 1 },
     });
-    if (result.action !== "list") throw new Error("Entity was not found");
     const item = result.items[0];
     if (!item) throw new Error("Entity was not found");
     return asJsonRecord(item);
   }
-  const result = await executeEntity(context, {
-    action: "get",
+  const result = await executeEntityAs(context, "get", {
     entity: z.enum(ENTITY_KERNEL_ENTITIES).parse(entity),
     id: entityId,
     missing: "error",
   });
-  if (result.action !== "get" || !result.item)
-    throw new Error("Entity was not found");
+  if (!result.item) throw new Error("Entity was not found");
   return asJsonRecord(result.item);
 }
 

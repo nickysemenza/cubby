@@ -1,9 +1,9 @@
 import {
-  seedConcurrently,
   seedLocationPrerequisite,
   seedProductPrerequisite,
-  seedStaplePlanningPrerequisite,
-} from "./e2e-fixtures";
+} from "./fixtures-catalog";
+import { seedConcurrently } from "./fixtures-core";
+import { seedStaplePlanningPrerequisite } from "./fixtures-recipes";
 import { escapeRegExp, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

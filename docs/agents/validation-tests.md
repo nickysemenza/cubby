@@ -51,7 +51,10 @@ plausibly touches, for a faster local loop than the full suite —
 `apps/web/tests/e2e/spec-areas.ts` maps each spec to the routes, feature
 dirs, and shared contract files it exercises, and `scripts/e2e-affected.ts`
 matches changed files (committed since `origin/main` plus the working tree)
-against it. A change to a shared seam (the entity kernel, the app shell,
+against it. The routes and feature dirs a spec visits are generated into
+`spec-areas.derived.ts` (`node scripts/generate-spec-areas.ts` from `apps/web`;
+`e2e-affected.unit.test.ts` fails when it drifts); server, contract, and shared
+component globs stay hand-written in `SPEC_EXTRA_GLOBS`. A change to a shared seam (the entity kernel, the app shell,
 `e2e-helpers.ts`, etc.) or anything the manifest can't place selects every
 spec instead of guessing narrow. `--list` prints the selection without
 running it. This is local-only: CI keeps running the full suite, and this is
@@ -82,3 +85,24 @@ utility class only affects a real browser's layout once Tailwind has
 generated it — jsdom tests never needed this because jsdom has no layout
 engine to feed. A component that imports `@cubby/recipebridge` (directly or
 transitively) needs `pnpm wasm` run first, same as the `ui` tier.
+
+## Test and dev data factories
+
+One layer builds data for Vitest, E2E, and the dev corpus:
+`apps/web/tooling/factories/`. `buildEntity(entity, overrides, { faker })`
+returns the entity's parsed create input (the entity list and types come from
+the generated create schemas; `ENTITY_DEFAULTS` is exhaustive, so a new creatable
+entity cannot skip it). `createEntity(context, ...)` writes it through the
+entity kernel. A factory never defaults a relation id; pass it. E2E specs call
+`createEntityFixture(page, entity, overrides)` from `tests/e2e/fixtures-core.ts`
+and keep domain seeders in `tests/e2e/fixtures-*.ts`. `seedBaseWorld` seeds Home
+and the taxonomy roots for every lane.
+
+Faker fills only fields nothing asserts on, from a per-test seed (E2E title
+path, Vitest test name via `testFaker()`, dev seed 1). A name a locator or
+assertion uses is an override shaped `${label} ${deterministicToken(...)}`
+(`uniqueName` in E2E); shortcodes come from `@cubby/shared` and UPCs are valid
+literals, never Faker. E2E records the seed as a `faker-seed` annotation, and
+`testFaker()` prints it when the test fails. Retailer corpora, statement CSVs,
+costing and nutrition numbers, and scenario states stay literal. `build:cf`
+fails if Faker reaches the Worker bundle.

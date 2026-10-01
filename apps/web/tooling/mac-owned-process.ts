@@ -4,18 +4,36 @@ import { z } from "zod";
 
 export type MacProcessExpectation = { executable: string; arguments: string[] };
 export type OwnedMacProcess = { pid: number; command: string };
-function processes() {
-  return execFileSync("ps", ["-axo", "pid=,stat=,command="], {
-    encoding: "utf8",
-    timeout: 1000,
-  })
-    .split("\n")
-    .flatMap((line) => {
-      const match = line.trim().match(/^(\d+)\s+(\S+)\s+(.+)$/u);
-      return match
-        ? [{ pid: Number(match[1]), state: match[2]!, command: match[3]! }]
-        : [];
-    });
+function processes(pid?: number) {
+  let output: string;
+  try {
+    output = execFileSync(
+      "ps",
+      pid === undefined
+        ? ["-axo", "pid=,stat=,command="]
+        : ["-p", String(pid), "-o", "pid=,stat=,command="],
+      { encoding: "utf8", timeout: pid === undefined ? 1000 : 3000 },
+    );
+  } catch (error) {
+    if (
+      pid !== undefined &&
+      z
+        .object({
+          status: z.literal(1),
+          stdout: z.literal(""),
+          stderr: z.literal(""),
+        })
+        .safeParse(error).success
+    )
+      return [];
+    throw error;
+  }
+  return output.split("\n").flatMap((line) => {
+    const match = line.trim().match(/^(\d+)\s+(\S+)\s+(.+)$/u);
+    return match
+      ? [{ pid: Number(match[1]), state: match[2]!, command: match[3]! }]
+      : [];
+  });
 }
 function matches(command: string, expected: MacProcessExpectation) {
   if (!command.startsWith(`${expected.executable} `)) return false;
@@ -65,7 +83,9 @@ export async function waitForOwnedMacProcess(
   );
 }
 function inspectOwned(expected: MacProcessExpectation, owner: OwnedMacProcess) {
-  const current = processes().find((process) => process.pid === owner.pid);
+  const current = processes(owner.pid).find(
+    (process) => process.pid === owner.pid,
+  );
   if (
     current &&
     !/[ZE]/u.test(current.state) &&
@@ -84,7 +104,9 @@ async function awaitExit(
   const deadline = Date.now() + timeoutMs;
   let changedCommand = false;
   do {
-    const current = processes().find((process) => process.pid === owner.pid);
+    const current = processes(owner.pid).find(
+      (process) => process.pid === owner.pid,
+    );
     if (!current) return true;
     // A signalled browser can rewrite argv during graceful shutdown. Observe its exit,
     // but never escalate a signal once exact command ownership has been lost.
@@ -97,7 +119,7 @@ async function awaitExit(
   } while (Date.now() < deadline);
   if (
     changedCommand &&
-    processes().some((process) => process.pid === owner.pid)
+    processes(owner.pid).some((process) => process.pid === owner.pid)
   )
     throw new Error(
       `Fixture PID ${owner.pid} changed ownership while exiting; refusing further signals and lease release`,

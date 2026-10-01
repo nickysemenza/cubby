@@ -1,4 +1,4 @@
-import { seedLocationPrerequisite } from "./e2e-fixtures";
+import { seedLocationPrerequisite } from "./fixtures-catalog";
 import { expect, test } from "./e2e-test";
 
 const toLegacy = (code: string): string =>

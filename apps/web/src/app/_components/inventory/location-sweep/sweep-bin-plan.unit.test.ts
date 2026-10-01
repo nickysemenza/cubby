@@ -1,11 +1,13 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
+import binPlanVectors from "@cubby/shared/golden-vectors/bin-plan.json";
 import { describe, expect, it } from "vitest";
 
 import {
   canGoMissing,
   planSweptBin,
   type SweepBinNode,
+  type SweepBinVerdict,
 } from "./sweep-bin-plan";
 
 const at = (
@@ -125,6 +127,63 @@ describe("canGoMissing", () => {
     "excludes the unscannable %s",
     (type) => {
       expect(canGoMissing(child(type))).toBe(false);
+    },
+  );
+});
+
+// Shared with apps/apple BinPlanTests (Audit/BinPlan.swift is a port of this
+// module): the verdict, reason and copy must agree between the two.
+describe("golden vectors", () => {
+  const byCode = new Map<string, SweepBinNode>();
+  const node = (code: string): SweepBinNode => {
+    const existing = byCode.get(code);
+    if (existing) return existing;
+    const spec = binPlanVectors.nodes.find(
+      (candidate) => candidate.code === code,
+    );
+    if (!spec) throw new Error(`unknown vector node ${code}`);
+    const built = at(
+      code,
+      spec.name,
+      spec.parent === null ? undefined : node(spec.parent),
+    );
+    byCode.set(code, built);
+    return built;
+  };
+
+  // The vectors use the Swift reason vocabulary: `root` is TS `home`.
+  const summarize = (verdict: SweepBinVerdict) => {
+    switch (verdict.kind) {
+      case "confirm":
+        return { verdict: "confirm" };
+      case "adopt":
+        return {
+          verdict: "adopt",
+          adoptName: verdict.bin.name,
+          currentParentName: verdict.bin.currentParentName,
+        };
+      case "refuse":
+        return {
+          verdict: "refuse",
+          reason: verdict.reason === "home" ? "root" : verdict.reason,
+          message: verdict.message,
+        };
+    }
+  };
+
+  it.each(binPlanVectors.cases)(
+    "$anchor scans $scanned -> $verdict $reason",
+    (vector) => {
+      expect(
+        summarize(planSweptBin(node(vector.anchor), node(vector.scanned))),
+      ).toEqual({
+        verdict: vector.verdict,
+        reason: "reason" in vector ? vector.reason : undefined,
+        message: vector.message?.replace("{verb}", "sweeping"),
+        adoptName: "adoptName" in vector ? vector.adoptName : undefined,
+        currentParentName:
+          "currentParentName" in vector ? vector.currentParentName : undefined,
+      });
     },
   );
 });

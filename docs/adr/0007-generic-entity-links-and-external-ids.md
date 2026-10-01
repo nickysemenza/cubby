@@ -111,7 +111,8 @@ NOT NULL exactly on kinds with a primary slot, and a 14-digit form for
 externalId)`, so an identifier names at most one live entity; primary is
 unique per `(entityId, source, kind)` among live rows. One `gtin_14` kind
 replaces one kind per encoding: values normalize to GTIN-14 at the write
-boundary (`normalizeGtin` refuses input that is not 8 to 14 digits, because
+boundary (`normalizeGtin` refuses input that is not 8, 12, 13, or 14 digits — the
+recipebridge `scan_code_gtin14` rule — because
 Postgres `lpad` truncates longer input and a truncated value would collide with
 a real barcode).
 

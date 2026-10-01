@@ -60,4 +60,40 @@ struct ImageTransformTests {
                 == "https://media.nickysemenza.com/cdn-cgi/image/width=256,height=256,quality=80,format=jpeg,fit=scale-down/products/abc.heic?v=2"
         )
     }
+
+    /// Shared with `apps/web/src/lib/image-url.unit.test.ts`: both clients mint the same URLs so
+    /// the Cloudflare edge cache is shared (`packages/shared/golden-vectors/image-url.json`).
+    @Test func matchesTheSharedGoldenVectors() throws {
+        struct Width: Decodable {
+            let rendered: Double
+            let rung: Int
+        }
+        struct Rewrite: Decodable {
+            let `in`: String
+            let width: Double
+            let out: String?
+        }
+        struct File: Decodable {
+            let rungs: [Int]
+            let widths: [Width]
+            let rewrites: [Rewrite]
+        }
+        let file = try GoldenVectors.decode(File.self, named: "image-url")
+        let bucket = "https://media.nickysemenza.com"
+        #expect(ImageTransform.widths == file.rungs)
+        for width in file.widths {
+            #expect(
+                ImageTransform.transformWidth(renderedWidth: CGFloat(width.rendered)) == width.rung,
+                "rendered \(width.rendered)")
+        }
+        for rewrite in file.rewrites {
+            let input = try #require(
+                URL(string: rewrite.in.replacingOccurrences(of: "{bucket}", with: bucket)))
+            let expected = rewrite.out.map { $0.replacingOccurrences(of: "{bucket}", with: bucket) }
+            #expect(
+                ImageTransform.transformed(input, renderedWidth: CGFloat(rewrite.width)).absoluteString
+                    == (expected ?? input.absoluteString),
+                "input \(rewrite.in)")
+        }
+    }
 }

@@ -1,7 +1,9 @@
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { z } from "zod";
 
+/** The one page-size ceiling and default every list boundary shares. */
 export const MAX_PAGE_SIZE = 500;
+export const DEFAULT_PAGE_SIZE = 10;
 export {
   LOCATION_UNSPECIFIED_GROUP_KEY,
   PRODUCT_UNCLASSIFIED_GROUP_KEY,
@@ -128,7 +130,12 @@ export const entityFilterList = <T extends z.ZodTypeAny>(schema: T) =>
 
 const paginationParams = z.object({
   pageIndex: z.number().int().min(0).default(0),
-  pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE).default(10),
+  pageSize: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_PAGE_SIZE)
+    .default(DEFAULT_PAGE_SIZE),
 });
 
 export function mcpPageSizeParam(opts: {
@@ -181,7 +188,7 @@ export const sortPaginationFields = {
     .default({ orderBy: "createdAt", direction: "desc" }),
   pagination: paginationParams
     .optional()
-    .default({ pageIndex: 0, pageSize: 10 }),
+    .default({ pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE }),
   groupBy: z.string().optional(),
 };
 
@@ -198,7 +205,7 @@ export const createSortPaginationFields = <
     .default({ orderBy: opts.defaultSort, direction: "desc" }),
   pagination: paginationParams
     .optional()
-    .default({ pageIndex: 0, pageSize: 10 }),
+    .default({ pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE }),
   groupBy: opts.groupableFields
     ? z.enum(opts.groupableFields).optional()
     : z.enum(opts.sortableFields).optional(),

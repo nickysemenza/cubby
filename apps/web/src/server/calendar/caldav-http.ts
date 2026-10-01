@@ -1,4 +1,5 @@
 import { userId, type UserId } from "@cubby/schemas/identifiers";
+import { concatBytes } from "@cubby/shared/external-fetch";
 import {
   DOMImplementation,
   DOMParser,
@@ -389,12 +390,7 @@ async function requestBody(request: Request): Promise<string> {
   } finally {
     reader.releaseLock();
   }
-  const combined = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    combined.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
+  const combined = concatBytes(chunks);
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(combined);
   } catch {

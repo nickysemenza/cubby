@@ -9,6 +9,7 @@ import type {
   EntityGraphPath,
 } from "@cubby/schemas/entity-graph";
 import { sql } from "drizzle-orm";
+import { chunk } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -44,14 +45,6 @@ type GraphExploreReader = (
 type Visit = {
   distance: number;
   paths: EntityGraphPath[];
-};
-
-const chunks = <T>(items: readonly T[], size: number): T[][] => {
-  const result: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    result.push(items.slice(index, index + size));
-  }
-  return result;
 };
 
 const pathRecordKey = (path: EntityGraphPath): string =>
@@ -178,7 +171,7 @@ export async function exploreEntityGraph(
 
   while (frontier.length > 0 && frontierDepth < requestedDepth) {
     const next = new Map<string, EntityRef>();
-    for (const batch of chunks(frontier, limits.maxRootsPerRead)) {
+    for (const batch of chunk(frontier, limits.maxRootsPerRead)) {
       if (reads >= limits.maxReads || now() >= deadline) {
         budgetReached = true;
         break;

@@ -373,4 +373,21 @@ mod tests {
         assert_eq!(scan_code_gtin14("abc"), None);
         assert_eq!(scan_code_gtin14(""), None);
     }
+
+    /// Shared with the pure-TS normalizer in `@cubby/schemas/external-id`, the
+    /// web wasm wrapper and Swift `ScanCodes.gtin14`: one rule, one vector file.
+    #[test]
+    fn scan_code_gtin14_matches_the_shared_golden_vectors() {
+        let doc: serde_json::Value = serde_json::from_str(include_str!(
+            "../../packages/shared/golden-vectors/gtin.json"
+        ))
+        .expect("gtin.json parses");
+        let vectors = doc["vectors"].as_array().expect("vectors array");
+        assert!(!vectors.is_empty());
+        for vector in vectors {
+            let input = vector["input"].as_str().expect("input");
+            let expected = vector["gtin14"].as_str().map(str::to_string);
+            assert_eq!(scan_code_gtin14(input), expected, "input {input:?}");
+        }
+    }
 }

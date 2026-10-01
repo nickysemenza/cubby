@@ -3,6 +3,7 @@ import {
   isEmbeddableEntity,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
+import { retryWithBackoff } from "@cubby/shared/retry";
 
 import { getErrorMessage } from "~/lib/error-utils";
 import { ENTITY_EMBEDDING_FEATURE } from "~/server/ai/features";
@@ -88,9 +89,6 @@ export function isThrottleError<TError>(error: TError): boolean {
   );
 }
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
 /** Delay before each retry of a throttled Vectorize upsert; see
  * {@link upsertVectorsWithRetry}. */
 const VECTOR_UPSERT_RETRY_DELAYS_MS = [500, 1000, 2000];
@@ -106,17 +104,19 @@ async function upsertVectorsWithRetry(
   port: EmbeddingRefreshPort,
   vectors: ReadonlyArray<SearchableEntityRef & { values: number[] }>,
 ): Promise<{ ok: true } | { ok: false; error: unknown }> {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      await port.vectorStore.upsert(vectors);
-      return { ok: true };
-    } catch (error) {
-      const delayMs = VECTOR_UPSERT_RETRY_DELAYS_MS[attempt];
-      if (delayMs === undefined || !isThrottleError(error)) {
-        return { ok: false, error };
-      }
-      await sleep(delayMs + Math.random() * 250);
-    }
+  try {
+    await retryWithBackoff(() => port.vectorStore.upsert(vectors), {
+      delayFor: (outcome, attempt) => {
+        if (outcome.ok) return null;
+        const delayMs = VECTOR_UPSERT_RETRY_DELAYS_MS[attempt];
+        return delayMs === undefined || !isThrottleError(outcome.error)
+          ? null
+          : delayMs + Math.random() * 250;
+      },
+    });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
   }
 }
 

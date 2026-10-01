@@ -95,11 +95,33 @@ export function measureServerClosure(root: string) {
   };
 }
 
+/**
+ * Files carrying Faker's runtime. `@faker-js/faker` is a devDependency for test
+ * and dev-seed data only (`tooling/factories`); its locale tables are
+ * megabytes, so any Worker chunk containing it means a test seam leaked into
+ * production code. The markers are method names Faker's `helpers` module
+ * defines and minification preserves as property keys.
+ */
+export function findBundledFaker(root: string): string[] {
+  return listJs(root).filter((file) => {
+    const source = readFileSync(path.join(root, file), "utf8");
+    return (
+      source.includes("weightedArrayElement") && source.includes("fromRegExp")
+    );
+  });
+}
+
 const invokedPath = process.argv[1]
   ? pathToFileURL(path.resolve(process.argv[1])).href
   : undefined;
 if (invokedPath === import.meta.url) {
-  const report = measureServerClosure(path.resolve("dist/server"));
+  const serverRoot = path.resolve("dist/server");
+  const faker = findBundledFaker(serverRoot);
+  if (faker.length > 0)
+    throw new Error(
+      `@faker-js/faker reached the Worker bundle (${faker.join(", ")}). It is for tests and dev seeding only; keep tooling/factories and *.fixtures imports out of src/ production code.`,
+    );
+  const report = measureServerClosure(serverRoot);
   const mb = (bytes: number) => `${(bytes / MB).toFixed(2)} MB`;
   console.log(
     `[check-server-closure] first request ${mb(report.firstRequest.bytes)} (${report.firstRequest.files.length} files), total ${mb(report.total.bytes)}`,

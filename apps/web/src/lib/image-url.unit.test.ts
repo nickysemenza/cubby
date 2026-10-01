@@ -1,3 +1,4 @@
+import imageVectors from "@cubby/shared/golden-vectors/image-url.json";
 import { describe, expect, it } from "vitest";
 
 import { IMAGE_WIDTHS, transformWidth, transformedImageUrl } from "./image-url";
@@ -46,5 +47,27 @@ describe("transformedImageUrl", () => {
 
   it("passes through strings that are not URLs", () => {
     expect(transformedImageUrl("not a url", 40)).toBe("not a url");
+  });
+});
+
+// Shared with apps/apple ImageTransformTests: the native app mints the same
+// URLs so the edge cache is shared across clients, so the two must not drift.
+describe("golden vectors", () => {
+  const expand = (value: string) =>
+    value.replaceAll("{bucket}", __R2_PUBLIC_URL__);
+
+  it("shares the rung ladder", () => {
+    expect([...IMAGE_WIDTHS]).toEqual(imageVectors.rungs);
+  });
+
+  it.each(imageVectors.widths)("snaps $rendered to $rung", (vector) => {
+    expect(transformWidth(vector.rendered)).toBe(vector.rung);
+  });
+
+  it.each(imageVectors.rewrites)("rewrites $in", (vector) => {
+    const input = expand(vector.in);
+    expect(transformedImageUrl(input, vector.width)).toBe(
+      vector.out === null ? input : expand(vector.out),
+    );
   });
 });

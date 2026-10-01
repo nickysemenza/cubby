@@ -29,6 +29,7 @@ import { gatewayBaseURL, gatewayFetch } from "~/server/clients/ai-gateway";
 import type { Database } from "~/server/db";
 import { image } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { cents } from "~/server/repo/money";
 import { ensureRun, systemActor } from "~/server/runs/ensure-run";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
@@ -38,8 +39,6 @@ import {
   purchaseExtractionPrompt,
   type PurchaseAuditRenderedBatch,
 } from "./prompts";
-
-const cents = (amount: number): number => Math.round(amount * 100);
 
 const validateExtraction = (output: ImportExtractionOutcome) => {
   const candidate = output.candidate;

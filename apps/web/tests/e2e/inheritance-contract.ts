@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { seedInheritancePrerequisite } from "./e2e-fixtures";
+import { seedInheritancePrerequisite } from "./fixtures-finance";
 import {
   expectViewportBounded,
   gotoAuthenticatedPage,

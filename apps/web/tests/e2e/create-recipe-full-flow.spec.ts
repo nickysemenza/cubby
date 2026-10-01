@@ -1,4 +1,4 @@
-import { seedCostedIngredientPrerequisite } from "./e2e-fixtures";
+import { seedCostedIngredientPrerequisite } from "./fixtures-recipes";
 import {
   SHORTCODE,
   fillInput,

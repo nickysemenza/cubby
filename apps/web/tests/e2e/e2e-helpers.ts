@@ -6,9 +6,17 @@ import {
   test,
   type TestInfo,
 } from "@playwright/test";
+import type { Faker } from "@faker-js/faker";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
+
+import {
+  deterministicToken,
+  FAKER_SEED_ANNOTATION,
+  fakerFromSeed,
+  hashSeed,
+} from "../../tooling/factories/faker";
 
 import {
   NAVIGATION_ANNOTATION,
@@ -28,15 +36,47 @@ export function escapeRegExp(text: string): string {
  * every spec it runs, so which specs share it changes with the shard split; a
  * literal or faker-picked name then collides with another spec's record (a
  * strict-mode violation, or a count that includes a stranger's rows).
+ *
+ * The token is a pure function of the test's identity (project, title path,
+ * repeat and retry index) and how many times this label was requested, so a
+ * failing run's names reproduce on the next run.
  */
+const uniqueNameCalls = new WeakMap<TestInfo, Map<string, number>>();
 export function uniqueName(testInfo: TestInfo, label: string): string {
-  const token = [
-    testInfo.testId.slice(-4),
-    testInfo.repeatEachIndex.toString(36),
-    testInfo.parallelIndex.toString(36),
-    Date.now().toString(36).slice(-5),
-  ].join("");
+  const calls = uniqueNameCalls.get(testInfo) ?? new Map<string, number>();
+  uniqueNameCalls.set(testInfo, calls);
+  const call = calls.get(label) ?? 0;
+  calls.set(label, call + 1);
+  const token = deterministicToken(
+    testInfo.project.name,
+    ...testInfo.titlePath,
+    testInfo.repeatEachIndex,
+    testInfo.retry,
+    label,
+    call,
+  );
   return `${label} ${token}`;
+}
+
+const testFakers = new WeakMap<TestInfo, Faker>();
+/**
+ * The running test's seeded Faker, for filler fields no assertion reads. Seeded
+ * from the test's title path, so it replays; one instance per test, so
+ * successive draws differ. The seed is recorded as a `faker-seed` annotation,
+ * which the report and run bundle show beside a failure.
+ */
+export function e2eFaker(): Faker {
+  const info = test.info();
+  const existing = testFakers.get(info);
+  if (existing) return existing;
+  const seed = hashSeed(info.project.name, ...info.titlePath);
+  info.annotations.push({
+    type: FAKER_SEED_ANNOTATION,
+    description: String(seed),
+  });
+  const faker = fakerFromSeed(seed);
+  testFakers.set(info, faker);
+  return faker;
 }
 
 /** Read an expense through the public API, for `expect.poll` after a UI write. */
