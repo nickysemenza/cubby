@@ -1,15 +1,14 @@
-import {
-  type BarDatum,
-  ResponsiveBar,
-  type ResponsiveBarSvgProps,
-} from "@nivo/bar";
-import { ResponsiveLine } from "@nivo/line";
-import { ResponsivePie } from "@nivo/pie";
+import type { BarDatum, ResponsiveBarSvgProps } from "@nivo/bar";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { sumBy } from "es-toolkit";
 import type { ComponentProps, ReactNode } from "react";
 import { useMemo } from "react";
 
+import {
+  ResponsiveBar,
+  ResponsiveLine,
+  ResponsivePie,
+} from "~/app/_components/charts/nivo-responsive";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import {

@@ -31,6 +31,7 @@ import { Toaster } from "~/components/ui/sonner";
 import { useDebug } from "~/hooks/useDebug";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
 import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
+import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { buildMetadataQueryOptions } from "~/lib/build-metadata";
 import { FLAGS } from "~/lib/flags";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
@@ -53,10 +54,13 @@ const TanStackDevtoolsMount = React.lazy(loadTanStackDevtools);
 
 // Lazy + flag-gated: the perf overlay and its web-vitals collector only load
 // when the `perfOverlay` flag is on (flags.ts, compile-time).
-const PerfOverlay = React.lazy(() =>
-  import("~/app/_components/perf-overlay").then((m) => ({
-    default: m.PerfOverlay,
-  })),
+const PerfOverlay = browserOnlyLazy<object>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("~/app/_components/perf-overlay").then((m) => ({
+          default: m.PerfOverlay,
+        })),
 );
 
 function PerfOverlayMount() {

@@ -19,11 +19,17 @@ import { useHydrated } from "~/hooks/useHydrated";
  *
  * The returned component renders `Placeholder` on the server and on the first
  * client render, then the real component (behind its own Suspense) once
- * hydrated, so server HTML and hydration always agree.
+ * hydrated, so server HTML and hydration always agree. Omit `Placeholder` for
+ * something only mounted after user interaction (a dialog, a popover body),
+ * which never appears in server HTML.
  */
+function Nothing() {
+  return null;
+}
+
 export function browserOnlyLazy<Props extends object>(
   load: (() => Promise<{ default: ComponentType<Props> }>) | null,
-  Placeholder: ComponentType,
+  Placeholder: ComponentType = Nothing,
 ) {
   const Lazy = load ? lazy(load) : null;
   return function BrowserOnly(props: Props) {

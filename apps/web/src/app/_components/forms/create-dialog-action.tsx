@@ -1,15 +1,23 @@
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { lazy, type ReactNode, Suspense, useState } from "react";
+import type { ComponentProps } from "react";
+import { type ReactNode, Suspense, useState } from "react";
 import { z } from "zod";
 
 import { Button } from "~/components/ui/button";
+import type { EntityEditDialog as EntityEditDialogComponent } from "~/entities/editing/entity-edit-dialog";
 import type { EntityEditDialogRequest } from "~/entities/editing/entity-edit-dialog";
+import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 
-const EntityEditDialog = lazy(() =>
-  import("~/entities/editing/entity-edit-dialog").then((module) => ({
-    default: module.EntityEditDialog,
-  })),
+const EntityEditDialog = browserOnlyLazy<
+  ComponentProps<typeof EntityEditDialogComponent>
+>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("~/entities/editing/entity-edit-dialog").then((module) => ({
+          default: module.EntityEditDialog,
+        })),
 );
 
 const routeSearchValueSchema = z.json();
