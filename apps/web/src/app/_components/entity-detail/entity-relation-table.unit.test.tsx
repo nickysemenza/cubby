@@ -2,6 +2,7 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import { testShortcode } from "@cubby/schemas/testing";
 import { formatCategoryLabel } from "@cubby/shared";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEntityMutationPort } from "~/entities/editing/use-entity-commands";
@@ -141,6 +142,28 @@ describe("EntityRelationTable", () => {
   });
   afterEach(() => {
     harness.dispose();
+  });
+
+  // Relation data is only ever fetched in the browser, so the server render is
+  // a skeleton; building the full list stack for it cost each detail page
+  // ~14 table setups of SSR CPU.
+  it("server-renders a skeleton without starting any list machinery", () => {
+    const list = entityList.list.withTransport(async () => {
+      throw new Error("no read during server render");
+    });
+    const Wrapper = harness.wrapper;
+    const html = renderToString(
+      <Wrapper>
+        <EntityRelationTable
+          plan={planFor("project", "tasks")}
+          recordId={testShortcode("project", "PRJ-TEST")}
+          title="Tasks"
+          operations={{ list }}
+        />
+      </Wrapper>,
+    );
+    expect(harness.queryClient.getQueryCache().getAll()).toHaveLength(0);
+    expect(html).toContain('aria-busy="true"');
   });
 
   it("issues the scoped list read, sorted and filtered per the plan", async () => {
