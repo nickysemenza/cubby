@@ -17,14 +17,14 @@ export function useLoadAllPages(
     hasNextPage: boolean;
     isFetchingNextPage: boolean;
     isError: boolean;
-    fetchNextPage: (options: { cancelRefetch: false }) => unknown;
+    fetchNextPage: (options: { cancelRefetch: false }) => void;
   },
   enabled = true,
 ) {
   const { hasNextPage, isFetchingNextPage, isError, fetchNextPage } = query;
   useEffect(() => {
     if (enabled && hasNextPage && !isFetchingNextPage && !isError) {
-      void fetchNextPage({ cancelRefetch: false });
+      fetchNextPage({ cancelRefetch: false });
     }
   }, [enabled, hasNextPage, isFetchingNextPage, isError, fetchNextPage]);
 }

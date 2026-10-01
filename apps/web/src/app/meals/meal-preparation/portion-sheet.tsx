@@ -2,7 +2,6 @@ import type {
   MealFoodAmount,
   MealPreparationYieldBasis,
 } from "@cubby/schemas/meal";
-import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useEffect, useMemo, useRef, useState } from "react";
