@@ -33,8 +33,12 @@ const PRUNE = new Set([
 
 // Include assets consumed by include_str!/include_bytes!, additions and deletions.
 // Checkout paths and mtimes aren't inputs: identical worktrees share one artifact.
-export const sourceDigest = (directory: string): string =>
-  digestTree(directory, { skip: (name) => PRUNE.has(name) });
+// A missing crate root is a broken input, not an empty one: fail loudly.
+export const sourceDigest = (directory: string): string => {
+  if (!existsSync(directory))
+    throw new Error(`Rust source directory not found: ${directory}`);
+  return digestTree(directory, { skip: (name) => PRUNE.has(name) });
+};
 
 export const sourceInputs = (roots: string[], workspace: string): string =>
   JSON.stringify(

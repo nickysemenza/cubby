@@ -41,8 +41,6 @@ const MISS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
  */
 const BATCH_UPSTREAM_LIMIT = 25;
 
-export { PartialUpcBatchLookupError };
-
 export type UpcUpstream = (upc: string) => Promise<ExternalLookupResult>;
 
 const toResponse = (

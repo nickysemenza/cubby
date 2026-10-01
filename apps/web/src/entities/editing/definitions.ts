@@ -691,7 +691,7 @@ const operationDefinition = <E extends EditableEntity>(
  * ranges — is generated from the entity declaration and canonical Zod.
  * Entries may only be removed (see `override-registry-shrink.unit.test.tsx`).
  */
-export interface EntityEditHooks<E extends EditableEntity> {
+interface EntityEditHooks<E extends EditableEntity> {
   /** Field behavior beyond what the declaration derives. */
   fields?: FieldOverrides<E>;
   /** Options for the named create intents. */

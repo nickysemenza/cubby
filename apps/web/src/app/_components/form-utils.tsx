@@ -18,10 +18,9 @@ import {
 import { toast } from "sonner";
 
 import { AutoSuggestSlot } from "~/app/_components/ai/auto-suggest-slot";
-import { Row, Stack } from "~/components/layout";
+import { Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button, type buttonVariants } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { QuantityInput } from "~/components/ui/quantity-input";
 import { useDialogHeaderActionsRegistration } from "~/components/ui/responsive-dialog";
@@ -437,57 +436,6 @@ export function TextareaField<TFieldValues extends FieldValues = FieldValues>({
               fieldState.error ? errorId : null,
             ])}
           />
-        </FormFieldGroup>
-      )}
-    />
-  );
-}
-
-/** A boolean checkbox field inside the shared field group. */
-export function CheckboxField<TFieldValues extends FieldValues = FieldValues>({
-  form,
-  name,
-  label,
-  description,
-  controlId = name,
-}: {
-  form: UseFormReturn<TFieldValues>;
-  name: FieldPathByValue<TFieldValues, boolean | null | undefined>;
-  label: string;
-  description?: ReactNode;
-  controlId?: string;
-}) {
-  const descriptionId = `${controlId}-description`;
-  const errorId = `${controlId}-error`;
-  return (
-    <Controller
-      control={form.control}
-      name={name}
-      render={({ field, fieldState }) => (
-        <FormFieldGroup
-          htmlFor={controlId}
-          descriptionId={descriptionId}
-          errorId={errorId}
-          label={label}
-          description={description}
-          invalid={fieldState.invalid}
-          error={fieldState.error}
-        >
-          <Row gap="sm" align="start">
-            <Checkbox
-              id={controlId}
-              checked={field.value === true}
-              name={field.name}
-              onBlur={field.onBlur}
-              ref={field.ref}
-              onCheckedChange={(checked) => field.onChange(checked === true)}
-              aria-invalid={fieldState.invalid}
-              aria-describedby={describedBy([
-                description ? descriptionId : null,
-                fieldState.error ? errorId : null,
-              ])}
-            />
-          </Row>
         </FormFieldGroup>
       )}
     />
