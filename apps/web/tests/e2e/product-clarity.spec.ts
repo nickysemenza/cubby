@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 import { attachPurchaseProducts } from "~/server/repo/purchase-products";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
@@ -14,6 +14,10 @@ import {
 } from "./e2e-fixtures";
 import { escapeRegExp, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+
+function recordRows(container: Page | Locator) {
+  return container.getByRole("row").or(container.getByRole("listitem"));
+}
 
 async function linkProducts(page: Page, purchase: string, products: string[]) {
   const { db, actor } = await createEvidenceHarnessContext(page);
@@ -118,9 +122,7 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
   await expect(products.getByRole("heading", { level: 2 })).toHaveText(
     /Products\s*5/,
   );
-  const mixedRow = products
-    .getByRole("row")
-    .filter({ hasText: `${name} mixed` });
+  const mixedRow = recordRows(products).filter({ hasText: `${name} mixed` });
   for (const role of [
     "Acquired",
     "Exited",
@@ -130,14 +132,13 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
   ])
     await expect(mixedRow.getByText(role, { exact: true })).toBeVisible();
   await expect(
-    products
-      .getByRole("row")
+    recordRows(products)
       .filter({ hasText: `${name} linked` })
       .getByText("Linked", { exact: true }),
   ).toBeVisible();
-  const plannedRow = products
-    .getByRole("row")
-    .filter({ hasText: `${name} planned` });
+  const plannedRow = recordRows(products).filter({
+    hasText: `${name} planned`,
+  });
   await expect(plannedRow.getByText("Planned", { exact: true })).toBeVisible();
   await expect(plannedRow.getByText("Acquired", { exact: true })).toHaveCount(
     0,
@@ -146,19 +147,22 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
 
   await products.getByLabel("Open all products", { exact: true }).click();
   await expect(page).toHaveURL(/\/connections\?/);
+  if (testInfo.project.name !== "Mobile Safari") {
+    await expect(
+      page.getByRole("columnheader", { name: "Movement", exact: true }),
+    ).toBeVisible();
+  }
+  await expect(recordRows(page)).toHaveCount(
+    testInfo.project.name === "Mobile Safari" ? 5 : 6,
+  );
   await expect(
-    page.getByRole("columnheader", { name: "Movement", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("row")).toHaveCount(6);
-  await expect(
-    page
-      .getByRole("row")
+    recordRows(page)
       .filter({ hasText: `${name} unknown` })
       .getByText("Unknown movement", { exact: true }),
   ).toBeVisible();
-  const adjustmentRow = page
-    .getByRole("row")
-    .filter({ hasText: `${name} adjusted` });
+  const adjustmentRow = recordRows(page).filter({
+    hasText: `${name} adjusted`,
+  });
   await expect(
     adjustmentRow.getByText("Price adjusted", { exact: true }),
   ).toBeVisible();
@@ -208,15 +212,14 @@ test("phone relationship rows keep planned and explicit link evidence separate",
   await expect(products.getByText("Planned", { exact: true })).toBeVisible();
   await expect(products.getByText("Acquired", { exact: true })).toHaveCount(0);
   await products.getByLabel("Open all products", { exact: true }).click();
+  await expect(page).toHaveURL(/\/connections\?/);
   await expect(
-    page
-      .getByRole("row")
+    recordRows(page)
       .filter({ hasText: `${name} item` })
       .getByText("Linked", { exact: true }),
   ).toBeVisible();
   await expect(
-    page
-      .getByRole("row")
+    recordRows(page)
       .filter({ hasText: `${name} item` })
       .getByText("Planned", { exact: true }),
   ).toBeVisible();
