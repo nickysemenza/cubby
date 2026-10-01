@@ -836,6 +836,7 @@ async function verifySpendingClassification(
     "expense",
     expenseCreateInput.parse({
       name: "Synthetic CLI itemized shirt",
+      trade: "other",
       productId: product.id,
       productQuantity: 1,
       purchaseId: purchase.id,
