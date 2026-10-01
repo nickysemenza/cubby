@@ -2,9 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { createRequire } from "node:module";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { setTimeout } from "node:timers/promises";
 import { z } from "zod";
 
@@ -70,8 +68,7 @@ export class MacImportDriver {
 
   async prepareBackend(): Promise<void> {
     if (!process.env.AGENT_DEVICE_MACOS_HELPER_BIN) {
-      const require = createRequire(import.meta.url);
-      const entry = require.resolve("agent-device");
+      const entry = import.meta.resolve("agent-device");
       // The pinned SDK owns its Swift-source fingerprint and helper build/cache.
       // This metadata-only call avoids opening or relaunching an app session.
       const helper = z
@@ -85,11 +82,7 @@ export class MacImportDriver {
               ),
           }),
         })
-        .parse(
-          await import(
-            pathToFileURL(path.join(path.dirname(entry), "helper.js")).href
-          ),
-        );
+        .parse(await import(new URL("helper.js", entry).href));
       await helper.t.resolveFrontmostMacOsApp();
     }
     const file = path.join(this.artifacts, "native-helper-build.json");
