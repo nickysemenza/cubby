@@ -274,7 +274,14 @@ export default defineConfig(async ({ command }) => {
       },
       ssr: {
         build: {
-          rolldownOptions: { onLog: failOnUndefinedImport },
+          // Vite leaves server output unminified by default; minified, the
+          // Worker upload drops from ~30 MB to ~16 MB. Names are kept so error
+          // names and stack frames stay readable.
+          minify: true,
+          rolldownOptions: {
+            onLog: failOnUndefinedImport,
+            output: { keepNames: true },
+          },
         },
       },
     },
