@@ -5,26 +5,28 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   assertNoServerCodeInClient,
-  assertNoDevLoginInWorker,
+  assertNoDevRoutes,
 } from "./check-client-bundle";
 
 const fixturePath = (name: string) =>
   fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
 
 describe("client bundle boundary", () => {
-  it("rejects local storage and readiness handlers in production output", async () => {
+  it("rejects local development routes in production output", async () => {
     const directory = await mkdtemp(
       path.join(tmpdir(), "cubby-worker-boundary-"),
     );
     try {
-      for (const route of ["/__dev/ready", "/__local-storage/s3/"]) {
+      for (const route of [
+        "/__dev/login",
+        "/__local-storage/s3/",
+        "/cdn-cgi/local/explorer",
+      ]) {
         await writeFile(
           path.join(directory, "worker.js"),
           `const route = '${route}';`,
         );
-        await expect(assertNoDevLoginInWorker(directory)).rejects.toThrow(
-          /local/i,
-        );
+        await expect(assertNoDevRoutes(directory)).rejects.toThrow(/local/i);
       }
     } finally {
       await rm(directory, { recursive: true, force: true });

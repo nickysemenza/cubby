@@ -3,8 +3,10 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { AuthEntryFrame } from "~/app/auth/auth-entry-frame";
+import { buttonVariants } from "~/components/ui/button";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
+import { cn } from "~/lib/utils";
 
 // Deliberately NOT loose. The OAuth server appends a signed authorize query
 // here (`sig` + repeated `ba_param` names, whose signature covers the exact
@@ -33,7 +35,7 @@ export const Route = createFileRoute("/auth/$authView")({
 
 function AuthPage() {
   const { authView } = Route.useParams();
-  const { google_error: googleError } = Route.useSearch();
+  const { google_error: googleError, redirect } = Route.useSearch();
 
   return (
     <AuthEntryFrame>
@@ -47,6 +49,17 @@ function AuthPage() {
         </p>
       ) : null}
       <AuthView pathname={authView} />
+      {/* Statically false in every build, so the link never reaches a
+          production bundle (enforced by scripts/check-client-bundle.ts). The
+          route itself exists only in tooling/dev/worker.ts. */}
+      {import.meta.env.DEV && authView === "sign-in" ? (
+        <a
+          href={`/__dev/login?${new URLSearchParams({ next: redirect ?? "/" })}`}
+          className={cn(buttonVariants({ variant: "outline" }), "mt-3 w-full")}
+        >
+          Continue as local dev user
+        </a>
+      ) : null}
     </AuthEntryFrame>
   );
 }

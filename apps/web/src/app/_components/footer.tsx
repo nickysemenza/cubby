@@ -27,6 +27,24 @@ export function AppFooter({ metadata }: { metadata: BuildMetadata }) {
               {metadata.commit}
             </a>
           </span>
+          {/* Statically false in every build, so the link never reaches a
+              production bundle (enforced by scripts/check-client-bundle.ts). */}
+          {import.meta.env.DEV && (
+            <>
+              <span aria-hidden="true" className="text-muted-foreground/40">
+                ·
+              </span>
+              <a
+                href="/cdn-cgi/local/explorer"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open the Cloudflare Local Explorer"
+                className="inline-flex min-h-11 items-center px-1 underline-offset-2 transition-colors hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:min-h-0 sm:px-0"
+              >
+                Local Explorer
+              </a>
+            </>
+          )}
         </Row>
         <Row align="center" gap="sm">
           <span className="hidden text-muted-foreground sm:inline">

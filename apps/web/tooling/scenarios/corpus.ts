@@ -110,6 +110,7 @@ export async function seedCorpus(pool: Pool, userId: string): Promise<void> {
       productId: product?.id ?? null,
       productQuantity: product ? 1 : null,
       purchaseId: purchase.id,
+      trade: "other",
     });
   }
 
