@@ -64,12 +64,21 @@ export class MacImportDriver {
     readonly session: string,
   ) {}
 
-  private invoke<T>(args: string[], schema: z.ZodType<T>): T {
-    const output = execFileSync(this.helper, args, {
-      encoding: "utf8",
-      timeout: 10000,
-      maxBuffer: 4 * 1024 * 1024,
-    });
+  private invoke<T>(args: string[], schema: z.ZodType<T>, attempt = 0): T {
+    let output: string;
+    let subprocessFailure: unknown;
+    try {
+      output = execFileSync(this.helper, args, {
+        encoding: "utf8",
+        timeout: 10000,
+        maxBuffer: 4 * 1024 * 1024,
+      });
+    } catch (error) {
+      const failure = z.object({ stdout: z.string().min(1) }).safeParse(error);
+      if (!failure.success) throw error;
+      output = failure.data.stdout;
+      subprocessFailure = error;
+    }
     const envelope = z
       .object({
         ok: z.boolean(),
@@ -77,14 +86,25 @@ export class MacImportDriver {
         error: z.unknown().optional(),
       })
       .parse(JSON.parse(output));
-    if (!envelope.ok)
-      throw new Error(
-        `Native Mac helper ${args[0]} failed: ${JSON.stringify(envelope.error)}`,
-      );
+    if (!envelope.ok) {
+      const diagnostic = JSON.stringify(envelope.error);
+      // SwiftUI editor transitions can briefly expose infinite AX bounds.
+      // Retry observations only; no input is sent without a valid owned tree.
+      if (
+        args[0] === "snapshot" &&
+        attempt < 3 &&
+        diagnostic.includes("EncodingError.invalidValue: inf (Double)")
+      ) {
+        execFileSync("osascript", ["-e", "delay 0.1"], { timeout: 1000 });
+        return this.invoke(args, schema, attempt + 1);
+      }
+      throw new Error(`Native Mac helper ${args[0]} failed: ${diagnostic}`);
+    }
+    if (subprocessFailure) throw subprocessFailure;
     return schema.parse(envelope.data);
   }
 
-  private guardForeground(): void {
+  private guardForeground(attempt = 0): void {
     if (this.aborted) throw new Error("Mac driver interrupted");
     if (!this.bundleID) throw new Error("No owned Mac fixture session");
     if (!this.pid) throw new Error("No verified fixture PID");
@@ -124,10 +144,12 @@ export class MacImportDriver {
       !activation.accepted ||
       activation.pid !== this.pid ||
       activation.bundleId !== this.bundleID
-    )
+    ) {
+      if (attempt < 2) return this.guardForeground(attempt + 1);
       throw new Error(
         `Owned fixture AppKit activation did not reach verified PID; observed ${activation.appName} (${activation.bundleId}) PID ${activation.pid}`,
       );
+    }
     const front = this.invoke(
       ["app", "frontmost"],
       z.object({ bundleId: z.string(), pid: z.number() }),
@@ -135,10 +157,12 @@ export class MacImportDriver {
     if (
       front.bundleId !== this.bundleID ||
       (this.pid !== undefined && front.pid !== this.pid)
-    )
+    ) {
+      if (attempt < 2) return this.guardForeground(attempt + 1);
       throw new Error(
         `Owned fixture is not the foreground process; observed ${front.bundleId} PID ${front.pid}; refusing native input`,
       );
+    }
     this.pid = front.pid;
   }
 
@@ -254,18 +278,30 @@ export class MacImportDriver {
       y = node.rect.y + node.rect.height / 2;
     if (!Number.isFinite(x) || !Number.isFinite(y))
       throw new Error("Native target has invalid bounds");
-    const hit = this.invoke(
-      [
-        "read",
-        "--x",
-        String(x),
-        "--y",
-        String(y),
-        "--bundle-id",
-        this.bundleID!,
-      ],
-      z.object({ text: z.string() }),
-    );
+    const readHit = () =>
+      this.invoke(
+        [
+          "read",
+          "--x",
+          String(x),
+          "--y",
+          String(y),
+          "--bundle-id",
+          this.bundleID!,
+        ],
+        z.object({ text: z.string() }),
+      );
+    const deadline = Date.now() + 3000;
+    let hit: { text: string };
+    while (true) {
+      try {
+        hit = readHit();
+        break;
+      } catch (error) {
+        if (Date.now() >= deadline) throw error;
+        this.guardForeground();
+      }
+    }
     this.record(
       ["owned-point", selector],
       0,
@@ -313,9 +349,11 @@ export class MacImportDriver {
       );
     this.guardForeground();
     const script =
-      text === "\n"
-        ? 'on run argv\n tell application "System Events" to key code 36\nend run'
-        : `on run argv\n tell application "System Events"\n ${replace ? 'keystroke "a" using command down\n' : ""} keystroke (item 1 of argv)\n end tell\nend run`;
+      text === "/"
+        ? 'on run argv\n tell application "System Events" to keystroke "g" using {command down, shift down}\nend run'
+        : text === "\n"
+          ? 'on run argv\n tell application "System Events" to key code 36\nend run'
+          : `on run argv\n tell application "System Events"\n ${replace ? 'keystroke "a" using command down\n' : ""} keystroke (item 1 of argv)\n end tell\nend run`;
     execFileSync("osascript", ["-e", script, text], { timeout: 10000 });
     return this.observe();
   }
@@ -368,7 +406,20 @@ export class MacImportDriver {
           break;
         case "fill":
           this.press(args[1]!);
-          output = this.keyboard(args[2]!, true);
+          if (args[1] === "id=PathTextField") {
+            this.guardForeground();
+            execFileSync(
+              "osascript",
+              [
+                "-e",
+                'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set pathSheet to sheet 1 of sheet 1 of window 1 of ownedProcess\n if value of attribute "AXIdentifier" of pathSheet is not "GoToWindow" then error "Expected the owned Go To sheet"\n set pathField to text field 1 of pathSheet\n if value of attribute "AXIdentifier" of pathField is not "PathTextField" then error "Expected the owned path field"\n set value of pathField to item 2 of argv\n end tell\nend run',
+                String(this.pid),
+                args[2]!,
+              ],
+              { timeout: 10000 },
+            );
+            output = this.observe();
+          } else output = this.keyboard(args[2]!, true);
           break;
         default:
           throw new Error(`Unsupported native action: ${args[0]}`);
@@ -471,9 +522,23 @@ export class MacImportDriver {
     );
   }
   async clickSidebar(label: "Browse" | "Photos"): Promise<void> {
-    await this.click('label="View" role=MenuBarItem');
-    await this.click(`label="${label}" role=MenuItem`);
+    this.nativeMenu("View", label);
     await this.wait(`label="${label}" role=window`);
+  }
+  private nativeMenu(menu: string, item: string): void {
+    this.guardForeground();
+    execFileSync(
+      "osascript",
+      [
+        "-e",
+        'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set ownedMenu to menu bar item (item 2 of argv) of menu bar 1 of ownedProcess\n click ownedMenu\n click menu item (item 3 of argv) of menu 1 of ownedMenu\n end tell\nend run',
+        String(this.pid),
+        menu,
+        item,
+      ],
+      { timeout: 10000 },
+    );
+    this.record(["native-menu", menu, item], 0, this.observe());
   }
   async openStatementImport(): Promise<void> {
     await this.click("id=browse.importStatement");
@@ -484,12 +549,23 @@ export class MacImportDriver {
     await this.action(["type", "/"]);
     await this.wait("id=PathTextField");
     await this.action(["fill", "id=PathTextField", file]);
+    await this.wait(`id="${file}"`);
     await this.action(["type", "\n"]);
     await this.click('label="Open" role=Button');
   }
   async openSettings(): Promise<void> {
-    await this.click('label="Cubby" role=MenuBarItem');
-    await this.click('label="Settings…" role=MenuItem');
+    this.nativeMenu("Cubby", "Settings…");
+    await this.wait('label="Settings" role=window');
+    this.guardForeground();
+    execFileSync(
+      "osascript",
+      [
+        "-e",
+        'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set value of scroll bar 1 of scroll area 1 of group 1 of window "Settings" of ownedProcess to 1\n end tell\nend run',
+        String(this.pid),
+      ],
+      { timeout: 10000 },
+    );
     await this.wait("id=settings.purchaseImport.syncNow");
   }
   async importStatement(file: string): Promise<void> {
@@ -539,12 +615,15 @@ export class MacImportDriver {
     await this.click("id=photo.source.files");
     await this.wait('label="Open" role=Button');
     await this.action(["type", "/"]);
-    await this.wait("role=TextField editable=true");
-    await this.action(["fill", "role=TextField editable=true", directory]);
+    await this.wait("id=PathTextField");
+    await this.action(["fill", "id=PathTextField", directory]);
+    await this.wait(`id="${directory}"`);
     await this.action(["type", "\n"]);
     await this.wait('contains="synthetic-shirt.png"');
     await this.action(["select-files"]);
     await this.click('label="Open" role=Button');
+    await this.wait("id=photos.review.continue");
+    await this.click("id=photos.review.continue");
     await this.wait('label="Add to import run…"');
     await this.click('label="Add to import run…"');
     await this.wait("id=photos.run.startNew");

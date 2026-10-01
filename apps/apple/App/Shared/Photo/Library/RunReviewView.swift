@@ -1,139 +1,6 @@
 import CubbyKit
 import SwiftUI
 
-@MainActor
-@Observable
-final class RunReviewModel {
-    private(set) var snapshot: RunWorkSnapshotOutput?
-    private(set) var review: PhotoRunReviewResponse?
-    private(set) var usage: AiRunUsageOut?
-    private(set) var usageError: String?
-    private(set) var error: String?
-    private(set) var actionError: String?
-    private(set) var busy = false
-
-    init(snapshot: RunWorkSnapshotOutput? = nil, review: PhotoRunReviewResponse? = nil) {
-        self.snapshot = snapshot
-        self.review = review
-    }
-
-    func refresh(runID: String, client: CubbyClient) async {
-        do {
-            async let usageRequest = client.runAiUsage(.init(runId: runID, limit: 1))
-            let next = try await client.runWorkSnapshot(.init(runId: runID))
-            snapshot = next
-            error = nil
-            if next.purpose == .photoInventory {
-                review = try await client.photoRunReview(.init(runId: runID))
-            }
-            do {
-                usage = try await usageRequest
-                usageError = nil
-            } catch {
-                Diagnostics.report(error, context: "Load run AI usage")
-                usageError = error.localizedDescription
-            }
-        } catch {
-            Diagnostics.report(error, context: "Load import run review")
-            self.error = error.localizedDescription
-        }
-    }
-
-    func act(
-        runID: String, client: CubbyClient,
-        operation: @escaping () async throws -> Void
-    ) async {
-        guard !busy else { return }
-        busy = true
-        actionError = nil
-        defer { busy = false }
-        do {
-            try await operation()
-            await refresh(runID: runID, client: client)
-        } catch {
-            Diagnostics.report(error, context: "Update import run")
-            actionError = error.localizedDescription
-        }
-    }
-}
-
-/// Whether the "Start grouping" action belongs on screen, and what to say instead when it
-/// doesn't. Zero photos and mid-processing both hide the action — grouping needs settled
-/// descriptions to work from, not just an upload.
-enum PhotoGroupingReadiness: Equatable {
-    /// No photos have arrived yet; nothing to group.
-    case waitingForPhotos
-    /// Photos arrived but device/description processing hasn't settled for all of them.
-    case processing
-    /// Photos are uploaded and described; the agent can be started.
-    case readyToStart
-    /// The agent already stopped short of proposing groups; review continues on the web.
-    case needsReviewOnWeb
-    /// The agent is between stages (already asked to start, or run isn't `.running`).
-    case working
-
-    var message: String {
-        switch self {
-        case .waitingForPhotos: "Waiting for photos to upload."
-        case .processing: "Photos are processing. Grouping starts once descriptions are ready."
-        case .readyToStart: "Photos are ready for the agent to propose item groups."
-        case .needsReviewOnWeb: "The agent stopped before proposing groups. Review these photos on the web."
-        case .working: "Photos uploaded; the agent is preparing item groups."
-        }
-    }
-}
-
-enum PhotoReviewPolicy {
-    static func approvableSelection(
-        selected: Set<String>, groups: [PhotoGroupProposal], images: [PhotoRunImage],
-        runStatus: RunStatus?
-    ) -> [String] {
-        groups.filter {
-            selected.contains($0.groupKey) && $0.state == .proposed
-                && approvalBlocker(group: $0, images: images, runStatus: runStatus) == nil
-        }.map(\.groupKey)
-    }
-
-    /// A photo counts as settled for grouping once its description job reaches a terminal state
-    /// (ready, skipped, or failed) — `.pending`/`.leased`/`.waitingForDevice` mean grouping would
-    /// start from incomplete evidence.
-    static func groupingReadiness(
-        images: [PhotoRunImage], runStatus: RunStatus?
-    ) -> PhotoGroupingReadiness {
-        guard !images.isEmpty else { return .waitingForPhotos }
-        if runStatus == .needsReview { return .needsReviewOnWeb }
-        let settled = images.allSatisfy {
-            $0.describe == .ready || $0.describe == .skipped || $0.describe == .failed
-        }
-        guard settled else { return .processing }
-        return runStatus == .running ? .readyToStart : .working
-    }
-
-    static func approvalBlocker(
-        group: PhotoGroupProposal, images: [PhotoRunImage], runStatus: RunStatus?
-    ) -> String? {
-        if group.missingImageCount > 0 { return "Some photos are missing; remove them before approval." }
-        let byID = Dictionary(uniqueKeysWithValues: images.map { ($0.id, $0) })
-        if (group.images.map(\.id) + group.skip.map(\.id)).contains(where: {
-            guard let state = byID[$0]?.targetState else { return false }
-            return state != .pending && !(runStatus == .needsReview && state == .unresolved)
-        }) {
-            return "A photo has already been settled outside this group."
-        }
-        if group.images.contains(where: {
-            guard let state = byID[$0.id]?.describe else { return false }
-            return state == .pending || state == .waitingForDevice || state == .leased || state == .failed
-        }) {
-            return
-                "Approval waits for AI descriptions. Device analysis and cutouts may continue in the background."
-        }
-        if case .existing(let product) = group.product, product.existing == nil {
-            return "Select an existing product before approval."
-        }
-        return nil
-    }
-}
-
 /// The same run, photo, and proposal state used by the web reviewer. No product is created until
 /// the household confirms a proposed group.
 struct RunReviewView: View {
@@ -142,19 +9,25 @@ struct RunReviewView: View {
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var model = RunReviewModel()
+    @State private var model = RunReviewSession()
     @State private var confirmingGroup: String?
     @State private var confirmingAll = false
     @State private var confirmingSelected = false
+    @State private var approvalReview: RunReviewDocument?
+    @State private var approvalKeys: [String] = []
     @State private var selectedGroupKeys: Set<String> = []
     @State private var discardingGroup: String?
     @State private var autoStartAttempted = false
     @State private var selectedGroupKey: String?
 
-    init(runID: String, previewModel: RunReviewModel? = nil) {
+    init(runID: String, previewModel: RunReviewSession? = nil) {
         self.runID = runID
         isPreview = previewModel != nil
-        _model = State(initialValue: previewModel ?? RunReviewModel())  // state-init-ok: fixture
+        _model = State(
+            initialValue: previewModel
+                ?? RunReviewSession(reportDiagnostic: { error, context in
+                    Diagnostics.report(error, context: context)
+                }))  // state-init-ok: fixture
     }
 
     private var proposed: [PhotoGroupProposal] {
@@ -223,17 +96,17 @@ struct RunReviewView: View {
                 set: { if !$0 { confirmingGroup = nil } }
             )
         ) {
-            if let group = confirmingGroup {
-                Button("Create or link product") { approve([group]) }
+            if confirmingGroup != nil {
+                Button("Create or link product") { approve() }
             }
         } message: {
             Text("This attaches the photos and commits the proposed product choice.")
         }
         .confirmationDialog("Approve all proposed items?", isPresented: $confirmingAll) {
-            Button("Approve \(proposed.count) items") { approve(proposed.map(\.groupKey)) }
+            Button("Approve \(approvalKeys.count) items") { approve() }
         }
         .confirmationDialog("Approve selected items?", isPresented: $confirmingSelected) {
-            Button("Approve \(approvableSelectedKeys.count) items") { approve(approvableSelectedKeys) }
+            Button("Approve \(approvalKeys.count) items") { approve() }
         } message: {
             Text("Products are created or linked only for the selected, ready items.")
         }
@@ -247,10 +120,8 @@ struct RunReviewView: View {
             if let group = discardingGroup {
                 Button("Discard proposal", role: .destructive) {
                     Task {
-                        await model.act(runID: runID, client: appModel.client) {
-                            _ = try await appModel.client.discardPhotoGroup(
-                                .init(runId: runID, groupKey: group))
-                        }
+                        await model.execute(
+                            .discardPhotoGroup(groupKey: group), runID: runID, client: appModel.client)
                     }
                 }
             }
@@ -266,12 +137,15 @@ struct RunReviewView: View {
     }
 
     private func resolveFinding(_ id: String, apply: Bool, fingerprint: String?) {
+        let reviewed = model.document(runID: runID)
         Task {
-            await model.act(runID: runID, client: appModel.client) {
-                _ = try await appModel.client.resolveRunFinding(
-                    .init(reviewedFingerprint: fingerprint, id: id, action: apply ? .apply : .dismiss))
+            let resolved = await model.execute(
+                .resolveFinding(
+                    reviewed: reviewed, id: id, apply: apply, reviewedFingerprint: fingerprint),
+                runID: runID, client: appModel.client)
+            if resolved {
+                appModel.recordEntityMutation(keys: [.expense, .purchase, .product, .run])
             }
-            appModel.recordEntityMutation(keys: [.expense, .purchase, .product, .run])
         }
     }
 
@@ -279,15 +153,21 @@ struct RunReviewView: View {
         await model.refresh(runID: runID, client: appModel.client)
     }
 
-    private func approve(_ keys: [String]) {
-        guard !keys.isEmpty else { return }
-        let groups = keys.compactMap { key in proposed.first { $0.groupKey == key } }
-        guard groups.count == keys.count else { return }
+    private func freezeApproval(_ keys: [String]) {
+        approvalKeys = keys
+        approvalReview = model.document(runID: runID)
+    }
+
+    private func approve() {
+        guard let reviewed = approvalReview, !approvalKeys.isEmpty else { return }
+        let keys = approvalKeys
+        approvalReview = nil
+        approvalKeys = []
         Task {
-            await model.act(runID: runID, client: appModel.client) {
-                _ = try await appModel.client.approvePhotoGroups(runID: runID, groups: groups)
-            }
-            if model.actionError == nil { selectedGroupKeys.subtract(keys) }
+            let approved = await model.execute(
+                .approvePhotoGroups(reviewed: reviewed, groupKeys: keys),
+                runID: runID, client: appModel.client)
+            if approved { selectedGroupKeys.subtract(keys) }
         }
     }
 
@@ -380,9 +260,8 @@ struct RunReviewView: View {
                     case .readyToStart:
                         Button {
                             Task {
-                                await model.act(runID: runID, client: appModel.client) {
-                                    _ = try await appModel.client.startPhotoGrouping(.init(runId: runID))
-                                }
+                                await model.execute(
+                                    .startGrouping, runID: runID, client: appModel.client)
                             }
                         } label: {
                             Label("Start grouping", systemImage: "sparkles")
@@ -405,16 +284,20 @@ struct RunReviewView: View {
                         Spacer()
                         if !selectedGroupKeys.isEmpty {
                             Button("Approve selected · \(approvableSelectedKeys.count)") {
+                                freezeApproval(approvableSelectedKeys)
                                 confirmingSelected = true
                             }
                             .disabled(model.busy || approvableSelectedKeys.isEmpty)
                         }
-                        Button("Approve all") { confirmingAll = true }
-                            .disabled(
-                                model.busy
-                                    || proposed.contains {
-                                        approvalBlocker($0, images: review.images) != nil
-                                    })
+                        Button("Approve all") {
+                            freezeApproval(proposed.map(\.groupKey))
+                            confirmingAll = true
+                        }
+                        .disabled(
+                            model.busy
+                                || proposed.contains {
+                                    approvalBlocker($0, images: review.images) != nil
+                                })
                     }
                 } footer: {
                     Text("Products are created or linked only after approval.")
@@ -649,9 +532,12 @@ struct RunReviewView: View {
                 }
             }
             HStack {
-                Button("Approve") { confirmingGroup = group.groupKey }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.busy || approvalBlocker(group, images: images) != nil)
+                Button("Approve") {
+                    freezeApproval([group.groupKey])
+                    confirmingGroup = group.groupKey
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.busy || approvalBlocker(group, images: images) != nil)
                 Button("Discard", role: .destructive) { discardingGroup = group.groupKey }
                     .disabled(model.busy)
             }
@@ -670,9 +556,7 @@ struct RunReviewView: View {
                 images: review.images, runStatus: model.snapshot?.status) == .readyToStart
         else { return }
         autoStartAttempted = true
-        await model.act(runID: runID, client: appModel.client) {
-            _ = try await appModel.client.startPhotoGrouping(.init(runId: runID))
-        }
+        await model.execute(.startGrouping, runID: runID, client: appModel.client)
     }
 
     private func groupName(_ group: PhotoGroupProposal) -> String {
@@ -1156,7 +1040,7 @@ private struct PhotoGroupDraftEditView: View {
     enum RunReviewPreviewFixture {
         static let runID = "RUN-4K7M"
 
-        @MainActor static func model() -> RunReviewModel {
+        @MainActor static func model() -> RunReviewSession {
             let itemID = ImageCode("IMG-2345")
             let labelID = ImageCode("IMG-2346")
             let group = PhotoGroupProposal(
@@ -1196,7 +1080,7 @@ private struct PhotoGroupDraftEditView: View {
                     .init(phase: "grouping", detail: "Identified one shirt and its label", createdAt: .now)
                 ],
                 operations: [])
-            return RunReviewModel(snapshot: run, review: review)
+            return RunReviewSession(snapshot: run, review: review)
         }
     }
 

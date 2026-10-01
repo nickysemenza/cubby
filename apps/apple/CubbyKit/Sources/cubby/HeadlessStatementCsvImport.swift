@@ -20,60 +20,31 @@ struct HeadlessStatementCsvImport: AsyncParsableCommand {
 
     func run() async throws {
         try await CLI.run {
-            guard
-                let baseURL = URL(string: baseURLString),
-                baseURL.scheme == "http", baseURL.host() == "127.0.0.1",
-                baseURL.port != nil, baseURL.user() == nil, baseURL.password() == nil,
-                baseURL.path().isEmpty || baseURL.path() == "/"
-            else {
-                throw CLIError.message("Headless statement import requires a loopback HTTP server")
-            }
-            guard previewOffset >= 0 else {
-                throw CLIError.message("Statement preview offset must be nonnegative")
-            }
-            let fileURL = URL(fileURLWithPath: filePath)
-            let data = try Data(contentsOf: fileURL)
-            guard data.count <= 5_000_000, !data.isEmpty,
-                let text = String(data: data, encoding: .utf8)
-            else {
-                throw CLIError.message("Choose a nonempty UTF-8 CSV smaller than 5 MB")
-            }
-            var input = StatementCsvFileInput(
-                fileName: fileURL.lastPathComponent, text: text, previewOffset: previewOffset)
-            if let mappingFile {
-                input.mapping = try decodeJSON(at: mappingFile)
-            }
-            let reviewed: StatementCsvCommitInput?
-            if let reviewFile {
-                let value: StatementCsvCommitInput = try decodeJSON(at: reviewFile)
-                guard value.fileName == input.fileName,
-                    Data(value.text.utf8) == data,
-                    value.mapping == input.mapping
-                else {
-                    throw CLIError.message("Review must name this exact CSV file, bytes, and mapping")
+            do {
+                let fileURL = URL(fileURLWithPath: filePath)
+                var input = try StatementCsvReviewSession.fileInput(
+                    fileName: fileURL.lastPathComponent, contents: Data(contentsOf: fileURL),
+                    previewOffset: previewOffset)
+                if let mappingFile { input.mapping = try decodeJSON(at: mappingFile) }
+                let session = await StatementCsvReviewSession(input: input)
+                let reviewed: StatementCsvCommitInput?
+                if let reviewFile {
+                    let value: StatementCsvCommitInput = try decodeJSON(at: reviewFile)
+                    _ = try await session.validatedReview(value)
+                    reviewed = value
+                } else {
+                    reviewed = nil
                 }
-                reviewed = value
-            } else {
-                reviewed = nil
-            }
 
-            let credentials = CredentialProvider(
-                host: CubbyBaseURL.host(of: baseURL), store: InMemorySessionTokenStore())
-            let identity = ClientIdentity.currentApp(product: "cubby-cli", installationID: nil)
-            let auth = AuthFlow(baseURL: baseURL, credentials: credentials, identity: identity)
-            _ = try await auth.signIn(
-                email: "sim@cubby.localhost", password: "cubby-sim-local-only")
-            let client = CubbyClient(
-                baseURL: baseURL, credentials: credentials, identity: identity)
-            let preview = try await client.previewStatementCsv(input)
-            if let reviewed {
-                // The backend previews again and validates every selected key and attachment.
-                guard !preview.needsMapping else {
-                    throw CLIError.message("Map the CSV columns before confirming the import")
+                let context = try await CLI.fixtureContext(baseURLString: baseURLString)
+                let preview = try await session.prepare(using: context.client)
+                if let reviewed {
+                    try printJSON(await session.commit(reviewed: reviewed, using: context.client))
+                } else {
+                    try printJSON(preview)
                 }
-                try printJSON(await client.commitStatementCsv(reviewed))
-            } else {
-                try printJSON(preview)
+            } catch let error as StatementCsvReviewError {
+                throw CLIError.message(error.localizedDescription)
             }
         }
     }

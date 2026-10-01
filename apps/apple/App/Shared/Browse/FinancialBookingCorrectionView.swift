@@ -8,10 +8,11 @@ struct FinancialBookingCorrectionView: View {
     @State private var mode = "convert_to_transfer"
     @State private var target: EntityPick?
     @State private var choosingTarget = false
-    @State private var preview: FinancialBookingCorrectionPreview?
-    @State private var result: FinancialBookingCorrectionResult?
+    @State private var review = FinancialBookingCorrectionReviewSession()
+    private var preview: FinancialBookingCorrectionPreview? { review.preview }
+    private var result: FinancialBookingCorrectionResult? { review.result }
     @State private var error: String?
-    @State private var busy = false
+    private var busy: Bool { review.isBusy }
 
     private var isCredit: Bool { (row.raw["amount"]?.doubleValue ?? 0) < 0 }
     private var targetEntity: EntityKey { mode == "attach_reimbursement" ? .purchase : .ledgerTransfer }
@@ -57,7 +58,7 @@ struct FinancialBookingCorrectionView: View {
                         "Apply retires only these reviewed aggregate Expenses and updates this settlement. The server rejects edited or itemized lineages."
                     )
                     .foregroundStyle(.secondary)
-                    Button("Apply reviewed correction") { Task { await apply(preview) } }
+                    Button("Apply reviewed correction") { Task { await apply() } }
                         .disabled(busy)
                         .accessibilityIdentifier("financial.correction.apply")
                 } else {
@@ -78,11 +79,11 @@ struct FinancialBookingCorrectionView: View {
         }
         .font(.caption)
         .onChange(of: mode) { _, _ in
-            target = nil; preview = nil
+            target = nil; review.invalidateReview()
         }
-        .onChange(of: target) { _, _ in preview = nil }
+        .onChange(of: target) { _, _ in review.invalidateReview() }
         .task(id: row.id) {
-            target = nil; preview = nil; result = nil; error = nil
+            target = nil; review.invalidateReview(clearResult: true); error = nil
         }
         .sheet(isPresented: $choosingTarget) {
             EntityPickerSheet(target: targetEntity, selected: [target?.id].compactMap { $0 }) {
@@ -94,8 +95,6 @@ struct FinancialBookingCorrectionView: View {
 
     private func prepare() async {
         guard let target else { return }
-        busy = true
-        defer { busy = false }
         error = nil
         do {
             let input: FinancialBookingCorrectionInput =
@@ -106,22 +105,17 @@ struct FinancialBookingCorrectionView: View {
                 : .init(
                     transactionId: row.id,
                     action: .convertToTransfer(.init(kind: .convertToTransfer, transferId: target.id)))
-            preview = try await appModel.client.previewFinancialBookingCorrection(input)
+            try await review.prepare(input, client: appModel.client)
         } catch {
             Diagnostics.report(error, context: "Preview booking correction")
             self.error = error.localizedDescription
         }
     }
 
-    private func apply(_ reviewed: FinancialBookingCorrectionPreview) async {
-        busy = true
-        defer { busy = false }
+    private func apply() async {
         error = nil
         do {
-            let input = try JSONDecoder.cubby().decode(
-                FinancialBookingCorrectionPreviewInput.self, from: JSONEncoder.cubby().encode(reviewed))
-            result = try await appModel.client.commitFinancialBookingCorrection(input)
-            preview = nil
+            _ = try await review.commit(client: appModel.client)
             appModel.recordEntityMutation(keys: [.financialTransaction, .expense, .purchase, .ledgerTransfer])
             onChanged()
         } catch {

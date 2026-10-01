@@ -675,7 +675,7 @@ async function main(): Promise<void> {
       restoreScenarioEnvironment();
       restoreDatabaseEnvironment();
     };
-    harness = runtime.createLocalWorkerdHarness(databaseURL, storage.url);
+    harness = runtime.createLocalWorkerdHarness(databaseURL, storage.url, true);
     const { url } = await harness.listen();
     const context = await request.newContext({
       baseURL: url.origin,
@@ -699,6 +699,12 @@ async function main(): Promise<void> {
     } finally {
       await context.dispose();
     }
+    const { seedMacStatementAccount } =
+      await import("./mac-import-prerequisites");
+    const statementAccountId = await seedMacStatementAccount(
+      databaseURL,
+      fixtureUserId,
+    );
     if (browserMode) {
       phase = "browser-fixture";
       retailer = await createMacRetailerFixture(artifacts, nonce, {
@@ -721,6 +727,7 @@ async function main(): Promise<void> {
           await import("./mac-import-composed-scenario");
         composed = await createMacComposedScenario({
           browser: browserScenario,
+          statementAccountId,
           driver,
           artifacts,
           webRoot,
@@ -884,7 +891,7 @@ async function main(): Promise<void> {
         );
       await driver.click(toggle[1]);
       await driver.click("id=statement.csv.confirm");
-      await driver.wait('text="2 source rows · 1 transactions"');
+      await driver.wait('text="Statement saved"');
       milestones.savedObserved = true;
       await driver.screenshot("csv-saved");
       phase = "database-readback";

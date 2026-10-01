@@ -1,6 +1,15 @@
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import {
+  financialBookingInput,
+  financialBookingPreview,
+  financialBookingResult,
+} from "@cubby/schemas/financial-booking";
+import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
+import { vendorCreateInput } from "@cubby/schemas/vendor";
+import { spendingCategoryCreateInput } from "@cubby/schemas/spending-category";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
   statementCsvCommitInput,
   statementCsvCommitOut,
   statementCsvPreviewOut,
@@ -14,6 +23,10 @@ import { z } from "zod";
 
 import { httpContract } from "~/lib/generated/http-contract.gen";
 import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
+import {
+  currentMemberLedgerParty,
+  setMemberLoginParty,
+} from "~/server/repo/member-login";
 
 import {
   buildKernelContext,
@@ -599,6 +612,7 @@ export async function runSwiftStatementCsvScenario(input: ScenarioInput) {
   };
   await verifyPagedDuplicates();
   const final = await verifyDateMatching();
+  const booking = await verifySharedBooking(input, target);
   console.log(
     "[headless-csv-e2e] Swift file preview, explicit review, exact retry, and ambiguous date attachment verified",
   );
@@ -624,15 +638,133 @@ export async function runSwiftStatementCsvScenario(input: ScenarioInput) {
           "duplicate-evidence-only-and-retry",
           "either-date-explicit-attachment-preserves-charge",
           "both-dates-outside-window-no-candidate",
+          "shared-swift-booking-preview-no-writes",
+          "shared-swift-reviewed-booking-and-replay",
         ],
         createdTransactions: after.transactions - before.transactions,
         seededCanonicalTransactions: 3,
         recordedEvidence: final.evidence - before.evidence,
         nativeInvocations: invocation,
+        booking,
       },
       null,
       2,
     )}\n`,
   );
   return [evidencePath, refusalWirePath, ...refusalEvidence];
+}
+
+async function verifySharedBooking(
+  input: ScenarioInput,
+  transactionId: string,
+) {
+  const context = buildKernelContext(
+    buildScenarioDatabase(input.pool),
+    testUserId(input.userId),
+  );
+  let member = await currentMemberLedgerParty(context.db, context.actorContext);
+  if (!member) {
+    const created = await createFixtureWithContext(
+      context,
+      "ledgerParty",
+      ledgerPartyCreateInput.parse({
+        name: "Synthetic CLI reviewer",
+        kind: "member",
+      }),
+    );
+    await setMemberLoginParty(
+      context.db,
+      context.auth.userId,
+      parseShortcodeFor("ledgerParty", created.id),
+      context.actorContext,
+    );
+    member = await currentMemberLedgerParty(context.db, context.actorContext);
+  }
+  requireFact(
+    member !== undefined && member !== null,
+    "Native booking fixture member is missing",
+  );
+  const vendor = await createFixtureWithContext(
+    context,
+    "vendor",
+    vendorCreateInput.parse({ name: "Synthetic CLI supplier" }),
+  );
+  const category = await createFixtureWithContext(
+    context,
+    "spendingCategory",
+    spendingCategoryCreateInput.parse({ name: "Synthetic CLI household" }),
+  );
+  const argsPath = path.join(
+    input.artifacts,
+    "synthetic-cli-booking-input.json",
+  );
+  const previewPath = path.join(input.artifacts, "native-booking-preview.json");
+  await writeFile(
+    argsPath,
+    JSON.stringify(
+      financialBookingInput.parse({
+        transactionId,
+        vendorId: vendor.id,
+        spendingCategoryId: category.id,
+      }),
+    ),
+  );
+  const countExpenses = async () =>
+    z.coerce
+      .number()
+      .parse(
+        (
+          await input.pool.query(
+            'SELECT count(*) AS n FROM "Expense" WHERE "deletedAt" IS NULL',
+          )
+        ).rows[0].n,
+      );
+  const before = await countExpenses();
+  const invoke = async (flag: string, file: string, output: string) => {
+    await input.runNative(
+      ["headless-financial-booking", "--base-url", input.origin, flag, file],
+      output,
+      `${output}.stderr.txt`,
+    );
+    return JSON.parse(await readFile(output, "utf8"));
+  };
+  const raw = await invoke("--input-file", argsPath, previewPath);
+  const preview = financialBookingPreview
+    .extend({
+      categoryOverride:
+        financialBookingPreview.shape.categoryOverride.default(null),
+      funderName: financialBookingPreview.shape.funderName.default(null),
+    })
+    .parse(raw);
+  requireFact(
+    preview.action === "create_aggregate" && (await countExpenses()) === before,
+    "Shared native booking preview wrote economics",
+  );
+  // The reviewed native response is reused byte-for-byte for commit and replay.
+  const first = financialBookingResult
+    .extend({ expenseId: financialBookingResult.shape.expenseId.default(null) })
+    .parse(
+      await invoke(
+        "--review-file",
+        previewPath,
+        path.join(input.artifacts, "native-booking-commit.json"),
+      ),
+    );
+  const retry = financialBookingResult
+    .extend({ expenseId: financialBookingResult.shape.expenseId.default(null) })
+    .parse(
+      await invoke(
+        "--review-file",
+        previewPath,
+        path.join(input.artifacts, "native-booking-replay.json"),
+      ),
+    );
+  requireFact(
+    first.expenseId !== null &&
+      retry.replayed &&
+      retry.purchaseId === first.purchaseId &&
+      (await countExpenses()) === before + 1,
+    "Shared native reviewed booking duplicated or lost its aggregate",
+  );
+  return { previewWrites: 0, expenseDelta: 1, replayed: true };
 }

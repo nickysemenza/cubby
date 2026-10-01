@@ -10,8 +10,18 @@ struct CubbyCLI: AsyncParsableCommand {
             Version.self, Auth.self, Call.self, Entity.self, Scan.self, Search.self, Parse.self,
             Photo.self, HeadlessProductEdit.self, HeadlessPhotoImport.self,
             HeadlessStatementCsvImport.self,
-        ]
+            HeadlessFinancialBooking.self,
+            RunReviewCommand.self,
+        ] + platformCommands
     )
+
+    private static var platformCommands: [any ParsableCommand.Type] {
+        #if os(macOS)
+            [BrowserCommand.self]
+        #else
+            []
+        #endif
+    }
 }
 
 extension CubbyCLI {

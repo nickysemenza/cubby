@@ -27,6 +27,7 @@ struct RunFindingReviewSection: View {
                         id, true, confirming?["proposedFix"]?["reviewSnapshot"]?["fingerprint"]?.stringValue)
                     confirming = nil
                 }
+                .accessibilityIdentifier("run.finding.confirm.\(id)")
             }
         } message: {
             Text(
@@ -53,6 +54,10 @@ struct RunFindingReviewSection: View {
                             .accessibilityIdentifier("run.finding.dismiss.\(id)")
                     }
                 }
+            } else if finding["status"]?.stringValue == "open", let id = finding["id"]?.stringValue {
+                Button("Dismiss") { onResolve(id, false, nil) }
+                    .disabled(busy)
+                    .accessibilityIdentifier("run.finding.dismiss.\(id)")
             }
         }
         .padding(.vertical, FieldGuideTokens.Space.xs)

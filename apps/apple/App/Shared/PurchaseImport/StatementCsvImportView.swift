@@ -4,17 +4,11 @@ import UniformTypeIdentifiers
 
 struct StatementCsvImportView: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var choosingFile = false
-    @State private var fileName = ""
-    @State private var fileText = ""
-    @State private var preview: StatementCsvPreviewOut?
-    @State private var reviewRows: [FinancialStatementImportPreviewRow] = []
-    @State private var result: StatementCsvCommitOut?
+    @State private var session = StatementCsvReviewSession()
     @State private var error: String?
     @State private var busy = false
-    @State private var selected = Set<String>()
-    @State private var kinds: [String: FinancialTransactionKind] = [:]
-    @State private var attachments: [String: String] = [:]
     @State private var usesMapping = false
 
     @State private var source = "bank-csv"
@@ -33,47 +27,47 @@ struct StatementCsvImportView: View {
     @State private var pendingValue = "pending"
     @State private var sign = StatementCsvColumnMapping.SignPayload.chargesNegative
 
-    var body: some View {
-        Form {
-            Section {
-                Button("Choose CSV file", systemImage: "doc.badge.plus") { choosingFile = true }
-                    .disabled(busy)
-                    .accessibilityIdentifier("statement.csv.chooseFile")
-                if !fileName.isEmpty {
-                    LabeledContent("File", value: fileName)
-                }
-                if busy { ProgressView("Checking statement…") }
-            } footer: {
-                Text(
-                    "Preview the source rows, then choose which charges to record as transactions. Nothing is created until you confirm."
-                )
-            }
+    private var fileName: String { session.input?.fileName ?? "" }
 
-            if let preview {
-                if preview.needsMapping { mappingSection(preview.headers) } else { reviewSection(preview) }
-            }
-            if let result {
-                Section("Saved") {
-                    Label(
-                        "\(result.evidence) source rows · \(result.transactions) transactions",
-                        systemImage: "checkmark.circle.fill"
-                    )
-                    .foregroundStyle(FieldGuideTokens.positive)
-                    if result.attached > 0 {
-                        Text("\(result.attached) source rows attached to existing transactions.")
-                    }
-                    if result.alreadyPresent > 0 {
-                        Text("\(result.alreadyPresent) source rows were already present.")
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xxl) {
+                if let result = session.result {
+                    completion(result)
+                } else {
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                        Text("Import statement").font(.fieldGuideHeadline)
+                        Text("Review your CSV before recording transactions.")
                             .foregroundStyle(.secondary)
                     }
+                    fileSummary
+                    if let preview = session.preview {
+                        if preview.needsMapping {
+                            mappingSection(preview.headers)
+                        } else {
+                            reviewSection(preview)
+                        }
+                    } else {
+                        Text("Nothing is created until you confirm your choices.")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                }
+                if busy { ProgressView("Processing statement…") }
+                if let error {
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                        Label("Needs attention", systemImage: "exclamationmark.triangle")
+                            .font(.fieldGuideTitle)
+                        Text(error).textSelection(.enabled)
+                    }
+                    .foregroundStyle(FieldGuideTokens.destructive)
                 }
             }
-            if let error {
-                Section("Needs attention") {
-                    Text(error).foregroundStyle(FieldGuideTokens.destructive)
-                }
-            }
+            .frame(maxWidth: FieldGuideTokens.readingWidth, alignment: .leading)
+            .padding(FieldGuideTokens.Space.xxl)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(FieldGuideTokens.canvas)
         .navigationTitle("Import statement")
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -94,39 +88,91 @@ struct StatementCsvImportView: View {
         }
     }
 
+    private var fileSummary: some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+            if !fileName.isEmpty {
+                Label {
+                    Text(fileName).font(.fieldGuideTitle).textSelection(.enabled)
+                } icon: {
+                    Image(systemName: "doc.text").foregroundStyle(.secondary)
+                }
+            }
+            Button(fileName.isEmpty ? "Choose CSV file" : "Choose another CSV", systemImage: "doc.badge.plus")
+            {
+                choosingFile = true
+            }
+            .buttonStyle(.bordered)
+            .disabled(busy)
+            .accessibilityIdentifier("statement.csv.chooseFile")
+        }
+    }
+
+    private func completion(_ value: StatementCsvCommitOut) -> some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
+            Label("Statement saved", systemImage: "checkmark.circle.fill")
+                .font(.fieldGuideHeadline)
+                .foregroundStyle(FieldGuideTokens.positive)
+            Text(fileName).font(.fieldGuideTitle).textSelection(.enabled)
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                LabeledContent("Source rows saved", value: "\(value.evidence)")
+                LabeledContent("Transactions recorded", value: "\(value.transactions)")
+                if value.attached > 0 {
+                    LabeledContent("Attached to existing transactions", value: "\(value.attached)")
+                }
+                if value.alreadyPresent > 0 {
+                    LabeledContent("Source rows already present", value: "\(value.alreadyPresent)")
+                }
+            }
+            .font(.callout.monospacedDigit())
+            Text("Your source rows are available as evidence.")
+                .foregroundStyle(.secondary)
+            Button("Import another statement", systemImage: "doc.badge.plus") { choosingFile = true }
+                .buttonStyle(.bordered)
+                .disabled(busy)
+                .accessibilityIdentifier("statement.csv.chooseFile")
+        }
+    }
+
     private func mappingSection(_ headers: [String]) -> some View {
-        Section("Map CSV columns") {
-            Text("These columns are unfamiliar. Check the amount direction and account before saving.")
-                .font(.caption).foregroundStyle(.secondary)
-            TextField("Source key", text: $source)
-                .autocorrectionDisabled()
-                #if os(iOS)
-                    .textInputAutocapitalization(.never)
-                #endif
-            TextField("Account name when file has no account column", text: $account)
-            columnPicker("Account column", selection: $accountColumn, headers: headers)
-            columnPicker("Date", selection: $dateColumn, headers: headers)
-            columnPicker("Amount", selection: $amountColumn, headers: headers)
-            columnPicker("Description", selection: $descriptionColumn, headers: headers)
-            columnPicker("Merchant", selection: $merchantColumn, headers: headers)
-            columnPicker("Category", selection: $categoryColumn, headers: headers)
-            columnPicker("Notes", selection: $notesColumn, headers: headers)
-            columnPicker("Direction", selection: $directionColumn, headers: headers)
-            columnPicker("Status", selection: $statusColumn, headers: headers)
-            Picker("Amount signs", selection: $sign) {
-                Text("Charges are negative").tag(StatementCsvColumnMapping.SignPayload.chargesNegative)
-                Text("Charges are positive").tag(StatementCsvColumnMapping.SignPayload.chargesPositive)
-                Text("Use direction column").tag(StatementCsvColumnMapping.SignPayload.directionColumn)
+        GroupBox {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+                Text("These columns are unfamiliar. Check the amount direction and account before saving.")
+                    .font(.caption).foregroundStyle(.secondary)
+                TextField("Source key", text: $source)
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                    #endif
+                TextField("Account name when file has no account column", text: $account)
+                columnPicker("Account column", selection: $accountColumn, headers: headers)
+                columnPicker("Date", selection: $dateColumn, headers: headers)
+                columnPicker("Amount", selection: $amountColumn, headers: headers)
+                columnPicker("Description", selection: $descriptionColumn, headers: headers)
+                columnPicker("Merchant", selection: $merchantColumn, headers: headers)
+                columnPicker("Category", selection: $categoryColumn, headers: headers)
+                columnPicker("Notes", selection: $notesColumn, headers: headers)
+                columnPicker("Direction", selection: $directionColumn, headers: headers)
+                columnPicker("Status", selection: $statusColumn, headers: headers)
+                Picker("Amount signs", selection: $sign) {
+                    Text("Charges are negative").tag(StatementCsvColumnMapping.SignPayload.chargesNegative)
+                    Text("Charges are positive").tag(StatementCsvColumnMapping.SignPayload.chargesPositive)
+                    Text("Use direction column").tag(StatementCsvColumnMapping.SignPayload.directionColumn)
+                }
+                if sign == .directionColumn {
+                    TextField("Charge value", text: $chargeValue)
+                    TextField("Credit value", text: $creditValue)
+                }
+                if !statusColumn.isEmpty { TextField("Pending value", text: $pendingValue) }
+                Button("Preview mapped rows") { Task { await prepare() } }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(
+                        busy || dateColumn.isEmpty || amountColumn.isEmpty || descriptionColumn.isEmpty
+                            || (account.isEmpty && accountColumn.isEmpty))
             }
-            if sign == .directionColumn {
-                TextField("Charge value", text: $chargeValue)
-                TextField("Credit value", text: $creditValue)
-            }
-            if !statusColumn.isEmpty { TextField("Pending value", text: $pendingValue) }
-            Button("Preview mapped rows") { Task { await prepare() } }
-                .disabled(
-                    busy || dateColumn.isEmpty || amountColumn.isEmpty || descriptionColumn.isEmpty
-                        || (account.isEmpty && accountColumn.isEmpty))
+            .textFieldStyle(.roundedBorder)
+            .padding(FieldGuideTokens.Space.sm)
+        } label: {
+            Text("Map CSV columns").font(.fieldGuideTitle)
         }
     }
 
@@ -135,130 +181,164 @@ struct StatementCsvImportView: View {
             Text("None").tag("")
             ForEach(headers, id: \.self) { header in Text(header).tag(header) }
         }
+        .pickerStyle(.menu)
     }
 
     private func reviewSection(_ value: StatementCsvPreviewOut) -> some View {
-        Section {
-            LabeledContent("Source", value: value.source ?? "CSV")
-            LabeledContent("Rows", value: "\(value.totalRows)")
-            if value.pendingRows > 0 {
-                LabeledContent("Pending rows", value: "\(value.pendingRows)")
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                Text("Review statement").font(.fieldGuideHeadline)
+                Text("Choose transactions to record or attach. Unselected rows remain source evidence.")
+                    .font(.callout).foregroundStyle(.secondary)
             }
-            if value.zeroValueRows > 0 {
-                LabeledContent("Zero-value rows", value: "\(value.zeroValueRows)")
-            }
-            ForEach(reviewRows, id: \.key) { row in
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(row.proposed.merchant ?? row.proposed.rawDescription ?? "Statement row")
-                            .font(.subheadline.weight(.medium))
-                        Spacer()
-                        Text(row.proposed.amount, format: .currency(code: "USD"))
-                            .font(.subheadline.monospacedDigit())
+            GroupBox {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                    LabeledContent("Source", value: value.source ?? "CSV")
+                    LabeledContent("Source rows", value: "\(value.totalRows)")
+                    if value.pendingRows > 0 {
+                        LabeledContent("Pending rows", value: "\(value.pendingRows)")
                     }
-                    Text("\(row.proposed.postedDate.rawValue) · \(row.accountName ?? "Account unresolved")")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text(row.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
-                        .font(.caption)
-                        .foregroundStyle(
-                            row.status == .readyToCreate
-                                ? FieldGuideTokens.positive : FieldGuideTokens.warning)
-                    if row.status == .possibleExisting {
-                        Toggle(
-                            "Attach source to existing transaction",
-                            isOn: Binding(
-                                get: { selected.contains(row.key) },
-                                set: { enabled in
-                                    if enabled {
-                                        selected.insert(row.key)
-                                    } else {
-                                        selected.remove(row.key)
-                                        attachments.removeValue(forKey: row.key)
-                                    }
-                                }
-                            )
-                        )
-                        .accessibilityIdentifier("statement.csv.attach.\(row.key)")
-                        if selected.contains(row.key) {
-                            Picker(
-                                "Existing transaction",
-                                selection: Binding(
-                                    get: { attachments[row.key] ?? "" },
-                                    set: { attachments[row.key] = $0 }
-                                )
-                            ) {
-                                Text("Choose transaction").tag("")
-                                ForEach(row.existingTransactionIds, id: \.self) { id in
-                                    Text(id).tag(id)
-                                }
-                            }
-                            Text(
-                                "Keeps the existing transaction's amount, date, and status. This source row remains available as evidence."
-                            )
-                            .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    if row.status == .readyToCreate {
-                        Toggle(
-                            "Record transaction",
-                            isOn: Binding(
-                                get: { selected.contains(row.key) },
-                                set: { enabled in
-                                    if enabled {
-                                        selected.insert(row.key)
-                                        kinds[row.key] = row.proposed.kind
-                                    } else {
-                                        selected.remove(row.key)
-                                    }
-                                }
-                            )
-                        )
-                        .accessibilityIdentifier("statement.csv.select.\(row.key)")
-                        if selected.contains(row.key) {
-                            Picker(
-                                "Kind",
-                                selection: Binding(
-                                    get: { kinds[row.key] ?? row.proposed.kind },
-                                    set: { kinds[row.key] = $0 }
-                                )
-                            ) {
-                                ForEach(FinancialTransactionKind.allCases, id: \.self) { kind in
-                                    Text(kind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
-                                        .tag(kind)
-                                }
-                            }
-                        }
+                    if value.zeroValueRows > 0 {
+                        LabeledContent("Zero-value rows", value: "\(value.zeroValueRows)")
                     }
                 }
-                .padding(.vertical, FieldGuideTokens.Space.xs)
+                .font(.callout.monospacedDigit())
+                .padding(FieldGuideTokens.Space.sm)
+            }
+            LazyVStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+                ForEach(session.reviewRows, id: \.key) { row in
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+                        transactionHeading {
+                            Text(row.proposed.merchant ?? row.proposed.rawDescription ?? "Statement row")
+                                .font(.fieldGuideTitle)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if !dynamicTypeSize.isAccessibilitySize { Spacer() }
+                            Text(row.proposed.amount, format: .currency(code: "USD"))
+                                .font(.fieldGuideData)
+                                .fixedSize()
+                        }
+                        Text(
+                            "\(row.proposed.postedDate.rawValue) · \(row.accountName ?? "Account unresolved")"
+                        )
+                        .font(.caption).foregroundStyle(.secondary)
+                        Text(row.status.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+                            .font(.caption)
+                            .foregroundStyle(
+                                row.status == .readyToCreate
+                                    ? FieldGuideTokens.positive : FieldGuideTokens.warning)
+                        if row.status == .possibleExisting {
+                            Toggle(
+                                "Attach source to existing transaction",
+                                isOn: Binding(
+                                    get: { session.selected.contains(row.key) },
+                                    set: { enabled in
+                                        if enabled {
+                                            session.selected.insert(row.key)
+                                        } else {
+                                            session.selected.remove(row.key)
+                                            session.attachments.removeValue(forKey: row.key)
+                                        }
+                                    }
+                                )
+                            )
+                            .accessibilityIdentifier("statement.csv.attach.\(row.key)")
+                            if session.selected.contains(row.key) {
+                                Picker(
+                                    "Existing transaction",
+                                    selection: Binding(
+                                        get: { session.attachments[row.key] ?? "" },
+                                        set: { session.attachments[row.key] = $0 }
+                                    )
+                                ) {
+                                    Text("Choose transaction").tag("")
+                                    ForEach(row.existingTransactionIds, id: \.self) { id in
+                                        Text(id).tag(id)
+                                    }
+                                }
+                                Text(
+                                    "Keeps the existing transaction's amount, date, and status. This source row remains available as evidence."
+                                )
+                                .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        if row.status == .readyToCreate {
+                            Toggle(
+                                "Record transaction",
+                                isOn: Binding(
+                                    get: { session.selected.contains(row.key) },
+                                    set: { enabled in
+                                        if enabled {
+                                            session.selected.insert(row.key)
+                                            session.kinds[row.key] = row.proposed.kind
+                                        } else {
+                                            session.selected.remove(row.key)
+                                        }
+                                    }
+                                )
+                            )
+                            .accessibilityIdentifier("statement.csv.select.\(row.key)")
+                            if session.selected.contains(row.key) {
+                                Picker(
+                                    "Kind",
+                                    selection: Binding(
+                                        get: { session.kinds[row.key] ?? row.proposed.kind },
+                                        set: { session.kinds[row.key] = $0 }
+                                    )
+                                ) {
+                                    ForEach(FinancialTransactionKind.allCases, id: \.self) { kind in
+                                        Text(
+                                            kind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized
+                                        )
+                                        .tag(kind)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(FieldGuideTokens.Space.lg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        FieldGuideTokens.surface,
+                        in: RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
+                            .strokeBorder(
+                                FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
+                    }
+                }
             }
             if value.hasMore {
                 Button("Review next rows") { Task { await loadMore() } }
                     .disabled(busy)
             }
-            Button("Confirm \(selected.count) decisions and save source rows") {
-                Task { await commit() }
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                Text(
+                    "\(session.selected.count) decisions selected · \(session.reviewRows.count) candidates reviewed"
+                )
+                .font(.fieldGuideTitle)
+                Button("Confirm \(session.selected.count) decisions and save source rows") {
+                    Task { await commit() }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(busy || session.hasUnresolvedAttachment)
+                .accessibilityIdentifier("statement.csv.confirm")
+                Text("All source rows are saved, including rows you leave unselected.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            .disabled(busy || hasUnresolvedAttachment)
-            .accessibilityIdentifier("statement.csv.confirm")
-        } header: {
-            Text("Review statement")
-        } footer: {
-            Text(
-                "\(reviewRows.count) transaction candidates reviewed. Unselected rows remain as source evidence; all source rows are saved in bounded batches."
-            )
         }
     }
 
-    private var hasUnresolvedAttachment: Bool {
-        reviewRows.contains { row in
-            row.status == .possibleExisting && selected.contains(row.key)
-                && (attachments[row.key] ?? "").isEmpty
-        }
+    private func transactionHeading<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        let layout =
+            dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: FieldGuideTokens.Space.sm))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.md))
+        return layout { content() }
     }
 
     private func fileInput() -> StatementCsvFileInput {
-        var input = StatementCsvFileInput(fileName: fileName, text: fileText)
+        var input = session.input ?? StatementCsvFileInput(fileName: "", text: "")
         if usesMapping {
             input.mapping = .init(
                 source: source, account: account, accountColumn: accountColumn,
@@ -274,26 +354,16 @@ struct StatementCsvImportView: View {
         busy = true
         defer { busy = false }
         error = nil
-        result = nil
-        preview = nil
-        reviewRows = []
+        session.replaceInput(nil)
         usesMapping = false
-        selected = []
-        kinds = [:]
-        attachments = [:]
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         do {
             let data = try Data(contentsOf: url)
-            guard data.count <= 5_000_000, let text = String(data: data, encoding: .utf8) else {
-                throw StatementFileError.invalidFile
-            }
-            fileName = url.lastPathComponent
-            fileText = text
-            let value = try await appModel.client.previewStatementCsv(
-                .init(fileName: fileName, text: fileText))
-            preview = value
-            reviewRows = value.preview?.rows ?? []
+            let input = try StatementCsvReviewSession.fileInput(
+                fileName: url.lastPathComponent, contents: data)
+            session.replaceInput(input)
+            let value = try await session.prepare(using: appModel.client)
             if value.needsMapping {
                 usesMapping = true
                 dateColumn = value.headers.first(where: { $0.localizedCaseInsensitiveContains("date") }) ?? ""
@@ -318,9 +388,7 @@ struct StatementCsvImportView: View {
         defer { busy = false }
         error = nil
         do {
-            let value = try await appModel.client.previewStatementCsv(fileInput())
-            preview = value
-            reviewRows = value.preview?.rows ?? []
+            _ = try await session.prepare(fileInput(), using: appModel.client)
         } catch {
             Diagnostics.report(error, context: "Map statement CSV")
             self.error = error.localizedDescription
@@ -328,16 +396,11 @@ struct StatementCsvImportView: View {
     }
 
     private func loadMore() async {
-        guard let preview, preview.hasMore else { return }
         busy = true
         defer { busy = false }
         error = nil
         do {
-            var input = fileInput()
-            input.previewOffset = preview.previewOffset + (preview.preview?.rows.count ?? 0)
-            let next = try await appModel.client.previewStatementCsv(input)
-            reviewRows.append(contentsOf: next.preview?.rows ?? [])
-            self.preview = next
+            try await session.loadMore(using: appModel.client)
         } catch {
             Diagnostics.report(error, context: "Review more statement rows")
             self.error = error.localizedDescription
@@ -349,32 +412,12 @@ struct StatementCsvImportView: View {
         defer { busy = false }
         error = nil
         do {
-            let file = fileInput()
-            let choices: StatementCsvCommitInput.SelectedPayload = selected.sorted().compactMap { key in
-                if let transactionId = attachments[key], !transactionId.isEmpty {
-                    return .init(key: key, transactionId: transactionId)
-                }
-                guard let kind = kinds[key] else { return nil }
-                return .init(key: key, kind: kind)
-            }
-            var input = StatementCsvCommitInput(fileName: file.fileName, text: file.text, selected: choices)
-            input.mapping = file.mapping
-            result = try await appModel.client.commitStatementCsv(input)
-            selected = []
-            attachments = [:]
-            let value = try await appModel.client.previewStatementCsv(file)
-            preview = value
-            reviewRows = value.preview?.rows ?? []
+            try await session.commit(using: appModel.client)
         } catch {
             Diagnostics.report(error, context: "Save statement CSV")
             self.error = error.localizedDescription
         }
     }
-}
-
-private enum StatementFileError: LocalizedError {
-    case invalidFile
-    var errorDescription: String? { "Choose a UTF-8 CSV smaller than 5 MB." }
 }
 
 #Preview(traits: .modifier(SignedInPreview())) {

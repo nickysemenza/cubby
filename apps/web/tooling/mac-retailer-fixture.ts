@@ -218,6 +218,7 @@ async function prepareRetailerFixture(
         "--no-proxy-server",
         "--use-mock-keychain",
         "--disable-features=DialMediaRouteProvider",
+        "--force-renderer-accessibility",
         "--no-first-run",
         "--no-default-browser-check",
         "about:blank",

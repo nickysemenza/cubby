@@ -22,13 +22,13 @@ afterEach(async () => {
   for (const directory of directories.splice(0))
     rmSync(directory, { recursive: true, force: true });
 });
-async function fixture(ignoreTermination = false) {
+async function fixture(termination: "exit" | "ignore" | "rename" = "exit") {
   const directory = mkdtempSync(path.join(tmpdir(), "cubby-owned-process-"));
   directories.push(directory);
   const script = path.join(directory, "fixture.cjs");
   writeFileSync(
     script,
-    `${ignoreTermination ? "process.on('SIGTERM',()=>{});" : ""} console.log('ready'); setInterval(()=>{},1000);`,
+    `${termination === "ignore" ? "process.on('SIGTERM',()=>{});" : termination === "rename" ? "process.on('SIGTERM',()=>{process.title='fixture-exiting';setTimeout(()=>process.exit(),100)});" : ""} console.log('ready'); setInterval(()=>{},1000);`,
   );
   const nonce = randomBytes(8).toString("hex");
   const args = [script, nonce];
@@ -66,13 +66,21 @@ describe("runner-owned process cleanup before AX binding", () => {
   });
 
   it("awaits owned process exit after bounded escalation instead of resolving at SIGKILL", async () => {
-    const { child, expected } = await fixture(true);
+    const { child, expected } = await fixture("ignore");
     const owner = await waitForOwnedMacProcess(expected);
     const result = await stopOwnedMacProcess(expected, owner, {
       terminateMs: 100,
       killMs: 2000,
     });
     expect(result.signals).toEqual(["SIGTERM", "SIGKILL"]);
+    expect(() => process.kill(child.pid!, 0)).toThrow(/ESRCH/);
+  });
+
+  it("waits for a signalled process that changes its command during graceful shutdown without signalling the changed command", async () => {
+    const { child, expected } = await fixture("rename");
+    const owner = await waitForOwnedMacProcess(expected);
+    const result = await stopOwnedMacProcess(expected, owner);
+    expect(result.signals).toEqual(["SIGTERM"]);
     expect(() => process.kill(child.pid!, 0)).toThrow(/ESRCH/);
   });
 });

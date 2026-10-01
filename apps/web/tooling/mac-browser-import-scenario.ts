@@ -7,6 +7,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { Pool } from "pg";
+import { z } from "zod";
 import {
   currentMemberLedgerParty,
   setMemberLoginParty,
@@ -124,6 +125,36 @@ export async function createMacBrowserScenario(input: Input) {
       });
       return result(operationId);
     }
+    async function awaitNativeRetry(appDriver: MacImportDriver) {
+      const resumeDeadline = Date.now() + 30_000;
+      const continuation = input.harness.getWorker(
+        "native-import-continuation",
+      );
+      const deliveries = z.object({
+        resumedEvents: z.array(
+          z.object({ runId: z.string(), eventId: z.string() }),
+        ),
+      });
+      let resumedEvents: z.infer<typeof deliveries>["resumedEvents"] = [];
+      while (true) {
+        resumedEvents = deliveries.parse(
+          await (await continuation.fetch("https://continuation.test/")).json(),
+        ).resumedEvents;
+        if (
+          resumedEvents.some((event) => event.runId === run.id) &&
+          (await loadRunScope(db, run.id)).public.status === "running"
+        )
+          break;
+        if (Date.now() >= resumeDeadline) {
+          await appDriver.snapshot();
+          throw new Error(
+            `Native Sync now did not resume the original fixture run (status ${(await loadRunScope(db, run.id)).public.status})`,
+          );
+        }
+        await setTimeout(250);
+      }
+      return resumedEvents;
+    }
     return {
       context: {
         db,
@@ -136,12 +167,21 @@ export async function createMacBrowserScenario(input: Input) {
       },
       evidence: browserDriver.evidence,
       async run(appDriver: MacImportDriver) {
+        await appDriver.openSettings();
+        await appDriver.click("id=settings.purchaseImport.reconnect");
         const deadline = Date.now() + 30_000;
         while (!(await broker.connected())) {
-          if (Date.now() >= deadline)
+          if (Date.now() >= deadline) {
+            const file = path.join(
+              input.artifacts,
+              "browser-connect-failure.txt",
+            );
+            writeFileSync(file, await appDriver.snapshot());
+            appDriver.evidence.push(file);
             throw new Error(
               "Actual Mac app did not connect to the fixture broker",
             );
+          }
           await setTimeout(250);
         }
         const before = await capture(
@@ -161,17 +201,14 @@ export async function createMacBrowserScenario(input: Input) {
           `id=settings.purchaseImport.openSignIn.${account.id}`,
         );
         await browserDriver.open(input.retailer.bundleID, input.retailer.pid);
+        await browserDriver.wait(
+          'label="Sign in to fixture retailer" role=Button',
+        );
         await browserDriver.click('label="Sign in to fixture retailer"');
         await browserDriver.wait('text="Your orders"');
         await browserDriver.screenshot("retailer-signed-in");
         await appDriver.click("id=settings.purchaseImport.syncNow");
-        while ((await loadRunScope(db, run.id)).public.status !== "running") {
-          if (Date.now() >= deadline + 30_000)
-            throw new Error(
-              "Native Sync now did not resume the original fixture run",
-            );
-          await setTimeout(250);
-        }
+        const resumedEvents = await awaitNativeRetry(appDriver);
         const history = await capture("mac:history", input.retailer.historyURL);
         if (
           history.state !== "completed" ||
@@ -225,6 +262,10 @@ export async function createMacBrowserScenario(input: Input) {
             {
               stages: results,
               originalRunResumed: true,
+              nativeSyncRetryDelivered: resumedEvents.some(
+                (event) => event.runId === run.id,
+              ),
+              coordinatorDecision: "deterministic claim_next_import_work",
               browserIsolated: true,
             },
             null,
