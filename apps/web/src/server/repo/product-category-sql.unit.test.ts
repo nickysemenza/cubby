@@ -28,7 +28,7 @@ describe("categoryFeatureSql", () => {
       .toSQL();
 
     expect(built.sql).toContain("a.depth < 2");
-    expect(built.sql).toContain(`"feature" = 'food'`);
+    expect(built.sql).toContain(`"feature" IN ('food')`);
     expect(built.params).toEqual([]);
   });
 
@@ -43,7 +43,7 @@ describe("categoryFeatureSql", () => {
       .toSQL();
 
     expect(built.sql).toContain("a.depth < 2");
-    expect(built.sql).toContain(`"feature" = 'food'`);
+    expect(built.sql).toContain(`"feature" IN ('food')`);
     // A relational findFirst may still bind its own LIMIT param — only the
     // depth (2) and feature ("food") literals must be absent from params.
     expect(built.params).not.toContain(2);

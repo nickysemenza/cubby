@@ -27,44 +27,34 @@ function featureLiteral(feature: ProductCategoryFeature): SQL {
   return sql.raw(`'${feature}'`);
 }
 
-/** True only when the closest non-null ancestor feature matches. */
-export const categoryFeatureSql = (
-  categoryIdExpr: SQL,
-  feature: ProductCategoryFeature,
-) => sql<boolean>`COALESCE((
-  WITH RECURSIVE ancestors AS (
-    SELECT c."id", c."parentId", c."feature", 0 AS depth, ARRAY[c."id"] AS visited
-    FROM "ProductCategory" c WHERE c."id" = ${categoryIdExpr} AND c."deletedAt" IS NULL
-    UNION ALL
-    SELECT parent."id", parent."parentId", parent."feature", a.depth + 1, a.visited || parent."id"
-    FROM ancestors a JOIN "ProductCategory" parent ON parent."id" = a."parentId"
-    WHERE parent."deletedAt" IS NULL AND a.depth < ${MAX_ANCESTOR_DEPTH}
-      AND NOT parent."id" = ANY(a.visited)
-  ) SELECT "feature" = ${featureLiteral(feature)} FROM ancestors WHERE "feature" IS NOT NULL ORDER BY depth LIMIT 1
-), false)`;
-
-/** True only when the closest non-null ancestor feature is one of `features`. */
+/** Resolve matching categories once; overrides stop propagation to descendants. */
 export const categoryFeatureInSql = (
   categoryIdExpr: SQL,
   features: readonly ProductCategoryFeature[],
 ) => {
   if (features.length === 0) return sql<boolean>`false`;
-  const literals = sql.join(
-    features.map((feature) => featureLiteral(feature)),
-    sql`, `,
-  );
-  return sql<boolean>`COALESCE((
-    WITH RECURSIVE ancestors AS (
-      SELECT c."id", c."parentId", c."feature", 0 AS depth, ARRAY[c."id"] AS visited
-      FROM "ProductCategory" c WHERE c."id" = ${categoryIdExpr} AND c."deletedAt" IS NULL
+  const literals = sql.join(features.map(featureLiteral), sql`, `);
+  return sql<boolean>`COALESCE(${categoryIdExpr} IN (
+    WITH RECURSIVE feature_categories AS (
+      SELECT c."id", 0 AS depth, ARRAY[c."id"] AS visited
+      FROM "ProductCategory" c
+      WHERE c."feature" IN (${literals}) AND c."deletedAt" IS NULL
       UNION ALL
-      SELECT parent."id", parent."parentId", parent."feature", a.depth + 1, a.visited || parent."id"
-      FROM ancestors a JOIN "ProductCategory" parent ON parent."id" = a."parentId"
-      WHERE parent."deletedAt" IS NULL AND a.depth < ${MAX_ANCESTOR_DEPTH}
-        AND NOT parent."id" = ANY(a.visited)
-    ) SELECT "feature" IN (${literals}) FROM ancestors WHERE "feature" IS NOT NULL ORDER BY depth LIMIT 1
+      SELECT child."id", a.depth + 1, a.visited || child."id"
+      FROM feature_categories a
+      JOIN "ProductCategory" child ON child."parentId" = a."id"
+      WHERE child."deletedAt" IS NULL AND child."feature" IS NULL
+        AND a.depth < ${MAX_ANCESTOR_DEPTH}
+        AND NOT child."id" = ANY(a.visited)
+    ) SELECT "id" FROM feature_categories
   ), false)`;
 };
+
+/** True only when the closest non-null ancestor feature matches. */
+export const categoryFeatureSql = (
+  categoryIdExpr: SQL,
+  feature: ProductCategoryFeature,
+) => categoryFeatureInSql(categoryIdExpr, [feature]);
 
 /** Parenthesized id subquery containing the selected categories and descendants. */
 export const categoryDescendantsSql = (
