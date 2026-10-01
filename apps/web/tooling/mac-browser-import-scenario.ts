@@ -170,11 +170,14 @@ export async function createMacBrowserScenario(input: Input) {
         await browserDriver.wait('text="Your orders"');
         await browserDriver.screenshot("retailer-signed-in");
         await appDriver.click("id=settings.purchaseImport.syncNow");
+        const resumeDeadline = Date.now() + 30_000;
         while ((await loadRunScope(db, run.id)).public.status !== "running") {
-          if (Date.now() >= deadline + 30_000)
+          if (Date.now() >= resumeDeadline) {
+            await appDriver.snapshot();
             throw new Error(
-              "Native Sync now did not resume the original fixture run",
+              `Native Sync now did not resume the original fixture run (status ${(await loadRunScope(db, run.id)).public.status})`,
             );
+          }
           await setTimeout(250);
         }
         const history = await capture("mac:history", input.retailer.historyURL);
