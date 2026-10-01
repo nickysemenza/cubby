@@ -287,12 +287,17 @@ export class MacImportDriver {
     );
   }
 
-  private press(selector: string): string {
+  private press(selector: string, containerID?: string): string {
     const surface = /role=Menu/.test(selector) ? "menubar" : "frontmost-app";
     if (!selector.startsWith("@")) {
       const before = this.observe(surface);
       this.record(["before-click", selector], 0, before);
     }
+    const container = containerID
+      ? this.matching(`id=${containerID}`)[0]?.rect
+      : null;
+    if (containerID && !container)
+      throw new Error(`Native click container is absent: ${containerID}`);
     const matches = this.matching(selector).filter(
       (node) =>
         !["statictext", "text", "group", "application", "window"].includes(
@@ -301,7 +306,12 @@ export class MacImportDriver {
         node.enabled !== false &&
         node.rect &&
         node.rect.width > 0 &&
-        node.rect.height > 0,
+        node.rect.height > 0 &&
+        (!container ||
+          (node.rect.x >= container.x &&
+            node.rect.y >= container.y &&
+            node.rect.x + node.rect.width <= container.x + container.width &&
+            node.rect.y + node.rect.height <= container.y + container.height)),
     );
     const node = matches[0];
     if (matches.length !== 1 || !node?.rect)
@@ -403,7 +413,7 @@ export class MacImportDriver {
           output = this.observe();
           break;
         case "click":
-          output = this.press(args[1]!);
+          output = this.press(args[1]!, args[2]);
           break;
         case "type":
           output = this.keyboard(args[1]!, false);
@@ -516,8 +526,12 @@ export class MacImportDriver {
   async snapshot(): Promise<string> {
     return this.action(["snapshot", "-i"]);
   }
-  async click(selector: string): Promise<string> {
-    return this.action(["click", selector]);
+  async click(selector: string, containerID?: string): Promise<string> {
+    return this.action([
+      "click",
+      selector,
+      ...(containerID ? [containerID] : []),
+    ]);
   }
   async wait(selector: string): Promise<string> {
     const started = Date.now(),

@@ -591,7 +591,10 @@ async function runNativeScenario(
       `id=field.explanation.product.${productId}.price`,
       "detail.product",
     );
-    await driver.click(`id=field.explanation.product.${productId}.price`);
+    await driver.click(
+      `id=field.explanation.product.${productId}.price`,
+      "detail.product",
+    );
     await driver.wait("id=field.explanation.popover");
     await driver.scrollTo(
       'id=field.explanation.effective-value text="$40.00"',
