@@ -3,7 +3,7 @@ import {
   screen,
 } from "@testing-library/react";
 import type { ReactElement } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -118,10 +118,7 @@ describe("Page workbench", () => {
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
   });
 
-  it("renders secondary detail actions once per width with that width's overflow", () => {
-    const secondary = vi.fn((overflow: "inline" | "menu") => (
-      <button type="button">{`Delete (${overflow})`}</button>
-    ));
+  it("renders secondary detail actions once beside the primary", () => {
     render(
       <Page
         variant="detail"
@@ -129,7 +126,7 @@ describe("Page workbench", () => {
         title="Blue mug"
         heroActions={{
           primary: <button type="button">Edit</button>,
-          secondary,
+          secondary: <button type="button">Delete</button>,
         }}
       >
         <p>Detail body</p>
@@ -137,17 +134,8 @@ describe("Page workbench", () => {
     );
 
     expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
-    // The plate never wraps the verbs in a second popover: the `md+` copy is
-    // told to spell verbs out inline, the phone copy to fold them behind its
-    // own "More actions" menu.
-    expect(secondary).toHaveBeenCalledWith("inline");
-    expect(secondary).toHaveBeenCalledWith("menu");
-    expect(
-      screen.getByRole("button", { name: "Delete (inline)" }).parentElement,
-    ).toHaveClass("md:flex");
-    expect(
-      screen.getByRole("button", { name: "Delete (menu)" }).parentElement,
-    ).toHaveClass("md:hidden");
+    // The content owns its width treatment; the plate never duplicates it.
+    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(1);
   });
 
   it("uses a viewport-aligned, overflow-safe wrapper for phone detail media", () => {

@@ -767,15 +767,16 @@ export function EntityActionButtons({
   /**
    * "menu" (default, unchanged behaviour): one primary button plus a "More
    * actions" popover for the rest. "inline": every visible verb renders as
-   * its own button, no split — the detail plate's `md+` width, which has
-   * room to spell every verb out.
+   * its own button, no split. "responsive": inline at `md+` and the menu
+   * below it — one action registry and one set of dialogs for both widths,
+   * where two components would each mount every dialog.
    */
-  overflow?: "inline" | "menu";
+  overflow?: "inline" | "menu" | "responsive";
 }) {
   const { detailActions, inspectorActions, dialogs } = useEntityActions(entity);
   const actions = surface === "inspector" ? inspectorActions : detailActions;
   if (actions.length === 0) return null;
-  const visible = actions.flatMap((action) => {
+  const visible: VisibleAction[] = actions.flatMap((action) => {
     if (
       verbs !== undefined &&
       action.verb !== "copyCodes" &&
@@ -786,27 +787,62 @@ export function EntityActionButtons({
     return availability.status === "hidden" ? [] : [{ action, availability }];
   });
 
-  if (overflow === "inline") {
+  if (overflow === "responsive")
     return (
       <>
-        {visible.map(({ action, availability }) => (
-          <VerbButton
-            key={action.id}
-            verb={action.verb}
-            disabled={availability.status === "disabled"}
-            disabledReason={
-              availability.status === "disabled"
-                ? availability.reason
-                : undefined
-            }
-            onClick={() => action.run(record)}
-          />
-        ))}
+        <div className="hidden flex-wrap items-center gap-2 md:flex">
+          <InlineActionButtons visible={visible} record={record} />
+        </div>
+        <div className="flex flex-wrap items-center gap-2 md:hidden">
+          <MenuActionButtons visible={visible} record={record} />
+        </div>
         {dialogs}
       </>
     );
-  }
+  return (
+    <>
+      {overflow === "inline" ? (
+        <InlineActionButtons visible={visible} record={record} />
+      ) : (
+        <MenuActionButtons visible={visible} record={record} />
+      )}
+      {dialogs}
+    </>
+  );
+}
 
+type VisibleAction = {
+  action: ResolvedEntityRecordAction;
+  availability: EntityActionAvailability;
+};
+
+function InlineActionButtons({
+  visible,
+  record,
+}: {
+  visible: readonly VisibleAction[];
+  record: EntityActionRow;
+}) {
+  return visible.map(({ action, availability }) => (
+    <VerbButton
+      key={action.id}
+      verb={action.verb}
+      disabled={availability.status === "disabled"}
+      disabledReason={
+        availability.status === "disabled" ? availability.reason : undefined
+      }
+      onClick={() => action.run(record)}
+    />
+  ));
+}
+
+function MenuActionButtons({
+  visible,
+  record,
+}: {
+  visible: readonly VisibleAction[];
+  record: EntityActionRow;
+}) {
   const primaryIndex = visible.findIndex(
     ({ action, availability }) =>
       action.group !== "destructive" &&
@@ -854,7 +890,6 @@ export function EntityActionButtons({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-      {dialogs}
     </>
   );
 }

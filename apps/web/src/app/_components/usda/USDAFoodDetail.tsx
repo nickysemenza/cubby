@@ -297,13 +297,13 @@ export const USDAFoodDetail: React.FC<{
         // registry contributes `copyIdentifiers` (the one verb declared for
         // `usda-food`) — `DetailSections` no longer surfaces registry verbs
         // in the strip, so this is now the only place either renders.
-        secondary: (overflow) => (
+        secondary: (
           <>
             <UsdaFoodActions food={food} />
             <EntityActionButtons
               entity="usda-food"
               record={{ id: String(fdc_id) }}
-              overflow={overflow}
+              overflow="responsive"
             />
           </>
         ),

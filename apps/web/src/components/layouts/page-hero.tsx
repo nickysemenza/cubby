@@ -61,13 +61,12 @@ export interface DetailHeroActions {
   /** The single action that should remain visible on every viewport. */
   primary?: ReactNode;
   /**
-   * Supporting and destructive actions, rendered once per width with the
-   * overflow treatment that applies there — "inline" at `md+` (every verb
-   * spelled out on the plate), "menu" below it (the content renders its own
-   * "More actions" popover, see `EntityActionButtons`). The plate never
+   * Supporting and destructive actions. The content owns its width
+   * treatment (`EntityActionButtons overflow="responsive"`: every verb
+   * spelled out at `md+`, a "More actions" popover below); the plate never
    * nests a second popover around it.
    */
-  secondary?: (overflow: "inline" | "menu") => ReactNode;
+  secondary?: ReactNode;
 }
 
 /** `heroStamp`'s tone, as a `Badge` variant. */
@@ -521,16 +520,7 @@ function DetailPlateActions({ actions }: { actions?: DetailHeroActions }) {
   return (
     <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1 print:hidden">
       {actions.primary}
-      {secondary && (
-        <>
-          <div className="hidden flex-wrap items-center gap-2 md:flex">
-            {secondary("inline")}
-          </div>
-          <div className="flex flex-wrap items-center gap-2 md:hidden">
-            {secondary("menu")}
-          </div>
-        </>
-      )}
+      {secondary}
     </div>
   );
 }

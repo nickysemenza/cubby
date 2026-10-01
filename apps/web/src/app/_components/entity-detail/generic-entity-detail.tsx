@@ -630,19 +630,17 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
           ) : undefined,
           // Overflow-aware: the plate spells every verb out at `md+` and
           // falls back to a primary + "More actions" popover on phone.
-          secondary: hasVerbs
-            ? (overflow: "inline" | "menu") => (
-                <EntityActionButtons
-                  entity={entity}
-                  // The whole record, not just its id: a verb's availability
-                  // reads the fields it gates on (a planting's status hides
-                  // "Start planting" once it has started).
-                  record={{ ...record, id: bag.id }}
-                  verbs={declaredVerbs}
-                  overflow={overflow}
-                />
-              )
-            : undefined,
+          secondary: hasVerbs ? (
+            <EntityActionButtons
+              entity={entity}
+              // The whole record, not just its id: a verb's availability
+              // reads the fields it gates on (a planting's status hides
+              // "Start planting" once it has started).
+              record={{ ...record, id: bag.id }}
+              verbs={declaredVerbs}
+              overflow="responsive"
+            />
+          ) : undefined,
         }
       : undefined;
 
