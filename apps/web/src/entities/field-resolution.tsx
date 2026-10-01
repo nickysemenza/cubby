@@ -367,7 +367,7 @@ export function FieldResolutionStatus({
     return (
       <span
         className="inline-flex shrink-0 text-muted-foreground"
-        title={resolutionLabel(resolution)}
+        title={`${resolutionLabel(resolution)} · ${resolution.sourceEntity?.name ?? resolution.source}`}
       >
         <Icon className="size-3.5" aria-hidden="true" />
         <span className="sr-only">{resolutionLabel(resolution)}</span>

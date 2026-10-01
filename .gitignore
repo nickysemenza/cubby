@@ -106,6 +106,7 @@ apps/apple/CubbyKit/Frameworks/
 .cargo/config.toml
 artifacts/sim-e2e/
 artifacts/sim-layout-e2e/
+artifacts/sim-product-clarity-e2e/
 artifacts/sim-dev/
 artifacts/headless-e2e/
 artifacts/headless-photo-e2e/

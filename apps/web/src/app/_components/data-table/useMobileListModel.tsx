@@ -249,15 +249,26 @@ function collectMobileSlots<TItem extends RowData>(
     const meta = cell.column.columnDef.meta;
     const slot = resolveSlot(colId, meta);
     if (slot === "hidden") continue;
+    const explanation = resolveColumnExplanation(
+      meta?.explanation,
+      row.original,
+      colId,
+    );
+    const resolution = fieldResolutionFor(
+      row.original,
+      explanation?.field ?? colId,
+    );
     const valueUnavailable = meta?.valueUnavailable?.(row.original) ?? false;
     if (
       !valueUnavailable &&
+      !(explanation && resolution) &&
       cell.column.accessorFn &&
       isEmptyCellValue(cell.getValue())
     )
       continue;
     const rendered = flexRender(cell.column.columnDef.cell, cell.getContext());
-    if (!hasRenderableContent(rendered)) continue;
+    if (!hasRenderableContent(rendered) && !(explanation && resolution))
+      continue;
 
     if (slot === "actions") {
       actionsContent = rendered;
@@ -295,20 +306,20 @@ function collectMobileSlots<TItem extends RowData>(
       ) : (
         rendered
       );
-    const resolution = fieldResolutionFor(row.original, colId);
-    const resolutionValue = resolution ? (
-      <span className="inline-flex min-w-0 items-center gap-1">
-        <span className="min-w-0 truncate">{inspectedValue}</span>
-        <FieldResolutionBadge
-          record={row.original}
-          field={colId}
-          interactive={false}
-          compact
-        />
-      </span>
-    ) : (
-      inspectedValue
-    );
+    const resolutionValue =
+      resolution && !explanation ? (
+        <span className="inline-flex min-w-0 items-center gap-1">
+          <span className="min-w-0 truncate">{inspectedValue}</span>
+          <FieldResolutionBadge
+            record={row.original}
+            field={colId}
+            interactive={false}
+            compact
+          />
+        </span>
+      ) : (
+        inspectedValue
+      );
     const provenanceValue = meta?.provenance ? (
       <span className="inline-flex max-w-full min-w-0 items-center gap-1">
         <span className="min-w-0 truncate">{resolutionValue}</span>
@@ -316,10 +327,6 @@ function collectMobileSlots<TItem extends RowData>(
       </span>
     ) : (
       resolutionValue
-    );
-    const explanation = resolveColumnExplanation(
-      meta?.explanation,
-      row.original,
     );
     const mobileValue =
       explanation && rowId ? (
@@ -331,6 +338,7 @@ function collectMobileSlots<TItem extends RowData>(
             field={explanation.field}
             label={explanation.label}
             surface="summary"
+            resolution={resolution}
           />
         </span>
       ) : (

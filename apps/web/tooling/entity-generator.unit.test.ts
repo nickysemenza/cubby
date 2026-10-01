@@ -803,6 +803,7 @@ describe("typed entity compiler", () => {
         title: "Details",
         placement: "supporting",
         collapsed: false,
+        overview: true,
         fields: ["name"],
       },
     ]);

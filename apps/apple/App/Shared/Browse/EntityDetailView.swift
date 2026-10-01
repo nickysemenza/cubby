@@ -288,6 +288,7 @@ struct EntityDetailContent: View {
     @Environment(\.developerOverlays) private var developerOverlays
     @State private var timeline: EntityTimelineOut?
     @State private var timelineError: String?
+    @State private var selectedSection = "overview"
     @State private var reviewedRelationship: RelationshipRecommendationReview?
 
     private var presentation: EntityPresentation { descriptor.presentation }
@@ -350,11 +351,26 @@ struct EntityDetailContent: View {
                     }
                 }
             }
-            if let journal = journalSection {
+            if presentation.detailSections.contains(where: { !$0.overview }) {
+                Section {
+                    Picker("Record view", selection: $selectedSection) {
+                        Text("Overview").tag("overview")
+                        ForEach(presentation.detailSections.filter { !$0.overview }) { section in
+                            Text(section.title ?? section.id).tag(section.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+            }
+            if selectedSection == "overview", let journal = journalSection {
                 EntityJournalSectionView(model: journal) { onCreateRelation(journal) }
             }
             ForEach(presentation.detailSections) { section in
-                if section.id != journalSection?.id { declared(section) }
+                if section.id != journalSection?.id,
+                    (selectedSection == "overview" ? section.overview : section.id == selectedSection)
+                {
+                    declared(section)
+                }
             }
             ForEach(connectedSections) { section in
                 ConnectedSectionView(model: section)

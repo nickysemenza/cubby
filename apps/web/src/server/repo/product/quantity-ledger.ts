@@ -161,6 +161,34 @@ export const hasUnknownAcquisitionLinesSql = (productId: AnyColumn) =>
                  AND uaq_e."productQuantity" IS NULL
                  AND (uaq_e."cost" IS NULL OR uaq_e."cost" >= 0))`;
 
+const ownershipQuantityEvidenceRow = z.object({
+  productId,
+  ownExpectedQuantity: z.number(),
+  hasKitContributions: z.boolean(),
+});
+
+/** Direct intervals can only be compared with the direct Expense balance.
+ * Ancestor evidence, including quantity-less lines, keeps ownership uncertain
+ * until the ownership fold also models kit history. */
+export const loadProductOwnershipQuantityEvidence = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly ProductId[],
+) => {
+  if (ids.length === 0)
+    return new Map<ProductId, z.infer<typeof ownershipQuantityEvidenceRow>>();
+  const query = sql`${kitAncestorCteSql(kitSeedForProductIds(ids))}
+    SELECT ka.target AS "productId",
+           COALESCE(${sql.raw(ownOnly(`"acquiredUnits"`))} - ${sql.raw(ownOnly(`"exitedUnits"`))}, 0)::double precision AS "ownExpectedQuantity",
+           COALESCE(bool_or(ka.depth > 0 AND ko."ledgerLines" > 0), false) AS "hasKitContributions"
+      ${sql.raw(QUANTITY_PROJECTION_FROM)}
+     GROUP BY ka.target`;
+  const rows = projectionRows(
+    await unwrapDb(db).execute(query),
+    ownershipQuantityEvidenceRow,
+  );
+  return new Map(rows.map((row) => [row.productId, row]));
+};
+
 /**
  * Batch-load the quantity ledger for a page of products.
  *

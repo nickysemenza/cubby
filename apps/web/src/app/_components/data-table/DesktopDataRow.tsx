@@ -93,12 +93,36 @@ function cellPresentation<TItem extends RowData>(
   return { selectable, selected, anchor, pinned, boundary, width };
 }
 
-function resolvedCellContent<TItem extends RowData>(
+function explainedCellContent<TItem extends RowData>(
   cell: ReturnType<Row<TItem>["getVisibleCells"]>[number],
   content: ReactNode,
 ) {
-  if (!fieldResolutionFor(cell.row.original, cell.column.id)) return content;
-  return (
+  const explanation = resolveColumnExplanation(
+    cell.column.columnDef.meta?.explanation,
+    cell.row.original,
+    cell.column.id,
+  );
+  const resolution = fieldResolutionFor(
+    cell.row.original,
+    explanation?.field ?? cell.column.id,
+  );
+  const rowIdentity = dataRowIdentitySchema.safeParse(cell.row.original);
+  return explanation && rowIdentity.success ? (
+    <CellFrame
+      trailing={
+        <FieldExplanation
+          entity={explanation.entity}
+          id={rowIdentity.data.id}
+          field={explanation.field}
+          label={explanation.label}
+          surface="list"
+          resolution={resolution}
+        />
+      }
+    >
+      {content}
+    </CellFrame>
+  ) : resolution ? (
     <CellFrame
       trailing={
         <FieldResolutionBadge
@@ -111,6 +135,8 @@ function resolvedCellContent<TItem extends RowData>(
     >
       {content}
     </CellFrame>
+  ) : (
+    content
   );
 }
 
@@ -136,30 +162,7 @@ function DesktopDataCell<TItem extends RowData>({
     rendered,
     cell.column.columnDef.meta,
   );
-  const resolvedContent = resolvedCellContent(cell, content);
-  const explanation = resolveColumnExplanation(
-    cell.column.columnDef.meta?.explanation,
-    cell.row.original,
-  );
-  const rowIdentity = dataRowIdentitySchema.safeParse(cell.row.original);
-  const explained =
-    explanation && rowIdentity.success ? (
-      <CellFrame
-        trailing={
-          <FieldExplanation
-            entity={explanation.entity}
-            id={rowIdentity.data.id}
-            field={explanation.field}
-            label={explanation.label}
-            surface="list"
-          />
-        }
-      >
-        {resolvedContent}
-      </CellFrame>
-    ) : (
-      resolvedContent
-    );
+  const explained = explainedCellContent(cell, content);
   return (
     <TableCell
       key={cell.id}

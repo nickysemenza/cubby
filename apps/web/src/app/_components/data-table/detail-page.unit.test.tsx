@@ -79,6 +79,31 @@ function renderDetail({
 }
 
 describe("DetailSections ledger", () => {
+  it("keeps supporting details out of Overview and preserves their hash targets", async () => {
+    renderDetail({
+      detailSections: [
+        ...sections,
+        {
+          id: "fits-with",
+          title: "Similar products",
+          icon: CircleIcon,
+          placement: "full",
+          overview: false,
+          content: <p>Similarity evidence</p>,
+        },
+      ],
+    });
+    expect(await screen.findByText("Story content")).toBeVisible();
+    expect(screen.queryByText("Similarity evidence")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More details" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Similar products" }));
+    expect(await screen.findByText("Similarity evidence")).toBeVisible();
+    expect(screen.queryByText("Story content")).not.toBeInTheDocument();
+    expect(harness.router.state.location.hash).toBe("fits-with");
+    fireEvent.click(screen.getByRole("tab", { name: "Overview" }));
+    expect(await screen.findByText("Story content")).toBeVisible();
+  });
+
   it("combines navigation, section jump, and Overview tools around explicit tracks", async () => {
     const { container } = renderDetail();
     expect(await screen.findByText("Story content")).toBeVisible();

@@ -83,6 +83,7 @@ export const seedProductPrerequisite = (
     categoryId?: string;
     growsPlantId?: string;
     externalIds?: ProductCreateInput["externalIds"];
+    tags?: string[];
   },
 ) =>
   createEntityFixture(page, "product", {
@@ -91,6 +92,7 @@ export const seedProductPrerequisite = (
     categoryId: opts.categoryId,
     growsPlantId: opts.growsPlantId,
     externalIds: opts.externalIds,
+    tags: opts.tags ?? [],
   });
 
 export const seedProjectPrerequisite = (page: Page, name: string) =>

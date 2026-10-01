@@ -31,9 +31,11 @@ function ClassificationReview({
   const [category, setCategory] =
     useState<ComboboxItem<SpendingCategoryShortcode> | null>(() => {
       const id =
-        initial.action === "vendor"
-          ? initial.defaultSpendingCategoryId
-          : initial.spendingCategoryId;
+        initial.action === "products"
+          ? null
+          : initial.action === "vendor"
+            ? initial.defaultSpendingCategoryId
+            : initial.spendingCategoryId;
       return id ? { id, name: id } : null;
     });
   const [review, setReview] =
@@ -106,24 +108,25 @@ function ClassificationReview({
           </NativeSelect>
         </label>
       )}
-      {(request.action !== "productCategory" ||
-        request.spendingCategoryMode === "mapped") && (
-        <EntityReferencePicker
-          entity="spendingCategory"
-          label="Spending category"
-          value={category}
-          disabled={busy}
-          placeholder="Choose spending category"
-          setValue={(item) => {
-            setCategory(item);
-            setDraft(
-              request.action === "vendor"
-                ? { ...request, defaultSpendingCategoryId: item?.id ?? null }
-                : { ...request, spendingCategoryId: item?.id ?? null },
-            );
-          }}
-        />
-      )}
+      {request.action !== "products" &&
+        (request.action !== "productCategory" ||
+          request.spendingCategoryMode === "mapped") && (
+          <EntityReferencePicker
+            entity="spendingCategory"
+            label="Spending category"
+            value={category}
+            disabled={busy}
+            placeholder="Choose spending category"
+            setValue={(item) => {
+              setCategory(item);
+              setDraft(
+                request.action === "vendor"
+                  ? { ...request, defaultSpendingCategoryId: item?.id ?? null }
+                  : { ...request, spendingCategoryId: item?.id ?? null },
+              );
+            }}
+          />
+        )}
       <Button
         variant="outline"
         disabled={

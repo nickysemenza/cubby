@@ -25,7 +25,6 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
-import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
 import { expenseProjectAllocationSql } from "~/server/repo/expense-project-allocation";
 import { compileTraversal } from "~/server/repo/relatedness/traversal";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
@@ -61,32 +60,6 @@ const dated = (label = `t."name"`, sort = `t."createdAt"`) => ({
  * Server-owned SQL realization of the curated schema registry. All identifiers
  * below are constants; caller data is parameterized separately.
  */
-/**
- * Did this Purchase ACQUIRE this Product, rather than dispose of it?
- *
- * A product-linked Expense reaches a Purchase in BOTH directions: a sale,
- * return, or disposal is a Purchase whose Expenses sum negative
- * (`repo/product/ownership.ts`). Without this, `product.purchases` filed 181
- * eBay-sale orders under a product's "Purchases", and its transpose
- * `purchase.products` listed the items 172 pure-disposal orders SOLD as things
- * they bought — both disagreeing with the detail cards beside them, which have
- * always filtered via `expensePairPredicate` (`repo/purchase-products.ts`).
- *
- * One expression for both directions, since it is one question about one
- * Expense row: only the aliases swap. Written against `s`/`t` alone —
- * intermediate hop aliases come from `compileTraversal` and are not a contract.
- */
-const purchaseAcquiredProduct = (alias: {
-  product: "s" | "t";
-  purchase: "s" | "t";
-}): string =>
-  `EXISTS (SELECT 1 FROM "Expense" pap_e
-            WHERE pap_e."productId" = ${alias.product}."id"
-              AND pap_e."purchaseId" = ${alias.purchase}."id"
-              AND pap_e."deletedAt" IS NULL
-              AND pap_e."future" = false
-              AND ${expenseAcquisitionSql("pap_e")})`;
-
 const SQL_RELATED_VIEWS = {
   "product.vendors": named(),
   "product.projects": named(),
@@ -96,7 +69,6 @@ const SQL_RELATED_VIEWS = {
       `COALESCE(NULLIF(t."orderId", ''), t."shortcode")`,
       `COALESCE(t."date"::timestamp, t."createdAt")`,
     ),
-    where: purchaseAcquiredProduct({ product: "s", purchase: "t" }),
   },
   "product.expenses": dated(
     `t."name"`,
@@ -183,15 +155,8 @@ const SQL_RELATED_VIEWS = {
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
     `COALESCE(t."postedDate", t."transactionDate", t."createdAt"::date)`,
   ),
-  // Via-spend, exactly like its mirror `product.purchases`: reached through a
-  // money row, and only an acquiring one. The 10 pairs whose sole evidence is a
-  // `purchaseProduct` link with no qualifying Expense stay out of this view on
-  // purpose — `listPurchaseProducts` (repo/purchase-products.ts) unions that
-  // second leg for the detail card, which is where an allocation-based order's
-  // goods belong.
   "purchase.products": {
     ...named(),
-    where: purchaseAcquiredProduct({ purchase: "s", product: "t" }),
   },
   "purchase.projects": named(),
   "expense.transactions": dated(
@@ -247,18 +212,38 @@ const sqlRelatedView = (key: RelatedViewKey) => {
 };
 
 /**
- * The curated registry supplies presentation only; traversal joins are compiled
- * from its declared graph path with the aliases this repository query expects.
+ * Most curated views compile their primary graph path. Purchase ↔ Product
+ * identity unions both evidence sources, matching the detail cards and graph.
  */
 const COMPILED_RELATED_JOINS = new Map<RelatedViewKey, SQL>(
-  relatedViewRegistry.map((view) => [
-    view.key,
-    compileTraversal(view.source, relatedViewPath(view), "related", {
-      root: "s",
-      leaf: "t",
-      to: view.target,
-    }).joins,
-  ]),
+  relatedViewRegistry.map((view) => {
+    if (view.key === "product.purchases" || view.key === "purchase.products") {
+      const fromProduct = view.key === "product.purchases";
+      const sourceColumn = fromProduct ? "productId" : "purchaseId";
+      const targetColumn = fromProduct ? "purchaseId" : "productId";
+      const targetTable = entityManifest[view.target].dbTable;
+      return [
+        view.key,
+        sql`INNER JOIN (
+        SELECT "purchaseId", "productId" FROM "Expense"
+          WHERE "deletedAt" IS NULL AND "productId" IS NOT NULL
+        UNION
+        SELECT "fromEntityId" AS "purchaseId", "toEntityId" AS "productId"
+          FROM "EntityLink" WHERE "kind" = 'purchaseProduct' AND "deletedAt" IS NULL
+      ) related_pairs ON ${sql.raw(`related_pairs."${sourceColumn}"`)} = s."id"
+      INNER JOIN ${sql.raw(`"${targetTable}"`)} t
+        ON t."id" = ${sql.raw(`related_pairs."${targetColumn}"`)} AND t."deletedAt" IS NULL`,
+      ];
+    }
+    return [
+      view.key,
+      compileTraversal(view.source, relatedViewPath(view), "related", {
+        root: "s",
+        leaf: "t",
+        to: view.target,
+      }).joins,
+    ];
+  }),
 );
 
 const compiledRelatedJoins = (key: RelatedViewKey): SQL => {

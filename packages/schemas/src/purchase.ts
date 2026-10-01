@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { productMovementKind } from "./product-movement-kind";
 import { financialTransactionOut } from "./financial-transaction";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
@@ -378,10 +379,9 @@ export const productPurchasesInput = z.object({
  *
  * `"link"` is an explicit `purchaseProduct` link — the sparse provenance edge
  * that exists for allocation-basis orders, whose Expenses can never carry a
- * `productId`. `"expense"` is derived: a live acquisition Expense on that
- * purchase names that product. That case is the overwhelmingly common one and
- * was invisible to these reads until 2026-08, which is the bug this enum was
- * introduced to fix. `"both"` is a pair carrying each edge.
+ * `productId`. `"expense"` is derived: any live product-linked Expense on that
+ * purchase names that product, including a planned line. `"both"` is a pair
+ * carrying each edge.
  *
  * Three values rather than a boolean because the overlap is real and neither
  * half may be hidden: only a row with a link can be detached, and only an
@@ -410,6 +410,14 @@ export const purchaseProductOut = z.object({
   coverImageUrl: z.url().nullable(),
   source: purchaseProductSource,
   linkAttachedAt,
+  movementKinds: z
+    .array(productMovementKind)
+    .describe(
+      "Distinct recorded movement kinds from nonfuture Expenses; an explicit link proves no movement.",
+    ),
+  hasPlanned: z
+    .boolean()
+    .describe("At least one live future Expense names this pair."),
   componentCount: z.number().int().nonnegative(),
 });
 export type PurchaseProductOut = z.infer<typeof purchaseProductOut>;
@@ -423,6 +431,14 @@ export const productPurchaseOut = z.object({
   orderId: z.string().nullable(),
   source: purchaseProductSource,
   linkAttachedAt,
+  movementKinds: z
+    .array(productMovementKind)
+    .describe(
+      "Distinct recorded movement kinds from nonfuture Expenses; an explicit link proves no movement.",
+    ),
+  hasPlanned: z
+    .boolean()
+    .describe("At least one live future Expense names this pair."),
 });
 export type ProductPurchaseOut = z.infer<typeof productPurchaseOut>;
 export const productPurchasesOut = z.array(productPurchaseOut);

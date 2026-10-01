@@ -28,6 +28,11 @@ import {
   useSectionIndexPending,
   useSectionVisible,
 } from "../data-table/detail-page";
+import {
+  relationshipMovementSource,
+  RelationshipMovementBadges,
+  RelationshipMovementProvider,
+} from "./relationship-movement";
 
 const PAGE_SIZE = 20;
 
@@ -210,6 +215,11 @@ export function ConnectedRecordsTable({
   initialOpenAll?: boolean;
   hideWhenEmpty?: boolean;
 }) {
+  const movementSource = relationshipMovementSource(
+    source,
+    target,
+    viewKey.startsWith("relation:") ? viewKey.slice("relation:".length) : "",
+  );
   const [openAll, setOpenAll] = useState(initialOpenAll);
   const [page, setPage] = useState(0);
   const query = useQuery(
@@ -245,42 +255,56 @@ export function ConnectedRecordsTable({
       <p className="text-sm text-muted-foreground">No connected records.</p>
     );
   return (
-    <div className="space-y-3">
-      <HopRange range={routeHopRange} />
-      <Table
-        containerClassName="rounded-md border border-border"
-        className="table-auto text-sm"
-      >
-        <TableHeader>
-          <TableRow>
-            <TableHead className={HEAD_CLASS}>
-              {isBrowserRoutedEntity(target)
-                ? entities[target].label
-                : "Record"}
-            </TableHead>
-            <TableHead className={HEAD_CLASS}>Connected through</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((item) => (
-            <TableRow key={item.target.entityId}>
-              <TableCell className={`${CELL_CLASS} font-medium`}>
-                <RecordPathLink node={item.target} />
-              </TableCell>
-              <TableCell className={CELL_CLASS}>
-                <RecordPaths paths={item.paths} />
-              </TableCell>
+    <RelationshipMovementProvider
+      source={movementSource}
+      recordId={sourceId}
+      operations={{}}
+    >
+      <div className="space-y-3">
+        <HopRange range={routeHopRange} />
+        <Table
+          containerClassName="rounded-md border border-border"
+          className="table-auto text-sm"
+        >
+          <TableHeader>
+            <TableRow>
+              <TableHead className={HEAD_CLASS}>
+                {isBrowserRoutedEntity(target)
+                  ? entities[target].label
+                  : "Record"}
+              </TableHead>
+              {movementSource !== null ? (
+                <TableHead className={HEAD_CLASS}>Movement</TableHead>
+              ) : null}
+              <TableHead className={HEAD_CLASS}>Connected through</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <ConnectionPager
-        openAll={openAll}
-        page={page}
-        totalCount={totalCount}
-        setOpenAll={setOpenAll}
-        setPage={setPage}
-      />
-    </div>
+          </TableHeader>
+          <TableBody>
+            {items.map((item) => (
+              <TableRow key={item.target.entityId}>
+                <TableCell className={`${CELL_CLASS} font-medium`}>
+                  <RecordPathLink node={item.target} />
+                </TableCell>
+                {movementSource !== null ? (
+                  <TableCell className={CELL_CLASS}>
+                    <RelationshipMovementBadges id={item.target.entityId} />
+                  </TableCell>
+                ) : null}
+                <TableCell className={CELL_CLASS}>
+                  <RecordPaths paths={item.paths} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        <ConnectionPager
+          openAll={openAll}
+          page={page}
+          totalCount={totalCount}
+          setOpenAll={setOpenAll}
+          setPage={setPage}
+        />
+      </div>
+    </RelationshipMovementProvider>
   );
 }

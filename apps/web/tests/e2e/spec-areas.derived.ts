@@ -232,6 +232,10 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
   "product-bulk-workflow.spec.ts": [
     "apps/web/src/routes/api/workflow-stream/$operation.ts",
   ],
+  "product-clarity.spec.ts": [
+    "apps/web/src/routes/_authenticated/products.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/purchases.$shortcode.tsx",
+  ],
   "product-photo-first.spec.ts": [
     "apps/web/src/routes/_authenticated/products.index.tsx",
   ],
@@ -263,7 +267,9 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/locations.$shortcode.tsx",
   ],
   "spending-classification-review.spec.ts": [
+    "apps/web/src/routes/_authenticated/expenses.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/product-categories.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/purchases.$shortcode.tsx",
     "apps/web/src/routes/api/v1/$resource.ts",
     "apps/web/src/routes/api/v1/$resource/$operation.ts",
   ],

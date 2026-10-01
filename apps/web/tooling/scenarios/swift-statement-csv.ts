@@ -1008,6 +1008,47 @@ async function verifySpendingClassification(
       alternate.id,
     "Historical mapping overwrote the reviewed explicit Expense purpose",
   );
+  const toolSpend = await createFixtureWithContext(
+    context,
+    "spendingCategory",
+    spendingCategoryCreateInput.parse({ name: "Synthetic CLI tools" }),
+  );
+  const toolParent = await createFixtureWithContext(
+    context,
+    "productCategory",
+    productCategoryCreateInput.parse({ name: "Synthetic CLI tools root" }),
+  );
+  const toolStorage = await createFixtureWithContext(
+    context,
+    "productCategory",
+    productCategoryCreateInput.parse({
+      name: "Synthetic CLI tool storage",
+      parentId: toolParent.id,
+    }),
+  );
+  await apply(
+    await preview({
+      action: "productCategory",
+      productCategoryId: toolParent.id,
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: toolSpend.id,
+    }),
+  );
+  const reassignment = await preview({
+    action: "products",
+    productIds: [product.id],
+    productCategoryId: toolStorage.id,
+  });
+  requireFact(
+    reassignment.decoded.changedExpenseCount === 0,
+    "Product reassignment preview ignored explicit Expense intent",
+  );
+  await apply(reassignment);
+  requireFact(
+    (await readState()).find((entry) => entry.shortcode === line.id)?.stored ===
+      alternate.id,
+    "Product reassignment overwrote explicit Expense intent",
+  );
   const resetLine = await preview({
     action: "expenses",
     expenseIds: [line.id],
@@ -1018,8 +1059,7 @@ async function verifySpendingClassification(
     (entry) => entry.shortcode === line.id,
   );
   requireFact(
-    inherited?.stored === null &&
-      inherited.resolution.value === booking.categoryId,
+    inherited?.stored === null && inherited.resolution.value === toolSpend.id,
     "Reset did not reveal the newly mapped Product category",
   );
   const aggregateBefore = (await readState()).find(
@@ -1067,6 +1107,7 @@ async function verifySpendingClassification(
       staleRefused: true,
       explicitOverridePreserved: true,
       inheritedMappingAfterReset: true,
+      reviewedProductReassignment: true,
       importedPurposeReset: true,
       nativeInvocations: invocation,
     },

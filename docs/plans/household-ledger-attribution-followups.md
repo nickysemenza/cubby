@@ -253,8 +253,9 @@ consolidate same-shape cases into table-driven tests.
 
 Follow [validation](../agents/validation.md): `pnpm generate:check`,
 `pnpm typecheck`, and `pnpm test:file` for touched tests while iterating; the
-integration tier needs `docker compose -p cubby up -d`; `pnpm check` before the
-PR. All repository text uses synthetic data.
+integration tier provisions Apple `container` services on macOS; Linux uses
+externally managed PostgreSQL/IntegreSQL. Follow the validation policy for the
+required PR checks. All repository text uses synthetic data.
 
 - [ ] `pnpm generate:check` and `pnpm check` pass
 - [ ] Bulk replace works from MCP `entity` `bulkUpdate` and from the web bulk

@@ -327,6 +327,17 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/server/services/image-storage.service.ts`,
     `${WEB}/src/contracts/image-upload.contract.ts`,
   ],
+  "product-clarity.spec.ts": [
+    `${WEB}/src/app/products/**`,
+    `${WEB}/src/app/purchases/**`,
+    `${WEB}/src/routes/_authenticated/connections.tsx`,
+    `${WEB}/src/app/_components/entity-detail/**`,
+    `${WEB}/src/server/repo/product/**`,
+    `${WEB}/src/server/repo/purchase-products.ts`,
+    `${WEB}/src/server/repo/related-view.ts`,
+    "packages/schemas/src/entity-definitions/00-product.entity.ts",
+    "packages/schemas/src/entity-definitions/12-purchase.entity.ts",
+  ],
   "product-ssr.spec.ts": [
     `${WEB}/src/app/products/**`,
     `${WEB}/src/server/repo/product/**`,

@@ -370,6 +370,7 @@ function declaredSections<E extends GenericDetailEntity>(
       placement: section.placement,
       icon: sectionIcon(section.kind),
       collapsed: section.collapsed,
+      overview: section.overview,
     };
     switch (section.kind) {
       case "fields":

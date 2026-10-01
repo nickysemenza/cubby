@@ -66,7 +66,64 @@ export class MacImportDriver {
     readonly session: string,
   ) {}
 
+  private get presentationHelper(): string {
+    return path.join(this.artifacts, "mac-presentation-ax");
+  }
+
+  private presentationAction(
+    action: "press" | "scroll",
+    containerID: string,
+    value: string,
+  ): void {
+    this.guardForeground();
+    execFileSync(
+      this.presentationHelper,
+      [
+        action,
+        String(this.pid),
+        path.join(homedir(), "Library/Caches/CubbyMacImportFixture/Cubby.app"),
+        containerID,
+        value,
+      ],
+      { timeout: 10000 },
+    );
+  }
+
   async prepareBackend(): Promise<void> {
+    const presentationSource = path.join(
+      this.repoRoot,
+      "apps/web/tooling/mac-presentation-ax.swift",
+    );
+    execFileSync(
+      "xcrun",
+      ["swiftc", presentationSource, "-o", this.presentationHelper],
+      { timeout: 30000 },
+    );
+    const presentationBuild = path.join(
+      this.artifacts,
+      "presentation-helper-build.json",
+    );
+    const presentationSourceEvidence = path.join(
+      this.artifacts,
+      "mac-presentation-ax.swift",
+    );
+    writeFileSync(presentationSourceEvidence, readFileSync(presentationSource));
+    writeFileSync(
+      presentationBuild,
+      JSON.stringify({
+        sourceSHA256: createHash("sha256")
+          .update(readFileSync(presentationSource))
+          .digest("hex"),
+        binarySHA256: createHash("sha256")
+          .update(readFileSync(this.presentationHelper))
+          .digest("hex"),
+      }),
+    );
+    this.evidence.push(
+      presentationBuild,
+      presentationSourceEvidence,
+      this.presentationHelper,
+    );
     if (!process.env.AGENT_DEVICE_MACOS_HELPER_BIN) {
       const entry = import.meta.resolve("agent-device");
       // The pinned SDK owns its Swift-source fingerprint and helper build/cache.
@@ -287,12 +344,17 @@ export class MacImportDriver {
     );
   }
 
-  private press(selector: string): string {
+  private press(selector: string, containerID?: string): string {
     const surface = /role=Menu/.test(selector) ? "menubar" : "frontmost-app";
     if (!selector.startsWith("@")) {
       const before = this.observe(surface);
       this.record(["before-click", selector], 0, before);
     }
+    const container = containerID
+      ? this.matching(`id=${containerID}`)[0]?.rect
+      : null;
+    if (containerID && !container)
+      throw new Error(`Native click container is absent: ${containerID}`);
     const matches = this.matching(selector).filter(
       (node) =>
         !["statictext", "text", "group", "application", "window"].includes(
@@ -301,7 +363,12 @@ export class MacImportDriver {
         node.enabled !== false &&
         node.rect &&
         node.rect.width > 0 &&
-        node.rect.height > 0,
+        node.rect.height > 0 &&
+        (!container ||
+          (node.rect.x >= container.x &&
+            node.rect.y >= container.y &&
+            node.rect.x + node.rect.width <= container.x + container.width &&
+            node.rect.y + node.rect.height <= container.y + container.height)),
     );
     const node = matches[0];
     if (matches.length !== 1 || !node?.rect)
@@ -342,18 +409,22 @@ export class MacImportDriver {
       0,
       JSON.stringify({ x, y, text: hit.text, ownedPID: this.pid }),
     );
-    this.invoke(
-      [
-        "press",
-        "--x",
-        String(x),
-        "--y",
-        String(y),
-        "--bundle-id",
-        this.bundleID!,
-      ],
-      z.object({}).passthrough(),
-    );
+    if (containerID && role(node) === "button" && node.identifier) {
+      this.presentationAction("press", containerID, node.identifier);
+    } else {
+      this.invoke(
+        [
+          "press",
+          "--x",
+          String(x),
+          "--y",
+          String(y),
+          "--bundle-id",
+          this.bundleID!,
+        ],
+        z.object({}).passthrough(),
+      );
+    }
     return this.observe(surface);
   }
 
@@ -403,7 +474,7 @@ export class MacImportDriver {
           output = this.observe();
           break;
         case "click":
-          output = this.press(args[1]!);
+          output = this.press(args[1]!, args[2]);
           break;
         case "type":
           output = this.keyboard(args[1]!, false);
@@ -516,8 +587,12 @@ export class MacImportDriver {
   async snapshot(): Promise<string> {
     return this.action(["snapshot", "-i"]);
   }
-  async click(selector: string): Promise<string> {
-    return this.action(["click", selector]);
+  async click(selector: string, containerID?: string): Promise<string> {
+    return this.action([
+      "click",
+      selector,
+      ...(containerID ? [containerID] : []),
+    ]);
   }
   async wait(selector: string): Promise<string> {
     const started = Date.now(),
@@ -533,6 +608,75 @@ export class MacImportDriver {
     }
     this.record(["wait", selector], 1, output, started);
     throw new Error(`Native wait timed out: ${selector}`);
+  }
+  async waitAbsent(selector: string): Promise<void> {
+    const started = Date.now();
+    let output = "";
+    while (Date.now() - started < 30000) {
+      output = this.observe();
+      if (!this.matching(selector).length) {
+        this.record(["wait-absent", selector], 0, output, started);
+        return;
+      }
+      await setTimeout(250);
+    }
+    this.record(["wait-absent", selector], 1, output, started);
+    throw new Error(`Native element did not dismiss: ${selector}`);
+  }
+  async scrollTo(
+    selector: string,
+    containerID: string,
+    direction: "up" | "down" = "down",
+  ): Promise<void> {
+    const started = Date.now();
+    let output = "";
+    while (Date.now() - started < 30000) {
+      output = this.observe();
+      const container = this.matching(`id=${containerID}`)[0]?.rect;
+      const windows = this.nodes
+        .filter((node) => ["window", "popover"].includes(role(node)))
+        .flatMap((node) => (node.rect ? [node.rect] : []));
+      if (
+        container &&
+        this.matching(selector).some((node) => {
+          const rect = node.rect;
+          return windows.some(
+            (window) =>
+              rect &&
+              rect.width > 0 &&
+              rect.height > 0 &&
+              rect.x >= Math.max(container.x, window.x) &&
+              rect.y >= Math.max(container.y, window.y) &&
+              rect.x + rect.width <=
+                Math.min(
+                  container.x + container.width,
+                  window.x + window.width,
+                ) &&
+              rect.y + rect.height <=
+                Math.min(
+                  container.y + container.height,
+                  window.y + window.height,
+                ),
+          );
+        })
+      ) {
+        this.record(["visible", selector, containerID], 0, output, started);
+        return;
+      }
+      if (container) {
+        this.guardForeground();
+        this.presentationAction(
+          "scroll",
+          containerID,
+          direction === "down" ? "0.15" : "-0.15",
+        );
+      }
+      await setTimeout(250);
+    }
+    this.record(["visible", selector, containerID], 1, output, started);
+    throw new Error(
+      `Native element did not become visible: ${selector} in ${containerID}`,
+    );
   }
   async screenshot(name: string): Promise<void> {
     this.guardForeground();

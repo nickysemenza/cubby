@@ -41,42 +41,32 @@ function JourneyStep({
   );
 }
 
-/** Targeted enrichment history stays visible even when a run made no writes. */
-export const ProductRuns: DetailSlotComponent<"product"> = ({
+/** Only the canonical backend ownership projection controls guidance. */
+export const ProductOwnershipEvidence: DetailSlotComponent<"product"> = ({
   record: product,
 }) => {
-  const runs = useQuery({
-    ...runOperations.history.queryOptions({ productId: product.id }),
-    select: (history) => history.runs,
-  });
   const purchases = useQuery(
     entityListFor("purchase").queryOptions({
       filters: { productId: parseShortcodeFor("product", product.id) },
-      pagination: { pageIndex: 0, pageSize: 20 },
+      pagination: { pageIndex: 0, pageSize: 12 },
     }),
   );
-  const launch = (
-    <TargetedImportLaunchButton
-      targetId={product.id}
-      targetLabel={product.name}
-      purpose="product_enrichment"
-    />
-  );
+  const evidence = product.ownershipEvidence;
   const ownPhotos = product.attachments.filter(
     (image) => image.source === "own",
   ).length;
   const linkedPurchases = purchases.data?.items ?? [];
-  const settled = linkedPurchases.some(
-    (purchase) => purchase.financialReconciliation.status === "match",
-  );
   return (
     <Stack gap="sm">
-      <div className="rounded-md border border-border bg-card p-3 text-sm">
-        <strong className="block">Finish this item</strong>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Keep photos, stock, purchase and statement evidence together.
-        </p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <p className="text-sm">
+        {evidence.state === "exited"
+          ? `Recorded ownership ended${evidence.exitedAt ? ` on ${evidence.exitedAt}` : ""}.`
+          : evidence.state === "owned"
+            ? "Recorded movements establish ownership."
+            : "Ownership is uncertain: recorded movements do not establish the current quantity."}
+      </p>
+      {evidence.state !== "exited" ? (
+        <div className="grid gap-2 sm:grid-cols-2">
           <JourneyStep
             label="Your photos"
             detail={ownPhotos ? `${ownPhotos} own photos` : "Add an item photo"}
@@ -85,65 +75,68 @@ export const ProductRuns: DetailSlotComponent<"product"> = ({
           <JourneyStep
             label="Inventory"
             detail={
-              product.inventoryEntry.length
+              product.onHandUnits !== null && product.onHandUnits > 0
                 ? "Inventory recorded"
-                : "Record where it lives"
+                : evidence.state === "uncertain"
+                  ? "Confirm whether you still own it before recording stock"
+                  : "Record where it lives"
             }
-            complete={product.inventoryEntry.length > 0}
-          />
-          <JourneyStep
-            label="Purchase & statement"
-            detail={
-              purchases.isPending
-                ? "Checking purchases"
-                : linkedPurchases.length
-                  ? settled
-                    ? "Statement matched"
-                    : "Review statement match"
-                  : "Match a purchase"
-            }
-            complete={settled}
+            complete={product.onHandUnits !== null && product.onHandUnits > 0}
           />
         </div>
-        {purchases.isError ? (
-          <StatusText tone="destructive">{purchases.error.message}</StatusText>
-        ) : null}
-        {linkedPurchases.map((purchase) => (
-          <div
-            key={purchase.id}
-            className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1"
+      ) : null}
+      {purchases.isPending ? (
+        <StatusText>Loading purchase evidence…</StatusText>
+      ) : null}
+      {purchases.isError ? (
+        <StatusText tone="destructive">{purchases.error.message}</StatusText>
+      ) : null}
+      {linkedPurchases.map((purchase) => (
+        <div
+          key={purchase.id}
+          className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm"
+        >
+          <Link
+            to="/purchases/$shortcode"
+            params={{ shortcode: purchase.id }}
+            className="font-medium text-primary hover:underline"
           >
-            <Link
-              to="/purchases/$shortcode"
-              params={{ shortcode: purchase.id }}
-              className="font-medium text-primary hover:underline"
-            >
-              {purchaseLabel(purchase)}
-            </Link>
-            <span className="text-muted-foreground">
-              {purchase.financialReconciliation.status === "match"
-                ? "Statement matched"
-                : "Statement match still needed"}
-            </span>
-          </div>
-        ))}
-      </div>
-      {launch}
-      <p className="text-sm text-muted-foreground">
-        To match this item to a purchase, open the purchase and choose
-        <strong className="font-medium text-foreground">
-          {" "}
-          Attach products
-        </strong>
-        . Retailer and Gmail imports can also match an existing Product when an
-        order is processed.
-      </p>
-      <Link
-        to="/purchases"
-        className="w-fit text-sm font-medium text-primary hover:underline"
-      >
-        Find a purchase
-      </Link>
+            {purchaseLabel(purchase)}
+          </Link>
+          <span className="text-muted-foreground">
+            {purchase.financialReconciliation.status === "match"
+              ? "Statement matched"
+              : "Statement evidence not matched"}
+          </span>
+        </div>
+      ))}
+      {evidence.state !== "exited" ? (
+        <Link
+          to="/purchases"
+          className="w-fit text-sm font-medium text-primary hover:underline"
+        >
+          Review purchase evidence
+        </Link>
+      ) : null}
+    </Stack>
+  );
+};
+
+/** Targeted enrichment stays in its dedicated section even when a run made no writes. */
+export const ProductRuns: DetailSlotComponent<"product"> = ({
+  record: product,
+}) => {
+  const runs = useQuery({
+    ...runOperations.history.queryOptions({ productId: product.id }),
+    select: (history) => history.runs,
+  });
+  return (
+    <Stack gap="sm">
+      <TargetedImportLaunchButton
+        targetId={product.id}
+        targetLabel={product.name}
+        purpose="product_enrichment"
+      />
       {runs.isPending ? (
         <StatusText>Loading enrichment history…</StatusText>
       ) : null}

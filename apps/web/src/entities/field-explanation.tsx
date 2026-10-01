@@ -4,6 +4,7 @@ import {
   fieldExplanationSource,
   type FieldExplanationOutput,
 } from "@cubby/schemas/field-explanation";
+import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import { inventoryShortcode } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
@@ -12,7 +13,6 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { CELL_RAIL_BUTTON_CLASS } from "~/app/_components/data-table/cell-frame";
-import { useRowActive } from "~/app/_components/data-table/row-activity";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ErrorDisplay } from "~/components/feedback/error-display";
@@ -31,6 +31,7 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 
+import { FieldResolutionStatus } from "./field-resolution";
 import { ResolutionExplanation } from "./field-resolution-explanation";
 
 type ExplanationSource = z.infer<typeof fieldExplanationSource>;
@@ -146,13 +147,20 @@ function visibleSources(data: FieldExplanationOutput) {
 export function ExplanationEntityLink({
   entity,
   id,
+  name,
 }: {
   entity: Entity;
   id: string;
+  name?: string | null;
 }) {
   const auditable = auditEntitySchema.safeParse(entity);
   return auditable.success ? (
-    <EntityRefLink variant="byId" entityKind={auditable.data} entityId={id} />
+    <EntityRefLink
+      variant="byId"
+      entityKind={auditable.data}
+      entityId={id}
+      name={name}
+    />
   ) : (
     <span className="font-mono text-xs">{id}</span>
   );
@@ -164,42 +172,18 @@ type FieldExplanationProps = {
   field: string;
   label: string;
   surface?: "list" | "detail" | "summary";
+  resolution?: FieldResolution | null;
 };
 
-export function FieldExplanation(props: FieldExplanationProps) {
-  const rowActive = useRowActive();
-  // An idle table row keeps the rail slot but not the control, its query
-  // observer, or its two mutations; see row-activity.
-  if (props.surface === "list" && !rowActive)
-    return <span aria-hidden className="size-5 shrink-0" />;
-  return <FieldExplanationControl {...props} />;
-}
-
-function FieldExplanationControl({
+export function FieldExplanation({
   entity,
   id,
   field,
   label,
   surface = "detail",
+  resolution,
 }: FieldExplanationProps) {
   const [open, setOpen] = useState(false);
-  const inheritOwner = useActionMutation({
-    mutationFn: inventory.setOwnership.mutationOptions,
-    success: "Using inherited owner",
-  });
-  const confirmOwner = useActionMutation({
-    mutationFn: inventory.confirmOwnership.mutationOptions,
-    success: "Owner confirmed",
-  });
-  const result = useQuery({
-    ...fieldExplanation.explain.queryOptions({
-      entityKind: entity,
-      entityId: id,
-      field,
-      surface,
-    }),
-    enabled: open,
-  });
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
@@ -219,136 +203,177 @@ function FieldExplanationControl({
           />
         }
       >
-        <InfoIcon className={surface === "list" ? "size-3" : "size-3.5"} />
+        {resolution ? (
+          <FieldResolutionStatus resolution={resolution} compact />
+        ) : (
+          <InfoIcon className={surface === "list" ? "size-3" : "size-3.5"} />
+        )}
       </PopoverTrigger>
       <PopoverContent className="max-h-[min(32rem,80dvh)] w-80 overflow-y-auto">
-        <Stack gap="sm">
-          <PopoverTitle>How {label.toLowerCase()} is determined</PopoverTitle>
-          {result.isPending ? (
-            <p>Loading explanation…</p>
-          ) : result.isError ? (
-            <Stack gap="sm">
-              <ErrorDisplay error={result.error} title="this explanation" />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => void result.refetch()}
-                disabled={result.isFetching}
-              >
-                Retry explanation
-              </Button>
-            </Stack>
-          ) : (
-            <>
-              <p className="text-sm">{result.data.rule.description}</p>
-              {result.data.resolution ? (
-                <ResolutionExplanation
-                  entity={entity}
-                  field={field}
-                  resolution={result.data.resolution}
-                />
-              ) : result.data.value !== null ||
-                !result.data.sources.some(
-                  (source) =>
-                    source.label === "Project share" ||
-                    source.label === "Unassigned share",
-                ) ? (
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Current value</span>
-                  <div className="mt-1">
-                    <ReadableExplanationValue value={result.data.value} />
-                  </div>
-                </div>
-              ) : null}
-              {visibleSources(result.data).map((source) => (
-                <div
-                  key={explanationSourceKey(source)}
-                  className="grid gap-1 text-sm"
-                >
-                  <span className="text-muted-foreground">{source.label}</span>
-                  {source.entity ? (
-                    <ExplanationEntityLink
-                      entity={source.entity.entityKind}
-                      id={source.entity.entityId}
-                    />
-                  ) : null}
-                  {source.value !== null || source.entity === null ? (
-                    <div className="mt-1">
-                      <ReadableExplanationValue value={source.value} />
-                    </div>
-                  ) : null}
-                </div>
-              ))}
-              {result.data.truncated ? (
-                <p className="text-xs text-muted-foreground">
-                  Showing the first sources.
-                </p>
-              ) : null}
-              {result.data.actions.map((action) => {
-                const inventoryAction =
-                  action.target.entityKind === "inventory";
-                if (action.kind === "inheritOwner" && inventoryAction) {
-                  return (
-                    <Button
-                      key={action.kind}
-                      size="sm"
-                      variant="outline"
-                      disabled={inheritOwner.isPending}
-                      onClick={() =>
-                        inheritOwner.mutate({
-                          inventoryEntryId: inventoryShortcode.parse(
-                            action.target.entityId,
-                          ),
-                          ownership: { mode: "inherit" },
-                        })
-                      }
-                    >
-                      {action.label}
-                    </Button>
-                  );
-                }
-                if (
-                  action.kind === "confirmOwner" &&
-                  inventoryAction &&
-                  result.data.evidenceFingerprint
-                ) {
-                  const evidenceFingerprint = result.data.evidenceFingerprint;
-                  return (
-                    <Button
-                      key={action.kind}
-                      size="sm"
-                      variant="outline"
-                      disabled={confirmOwner.isPending}
-                      onClick={() =>
-                        confirmOwner.mutate({
-                          inventoryEntryId: inventoryShortcode.parse(
-                            action.target.entityId,
-                          ),
-                          evidenceFingerprint,
-                        })
-                      }
-                    >
-                      {action.label}
-                    </Button>
-                  );
-                }
-                return (
-                  <div
-                    key={action.kind}
-                    className="flex items-center gap-2 text-sm"
-                  >
-                    <span>{action.label}</span>
-                    <ExplanationEntityLink
-                      entity={action.target.entityKind}
-                      id={action.target.entityId}
-                    />
-                  </div>
-                );
-              })}
-            </>
-          )}
-        </Stack>
+        {open ? (
+          <FieldExplanationContents
+            entity={entity}
+            id={id}
+            field={field}
+            label={label}
+            surface={surface}
+          />
+        ) : null}
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** Query observers and actions mount only while the explanation is open. */
+function FieldExplanationContents({
+  entity,
+  id,
+  field,
+  label,
+  surface = "detail",
+}: FieldExplanationProps) {
+  const inheritOwner = useActionMutation({
+    mutationFn: inventory.setOwnership.mutationOptions,
+    success: "Using inherited owner",
+  });
+  const confirmOwner = useActionMutation({
+    mutationFn: inventory.confirmOwnership.mutationOptions,
+    success: "Owner confirmed",
+  });
+  const result = useQuery({
+    ...fieldExplanation.explain.queryOptions({
+      entityKind: entity,
+      entityId: id,
+      field,
+      surface,
+    }),
+  });
+  return (
+    <Stack gap="sm">
+      <PopoverTitle>How {label.toLowerCase()} is determined</PopoverTitle>
+      {result.isPending ? (
+        <p>Loading explanation…</p>
+      ) : result.isError ? (
+        <Stack gap="sm">
+          <ErrorDisplay error={result.error} title="this explanation" />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void result.refetch()}
+            disabled={result.isFetching}
+          >
+            Retry explanation
+          </Button>
+        </Stack>
+      ) : (
+        <>
+          <p className="text-sm">{result.data.rule.description}</p>
+          {result.data.resolution ? (
+            <ResolutionExplanation
+              entity={entity}
+              field={field}
+              resolution={result.data.resolution}
+              evidence={result.data.resolutionEvidence}
+            />
+          ) : result.data.value !== null ||
+            !result.data.sources.some(
+              (source) =>
+                source.label === "Project share" ||
+                source.label === "Unassigned share",
+            ) ? (
+            <div className="text-sm">
+              <span className="text-muted-foreground">Current value</span>
+              <div className="mt-1">
+                <ReadableExplanationValue value={result.data.value} />
+              </div>
+            </div>
+          ) : null}
+          {visibleSources(result.data).map((source) => (
+            <div
+              key={explanationSourceKey(source)}
+              className="grid gap-1 text-sm"
+            >
+              <span className="text-muted-foreground">{source.label}</span>
+              {source.entity ? (
+                <ExplanationEntityLink
+                  entity={source.entity.entityKind}
+                  id={source.entity.entityId}
+                />
+              ) : null}
+              {source.value !== null || source.entity === null ? (
+                <div className="mt-1">
+                  <ReadableExplanationValue value={source.value} />
+                </div>
+              ) : null}
+            </div>
+          ))}
+          {result.data.truncated ? (
+            <p className="text-xs text-muted-foreground">
+              Showing the first sources.
+            </p>
+          ) : null}
+          {result.data.actions.map((action) => {
+            const inventoryAction = action.target.entityKind === "inventory";
+            if (action.kind === "inheritOwner" && inventoryAction) {
+              return (
+                <Button
+                  key={action.kind}
+                  size="sm"
+                  variant="outline"
+                  disabled={inheritOwner.isPending}
+                  onClick={() =>
+                    inheritOwner.mutate({
+                      inventoryEntryId: inventoryShortcode.parse(
+                        action.target.entityId,
+                      ),
+                      ownership: { mode: "inherit" },
+                    })
+                  }
+                >
+                  {action.label}
+                </Button>
+              );
+            }
+            if (
+              action.kind === "confirmOwner" &&
+              inventoryAction &&
+              result.data.evidenceFingerprint
+            ) {
+              const evidenceFingerprint = result.data.evidenceFingerprint;
+              return (
+                <Button
+                  key={action.kind}
+                  size="sm"
+                  variant="outline"
+                  disabled={confirmOwner.isPending}
+                  onClick={() =>
+                    confirmOwner.mutate({
+                      inventoryEntryId: inventoryShortcode.parse(
+                        action.target.entityId,
+                      ),
+                      evidenceFingerprint,
+                    })
+                  }
+                >
+                  {action.label}
+                </Button>
+              );
+            }
+            return (
+              <div
+                key={action.kind}
+                className="flex items-center gap-2 text-sm"
+              >
+                <span>{action.label}</span>
+                <ExplanationEntityLink
+                  entity={action.target.entityKind}
+                  id={action.target.entityId}
+                />
+              </div>
+            );
+          })}
+        </>
+      )}
+    </Stack>
   );
 }

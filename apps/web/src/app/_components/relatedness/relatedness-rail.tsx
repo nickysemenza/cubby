@@ -3,7 +3,7 @@ import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -130,6 +130,10 @@ export function RelatednessRail({
   /** Canonical results already resolved by a parent avoid duplicate work. */
   seededDisplayImages?: EntityDisplayImageMap;
 }) {
+  const [visibleCount, setVisibleCount] = useState(12);
+  useEffect(() => {
+    setVisibleCount(12);
+  }, [product.id]);
   const poll = useEmbeddingReadinessPoll(product.id);
   const { refetchInterval, notifyStatus } = poll;
 
@@ -163,9 +167,13 @@ export function RelatednessRail({
   }, [status, notifyStatus]);
 
   const items = group?.proposals ?? EMPTY_RELATED_PRODUCTS;
+  const visibleItems = useMemo(
+    () => items.slice(0, visibleCount),
+    [items, visibleCount],
+  );
   const relatedProductIds = useMemo(
-    () => items.map((item) => item.target.id),
-    [items],
+    () => visibleItems.map((item) => item.target.id),
+    [visibleItems],
   );
 
   return (
@@ -198,7 +206,7 @@ export function RelatednessRail({
         }))}
         seeded={seededDisplayImages}
       >
-        {items.map((item) => (
+        {visibleItems.map((item) => (
           <RelatedProductRowWithCanonicalImage
             key={item.target.id}
             item={item}
@@ -206,6 +214,15 @@ export function RelatednessRail({
         ))}
       </EntityDisplayImagesProvider>
 
+      {items.length > visibleCount && (
+        <Button
+          variant="outline"
+          className="min-h-11 w-fit"
+          onClick={() => setVisibleCount((count) => count + 12)}
+        >
+          Show {Math.min(12, items.length - visibleCount)} more products
+        </Button>
+      )}
       {status === "ready" && items.length === 0 && (
         <p className="text-xs text-muted-foreground">
           No related products yet.
@@ -231,11 +248,16 @@ function RelatedProductRowWithCanonicalImage({
     <RelatedProductRow
       product={item.target}
       displayImage={displayImage}
+      evidence={item.evidence
+        .map((evidence) =>
+          evidence.detail
+            ? `${evidence.signal}: ${evidence.detail}`
+            : evidence.signal,
+        )
+        .join(" · ")}
       action={
         <span className="font-mono text-2xs text-slate">
-          {item.score > 0
-            ? `${Math.round(item.score * 100)}% similar`
-            : item.evidence.map((evidence) => evidence.signal).join(" · ")}
+          {item.score > 0 ? `${Math.round(item.score * 100)}% similar` : null}
         </span>
       }
     />

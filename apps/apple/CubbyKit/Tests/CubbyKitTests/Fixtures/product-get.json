@@ -4,6 +4,12 @@
   "previousShortcodes": [],
   "name": "Sample Product",
   "acquisitionOrigin": "unknown",
+  "ownershipEvidence": {
+    "state": "uncertain",
+    "acquiredAt": null,
+    "exitedAt": null,
+    "confidenceLostAt": null
+  },
   "aliases": [],
   "tags": [],
   "primaryGtin": null,

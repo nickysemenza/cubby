@@ -2,6 +2,7 @@ import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
 import type {
   ExpenseId,
+  ProductId,
   ProductCategoryId,
   SpendingCategoryId,
   SpendingCategoryShortcode,
@@ -22,6 +23,7 @@ const column = (alias: string, key: string) =>
   sql`${sql.identifier(alias.replace(/^"|"$/gu, ""))}.${sql.identifier(key)}`;
 
 export type ExpenseSpendingCategoryResolutionDraft = {
+  products?: readonly { id: ProductId; categoryId: ProductCategoryId | null }[];
   categories?: readonly {
     id: SpendingCategoryId;
     shortcode: SpendingCategoryShortcode;
@@ -108,7 +110,7 @@ export function expenseSpendingCategoryResolutionSql(
   return sql`(
     WITH RECURSIVE ancestors AS (
       SELECT c.id,${categoryParent} AS "parentId",c.feature,c.name,c.shortcode,${categoryMode} AS "spendingCategoryMode",${categoryTarget} AS "spendingCategoryId",0 AS depth,ARRAY[c.id] AS visited
-      FROM "Product" g JOIN "ProductCategory" c ON c.id=g."categoryId" AND c."deletedAt" IS NULL
+      FROM "Product" g JOIN "ProductCategory" c ON c.id=${projectedValue("g", "categoryId", draft?.products)} AND c."deletedAt" IS NULL
       WHERE g.id=${productId} AND g."deletedAt" IS NULL
       UNION ALL
       SELECT c.id,${categoryParent} AS "parentId",c.feature,c.name,c.shortcode,${categoryMode} AS "spendingCategoryMode",${categoryTarget} AS "spendingCategoryId",a.depth+1,a.visited||c.id

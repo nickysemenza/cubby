@@ -455,7 +455,7 @@ export async function getProductMovementTimeline(
         row.purchaseDisplayLabel ??
         row.orderId ??
         "Unitemized purchase product",
-      kind: "acquired",
+      kind: "linked",
       cost: null,
       quantity: null,
       signedQuantity: null,
@@ -515,10 +515,6 @@ export async function getProductMovementTimeline(
     },
   );
   const markersByProduct = groupBy(actualRows, (row) => row.productId!);
-  const provenanceMarkersByProduct = groupBy(
-    unitemizedRows,
-    (row) => row.productId,
-  );
   const usageRows =
     productIdsWithMovements.length === 0
       ? []
@@ -545,20 +541,12 @@ export async function getProductMovementTimeline(
     if (!productCodesWithMovements.has(item.id)) return [];
     const privateId = idByCode.get(item.id);
     if (!privateId) return [];
-    const markers = [
-      ...(markersByProduct[privateId] ?? []).map((row) => ({
-        date:
-          row.expenseDate === null
-            ? null
-            : (row.purchaseDate ?? row.expenseDate),
-        signedQuantity: classifyProductMovement(row.cost, row.quantity)
-          .signedQuantity,
-      })),
-      ...(provenanceMarkersByProduct[privateId] ?? []).map((row) => ({
-        date: row.purchaseDate,
-        signedQuantity: null,
-      })),
-    ];
+    const markers = (markersByProduct[privateId] ?? []).map((row) => ({
+      date:
+        row.expenseDate === null ? null : (row.purchaseDate ?? row.expenseDate),
+      signedQuantity: classifyProductMovement(row.cost, row.quantity)
+        .signedQuantity,
+    }));
     const ownership = buildConfidentOwnershipIntervals(markers, today);
     return [
       {
@@ -617,6 +605,7 @@ export async function getProductMovementTimeline(
 }
 
 const KIND_LABEL = {
+  linked: "Linked",
   acquired: "Acquired",
   exited: "Exited",
   discarded: "Discarded",
