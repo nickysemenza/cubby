@@ -48,7 +48,10 @@ async function ancestors(
   const parent = sql.identifier(config.parent);
   let value: SQL;
   let assigned: SQL;
-  if (kind === "productCategory") {
+  if (kind === "productCategory" && field === "feature") {
+    value = sql`to_jsonb(p.feature)`;
+    assigned = sql`p.feature IS NOT NULL`;
+  } else if (kind === "productCategory") {
     value = sql`jsonb_build_object('mode',p."spendingCategoryMode",'category',(SELECT c.shortcode FROM "SpendingCategory" c WHERE c.id=p."spendingCategoryId" AND c."deletedAt" IS NULL))`;
     assigned = sql`p."spendingCategoryMode" <> 'inherit'`;
   } else if (kind === "project" && field === "locations") {
@@ -218,7 +221,7 @@ export async function loadFieldResolutionEvidence(
     }
   } else if (
     entity === "productCategory" &&
-    ["spendingCategoryId", "spendingCategoryMode"].includes(field)
+    ["spendingCategoryId", "spendingCategoryMode", "feature"].includes(field)
   ) {
     kind = "productCategory";
     nodes = await ancestors(

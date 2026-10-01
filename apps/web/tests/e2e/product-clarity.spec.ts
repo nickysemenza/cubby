@@ -429,3 +429,49 @@ test("Similar products shows the first twelve tag matches and expands the rest",
     similar.getByRole("button", { name: "Show 2 more products", exact: true }),
   ).toHaveCount(0);
 });
+
+// Regression: a root feature binding read "Override on this product category"
+// with "Nothing to inherit", and no category showed its feature ancestry.
+test("feature explanation ladders ancestry and calls a root binding set here", async ({
+  page,
+}, testInfo) => {
+  const name = uniqueName(testInfo, "Synthetic feature ladder");
+  const child = await seedProductCategoryPrerequisite(page, {
+    name: `${name} child`,
+    parentId: taxonomyShortcode("household"),
+  });
+  // The record's own field, not a Subcategories row's rail button.
+  const explanation = page.locator(
+    'button[aria-label="How feature is determined"]:not(table button)',
+  );
+
+  await gotoAuthenticatedPage(
+    page,
+    `/product-categories/${child.id}`,
+    explanation,
+  );
+  await explanation.click();
+  const popover = page.locator("[data-slot=popover-content]");
+  await expect(popover.getByText("Inherited", { exact: true })).toBeVisible();
+  await expect(
+    popover.getByText("Resolution order", { exact: true }),
+  ).toBeVisible();
+  const rows = popover.getByRole("listitem");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toHaveAttribute("data-role", "unset");
+  await expect(rows.last()).toHaveAttribute("data-role", "wins");
+  await expect(popover.getByText(/override/i)).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await gotoAuthenticatedPage(
+    page,
+    `/product-categories/${taxonomyShortcode("household")}`,
+    explanation,
+  );
+  await explanation.click();
+  await expect(popover.getByText("Set here", { exact: true })).toBeVisible();
+  await expect(popover.getByText(/override|inherit/i)).toHaveCount(0);
+  await expect(
+    popover.getByRole("button", { name: /Use inherited value|Clear value/ }),
+  ).toHaveCount(0);
+});

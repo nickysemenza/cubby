@@ -56,6 +56,26 @@ struct FieldResolutionPresentationTests {
         #expect(explicit.resetPayload(field: field) == ["evidenceExpectation": .null])
     }
 
+    // Regression: an explicit value with nothing to inherit was labelled an override.
+    @Test func explicitValueWithNothingAboveIsSetHereNotAnOverride() throws {
+        let field = try field()
+        func state(_ fallback: JSONValue, matches: Bool) throws -> FieldResolutionState {
+            let raw: JSONValue = [
+                "fieldResolutions": [
+                    "evidenceExpectation": [
+                        "mode": "explicit", "storedValue": "required", "value": "required",
+                        "fallbackValue": fallback, "source": "explicit", "sourceEntity": .null,
+                        "matchesFallback": .bool(matches), "canReset": true,
+                    ]
+                ]
+            ]
+            return try #require(FieldResolutionPresentation(raw: raw, field: field)).state
+        }
+        #expect(try state(.null, matches: false).label == "Set here")
+        #expect(try state("not_expected", matches: false).label == "Overrides inherited")
+        #expect(try state("required", matches: true).tone == .redundant)
+    }
+
     @Test func ordinaryFieldWithoutServerResolutionKeepsItsOwnValue() throws {
         let field = try field()
         #expect(

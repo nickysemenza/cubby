@@ -1,4 +1,8 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  taxonomyId,
+  taxonomyShortcode,
+} from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -82,6 +86,64 @@ describe("derived field explanations against canonical records", () => {
         entityId: parent.shortcode,
       },
     });
+  });
+
+  // The feature popover showed no ladder, and its "Edit source" linked back
+  // to the category being inspected instead of the ancestor supplying it.
+  it("ladders Product Category feature ancestry and targets the supplying ancestor", async () => {
+    // Every feature is already bound once by the seeded taxonomy.
+    const root = {
+      id: taxonomyId("household"),
+      shortcode: taxonomyShortcode("household"),
+    };
+    const middle = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Fixture household middle",
+      parentId: root.id,
+    });
+    const leaf = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Fixture household leaf",
+      parentId: middle.id,
+    });
+    const explain = (shortcode: string) =>
+      explainField(context(), {
+        entityKind: "productCategory",
+        entityId: parseShortcodeFor("productCategory", shortcode),
+        field: "feature",
+        surface: "list",
+      });
+
+    const inherited = await explain(leaf.shortcode);
+    expect(inherited.resolution).toMatchObject({
+      mode: "inherit",
+      value: "household",
+      sourceEntity: { entityId: root.shortcode },
+    });
+    expect(
+      inherited.resolutionEvidence?.hierarchy.map((node) => [
+        node.entity?.entityId,
+        node.value,
+      ]),
+    ).toEqual([
+      [leaf.shortcode, expect.objectContaining({ assigned: false })],
+      [middle.shortcode, expect.objectContaining({ assigned: false })],
+      [
+        root.shortcode,
+        expect.objectContaining({ value: "household", assigned: true }),
+      ],
+    ]);
+    expect(inherited.actions).toEqual([
+      expect.objectContaining({
+        kind: "editSource",
+        target: { entityKind: "productCategory", entityId: root.shortcode },
+      }),
+    ]);
+
+    const bound = await explain(root.shortcode);
+    expect(bound.resolution).toMatchObject({
+      mode: "explicit",
+      fallbackValue: null,
+    });
+    expect(bound.actions[0]?.target.entityId).toBe(root.shortcode);
   });
 
   it("does not name a cross-Project parent trade as a Task fallback", async () => {

@@ -31,7 +31,11 @@ public struct FieldResolutionPresentation: Sendable {
         return "\(mode) · \(resolution.source)"
     }
 
-    public var resetLabel: String { fallbackValue == .null ? "Clear override" : "Use inherited value" }
+    public var resetLabel: String { fallbackValue == .null ? "Clear value" : "Use inherited value" }
+
+    public var state: FieldResolutionState {
+        FieldResolutionState(resolution, hasFallback: fallbackValue != .null)
+    }
 
     public func resetPayload(field: FieldDescriptor) -> [String: JSONValue]? {
         guard resolution.canReset else { return nil }
@@ -66,5 +70,34 @@ public struct FieldResolutionPresentation: Sendable {
 
     private static func value(at path: String, in raw: JSONValue) -> JSONValue? {
         path.split(separator: ".").reduce(Optional(raw)) { current, key in current?[String(key)] }
+    }
+}
+
+/// One vocabulary for every resolution surface, matching the web popover. An explicit value with
+/// nothing above it is "Set here", never an override: there is nothing for it to override.
+public struct FieldResolutionState: Sendable, Equatable {
+    public enum Tone: Sendable, Equatable { case set, override, redundant, none, inherit, allocated }
+
+    public let tone: Tone
+    public let label: String
+    public let systemImage: String
+
+    public init(_ resolution: FieldResolution, hasFallback: Bool) {
+        switch resolution.mode {
+        case .inherit:
+            (tone, label, systemImage) = (.inherit, "Inherited", "arrow.turn.down.right")
+        case .allocated:
+            (tone, label, systemImage) = (.allocated, resolution.source, "chart.pie")
+        case .none:
+            (tone, label, systemImage) = (.none, hasFallback ? "Blocks inherited" : "None", "nosign")
+        case .explicit:
+            if resolution.matchesFallback {
+                (tone, label, systemImage) = (.redundant, "Redundant", "exclamationmark.triangle")
+            } else if hasFallback {
+                (tone, label, systemImage) = (.override, "Overrides inherited", "arrow.counterclockwise")
+            } else {
+                (tone, label, systemImage) = (.set, "Set here", "circle.fill")
+            }
+        }
     }
 }

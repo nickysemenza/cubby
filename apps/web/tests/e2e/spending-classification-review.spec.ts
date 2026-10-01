@@ -226,9 +226,7 @@ test("reviews historical item classification and preserves explicit purpose", as
     exact: true,
   });
   await explanation.click();
-  await expect(
-    page.getByText("Without the override", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText("Fallback", { exact: true })).toBeVisible();
   await expect(
     page
       .getByText("Synthetic classification tools parent", { exact: true })
@@ -258,7 +256,7 @@ test("reviews historical item classification and preserves explicit purpose", as
   ).toBeVisible();
   failExplanation = false;
   await page.getByRole("button", { name: "Retry explanation" }).click();
-  await expect(page.getByText("In effect", { exact: true })).toBeVisible();
+  await expect(page.getByText("Rule ·", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 900 });
   await patch(expense, { spendingCategoryId: null });
@@ -298,8 +296,9 @@ test("reviews historical item classification and preserves explicit purpose", as
     .first();
   await expect(tableExplanation).toBeVisible();
   await tableExplanation.click();
-  await expect(page.getByText("In effect", { exact: true })).toBeVisible();
-  await expect(page.getByText("Hierarchy", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Resolution order", { exact: true }),
+  ).toBeVisible();
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 402, height: 874 });
   const phoneExplanation = page
@@ -310,7 +309,9 @@ test("reviews historical item classification and preserves explicit purpose", as
     })
     .first();
   await phoneExplanation.click();
-  await expect(page.getByText("In effect", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Resolution order", { exact: true }),
+  ).toBeVisible();
   await page.keyboard.press("Escape");
   const blocked = await preview({
     action: "productCategory",
@@ -321,6 +322,8 @@ test("reviews historical item classification and preserves explicit purpose", as
   expect((await apply(blocked)).ok()).toBeTruthy();
   await page.reload();
   await phoneExplanation.click();
-  await expect(page.getByText("Hierarchy", { exact: true })).toBeVisible();
-  await expect(page.getByText("blocked", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Resolution order", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("Blocked", { exact: true })).toBeVisible();
 });
