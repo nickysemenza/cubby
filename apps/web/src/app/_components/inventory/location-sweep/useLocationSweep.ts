@@ -33,6 +33,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { showErrorToast } from "~/components/feedback/error-details";
+
 import type { ScanFeedbackEntry } from "~/app/_components/inventory/persistent-scanner";
 import { entityDetailFor } from "~/entities/entity-detail";
 import {
@@ -192,7 +194,7 @@ export function useLocationSweep({
         resolveScanStrays: (input) => inventory.resolveScanStrays.call(input),
         bulkUpdateParent: (input) => location.bulkUpdateParent.call(input),
         ensureGlobalUnknown: () => location.ensureGlobalUnknown.call(undefined),
-        notifyError: (message) => toast.error(message),
+        notifyError: (message) => showErrorToast(message),
         notifySuccess: (message) => toast.success(message),
       },
     [dependencies, queryClient],

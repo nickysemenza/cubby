@@ -7,6 +7,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 
+import { showErrorToast } from "~/components/feedback/error-details";
+
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog.gen";
 
@@ -163,7 +165,7 @@ export function WithVendorShortcodeSearch({
         const message = result.ok
           ? "Vendor creation returned no record."
           : (result.issues[0]?.message ?? "Failed to create vendor.");
-        toast.error(message);
+        showErrorToast(message);
         throw new Error(message);
       }
       toast.success(`Added vendor ${result.result.name}`);
