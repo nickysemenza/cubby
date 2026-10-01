@@ -66,7 +66,64 @@ export class MacImportDriver {
     readonly session: string,
   ) {}
 
+  private get presentationHelper(): string {
+    return path.join(this.artifacts, "mac-presentation-ax");
+  }
+
+  private presentationAction(
+    action: "press" | "scroll",
+    containerID: string,
+    value: string,
+  ): void {
+    this.guardForeground();
+    execFileSync(
+      this.presentationHelper,
+      [
+        action,
+        String(this.pid),
+        path.join(homedir(), "Library/Caches/CubbyMacImportFixture/Cubby.app"),
+        containerID,
+        value,
+      ],
+      { timeout: 10000 },
+    );
+  }
+
   async prepareBackend(): Promise<void> {
+    const presentationSource = path.join(
+      this.repoRoot,
+      "apps/web/tooling/mac-presentation-ax.swift",
+    );
+    execFileSync(
+      "xcrun",
+      ["swiftc", presentationSource, "-o", this.presentationHelper],
+      { timeout: 30000 },
+    );
+    const presentationBuild = path.join(
+      this.artifacts,
+      "presentation-helper-build.json",
+    );
+    const presentationSourceEvidence = path.join(
+      this.artifacts,
+      "mac-presentation-ax.swift",
+    );
+    writeFileSync(presentationSourceEvidence, readFileSync(presentationSource));
+    writeFileSync(
+      presentationBuild,
+      JSON.stringify({
+        sourceSHA256: createHash("sha256")
+          .update(readFileSync(presentationSource))
+          .digest("hex"),
+        binarySHA256: createHash("sha256")
+          .update(readFileSync(this.presentationHelper))
+          .digest("hex"),
+      }),
+    );
+    this.evidence.push(
+      presentationBuild,
+      presentationSourceEvidence,
+      this.presentationHelper,
+    );
     if (!process.env.AGENT_DEVICE_MACOS_HELPER_BIN) {
       const entry = import.meta.resolve("agent-device");
       // The pinned SDK owns its Swift-source fingerprint and helper build/cache.
@@ -352,18 +409,22 @@ export class MacImportDriver {
       0,
       JSON.stringify({ x, y, text: hit.text, ownedPID: this.pid }),
     );
-    this.invoke(
-      [
-        "press",
-        "--x",
-        String(x),
-        "--y",
-        String(y),
-        "--bundle-id",
-        this.bundleID!,
-      ],
-      z.object({}).passthrough(),
-    );
+    if (containerID && role(node) === "button" && node.identifier) {
+      this.presentationAction("press", containerID, node.identifier);
+    } else {
+      this.invoke(
+        [
+          "press",
+          "--x",
+          String(x),
+          "--y",
+          String(y),
+          "--bundle-id",
+          this.bundleID!,
+        ],
+        z.object({}).passthrough(),
+      );
+    }
     return this.observe(surface);
   }
 
@@ -573,7 +634,7 @@ export class MacImportDriver {
       output = this.observe();
       const container = this.matching(`id=${containerID}`)[0]?.rect;
       const windows = this.nodes
-        .filter((node) => role(node) === "window")
+        .filter((node) => ["window", "popover"].includes(role(node)))
         .flatMap((node) => (node.rect ? [node.rect] : []));
       if (
         container &&
@@ -604,43 +665,10 @@ export class MacImportDriver {
       }
       if (container) {
         this.guardForeground();
-        // Scope AX scrolling to the declared view inside the verified fixture PID.
-        execFileSync(
-          "osascript",
-          [
-            "-e",
-            `on run argv
- tell application "System Events"
-  set ownedProcess to first application process whose unix id is (item 1 of argv as integer)
-  set ownedView to missing value
-  repeat with candidate in entire contents of ownedProcess
-   try
-    if value of attribute "AXIdentifier" of candidate is item 2 of argv then
-     set ownedView to contents of candidate
-     exit repeat
-    end if
-   end try
-  end repeat
-  if ownedView is missing value then error "Owned scroll container is absent"
-  repeat with bar in entire contents of ownedView
-   try
-    if role of bar is "AXScrollBar" and value of attribute "AXOrientation" of bar is "AXVerticalOrientation" then
-     set nextValue to (value of bar as real) + (item 3 of argv as real)
-     if nextValue > 1 then set nextValue to 1
-     if nextValue < 0 then set nextValue to 0
-     set value of bar to nextValue
-     return
-    end if
-   end try
-  end repeat
-  error "Owned view has no writable vertical scroll bar"
- end tell
-end run`,
-            String(this.pid),
-            containerID,
-            direction === "down" ? "0.15" : "-0.15",
-          ],
-          { timeout: 10000 },
+        this.presentationAction(
+          "scroll",
+          containerID,
+          direction === "down" ? "0.15" : "-0.15",
         );
       }
       await setTimeout(250);

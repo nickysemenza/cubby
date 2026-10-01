@@ -615,7 +615,10 @@ async function runNativeScenario(
       "field.explanation.popover",
       "up",
     );
-    await driver.click("id=field.explanation.close");
+    await driver.click(
+      "id=field.explanation.close",
+      "field.explanation.popover",
+    );
     await driver.waitAbsent("id=field.explanation.popover");
     async function relationEvidence(
       target: "product" | "purchase",
@@ -636,7 +639,10 @@ async function runNativeScenario(
     await relationEvidence("purchase", purchaseId);
     milestones.productPurchaseEvidenceObserved = true;
     await driver.screenshot("product-purchase-evidence");
-    await driver.click(`id=relation.row.purchase.${purchaseId}`);
+    await driver.click(
+      `id=relation.row.purchase.${purchaseId}`,
+      "detail.product",
+    );
     await driver.wait("id=detail.purchase.edit");
     await relationEvidence("product", productId);
     milestones.purchaseProductEvidenceObserved = true;
