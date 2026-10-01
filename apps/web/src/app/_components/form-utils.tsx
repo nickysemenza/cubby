@@ -18,9 +18,10 @@ import {
 import { toast } from "sonner";
 
 import { AutoSuggestSlot } from "~/app/_components/ai/auto-suggest-slot";
-import { Stack } from "~/components/layout";
+import { Row, Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Button, type buttonVariants } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { QuantityInput } from "~/components/ui/quantity-input";
 import { useDialogHeaderActionsRegistration } from "~/components/ui/responsive-dialog";
@@ -376,22 +377,32 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   );
 }
 
-// Helper for handling required textarea fields
-export function RequiredTextareaField<
-  TFieldValues extends FieldValues = FieldValues,
->({
+const describedBy = (ids: Array<string | null>) =>
+  ids.filter(Boolean).join(" ") || undefined;
+
+/**
+ * The one textarea field primitive. `nullable` maps an emptied box to `null`;
+ * `description` and `rows` tune the surrounding group and box.
+ */
+export function TextareaField<TFieldValues extends FieldValues = FieldValues>({
   form,
   name,
   label,
   placeholder,
+  description,
   rows = 3,
+  nullable = false,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: FieldPathByValue<TFieldValues, string | null | undefined>;
   label: string;
-  placeholder: string;
+  placeholder?: string;
+  description?: ReactNode;
   rows?: number;
+  nullable?: boolean;
 }) {
+  const descriptionId = `${name}-description`;
+  const errorId = `${name}-error`;
   return (
     <Controller
       control={form.control}
@@ -399,18 +410,82 @@ export function RequiredTextareaField<
       render={({ field, fieldState }) => (
         <FormFieldGroup
           htmlFor={name}
+          descriptionId={descriptionId}
+          errorId={errorId}
           label={label}
+          description={description}
           invalid={fieldState.invalid}
           error={fieldState.error}
         >
           <Textarea
             id={name}
-            placeholder={placeholder}
             {...field}
+            value={field.value ?? ""}
+            placeholder={placeholder}
             className="min-h-0 px-2 py-1"
             rows={rows}
+            onChange={(event) =>
+              field.onChange(
+                event.target.value === "" && nullable ? null : event.target.value,
+              )
+            }
             aria-invalid={fieldState.invalid}
+            aria-describedby={describedBy([
+              description ? descriptionId : null,
+              fieldState.error ? errorId : null,
+            ])}
           />
+        </FormFieldGroup>
+      )}
+    />
+  );
+}
+
+/** A boolean checkbox field inside the shared field group. */
+export function CheckboxField<TFieldValues extends FieldValues = FieldValues>({
+  form,
+  name,
+  label,
+  description,
+  controlId = name,
+}: {
+  form: UseFormReturn<TFieldValues>;
+  name: FieldPathByValue<TFieldValues, boolean | null | undefined>;
+  label: string;
+  description?: ReactNode;
+  controlId?: string;
+}) {
+  const descriptionId = `${controlId}-description`;
+  const errorId = `${controlId}-error`;
+  return (
+    <Controller
+      control={form.control}
+      name={name}
+      render={({ field, fieldState }) => (
+        <FormFieldGroup
+          htmlFor={controlId}
+          descriptionId={descriptionId}
+          errorId={errorId}
+          label={label}
+          description={description}
+          invalid={fieldState.invalid}
+          error={fieldState.error}
+        >
+          <Row gap="sm" align="start">
+            <Checkbox
+              id={controlId}
+              checked={field.value === true}
+              name={field.name}
+              onBlur={field.onBlur}
+              ref={field.ref}
+              onCheckedChange={(checked) => field.onChange(checked === true)}
+              aria-invalid={fieldState.invalid}
+              aria-describedby={describedBy([
+                description ? descriptionId : null,
+                fieldState.error ? errorId : null,
+              ])}
+            />
+          </Row>
         </FormFieldGroup>
       )}
     />

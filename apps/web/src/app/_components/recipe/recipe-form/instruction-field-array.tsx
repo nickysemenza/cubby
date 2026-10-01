@@ -5,7 +5,7 @@ import { type UseFormReturn, useFieldArray } from "react-hook-form";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 
-import { RequiredTextareaField } from "../../form-utils";
+import { TextareaField } from "../../form-utils";
 import { FieldArrayItemControls } from "./field-array-item-controls";
 import type { RecipeFormValues } from "./types";
 
@@ -34,7 +34,7 @@ export const InstructionFieldArray: FC<InstructionFieldArrayProps> = ({
           {fields.map((field, instructionIndex) => (
             <Row key={field.id} align="start" gap="xs">
               <div className="flex-grow">
-                <RequiredTextareaField
+                <TextareaField
                   form={form}
                   name={`sections.${sectionIndex}.instructions.${instructionIndex}.instruction`}
                   label={`Step ${instructionIndex + 1}`}
