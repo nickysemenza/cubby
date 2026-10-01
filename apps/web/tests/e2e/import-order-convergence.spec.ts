@@ -1,12 +1,11 @@
 import {
+  BROWSER_SOURCE_ORDERS,
   createConvergenceHarness,
-  EVIDENCE_SOURCES,
-  sourcePermutations,
 } from "./import-order-convergence.helpers";
 import { gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-for (const order of sourcePermutations(EVIDENCE_SOURCES)) {
+for (const order of BROWSER_SOURCE_ORDERS) {
   test(`Gmail, retailer, own photos and statement converge: ${order.join(" → ")}`, async ({
     page,
     baseURL,
