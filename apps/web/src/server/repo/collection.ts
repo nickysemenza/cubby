@@ -45,12 +45,12 @@ import { inventoryAmountSql } from "~/server/repo/inventory/helpers";
 import {
   getLocationCoverImageUrlsByLocationIds,
   updateLocation,
-} from "~/server/repo/location";
+} from "~/server/repo/location/crud";
+import { categorySummarySql } from "~/server/repo/product-category-sql";
 import {
   getProductCoverImageUrlsByProductIds,
   updateProduct,
-} from "~/server/repo/product";
-import { categorySummarySql } from "~/server/repo/product-category-sql";
+} from "~/server/repo/product/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import {

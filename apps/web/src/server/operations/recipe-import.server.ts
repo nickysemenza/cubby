@@ -57,7 +57,7 @@ import {
   getCookbookRecipesForDiff,
   getNotionRecipePageIds,
   getNotionRecipesForDiff,
-} from "~/server/repo/recipe";
+} from "~/server/repo/recipe/crud";
 import { findParentRecipeIdsBatch } from "~/server/repo/recipe/totals";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {

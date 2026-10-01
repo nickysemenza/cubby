@@ -18,7 +18,7 @@ import {
   updatePlanting,
 } from "~/server/repo/garden";
 import { plantingRepository } from "~/server/repo/garden/repository";
-import { createLocation } from "~/server/repo/location";
+import { createLocation } from "~/server/repo/location/crud";
 import {
   createPlantFixture,
   createProductFixture,

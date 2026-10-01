@@ -10,7 +10,7 @@ import {
 } from "~/server/db/schema";
 
 import { getDb } from "./database-helpers";
-import { upsertRecipe } from "./recipe";
+import { upsertRecipe } from "./recipe/crud";
 import {
   createIngredients,
   ingredientRef,

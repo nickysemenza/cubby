@@ -12,9 +12,9 @@ import {
   getEntityEmbeddingDeletedAtForRef,
   seedEntityEmbedding,
 } from "~/server/repo/entity-embedding";
-import { createExpense } from "~/server/repo/expense";
-import { deleteProducts } from "~/server/repo/product";
-import { createProject, updateProject } from "~/server/repo/project";
+import { createExpense } from "~/server/repo/expense/crud";
+import { deleteProducts } from "~/server/repo/product/crud";
+import { createProject, updateProject } from "~/server/repo/project/crud";
 import {
   createInventoryFixture as createInventoryEntry,
   createLocationFixture as createLocation,
@@ -26,7 +26,7 @@ import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocument,
 } from "~/server/repo/search-document";
-import { createTask } from "~/server/repo/task";
+import { createTask } from "~/server/repo/task/crud";
 
 import { getSemanticEmbeddingConfig } from "../semantic/config";
 import {

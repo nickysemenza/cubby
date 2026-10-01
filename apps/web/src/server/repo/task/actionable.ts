@@ -73,7 +73,7 @@ import { householdLocalDate } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
 import { entityLink, project, task } from "~/server/db/schema";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 import { liveLinks } from "~/server/repo/entity-links";
 import { listAll } from "~/server/repo/list-all";

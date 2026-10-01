@@ -3,8 +3,8 @@ import { buildEntity } from "tooling/factories/build";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { createExpense } from "~/server/repo/expense";
-import { productList } from "~/server/repo/product";
+import { createExpense } from "~/server/repo/expense/crud";
+import { productList } from "~/server/repo/product/crud";
 import { purchaseList } from "~/server/repo/purchase";
 import {
   createInventoryFixture,

@@ -4,7 +4,7 @@ import { suggestFinancialTransferPairs } from "~/server/repo/financial-transfer-
 import {
   householdContributionLedger,
   projectContribution,
-} from "~/server/repo/household-contribution";
+} from "~/server/repo/household-contribution/reports";
 
 export const householdContributionHandlers = implementOperationDomain(
   householdContributionContract,

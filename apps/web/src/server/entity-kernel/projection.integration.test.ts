@@ -13,7 +13,7 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { getDb } from "~/server/repo/database-helpers";
-import { createLocation } from "~/server/repo/location";
+import { createLocation } from "~/server/repo/location/crud";
 import {
   createPlantFixture,
   makeLocationInput,

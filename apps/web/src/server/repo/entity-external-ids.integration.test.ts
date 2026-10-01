@@ -25,10 +25,10 @@ import { entityExternalId } from "~/server/db/schema";
  */
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
-import { loadDataQualities } from "./data-quality";
+import { loadDataQualities } from "./data-quality/hydrate";
 import { getDb } from "./database-helpers";
 import { updateFinancialTransaction } from "./financial-transaction";
-import { updateProduct } from "./product";
+import { updateProduct } from "./product/crud";
 import { getPurchaseByID } from "./purchase";
 import { getNotionRecipePageIds, upsertNotionRecipe } from "./recipe/crud";
 import {

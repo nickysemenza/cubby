@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { entityAttachment } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { updateProduct } from "~/server/repo/product";
+import { updateProduct } from "~/server/repo/product/crud";
 import {
   createImageFixture,
   createProductFixture as createProduct,

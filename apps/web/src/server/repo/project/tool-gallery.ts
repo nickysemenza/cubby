@@ -19,8 +19,8 @@ import { inventoryEntry, location, product } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { inventoryAmountSql } from "~/server/repo/inventory/helpers";
 import { loadLocationAncestors } from "~/server/repo/location/tree";
-import { getProductImagesByProductIds } from "~/server/repo/product";
 import { categoryFeatureSql } from "~/server/repo/product-category-sql";
+import { getProductImagesByProductIds } from "~/server/repo/product/crud";
 
 import { deriveToolTrades } from "./tool-trades";
 import { EMPTY_METRICS, loadResourceMetrics } from "./tools";

@@ -11,7 +11,7 @@ import {
   project,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
-import { createExpense } from "~/server/repo/expense";
+import { createExpense } from "~/server/repo/expense/crud";
 import {
   createProductFixture,
   makeExpenseInput,

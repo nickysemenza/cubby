@@ -12,12 +12,10 @@ import {
 } from "~/server/db/schema";
 
 import { getDb, notDeleted } from "./database-helpers";
-import {
-  deleteIngredients,
-  getIngredientByID,
-  ingredientList,
-} from "./ingredient";
-import { deleteRecipes } from "./recipe";
+import { getIngredientByID } from "./ingredient/crud";
+import { deleteIngredients } from "./ingredient/deletion";
+import { ingredientList } from "./ingredient/search";
+import { deleteRecipes } from "./recipe/crud";
 import {
   createIngredientFixture as createIngredient,
   createRecipeFixture as createRecipe,

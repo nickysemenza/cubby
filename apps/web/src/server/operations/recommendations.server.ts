@@ -13,7 +13,7 @@ import {
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { findDuplicateProductIdentities } from "~/server/repo/problems";
+import { findDuplicateProductIdentities } from "~/server/repo/problems/detectors-product";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   dismissSuggestion,

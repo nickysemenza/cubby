@@ -50,7 +50,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { cookbookSourceRecipeCountSql } from "~/server/repo/cookbook-source-count";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   buildPartialUpdateValues,
   getDb,
@@ -66,13 +66,13 @@ import {
 } from "~/server/repo/import-recipe-convert";
 import { type ListPage, listScaffold } from "~/server/repo/list";
 import { listAll } from "~/server/repo/list-all";
-import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
+import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 import {
   deleteRecipesByCookbookTx,
   getCookbookRecipeIdsByTitle,
   getCookbookRecipeTitles,
-} from "~/server/repo/recipe";
-import { deleteByPolicy } from "~/server/repo/removal";
+} from "~/server/repo/recipe/crud";
+import { deleteByPolicy } from "~/server/repo/removal/dispositions";
 import { createEntityCrud } from "~/server/repo/repository";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";

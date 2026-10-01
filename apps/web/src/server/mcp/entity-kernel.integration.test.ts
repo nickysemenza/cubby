@@ -12,7 +12,7 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { createMcpServer, listMcpToolCatalog } from "~/server/mcp/server";
-import { findOrCreateIngredient } from "~/server/repo/ingredient";
+import { findOrCreateIngredient } from "~/server/repo/ingredient/crud";
 import {
   createProductFixture,
   ingredientRef,

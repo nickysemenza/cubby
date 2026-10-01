@@ -17,8 +17,8 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { taxonomyShortcode } from "../../../tooling/product-category-fixtures";
 import { getDb } from "./database-helpers";
-import { deleteProducts } from "./product";
-import { deleteProjects } from "./project";
+import { deleteProducts } from "./product/crud";
+import { deleteProjects } from "./project/crud";
 import { attachProjectResources, repointProjectUses } from "./project/tools";
 import {
   createProductFixture as createProduct,

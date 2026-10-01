@@ -29,7 +29,7 @@ import {
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { getTasksByIDs } from "~/server/repo/task";
+import { getTasksByIDs } from "~/server/repo/task/crud";
 
 import { getProjectByID } from "./crud";
 import { setProjectExternalUrls } from "./external-links";

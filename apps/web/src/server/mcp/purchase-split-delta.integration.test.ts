@@ -24,7 +24,7 @@ import { describe, expect, it } from "vitest";
 
 import { splitExpenseWithDeltaOut } from "~/contracts/purchase.contract";
 import type { EntityKernelContext } from "~/server/entity-kernel";
-import { getExpenseByShortcode } from "~/server/repo/expense";
+import { getExpenseByShortcode } from "~/server/repo/expense/crud";
 import { makeExpenseInput } from "~/server/repo/repo.fixtures";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";

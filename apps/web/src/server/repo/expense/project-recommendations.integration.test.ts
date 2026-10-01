@@ -7,8 +7,8 @@ import {
   deleteExpenses,
   getExpenseByShortcode,
   updateExpense,
-} from "~/server/repo/expense";
-import { createProduct } from "~/server/repo/product";
+} from "~/server/repo/expense/crud";
+import { createProduct } from "~/server/repo/product/crud";
 import { makeProductInput } from "~/server/repo/repo.fixtures";
 import { getEntityRecommendations } from "~/server/services/entity-recommendations.service";
 

@@ -19,14 +19,14 @@ import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 // Extended schemas that include food data
 import type { Database } from "~/server/db";
 
+import { getIngredientByID as getIngredientByIDRepo } from "../repo/ingredient/crud";
+import { findFuzzyMergeCandidates } from "../repo/ingredient/merge";
 import {
   enrichmentWorkbenchIngredients as enrichmentWorkbenchIngredientsRepo,
-  findFuzzyMergeCandidates,
-  getIngredientByID as getIngredientByIDRepo,
   getIngredientByName as getIngredientByNameRepo,
   getIngredientsByIDsLean as getIngredientsByIDsLeanRepo,
-} from "../repo/ingredient";
-import { foodLookupParamFromProduct } from "../repo/product";
+} from "../repo/ingredient/search";
+import { foodLookupParamFromProduct } from "../repo/product/helpers";
 import { recipeTreeLeafIngredientIds } from "../repo/recipe/totals";
 import { TraceNames, withTrace } from "../tracing";
 import { batchEnrichNestedItems, batchEnrichWithFood } from "./usda-helpers";

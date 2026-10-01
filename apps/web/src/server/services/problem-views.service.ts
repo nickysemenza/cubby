@@ -39,22 +39,22 @@ import {
 } from "~/entities/view-manifest";
 import { countLabel } from "~/lib/pluralize";
 import type { Database } from "~/server/db";
-import { expenseList } from "~/server/repo/expense";
+import { expenseList } from "~/server/repo/expense/lookup";
 import { listFinancialTransactions } from "~/server/repo/financial-transaction";
 import { imageList } from "~/server/repo/image";
-import { ingredientList } from "~/server/repo/ingredient";
-import { inventoryentryList } from "~/server/repo/inventory";
-import { locationList } from "~/server/repo/location";
-import { mealList } from "~/server/repo/meal";
-import { productList } from "~/server/repo/product";
+import { ingredientList } from "~/server/repo/ingredient/search";
+import { inventoryentryList } from "~/server/repo/inventory/crud";
+import { locationList } from "~/server/repo/location/crud";
+import { mealList } from "~/server/repo/meal/crud";
 import {
   getProductConversionCoverageFreshness,
   type ProductConversionCoverageFreshness,
 } from "~/server/repo/product/conversion-coverage";
-import { projectList } from "~/server/repo/project";
+import { productList } from "~/server/repo/product/crud";
+import { projectList } from "~/server/repo/project/lookup";
 import { purchaseList } from "~/server/repo/purchase";
-import { recipeList } from "~/server/repo/recipe";
-import { taskList } from "~/server/repo/task";
+import { recipeList } from "~/server/repo/recipe/crud";
+import { taskList } from "~/server/repo/task/lookup";
 import { vendorList } from "~/server/repo/vendor";
 import {
   type DiagnosticRunOptions,

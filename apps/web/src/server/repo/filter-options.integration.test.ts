@@ -2,14 +2,14 @@ import { buildEntity } from "tooling/factories/build";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { createExpense } from "./expense";
+import { createExpense } from "./expense/crud";
 import { getFilterOptions } from "./filter-options";
-import { createIngredient } from "./ingredient";
+import { createIngredient } from "./ingredient/crud";
 import { createLedgerParty } from "./ledger-party";
-import { createProduct } from "./product";
-import { createProject } from "./project";
+import { createProduct } from "./product/crud";
+import { createProject } from "./project/crud";
 import { createPurchase } from "./purchase";
-import { createRecipe } from "./recipe";
+import { createRecipe } from "./recipe/crud";
 import { makeProductInput, makeRecipeInput } from "./repo.fixtures";
 import { findOrCreateVendor, getVendorByID } from "./vendor";
 

@@ -67,12 +67,12 @@ import {
   updateLiveAndReturn,
   withTransactionOn,
 } from "~/server/repo/database-helpers";
+import { type RemovableEntity } from "~/server/repo/removal/core";
+import { executeDeleteWithEffects } from "~/server/repo/removal/delete-effects";
 import {
   deleteByPolicy,
   type DeleteHooks,
-  executeDeleteWithEffects,
-  type RemovableEntity,
-} from "~/server/repo/removal";
+} from "~/server/repo/removal/dispositions";
 import {
   resolveLiveShortcode,
   resolveOrThrow,

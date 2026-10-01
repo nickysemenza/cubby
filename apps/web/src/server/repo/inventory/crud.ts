@@ -30,11 +30,11 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   dataQualityFilterPredicates,
   dataQualitySortResolver,
-  loadDataQualities,
-} from "~/server/repo/data-quality";
+} from "~/server/repo/data-quality/sql";
 import {
   amountFromColumns,
   amountToColumns,
@@ -55,14 +55,14 @@ import {
   wantsListGroup,
   type ListProjection,
 } from "~/server/repo/list-projection";
-import { isGlobalUnknownLocation } from "~/server/repo/location";
+import { isGlobalUnknownLocation } from "~/server/repo/location/crud";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import {
   effectiveProductPriceSql,
   loadProductPricing,
 } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
-import { deleteByPolicy } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal/dispositions";
 import { createEntityReader } from "~/server/repo/repository";
 import {
   lexicalEligibility,

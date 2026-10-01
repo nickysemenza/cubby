@@ -20,7 +20,7 @@ import {
   withTransaction,
   databaseForTransaction,
 } from "./database-helpers";
-import { deleteExpenses, updateExpense } from "./expense";
+import { deleteExpenses, updateExpense } from "./expense/crud";
 import { digestValue, loadFinancialBookingLineage } from "./financial-booking";
 import { lockFinancialEvidenceKeys } from "./financial-evidence";
 import { updateFinancialTransaction } from "./financial-transaction";

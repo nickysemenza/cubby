@@ -3,7 +3,7 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   clearDataException,
   setDataException,
-} from "~/server/repo/data-quality";
+} from "~/server/repo/data-quality/exceptions";
 
 export const dataQualityHandlers = implementOperationDomain(
   dataQualityContract,

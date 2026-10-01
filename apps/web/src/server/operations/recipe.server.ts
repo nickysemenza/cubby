@@ -37,13 +37,15 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getMultiMeasureRecipeIngredients } from "~/server/repo/equivalences";
 import {
   duplicateRecipe,
+  getRecipesByIDs,
+  recipeList,
+} from "~/server/repo/recipe/crud";
+import {
   getAllTags,
   getIngredientCooccurrence,
   getIngredientUsage,
   getRecipeDependencyGraph,
-  getRecipesByIDs,
-  recipeList,
-} from "~/server/repo/recipe";
+} from "~/server/repo/recipe/queries";
 import {
   bindShortcodeResolver,
   resolveLiveShortcodes,

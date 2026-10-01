@@ -4,11 +4,11 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { updateProject, getProjectByID } from "./project";
+import { updateProject, getProjectByID } from "./project/crud";
 import { loadRelatedPreviews } from "./related-view";
 import { insertWithShortcode } from "./shortcode-utils";
-import { getTaskByShortcode, updateTask } from "./task";
 import { resolveDraftTaskFields } from "./task-project-inheritance";
+import { getTaskByShortcode, updateTask } from "./task/crud";
 
 describe("task inheritance", () => {
   const ctx = withTestDb();

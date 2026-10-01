@@ -56,7 +56,7 @@ import {
   type ListReadRow,
 } from "~/server/repo/list-projection";
 import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge/core";
-import { policyDelete } from "~/server/repo/removal";
+import { policyDelete } from "~/server/repo/removal/dispositions";
 import { createEntityCrud } from "~/server/repo/repository";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";

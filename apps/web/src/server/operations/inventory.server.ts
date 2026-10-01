@@ -34,18 +34,18 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   addInventoryEntries,
   bulkMoveInventoryEntries,
-  getInventoryByLocationIds,
   getInventoryLocationSnapshotToken,
   moveInventoryEntries,
   reconcileLocationSession,
+} from "~/server/repo/inventory/bulk";
+import { getInventoryByLocationIds } from "~/server/repo/inventory/crud";
+import {
   setInventoryOwnership,
   confirmInventoryOwnership,
-  receiveExpenseInventory,
-} from "~/server/repo/inventory";
-import {
-  discardFromInventoryEntries,
-  findDuplicateUniqueProducts,
-} from "~/server/repo/product";
+} from "~/server/repo/inventory/ownership-mutations";
+import { receiveExpenseInventory } from "~/server/repo/inventory/receive";
+import { findDuplicateUniqueProducts } from "~/server/repo/product/analytics";
+import { discardFromInventoryEntries } from "~/server/repo/product/discard";
 import {
   bindShortcodeResolver,
   lookupShortcodes,

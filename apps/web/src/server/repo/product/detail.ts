@@ -7,10 +7,10 @@ import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { observeOperationPhase } from "~/server/observed-request";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
-import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient";
+import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient/search";
 import { enrichProductRowsWithInventoryValuations } from "~/server/repo/inventory/valuation";
 import {
   getProductCoverImageUrlsByProductIds,

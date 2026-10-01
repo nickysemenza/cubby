@@ -44,7 +44,7 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   getDb,
   notDeleted,
@@ -58,8 +58,8 @@ import {
   liveLinks,
 } from "~/server/repo/entity-links";
 import { enrichProductRowsWithInventoryValuations } from "~/server/repo/inventory/valuation";
-import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { markProductConversionCoverageInputStale } from "~/server/repo/product/conversion-coverage";
+import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 import { enrichProductListItems } from "~/server/repo/product/list-enrichment";
 import { dbProductToListAPI } from "~/server/repo/product/mappers";
 // `findMergeComponentCycle` is the SAME question `mergeProducts` already

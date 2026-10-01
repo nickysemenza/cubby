@@ -38,7 +38,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   dataQualityFilterPredicates,
   dataQualitySortResolver,
-} from "./data-quality";
+} from "./data-quality/sql";
 import {
   arrayOverlapOrPresence,
   auditDateWhereConditions,

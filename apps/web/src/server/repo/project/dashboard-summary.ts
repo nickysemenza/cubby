@@ -32,7 +32,7 @@ import { sumBy, uniq } from "es-toolkit";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { expense, project, task } from "~/server/db/schema";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   countWhere,
   getDb,

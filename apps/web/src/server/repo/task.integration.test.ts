@@ -17,9 +17,10 @@ import {
   refreshSearchDocument,
 } from "~/server/repo/search-document";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
-import { getTaskByShortcode, taskList, updateTask } from "~/server/repo/task";
 import { listActionableTasks } from "~/server/repo/task/actionable";
+import { getTaskByShortcode, updateTask } from "~/server/repo/task/crud";
 import { updateTasksInBulk } from "~/server/repo/task/crud";
+import { taskList } from "~/server/repo/task/lookup";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 

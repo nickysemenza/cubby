@@ -15,7 +15,7 @@ import {
 } from "~/server/db/schema";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
 import { unwrapDb } from "~/server/repo/database-helpers";
-import { createExpense, updateExpense } from "~/server/repo/expense";
+import { createExpense, updateExpense } from "~/server/repo/expense/crud";
 import {
   createFinancialAccount,
   updateFinancialAccount,

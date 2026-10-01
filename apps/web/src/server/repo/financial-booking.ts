@@ -28,8 +28,8 @@ import {
   withTransaction,
   databaseForTransaction,
 } from "./database-helpers";
-import { createExpense } from "./expense";
 import { spendingClassificationRevision } from "./expense-category-resolution";
+import { createExpense } from "./expense/crud";
 import { lockFinancialEvidenceKeys } from "./financial-evidence";
 import { updateFinancialTransaction } from "./financial-transaction";
 import { createPurchase } from "./purchase";

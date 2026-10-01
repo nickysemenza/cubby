@@ -41,11 +41,11 @@ import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { getDb } from "./database-helpers";
 import type { CookbookImportContext } from "./import-recipe-convert";
-import { createIngredient, findOrCreateIngredient } from "./ingredient";
-import { createInventoryEntry } from "./inventory";
-import { createLocation } from "./location";
-import { createProduct } from "./product";
-import { createRecipe } from "./recipe";
+import { createIngredient, findOrCreateIngredient } from "./ingredient/crud";
+import { createInventoryEntry } from "./inventory/crud";
+import { createLocation } from "./location/crud";
+import { createProduct } from "./product/crud";
+import { createRecipe } from "./recipe/crud";
 import { resolveLiveShortcode } from "./shortcode-resolver";
 import { insertWithShortcode } from "./shortcode-utils";
 

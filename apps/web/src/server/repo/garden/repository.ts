@@ -13,7 +13,7 @@ import { diffUnorderedIdSet, logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { liveLinks } from "~/server/repo/entity-links";
 import { bulkPatchEntities } from "~/server/repo/entity-patch";
-import { deleteByPolicy } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal/dispositions";
 import { asActor, defineRepository } from "~/server/repo/repository";
 import {
   bindShortcodeResolver,

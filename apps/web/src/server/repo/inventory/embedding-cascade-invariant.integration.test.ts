@@ -50,19 +50,20 @@ import {
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 import { liveLinks } from "~/server/repo/entity-links";
+import { reconcileLocationSession } from "~/server/repo/inventory/bulk";
 import {
   createInventoryEntry,
   deleteInventoryEntries,
-  reconcileLocationSession,
-} from "~/server/repo/inventory";
-import { createLocation } from "~/server/repo/location";
-import { createProduct, mergeProducts } from "~/server/repo/product";
+} from "~/server/repo/inventory/crud";
+import { createLocation } from "~/server/repo/location/crud";
+import { createProduct } from "~/server/repo/product/crud";
+import { mergeProducts } from "~/server/repo/product/merge";
 import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
-import { createTask, deleteTasks, updateTask } from "~/server/repo/task";
+import { createTask, deleteTasks, updateTask } from "~/server/repo/task/crud";
 
 const amount = { value: 3, unit: "each" };
 

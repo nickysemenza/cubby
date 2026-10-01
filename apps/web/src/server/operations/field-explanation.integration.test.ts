@@ -7,8 +7,8 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { explainField } from "~/server/operations/field-explanation.server";
-import { createExpense } from "~/server/repo/expense";
-import { createInventoryEntry } from "~/server/repo/inventory";
+import { createExpense } from "~/server/repo/expense/crud";
+import { createInventoryEntry } from "~/server/repo/inventory/crud";
 import { createLedgerParty } from "~/server/repo/ledger-party";
 import {
   createLocationFixture,

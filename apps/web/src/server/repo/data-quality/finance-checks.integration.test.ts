@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { createGardenEntry, createPlanting } from "~/server/repo/garden";
 import { createLedgerParty } from "~/server/repo/ledger-party";
 import { createLedgerTransfer } from "~/server/repo/ledger-transfer";
-import { createLocation } from "~/server/repo/location";
+import { createLocation } from "~/server/repo/location/crud";
 import {
   createImageFixture,
   createPlantFixture,

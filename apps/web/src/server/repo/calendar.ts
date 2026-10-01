@@ -38,7 +38,7 @@ import {
   mapPlantingItems,
   plantingLinkedProjectSql,
 } from "./calendar-plantings";
-import { loadDataQualities } from "./data-quality";
+import { loadDataQualities } from "./data-quality/hydrate";
 import { getDb, notDeleted, relations } from "./database-helpers";
 import { eqAny, presenceCondition } from "./database-helpers/query";
 import { expenseInheritanceReadExtras } from "./expense-inheritance";
@@ -49,21 +49,21 @@ import {
 import { dbExpenseToAPI } from "./expense/helpers";
 import { chargeCondition } from "./expense/lookup";
 import { getPlanting } from "./garden";
-import { getMealsByDateRange } from "./meal";
-import { getProductCoverImageUrlsByProductIds } from "./product";
+import { getMealsByDateRange } from "./meal/crud";
+import { getProductCoverImageUrlsByProductIds } from "./product/crud";
 import {
   collectDescendantIds,
   loadProjectDateWindows,
   loadProjectTree,
 } from "./project/subtree";
-import { getRecipeCoverImageUrlsByShortcodes } from "./recipe";
+import { getRecipeCoverImageUrlsByShortcodes } from "./recipe/crud";
 import { resolveAllPresent } from "./shortcode-resolver";
-import { getTasksByIDs } from "./task";
 import {
   effectiveTaskProjectSql,
   effectiveTaskTradeSql,
   hydrateTaskInheritanceRows,
 } from "./task-project-inheritance";
+import { getTasksByIDs } from "./task/crud";
 import { dbTaskToAPI } from "./task/helpers";
 
 const emptyDaySummary = (): CalendarDaySummary => ({

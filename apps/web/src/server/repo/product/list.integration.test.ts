@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { product } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { createIngredient } from "~/server/repo/ingredient";
+import { createIngredient } from "~/server/repo/ingredient/crud";
 import { attachProductComponents } from "~/server/repo/product-components";
 import {
   createPlantFixture,
@@ -14,7 +14,7 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 
-import { productList } from ".";
+import { productList } from "./crud";
 import { listProductsRead, productListSummary } from "./crud";
 import { loadProductPriceSum, loadProductPricing } from "./pricing";
 import { loadProductQuantityLedgers } from "./quantity-ledger";

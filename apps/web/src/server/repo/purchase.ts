@@ -70,11 +70,9 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
-import {
-  gapCondition,
-  loadDataQualities,
-  touchDataQualityTargets,
-} from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
+import { gapCondition } from "~/server/repo/data-quality/sql";
+import { touchDataQualityTargets } from "~/server/repo/data-quality/touch";
 import {
   buildPartialUpdateValues,
   correlated,
@@ -122,7 +120,7 @@ import {
   finalizeMerge,
   repointEdge,
   resolveMergeTargets,
-} from "~/server/repo/merge";
+} from "~/server/repo/merge/core";
 import { syncChangedEffectivePrices } from "~/server/repo/product/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 import {
@@ -130,9 +128,9 @@ import {
   loadPurchaseFinancialAggregates,
   type PurchaseFinancialAggregate,
 } from "~/server/repo/purchase-financial-aggregates";
+import { cascadeRemoval } from "~/server/repo/removal/core";
 /** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
-import { deleteByPolicy } from "~/server/repo/removal";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal/dispositions";
 import { mergeRunTargets } from "~/server/repo/run-target-merge";
 import {
   resolveAllOrThrow,

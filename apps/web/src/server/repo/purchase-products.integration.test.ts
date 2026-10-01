@@ -16,7 +16,7 @@ import { liveLinks } from "~/server/repo/entity-links";
 
 import { getDb } from "./database-helpers";
 import { getEntityGraph } from "./entity-graph";
-import { createExpense } from "./expense";
+import { createExpense } from "./expense/crud";
 import { mergeProducts } from "./product/merge";
 import { getProductMovementTimeline } from "./product/movement-timeline";
 import {

@@ -81,7 +81,7 @@ import { expenseTradeAffinity } from "~/server/repo/expense/analytics";
 import {
   getLocationPutAwayCandidates,
   type LocationPutAwayCandidate,
-} from "~/server/repo/location";
+} from "~/server/repo/location/lookup";
 import {
   listBoundCategoryFeatures,
   listProductCategoryTreeOptions,

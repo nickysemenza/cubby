@@ -39,7 +39,7 @@ import { and, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { getDb } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 

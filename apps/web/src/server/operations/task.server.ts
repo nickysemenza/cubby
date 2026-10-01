@@ -8,15 +8,13 @@ import type { Database } from "~/server/db";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { listAll } from "~/server/repo/list-all";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
-import {
-  getTaskBoard,
-  getTaskSummary,
-  getTaskTimeline,
-  getTaskTodayBriefing,
-  listActionableTasks,
-  reorderTasks,
-  taskList,
-} from "~/server/repo/task";
+import { listActionableTasks } from "~/server/repo/task/actionable";
+import { getTaskBoard } from "~/server/repo/task/board";
+import { reorderTasks } from "~/server/repo/task/crud";
+import { taskList } from "~/server/repo/task/lookup";
+import { getTaskSummary } from "~/server/repo/task/summary";
+import { getTaskTimeline } from "~/server/repo/task/timeline";
+import { getTaskTodayBriefing } from "~/server/repo/task/today-briefing";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 

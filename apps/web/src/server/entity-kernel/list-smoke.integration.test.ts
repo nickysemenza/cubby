@@ -60,7 +60,7 @@ import {
   SKIPPED_ENTITIES,
 } from "~/server/entity-kernel/reference-universe.fixtures";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
-import { ingredientList } from "~/server/repo/ingredient";
+import { ingredientList } from "~/server/repo/ingredient/search";
 
 /* oxlint-disable anti-slop/no-runtime-typeof, anti-slop/no-unknown-parameters, anti-slop/no-unknown-returns -- the mock() walker trade-off in reference-universe.fixtures.ts */
 /**

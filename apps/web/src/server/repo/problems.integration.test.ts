@@ -35,12 +35,12 @@ import { runDiagnostic } from "../services/problem-diagnostics.service";
 import { findViewProblems } from "../services/problem-views.service";
 import { findFastProblems } from "../services/problems.service";
 import { createTestRequestContext } from "../testing/request-context";
-import { setDataException } from "./data-quality";
+import { setDataException } from "./data-quality/exceptions";
 import { getDb } from "./database-helpers";
-import { updateExpense } from "./expense";
+import { updateExpense } from "./expense/crud";
 import { updateFinancialTransaction } from "./financial-transaction";
 import { createMealWithEntityId } from "./meal/crud";
-import { findEntitiesMissingEmbeddings } from "./problems";
+import { findEntitiesMissingEmbeddings } from "./problems/detectors-embedding";
 import { getPurchaseByID, purchaseList, updatePurchase } from "./purchase";
 import {
   createIngredientFixture,

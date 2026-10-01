@@ -8,8 +8,9 @@ import { describe, expect, it } from "vitest";
 import type { UPCLookupResponse } from "~/contracts/upc.schemas";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import { executeEntity } from "~/server/entity-kernel";
-import { findProductByGtin, quickCreateProduct } from "~/server/repo/product";
 import { resolveProductCategory } from "~/server/repo/product-category";
+import { quickCreateProduct } from "~/server/repo/product/crud";
+import { findProductByGtin } from "~/server/repo/product/lookup";
 import {
   createProductFixture,
   makeExpenseInput,

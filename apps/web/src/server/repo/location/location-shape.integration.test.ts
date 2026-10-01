@@ -7,7 +7,7 @@ import {
   buildLocationAnalysisFingerprint,
 } from "~/server/ai/features";
 import { upsertAiAnalysis } from "~/server/repo/ai-analysis";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -22,7 +22,7 @@ import {
   locationList,
   updateLocation,
   updateLocationAiDescription,
-} from "./index";
+} from "./crud";
 
 const page = { pageIndex: 0, pageSize: 50 };
 

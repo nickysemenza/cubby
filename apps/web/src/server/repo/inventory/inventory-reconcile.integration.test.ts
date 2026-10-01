@@ -6,12 +6,10 @@ import { describe, expect, it } from "vitest";
 
 import { inventoryEntry, location as locationTable } from "~/server/db/schema";
 import { amountFromColumns, getDb } from "~/server/repo/database-helpers";
-import {
-  createInventoryEntry,
-  reconcileLocationSession,
-} from "~/server/repo/inventory";
-import { createLocation } from "~/server/repo/location";
-import { createProduct } from "~/server/repo/product";
+import { reconcileLocationSession } from "~/server/repo/inventory/bulk";
+import { createInventoryEntry } from "~/server/repo/inventory/crud";
+import { createLocation } from "~/server/repo/location/crud";
+import { createProduct } from "~/server/repo/product/crud";
 import {
   makeLocationInput,
   makeProductInput,

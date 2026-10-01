@@ -22,7 +22,7 @@ import {
   type StoredAiAnalysis,
   upsertAiAnalysis,
 } from "~/server/repo/ai-analysis";
-import { getRecipeByID } from "~/server/repo/recipe";
+import { getRecipeByID } from "~/server/repo/recipe/crud";
 
 import { validateRecipeFlowPlan } from "./validation";
 

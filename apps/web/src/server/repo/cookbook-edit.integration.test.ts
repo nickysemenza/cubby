@@ -1,7 +1,7 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getRecipeByID, updateRecipe } from "~/server/repo/recipe";
+import { getRecipeByID, updateRecipe } from "~/server/repo/recipe/crud";
 
 import { updateCookbook, upsertCookbook } from "./cookbook";
 import {

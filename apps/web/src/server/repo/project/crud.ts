@@ -20,7 +20,7 @@ import {
   diffUnorderedIdSet,
   logAuditEntry,
 } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   assertNoDependents,
   buildPartialUpdateValues,
@@ -40,7 +40,7 @@ import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validatio
  * same transaction as the column update, and `delete` guards against
  * orphaning live tasks/expenses before hard-deleting the dependency edges.
  */
-import { policyDelete } from "~/server/repo/removal";
+import { policyDelete } from "~/server/repo/removal/dispositions";
 import { createEntityReader } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,

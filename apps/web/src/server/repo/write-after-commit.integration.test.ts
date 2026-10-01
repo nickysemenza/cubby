@@ -12,7 +12,7 @@ import {
   createLocation,
   getLocationById,
   updateLocationAiDescription,
-} from "~/server/repo/location";
+} from "~/server/repo/location/crud";
 import { getPlantByShortcode } from "~/server/repo/plant";
 import {
   createImageFixture,

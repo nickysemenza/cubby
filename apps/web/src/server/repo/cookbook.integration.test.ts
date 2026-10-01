@@ -33,7 +33,7 @@ import {
 import { getDb } from "./database-helpers";
 import { createPendingImageRecord } from "./image";
 import { upsertCookbookRecipeFromCookbook } from "./import-recipe-convert";
-import { deleteProducts } from "./product";
+import { deleteProducts } from "./product/crud";
 import {
   createProductFixture,
   makeCookbookExtraction,

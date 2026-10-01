@@ -8,15 +8,15 @@ import { afterEach, describe, expect, it } from "vitest";
 import { setCfEnv } from "~/server/cf-env";
 import { executeEntity } from "~/server/entity-kernel";
 import { upsertCookbook } from "~/server/repo/cookbook";
-import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import { findParentRecipesWithDeletedSubRecipes } from "~/server/repo/problems";
-import { createProduct } from "~/server/repo/product";
+import { findOrCreateIngredient } from "~/server/repo/ingredient/crud";
+import { findParentRecipesWithDeletedSubRecipes } from "~/server/repo/problems/detectors-recipe";
+import { createProduct } from "~/server/repo/product/crud";
 import {
   createRecipe,
   deleteRecipes,
   getRecipeByID,
   upsertCookbookRecipe,
-} from "~/server/repo/recipe";
+} from "~/server/repo/recipe/crud";
 import { getRecipeTotalsState } from "~/server/repo/recipe/totals";
 import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import {

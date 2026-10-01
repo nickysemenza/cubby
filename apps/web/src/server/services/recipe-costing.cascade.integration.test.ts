@@ -9,9 +9,9 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
-import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import { createProduct, updateProduct } from "~/server/repo/product";
-import { createRecipe, updateRecipe } from "~/server/repo/recipe";
+import { findOrCreateIngredient } from "~/server/repo/ingredient/crud";
+import { createProduct, updateProduct } from "~/server/repo/product/crud";
+import { createRecipe, updateRecipe } from "~/server/repo/recipe/crud";
 import {
   getRecipeTotalsState,
   markRecipesStale,

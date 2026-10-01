@@ -17,18 +17,19 @@ import {
   notDeleted,
 } from "~/server/repo/database-helpers";
 import { amountToColumns } from "~/server/repo/database-helpers";
-import { deleteIngredients, mergeIngredients } from "~/server/repo/ingredient";
+import { deleteIngredients } from "~/server/repo/ingredient/deletion";
+import { mergeIngredients } from "~/server/repo/ingredient/merge";
 import {
   deleteLedgerParties,
   mergeLedgerParties,
 } from "~/server/repo/ledger-party";
-import { deleteMeals } from "~/server/repo/meal";
-import { findOrphanedProducts } from "~/server/repo/problems";
+import { deleteMeals } from "~/server/repo/meal/crud";
+import { findOrphanedProducts } from "~/server/repo/problems/detectors-product";
+import { deleteProducts } from "~/server/repo/product/crud";
 import {
-  deleteProducts,
   mergeProducts,
   previewMergeProducts,
-} from "~/server/repo/product";
+} from "~/server/repo/product/merge";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 describe("meal food entry lifecycle", () => {

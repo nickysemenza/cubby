@@ -12,10 +12,10 @@ import { entityAttachment } from "~/server/db/schema";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import { getDb } from "~/server/repo/database-helpers";
-import { createInventoryEntry } from "~/server/repo/inventory";
+import { createInventoryEntry } from "~/server/repo/inventory/crud";
 import { createLedgerParty } from "~/server/repo/ledger-party";
-import { mergeProducts } from "~/server/repo/product";
 import { listProductMatchRows } from "~/server/repo/product-match-candidate";
+import { mergeProducts } from "~/server/repo/product/merge";
 import { attachPurchaseProducts } from "~/server/repo/purchase-products";
 import {
   createImageFixture,

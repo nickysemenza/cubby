@@ -67,20 +67,22 @@ import {
 import { linkQuantity, liveLinks } from "~/server/repo/entity-links";
 import { impact, present, sideEffect } from "~/server/repo/impact";
 import {
-  assertDistinctMergeTargets,
-  finalizeMerge,
   foldAssociation,
   planSlotCollisions,
-  resolveMergeTargets,
   type SlotCollisionPlan,
-} from "~/server/repo/merge";
+} from "~/server/repo/merge/collisions";
+import {
+  assertDistinctMergeTargets,
+  finalizeMerge,
+  resolveMergeTargets,
+} from "~/server/repo/merge/core";
 import {
   getCategoryFeature,
   resolveProductCategory,
 } from "~/server/repo/product-category";
 import { repointProductMatchCandidatesTx } from "~/server/repo/product-match-candidate";
 import { unitMappingSides } from "~/server/repo/product/unit-mappings";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { cascadeRemoval } from "~/server/repo/removal/core";
 import { mergeRunTargets } from "~/server/repo/run-target-merge";
 
 import { validateLiveEffectiveTrades } from "../inheritance-validation";

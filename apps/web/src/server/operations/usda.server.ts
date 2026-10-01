@@ -12,7 +12,7 @@ import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { foodLookupParamFromProduct } from "~/server/repo/product";
+import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { getProductUsdaSuggestionSource } from "~/server/repo/product/usda-suggestion-source";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import type { USDAService } from "~/server/services/usda.service";

@@ -35,19 +35,21 @@ import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { withTransactionDatabase } from "~/server/repo/database-helpers";
+import { copyMealRange, duplicateMeal } from "~/server/repo/meal/copy";
 import {
   addRecipeToMeal,
-  getMealPreparations,
   getMealsByDateRange,
   getUpcomingMealSummary,
   removeMealRecipeWithEntityId,
-  saveMealRecipePreparation,
   updateMeal,
   updateMealRecipeWithEntityId,
-} from "~/server/repo/meal";
-import { getMealByID } from "~/server/repo/meal";
-import { copyMealRange, duplicateMeal } from "~/server/repo/meal/copy";
+} from "~/server/repo/meal/crud";
+import { getMealByID } from "~/server/repo/meal/crud";
 import { saveMealFood, removeMealFood } from "~/server/repo/meal/food";
+import {
+  getMealPreparations,
+  saveMealRecipePreparation,
+} from "~/server/repo/meal/portions";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import type {
   AvailabilityService,

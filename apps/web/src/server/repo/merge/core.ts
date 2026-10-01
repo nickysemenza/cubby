@@ -22,8 +22,8 @@ import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted } from "~/server/repo/database-helpers";
 import { recordMergeRedirects } from "~/server/repo/entity-identity";
 import { parseLinkEdgeKey } from "~/server/repo/entity-links";
-import type { RemovableEntity } from "~/server/repo/removal";
-import { cascadeRemoval } from "~/server/repo/removal";
+import type { RemovableEntity } from "~/server/repo/removal/core";
+import { cascadeRemoval } from "~/server/repo/removal/core";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 
 type MergeableTable = PgTable & { id: PgColumn; deletedAt: PgColumn };
