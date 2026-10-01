@@ -11,6 +11,8 @@ these pages stay within Documentation.
   deduplication](photo-library-dedup.md) explain household workflows.
 - [How values are determined](how-values-are-determined.md) is generated from
   entity field explanations. Edit its generator, not its output.
+- [Development](development.md) covers architecture, commands, testing,
+  deployment, and the HTTP API.
 - [Entities](entities.md) and [Application framework](application-framework/README.md)
   describe the compiled entity architecture.
 - [CI](ci.md), [Infrastructure](infrastructure.md), and the operational

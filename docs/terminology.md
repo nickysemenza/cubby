@@ -2,7 +2,7 @@
 
 A glossary disambiguating Cubby's domain concepts and how each one is named in
 the **UI**, in **code/schema**, and in the **database** (Postgres table). The
-canonical entity overview lives in [README.md](../README.md#-entities); this doc
+canonical entity overview lives in [README.md](../README.md#entities); this doc
 exists to resolve the naming drift that the audit flagged — the same concept
 sometimes wears three different names across layers.
 
@@ -105,8 +105,8 @@ USDAFood  ←(loose link, fdc_id/barcode)──  Product  ──(optional FK, in
 - **USDAFood** (`usda_food`) — nutrition reference data from USDA FoodData
   Central, served by the sibling `usda-api` worker (not a row in the main DB).
   Linked to a Product for nutrition/cost intelligence; the link is _loose_
-  (resolved at query time, `fdc_id`-first then barcode) — see the USDA notes in
-  README.
+  (resolved at query time, `fdc_id`-first then barcode) — see the USDA bullet in
+  [development](development.md#architecture).
 
 **Rule of thumb:** Recipes reference **Ingredients**; the pantry holds
 **InventoryEntries of Products**; **USDA** supplies nutrition. The Product is
