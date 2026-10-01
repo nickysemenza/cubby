@@ -36,14 +36,8 @@ server-enforced and disclosed.
 
 ## Reuse before writing a helper
 
-Use `useDeletableConfig`, `useUpdateMutation`, `useActionMutation`,
-`getErrorMessage`, `copyText`, and the existing form-field helpers rather than
-recreating their normal UI behavior. Use the repository helpers
-`insertAndReturn`, `updateAndReturn`, `withTransaction`, `formatSearchTerm`,
-`notDeleted`, and `buildSearchConditions`; use the shortcode resolver and
-`finalizeMerge` for their named operations. Prefer `es-toolkit` collection
-helpers and exhaustive `ts-pattern` matches when they express the operation
-directly.
+The catalog of shared helpers and generic paths lives in
+[generic paths](generic-paths.md).
 
 Do not turn every raw mutation into `useActionMutation`: it has static
 invalidation and toast semantics. A raw mutation remains correct for shared
