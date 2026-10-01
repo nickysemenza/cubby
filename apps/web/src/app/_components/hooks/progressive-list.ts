@@ -50,8 +50,17 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
   get signal() {
     return this.controller.signal;
   }
+  /**
+   * Cancels in-flight reads but keeps the session reusable: StrictMode replays
+   * effects on the same session without a reset. An aborted `load` returns
+   * without touching state, so in-flight rows go back to `pending` here, or
+   * the replayed load would skip them as already in flight.
+   */
   dispose() {
     this.controller.abort();
+    this.controller = new AbortController();
+    for (const [key, state] of this.states)
+      if (state.state === "loading") this.states.set(key, { state: "pending" });
   }
   setPages(pages: readonly (readonly T[])[]) {
     this.pages = pages;
