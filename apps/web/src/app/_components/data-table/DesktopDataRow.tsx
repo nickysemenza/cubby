@@ -234,6 +234,16 @@ export interface DesktopDataRowProps<TItem extends RowData> {
   suppressCellRowClick?: boolean;
 }
 
+/** Keyboard focus is `:focus-visible`; a pointer click on a control is not. */
+function isKeyboardFocus(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  try {
+    return target.matches(":focus-visible");
+  } catch {
+    return false;
+  }
+}
+
 function isInteractiveEventTarget(target: EventTarget | null) {
   return (
     target instanceof HTMLElement &&
@@ -306,11 +316,16 @@ function DesktopDataRowInner<TItem extends RowData>({
         onRowHoverEnd?.(row);
       }}
       onFocus={(event) => {
-        if (isInteractiveEventTarget(event.target)) return;
-        // Only the row or a selected cell activates on focus (the keyboard
-        // path). Flipping activity while a control inside the row held focus
-        // remounted the selection checkbox between mousedown and mouseup, so
-        // the click never toggled; pointer users activate on hover first.
+        if (
+          isInteractiveEventTarget(event.target) &&
+          !isKeyboardFocus(event.target)
+        )
+          return;
+        // The row, a selected cell, or a keyboard-focused control activates
+        // the row, so Tab users reach its rail controls. A pointer-focused
+        // control does not: flipping activity at mousedown remounted the
+        // selection checkbox before mouseup, so the click never toggled;
+        // pointer users activate on hover first.
         activity.activate();
         onRowHover?.(row);
       }}

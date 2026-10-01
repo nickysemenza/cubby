@@ -301,9 +301,13 @@ export const productListOverride = defineListOverride<
       entity: "inventory",
     });
     const createInventoryMutation = useCreateInventoryMutation();
-    const nameEditable = useNameEditable<ProductTreeRow>(
-      updateProductMutation.mutateAsync,
-    );
+    // Column memos key on these stable functions, never on the mutation
+    // result objects: those change every render, and a column rebuild
+    // remounts every cell (it swallowed row-checkbox clicks mid-hover).
+    const updateProduct = updateProductMutation.mutateAsync;
+    const updateInventory = updateInventoryMutation.mutateAsync;
+    const createInventory = createInventoryMutation.mutateAsync;
+    const nameEditable = useNameEditable<ProductTreeRow>(updateProduct);
 
     // The dialog tracks an id and derives the product from live list data, so
     // post-save invalidation refreshes the open dialog too.
@@ -327,7 +331,7 @@ export const productListOverride = defineListOverride<
                   <EditableCell
                     value={value}
                     onSave={async (newValue) => {
-                      await updateProductMutation.mutateAsync({
+                      await updateProduct({
                         id: info.row.original.id,
                         data:
                           newValue != null &&
@@ -351,7 +355,7 @@ export const productListOverride = defineListOverride<
               className: "w-32",
               editable: {
                 onSave: async (newValue, product) => {
-                  await updateProductMutation.mutateAsync({
+                  await updateProduct({
                     id: product.id,
                     data: { fdc_id: newValue ? Number(newValue) : null },
                   });
@@ -374,7 +378,7 @@ export const productListOverride = defineListOverride<
               filterConfig: null,
               editable: {
                 onSave: async (stockTracked, product) => {
-                  await updateProductMutation.mutateAsync({
+                  await updateProduct({
                     id: product.id,
                     data: { stockTracked },
                   });
@@ -408,7 +412,7 @@ export const productListOverride = defineListOverride<
                   <EditableCell
                     value={product.price}
                     onSave={async (price) => {
-                      await updateProductMutation.mutateAsync({
+                      await updateProduct({
                         id: product.id,
                         data: { price },
                       });
@@ -569,7 +573,7 @@ export const productListOverride = defineListOverride<
             }),
           );
         }),
-      [updateProductMutation],
+      [updateProduct],
     );
 
     const compose = useCallback(
@@ -599,7 +603,7 @@ export const productListOverride = defineListOverride<
                 ),
                 editable: {
                   onSave: async (newIngredientId, product) => {
-                    await updateProductMutation.mutateAsync({
+                    await updateProduct({
                       id: product.id,
                       data: { ingredientId: newIngredientId },
                     });
@@ -798,13 +802,13 @@ export const productListOverride = defineListOverride<
                     );
                   },
                   onMoveEntry: async (entry, locationId) => {
-                    await updateInventoryMutation.mutateAsync({
+                    await updateInventory({
                       id: entry.id,
                       data: { locationId },
                     });
                   },
                   onCreateEntry: async (product, locationId) => {
-                    await createInventoryMutation.mutateAsync({
+                    await createInventory({
                       productId: product.id,
                       locationId,
                       amount: { value: 1, unit: "each" },
@@ -818,7 +822,7 @@ export const productListOverride = defineListOverride<
           place("expenseCount");
           rest();
         }),
-      [createInventoryMutation, updateInventoryMutation, updateProductMutation],
+      [createInventory, updateInventory, updateProduct],
     );
 
     // Kits on the currently loaded pages, fetched for the whole page rather
@@ -923,7 +927,8 @@ export function createUnitMappingsColumn<
   T extends { id: string; ingredient?: { naKinds?: BaseKind[] | null } | null },
 >(
   columnHelper: ColumnHelper<T>,
-  mappingsMap: Record<string, UnitMapping[]>,
+  /** A lookup, so callers keep the column stable while their map grows. */
+  mappingsFor: (id: string) => UnitMapping[] | undefined,
   options?: {
     id?: string;
     header?: string;
@@ -943,7 +948,7 @@ export function createUnitMappingsColumn<
     },
     cell: (info) => {
       const entity = info.row.original;
-      const mappings = mappingsMap[entity.id] ?? [];
+      const mappings = mappingsFor(entity.id) ?? [];
       return (
         <div className="w-full">
           <UnitMappingDisplay

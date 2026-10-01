@@ -5,7 +5,7 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { CellData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { z } from "zod";
 
 import type { EntityActionSubject } from "~/app/_components/actions/entity-actions";
@@ -213,6 +213,16 @@ export function useStandardColumns<TData extends BaseListRow>({
   }, [entity, titleField]);
 
   // Build columns array with standard columns - memoized to prevent infinite re-renders
+  // The map grows with every page and enrichment arrival; keying columns on
+  // it rebuilt them all and remounted every cell. Cells look rows up through a
+  // stable function instead, and only the column's presence keys the memo.
+  const latestMappings = useRef(mappingsMap);
+  latestMappings.current = mappingsMap;
+  const mappingsFor = useCallback(
+    (id: string) => latestMappings.current?.[id],
+    [],
+  );
+  const hasMappings = mappingsMap !== null;
   return useMemo(
     () =>
       createCubbyColumnCollection<TData>((add) => {
@@ -369,7 +379,7 @@ export function useStandardColumns<TData extends BaseListRow>({
           });
 
         // Append unit mappings column if configured
-        if (shouldUseMappings && mappingsMap) {
+        if (shouldUseMappings && hasMappings) {
           // The product id stays "unitMappingQuality" — it's what the manifest's
           // presence filter hangs on. NOT sortable: the cell grades conversion
           // COVERAGE (a graph reachability run through the unit engine, over
@@ -380,7 +390,7 @@ export function useStandardColumns<TData extends BaseListRow>({
             entity === "product" ? "unitMappingQuality" : "unitMappings";
           add(
             withManifestFilter(
-              createUnitMappingsColumn(columnHelper, mappingsMap, {
+              createUnitMappingsColumn(columnHelper, mappingsFor, {
                 id: mappingsColId,
                 enableSorting: false,
               }),
@@ -411,7 +421,8 @@ export function useStandardColumns<TData extends BaseListRow>({
       shouldUseMappings,
       standardColumns,
       titleField,
-      mappingsMap,
+      hasMappings,
+      mappingsFor,
       stableFilters,
       filterOptions,
       enableRowSelection,
