@@ -620,14 +620,13 @@ export function useEntityList<
             .find((state) => state && state.state !== "ready");
         add({
           ...column,
-          meta: meta
-            ? attachCubbyColumnMeta<TData>({
-                ...meta,
-                entityRefs: meta.entityRefs
-                  ? (row) => (stateFor(row) ? [] : meta.entityRefs!(row))
-                  : undefined,
-              })
-            : undefined,
+          meta: attachCubbyColumnMeta<TData>({
+            ...meta,
+            valueUnavailable: (row) => Boolean(stateFor(row)),
+            entityRefs: meta?.entityRefs
+              ? (row) => (stateFor(row) ? [] : meta.entityRefs!(row))
+              : undefined,
+          }),
           cell: (info) => {
             const state = stateFor(info.row.original);
             return (

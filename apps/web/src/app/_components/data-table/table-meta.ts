@@ -90,6 +90,8 @@ export interface CubbyColumnMeta<TData = CellData> {
   cellData?: ColumnCellData<TData>;
   /** Authoritative list inputs when a display column has another id. */
   readFields?: readonly string[];
+  /** Deferred values must render their state without invoking data accessors. */
+  valueUnavailable?: (row: TData) => boolean;
   /** Public refs rendered by this column, collected once at the table owner. */
   entityRefs?: (row: TData) => readonly EntityRef[];
 }

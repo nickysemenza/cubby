@@ -10,10 +10,13 @@ import {
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { unwrapDb } from "./database-helpers";
+import {
+  loadExpenseJointAllocations,
+  loadExpenseProjectAllocations,
+} from "./expense-project-allocation";
 import { insertWithShortcode } from "./shortcode-utils";
 import {
   applySpendingClassificationSeed,
-  previewExpenseProjectRoundingRedistribution,
   previewSpendingClassificationSeed,
 } from "./spending-classification-seed";
 
@@ -252,7 +255,7 @@ describe("reviewed spending taxonomy seed", () => {
     expect(unchanged.rows[0]?.count).toBe(0);
   });
 
-  it("reports historical Project cent redistribution without changing Expense money", async () => {
+  it("conserves current principal-line cents before Project grouping without changing Expense money", async () => {
     const projects = await Promise.all(
       ["One", "Two"].map((name) =>
         insertWithShortcode(ctx.db, "project", {
@@ -292,15 +295,38 @@ describe("reviewed spending taxonomy seed", () => {
       costType: "materials",
       purchaseId: purchase.id,
     });
-    const result = await previewExpenseProjectRoundingRedistribution(ctx.db, [
+    const expenseCents = async () =>
+      (
+        await unwrapDb(ctx.db).execute<{ cents: string }>(
+          sql`SELECT round(sum(cost)::numeric * 100)::text AS cents FROM "Expense" WHERE "purchaseId"=${purchase.id} AND "deletedAt" IS NULL`,
+        )
+      ).rows[0]!.cents;
+    expect(await expenseCents()).toBe("301");
+    const allocations = await loadExpenseJointAllocations(ctx.db, [
+      ...items.map((item) => item.id),
       fee.id,
     ]);
-    expect(result).toEqual({
-      changedExpenseCount: 1,
-      changedProjectCount: 2,
-      absoluteProjectDeltaCents: "2",
-      totalBeforeCents: "1",
-      totalAfterCents: "1",
-    });
+    expect(
+      allocations.reduce((sum, row) => sum + (row.attributedCents ?? 0n), 0n),
+    ).toBe(301n);
+    expect(
+      allocations
+        .filter((row) => row.expenseId === fee.id && row.attributedCents === 1n)
+        .map((row) => row.principalExpenseId),
+    ).toEqual([winner.id]);
+    const projectsAllocated = await loadExpenseProjectAllocations(ctx.db, [
+      fee.id,
+    ]);
+    expect(
+      projectsAllocated.reduce(
+        (sum, row) => sum + (row.attributedCents ?? 0n),
+        0n,
+      ),
+    ).toBe(1n);
+    expect(
+      projectsAllocated.find((row) => row.projectId === projects[1]!.id)
+        ?.attributedCents,
+    ).toBe(1n);
+    expect(await expenseCents()).toBe("301");
   });
 });

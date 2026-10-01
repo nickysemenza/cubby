@@ -8,14 +8,13 @@ import {
   productCategoryId,
   productCategoryShortcode,
   userId,
-  type ExpenseId,
 } from "@cubby/schemas/identifiers";
 import {
   SHORTCODE_CHARS,
   SHORTCODE_BODY_LENGTH,
   SHORTCODE_PREFIX,
 } from "@cubby/shared";
-import { sql, type SQL } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -25,20 +24,12 @@ import {
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 
-import {
-  unwrapDb,
-  uuidArrayParam,
-  withTransactionDatabase,
-} from "./database-helpers";
+import { unwrapDb, withTransactionDatabase } from "./database-helpers";
 import {
   spendingClassificationRevision,
   type ExpenseSpendingCategoryResolutionDraft,
 } from "./expense-category-resolution";
-import { effectiveExpenseProjectSql } from "./expense-inheritance";
-import {
-  expenseProjectAllocationSql,
-  loadExpenseJointAllocations,
-} from "./expense-project-allocation";
+import { loadExpenseJointAllocations } from "./expense-project-allocation";
 import { applyReviewedSpendingClassificationPolicy } from "./spending-classification-review";
 import { withReviewedSpendingClassification } from "./spending-classification-review-authorization";
 
@@ -325,12 +316,10 @@ async function buildSeedPreview(
       deltaCents: (afterCents - beforeCents).toString(),
     };
   });
-  const rounding = await previewExpenseProjectRoundingRedistribution(db);
   return {
     categories,
     mappings,
     policyRevision,
-    rounding,
     categoryDeltas,
     newCategories: categories.filter((row) => !row.existing).length,
     plannedMappings: mappings.filter((row) => !row.preserve).length,
@@ -344,7 +333,6 @@ async function buildSeedPreview(
       history,
       before: allocations(before),
       after: allocations(after),
-      rounding,
     }),
   };
 }
@@ -460,207 +448,4 @@ export async function resolveSpendingClassificationSeedActor(
   if (rows.length !== 1)
     fail("Seed actor name must resolve to exactly one existing member login.");
   return rows[0]!.id;
-}
-
-/** Frozen previous Project grouping/shortcode remainder policy, retained only for aggregate rollout comparison. */
-const legacyExpenseProjectAllocationSql = (
-  expenseIds?: readonly ExpenseId[],
-): SQL => sql`
-  WITH ${
-    expenseIds
-      ? sql`selected_expense AS (
-    SELECT allocation_target."id", allocation_target."purchaseId" FROM "Expense" allocation_target
-    WHERE allocation_target."deletedAt" IS NULL AND allocation_target."id" = ANY(${uuidArrayParam(expenseIds)})
-  ),`
-      : sql``
-  } principal_fact AS (
-    SELECT
-      e."id" AS "expenseId",
-      e."purchaseId",
-      ${effectiveExpenseProjectSql("e")} AS "projectId",
-      round((e."cost")::numeric * 100)::bigint AS cost_cents
-    FROM ${
-      expenseIds
-        ? sql`(
-      SELECT sibling.* FROM "Expense" sibling
-      WHERE sibling."deletedAt" IS NULL
-        AND sibling."purchaseId" IN (SELECT "purchaseId" FROM selected_expense)
-      UNION ALL
-      SELECT standalone.* FROM "Expense" standalone
-      WHERE standalone."deletedAt" IS NULL AND standalone."purchaseId" IS NULL
-        AND standalone."id" IN (SELECT "id" FROM selected_expense)
-    )`
-        : sql`"Expense"`
-    } e
-    LEFT JOIN "Purchase" live_purchase
-      ON live_purchase."id" = e."purchaseId"
-     AND live_purchase."deletedAt" IS NULL
-    WHERE e."deletedAt" IS NULL
-      AND e."lineKind" = 'principal'
-      AND (e."purchaseId" IS NULL OR live_purchase."id" IS NOT NULL)
-  ), purchase_direction AS (
-    SELECT
-      "purchaseId",
-      coalesce(bool_or(cost_cents > 0), false) AS has_positive,
-      coalesce(bool_or(cost_cents < 0), false) AS has_negative
-    FROM principal_fact
-    WHERE "purchaseId" IS NOT NULL AND cost_cents IS NOT NULL
-    GROUP BY "purchaseId"
-  ), purchase_coverage AS (
-    SELECT
-      "purchaseId",
-      bool_or(cost_cents IS NULL) AS has_unpriced_principal
-    FROM principal_fact
-    WHERE "purchaseId" IS NOT NULL
-    GROUP BY "purchaseId"
-  ), project_weight AS (
-    SELECT
-      f."purchaseId",
-      f."projectId",
-      CASE WHEN d.has_positive THEN 'positive' ELSE 'refund' END::text AS basis,
-      sum(CASE
-        WHEN d.has_positive AND f.cost_cents > 0 THEN f.cost_cents
-        WHEN NOT d.has_positive AND d.has_negative AND f.cost_cents < 0 THEN abs(f.cost_cents)
-        ELSE 0
-      END)::bigint AS weight
-    FROM principal_fact f
-    JOIN purchase_direction d ON d."purchaseId" = f."purchaseId"
-    GROUP BY f."purchaseId", f."projectId", d.has_positive, d.has_negative
-    HAVING sum(CASE
-      WHEN d.has_positive AND f.cost_cents > 0 THEN f.cost_cents
-      WHEN NOT d.has_positive AND d.has_negative AND f.cost_cents < 0 THEN abs(f.cost_cents)
-      ELSE 0
-    END) > 0
-  ), fallback_weight AS (
-    SELECT
-      p."id" AS "purchaseId",
-      default_project."id" AS "projectId",
-      'default'::text AS basis,
-      1::bigint AS weight
-    FROM "Purchase" p
-    LEFT JOIN "Project" default_project
-      ON default_project."id" = p."defaultProjectId"
-     AND default_project."deletedAt" IS NULL
-    WHERE p."deletedAt" IS NULL
-      ${expenseIds ? sql`AND p."id" IN (SELECT "purchaseId" FROM selected_expense)` : sql``}
-      AND NOT EXISTS (
-        SELECT 1 FROM project_weight w WHERE w."purchaseId" = p."id"
-      )
-  ), weights AS (
-    SELECT * FROM project_weight
-    UNION ALL
-    SELECT * FROM fallback_weight
-  ), adjustment_seed AS (
-    SELECT
-      e."id" AS "expenseId",
-      e."purchaseId",
-      w."projectId",
-      w.basis,
-      w.weight,
-      round((e."cost")::numeric * 100)::bigint AS source_cents,
-      sum(w.weight) OVER (PARTITION BY e."id") AS total_weight,
-      coalesce(coverage.has_unpriced_principal, false) AS has_unpriced_principal,
-      coalesce(pj."shortcode", '~unassigned') AS allocation_key
-    FROM "Expense" e
-    JOIN "Purchase" p
-      ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
-    JOIN weights w ON w."purchaseId" = p."id"
-    LEFT JOIN purchase_coverage coverage
-      ON coverage."purchaseId" = p."id"
-    LEFT JOIN "Project" pj
-      ON pj."id" = w."projectId" AND pj."deletedAt" IS NULL
-    WHERE e."deletedAt" IS NULL AND e."lineKind" <> 'principal'
-      ${expenseIds ? sql`AND e."id" IN (SELECT "id" FROM selected_expense)` : sql``}
-  ), adjustment_floor AS (
-    SELECT
-      *,
-      CASE WHEN source_cents IS NULL THEN NULL ELSE
-        floor(abs(source_cents)::numeric * weight::numeric / total_weight)::bigint
-      END AS base_cents,
-      CASE WHEN source_cents IS NULL THEN NULL ELSE
-        mod(abs(source_cents)::numeric * weight::numeric, total_weight)
-      END AS fractional_rank
-    FROM adjustment_seed
-  ), adjustment_ranked AS (
-    SELECT
-      *,
-      sum(base_cents) OVER (PARTITION BY "expenseId") AS assigned_cents,
-      row_number() OVER (
-        PARTITION BY "expenseId"
-        ORDER BY fractional_rank DESC NULLS LAST, allocation_key ASC
-      ) AS remainder_rank
-    FROM adjustment_floor
-  ), allocated AS (
-    SELECT
-      f."expenseId",
-      f."purchaseId",
-      f."projectId",
-      f.cost_cents AS source_cents,
-      f.cost_cents AS attributed_cents,
-      'principal'::text AS basis,
-      f.cost_cents IS NULL AS incomplete
-    FROM principal_fact f
-    UNION ALL
-    SELECT
-      r."expenseId",
-      r."purchaseId",
-      r."projectId",
-      r.source_cents,
-      CASE WHEN r.source_cents IS NULL THEN NULL ELSE
-        sign(r.source_cents) * (
-          r.base_cents + CASE
-            WHEN r.remainder_rank <= abs(r.source_cents) - r.assigned_cents THEN 1
-            ELSE 0
-          END
-        )
-      END::bigint AS attributed_cents,
-      r.basis,
-      r.basis = 'default' OR r.has_unpriced_principal AS incomplete
-    FROM adjustment_ranked r
-  )
-  SELECT
-    a."expenseId",
-    a."purchaseId",
-    a."projectId",
-    p."shortcode" AS "projectShortcode",
-    p."name" AS "projectName",
-    a.source_cents::text AS "sourceCents",
-    a.attributed_cents::text AS "attributedCents",
-    a.basis,
-    a.incomplete
-  FROM allocated a
-  LEFT JOIN "Project" p
-    ON p."id" = a."projectId" AND p."deletedAt" IS NULL
-  ${expenseIds ? sql`WHERE a."expenseId" IN (SELECT "id" FROM selected_expense)` : sql``}
-`;
-
-const roundingRow = z.object({
-  changedExpenseCount: z.number(),
-  changedProjectCount: z.number(),
-  absoluteProjectDeltaCents: z.string(),
-  totalBeforeCents: z.string(),
-  totalAfterCents: z.string(),
-});
-
-/** Aggregate-only report: no household Expense or Project identifiers leave this boundary. */
-export async function previewExpenseProjectRoundingRedistribution(
-  db: Database,
-  expenseIds?: readonly ExpenseId[],
-) {
-  const result = await unwrapDb(db).execute(sql`
-    WITH before AS (${legacyExpenseProjectAllocationSql(expenseIds)}),
-      after AS (${expenseProjectAllocationSql(expenseIds)}),
-      delta AS (
-        SELECT coalesce(b."expenseId",a."expenseId") AS "expenseId",coalesce(b."projectId",a."projectId") AS "projectId",
-          coalesce(a."attributedCents"::bigint,0)-coalesce(b."attributedCents"::bigint,0) AS cents
-        FROM before b FULL JOIN after a ON a."expenseId"=b."expenseId" AND a."projectId" IS NOT DISTINCT FROM b."projectId"
-      )
-    SELECT count(DISTINCT "expenseId") FILTER (WHERE cents<>0)::int AS "changedExpenseCount",
-      count(DISTINCT coalesce("projectId"::text,'~unassigned')) FILTER (WHERE cents<>0)::int AS "changedProjectCount",
-      coalesce(sum(abs(cents)),0)::text AS "absoluteProjectDeltaCents",
-      (SELECT coalesce(sum("attributedCents"::bigint),0)::text FROM before) AS "totalBeforeCents",
-      (SELECT coalesce(sum("attributedCents"::bigint),0)::text FROM after) AS "totalAfterCents"
-    FROM delta
-  `);
-  return roundingRow.parse(result.rows[0]);
 }

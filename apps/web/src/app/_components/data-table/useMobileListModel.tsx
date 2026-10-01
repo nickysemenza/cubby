@@ -249,7 +249,13 @@ function collectMobileSlots<TItem extends RowData>(
     const meta = cell.column.columnDef.meta;
     const slot = resolveSlot(colId, meta);
     if (slot === "hidden") continue;
-    if (cell.column.accessorFn && isEmptyCellValue(cell.getValue())) continue;
+    const valueUnavailable = meta?.valueUnavailable?.(row.original) ?? false;
+    if (
+      !valueUnavailable &&
+      cell.column.accessorFn &&
+      isEmptyCellValue(cell.getValue())
+    )
+      continue;
     const rendered = flexRender(cell.column.columnDef.cell, cell.getContext());
     if (!hasRenderableContent(rendered)) continue;
 
@@ -264,7 +270,11 @@ function collectMobileSlots<TItem extends RowData>(
     if (slot === "title") {
       // Linked desktop identities render a component, but their accessor is
       // still the authoritative plain-text label for the mobile card.
-      title = mobileTitleText(rendered, cell.getValue()) ?? title;
+      title =
+        mobileTitleText(
+          rendered,
+          valueUnavailable ? undefined : cell.getValue(),
+        ) ?? title;
       continue;
     }
 
