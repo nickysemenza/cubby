@@ -52,11 +52,10 @@ import {
   productCategory,
   productConversionCoverage,
   productUnitMappings,
-  runEvidence,
-  runTarget,
   task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { mergeRunTargets } from "~/server/repo/run-target-merge";
 import { type AuditEntryInput, logAuditEntries } from "~/server/repo/audit-log";
 import {
   amountToColumns,
@@ -1696,34 +1695,7 @@ export const mergeProducts = async (
     // Preserve the keeper's target when both Products were inspected in the
     // same run; re-pointing all rows at once would violate the unique
     // `(runId, entityId)` index.
-    const targetedRuns = await tx
-      .select({ id: runTarget.id, runId: runTarget.runId })
-      .from(runTarget)
-      .where(inArray(runTarget.entityId, plan.loserIds));
-    for (const target of targetedRuns) {
-      const [existing] = await tx
-        .select({ id: runTarget.id })
-        .from(runTarget)
-        .where(
-          and(
-            eq(runTarget.runId, target.runId),
-            eq(runTarget.entityId, keepId),
-          ),
-        )
-        .limit(1);
-      if (existing) {
-        await tx
-          .update(runEvidence)
-          .set({ targetId: existing.id })
-          .where(eq(runEvidence.targetId, target.id));
-        await tx.delete(runTarget).where(eq(runTarget.id, target.id));
-      } else {
-        await tx
-          .update(runTarget)
-          .set({ entityId: keepId, updatedAt: new Date() })
-          .where(eq(runTarget.id, target.id));
-      }
-    }
+    await mergeRunTargets(tx, keepId, plan.loserIds);
     await logAuditEntries(
       tx,
       actor,

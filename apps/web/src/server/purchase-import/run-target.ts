@@ -1,6 +1,6 @@
 import type { EntityId } from "@cubby/schemas/identifiers";
 import type { RunTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
-import { and, desc, eq, exists, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, or, type SQL, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -37,11 +37,15 @@ export async function resolveProductImportTarget(
   return resolveLiveShortcode(db, productShortcode, "product");
 }
 
-/** List write provenance and targeted no-op validation runs for a Purchase. */
-export function listRuns(
+/**
+ * Run summaries for one household party, newest first, with their AI spend.
+ * `where` narrows to the runs that concern one target; `undefined` lists the
+ * party's 20 most recent runs.
+ */
+function runSummaryQuery(
   db: Database,
   ledgerPartyId: EntityId<"ledgerParty">,
-  purchaseId?: EntityId<"purchase">,
+  where: SQL | undefined,
 ) {
   const query = getDb(db)
     .select({
@@ -74,42 +78,51 @@ export function listRuns(
       and(eq(vendor.id, vendorAccount.vendorId), notDeleted(vendor)),
     )
     .leftJoin(aiUsage, and(eq(aiUsage.runId, runTable.id), notDeleted(aiUsage)))
-    .where(
-      and(
-        eq(runTable.ledgerPartyId, ledgerPartyId),
-        purchaseId
-          ? or(
-              exists(
-                getDb(db)
-                  .select({ id: auditLog.id })
-                  .from(auditLog)
-                  .where(
-                    and(
-                      eq(auditLog.runId, runTable.id),
-                      eq(auditLog.entityKind, "purchase"),
-                      eq(auditLog.entityId, purchaseId),
-                    ),
-                  ),
-              ),
-              exists(
-                getDb(db)
-                  .select({ id: runTarget.id })
-                  .from(runTarget)
-                  .where(
-                    and(
-                      eq(runTarget.runId, runTable.id),
-                      eq(runTarget.entityId, purchaseId),
-                    ),
-                  ),
-              ),
-            )
-          : undefined,
-      ),
-    )
+    .where(and(eq(runTable.ledgerPartyId, ledgerPartyId), where))
     .groupBy(runTable.id, vendorAccount.label, vendor.name)
     .orderBy(desc(runTable.startedAt));
 
-  return purchaseId ? query : query.limit(20);
+  return where ? query : query.limit(20);
+}
+
+/** A run that targets `entityId` through a `RunTarget` row. */
+const runTargets = (db: Database, entityId: EntityId<"purchase" | "product">) =>
+  exists(
+    getDb(db)
+      .select({ id: runTarget.id })
+      .from(runTarget)
+      .where(
+        and(eq(runTarget.runId, runTable.id), eq(runTarget.entityId, entityId)),
+      ),
+  );
+
+/** List write provenance and targeted no-op validation runs for a Purchase. */
+export function listRuns(
+  db: Database,
+  ledgerPartyId: EntityId<"ledgerParty">,
+  purchaseId?: EntityId<"purchase">,
+) {
+  return runSummaryQuery(
+    db,
+    ledgerPartyId,
+    purchaseId
+      ? or(
+          exists(
+            getDb(db)
+              .select({ id: auditLog.id })
+              .from(auditLog)
+              .where(
+                and(
+                  eq(auditLog.runId, runTable.id),
+                  eq(auditLog.entityKind, "purchase"),
+                  eq(auditLog.entityId, purchaseId),
+                ),
+              ),
+          ),
+          runTargets(db, purchaseId),
+        )
+      : undefined,
+  );
 }
 
 /** List write provenance and targeted enrichment runs for a Product. */
@@ -118,59 +131,11 @@ export function listProductRuns(
   ledgerPartyId: EntityId<"ledgerParty">,
   productId?: EntityId<"product">,
 ) {
-  const query = getDb(db)
-    .select({
-      id: runTable.id,
-      publicId: runTable.shortcode,
-      vendorAccountLabel: vendorAccount.label,
-      vendorName: vendor.name,
-      trigger: runTable.trigger,
-      purpose: runTable.purpose,
-      status: runTable.status,
-      startedAt: runTable.startedAt,
-      endedAt: runTable.endedAt,
-      ordersSeen: runTable.ordersSeen,
-      imported: runTable.imported,
-      updated: runTable.updated,
-      skipped: runTable.skipped,
-      failureCode: runTable.failureCode,
-      estimatedCost: sql<number>`coalesce(sum(${aiUsage.estimatedCost}), 0)`,
-    })
-    .from(runTable)
-    .leftJoin(
-      vendorAccount,
-      and(
-        eq(vendorAccount.id, runTable.vendorAccountId),
-        notDeleted(vendorAccount),
-      ),
-    )
-    .leftJoin(
-      vendor,
-      and(eq(vendor.id, vendorAccount.vendorId), notDeleted(vendor)),
-    )
-    .leftJoin(aiUsage, and(eq(aiUsage.runId, runTable.id), notDeleted(aiUsage)))
-    .where(
-      and(
-        eq(runTable.ledgerPartyId, ledgerPartyId),
-        productId
-          ? exists(
-              getDb(db)
-                .select({ id: runTarget.id })
-                .from(runTarget)
-                .where(
-                  and(
-                    eq(runTarget.runId, runTable.id),
-                    eq(runTarget.entityId, productId),
-                  ),
-                ),
-            )
-          : undefined,
-      ),
-    )
-    .groupBy(runTable.id, vendorAccount.label, vendor.name)
-    .orderBy(desc(runTable.startedAt));
-
-  return productId ? query : query.limit(20);
+  return runSummaryQuery(
+    db,
+    ledgerPartyId,
+    productId ? runTargets(db, productId) : undefined,
+  );
 }
 
 /**

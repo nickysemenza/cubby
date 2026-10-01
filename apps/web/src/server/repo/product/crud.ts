@@ -449,7 +449,7 @@ const fetchProductById = async (
 };
 
 /** Resolve location breadcrumbs and identity-product covers in batch; preserve both relationship directions. */
-const hydrateProductLocationBreadcrumbs = async (
+export const hydrateProductLocationBreadcrumbs = async (
   db: Database,
   rows: ProductDeepDB[],
 ): Promise<ProductDeepDB[]> => {
