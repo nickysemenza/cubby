@@ -464,6 +464,10 @@ struct FieldExplanationLabel: View {
             .padding(FieldGuideTokens.Space.md)
             .frame(idealWidth: 340, alignment: .leading)
         }
+        #if os(macOS)
+            .frame(width: 340, height: 480)
+            .accessibilityElement(children: .contain)
+        #endif
         .accessibilityIdentifier("field.explanation.popover")
         .presentationCompactAdaptation(.sheet)
     }
