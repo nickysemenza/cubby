@@ -465,7 +465,7 @@ struct FieldExplanationLabel: View {
             .frame(idealWidth: 340, alignment: .leading)
         }
         .accessibilityIdentifier("field.explanation.popover")
-        .presentationCompactAdaptation(.popover)
+        .presentationCompactAdaptation(.sheet)
     }
 
     private func loadExplanation() async {
