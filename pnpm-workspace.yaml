@@ -29,8 +29,8 @@ overrides:
   # Flue 2.1.0 cannot replay the system-role turn context emitted by pi 0.86.
   # Keep its paired runtime packages on the last compatible release until Flue
   # publishes support; the real two-Worker recovery test enforces this boundary.
-  "@earendil-works/pi-agent-core": 0.83.0
-  "@earendil-works/pi-ai": 0.83.0
+  "@earendil-works/pi-agent-core": 0.87.1
+  "@earendil-works/pi-ai": 0.87.1
   # better-auth pins @better-auth/core to its own exact version while the
   # @better-auth/* plugins peer on a caret range; auto-installed peers resolve
   # to the newest patch, so whenever better-auth lags core (Renovate skips
@@ -72,7 +72,7 @@ overrides:
   zod: 4.6.5
   # GHSA-4cwx-7wf7-3272 and related Undici 7 advisories. Miniflare pins 7.28;
   # force the maintained major.
-  undici@7.28.0: 8.10.2
+  undici@7.28.0: 8.11.2
   vite: ^8.0.0
   webpack: ^5.104.1
   wrangler: 4.145.0

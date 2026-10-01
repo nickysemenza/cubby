@@ -19,7 +19,7 @@
     "@cubby/schemas": "workspace:*",
     "@cubby/shared": "workspace:*",
     "@cubby/worker-tracing": "workspace:*",
-    "@earendil-works/pi-ai": "0.83.0",
+    "@earendil-works/pi-ai": "0.87.1",
     "@flue/runtime": "2.1.0",
     "@sentry/cloudflare": "^10.66.0",
     "valibot": "^1.1.0",

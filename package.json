@@ -70,7 +70,7 @@
     "@neon/env": "^1.4.7"
   },
   "devDependencies": {
-    "@oxlint/plugins": "1.82.0",
+    "@oxlint/plugins": "1.85.0",
     "@redocly/cli": "^2.52.0",
     "@tanstack/router-generator": "1.167.33",
     "@ts-rest/open-api": "3.53.0-rc.1",
@@ -81,14 +81,14 @@
     "knip": "^6.27.0",
     "lint-staged": "^17.5.1",
     "nx": "23.2.0",
-    "oxc-parser": "0.149.0",
+    "oxc-parser": "0.151.0",
     "oxfmt": "0.70.0",
-    "oxlint": "1.82.0",
+    "oxlint": "1.85.0",
     "tsx": "^4.23.1",
     "typescript": "^7.0.2",
     "zod": "^4.6.5"
   },
-  "packageManager": "pnpm@12.4.1",
+  "packageManager": "pnpm@12.6.0",
   "nx": {
     "includedScripts": []
   }
