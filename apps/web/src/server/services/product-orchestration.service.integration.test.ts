@@ -1,15 +1,11 @@
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import type {
-  UPCLookupClient,
-  UpcLookupPort,
-} from "~/server/clients/upc-lookup";
+import type { UPCLookupResponse } from "~/contracts/upc.schemas";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import { executeEntity } from "~/server/entity-kernel";
 import { createExpense } from "~/server/repo/expense";
@@ -24,6 +20,7 @@ import { requireActor } from "~/server/request-context";
 import { runDiagnostic } from "~/server/services/problem-diagnostics.service";
 import { createProductWriteActions } from "~/server/services/product.service";
 import { RecipeCostingService } from "~/server/services/recipe-costing.service";
+import type { UpcLookupService, UpcLookupPort } from "~/server/services/upc";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
@@ -473,7 +470,7 @@ describe("product create cover-photo warnings", () => {
           auth: { userId: ctx.actor.userId },
         }),
       ),
-      upcLookupClient: fromPartial<UPCLookupClient>(
+      upcLookupClient: fromPartial<UpcLookupService>(
         upcLookupClient(async () =>
           upcResponse({ upc, imageUrl: "http://127.0.0.1/cover.jpg" }),
         ),

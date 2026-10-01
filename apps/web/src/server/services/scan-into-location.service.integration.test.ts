@@ -4,12 +4,11 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import type { UpcLookupPort } from "~/server/clients/upc-lookup";
+import type { UPCLookupResponse } from "~/contracts/upc.schemas";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import {
   createInventoryEntry,
@@ -19,6 +18,7 @@ import { createLocation } from "~/server/repo/location";
 import { quickCreateProduct } from "~/server/repo/product";
 import { makeLocationInput } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import type { UpcLookupPort } from "~/server/services/upc";
 
 import {
   resolveScanStrays,

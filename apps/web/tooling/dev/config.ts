@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { D1Database, R2Bucket } from "@cloudflare/workers-types";
@@ -132,7 +132,6 @@ export async function createLocalDevPeers(profile: DevProfile) {
   const prefix = `cubby-dev-${profile.id}`;
   const services = {
     USDA_API: `${prefix}-usda`,
-    UPC_LOOKUP: `${prefix}-upc`,
     PURCHASE_AGENT: `${prefix}-purchase`,
   };
   const queueName = `${prefix}-purchase`;
@@ -177,23 +176,6 @@ export async function createLocalDevPeers(profile: DevProfile) {
       ],
       r2_buckets: [{ binding: "USDA_BUNDLES", bucket_name: `${prefix}-usda` }],
     },
-    {
-      ...common,
-      name: services.UPC_LOOKUP,
-      main: path.join(profile.repoRoot, "apps/upc-lookup/src/local-dev.ts"),
-      vars: {
-        API_KEY: profile.vars.UPC_LOOKUP_API_KEY ?? "cubby-local",
-        LOCAL_OFFLINE: "true",
-      },
-      d1_databases: [
-        {
-          binding: "DB",
-          database_name: `${prefix}-upc`,
-          database_id: `${profile.id}-upc`,
-        },
-      ],
-      r2_buckets: [{ binding: "IMAGES", bucket_name: `${prefix}-upc` }],
-    },
     purchaseConfig,
   ];
   const auxiliaryWorkers: Array<{
@@ -207,7 +189,7 @@ export async function createLocalDevPeers(profile: DevProfile) {
       mode: 0o600,
     });
     const customizer =
-      index === 2 && profile.profile === "integrations"
+      index === 1 && profile.profile === "integrations"
         ? purchaseCustomizers.get(profile.id)
         : undefined;
     const auxiliary: (typeof auxiliaryWorkers)[number] = {
@@ -223,11 +205,10 @@ export async function createLocalDevPeers(profile: DevProfile) {
 /** Prepare before Vite starts; proxy and plugin share the same persistence root. */
 export async function prepareLocalDevPeers(profile: DevProfile): Promise<void> {
   const peers = await createLocalDevPeers(profile);
-  for (const [index, peer] of peers.auxiliaryWorkers.slice(0, 2).entries()) {
+  for (const peer of peers.auxiliaryWorkers.slice(0, 1)) {
     const proxy = await getPlatformProxy<{
       DB: D1Database;
       USDA_BUNDLES: R2Bucket;
-      IMAGES: R2Bucket;
     }>({
       configPath: peer.configPath,
       envFiles: [],
@@ -235,8 +216,7 @@ export async function prepareLocalDevPeers(profile: DevProfile): Promise<void> {
       remoteBindings: false,
     });
     try {
-      if (index === 0) await seedLocalUsda(proxy.env);
-      else await seedLocalUpc(proxy.env);
+      await seedLocalUsda(proxy.env);
     } finally {
       await proxy.dispose();
     }
@@ -244,7 +224,6 @@ export async function prepareLocalDevPeers(profile: DevProfile): Promise<void> {
 }
 
 const VERSION = "vlocal1";
-const LOCAL_FIXTURE_UPC = "012345678905";
 
 /** Small synthetic data exercises the actual D1 index + R2 range-read path. */
 async function seedLocalUsda(env: {
@@ -337,31 +316,4 @@ async function seedLocalUsda(env: {
     ).bind(VERSION),
   );
   await env.DB.batch(statements);
-}
-
-async function seedLocalUpc(env: {
-  DB: D1Database;
-  IMAGES: R2Bucket;
-}): Promise<void> {
-  await env.DB
-    .exec(`CREATE TABLE IF NOT EXISTS products (upc TEXT PRIMARY KEY, name TEXT NOT NULL, manufacturer TEXT, brand TEXT, category TEXT, description TEXT, price_dollars REAL, image_key TEXT, source TEXT NOT NULL, source_data TEXT, created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now')));
-    CREATE INDEX IF NOT EXISTS idx_products_name ON products(name);
-    CREATE INDEX IF NOT EXISTS idx_products_manufacturer ON products(manufacturer);
-    CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand);
-    CREATE TABLE IF NOT EXISTS upc_misses (upc TEXT PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 1, last_checked_at TEXT DEFAULT (datetime('now')));`);
-  const key = `images/${LOCAL_FIXTURE_UPC}.png`;
-  const bytes = await readFile(
-    new URL(
-      "../../tests/e2e/fixtures/synthetic-wardrobe-shirt.png",
-      import.meta.url,
-    ),
-  );
-  await env.IMAGES.put(key, bytes, {
-    httpMetadata: { contentType: "image/png" },
-  });
-  await env.DB.prepare(
-    `INSERT OR IGNORE INTO products (upc,name,manufacturer,brand,category,description,price_dollars,image_key,source) VALUES (?, 'Synthetic cotton shirt', 'Synthetic Works', 'Synthetic', 'Clothing', 'Local synthetic barcode fixture', 18, ?, 'manual')`,
-  )
-    .bind(LOCAL_FIXTURE_UPC, key)
-    .run();
 }

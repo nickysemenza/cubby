@@ -1290,14 +1290,6 @@ PRs; unordered.
   R2 simulation](https://developers.cloudflare.com/workers/local-development/bindings-per-env/),
   but a binding alone does not implement the current presigned-URL contract.
 
-- **Fold `apps/upc-lookup` into the main worker.** Web already caches UPC
-  lookups in Postgres (`UpcLookupCache`), so the Worker's D1 store, admin UI and
-  MCP server duplicate it. Export D1's hand-entered (`manual`) products and miss
-  rows into `UpcLookupCache` first, move the upcitemdb adapter into
-  `server/services/upc/`, then delete the Worker and `packages/upc-contract`.
-  `apps/usda-api` stays separate: it owns the FoodData Central dataset (D1 search
-  index plus R2 bundles) behind the `USDA_API` service binding.
-
 ## Operational passes
 
 - **Finish image provenance rollout on existing photos.** Run

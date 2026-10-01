@@ -43,6 +43,13 @@
       "when": 1790866006761,
       "tag": "0005_expense_booking_transaction_index",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790885858726,
+      "tag": "0006_upc_cache_product_fields",
+      "breakpoints": true
     }
   ]
 }

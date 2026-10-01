@@ -104,7 +104,7 @@ const affectedByPath = (path: string): Partial<CiChangeScope> | null => {
     path.startsWith("apps/purchase-agent/")
   )
     return { validation: true, web: true, auxiliary: true };
-  if (path.startsWith("apps/upc-lookup/") || path.startsWith("apps/usda-api/"))
+  if (path.startsWith("apps/usda-api/"))
     return { validation: true, auxiliary: true };
   if (path.startsWith("docker-compose")) return { validation: true, web: true };
   return null;

@@ -1,1 +1,0 @@
-CREATE INDEX `idx_products_brand` ON `products` (`brand`);

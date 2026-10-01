@@ -1,0 +1,36 @@
+name: "Save cache (main only)"
+description: >-
+  Saves a large build cache under the key its matching restore step produced,
+  by policy: only main saves once a restore-key prefix exists, and a PR saves
+  only on a full miss. A PR's cache is private to its ref, and a ~1 GB copy per
+  PR evicts everyone else's caches (the repo sat at 13.4 GB of 10 GB on
+  2026-09-22). A concurrent job may have saved the same key first; that 409 is
+  harmless and never fails the check. Call it with `if: always()` so a red run
+  still keeps the build for the next attempt.
+
+inputs:
+  path:
+    description: "Newline-separated paths to save; must list exactly the restore step's paths"
+    required: true
+  key:
+    description: "Primary key from the restore step (steps.<id>.outputs.cache-primary-key)"
+    required: true
+  cache-hit:
+    description: "steps.<id>.outputs.cache-hit from the restore step"
+    required: true
+  matched-key:
+    description: "steps.<id>.outputs.cache-matched-key from the restore step"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Save cache
+      if: >-
+        always() && inputs.cache-hit != 'true' &&
+        (github.event_name == 'push' || inputs.matched-key == '')
+      continue-on-error: true
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ inputs.key }}

@@ -1,0 +1,25 @@
+name: "Toolchain hash"
+description: >-
+  Hashes the output of a toolchain version command (`swift --version`,
+  `xcodebuild -version`) for use in a build-cache key, so a compiler upgrade
+  never restores objects built by the old one.
+
+inputs:
+  command:
+    description: "Command whose combined stdout/stderr identifies the toolchain"
+    required: true
+
+outputs:
+  hash:
+    description: "SHA-256 of the command output"
+    value: ${{ steps.hash.outputs.hash }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Compute toolchain hash
+      id: hash
+      shell: bash
+      env:
+        VERSION_COMMAND: ${{ inputs.command }}
+      run: echo "hash=$(bash -c "$VERSION_COMMAND" 2>&1 | shasum -a 256 | awk '{print $1}')" >> "$GITHUB_OUTPUT"

@@ -19,7 +19,7 @@ dependency.
 | Purchase-import orchestration | Cloudflare Workers + Flue          | Private Worker `purchase-agent`, queue `cubby-purchase-agent`, SQLite Durable Objects |
 | PostgreSQL                    | Neon through Cloudflare Hyperdrive | One Neon origin, two Hyperdrive configurations                                        |
 | Images and documents          | Cloudflare R2                      | Bucket `foo`, public origin `https://media.nickysemenza.com`                          |
-| Product lookup                | Cloudflare Workers                 | Worker `upc-lookup`, D1 `upc-lookup-db`, R2 `upc-images`                              |
+| Product lookup                | Main Worker + PostgreSQL           | `UpcLookupCache` table, upcitemdb fallback (no key)                                   |
 | USDA food data                | Cloudflare Workers                 | Worker `usda-api`, D1 `usda-api-index`, R2 `usda-api-bundles`                         |
 | AI routing                    | Cloudflare AI Gateway              | Gateway `cubby`, Workers AI binding `AI`                                              |
 | Semantic vectors              | Cloudflare Vectorize               | `cubby-openai-text-embedding-3-small-1536`                                            |
@@ -33,7 +33,6 @@ The checked-in provider configurations are:
 
 - [`apps/web/wrangler.jsonc`](../apps/web/wrangler.jsonc)
 - [`apps/purchase-agent/wrangler.jsonc`](../apps/purchase-agent/wrangler.jsonc)
-- [`apps/upc-lookup/wrangler.jsonc`](../apps/upc-lookup/wrangler.jsonc)
 - [`apps/usda-api/wrangler.jsonc`](../apps/usda-api/wrangler.jsonc)
 - [`.github/workflows/deploy.yaml`](../.github/workflows/deploy.yaml)
 
@@ -48,7 +47,7 @@ Account ID: `9f10f078d35d86c78dedece2300a6b88`.
 - Custom domain `cubby.nickysemenza.com`; `workers.dev` production routing is
   disabled and preview URLs are enabled.
 - Smart Placement and static assets.
-- Service bindings `USDA_API` -> `usda-api`, `UPC_LOOKUP` -> `upc-lookup`, and
+- Service bindings `USDA_API` -> `usda-api` and
   `PURCHASE_AGENT` -> the private `purchase-agent` Worker. The reverse named
   `CUBBY_PURCHASE_SERVICE` binding carries database-authoritative MCP and import
   operations; neither direction uses a public Worker URL.
@@ -230,10 +229,8 @@ The main app uses the S3-compatible R2 endpoint for account
 public origin `https://media.nickysemenza.com`. The R2 access-key pair is scoped
 for that bucket and stored only as Worker secrets.
 
-The auxiliary Workers use native R2 bindings:
-
-- `upc-lookup`: binding `IMAGES`, bucket `upc-images`.
-- `usda-api`: binding `USDA_BUNDLES`, bucket `usda-api-bundles`.
+The `usda-api` auxiliary Worker uses a native R2 binding: `USDA_BUNDLES`, bucket
+`usda-api-bundles`.
 
 Cloudflare DNS and the R2 custom-domain configuration must route
 `media.nickysemenza.com` to the main bucket. Image delivery depends on
@@ -241,16 +238,18 @@ Cloudflare Image Resizing at that origin.
 
 ### D1 and auxiliary Workers
 
-| Worker       | D1 database      | Database ID                            | Other state                              |
-| ------------ | ---------------- | -------------------------------------- | ---------------------------------------- |
-| `upc-lookup` | `upc-lookup-db`  | `6c1f2074-2017-48d1-ae37-bc7002d47c64` | R2 `upc-images`; Worker secret `API_KEY` |
-| `usda-api`   | `usda-api-index` | `e2e0037c-6046-4b66-85d9-03ceb0770db6` | R2 `usda-api-bundles`                    |
+| Worker     | D1 database      | Database ID                            | Other state           |
+| ---------- | ---------------- | -------------------------------------- | --------------------- |
+| `usda-api` | `usda-api-index` | `e2e0037c-6046-4b66-85d9-03ceb0770db6` | R2 `usda-api-bundles` |
+
+The retired `upc-lookup` Worker (D1 `upc-lookup-db`, R2 `upc-images`) is
+replaced by the main Worker's `UpcLookupCache`; see
+[the D1 migration runbook](runbooks/upc-d1-migration.md).
 
 D1 migrations live beside each Worker and are an explicit operator step; the
 package deploy scripts do not apply them:
 
 ```bash
-pnpm --filter @cubby/upc-lookup run db:migrate:remote
 pnpm --filter @cubby/usda-api run edge:d1:migrate:remote
 ```
 
@@ -277,7 +276,6 @@ pnpm --dir apps/web exec wrangler secret list --config wrangler.jsonc
 | `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                   |
 | `AI_GATEWAY_API_KEY`   | Local secret only              | REST fallback outside the production Workers AI binding |
 | `NOTION_API_KEY`       | Optional Worker/local secret   | Optional Notion integration                             |
-| `API_KEY`              | `upc-lookup` Worker secret     | Direct access to the UPC lookup Worker                  |
 
 OAuth client IDs, Cloudflare account IDs, resource IDs, public origins, and
 Sentry DSNs are identifiers, not credentials. They may be committed. OAuth
@@ -444,7 +442,7 @@ hosted native deployment in this repository.
 For a new account or disaster recovery:
 
 1. Restore PostgreSQL and R2 before accepting writes.
-2. Recreate auxiliary D1/R2 resources and deploy `usda-api` and `upc-lookup`.
+2. Recreate auxiliary D1/R2 resources and deploy `usda-api`.
 3. Recreate Hyperdrive, queues, Vectorize, AI Gateway/provider access, and
    observability destinations; update checked-in IDs if they changed.
 4. Restore Worker and GitHub secrets through their providers.

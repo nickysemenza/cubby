@@ -21,7 +21,7 @@ import { productId } from "@cubby/schemas/identifiers";
 import { searchIndexRepairCountersSchema } from "@cubby/schemas/maintenance";
 import { dashboardCountsOut } from "@cubby/schemas/dashboard";
 import { foodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { productLookupResponseSchema } from "@cubby/upc-contract";
+import { productLookupResponseSchema } from "~/contracts/upc.schemas";
 import { AwsClient } from "aws4fetch";
 import { Pool } from "pg";
 import { z } from "zod";
@@ -484,7 +484,7 @@ try {
     true,
   );
   await check(
-    "real UPC service binding reads its persisted synthetic fixture",
+    "UPC lookup serves its persisted synthetic UpcLookupCache fixture",
     async () => {
       const upcResponse = await context.request.get(
         "/api/v1/upc/lookup?upc=012345678905",

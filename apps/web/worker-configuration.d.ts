@@ -24,8 +24,6 @@ interface __BaseEnv_Env {
 	R2_BUCKET_NAME: string;
 	R2_PUBLIC_URL: string;
 	USDA_API_URL: string;
-	UPC_LOOKUP_API_URL: string;
-	UPC_LOOKUP_API_KEY: string;
 	NOTION_API_KEY: string;
 	DB_FRESHNESS: DurableObjectNamespace<import("./src/cf-server").DatabaseFreshnessDurableObject>;
 	CALENDAR_FEED: DurableObjectNamespace<import("./src/cf-server").CalendarFeedDurableObject>;
@@ -33,7 +31,6 @@ interface __BaseEnv_Env {
 	IMAGE_PROCESSING: DurableObjectNamespace<import("./src/cf-server").ImageProcessingDurableObject>;
 	AI_RESPONSE_CACHE: DurableObjectNamespace<import("./src/cf-server").AiResponseCacheDurableObject>;
 	USDA_API: Fetcher /* usda-api */;
-	UPC_LOOKUP: Fetcher /* upc-lookup */;
 	PURCHASE_AGENT: Fetcher /* purchase-agent */;
 	SEARCH_INDEX_REPAIR: Workflow<Parameters<import("./src/cf-server").SearchIndexRepairWorkflow['run']>[0]['payload']>;
 }
@@ -49,5 +46,5 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "NODE_ENV" | "ALLOW_SIGNUP" | "E2E_AUTH_TEST_MODE" | "APP_ORIGIN" | "R2_KEY_PREFIX" | "GOOGLE_CLIENT_ID" | "BETTER_AUTH_SECRET" | "DATABASE_URL" | "R2_ACCESS_KEY_ID" | "R2_SECRET_ACCESS_KEY" | "R2_ENDPOINT" | "R2_BUCKET_NAME" | "R2_PUBLIC_URL" | "USDA_API_URL" | "UPC_LOOKUP_API_URL" | "UPC_LOOKUP_API_KEY" | "NOTION_API_KEY">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "NODE_ENV" | "ALLOW_SIGNUP" | "E2E_AUTH_TEST_MODE" | "APP_ORIGIN" | "R2_KEY_PREFIX" | "GOOGLE_CLIENT_ID" | "BETTER_AUTH_SECRET" | "DATABASE_URL" | "R2_ACCESS_KEY_ID" | "R2_SECRET_ACCESS_KEY" | "R2_ENDPOINT" | "R2_BUCKET_NAME" | "R2_PUBLIC_URL" | "USDA_API_URL" | "NOTION_API_KEY">> {}
 }
