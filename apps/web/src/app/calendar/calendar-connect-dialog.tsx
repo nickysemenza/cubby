@@ -7,7 +7,6 @@ import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { KeyIcon } from "@phosphor-icons/react/dist/csr/Key";
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
-import { toast } from "sonner";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { ErrorDisplay } from "~/components/feedback/error-display";
@@ -23,7 +22,7 @@ import {
 } from "~/components/ui/dialog";
 import { StatusText } from "~/components/ui/status-text";
 import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { copyText } from "~/lib/clipboard";
+import { copyTextWithToast } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
 
 const FEEDS = [
@@ -46,11 +45,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
       variant="outline"
       size="sm"
       onClick={() => {
-        void copyText(value).then((copied) =>
-          copied
-            ? toast.success(`${label} copied`)
-            : toast.error("Copy failed"),
-        );
+        void copyTextWithToast(value, `${label} copied`);
       }}
     >
       <CopyIcon className="size-3" aria-hidden />

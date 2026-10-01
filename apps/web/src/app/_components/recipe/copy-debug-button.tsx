@@ -1,10 +1,9 @@
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { Button } from "~/components/ui/button";
-import { copyText } from "~/lib/clipboard";
+import { copyTextWithToast } from "~/lib/clipboard";
 
 /**
  * Shared shell for the "copy as debug" buttons that drop facts into a Claude
@@ -36,12 +35,8 @@ export function CopyDebugButton({
       title={title}
       onClick={async (e) => {
         e.stopPropagation();
-        if (!(await copyText(getText()))) {
-          toast.error("Copy failed");
-          return;
-        }
+        if (!(await copyTextWithToast(getText(), toastLabel))) return;
         setCopied(true);
-        toast.success(toastLabel);
         setTimeout(() => setCopied(false), 1500);
       }}
     >

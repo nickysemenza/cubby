@@ -16,6 +16,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import * as React from "react";
 
+import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
@@ -594,10 +595,8 @@ function SearchResults({
   );
 }
 
-const formatPlacementAmount = (placement: SearchInventoryPlacement) => {
-  const { value, upperValue, unit } = placement.amount;
-  return `${value}${upperValue === undefined ? "" : `–${upperValue}`} ${unit}`;
-};
+const formatPlacementAmount = (placement: SearchInventoryPlacement) =>
+  tryFormatAmount(placement.amount);
 
 const placementDestination = (
   group: Extract<SearchResultGroup, { kind: "product" }>,

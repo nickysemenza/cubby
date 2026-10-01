@@ -14,6 +14,7 @@ import { PurchaseImportAgentConnection } from "~/app/activity/purchase-import-ag
 import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
 import { AwaitingWorkCard } from "~/app/problems/components/awaiting-work-card";
 import { MaintenanceCard } from "~/app/problems/components/maintenance-card";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -40,7 +41,7 @@ import {
   run as runOperations,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
-import { copyText } from "~/lib/clipboard";
+import { copyTextWithToast } from "~/lib/clipboard";
 import { formatInstant } from "~/lib/date-format";
 import { getErrorMessage } from "~/lib/error-utils";
 import { hasGmailReadonlyScope } from "~/lib/google-auth";
@@ -315,7 +316,10 @@ function GmailAccessCard() {
       scopes: [GMAIL_READONLY_SCOPE],
     });
     if (result.error) {
-      toast.error(result.error.message || "Gmail could not be connected.");
+      showErrorToast(
+        result.error,
+        result.error.message || "Gmail could not be connected.",
+      );
       setBusy(false);
     }
   };
@@ -326,7 +330,10 @@ function GmailAccessCard() {
       accountId: googleAccount.id,
     });
     if (result.error) {
-      toast.error(result.error.message || "Gmail could not be disconnected.");
+      showErrorToast(
+        result.error,
+        result.error.message || "Gmail could not be disconnected.",
+      );
     } else {
       toast.success("Google and Gmail disconnected");
       await accounts.refetch();
@@ -449,11 +456,7 @@ function CalendarFeedInspectorCard({ enabled }: { enabled: boolean }) {
               disabled={!json}
               onClick={() => {
                 if (!json) return;
-                void copyText(json).then((copied) =>
-                  copied
-                    ? toast.success("Calendar feed state copied")
-                    : toast.error("Copy failed"),
-                );
+                void copyTextWithToast(json, "Calendar feed state copied");
               }}
             >
               <CopyIcon className="size-3" />
