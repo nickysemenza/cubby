@@ -329,9 +329,11 @@ export class MacImportDriver {
       );
     this.guardForeground();
     const script =
-      text === "\n"
-        ? 'on run argv\n tell application "System Events" to key code 36\nend run'
-        : `on run argv\n tell application "System Events"\n ${replace ? 'keystroke "a" using command down\n' : ""} keystroke (item 1 of argv)\n end tell\nend run`;
+      text === "/"
+        ? 'on run argv\n tell application "System Events" to keystroke "g" using {command down, shift down}\nend run'
+        : text === "\n"
+          ? 'on run argv\n tell application "System Events" to key code 36\nend run'
+          : `on run argv\n tell application "System Events"\n ${replace ? 'keystroke "a" using command down\n' : ""} keystroke (item 1 of argv)\n end tell\nend run`;
     execFileSync("osascript", ["-e", script, text], { timeout: 10000 });
     return this.observe();
   }
