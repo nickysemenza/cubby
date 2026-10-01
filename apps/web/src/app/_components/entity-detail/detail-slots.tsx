@@ -64,6 +64,11 @@ export const detailSlots = {
     ),
   },
   product: {
+    ownership: slot(() =>
+      import("~/app/products/product-runs").then((m) => ({
+        default: m.ProductOwnershipEvidence,
+      })),
+    ),
     nutrition: slot(() =>
       import("~/app/products/slots").then((m) => ({
         default: m.ProductNutrition,

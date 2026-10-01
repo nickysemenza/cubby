@@ -142,7 +142,9 @@ describe("GenericEntityDetail", () => {
 
   it.each(cases)(
     "$entity renders the declared $section.kind section $section.id",
-    ({ entity, section }) => {
+    async ({ entity, section }) => {
+      if (!section.overview)
+        await harness.router.navigate({ to: "/", hash: section.id });
       const { container } = render(
         <GenericEntityDetail
           entity={entity}
@@ -372,6 +374,7 @@ describe("GenericEntityDetail", () => {
   // slots, reference-link previews) in `SectionCard`'s own table-driven
   // tests, `detail-page.unit.test.tsx`.
   it("hides a real hideWhenEmpty relation section once its first page resolves empty", async () => {
+    await harness.router.navigate({ to: "/", hash: "plantings" });
     const { container } = render(
       <GenericEntityDetail
         entity="product"

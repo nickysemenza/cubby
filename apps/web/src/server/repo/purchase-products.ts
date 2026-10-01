@@ -1,42 +1,17 @@
 /**
- * Which Products a Purchase acquired, and the transpose — answered from TWO
- * sources, because one of them alone cannot answer it.
- *
- * `purchaseProduct` is a deliberately SPARSE provenance edge. It exists because
- * an installment/lump-sum Purchase's Expenses are `lineBasis: "allocation"`
- * (see `packages/schemas/src/expense-line-kind.ts`) and can never carry a
- * `productId`. An allocation is a slice of a total that was never itemized —
- * money cut by payment schedule (a deposit buys no particular item) or by an
- * estimated materials/labor split — so pointing products at one would halve
- * every derived unit price and claim phantom units. Without this table those
- * goods had no path at all back to the order that bought them.
- *
- * Which means it was never a mirror of the ordinary case, and reading it as one
- * was a bug: on live data 13 link rows exist against 9,609 pairs the Expense
- * ledger already establishes, so these reads returned nothing for 5,328 of
- * 5,614 products while the Expense History beside them named the order. Both
- * legs are now unioned per pair — see {@link expenseIsAcquisition} for which
- * Expenses count, which is the part that is easy to get wrong.
- *
- * Backfilling the 9,606 missing rows was rejected: it would duplicate an edge
- * that already exists and demand a sync rule on every Expense write, including
- * purchase reparenting. The join still carries NO money and NO quantity — that
- * stays on `Expense` (root AGENTS.md tenet: all money lives on Expense;
- * `purchase.statedTotal` is never summed into spend).
- *
- * Mirrors `attachProjectResources` / `detachProjectResources` /
- * `listProjectResources` in `repo/project/tools.ts` as closely as possible —
- * same transaction shape, same liveness checks, same `onConflictDoNothing`
- * insert against the partial-unique index, same before/after audit diff.
- * Deliberately NOT mirrored: `assertNoTimelineConflict`, which polices tool
- * *ownership windows* against a project's dates — there is no analogous
- * concept for a plain purchase/product link.
+ * Purchase ↔ Product identity is the deduplicated union of live explicit links
+ * and all live product-linked Expenses. Links carry provenance, never money or
+ * quantity; recorded movement evidence and plans remain separate facts.
  */
 
 import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId, PurchaseId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  productMovementKind,
+  type ProductMovementKind,
+} from "@cubby/schemas/product";
 import type {
   ProductPurchaseOut,
   PurchaseProductOut,
@@ -44,6 +19,7 @@ import type {
 import { and, asc, count, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import { classifyProductMovement } from "~/lib/product-movement";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   entityLink,
@@ -72,37 +48,52 @@ import {
   throwRelationRefusal,
 } from "~/server/repo/relation-preflight";
 
-/**
- * Does this Expense say the order ACQUIRED the product?
- *
- * The rule itself lives in {@link expenseAcquisitionSql} — one definition,
- * shared with the Product list's purchase-date value/sort/filter sites so the
- * two surfaces cannot disagree about what an acquisition is. Reading it as
- * "any product-linked Expense" would file 181 eBay-sale and disposal orders
- * under "products this purchase bought", and 198 pairs rest on the $0 and
- * unknown-quantity lines it deliberately keeps.
- *
- * Every consumer below queries an UNALIASED `"Expense"` (`.from(expense)` /
- * `FROM ${expense}`), so the raw-text form renders exactly as the interpolated
- * columns it replaced.
- */
-const expenseIsAcquisition = sql.raw(expenseAcquisitionSql('"Expense"'));
-
-/**
- * The pairs one side of the relation contributes from the Expense ledger.
- *
- * `future` rows are excluded on their own terms rather than by copying
- * `movement-timeline`'s filter: a planned expense has not bought anything yet.
- * (It is currently moot — no pair touches a future expense — but the rule
- * should not depend on that staying true.)
- */
-export const expensePairPredicate = (scope: SQL) =>
+/** Acquisition-only consumers must not broaden when identity relations do. */
+export const expenseAcquisitionPairPredicate = (scope: SQL) =>
   and(
     scope,
     notDeleted(expense),
     eq(expense.future, false),
-    expenseIsAcquisition,
+    sql.raw(expenseAcquisitionSql('"Expense"')),
   );
+
+/** A live Expense establishes identity even when it records an exit or a plan. */
+const expensePairPredicate = (scope: SQL) => and(scope, notDeleted(expense));
+
+const movementEvidenceByPair = (
+  rows: readonly {
+    key: string;
+    cost: number | null;
+    quantity: number | null;
+    future: boolean;
+  }[],
+) => {
+  const evidence = new Map<
+    string,
+    { movementKinds: Set<ProductMovementKind>; hasPlanned: boolean }
+  >();
+  for (const row of rows) {
+    const pair = evidence.get(row.key) ?? {
+      movementKinds: new Set<ProductMovementKind>(),
+      hasPlanned: false,
+    };
+    if (row.future) pair.hasPlanned = true;
+    else
+      pair.movementKinds.add(
+        classifyProductMovement(row.cost, row.quantity).kind,
+      );
+    evidence.set(row.key, pair);
+  }
+  return (key: string) => {
+    const pair = evidence.get(key);
+    return {
+      movementKinds: productMovementKind.options.filter((kind) =>
+        pair?.movementKinds.has(kind),
+      ),
+      hasPlanned: pair?.hasPlanned ?? false,
+    };
+  };
+};
 
 /**
  * Fold the two legs into one row per pair.
@@ -140,7 +131,10 @@ const mergeSources = <T>(
   for (const row of expenseRows) {
     const existing = merged.get(row.key);
     if (existing) {
-      merged.set(row.key, { ...existing, source: "both" });
+      merged.set(row.key, {
+        ...existing,
+        source: existing.source === "expense" ? "expense" : "both",
+      });
       continue;
     }
     merged.set(row.key, { ...row, source: "expense", linkAttachedAt: null });
@@ -205,6 +199,10 @@ export async function listPurchaseProducts(
       .select({ ...productColumns, linkAttachedAt: entityLink.createdAt })
       .from(entityLink)
       .innerJoin(
+        purchase,
+        and(eq(purchase.id, entityLink.fromEntityId), notDeleted(purchase)),
+      )
+      .innerJoin(
         product,
         and(eq(product.id, entityLink.toEntityId), notDeleted(product)),
       )
@@ -215,8 +213,17 @@ export async function listPurchaseProducts(
         ),
       ),
     dbc
-      .selectDistinct(productColumns)
+      .select({
+        ...productColumns,
+        cost: expense.cost,
+        quantity: expense.productQuantity,
+        future: expense.future,
+      })
       .from(expense)
+      .innerJoin(
+        purchase,
+        and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+      )
       .innerJoin(
         product,
         and(eq(product.id, expense.productId), notDeleted(product)),
@@ -224,7 +231,10 @@ export async function listPurchaseProducts(
       .where(expensePairPredicate(eq(expense.purchaseId, purchaseId))),
   ]);
 
-  const rows = mergeSources(
+  const movementEvidence = movementEvidenceByPair(
+    expenseRows.map((row) => ({ ...row, key: row.productId })),
+  );
+  const rows = mergeSources<Omit<(typeof linkRows)[number], "linkAttachedAt">>(
     linkRows.map((row) => ({ ...row, key: row.productId })),
     expenseRows.map((row) => ({ ...row, key: row.productId })),
   ).sort((a, b) => a.productName.localeCompare(b.productName));
@@ -244,6 +254,7 @@ export async function listPurchaseProducts(
     coverImageUrl: coverImageUrls.get(row.productId) ?? null,
     source: row.source,
     linkAttachedAt: row.linkAttachedAt,
+    ...movementEvidence(row.productId),
     componentCount: componentCounts.get(row.productId) ?? 0,
   }));
 }
@@ -271,6 +282,10 @@ export async function listProductPurchases(
       .select({ ...purchaseColumns, linkAttachedAt: entityLink.createdAt })
       .from(entityLink)
       .innerJoin(
+        product,
+        and(eq(product.id, entityLink.toEntityId), notDeleted(product)),
+      )
+      .innerJoin(
         purchase,
         and(eq(purchase.id, entityLink.fromEntityId), notDeleted(purchase)),
       )
@@ -279,8 +294,17 @@ export async function listProductPurchases(
         and(eq(entityLink.toEntityId, productId), liveLinks("purchaseProduct")),
       ),
     dbc
-      .selectDistinct(purchaseColumns)
+      .select({
+        ...purchaseColumns,
+        cost: expense.cost,
+        quantity: expense.productQuantity,
+        future: expense.future,
+      })
       .from(expense)
+      .innerJoin(
+        product,
+        and(eq(product.id, expense.productId), notDeleted(product)),
+      )
       .innerJoin(
         purchase,
         and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
@@ -289,7 +313,10 @@ export async function listProductPurchases(
       .where(expensePairPredicate(eq(expense.productId, productId))),
   ]);
 
-  const rows = mergeSources(
+  const movementEvidence = movementEvidenceByPair(
+    expenseRows.map((row) => ({ ...row, key: row.purchaseKey })),
+  );
+  const rows = mergeSources<Omit<(typeof linkRows)[number], "linkAttachedAt">>(
     linkRows.map((row) => ({ ...row, key: row.purchaseKey })),
     expenseRows.map((row) => ({ ...row, key: row.purchaseKey })),
   ).sort((a, b) => b.date.localeCompare(a.date));
@@ -302,6 +329,7 @@ export async function listProductPurchases(
     orderId: row.orderId,
     source: row.source,
     linkAttachedAt: row.linkAttachedAt,
+    ...movementEvidence(row.purchaseKey),
   }));
 }
 

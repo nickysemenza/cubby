@@ -96,7 +96,10 @@ export const productContract = defineContract("product", {
       ],
     },
   }),
-  purchases: query({ ...productWorkflowSchemas.purchases }),
+  purchases: query({
+    native: "Show related Purchase movement evidence for a Product",
+    ...productWorkflowSchemas.purchases,
+  }),
   components: query({
     ...productWorkflowSchemas.components,
     cache: {

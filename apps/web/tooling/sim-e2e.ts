@@ -37,10 +37,13 @@ const statementCsv = flags.includes("--statement-csv");
 const watch = flags.includes("--watch");
 const video = flags.includes("--video");
 const layout = flags.includes("--layout");
+const productClarity = flags.includes("--product-clarity");
 if (
   (watch && video) ||
   (video && headless) ||
-  (layout && (headless || photo || purchase || watch)) ||
+  (layout && (headless || photo || purchase || watch || productClarity)) ||
+  (productClarity &&
+    (headless || photo || purchase || watch || statementCsv)) ||
   (photo && (!headless || watch)) ||
   (purchase && !photo) ||
   (statementCsv && (!headless || photo || purchase || watch)) ||
@@ -53,26 +56,29 @@ if (
         "--photo",
         "--purchase",
         "--layout",
+        "--product-clarity",
         "--statement-csv",
       ].includes(argument),
   )
 )
   throw new Error(
-    "Usage: sim-e2e.ts [--video | --layout [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
+    "Usage: sim-e2e.ts [--video | --layout [--video] | --product-clarity [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
   );
-const lane = statementCsv
-  ? "headless-statement-csv-e2e"
-  : layout
-    ? "sim-layout-e2e"
-    : purchase
-      ? "headless-wardrobe-e2e"
-      : photo
-        ? "headless-photo-e2e"
-        : headless
-          ? "headless-e2e"
-          : watch
-            ? "sim-dev"
-            : "sim-e2e";
+const lane = productClarity
+  ? "sim-product-clarity-e2e"
+  : statementCsv
+    ? "headless-statement-csv-e2e"
+    : layout
+      ? "sim-layout-e2e"
+      : purchase
+        ? "headless-wardrobe-e2e"
+        : photo
+          ? "headless-photo-e2e"
+          : headless
+            ? "headless-e2e"
+            : watch
+              ? "sim-dev"
+              : "sim-e2e";
 // Database bootstrap validates the caller's environment before simulation-only overrides.
 const bootstrapEnvironment = { ...process.env };
 for (const [key, value] of Object.entries({
@@ -1086,13 +1092,15 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
       cases: [{ name: lane, status, durationMs }],
       profile: "worker",
       scenario: lane,
-      fixture: statementCsv
-        ? "synthetic-statement-csv"
-        : layout
-          ? "synthetic-layout"
-          : photo
-            ? "synthetic-wardrobe"
-            : "synthetic-product",
+      fixture: productClarity
+        ? "synthetic-product-evidence"
+        : statementCsv
+          ? "synthetic-statement-csv"
+          : layout
+            ? "synthetic-layout"
+            : photo
+              ? "synthetic-wardrobe"
+              : "synthetic-product",
       fixtureVersion: 1,
       phase,
       phases,
@@ -1116,6 +1124,7 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
 async function seedNativeScenario(userId: string): Promise<{
   productId: string;
   layoutRunID?: string;
+  purchaseId?: string;
 }> {
   const seedPool = new Pool({ connectionString: databaseURL });
   try {
@@ -1123,8 +1132,11 @@ async function seedNativeScenario(userId: string): Promise<{
       seedSimulatorPhotoActor,
       seedSimulatorScenario,
       seedSimulatorLayoutRun,
+      seedSimulatorProductClarity,
     } = await import("./scenarios/simulator");
     await seedSimulatorPhotoActor(seedPool, userId);
+    if (productClarity)
+      return await seedSimulatorProductClarity(seedPool, userId);
     return {
       productId:
         photo || statementCsv
@@ -1144,6 +1156,7 @@ async function runNativeJourney(
   common: string[],
   productId: string,
   layoutRunID?: string,
+  purchaseId?: string,
 ): Promise<void> {
   const stopRecording = video
     ? await recordSimulatorVideo(deviceID)
@@ -1153,9 +1166,11 @@ async function runNativeJourney(
       "exec",
       "agent-device",
       "test",
-      layout
-        ? "apps/apple/e2e/native-layout.ad"
-        : "apps/apple/e2e/product-edit.ad",
+      productClarity
+        ? "apps/apple/e2e/product-clarity.ad"
+        : layout
+          ? "apps/apple/e2e/native-layout.ad"
+          : "apps/apple/e2e/product-edit.ad",
       ...common,
       "--artifacts-dir",
       artifacts,
@@ -1166,11 +1181,12 @@ async function runNativeJourney(
       "-e",
       `PRODUCT_ID=${productId}`,
       ...(layoutRunID ? ["-e", `RUN_ID=${layoutRunID}`] : []),
+      ...(purchaseId ? ["-e", `PURCHASE_ID=${purchaseId}`] : []),
     ]);
   } finally {
     await stopRecording?.();
   }
-  if (!layout) await assertNativeEdit(productId);
+  if (!layout && !productClarity) await assertNativeEdit(productId);
 }
 
 async function main(): Promise<void> {
@@ -1436,7 +1452,13 @@ async function main(): Promise<void> {
             launch,
           });
         } else {
-          await runNativeJourney(device.udid, common, productId, layoutRunID);
+          await runNativeJourney(
+            device.udid,
+            common,
+            productId,
+            layoutRunID,
+            seeded.purchaseId,
+          );
         }
       } catch (error) {
         await run("xcrun", [

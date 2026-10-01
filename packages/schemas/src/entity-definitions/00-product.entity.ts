@@ -47,6 +47,15 @@ export default defineEntity({
     },
     icons: { phosphor: "Barcode", sfSymbol: "shippingbox", emoji: "📦" },
     detail: {
+      overviewSections: [
+        "overview",
+        "ownership",
+        "notes",
+        "stocked-at",
+        "movements",
+        "purchases",
+        "expenses",
+      ],
       relationFilterOverrides: {
         "project-uses": { descriptor: "usedToolId" },
         "purchased-projects": { descriptor: "purchasedProductId" },
@@ -69,7 +78,21 @@ export default defineEntity({
         actionOverrides: ["edit", "addToInventory", "recordSale", "discard"],
       },
       additionalSectionOverrides: [
-        { kind: "slot", id: "runs", title: "Item journey" },
+        { kind: "slot", id: "ownership", title: "Ownership & evidence" },
+        { kind: "slot", id: "runs", title: "Enrichment history" },
+        {
+          kind: "fields",
+          id: "nutrition-links",
+          title: "Nutrition sources",
+          fields: ["fdc_id", "ingredientId"],
+        },
+        {
+          kind: "fields",
+          id: "notes",
+          title: "Notes",
+          fields: ["notes"],
+          placement: "full",
+        },
         {
           kind: "relation",
           id: "plantings",
@@ -104,7 +127,7 @@ export default defineEntity({
         { kind: "slot", id: "labels", title: "Labels" },
         { kind: "slot", id: "nutrition", title: "Nutrition" },
         { kind: "slot", id: "unit-mappings", title: "Unit mappings" },
-        { kind: "slot", id: "fits-with", title: "Fits with" },
+        { kind: "slot", id: "fits-with", title: "Similar products" },
         { kind: "slot", id: "cookbooks", title: "Cookbooks" },
         { kind: "slot", id: "recipe-appearances", title: "Appears in recipes" },
       ],

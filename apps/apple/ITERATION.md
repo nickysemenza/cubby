@@ -27,6 +27,14 @@ and replays it without duplicating economics. Run this lane directly or with
 sanitized results and replay command are checksummed under
 `artifacts/headless-e2e/statement-csv/`.
 
+`pnpm test:e2e:sim -- --product-clarity --video` runs a focused synthetic Product
+presentation journey. It opens and closes the valuation explanation, checks the
+manual and expense-derived values, and verifies recorded movement, planned, and
+explicit-link badges in both Product → Purchase and Purchase → Product navigation.
+The existing disposable database, auth, build-provenance, and artifact bundle
+paths apply. This lane launches the simulator app; run it after other native
+UI automation has released the host.
+
 Keep import workflow state in `CubbyKit`: CSV preview and decisions, transaction
 booking/correction review, Run/photo review commands, and the macOS browser bridge
 are shared with the CLI. Matching, categorization, receipt expectations, and

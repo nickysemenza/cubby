@@ -55,6 +55,7 @@ export const purchaseContract = defineContract("purchase", {
     cache: { tags: [["purchase"]] },
   }),
   products: query({
+    native: "Show Product movement evidence for a Purchase",
     input: purchaseProductsInput,
     output: purchaseProductsOut,
   }),

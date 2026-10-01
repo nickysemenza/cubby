@@ -143,6 +143,7 @@ public enum EntityDetailSlotID: String, CaseIterable, Codable, Sendable {
     case productFitsWith = "product.fits-with"
     case productLabels = "product.labels"
     case productNutrition = "product.nutrition"
+    case productOwnership = "product.ownership"
     case productRecipeAppearances = "product.recipe-appearances"
     case productRuns = "product.runs"
     case productUnitMappings = "product.unit-mappings"
@@ -387,6 +388,7 @@ public struct DetailSection: Codable, Sendable, Hashable, Identifiable {
     public let placement: SectionPlacement
     public let collapsed: Bool
     public let explanationField: String?
+    public let overview: Bool
     public let kind: Kind
 }
 

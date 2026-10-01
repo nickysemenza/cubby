@@ -47,6 +47,23 @@ export default defineEntity({
       },
       hero: { stats: ["statedTotal", "expenseTotal"] },
       additionalSectionOverrides: [
+        {
+          kind: "relation",
+          id: "expenses",
+          title: "Expenses",
+          relation: "expenses",
+          filter: { descriptor: "purchaseIdFilter" },
+          columns: [
+            "name",
+            "cost",
+            "productId",
+            "spendingCategoryId",
+            "lineKind",
+            "costType",
+            "trade",
+          ],
+          collapseWhenEmpty: true,
+        },
         { kind: "slot", id: "project-allocation", title: "Project allocation" },
         { kind: "slot", id: "runs", title: "Import runs" },
         { kind: "slot", id: "order-mail", title: "Order email" },

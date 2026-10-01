@@ -14,6 +14,11 @@ import type {
 /** Section ids the renderers derive from capabilities, never declared. */
 const RESERVED_SECTION_IDS = new Set(["history", "relationships", "images"]);
 
+export const detailSectionInOverview = (
+  overviewSections: readonly string[] | null,
+  id: string,
+): boolean => overviewSections === null || overviewSections.includes(id);
+
 type PresentationFacts = Readonly<{
   fieldModel: EntityFieldModel;
   relations: EntityDeclarationMetadata["relations"];
@@ -440,7 +445,11 @@ export const compilePresentation = (
         images: detail.hero.images ?? capabilities.images.storage === "gallery",
         actions: detail.hero.actions ?? (facts.hasUpdate ? ["edit"] : []),
       },
-      sections,
+      sections: sections.map((section) => ({
+        ...section,
+        overview: detailSectionInOverview(detail.overviewSections, section.id),
+      })),
+      overviewSections: detail.overviewSections,
       preview,
       omitRelations: detail.omitRelations,
       additionalSections: detail.additionalSections,

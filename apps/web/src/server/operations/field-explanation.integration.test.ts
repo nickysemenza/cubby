@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -26,6 +27,97 @@ describe("derived field explanations against canonical records", () => {
     entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
+
+  // Lazy explanations must expose the same winning ancestor and fallback as
+  // canonical reads, even when an Expense override hides that mapping.
+  it("explains Product Category ancestry behind an Expense override", async () => {
+    const mapped = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Fixture tools",
+    });
+    const explicit = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Fixture gifts",
+    });
+    const parent = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Fixture tools",
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: mapped.id,
+    });
+    const child = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Fixture tool storage",
+      parentId: parent.id,
+    });
+    const item = await insertWithShortcode(ctx.db, "product", {
+      name: "Fixture toolbox",
+      manufacturer: "Fixture",
+      categoryId: child.id,
+    });
+    const line = await insertWithShortcode(ctx.db, "expense", {
+      name: "Fixture gift",
+      cost: 15,
+      date: "2026-09-01",
+      productId: item.id,
+      spendingCategoryId: explicit.id,
+      costType: "tools",
+      trade: "other",
+    });
+    const explanation = await explainField(context(), {
+      entityKind: "expense",
+      entityId: parseShortcodeFor("expense", line.shortcode),
+      field: "spendingCategoryId",
+      surface: "list",
+    });
+    expect(explanation.resolution?.value).toBe(explicit.shortcode);
+    expect(explanation.resolution?.fallbackValue).toBe(mapped.shortcode);
+    expect(explanation.resolutionEvidence).toMatchObject({
+      hierarchy: [
+        {
+          entity: { entityKind: "productCategory", entityId: child.shortcode },
+        },
+        {
+          entity: { entityKind: "productCategory", entityId: parent.shortcode },
+        },
+      ],
+      fallbackSource: {
+        entityKind: "productCategory",
+        entityId: parent.shortcode,
+      },
+    });
+  });
+
+  it("does not name a cross-Project parent trade as a Task fallback", async () => {
+    const first = await insertWithShortcode(ctx.db, "project", {
+      name: "Fixture parent project",
+      defaultTrade: "building",
+    });
+    const second = await insertWithShortcode(ctx.db, "project", {
+      name: "Fixture independent project",
+      defaultTrade: "plumbing",
+    });
+    const parent = await insertWithShortcode(ctx.db, "task", {
+      name: "Fixture parent task",
+      projectId: first.id,
+      projectMode: "explicit",
+      trade: "electrical",
+    });
+    const child = await insertWithShortcode(ctx.db, "task", {
+      name: "Fixture separate task",
+      projectId: second.id,
+      projectMode: "explicit",
+      parentTaskId: parent.id,
+      trade: "other",
+    });
+    const explanation = await explainField(context(), {
+      entityKind: "task",
+      entityId: parseShortcodeFor("task", child.shortcode),
+      field: "trade",
+      surface: "list",
+    });
+    expect(explanation.resolution?.fallbackValue).toBe("plumbing");
+    expect(explanation.resolutionEvidence?.fallbackSource).toMatchObject({
+      entityKind: "project",
+      entityId: second.shortcode,
+    });
+  });
 
   it("explains manual price precedence and links the records behind an expense count", async () => {
     const product = await createProductFixture(

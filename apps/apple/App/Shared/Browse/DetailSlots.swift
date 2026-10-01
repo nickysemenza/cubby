@@ -10,6 +10,17 @@ enum DetailSlotRegistry {
     static func view(for key: EntityKey, slot: String, row: EntityRow, appModel: AppModel) -> AnyView? {
         guard let slot = EntityDetailSlotID(rawValue: slot) else { return nil }
         switch (key, slot) {
+        case (.product, .productNutrition):
+            return AnyView(ProductNutritionDetailSlot(row: row))
+        case (.product, .productUnitMappings):
+            return AnyView(ProductUnitMappingsDetailSlot(row: row))
+        case (.product, .productFitsWith):
+            return AnyView(ProductSimilarityDetailSlot(productID: row.id))
+        case (.product, .productRuns):
+            return AnyView(ProductEnrichmentHistorySlot(productID: row.id))
+        case (.product, .productOwnership):
+            guard let detail = try? row.decode(ProductDetail.self) else { return nil }
+            return AnyView(ProductJourneySummaryView(product: detail))
         case (.meal, .mealNutrition):
             return AnyView(MealNutritionSlot(mealID: row.id))
         case (.ledgerParty, .ledgerPartyWardrobe):
@@ -59,9 +70,6 @@ enum DetailSlotRegistry {
             return AnyView(InventoryOwnershipControl(detail: detail, onChanged: onChanged))
         case .financialTransaction:
             return AnyView(FinancialTransactionEvidenceView(row: row, onChanged: onChanged))
-        case .product:
-            guard let detail = try? row.decode(ProductDetail.self) else { return nil }
-            return AnyView(ProductJourneySummaryView(product: detail))
         default:
             return nil
         }
@@ -76,18 +84,31 @@ private struct ProductJourneySummaryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            Text("Finish this item").font(.subheadline.weight(.semibold))
-            Label(
-                ownPhotos == 0 ? "Add an item photo" : "\(ownPhotos) own photos",
-                systemImage: ownPhotos == 0 ? "circle.dotted" : "checkmark.circle.fill"
+            Text(
+                product.ownershipEvidence.state == .exited
+                    ? "Recorded ownership ended\(product.ownershipEvidence.exitedAt.map { " on \($0.rawValue)" } ?? "")."
+                    : product.ownershipEvidence.state == .owned
+                        ? "Recorded movements establish ownership."
+                        : "Ownership is uncertain: recorded movements do not establish the current quantity."
             )
-            Label(
-                product.inventoryEntry.isEmpty ? "Record where it lives" : "Inventory recorded",
-                systemImage: product.inventoryEntry.isEmpty ? "circle.dotted" : "checkmark.circle.fill"
-            )
-            Link(
-                "Review purchase and statement",
-                destination: appModel.webURL(for: .product, id: product.id.rawValue))
+            .font(.subheadline)
+            if product.ownershipEvidence.state != .exited {
+                Label(
+                    ownPhotos == 0 ? "Add an item photo" : "\(ownPhotos) own photos",
+                    systemImage: ownPhotos == 0 ? "circle.dotted" : "checkmark.circle.fill"
+                )
+                Label(
+                    (product.onHandUnits ?? 0) <= 0
+                        ? product.ownershipEvidence.state == .uncertain
+                            ? "Confirm whether you still own it before recording stock"
+                            : "Record where it lives"
+                        : "Inventory recorded",
+                    systemImage: (product.onHandUnits ?? 0) <= 0 ? "circle.dotted" : "checkmark.circle.fill"
+                )
+                Link(
+                    "Review purchase and statement",
+                    destination: appModel.webURL(for: .product, id: product.id.rawValue))
+            }
         }
         .font(.caption)
         .frame(maxWidth: .infinity, alignment: .leading)

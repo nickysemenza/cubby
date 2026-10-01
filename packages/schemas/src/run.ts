@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { runPurpose } from "./run-fields";
 
 import { runFilters, runOut } from "./generated/run.gen";
 import { generatedEntitySort } from "./generated/entity-sort.gen";
@@ -98,3 +99,23 @@ export const targetedImportStartOutput = z.object({
 export type TargetedImportStartOutput = z.infer<
   typeof targetedImportStartOutput
 >;
+
+export const runSummary = z.object({
+  publicId: runShortcode,
+  purpose: runPurpose,
+  vendorAccountLabel: z.string().nullable(),
+  vendorName: z.string().nullable(),
+  trigger: z.string(),
+  status: z.string(),
+  startedAt: z.iso.datetime(),
+  endedAt: z.iso.datetime().nullable(),
+  ordersSeen: z.number().int(),
+  imported: z.number().int(),
+  updated: z.number().int(),
+  skipped: z.number().int(),
+  failureCode: z.string().nullable(),
+  estimatedCost: z.number(),
+});
+export type RunSummary = z.infer<typeof runSummary>;
+
+export const runHistoryOut = z.object({ runs: z.array(runSummary) });

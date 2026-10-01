@@ -27,6 +27,153 @@ describe("reviewed spending classification", () => {
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
 
+  // Reassignment can change historical allocations without changing an Expense;
+  // even an unbooked Product must participate in the stale-review fingerprint.
+  it("reviews Product taxonomy reassignment without overwriting Expense intent", async () => {
+    const oldSpend = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Fixture furnishings",
+    });
+    const toolsSpend = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Fixture tools",
+    });
+    const oldCategory = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Fixture storage",
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: oldSpend.id,
+    });
+    const parent = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Fixture tools",
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: toolsSpend.id,
+    });
+    const target = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Fixture tool storage",
+      parentId: parent.id,
+    });
+    const item = await insertWithShortcode(ctx.db, "product", {
+      name: "Fixture tool box",
+      manufacturer: "Fixture",
+      categoryId: oldCategory.id,
+    });
+    const line = await insertWithShortcode(ctx.db, "expense", {
+      name: "Fixture item",
+      cost: -20,
+      productQuantity: -1,
+      productId: item.id,
+      date: "2026-09-01",
+      costType: "tools",
+      trade: "other",
+    });
+    const override = await insertWithShortcode(ctx.db, "expense", {
+      name: "Fixture explicit purpose",
+      cost: 10,
+      productQuantity: 1,
+      productId: item.id,
+      spendingCategoryId: oldSpend.id,
+      date: "2026-09-02",
+      costType: "tools",
+      trade: "other",
+    });
+    const request = {
+      action: "products" as const,
+      productIds: [parseShortcodeFor("product", item.shortcode)],
+      productCategoryId: parseShortcodeFor("productCategory", target.shortcode),
+    };
+    const preview = await previewSpendingClassificationReview(ctx.db, request);
+    expect(preview.changedExpenseCount).toBe(1);
+    expect(
+      (
+        await unwrapDb(ctx.db).execute(
+          sql`SELECT "categoryId" FROM "Product" WHERE id=${item.id}`,
+        )
+      ).rows[0]?.categoryId,
+    ).toBe(oldCategory.id);
+    await applySpendingClassificationReview(context(), {
+      request,
+      fingerprint: preview.fingerprint,
+    });
+    const resolved = await unwrapDb(ctx.db).execute(
+      sql`SELECT id,cost,"productQuantity",${effectiveExpenseSpendingCategorySql("e")} AS category FROM "Expense" e WHERE e.id IN (${line.id},${override.id})`,
+    );
+    expect(resolved.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: line.id,
+          cost: -20,
+          productQuantity: -1,
+          category: toolsSpend.id,
+        }),
+        expect.objectContaining({
+          id: override.id,
+          cost: 10,
+          productQuantity: 1,
+          category: oldSpend.id,
+        }),
+      ]),
+    );
+  });
+
+  it("refuses a stale reassignment of a Product with no Expenses", async () => {
+    const source = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Fixture old taxonomy",
+    });
+    const target = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Fixture target taxonomy",
+    });
+    const item = await insertWithShortcode(ctx.db, "product", {
+      name: "Fixture unbooked item",
+      manufacturer: "Fixture",
+      categoryId: source.id,
+    });
+    const request = {
+      action: "products" as const,
+      productIds: [parseShortcodeFor("product", item.shortcode)],
+      productCategoryId: parseShortcodeFor("productCategory", target.shortcode),
+    };
+    const preview = await previewSpendingClassificationReview(ctx.db, request);
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Product" SET "categoryId"=NULL WHERE id=${item.id}`,
+    );
+    await expect(
+      applySpendingClassificationReview(context(), {
+        request,
+        fingerprint: preview.fingerprint,
+      }),
+    ).rejects.toThrow(/changed/i);
+    expect(
+      (
+        await unwrapDb(ctx.db).execute(
+          sql`SELECT "categoryId" FROM "Product" WHERE id=${item.id}`,
+        )
+      ).rows[0]?.categoryId,
+    ).toBeNull();
+  });
+
+  it("refuses taxonomy changes that would change Food allocation semantics", async () => {
+    const food = await unwrapDb(ctx.db).query.productCategory.findFirst({
+      where: (category, { eq }) => eq(category.feature, "food"),
+    });
+    if (!food) throw new Error("Missing synthetic Food feature root");
+    const tools = await insertWithShortcode(ctx.db, "productCategory", {
+      name: "Fixture tools root",
+    });
+    const item = await insertWithShortcode(ctx.db, "product", {
+      name: "Fixture food item",
+      manufacturer: "Fixture",
+      categoryId: food.id,
+    });
+    await expect(
+      previewSpendingClassificationReview(ctx.db, {
+        action: "products",
+        productIds: [parseShortcodeFor("product", item.shortcode)],
+        productCategoryId: parseShortcodeFor(
+          "productCategory",
+          tools.shortcode,
+        ),
+      }),
+    ).rejects.toThrow("feature");
+  });
+
   it.each(["productCategory", "vendor"] as const)(
     "authorizes only the reviewed %s write through kernel savepoints",
     async (action) => {

@@ -104,6 +104,7 @@ const KIND_COLOR = {
   // Money-only: nothing left the house on this row.
   adjusted: "var(--muted-foreground)",
   unknown: "var(--muted-foreground)",
+  linked: "var(--muted-foreground)",
   "audit:create": "var(--positive)",
   "audit:update": "var(--muted-foreground)",
   "audit:delete": "var(--destructive)",
@@ -114,6 +115,7 @@ const KIND_LABEL = {
   discarded: "Discarded",
   adjusted: "Price adjusted",
   unknown: "Unknown",
+  linked: "Linked purchase",
   "audit:create": "Created",
   "audit:update": "Updated",
   "audit:delete": "Deleted",

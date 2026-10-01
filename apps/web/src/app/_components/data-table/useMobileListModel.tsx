@@ -295,20 +295,29 @@ function collectMobileSlots<TItem extends RowData>(
       ) : (
         rendered
       );
-    const resolution = fieldResolutionFor(row.original, colId);
-    const resolutionValue = resolution ? (
-      <span className="inline-flex min-w-0 items-center gap-1">
-        <span className="min-w-0 truncate">{inspectedValue}</span>
-        <FieldResolutionBadge
-          record={row.original}
-          field={colId}
-          interactive={false}
-          compact
-        />
-      </span>
-    ) : (
-      inspectedValue
+    const explanation = resolveColumnExplanation(
+      meta?.explanation,
+      row.original,
+      colId,
     );
+    const resolution = fieldResolutionFor(
+      row.original,
+      explanation?.field ?? colId,
+    );
+    const resolutionValue =
+      resolution && !explanation ? (
+        <span className="inline-flex min-w-0 items-center gap-1">
+          <span className="min-w-0 truncate">{inspectedValue}</span>
+          <FieldResolutionBadge
+            record={row.original}
+            field={colId}
+            interactive={false}
+            compact
+          />
+        </span>
+      ) : (
+        inspectedValue
+      );
     const provenanceValue = meta?.provenance ? (
       <span className="inline-flex max-w-full min-w-0 items-center gap-1">
         <span className="min-w-0 truncate">{resolutionValue}</span>
@@ -316,10 +325,6 @@ function collectMobileSlots<TItem extends RowData>(
       </span>
     ) : (
       resolutionValue
-    );
-    const explanation = resolveColumnExplanation(
-      meta?.explanation,
-      row.original,
     );
     const mobileValue =
       explanation && rowId ? (
@@ -331,6 +336,7 @@ function collectMobileSlots<TItem extends RowData>(
             field={explanation.field}
             label={explanation.label}
             surface="summary"
+            resolution={resolution}
           />
         </span>
       ) : (

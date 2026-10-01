@@ -77,10 +77,9 @@ import {
   enrichProductRowsWithQuantityLedger,
   loadProductPickerQuantities,
 } from "~/server/repo/product/quantity-ledger";
-// The one rule for "does this Expense say the order bought the product" —
-// shared rather than restated, so a kit's purchase link and the Purchases panel
-// can never disagree about which orders count.
-import { expensePairPredicate } from "~/server/repo/purchase-products";
+// A kit's most recent acquisition remains narrower than identity relations,
+// which also include exits and planned Expenses.
+import { expenseAcquisitionPairPredicate } from "~/server/repo/purchase-products";
 import { linkRelationAdapter } from "~/server/repo/relation-mutation-adapter";
 import {
   emptyPreflight,
@@ -336,7 +335,9 @@ async function loadMostRecentPurchaseByProductId(
       )
       .leftJoin(vendor, liveVendor)
       .where(
-        expensePairPredicate(inArray(expense.productId, parentProductIds)),
+        expenseAcquisitionPairPredicate(
+          inArray(expense.productId, parentProductIds),
+        ),
       ),
   ]);
 

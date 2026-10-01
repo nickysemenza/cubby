@@ -294,27 +294,46 @@ struct FieldExplanationLabel: View {
     let field: FieldDescriptor
     let subject: EntityRef
     var labelOverride: String? = nil
+    var surface = "detail"
     @Environment(AppModel.self) private var appModel
     @State private var showingExplanation = false
     @State private var resolved: FieldExplanationOutput?
     @State private var loadError: String?
 
     var body: some View {
-        HStack(spacing: FieldGuideTokens.Space.xs) {
-            Text(labelOverride ?? field.label)
-            if let explanation = field.explanation {
-                Button {
-                    showingExplanation = true
-                } label: {
+        if let explanation = field.explanation {
+            Button {
+                showingExplanation = true
+            } label: {
+                HStack(spacing: FieldGuideTokens.Space.xs) {
+                    Text(labelOverride ?? field.label)
+                        .fixedSize(horizontal: false, vertical: true)
                     Image(systemName: "info.circle")
+                        .accessibilityHidden(true)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("About \(labelOverride ?? field.label)")
-                .popover(isPresented: $showingExplanation) {
-                    explanationPopover(fallback: explanation.description)
-                        .task(id: showingExplanation) { await loadExplanation() }
-                }
+                .frame(
+                    minWidth: FieldGuideTokens.touchTarget,
+                    minHeight: FieldGuideTokens.touchTarget, alignment: .leading
+                )
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(
+                "field.explanation.\(subject.entity.rawValue).\(subject.id).\(field.key)"
+            )
+            .accessibilityLabel("About \(labelOverride ?? field.label)")
+            .accessibilityHint("Shows the value, its source, and the rule used.")
+            .onChange(of: subject) { _, _ in
+                showingExplanation = false
+                resolved = nil
+                loadError = nil
+            }
+            .popover(isPresented: $showingExplanation) {
+                explanationPopover(fallback: explanation.description)
+                    .task(id: showingExplanation) { await loadExplanation() }
+            }
+        } else {
+            Text(labelOverride ?? field.label)
         }
     }
 
@@ -322,11 +341,91 @@ struct FieldExplanationLabel: View {
     private func explanationPopover(fallback: String) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-                Text(resolved?.label ?? field.label).font(.headline)
+                HStack {
+                    Text(resolved?.label ?? field.label).font(.headline)
+                    Spacer()
+                    Button("Close field explanation", systemImage: "xmark") {
+                        showingExplanation = false
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.plain)
+                    .frame(minWidth: FieldGuideTokens.touchTarget, minHeight: FieldGuideTokens.touchTarget)
+                    .accessibilityIdentifier("field.explanation.close")
+                }
                 Text(resolved?.rule.description ?? fallback)
                     .font(.fieldGuideBody)
                     .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 if let resolved {
+                    if let resolution = resolved.resolution {
+                        Divider()
+                        Text("In effect").font(.fieldGuideLabel.weight(.semibold))
+                        Text(display(resolution.value) ?? "None").font(.fieldGuideData)
+                        Text(
+                            resolution.mode == .explicit
+                                ? "Override on this \(EntityCatalog[subject.entity].singular.lowercased())"
+                                : resolution.source
+                        )
+                        .font(.caption).foregroundStyle(.secondary)
+                        if let source = resolution.sourceEntity,
+                            let entity = EntityKey(rawValue: source.entityKind.rawValue)
+                        {
+                            NavigationLink(
+                                source.name ?? source.entityId,
+                                value: Route.entityDetail(entity, id: source.entityId))
+                        }
+                        if resolution.mode == .explicit || resolution.mode == .none {
+                            Text("Without the override").font(.fieldGuideLabel.weight(.semibold))
+                            Text(display(resolution.fallbackValue) ?? "Nothing to inherit").font(
+                                .fieldGuideData)
+                            if let source = resolved.resolutionEvidence?.fallbackSource,
+                                let entity = EntityKey(rawValue: source.entityKind.rawValue)
+                            {
+                                NavigationLink(
+                                    source.name ?? source.entityId,
+                                    value: Route.entityDetail(entity, id: source.entityId))
+                            }
+                            if resolution.matchesFallback {
+                                Text("Same value — the override is redundant.").font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    if let evidence = resolved.resolutionEvidence, !evidence.hierarchy.isEmpty {
+                        Divider()
+                        Text("Hierarchy").font(.fieldGuideLabel.weight(.semibold))
+                        ForEach(Array(evidence.hierarchy.enumerated()), id: \.offset) { index, source in
+                            let value = try? JSONValue(encoding: source.value)
+                            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                                Text("\(index + 1). \(source.label)")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                if let reference = source.entity,
+                                    let entity = EntityKey(rawValue: reference.entityKind.rawValue)
+                                {
+                                    NavigationLink(
+                                        value?["name"]?.stringValue ?? reference.entityId,
+                                        value: Route.entityDetail(entity, id: reference.entityId)
+                                    )
+                                    .font(.fieldGuideBody.weight(.medium))
+                                    .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+                                }
+                                if value?["assigned"]?.boolValue == false {
+                                    Text("No assignment here")
+                                        .font(.fieldGuideLabel).foregroundStyle(.secondary)
+                                } else if let nested = value?["value"], let text = displayJSON(nested) {
+                                    Text(text).font(.fieldGuideData)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                } else if let text = display(source.value) {
+                                    Text(text).font(.fieldGuideData)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(FieldGuideTokens.Space.sm)
+                            .background(
+                                FieldGuideTokens.inset,
+                                in: RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
+                        }
+                    }
                     if !resolved.sources.isEmpty {
                         Divider()
                         Text("Based on").font(.fieldGuideLabel.weight(.semibold))
@@ -348,6 +447,7 @@ struct FieldExplanationLabel: View {
                     }
                 } else if let loadError {
                     Text(loadError).font(.caption).foregroundStyle(.secondary)
+                    Button("Retry explanation") { Task { await loadExplanation() } }
                 } else {
                     ProgressView().controlSize(.small)
                 }
@@ -355,23 +455,37 @@ struct FieldExplanationLabel: View {
             .padding(FieldGuideTokens.Space.md)
             .frame(idealWidth: 340, alignment: .leading)
         }
+        .accessibilityIdentifier("field.explanation.popover")
         .presentationCompactAdaptation(.popover)
     }
 
     private func loadExplanation() async {
         guard showingExplanation, resolved == nil else { return }
         do {
-            resolved = try await appModel.client.fieldExplanation(
-                subject: subject, field: field.key)
+            let result = try await appModel.client.fieldExplanation(
+                subject: subject, field: field.key, surface: surface)
+            try Task.checkCancellation()
+            resolved = result
             loadError = nil
+        } catch is CancellationError {
         } catch {
-            loadError = "Current evidence couldn’t be loaded."
+            guard !Task.isCancelled else { return }
+            loadError = String(describing: error)
             appModel.handle(error)
         }
     }
 
     private func display(_ value: JsonValue) -> String? {
         guard let value = try? JSONValue(encoding: value) else { return nil }
+        return displayJSON(value)
+    }
+
+    private func displayJSON(_ value: JSONValue) -> String? {
+        if let text = EntityFieldValue.text(value, field: field) { return text }
+        if let mode = value["mode"]?.stringValue {
+            if let category = value["category"]?.stringValue { return "Category · \(category)" }
+            return mode == "none" ? "No category" : mode.capitalized
+        }
         switch value {
         case .null: return nil
         case .bool(let value): return value ? "Yes" : "No"
@@ -392,6 +506,22 @@ struct FieldExplanationLabel: View {
 struct RelationSectionView: View {
     let model: RelationSectionModel
     let onCreate: (() -> Void)?
+
+    @Environment(AppModel.self) private var appModel
+    @State private var context: [String: RelationFinancialEvidence] = [:]
+    @State private var contextError: String?
+    @State private var contextRevision = 0
+
+    private struct RelationFinancialEvidence {
+        let movementKinds: [ProductMovementKind]
+        let hasPlanned: Bool
+        let hasLink: Bool
+    }
+
+    private var hasFinancialContext: Bool {
+        (model.source.key == .product && model.target.key == .purchase)
+            || (model.source.key == .purchase && model.target.key == .product)
+    }
 
     /// `spec.hideWhenEmpty` skips the whole section — header, create button, and all — once the
     /// first page has loaded with no rows and no error; a still-loading or failed section always
@@ -425,9 +555,71 @@ struct RelationSectionView: View {
                 }
             }
         }
-        .task {
-            await model.list.loadInitial(); await model.loadConnectionEvidence()
+        .task(id: "\(model.source.key.rawValue):\(model.recordID):\(model.id)") {
+            await model.list.loadInitial()
+            await model.loadConnectionEvidence()
         }
+        .task(id: "\(model.source.key.rawValue):\(model.recordID):\(contextRevision)") {
+            context = [:]
+            contextError = nil
+            await loadFinancialContext()
+        }
+        .onChange(of: model.list.activity) { previous, current in
+            if previous == .refreshing, current == .idle { contextRevision += 1 }
+        }
+    }
+
+    private func loadFinancialContext() async {
+        guard hasFinancialContext else { return }
+        do {
+            var evidence: [String: RelationFinancialEvidence] = [:]
+            if model.source.key == .product {
+                let rows = try await appModel.client.productPurchases(
+                    .init(productId: model.recordID))
+                for row in rows {
+                    evidence[row.purchaseId] = RelationFinancialEvidence(
+                        movementKinds: row.movementKinds, hasPlanned: row.hasPlanned,
+                        hasLink: row.source == .link || row.source == .both)
+                }
+            } else {
+                let rows = try await appModel.client.purchaseProducts(
+                    .init(purchaseId: model.recordID))
+                for row in rows {
+                    evidence[row.productId.rawValue] = RelationFinancialEvidence(
+                        movementKinds: row.movementKinds, hasPlanned: row.hasPlanned,
+                        hasLink: row.source == .link || row.source == .both)
+                }
+            }
+            try Task.checkCancellation()
+            context = evidence
+            contextError = nil
+        } catch is CancellationError {
+        } catch {
+            guard !Task.isCancelled else { return }
+            contextError = String(describing: error)
+            appModel.handle(error)
+        }
+    }
+
+    @ViewBuilder
+    private func financialBadges(_ evidence: RelationFinancialEvidence, rowID: String) -> some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            ForEach(evidence.movementKinds, id: \.rawValue) { kind in
+                StatusChip(text: "Movement · \(kind.rawValue.capitalized)")
+                    .accessibilityIdentifier(
+                        "relation.evidence.\(model.target.key.rawValue).\(rowID).movement.\(kind.rawValue)")
+            }
+            if evidence.hasPlanned {
+                StatusChip(text: "Planned", tone: .warning)
+                    .accessibilityIdentifier(
+                        "relation.evidence.\(model.target.key.rawValue).\(rowID).planned")
+            }
+            if evidence.hasLink {
+                StatusChip(text: "Linked")
+                    .accessibilityIdentifier("relation.evidence.\(model.target.key.rawValue).\(rowID).linked")
+            }
+        }
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder
@@ -449,10 +641,17 @@ struct RelationSectionView: View {
                     NavigationLink(value: Route.entityDetail(model.target.key, id: row.id)) {
                         EntityRowView(key: model.target.key, row: row, columns: model.spec.columns)
                     }
+                    .accessibilityIdentifier("relation.row.\(model.target.key.rawValue).\(row.id)")
+                    if let evidence = context[row.id] { financialBadges(evidence, rowID: row.id) }
                     if let evidence = model.connectionEvidence[row.id] {
                         RecordPathView(paths: evidence.paths)
                     }
                 }
+            }
+            if let error = contextError {
+                Text(error).font(.caption).foregroundStyle(.secondary)
+                Button("Retry relation evidence") { Task { await loadFinancialContext() } }
+                    .frame(minHeight: FieldGuideTokens.touchTarget)
             }
             if let error = model.connectionError {
                 Text(error).font(.caption).foregroundStyle(.secondary)

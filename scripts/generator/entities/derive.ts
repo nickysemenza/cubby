@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { detailSectionInOverview } from "./presentation.ts";
 import {
   type CompiledEntity,
   type DeclarationObject,
@@ -519,6 +520,7 @@ export const deriveRelationSections = (
         title: relation.label,
         placement: "primary",
         collapsed: false,
+        overview: detailSectionInOverview(detail.overviewSections, id),
         relation: relation.key,
         filter,
         columns: target.fieldModel.fields

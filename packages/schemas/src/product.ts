@@ -368,18 +368,10 @@ export const productFilterFields = {
 export const productFiltersSchema = z.object(productFilterFields);
 export type ProductFilters = z.infer<typeof productFiltersSchema>;
 
-export const productMovementKind = z.enum([
-  "acquired",
-  "exited",
-  "discarded",
-  // Money came back and no unit moved: a price concession with the item kept.
-  // Distinct from "exited" because the timeline draws ownership from these —
-  // reading a concession as an exit would end an ownership span the household
-  // never ended.
-  "adjusted",
-  "unknown",
-]);
-export type ProductMovementKind = z.infer<typeof productMovementKind>;
+export {
+  productMovementKind,
+  type ProductMovementKind,
+} from "./product-movement-kind";
 
 // `expectedQuantity` and `quantityVariance` (units bought minus units gone,
 // and shelf minus that) are correlated subqueries in
@@ -771,7 +763,18 @@ export const productListItemMcpEntityOut = productListItemOut.extend({
   food: foodSummaryMcpOut.nullable(),
 });
 
+export const productOwnershipEvidenceOut = z.object({
+  state: z.enum(["owned", "exited", "uncertain"]),
+  acquiredAt: plainDate.nullable(),
+  exitedAt: plainDate.nullable(),
+  confidenceLostAt: plainDate.nullable(),
+});
+export type ProductOwnershipEvidenceOut = z.infer<
+  typeof productOwnershipEvidenceOut
+>;
+
 export const productWithFoodOut = z.object({
+  ownershipEvidence: productOwnershipEvidenceOut,
   ...productTopLevelFields,
   // Same derived cover rule as `productTopLevelOut`/the picker (see
   // `getProductCoverImageUrlsByProductIds`) — not a stored field.
