@@ -10,7 +10,7 @@ import { z } from "zod";
 
 import type { PhotoImportCommitInput } from "~/contracts/photo-import.contract";
 import {
-  executeEntity,
+  executeEntityAs,
   type EntityKernelContext,
 } from "~/server/entity-kernel";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
@@ -310,13 +310,12 @@ const readSourceRecord = async (
       `Route ${route.routeId} cannot read its source fields`,
     );
   }
-  const result = await executeEntity(context, {
-    action: "get",
+  const result = await executeEntityAs(context, "get", {
     entity: entity.data,
     id: source.id,
     missing: "error",
   });
-  if (result.action !== "get" || result.item === null) {
+  if (result.item === null) {
     throw createAppError(
       "REFERENCED_RECORD_MISSING",
       `Photo route source ${source.id} is unavailable`,
