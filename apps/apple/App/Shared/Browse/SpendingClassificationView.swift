@@ -99,7 +99,7 @@ struct SpendingClassificationView: View {
 
     private func money(_ cents: String) -> String {
         guard let value = Decimal(string: cents) else { return "\(cents) cents" }
-        return (value / 100).formatted(.currency(code: "USD"))
+        return (value / 100).formatted(.usd)
     }
 
     private func prepare() async {

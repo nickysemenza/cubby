@@ -61,7 +61,7 @@ final class IdentifyModel {
             candidates = try await index.rank(image, limit: 5)
         } catch {
             candidates = []
-            phase = .failed(message(for: error))
+            phase = .failed(error.userMessage)
             Diagnostics.report(error, context: "identify.rank")
         }
     }
@@ -72,17 +72,11 @@ final class IdentifyModel {
     private func buildIndex() async {
         phase = .indexing(done: 0, total: maxProducts)
         do {
-            var ids: [ProductCode] = []
-            var page = 1
-            while ids.count < maxProducts {
-                let result = try await client.productIDsWithImages(page: page, pageSize: 100)
-                ids += result.items
-                if result.items.count < 100 { break }
-                page += 1
-            }
-            let targetIDs = Array(ids.prefix(maxProducts))
-
             let client = self.client
+            let targetIDs = try await ListPage.collectAll(limit: maxProducts, pageSize: 100) { page, size in
+                try await client.productIDsWithImages(page: page, pageSize: size)
+            }
+
             let products = await withTaskGroup(of: ProductDetail?.self, returning: [ProductDetail].self) {
                 group in
                 var iterator = targetIDs.makeIterator()
@@ -113,12 +107,8 @@ final class IdentifyModel {
             let count = await index.count
             phase = .ready(count: count)
         } catch {
-            phase = .failed(message(for: error))
+            phase = .failed(error.userMessage)
             Diagnostics.report(error, context: "identify.buildIndex")
         }
-    }
-
-    private func message(for error: any Error) -> String {
-        (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
     }
 }

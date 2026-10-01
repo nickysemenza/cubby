@@ -44,11 +44,11 @@ struct FinancialBookingCorrectionView: View {
                         "Target defaults apply where an Expense has no override; existing Expense overrides remain."
                     )
                     .foregroundStyle(.secondary)
-                    LabeledContent("Settlement", value: preview.amount.formatted(.currency(code: "USD")))
+                    LabeledContent("Settlement", value: preview.amount.formatted(.usd))
                     Text("Expenses to retire").font(.caption.weight(.semibold))
                     ForEach(Array(preview.lines.enumerated()), id: \.offset) { _, line in
                         VStack(alignment: .leading) {
-                            LabeledContent(line.title, value: line.amount.formatted(.currency(code: "USD")))
+                            LabeledContent(line.title, value: line.amount.formatted(.usd))
                             if let notes = line.notes, !notes.isEmpty {
                                 Text(notes).foregroundStyle(.secondary)
                             }

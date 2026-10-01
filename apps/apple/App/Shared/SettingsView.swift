@@ -309,7 +309,7 @@ struct SettingsView: View {
                                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         }
                         Spacer()
-                        Text(Double(hunt.amountInCents) / 100, format: .currency(code: "USD"))
+                        Text(Double(hunt.amountInCents) / 100, format: .usd)
                             .font(.fieldGuideData)
                     }
                 }

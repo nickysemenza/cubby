@@ -178,7 +178,7 @@ public final class GenericEntityListModel {
             timeline = result
         } catch {
             guard generation == timelineGeneration else { return }
-            timelineError = Self.describe(error)
+            timelineError = error.userMessage
         }
         isLoadingTimeline = false
     }
@@ -205,7 +205,7 @@ public final class GenericEntityListModel {
             // A refresh or newer request owns the state now.
         } catch {
             guard generation == requestGeneration else { return }
-            nextPageError = Self.describe(error)
+            nextPageError = error.userMessage
         }
         finishRequest(generation)
     }
@@ -255,7 +255,7 @@ public final class GenericEntityListModel {
             // A newer request owns the state now.
         } catch {
             guard generation == requestGeneration else { return }
-            let message = Self.describe(error)
+            let message = error.userMessage
             if rows.isEmpty && !hasLoaded {
                 initialError = message
                 phase = .failed(message)
@@ -324,14 +324,5 @@ public final class GenericEntityListModel {
     private static func supportsProgressiveSearch(_ view: ListView) -> Bool {
         if case .slot = view { return false }
         return true
-    }
-
-    static func describe(_ error: Error) -> String {
-        if let apiError = error as? CubbyAPIError {
-            let code = apiError.detail?.code ?? "HTTP_\(apiError.status)"
-            let message = apiError.detail?.message ?? "Request failed"
-            return "\(code): \(message)"
-        }
-        return String(describing: error)
     }
 }

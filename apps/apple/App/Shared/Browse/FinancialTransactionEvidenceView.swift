@@ -149,19 +149,19 @@ struct FinancialTransactionEvidenceView: View {
                 "Action",
                 value: preview.action == .linkExisting ? "Link existing Expenses" : "Create aggregate Expense"
             )
-            LabeledContent("Settlement", value: preview.amount.formatted(.currency(code: "USD")))
+            LabeledContent("Settlement", value: preview.amount.formatted(.usd))
             LabeledContent("Account", value: preview.accountName)
             LabeledContent("Funder", value: preview.funderName ?? "No account owner recorded")
             LabeledContent("Trade", value: preview.trade.rawValue.capitalized)
             LabeledContent("Cost type", value: preview.costType.rawValue.capitalized)
             LabeledContent(
-                "Signed booked amount", value: preview.existingBookedAmount.formatted(.currency(code: "USD")))
+                "Signed booked amount", value: preview.existingBookedAmount.formatted(.usd))
             LabeledContent(
                 "Prior vendor settlements",
-                value: preview.previouslySettledAmount.formatted(.currency(code: "USD")))
+                value: preview.previouslySettledAmount.formatted(.usd))
             LabeledContent(
                 "Remaining booked amount",
-                value: preview.remainingBookedAmount.formatted(.currency(code: "USD")))
+                value: preview.remainingBookedAmount.formatted(.usd))
             Text(
                 preview.action == .linkExisting
                     ? "This links the existing Expenses to this settlement."

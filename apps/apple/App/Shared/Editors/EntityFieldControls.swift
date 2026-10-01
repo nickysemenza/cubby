@@ -189,7 +189,7 @@ struct EntityFieldControl: View {
                 value: Binding(
                     get: { value.doubleValue },
                     set: { model.draft[key] = $0.map(JSONValue.number) ?? .null }),
-                format: .currency(code: "USD")
+                format: .usd
             )
             .multilineTextAlignment(.trailing)
         }

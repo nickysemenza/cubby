@@ -121,7 +121,7 @@ public final class RecountSession {
             duplicates = (try? await service.duplicateProductIDs()) ?? []
             phase = .choosingScope
         } catch {
-            phase = .failed(Self.message(for: error))
+            phase = .failed(error.userMessage)
         }
     }
 
@@ -274,7 +274,7 @@ public final class RecountSession {
             if unknownLocation == nil { unknownLocation = try await service.ensureGlobalUnknown() }
             if let unknownLocation { stage(.relocate(unknownLocation, name: "Unknown"), for: id) }
         } catch {
-            lastError = Self.message(for: error)
+            lastError = error.userMessage
         }
     }
 
@@ -333,7 +333,7 @@ public final class RecountSession {
             }
             return
         } catch {
-            lastError = Self.message(for: error)
+            lastError = error.userMessage
             return
         }
 
@@ -346,7 +346,7 @@ public final class RecountSession {
             do {
                 summary.adopted += try await service.adopt(adoptions.map(\.id), into: bin.id)
             } catch {
-                lastError = "Counted, but the bins were not adopted: \(Self.message(for: error))"
+                lastError = "Counted, but the bins were not adopted: \(error.userMessage)"
             }
         }
         completed.insert(bin.id)
@@ -433,7 +433,7 @@ public final class RecountSession {
             pendingVerify.subtract(fresh.rows.map(\.product.id))
             report()
         } catch {
-            lastError = Self.message(for: error)
+            lastError = error.userMessage
         }
     }
 
@@ -486,7 +486,7 @@ public final class RecountSession {
         do {
             return .scanned(try await service.scan(raw: read.raw, at: read.anchor))
         } catch {
-            return .failed(message(for: error))
+            return .failed(error.userMessage)
         }
     }
 
@@ -633,12 +633,5 @@ public final class RecountSession {
 
     private func report() {
         onProgress?(progress)
-    }
-
-    private static func message(for error: any Error) -> String {
-        if let error = error as? CubbyAPIError {
-            return error.detail?.message ?? "HTTP \(error.status)"
-        }
-        return String(describing: error)
     }
 }
