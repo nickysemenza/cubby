@@ -11,6 +11,7 @@ import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { formatEstimate } from "~/lib/nutrition-format";
+import { formatCount } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
 export type FoodAmountSourceKind =
@@ -27,9 +28,6 @@ const BASE_UNIT_SUGGESTIONS = {
 } as const satisfies Record<FoodAmountSourceKind, readonly string[]>;
 const NO_SUGGESTED_UNITS: readonly string[] = [];
 
-const compactNumber = (value: number) =>
-  Number(value.toFixed(2)).toLocaleString();
-
 export function formatFoodAmount(amount: {
   value: number;
   unit: string;
@@ -37,7 +35,7 @@ export function formatFoodAmount(amount: {
 }): string {
   const formatted = tryFormatAmount(amount);
   return formatted.startsWith("Error formatting amount:")
-    ? `${compactNumber(amount.value)} ${amount.unit}`
+    ? `${formatCount(amount.value, 2)} ${amount.unit}`
     : formatted;
 }
 
@@ -46,15 +44,15 @@ export function formatFoodAmountEstimate(
 ): string {
   const parts: string[] = [];
   if (estimate.grams != null) {
-    parts.push(`Estimated weight ${compactNumber(estimate.grams)} g`);
+    parts.push(`Estimated weight ${formatCount(estimate.grams, 2)} g`);
   } else if (hasKnownEstimate(estimate.weight)) {
     parts.push(
-      `Estimated weight ${formatEstimate(estimate.weight, (value) => `${compactNumber(value)} g`)}`,
+      `Estimated weight ${formatEstimate(estimate.weight, (value) => `${formatCount(value, 2)} g`)}`,
     );
   }
   if (hasKnownEstimate(estimate.batchShare)) {
     parts.push(
-      `${formatEstimate(estimate.batchShare, (value) => `${compactNumber(value * 100)}%`)} of batch`,
+      `${formatEstimate(estimate.batchShare, (value) => `${formatCount(value * 100, 2)}%`)} of batch`,
     );
   }
   if (parts.length) return parts.join(" · ");

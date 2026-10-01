@@ -9,7 +9,6 @@ import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useId, useState } from "react";
 import { z } from "zod";
 
-import { EntityStat } from "~/components/entity/entity-stat";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -71,16 +70,14 @@ export function GalleryHeader({
       >
         {stats && (
           <div className="hidden items-center gap-2 border-r pr-2 text-xs text-muted-foreground md:flex">
-            <EntityStat
-              entity="location"
-              count={stats.locationCount}
-              label="locations"
-            />
-            <EntityStat
-              entity="inventory"
-              count={stats.itemCount}
-              label="items"
-            />
+            <span className="flex items-center gap-1">
+              <EntityIcon entity="location" size={12} />
+              {stats.locationCount} locations
+            </span>
+            <span className="flex items-center gap-1">
+              <EntityIcon entity="inventory" size={12} />
+              {stats.itemCount} items
+            </span>
           </div>
         )}
 

@@ -1,15 +1,8 @@
 import { locationShortcode } from "@cubby/schemas/identifiers";
 import type { infLocation, LocationType } from "@cubby/schemas/location";
-import {
-  buildNutrition,
-  type MeasureEstimate,
-  withMacros,
-} from "@cubby/schemas/nutrition";
 import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { SHORTCODE_CHARS } from "@cubby/shared";
 import { z } from "zod";
-
-import type { entitySummaryDataSchema } from "~/components/entity/entity-summary-card";
 
 // Deterministic ids/shortcodes for these static demo fixtures. We must NOT call
 // crypto.randomUUID() / random shortcode generation at module top-level: workerd
@@ -87,29 +80,6 @@ export const sampleUnitMappings: z.infer<typeof unitMappingWithMetadata>[] = [
     sourceMetadata: { type: "manual" },
   },
 ];
-
-// Sample data for EntitySummaryCard
-const completeEstimate = (lower: number, total: number): MeasureEstimate => ({
-  status: "complete",
-  lower,
-  upper: null,
-  coverage: { covered: total, total },
-});
-
-export const sampleSummaryData: z.infer<typeof entitySummaryDataSchema> = {
-  type: "recipe",
-  data: {
-    ...withMacros({
-      cost: completeEstimate(8.45, 6),
-      nutrition: buildNutrition((key) => {
-        if (key === "kcal") return completeEstimate(2800, 6);
-        if (key === "protein") return completeEstimate(42, 6);
-        return { status: "unavailable", reason: "no_data" };
-      }),
-    }),
-    weight: completeEstimate(650, 6),
-  },
-};
 
 // Sample data for formatRichText - raw instruction text and ingredient names
 export const sampleRichTextInput = {

@@ -21,18 +21,11 @@ import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { useEntityListSource } from "~/app/_components/combobox/with-search-hook";
 import { tradeOptions } from "~/app/projects/trade-options";
+import { WorkflowDialog } from "~/components/dialogs/workflow-dialog";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
@@ -240,253 +233,241 @@ export function SplitExpenseDialog({
   const productLabel = expense.productName ?? "the linked product";
 
   return (
-    <Dialog
+    <WorkflowDialog
       open={open}
       onOpenChange={(next) => {
         if (!next) setParts(seedParts());
         onOpenChange(next);
       }}
+      size="lg"
+      title={`Split "${expense.name}"`}
+      description={
+        <>
+          The parts below are filed under the same Purchase and{" "}
+          <strong>this Expense is deleted</strong> — a split replaces the row,
+          it doesn't add to it. Each part carries its own trade and cost type,
+          which is what makes a combo kit's saw half tools and its blade half
+          materials.
+        </>
+      }
+      primary={{
+        label: `Split into ${parts.length}`,
+        pendingLabel: "Splitting...",
+        pending: splitMutation.isPending,
+        disabled: missingName,
+        onClick: () =>
+          splitMutation.mutate({
+            expenseId: expense.id,
+            parts: parts.map((part) => ({
+              name: part.name.trim(),
+              cost: parseCost(part.cost),
+              costType: part.costType,
+              trade: part.trade,
+              // Plain string out of the picker — branded as a shortcode at
+              // this boundary, same convention as the create/settle dialogs.
+              projectId: part.projectId
+                ? parseShortcodeFor("project", part.projectId)
+                : null,
+              productId: part.keepProduct ? expense.productId : null,
+              productQuantity:
+                part.keepProduct && part.productQuantity !== ""
+                  ? Number(part.productQuantity)
+                  : null,
+            })),
+          }),
+      }}
     >
-      <DialogContent size="lg">
-        <DialogHeader>
-          <DialogTitle>Split "{expense.name}"</DialogTitle>
-          <DialogDescription>
-            The parts below are filed under the same Purchase and{" "}
-            <strong>this Expense is deleted</strong> — a split replaces the row,
-            it doesn't add to it. Each part carries its own trade and cost type,
-            which is what makes a combo kit's saw half tools and its blade half
-            materials.
-          </DialogDescription>
-        </DialogHeader>
-
-        <Stack gap="sm" className="max-h-80 overflow-y-auto">
-          {parts.map((part, index) => (
-            <Stack
-              key={part.key}
-              gap="xs"
-              className="border border-[var(--border)] p-2"
-            >
-              <Row align="center" justify="between" gap="sm">
-                <Eyebrow>Part {index + 1}</Eyebrow>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={parts.length <= 2}
-                  onClick={() => removePart(part.key)}
-                  aria-label={`Remove part ${index + 1}`}
-                >
-                  <XIcon />
-                </Button>
-              </Row>
-              <Row align="center" gap="sm">
-                <Input
-                  value={part.name}
-                  onChange={(event) =>
-                    updatePart(part.key, { name: event.target.value })
+      <Stack gap="sm" className="max-h-80 overflow-y-auto">
+        {parts.map((part, index) => (
+          <Stack
+            key={part.key}
+            gap="xs"
+            className="border border-[var(--border)] p-2"
+          >
+            <Row align="center" justify="between" gap="sm">
+              <Eyebrow>Part {index + 1}</Eyebrow>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={parts.length <= 2}
+                onClick={() => removePart(part.key)}
+                aria-label={`Remove part ${index + 1}`}
+              >
+                <XIcon />
+              </Button>
+            </Row>
+            <Row align="center" gap="sm">
+              <Input
+                value={part.name}
+                onChange={(event) =>
+                  updatePart(part.key, { name: event.target.value })
+                }
+                placeholder="What this part is"
+                className="flex-1"
+                aria-label={`Part ${index + 1} name`}
+              />
+              <Input
+                value={part.cost}
+                onChange={(event) =>
+                  updatePart(part.key, { cost: event.target.value })
+                }
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                className="w-28 shrink-0 text-right font-mono tabular-nums"
+                aria-label={`Part ${index + 1} cost`}
+              />
+            </Row>
+            <Row align="center" gap="sm" wrap>
+              <StaticPicker
+                items={fieldEnumOptions("expense", "costType")}
+                value={part.costType}
+                onValueChange={(next) => {
+                  // Required enum — a cleared picker is a no-op.
+                  const parsed = costTypeSchema.safeParse(next);
+                  if (parsed.success) {
+                    updatePart(part.key, { costType: parsed.data });
                   }
-                  placeholder="What this part is"
-                  className="flex-1"
-                  aria-label={`Part ${index + 1} name`}
-                />
-                <Input
-                  value={part.cost}
-                  onChange={(event) =>
-                    updatePart(part.key, { cost: event.target.value })
-                  }
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  className="w-28 shrink-0 text-right font-mono tabular-nums"
-                  aria-label={`Part ${index + 1} cost`}
-                />
-              </Row>
-              <Row align="center" gap="sm" wrap>
-                <StaticPicker
-                  items={fieldEnumOptions("expense", "costType")}
-                  value={part.costType}
-                  onValueChange={(next) => {
-                    // Required enum — a cleared picker is a no-op.
-                    const parsed = costTypeSchema.safeParse(next);
-                    if (parsed.success) {
-                      updatePart(part.key, { costType: parsed.data });
-                    }
-                  }}
-                  className="w-36"
-                  label={`Part ${index + 1} cost type`}
-                  compact
-                />
-                <StaticPicker
-                  items={tradeOptions}
-                  value={part.trade}
-                  onValueChange={(next) => {
-                    const parsed = tradeSchema.nullable().safeParse(next);
-                    if (parsed.success) {
-                      updatePart(part.key, { trade: parsed.data });
-                    }
-                  }}
-                  className="w-40"
-                  label={`Part ${index + 1} trade`}
-                  placeholder="Inherited trade"
-                  clearable
-                  compact
-                />
-                <div className="w-48">
-                  <PartProjectPicker
-                    projectId={part.projectId}
-                    onChange={(projectId) =>
-                      updatePart(part.key, { projectId })
-                    }
-                  />
-                </div>
-                {expense.productId && (
-                  <Row align="center" gap="xs">
-                    <Row
-                      as="label"
-                      align="center"
-                      gap="xs"
-                      className="text-xs"
-                      title={`Give this part the ${productLabel} link`}
-                    >
-                      <Checkbox
-                        checked={part.keepProduct}
-                        onCheckedChange={(checked) =>
-                          setProductPart(part.key, checked === true)
-                        }
-                        aria-label={`Give part ${index + 1} the ${productLabel} link`}
-                      />
-                      Product
-                    </Row>
-                    {part.keepProduct ? (
-                      <Input
-                        value={part.productQuantity}
-                        onChange={(event) =>
-                          updatePart(part.key, {
-                            productQuantity: event.target.value,
-                          })
-                        }
-                        type="number"
-                        step="any"
-                        placeholder="Qty unknown"
-                        className="w-28"
-                        aria-label={`Part ${index + 1} product quantity`}
-                      />
-                    ) : null}
-                  </Row>
-                )}
-              </Row>
-              <FieldSuggestionApply
-                source={{
-                  basisMode: "provided",
-                  entity: "expense",
-                  targets: ["trade"],
-                  basis: {
-                    name: part.name || null,
-                    projectId: part.projectId,
-                    vendor: expense.vendor,
-                  },
                 }}
-                currentValue={part.trade}
-                onApply={(suggestion) => {
-                  const parsed = tradeSchema.safeParse(suggestion.value);
+                className="w-36"
+                label={`Part ${index + 1} cost type`}
+                compact
+              />
+              <StaticPicker
+                items={tradeOptions}
+                value={part.trade}
+                onValueChange={(next) => {
+                  const parsed = tradeSchema.nullable().safeParse(next);
                   if (parsed.success) {
                     updatePart(part.key, { trade: parsed.data });
                   }
                 }}
+                className="w-40"
+                label={`Part ${index + 1} trade`}
+                placeholder="Inherited trade"
+                clearable
+                compact
               />
-            </Stack>
-          ))}
-        </Stack>
-
-        <Row align="center" justify="between" gap="sm">
-          <Stack gap="tight">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={addPart}
-              disabled={atSplitLimit}
-            >
-              <PlusIcon />
-              Add part
-            </Button>
-            {atSplitLimit ? (
-              <Description size="2xs">
-                A split can contain at most {MAX_SPLIT_EXPENSE_PARTS} parts.
-              </Description>
-            ) : null}
+              <div className="w-48">
+                <PartProjectPicker
+                  projectId={part.projectId}
+                  onChange={(projectId) => updatePart(part.key, { projectId })}
+                />
+              </div>
+              {expense.productId && (
+                <Row align="center" gap="xs">
+                  <Row
+                    as="label"
+                    align="center"
+                    gap="xs"
+                    className="text-xs"
+                    title={`Give this part the ${productLabel} link`}
+                  >
+                    <Checkbox
+                      checked={part.keepProduct}
+                      onCheckedChange={(checked) =>
+                        setProductPart(part.key, checked === true)
+                      }
+                      aria-label={`Give part ${index + 1} the ${productLabel} link`}
+                    />
+                    Product
+                  </Row>
+                  {part.keepProduct ? (
+                    <Input
+                      value={part.productQuantity}
+                      onChange={(event) =>
+                        updatePart(part.key, {
+                          productQuantity: event.target.value,
+                        })
+                      }
+                      type="number"
+                      step="any"
+                      placeholder="Qty unknown"
+                      className="w-28"
+                      aria-label={`Part ${index + 1} product quantity`}
+                    />
+                  ) : null}
+                </Row>
+              )}
+            </Row>
+            <FieldSuggestionApply
+              source={{
+                basisMode: "provided",
+                entity: "expense",
+                targets: ["trade"],
+                basis: {
+                  name: part.name || null,
+                  projectId: part.projectId,
+                  vendor: expense.vendor,
+                },
+              }}
+              currentValue={part.trade}
+              onApply={(suggestion) => {
+                const parsed = tradeSchema.safeParse(suggestion.value);
+                if (parsed.success) {
+                  updatePart(part.key, { trade: parsed.data });
+                }
+              }}
+            />
           </Stack>
-          {expense.productId && (
-            <Description size="2xs">
-              "Product" hands {productLabel} to one part; the rest start with no
-              product.
-            </Description>
-          )}
-        </Row>
+        ))}
+      </Stack>
 
-        <Stack gap="tight" className="border-t border-[var(--border)] pt-2">
-          <Row align="center" justify="between" gap="sm">
-            <span className="text-sm text-muted-foreground">Parts total</span>
-            <span className="font-mono text-sm tabular-nums">
-              {formatCurrency(partsTotal)}
-            </span>
-          </Row>
-          <Row align="center" justify="between" gap="sm">
-            <span className="text-sm text-muted-foreground">Original cost</span>
-            <span className="font-mono text-sm tabular-nums">
-              {original != null ? formatCurrency(original) : <NoneValue />}
-            </span>
-          </Row>
-          {/* A cue, never a gate. The parts are recorded exactly as typed:
+      <Row align="center" justify="between" gap="sm">
+        <Stack gap="tight">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={addPart}
+            disabled={atSplitLimit}
+          >
+            <PlusIcon />
+            Add part
+          </Button>
+          {atSplitLimit ? (
+            <Description size="2xs">
+              A split can contain at most {MAX_SPLIT_EXPENSE_PARTS} parts.
+            </Description>
+          ) : null}
+        </Stack>
+        {expense.productId && (
+          <Description size="2xs">
+            "Product" hands {productLabel} to one part; the rest start with no
+            product.
+          </Description>
+        )}
+      </Row>
+
+      <Stack gap="tight" className="border-t border-[var(--border)] pt-2">
+        <Row align="center" justify="between" gap="sm">
+          <span className="text-sm text-muted-foreground">Parts total</span>
+          <span className="font-mono text-sm tabular-nums">
+            {formatCurrency(partsTotal)}
+          </span>
+        </Row>
+        <Row align="center" justify="between" gap="sm">
+          <span className="text-sm text-muted-foreground">Original cost</span>
+          <span className="font-mono text-sm tabular-nums">
+            {original != null ? formatCurrency(original) : <NoneValue />}
+          </span>
+        </Row>
+        {/* A cue, never a gate. The parts are recorded exactly as typed:
               a partial refund or a discount applied to one half legitimately
               makes the halves disagree with the original Expense. */}
-          {delta !== null ? (
-            <StatusText tone="warning" className="text-xs">
-              Parts are {formatCurrency(Math.abs(delta))}{" "}
-              {delta > 0 ? "over" : "under"} the original — saved as entered.
-              Nothing is auto-balanced.
-            </StatusText>
-          ) : (
-            <Description size="xs">
-              {original == null
-                ? "The original has no cost recorded, so there's nothing to reconcile against."
-                : "Parts add up to the original cost."}
-            </Description>
-          )}
-        </Stack>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            disabled={missingName || splitMutation.isPending}
-            onClick={() =>
-              splitMutation.mutate({
-                expenseId: expense.id,
-                parts: parts.map((part) => ({
-                  name: part.name.trim(),
-                  cost: parseCost(part.cost),
-                  costType: part.costType,
-                  trade: part.trade,
-                  // Plain string out of the picker — branded as a shortcode at
-                  // this boundary, same convention as the create/settle dialogs.
-                  projectId: part.projectId
-                    ? parseShortcodeFor("project", part.projectId)
-                    : null,
-                  productId: part.keepProduct ? expense.productId : null,
-                  productQuantity:
-                    part.keepProduct && part.productQuantity !== ""
-                      ? Number(part.productQuantity)
-                      : null,
-                })),
-              })
-            }
-          >
-            {splitMutation.isPending
-              ? "Splitting..."
-              : `Split into ${parts.length}`}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        {delta !== null ? (
+          <StatusText tone="warning" className="text-xs">
+            Parts are {formatCurrency(Math.abs(delta))}{" "}
+            {delta > 0 ? "over" : "under"} the original — saved as entered.
+            Nothing is auto-balanced.
+          </StatusText>
+        ) : (
+          <Description size="xs">
+            {original == null
+              ? "The original has no cost recorded, so there's nothing to reconcile against."
+              : "Parts add up to the original cost."}
+          </Description>
+        )}
+      </Stack>
+    </WorkflowDialog>
   );
 }

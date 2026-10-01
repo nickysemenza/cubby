@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { showErrorToast } from "~/components/feedback/error-details";
 import { DropdownMenuSeparator } from "~/components/ui/dropdown-menu";
 import type {
   EditableEntity,
@@ -134,7 +135,8 @@ export function useOptimisticDelete<
         toast.success(`${deletable.entityLabel} deleted`);
       };
       const onError = (error: Error) => {
-        toast.error(
+        showErrorToast(
+          error,
           error.message ||
             `Failed to delete ${deletable.entityLabel.toLowerCase()}`,
         );

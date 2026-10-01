@@ -8,10 +8,6 @@ import {
   parseRichTextSafe,
 } from "~/app/_components/recipe/richtext";
 import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
-import {
-  EntitySummaryCard,
-  entitySummaryDataSchema,
-} from "~/components/entity/entity-summary-card";
 
 import { EditableComponentDemo } from "../_components/EditableComponentDemo";
 import { Prose } from "../_components/Prose";
@@ -19,7 +15,6 @@ import {
   richTextInputSchema,
   sampleLocations,
   sampleRichTextInput,
-  sampleSummaryData,
   sampleUnitMappings,
 } from "../_data/samples";
 
@@ -52,21 +47,6 @@ export function ComponentDemosSection() {
         defaultData={sampleUnitMappings}
       >
         {(data) => <ConversionCapabilities mappings={data} />}
-      </EditableComponentDemo>
-
-      <EditableComponentDemo
-        title="EntitySummaryCard"
-        description="Summary card showing aggregated data for an entity like a recipe's nutritional info and cost."
-        schema={entitySummaryDataSchema}
-        defaultData={sampleSummaryData}
-      >
-        {(data) => (
-          <EntitySummaryCard
-            title="Recipe Summary"
-            description="Chocolate Chip Cookies"
-            summaryData={data}
-          />
-        )}
       </EditableComponentDemo>
 
       <EditableComponentDemo

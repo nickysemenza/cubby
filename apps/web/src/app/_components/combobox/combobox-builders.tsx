@@ -30,6 +30,7 @@ import { ProjectMark } from "~/app/projects/project-mark";
 import { VendorMark } from "~/components/entity/vendor-cell";
 import { Image } from "~/components/ui/image";
 import { EntityIcon } from "~/entities/entities";
+import { formatCount } from "~/lib/utils";
 
 export type ProductPickerIntent = "reference" | "stock";
 
@@ -38,9 +39,6 @@ export const pickerRecord = z.object({ id: z.string() }).catchall(z.unknown());
 export type PickerRecord = z.infer<typeof pickerRecord>;
 const pickerAliases = z.array(z.string());
 const pickerTitle = z.string();
-
-const formatPickerQuantity = (value: number) =>
-  Number.isInteger(value) ? String(value) : value.toLocaleString();
 
 function SearchPickerIcon({
   entity,
@@ -262,7 +260,7 @@ function withProductInventoryPresentation(
   const facts = [
     knownOnHand === null
       ? "Mixed units on hand"
-      : `${formatPickerQuantity(knownOnHand)} on hand / ${formatPickerQuantity(expected)} expected`,
+      : `${formatCount(knownOnHand, 3)} on hand / ${formatCount(expected, 3)} expected`,
   ];
   if (unknownLines > 0) {
     facts.push(
@@ -286,7 +284,7 @@ function withProductInventoryPresentation(
     return productPickerInventoryGroup(
       base,
       { id: "needs-stock", label: "Needs stocking", order: 0 },
-      { label: `Need ${formatPickerQuantity(need)}`, tone: "positive" },
+      { label: `Need ${formatCount(need, 3)}`, tone: "positive" },
       facts,
     );
 

@@ -26,17 +26,9 @@ import {
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { WorkflowDialog } from "~/components/dialogs/workflow-dialog";
 import { Row } from "~/components/layout";
-import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { entityRelationMutationOptions } from "~/entities/entity-mutation";
@@ -177,66 +169,59 @@ export function LinkProductsDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={resetAndClose}>
-      <DialogContent size="lg">
-        <DialogHeader>
-          <DialogTitle>
-            Attach products to {purchaseLabel(purchase)}
-          </DialogTitle>
-          <DialogDescription>
-            Record which products this purchase bought. The link carries no
-            money or quantity — spend stays on the purchase&apos;s Expenses.
-          </DialogDescription>
-        </DialogHeader>
-        <Row align="center" gap="sm">
-          <MagnifyingGlassIcon
-            className="size-3.5 shrink-0 text-muted-foreground"
-            aria-hidden
-          />
-          <Input
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="Search products…"
-          />
-        </Row>
-        <div className="max-h-96 overflow-y-auto">
-          <ListWorkbench
-            model={workbench}
-            mode="embedded"
-            ariaLabel="Products available to attach"
-            emptyState={
-              <Empty variant="minimal" className="py-6">
-                <EmptyTitle>No products found</EmptyTitle>
-                <EmptyDescription>
-                  Adjust the search, or every match is already attached.
-                </EmptyDescription>
-              </Empty>
-            }
-          />
-        </div>
-        <DialogFooter>
-          <Description size="xs" className="mr-auto">
-            {selected.size} selected
-          </Description>
-          <Button variant="outline" onClick={() => resetAndClose(false)}>
-            Cancel
-          </Button>
-          <Button
-            disabled={selected.size === 0 || attach.isPending}
-            onClick={() =>
-              attach.mutate({
-                action: "attach",
-                entity: "purchase",
-                relation: "products",
-                id: purchase.id,
-                items: [...selected].map((id) => ({ id })),
-              })
-            }
-          >
-            {attach.isPending ? "Attaching..." : `Attach ${selected.size}`}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <WorkflowDialog
+      open={open}
+      onOpenChange={resetAndClose}
+      size="lg"
+      title={`Attach products to ${purchaseLabel(purchase)}`}
+      description="Record which products this purchase bought. The link carries no money or quantity — spend stays on the purchase's Expenses."
+      summary={
+        <Description size="xs" className="mr-auto">
+          {selected.size} selected
+        </Description>
+      }
+      onCancel={() => resetAndClose(false)}
+      primary={{
+        label: `Attach ${selected.size}`,
+        pendingLabel: "Attaching...",
+        pending: attach.isPending,
+        disabled: selected.size === 0,
+        onClick: () =>
+          attach.mutate({
+            action: "attach",
+            entity: "purchase",
+            relation: "products",
+            id: purchase.id,
+            items: [...selected].map((id) => ({ id })),
+          }),
+      }}
+    >
+      <Row align="center" gap="sm">
+        <MagnifyingGlassIcon
+          className="size-3.5 shrink-0 text-muted-foreground"
+          aria-hidden
+        />
+        <Input
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+          placeholder="Search products…"
+        />
+      </Row>
+      <div className="max-h-96 overflow-y-auto">
+        <ListWorkbench
+          model={workbench}
+          mode="embedded"
+          ariaLabel="Products available to attach"
+          emptyState={
+            <Empty variant="minimal" className="py-6">
+              <EmptyTitle>No products found</EmptyTitle>
+              <EmptyDescription>
+                Adjust the search, or every match is already attached.
+              </EmptyDescription>
+            </Empty>
+          }
+        />
+      </div>
+    </WorkflowDialog>
   );
 }

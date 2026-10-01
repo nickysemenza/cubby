@@ -63,6 +63,18 @@ export async function copyText(
   }
 }
 
+/** Copy text and toast the outcome with the shared "Copy failed" message. */
+export async function copyTextWithToast(
+  text: string,
+  successMessage: string,
+  port: ClipboardPort = productionClipboardPort,
+): Promise<boolean> {
+  const copied = await copyText(text, port);
+  if (copied) port.notifications.success(successMessage);
+  else port.notifications.error("Copy failed");
+  return copied;
+}
+
 /**
  * Copy public shortcodes, one per line, and toast the outcome.
  *

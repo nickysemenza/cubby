@@ -29,17 +29,10 @@ import { z } from "zod";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { DiscardLineFields } from "~/app/_components/inventory/discard-line-fields";
+import { WorkflowDialog } from "~/components/dialogs/workflow-dialog";
 import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
 import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { NullableNumericField, SelectField } from "../form-utils";
@@ -228,98 +221,86 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   });
 
   return (
-    <Dialog open={open} onOpenChange={close}>
-      <DialogContent size="md">
-        <DialogHeader>
-          <DialogTitle>Discard</DialogTitle>
-          <DialogDescription>
-            Record that units of "{product.name}" were thrown away, broken, or
-            given away. Logs a $0 expense with a negative quantity — no vendor,
-            no order.
-          </DialogDescription>
-        </DialogHeader>
-        <Stack gap="md">
-          <NullableNumericField
-            form={form}
-            name="quantity"
-            label="Units discarded"
-            placeholder="1"
-            fraction
-          />
-          <DiscardLineFields
-            form={form}
-            productId={product.id}
-            productName={product.name}
-          />
+    <WorkflowDialog
+      open={open}
+      onOpenChange={close}
+      title="Discard"
+      description={`Record that units of "${product.name}" were thrown away, broken, or given away. Logs a $0 expense with a negative quantity — no vendor, no order.`}
+      primary={{
+        label: "Discard",
+        pending: discard.isPending,
+        disabled: needsEntryChoice,
+        onClick: () => void submit(),
+      }}
+    >
+      <Stack gap="md">
+        <NullableNumericField
+          form={form}
+          name="quantity"
+          label="Units discarded"
+          placeholder="1"
+          fraction
+        />
+        <DiscardLineFields
+          form={form}
+          productId={product.id}
+          productName={product.name}
+        />
 
-          {entries.length === 0 ? (
-            <Description>
-              Not stocked anywhere, so there is nothing to take off a shelf —
-              this just records the exit in the ledger.
-            </Description>
-          ) : (
-            <Stack gap="sm">
-              <Controller
-                control={form.control}
-                name="adjustInventory"
-                render={({ field }) => (
-                  <Row gap="sm" align="center">
-                    <Checkbox
-                      id={adjustInventoryId}
-                      checked={field.value}
-                      onCheckedChange={(checked) =>
-                        field.onChange(checked === true)
-                      }
-                    />
-                    <label htmlFor={adjustInventoryId} className="text-sm">
-                      Also take these units off the shelf
-                    </label>
-                  </Row>
-                )}
+        {entries.length === 0 ? (
+          <Description>
+            Not stocked anywhere, so there is nothing to take off a shelf — this
+            just records the exit in the ledger.
+          </Description>
+        ) : (
+          <Stack gap="sm">
+            <Controller
+              control={form.control}
+              name="adjustInventory"
+              render={({ field }) => (
+                <Row gap="sm" align="center">
+                  <Checkbox
+                    id={adjustInventoryId}
+                    checked={field.value}
+                    onCheckedChange={(checked) =>
+                      field.onChange(checked === true)
+                    }
+                  />
+                  <label htmlFor={adjustInventoryId} className="text-sm">
+                    Also take these units off the shelf
+                  </label>
+                </Row>
+              )}
+            />
+            {adjustInventory && selectedEntry ? (
+              <Description>
+                Removing from {selectedEntry.location.name}, which currently
+                holds {selectedEntry.amount.value} {selectedEntry.amount.unit}.
+              </Description>
+            ) : null}
+            {warning ? (
+              <div
+                className={
+                  warning.tone === "destructive"
+                    ? "rounded border-2 border-destructive bg-destructive/10 p-2 text-xs text-destructive"
+                    : "rounded border-2 border-warning bg-warning/10 p-2 text-xs text-warning-ink"
+                }
+              >
+                {warning.message}
+              </div>
+            ) : null}
+            {adjustInventory && entries.length > 1 ? (
+              <SelectField
+                form={form}
+                name="inventoryEntryId"
+                label="Take from"
+                options={entryOptions}
+                placeholder="Pick a shelf…"
               />
-              {adjustInventory && selectedEntry ? (
-                <Description>
-                  Removing from {selectedEntry.location.name}, which currently
-                  holds {selectedEntry.amount.value} {selectedEntry.amount.unit}
-                  .
-                </Description>
-              ) : null}
-              {warning ? (
-                <div
-                  className={
-                    warning.tone === "destructive"
-                      ? "rounded border-2 border-destructive bg-destructive/10 p-2 text-xs text-destructive"
-                      : "rounded border-2 border-warning bg-warning/10 p-2 text-xs text-warning-ink"
-                  }
-                >
-                  {warning.message}
-                </div>
-              ) : null}
-              {adjustInventory && entries.length > 1 ? (
-                <SelectField
-                  form={form}
-                  name="inventoryEntryId"
-                  label="Take from"
-                  options={entryOptions}
-                  placeholder="Pick a shelf…"
-                />
-              ) : null}
-            </Stack>
-          )}
-
-          <Row justify="end" gap="sm">
-            <Button variant="outline" onClick={() => close(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void submit()}
-              disabled={needsEntryChoice || discard.isPending}
-            >
-              Discard
-            </Button>
-          </Row>
-        </Stack>
-      </DialogContent>
-    </Dialog>
+            ) : null}
+          </Stack>
+        )}
+      </Stack>
+    </WorkflowDialog>
   );
 };

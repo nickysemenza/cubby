@@ -1,8 +1,7 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
-import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import {
   recipe,
   image,
@@ -12,8 +11,10 @@ import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import { useActionMutation } from "../hooks/useActionMutation";
 import { VerbMenuItem } from "./action-verb-ui";
+import { DeleteEntityDialog } from "./delete-entity-action";
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
+import { useStagedRow } from "./use-staged-row";
 
 type StagedDeleteRow = EntityActionRow & {
   recipeCount?: number;
@@ -32,7 +33,6 @@ const productionOperations: SpecialistLifecycleOperations = {
 interface StagedSpecialistDeleteConfig {
   entityLabel: string;
   description: string;
-  pendingLabel: string;
   stageRow: (row: EntityActionRow) => StagedDeleteRow;
   renderItem: (row: StagedDeleteRow) => string;
   submit: (row: StagedDeleteRow) => Promise<void>;
@@ -43,38 +43,15 @@ interface StagedSpecialistDeleteConfig {
 function useStagedSpecialistDelete({
   entityLabel,
   description,
-  pendingLabel,
   stageRow,
   renderItem,
   submit,
   isPending,
   failureMessage,
 }: StagedSpecialistDeleteConfig): EntityActionHandles {
-  const [staged, setStaged] = useState<StagedDeleteRow | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-  const resolveRef = useRef<((result: { success: boolean }) => void) | null>(
-    null,
-  );
-
-  const finish = useCallback((success: boolean) => {
-    setStaged(null);
-    setFailure(null);
-    resolveRef.current?.({ success });
-    resolveRef.current = null;
-  }, []);
-
-  const stage = useCallback(
-    (rows: readonly EntityActionRow[]) => {
-      const row = rows[0];
-      if (!row) return Promise.resolve({ success: false });
-      resolveRef.current?.({ success: false });
-      setFailure(null);
-      setStaged(stageRow(row));
-      return new Promise<{ success: boolean }>((resolve) => {
-        resolveRef.current = resolve;
-      });
-    },
-    [stageRow],
+  const { staged, stage, finish } = useStagedRow(stageRow, () =>
+    setFailure(null),
   );
 
   return {
@@ -102,19 +79,17 @@ function useStagedSpecialistDelete({
           }
         : { status: "available" },
     dialog: staged ? (
-      <BulkActionDialog
-        open
+      <DeleteEntityDialog
+        entityLabel={entityLabel}
+        items={[{ id: staged.id, name: staged.name ?? staged.id }]}
+        failures={failure ? [failure] : []}
+        isPending={isPending}
+        previewImpact={false}
+        description={description}
+        renderItem={() => renderItem(staged)}
         onOpenChange={(open) => {
           if (!open) finish(false);
         }}
-        items={[{ id: staged.id, name: staged.name ?? staged.id }]}
-        itemNoun={entityLabel}
-        action="Delete"
-        variant="destructive"
-        pendingLabel={pendingLabel}
-        description={description}
-        renderItem={() => renderItem(staged)}
-        error={failure}
         onSubmit={async () => {
           try {
             await submit(staged);
@@ -123,7 +98,6 @@ function useStagedSpecialistDelete({
             setFailure(getErrorMessage(error) || failureMessage);
           }
         }}
-        isPending={isPending}
       />
     ) : null,
   };
@@ -164,7 +138,6 @@ export function useDeleteCookbookEntityAction(
     entityLabel: "Cookbook",
     description:
       "Deleting this cookbook also deletes every recipe it produced — including ones used as a sub-recipe elsewhere or currently planned into a meal, with no separate warning. This cannot be undone.",
-    pendingLabel: "Deleting...",
     stageRow,
     renderItem: (row) =>
       row.recipeCount === undefined
@@ -209,7 +182,6 @@ export function useDeleteImageEntityAction(
     entityLabel: "Image",
     description:
       "This will permanently remove this image and its stored file from your workspace. This action cannot be undone.",
-    pendingLabel: "Deleting...",
     stageRow,
     renderItem: (row) => row.name ?? row.id,
     submit,

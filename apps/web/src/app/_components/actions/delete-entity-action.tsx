@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
@@ -14,11 +14,12 @@ import {
 import { pluralWord } from "~/lib/pluralize";
 
 import { defineEntityAction } from "./entity-action-definition";
-import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
+import type { EntityActionHandles } from "./entity-actions";
 import {
   DeleteImpactPreviewList,
   type ImpactPreviewOperations,
 } from "./entity-operation-impact-preview";
+import { useStagedRow } from "./use-staged-row";
 
 /** The delete dialog depends on this small command surface, not the form kernel. */
 export type DeleteEntityActionCommands = Pick<
@@ -53,6 +54,8 @@ export function DeleteEntityDialog({
   failures = [],
   isPending,
   previewImpact = true,
+  description,
+  renderItem = (item) => item.name,
   impactPreviewOperations,
   onOpenChange,
   onSubmit,
@@ -62,6 +65,9 @@ export function DeleteEntityDialog({
   failures?: readonly string[];
   isPending: boolean;
   previewImpact?: boolean;
+  /** Overrides the generic confirmation sentence (cascading deletes). */
+  description?: string;
+  renderItem?: (item: { id: string; name: string }) => string;
   /** Test-injectable seam for the impact preview's `connections` query. */
   impactPreviewOperations?: ImpactPreviewOperations;
   onOpenChange: (open: boolean) => void;
@@ -76,8 +82,8 @@ export function DeleteEntityDialog({
       action="Delete"
       variant="destructive"
       pendingLabel="Deleting..."
-      description={deleteDescription(label, items.length)}
-      renderItem={(item) => item.name}
+      description={description ?? deleteDescription(label, items.length)}
+      renderItem={renderItem}
       error={
         failures.length > 0 ? (
           <ul className="space-y-1">
@@ -127,29 +133,12 @@ export function useDeleteEntityAction(
   const generatedCommands = useEntityCommands(generatedEntity);
   const commands = commandOverride ?? generatedCommands;
   const navigate = useNavigate();
-  const [staged, setStaged] = useState<EntityActionRow | null>(null);
   const [failures, setFailures] = useState<readonly string[]>([]);
-  const resolveRef = useRef<((result: { success: boolean }) => void) | null>(
-    null,
-  );
   const label = entityLabel(generatedEntity);
-
-  const finish = useCallback((success: boolean) => {
-    setStaged(null);
-    resolveRef.current?.({ success });
-    resolveRef.current = null;
-  }, []);
-
-  const stage = useCallback((rows: readonly EntityActionRow[]) => {
-    const row = rows[0];
-    if (!row) return Promise.resolve({ success: false });
-    resolveRef.current?.({ success: false });
-    setFailures([]);
-    setStaged(row);
-    return new Promise<{ success: boolean }>((resolve) => {
-      resolveRef.current = resolve;
-    });
-  }, []);
+  const { staged, stage, finish } = useStagedRow(
+    (row) => row,
+    () => setFailures([]),
+  );
 
   return {
     run: stage,

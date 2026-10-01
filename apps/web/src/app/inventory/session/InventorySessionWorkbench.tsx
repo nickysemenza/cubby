@@ -20,6 +20,7 @@ import {
   useActionMutation,
   useEntityActionMutation,
 } from "~/app/_components/hooks/useActionMutation";
+import { LocationMoveDialog } from "~/app/_components/locations/location-move-dialog";
 import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
 import { QueuePassResumePrompt } from "~/app/_components/queue-pass/QueuePassProgress";
 import { showErrorToast } from "~/components/feedback/error-details";
@@ -45,7 +46,6 @@ import { getErrorMessage } from "~/lib/error-utils";
 
 import type { RecountWorklist } from "../worklist/worklist-locations";
 import { LocationReviewPane } from "./_components/LocationReviewPane";
-import { MoveToDialog } from "./_components/MoveToDialog";
 import { ParentPicker } from "./_components/ParentPicker";
 import {
   LocationWorkbenchSidebar,
@@ -908,15 +908,24 @@ function InventorySessionActive({
       </div>
 
       {moveTarget && (
-        <MoveToDialog
-          open
-          onOpenChange={(next) => {
-            if (!next) onCloseMoveTarget();
+        <LocationMoveDialog
+          title={`Move ${moveTarget.item.product.name}`}
+          description={
+            moveTarget.commit === "done"
+              ? "Pick where this belongs. The move will be committed with the rest of this recount."
+              : "Pick where this belongs — it moves there now (undo from the toast)."
+          }
+          submitLabel={moveTarget.commit === "done" ? "Stage move" : "Move"}
+          onClose={onCloseMoveTarget}
+          disabledReason={(id) =>
+            id === moveTarget.sourceLocationId
+              ? "Already the current location"
+              : null
+          }
+          onConfirm={async (id) => {
+            await onConfirmMoveTo(id);
+            return null;
           }}
-          title={moveTarget.item.product.name}
-          sourceLocationId={moveTarget.sourceLocationId}
-          commit={moveTarget.commit}
-          onConfirm={onConfirmMoveTo}
         />
       )}
     </Stack>

@@ -27,22 +27,14 @@ import {
 } from "~/app/_components/entity-media/entity-display-images";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { TradeBadge } from "~/app/projects/trade-options";
+import { WorkflowDialog } from "~/components/dialogs/workflow-dialog";
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
 import {
   FilterableCombobox,
   type FilterableComboboxItem,
 } from "~/components/ui/combobox";
 import { Description } from "~/components/ui/description";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { Input } from "~/components/ui/input";
 import { NoneValue } from "~/components/ui/none-value";
@@ -267,84 +259,75 @@ export function LinkExpensesDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={resetAndClose}>
-      <DialogContent size="xl">
-        <DialogHeader>
-          <DialogTitle>
-            Attach expenses to {purchaseLabel(purchase)}
-          </DialogTitle>
-          <DialogDescription>
-            One purchase can span trades. Attaching moves each expense onto this
-            purchase and off its current purchase.
-          </DialogDescription>
-        </DialogHeader>
-        <Row align="center" gap="sm">
-          <Input
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="Search expense names…"
-            className="flex-1"
-          />
-          <FilterableCombobox
-            items={SCOPE_OPTIONS}
-            value={scope}
-            onValueChange={(next) => {
-              if (next && isCandidateScope(next)) setScope(next);
-            }}
-            className="w-56 shrink-0"
-          />
-        </Row>
-        <div className="max-h-72 overflow-y-auto">
-          <ListWorkbench
-            model={workbench}
-            mode="embedded"
-            ariaLabel="Expenses available to attach"
-            emptyState={
-              <Empty variant="minimal" className="py-6">
-                <EmptyTitle>No expenses to attach</EmptyTitle>
-                <EmptyDescription>
-                  Nothing matches this scope. Widen it to any expense, or clear
-                  the search.
-                </EmptyDescription>
-              </Empty>
-            }
-          />
-        </div>
-        <Description size="xs">
-          A payment schedule is not one Purchase — separate transactions stay
-          separate Purchases. Attaching an already-filed expense moves it off
-          its current purchase.
-        </Description>
-        <DialogFooter>
-          <Stack gap="tight" className="mr-auto text-left">
-            <span className="font-mono text-xs tabular-nums">
-              {selected.length} selected · {formatCurrency(selectedTotal)}
-            </span>
-            {selected.length > 0 && (
-              <Description size="2xs">
-                Purchase expense total would go to{" "}
-                {formatCurrency(purchase.expenseTotal + selectedTotal)}
-              </Description>
-            )}
-          </Stack>
-          <Button variant="outline" onClick={() => resetAndClose(false)}>
-            Cancel
-          </Button>
-          <Button
-            disabled={selected.length === 0 || linkMutation.isPending}
-            onClick={() =>
-              linkMutation.mutate({
-                purchaseId: purchase.id,
-                expenseIds: selected,
-              })
-            }
-          >
-            {linkMutation.isPending
-              ? "Attaching..."
-              : `Attach ${selected.length}`}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <WorkflowDialog
+      open={open}
+      onOpenChange={resetAndClose}
+      size="xl"
+      title={`Attach expenses to ${purchaseLabel(purchase)}`}
+      description="One purchase can span trades. Attaching moves each expense onto this purchase and off its current purchase."
+      summary={
+        <Stack gap="tight" className="mr-auto text-left">
+          <span className="font-mono text-xs tabular-nums">
+            {selected.length} selected · {formatCurrency(selectedTotal)}
+          </span>
+          {selected.length > 0 && (
+            <Description size="2xs">
+              Purchase expense total would go to{" "}
+              {formatCurrency(purchase.expenseTotal + selectedTotal)}
+            </Description>
+          )}
+        </Stack>
+      }
+      onCancel={() => resetAndClose(false)}
+      primary={{
+        label: `Attach ${selected.length}`,
+        pendingLabel: "Attaching...",
+        pending: linkMutation.isPending,
+        disabled: selected.length === 0,
+        onClick: () =>
+          linkMutation.mutate({
+            purchaseId: purchase.id,
+            expenseIds: selected,
+          }),
+      }}
+    >
+      <Row align="center" gap="sm">
+        <Input
+          value={searchInput}
+          onChange={(event) => setSearchInput(event.target.value)}
+          placeholder="Search expense names…"
+          className="flex-1"
+        />
+        <FilterableCombobox
+          items={SCOPE_OPTIONS}
+          value={scope}
+          onValueChange={(next) => {
+            if (next && isCandidateScope(next)) setScope(next);
+          }}
+          className="w-56 shrink-0"
+        />
+      </Row>
+      <div className="max-h-72 overflow-y-auto">
+        <ListWorkbench
+          model={workbench}
+          mode="embedded"
+          ariaLabel="Expenses available to attach"
+          emptyState={
+            <Empty variant="minimal" className="py-6">
+              <EmptyTitle>No expenses to attach</EmptyTitle>
+              <EmptyDescription>
+                Nothing matches this scope. Widen it to any expense, or clear
+                the search.
+              </EmptyDescription>
+            </Empty>
+          }
+        />
+      </div>
+      <Description size="xs">
+        A payment schedule is not one Purchase — separate transactions stay
+        separate Purchases. Attaching an already-filed expense moves it off its
+        current purchase.
+      </Description>
+    </WorkflowDialog>
   );
 }
