@@ -35,11 +35,12 @@ const columnHelper = createCubbyColumnHelper<LocationListItemOut>();
 
 // `children`/`inventoryEntries` are relation/computed columns outside the
 // field model.
-const LOCATION_INITIAL_COLUMN_VISIBILITY = {
+// A function for the same import-cycle reason as product.
+const locationInitialColumnVisibility = () => ({
   children: false,
   inventoryEntries: false,
   ...entityListHiddenColumns("location"),
-};
+});
 
 const locationGrouping = generatedEntitySort.location.grouping;
 if (!locationGrouping)
@@ -154,7 +155,7 @@ export const locationListOverride = defineListOverride<
         deletable: true as const,
         filterOptions,
         extraActions,
-        initialColumnVisibility: LOCATION_INITIAL_COLUMN_VISIBILITY,
+        initialColumnVisibility: locationInitialColumnVisibility(),
         groupConfig: LOCATION_GROUP_CONFIG,
       }),
       [filterOptions],

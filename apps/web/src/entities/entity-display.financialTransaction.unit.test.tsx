@@ -82,12 +82,13 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
 
 /**
  * Builds the financial transaction list's columns the same way
- * `financial-transaction-list.tsx` does: overrides for the six columns
+ * `financial-transaction-list.tsx` does: overrides for the columns
  * that render specially (`accountId`/`purchaseId` are `identifier` fields
- * with a `reference`, and `vendorInference`/`sourceRefs` are `json` fields —
+ * with a `reference`, and `sourceRefs` is a `json` field —
  * `createEntityDisplayColumns` throws without an override for any of these;
  * `amount`/`postedDate` keep their existing currency/date renderers rather
- * than falling back to the generic one). Everything else (`kind`, `status`,
+ * than falling back to the generic one). `vendorInference` comes from its
+ * declared `possible-vendor` list renderer. Everything else (`kind`, `status`,
  * `transactionDate`, `merchant`, `rawDescription`, `sourceCategory`,
  * `notes`) is left generic to exercise the declaration's own
  * width/format/mobile metadata. The stubs below are test-local, not the
@@ -124,15 +125,6 @@ function buildFinancialTransactionColumns() {
         helper.display({
           id: "postedDate",
           cell: ({ row }) => <span>{row.original.postedDate}</span>,
-        }),
-      );
-      add(
-        helper.display({
-          id: "vendorInference",
-          enableSorting: false,
-          cell: ({ row }) => (
-            <span>{row.original.vendorInference ? "Vendor" : "—"}</span>
-          ),
         }),
       );
       add(
@@ -250,7 +242,6 @@ describe("financial transaction list display columns", () => {
           add(helper.display({ id: "amount", cell: () => null }));
           add(helper.display({ id: "purchaseId", cell: () => null }));
           add(helper.display({ id: "postedDate", cell: () => null }));
-          add(helper.display({ id: "vendorInference", cell: () => null }));
           add(helper.display({ id: "sourceRefs", cell: () => null }));
           add(helper.display({ id: "accountName", cell: () => null }));
         }),

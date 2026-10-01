@@ -168,7 +168,7 @@ describe("EntityEditDialog thrown submit errors", () => {
   // The kernel validates only what the registry declares (required, custom
   // `validate`); a value the generated update schema then rejects used to
   // throw out of `submit()` as an unhandled rejection the dialog never showed.
-  it("shows a build failure in the banner and beside its field instead of swallowing it", async () => {
+  it("shows a build failure beside its field instead of swallowing it", async () => {
     const transport = vi.fn(async () =>
       entityBrowserMutationResultSchema.parse({
         action: "update",
@@ -212,7 +212,8 @@ describe("EntityEditDialog thrown submit errors", () => {
     await waitFor(() =>
       expect(screen.getAllByText(/Invalid option/).length).toBeGreaterThan(0),
     );
-    expect(screen.getByText(/at status/)).toBeInTheDocument();
+    // The canonical Zod issue is path-keyed, so it renders beside `status`
+    // (the assertion above) rather than in the banner of field-less issues.
     expect(transport).not.toHaveBeenCalled();
   });
 });
