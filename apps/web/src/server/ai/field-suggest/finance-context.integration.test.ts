@@ -5,6 +5,7 @@ import {
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import type { JevPort } from "~/server/ai/jev";
 import {
@@ -158,7 +159,23 @@ describe("reviewed linked finance category suggestions", () => {
     expect(subject).toContain("Fixture black crew shirt");
     expect(subject).toContain('"productQuantity":2');
     expect(subject).not.toContain("Unsaved misleading restaurant");
-    expect(subject.split("Fixture crew shirt line")).toHaveLength(2);
+    const linkedEvidence = subject.split(
+      "\nSaved linked evidence (mixed lines remain distinct; truncation means incomplete evidence):\n",
+    )[1];
+    if (!linkedEvidence) throw new Error("Missing linked finance evidence");
+    const evidence = z
+      .object({
+        savedRecord: z.object({ shortcode: z.string(), name: z.string() }),
+        lines: z.array(z.object({ shortcode: z.string(), name: z.string() })),
+      })
+      .parse(JSON.parse(linkedEvidence));
+    // The saved record and descriptive basis may repeat its name. The linked
+    // line collection must still contain exactly one copy of this Expense.
+    expect(evidence.savedRecord).toEqual({
+      shortcode: f.line.shortcode,
+      name: "Fixture crew shirt line",
+    });
+    expect(evidence.lines).toEqual([evidence.savedRecord]);
     const stored = async () =>
       (
         await getDb(ctx.db)

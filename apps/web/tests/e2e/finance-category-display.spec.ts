@@ -42,6 +42,7 @@ test("linked Expense categories display their readable label and transaction exp
     cost: 23,
     date: "2026-09-10",
     costType: "materials",
+    trade: "other",
     spendingCategoryId: categoryId,
   });
   const transactionId = await create("financial-transactions", {

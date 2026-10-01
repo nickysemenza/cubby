@@ -91,7 +91,7 @@ function schemaFaults(schema: JsonObject): string[] {
 describe("MCP catalog", () => {
   const ctx = withTestDb("mcp");
 
-  it("publishes the 21 tools with annotations derived from their actions", async () => {
+  it("publishes the exact tool catalog with annotations derived from its actions", async () => {
     const { tools } = await listMcpToolCatalog();
     expect(
       Object.fromEntries(tools.map((tool) => [tool.name, tool.annotations])),
@@ -105,6 +105,8 @@ describe("MCP catalog", () => {
       recipe_insights: readOnly(true),
       nutrition: readOnly(),
       finance_read: readOnly(),
+      spending_classification_read: readOnly(),
+      spending_classification_write: write(),
       imports_read: readOnly(true),
       activity: readOnly(),
       statement_rows: write({ destructive: true }),

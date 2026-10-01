@@ -476,7 +476,7 @@ const resolveExpenseSort = (sort: SortParams) => {
 
   if (sort.orderBy === "spendingCategoryId")
     return [
-      sql`(SELECT string_agg(DISTINCT a."spendingCategoryName", ', ' ORDER BY a."spendingCategoryName") FROM (${expenseJointAllocationSql()}) a WHERE a."expenseId"="expense".id) ${sql.raw(dirSql)}`,
+      sql`(SELECT string_agg(DISTINCT a."spendingCategoryName", ', ' ORDER BY a."spendingCategoryName") FROM (${expenseJointAllocationSql(sql`ARRAY["expense".id]`)}) a) ${sql.raw(dirSql)}`,
     ];
   if (sort.orderBy === "projectId") {
     const direction =

@@ -39,6 +39,7 @@ export type PickerSearchEntity =
   | "task"
   | "plant"
   | "planting"
+  | "vendorAccount"
   | "vendor";
 
 /**
@@ -205,6 +206,7 @@ const FALLBACK_BLANK_FILTER_KEY = {
   ledgerTransfer: "search",
   spendingCategory: "search",
   purchase: "search",
+  vendorAccount: "search",
 } satisfies Record<Exclude<PickerSearchEntity, "vendor">, string>;
 
 /** Resolves the filter field a blank-query list request should key on. */

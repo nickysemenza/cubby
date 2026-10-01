@@ -921,6 +921,7 @@ export default defineEntity({
         "productQuantity",
         "costType",
         "trade",
+        "spendingCategoryId",
         "projectId",
         "productId",
         "purchaseId",
@@ -928,7 +929,7 @@ export default defineEntity({
         "createdAt",
         "updatedAt",
       ],
-      computed: ["projectId", "productId"],
+      computed: ["spendingCategoryId", "projectId", "productId"],
       groupable: ["costType"],
     },
     intents: {

@@ -263,6 +263,7 @@ const manifestConfigs = {
   planting: manifestConfig("planting"),
   financialAccount: manifestConfig("financialAccount"),
   purchase: manifestConfig("purchase"),
+  vendorAccount: manifestConfig("vendorAccount"),
 } satisfies {
   [K in ManifestPickerEntity]: UseEntitySearchConfig<
     ShortcodeFor<K>,
