@@ -187,6 +187,7 @@ jobs:
           path: |
             apps/web/dist
             apps/purchase-agent/dist
+            apps/mcp-apps/dist
             packages/wasm
           if-no-files-found: error
           retention-days: 1

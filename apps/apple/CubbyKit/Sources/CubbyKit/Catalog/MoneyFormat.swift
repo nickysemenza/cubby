@@ -6,6 +6,10 @@ extension FormatStyle where Self == FloatingPointFormatStyle<Double>.Currency {
     public static var usd: Self { .currency(code: "USD") }
 }
 
+extension FormatStyle where Self == Decimal.FormatStyle.Currency {
+    public static var usd: Self { .currency(code: "USD") }
+}
+
 extension Double {
     public var usd: String { formatted(.usd) }
 }

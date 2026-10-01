@@ -320,7 +320,8 @@ struct GenericEntityEditModelTests {
                 heroImages: false, heroActions: [], detailSections: [], connectedViews: [],
                 listViews: [], listTotals: [], shelfSubtitle: [],
                 listActions: [], timelineFields: [], lifecycle: nil, editSections: nil,
-                readOnlyOnUpdate: readOnlyOnUpdate, readOnlyWhen: readOnlyWhen))
+                readOnlyOnUpdate: readOnlyOnUpdate, readOnlyWhen: readOnlyWhen,
+                editDateRanges: [], savedViews: []))
     }
 
     @Test func imageOrderTravelsOnlyWhenReordered() async throws {
