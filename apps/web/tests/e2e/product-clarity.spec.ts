@@ -16,7 +16,13 @@ import { escapeRegExp, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 function recordRows(container: Page | Locator) {
-  return container.getByRole("row").or(container.getByRole("listitem"));
+  return container
+    .getByRole("row")
+    .or(
+      container
+        .getByRole("list", { name: /^(Products|Purchases) list$/ })
+        .getByRole("listitem"),
+    );
 }
 
 async function linkProducts(page: Page, purchase: string, products: string[]) {
@@ -147,14 +153,10 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
 
   await products.getByLabel("Open all products", { exact: true }).click();
   await expect(page).toHaveURL(/\/connections\?/);
-  if (testInfo.project.name !== "Mobile Safari") {
-    await expect(
-      page.getByRole("columnheader", { name: "Movement", exact: true }),
-    ).toBeVisible();
-  }
-  await expect(recordRows(page)).toHaveCount(
-    testInfo.project.name === "Mobile Safari" ? 5 : 6,
-  );
+  await expect(
+    page.getByRole("columnheader", { name: "Movement", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("row")).toHaveCount(6);
   await expect(
     recordRows(page)
       .filter({ hasText: `${name} unknown` })
