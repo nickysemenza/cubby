@@ -1,3 +1,4 @@
+import { SENTRY_DATA_COLLECTION } from "@cubby/worker-tracing/sentry-data-collection";
 import * as Sentry from "@sentry/cloudflare";
 import {
   CUBBY_SENTRY_DSN,
@@ -196,6 +197,7 @@ export default Sentry.withSentry(
   () => ({
     dsn: CUBBY_SENTRY_DSN,
     environment: import.meta.env.DEV ? "development" : "production",
+    dataCollection: SENTRY_DATA_COLLECTION,
     tracesSampleRate: 0,
     tracesSampler: () => 0,
     initialScope: { tags: { service: "upc-lookup" } },

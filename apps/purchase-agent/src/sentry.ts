@@ -15,10 +15,9 @@ import {
 export const cloudflare = extend({
   wrap: (Final) =>
     Sentry.instrumentDurableObjectWithSentry(
-      (bindings: SentryAgentEnv) => ({
-        ...purchaseAgentSentryOptions(bindings),
-        enableLogs: true,
-      }),
+      // Sentry 11 captures logs whenever `Sentry.logger` is called; there is
+      // no `enableLogs` switch.
+      (bindings: SentryAgentEnv) => purchaseAgentSentryOptions(bindings),
       Final,
     ),
 });

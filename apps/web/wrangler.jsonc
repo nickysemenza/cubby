@@ -1,9 +1,9 @@
 {
   "name": "cubby",
   "main": "src/cf-server.ts",
-  // Bumped to 2026-06-16 for the cloudflare:workers `tracing.enterSpan` custom-spans
+  // 2026-06-16 is the minimum for the cloudflare:workers `tracing.enterSpan` custom-spans
   // API (shipped 2026-06-16) — see src/server/tracing.ts prod backend.
-  "compatibility_date": "2026-06-16",
+  "compatibility_date": "2026-09-19",
   "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
   // Runaway-request guardrail above the 30s default. The original 120s stopgap
   // was for the Problems WASM parse-sweeps, which have since moved off the hot

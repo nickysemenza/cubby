@@ -16,14 +16,14 @@
   },
   "dependencies": {
     "@cubby/design-tokens": "workspace:*",
-    "@modelcontextprotocol/ext-apps": "^2.0.0",
+    "@modelcontextprotocol/ext-apps": "^2.0.3",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "jsdom": "^30.0.0",
+    "jsdom": "^30.1.1",
     "typescript": "^7.0.2",
     "vite": "^8.1.5",
     "vite-plugin-singlefile": "^2.3.3",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.3"
   }
 }

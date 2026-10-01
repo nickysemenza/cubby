@@ -14,8 +14,12 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const MB = 1_000_000;
-// Measured at 5.35 MB first request / 16.6 MB total when introduced.
-const FIRST_REQUEST_BUDGET = 6 * MB;
+// Measured at 5.35 MB first request / 16.6 MB total when introduced. Sentry 11
+// (@sentry/cloudflare) adds a ~1.1 MB chunk (the shared tracer provider,
+// attribute conventions, and channel-instrumentation tables) that Cubby never
+// uses at runtime because tracing is sampled to 0: 6.27 MB first request /
+// 16.9 MB total. Staying on Sentry 10 restores the 6 MB budget.
+const FIRST_REQUEST_BUDGET = 6.5 * MB;
 const TOTAL_BUDGET = 18 * MB;
 
 const STATIC_IMPORT =

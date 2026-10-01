@@ -6,6 +6,7 @@
 // bridge that turns Flue's event stream into Sentry issues, breadcrumbs, and
 // logs. `sentry.ts` wires it into the Worker; this module imports nothing
 // that needs workerd, so the unit test can drive it with a fake reporter.
+import { SENTRY_DATA_COLLECTION } from "@cubby/worker-tracing/sentry-data-collection";
 import { CUBBY_SENTRY_DSN } from "@cubby/worker-tracing/sentry-dsn";
 import type { FlueObservation } from "@flue/runtime";
 import type * as Sentry from "@sentry/cloudflare";
@@ -65,7 +66,7 @@ export function purchaseAgentSentryOptions(
     // "test" is what the workerd harness sets; every SDK call becomes a no-op.
     enabled: bindings.SENTRY_ENVIRONMENT !== "test",
     environment: bindings.SENTRY_ENVIRONMENT,
-    sendDefaultPii: false,
+    dataCollection: SENTRY_DATA_COLLECTION,
     tracesSampleRate: 0,
     tracesSampler: () => 0,
     initialScope: { tags: { service: "purchase-agent" } },

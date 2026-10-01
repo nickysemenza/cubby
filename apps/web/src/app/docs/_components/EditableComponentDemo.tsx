@@ -114,12 +114,8 @@ export function EditableComponentDemo<T>({
             <JsonEditor
               data={data}
               setData={handleUpdate}
-              rootFontSize={12}
+              baseFontSize={12}
               collapse={2}
-              restrictEdit={false}
-              restrictDelete={false}
-              restrictAdd={false}
-              restrictTypeSelection={false}
               {...jsonEditorSchemaProps}
             />
           </div>

@@ -1,3 +1,4 @@
+import { SENTRY_DATA_COLLECTION } from "@cubby/worker-tracing/sentry-data-collection";
 import { CUBBY_SENTRY_DSN } from "@cubby/worker-tracing/sentry-dsn";
 import * as Sentry from "@sentry/tanstackstart-react";
 import { createRouter } from "@tanstack/react-router";
@@ -71,7 +72,7 @@ export const getRouter = () => {
         !("__CUBBY_E2E_DISABLE_SENTRY__" in window) &&
         (!import.meta.env.CUBBY_LOCAL_RUNTIME ||
           import.meta.env.CUBBY_LOCAL_TELEMETRY),
-      sendDefaultPii: false,
+      dataCollection: SENTRY_DATA_COLLECTION,
       release: `cubby@${__GIT_COMMIT__}`,
       environment: sentryEnvironment(
         window.location.origin,

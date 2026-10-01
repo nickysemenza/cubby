@@ -58,25 +58,25 @@
     "test:e2e:dev": "pnpm --dir apps/web exec tsx tooling/dev/smoke.ts"
   },
   "dependencies": {
-    "@neon/config": "^1.8.2",
-    "@neon/env": "^1.4.7"
+    "@neon/config": "^1.8.3",
+    "@neon/env": "^1.4.8"
   },
   "devDependencies": {
-    "@oxlint/plugins": "1.82.0",
-    "@redocly/cli": "^2.52.0",
-    "@tanstack/router-generator": "1.167.33",
+    "@oxlint/plugins": "1.86.0",
+    "@redocly/cli": "^2.57.0",
+    "@tanstack/router-generator": "1.167.40",
     "@ts-rest/open-api": "3.53.0-rc.1",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.6.3",
     "agent-device": "0.21.12",
     "concurrently": "^10.0.5",
     "husky": "^9.1.7",
-    "knip": "^6.27.0",
-    "lint-staged": "^17.5.1",
-    "nx": "23.2.0",
-    "oxc-parser": "0.149.0",
-    "oxfmt": "0.70.0",
-    "oxlint": "1.82.0",
-    "tsx": "^4.23.1",
+    "knip": "^6.39.0",
+    "lint-staged": "^17.6.0",
+    "nx": "23.2.1",
+    "oxc-parser": "0.152.0",
+    "oxfmt": "0.71.0",
+    "oxlint": "1.86.0",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "zod": "^4.6.5"
   },
