@@ -204,13 +204,10 @@ function cfZodLocalesStub(): Plugin {
     resolveId(source, importer) {
       if (
         source === "../locales/index.js" &&
-        /\/zod\/v4\/(classic|core|mini)\//.test(
-          importer?.replaceAll("\\", "/") ?? "",
-        )
+        importer &&
+        /\/zod\/v4\/(classic|core|mini)\//.test(importer.replaceAll("\\", "/"))
       )
-        return (
-          path.join(path.dirname(importer), "../locales/en.js") + "?en-only"
-        );
+        return `${path.join(path.dirname(importer), "../locales/en.js")}?en-only`;
     },
     load(id) {
       if (id.endsWith("?en-only"))
