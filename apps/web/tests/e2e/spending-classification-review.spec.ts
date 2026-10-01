@@ -312,4 +312,15 @@ test("reviews historical item classification and preserves explicit purpose", as
   await phoneExplanation.click();
   await expect(page.getByText("In effect", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
+  const blocked = await preview({
+    action: "productCategory",
+    productCategoryId: storage,
+    spendingCategoryMode: "blocked",
+    spendingCategoryId: null,
+  });
+  expect((await apply(blocked)).ok()).toBeTruthy();
+  await page.reload();
+  await phoneExplanation.click();
+  await expect(page.getByText("Hierarchy", { exact: true })).toBeVisible();
+  await expect(page.getByText("blocked", { exact: true })).toBeVisible();
 });

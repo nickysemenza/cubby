@@ -51,6 +51,7 @@ export default defineEntity({
         "overview",
         "ownership",
         "notes",
+        "labels",
         "stocked-at",
         "movements",
         "purchases",

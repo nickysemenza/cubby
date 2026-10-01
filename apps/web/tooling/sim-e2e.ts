@@ -1167,11 +1167,12 @@ async function runNativeJourney(
       "agent-device",
       "test",
       productClarity
-        ? "apps/apple/e2e/product-clarity.ad"
+        ? "apps/apple/e2e/product-clarity.yaml"
         : layout
           ? "apps/apple/e2e/native-layout.ad"
           : "apps/apple/e2e/product-edit.ad",
       ...common,
+      ...(productClarity ? ["--maestro"] : []),
       "--artifacts-dir",
       artifacts,
       "--reporter",

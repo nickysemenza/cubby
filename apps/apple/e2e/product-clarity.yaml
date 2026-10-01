@@ -1,0 +1,80 @@
+appId: com.nickysemenza.cubby
+---
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible: "Find"
+    timeout: 60000
+- tapOn: "Find"
+- tapOn: "Search Cubby"
+- inputText: "Synthetic Atlas Lantern"
+- extendedWaitUntil:
+    visible:
+      id: "search.result.${PRODUCT_ID}"
+    timeout: 30000
+- tapOn:
+    id: "search.result.${PRODUCT_ID}"
+- extendedWaitUntil:
+    visible:
+      id: "detail.product.edit"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "field.explanation.product.${PRODUCT_ID}.price"
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: "field.explanation.product.${PRODUCT_ID}.price"
+- extendedWaitUntil:
+    visible:
+      id: "field.explanation.popover"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "In effect"
+    timeout: 30000
+- assertVisible: "\\$40\\.00"
+- assertVisible: "Without the override"
+- scrollUntilVisible:
+    element:
+      id: "field.explanation.fallback-value"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: "\\$25\\.00"
+- scrollUntilVisible:
+    element: "Manual valuation price"
+    direction: DOWN
+    timeout: 30000
+- assertVisible: "Expense-derived unit price"
+- scrollUntilVisible:
+    element:
+      id: "field.explanation.close"
+    direction: UP
+    timeout: 30000
+- tapOn:
+    id: "field.explanation.close"
+- assertNotVisible:
+    id: "field.explanation.popover"
+- scrollUntilVisible:
+    element:
+      id: "relation.evidence.purchase.${PURCHASE_ID}.movement.acquired"
+    direction: DOWN
+    timeout: 30000
+- assertVisible:
+    id: "relation.evidence.purchase.${PURCHASE_ID}.movement.adjusted"
+- assertVisible:
+    id: "relation.evidence.purchase.${PURCHASE_ID}.planned"
+- assertVisible:
+    id: "relation.evidence.purchase.${PURCHASE_ID}.linked"
+- tapOn:
+    id: "relation.row.purchase.${PURCHASE_ID}"
+- scrollUntilVisible:
+    element:
+      id: "relation.evidence.product.${PRODUCT_ID}.movement.acquired"
+    direction: DOWN
+    timeout: 30000
+- assertVisible:
+    id: "relation.evidence.product.${PRODUCT_ID}.movement.adjusted"
+- assertVisible:
+    id: "relation.evidence.product.${PRODUCT_ID}.planned"
+- assertVisible:
+    id: "relation.evidence.product.${PRODUCT_ID}.linked"

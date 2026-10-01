@@ -344,12 +344,18 @@ struct FieldExplanationLabel: View {
                 HStack {
                     Text(resolved?.label ?? field.label).font(.headline)
                     Spacer()
-                    Button("Close field explanation", systemImage: "xmark") {
+                    Button {
                         showingExplanation = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .frame(
+                                minWidth: FieldGuideTokens.touchTarget,
+                                minHeight: FieldGuideTokens.touchTarget
+                            )
+                            .contentShape(Rectangle())
                     }
-                    .labelStyle(.iconOnly)
                     .buttonStyle(.plain)
-                    .frame(minWidth: FieldGuideTokens.touchTarget, minHeight: FieldGuideTokens.touchTarget)
+                    .accessibilityLabel("Close field explanation")
                     .accessibilityIdentifier("field.explanation.close")
                 }
                 Text(resolved?.rule.description ?? fallback)
@@ -360,6 +366,7 @@ struct FieldExplanationLabel: View {
                         Divider()
                         Text("In effect").font(.fieldGuideLabel.weight(.semibold))
                         Text(display(resolution.value) ?? "None").font(.fieldGuideData)
+                            .accessibilityIdentifier("field.explanation.effective-value")
                         Text(
                             resolution.mode == .explicit
                                 ? "Override on this \(EntityCatalog[subject.entity].singular.lowercased())"
@@ -376,7 +383,9 @@ struct FieldExplanationLabel: View {
                         if resolution.mode == .explicit || resolution.mode == .none {
                             Text("Without the override").font(.fieldGuideLabel.weight(.semibold))
                             Text(display(resolution.fallbackValue) ?? "Nothing to inherit").font(
-                                .fieldGuideData)
+                                .fieldGuideData
+                            )
+                            .accessibilityIdentifier("field.explanation.fallback-value")
                             if let source = resolved.resolutionEvidence?.fallbackSource,
                                 let entity = EntityKey(rawValue: source.entityKind.rawValue)
                             {

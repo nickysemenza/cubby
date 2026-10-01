@@ -123,7 +123,7 @@ describe("ResolutionExplanation", () => {
     }
   });
 
-  it("renders an explicitly-cleared value with no second row", () => {
+  it("explains an explicitly-cleared value and the absence of a fallback", () => {
     render(
       <ResolutionExplanation
         entity="task"
@@ -141,7 +141,8 @@ describe("ResolutionExplanation", () => {
       />,
     );
     expect(screen.getByText(/Task override/)).toBeInTheDocument();
-    expect(screen.queryByText("Without the override")).not.toBeInTheDocument();
+    expect(screen.getByText("Without the override")).toBeInTheDocument();
+    expect(screen.getByText("Nothing to inherit")).toBeInTheDocument();
     expect(screen.queryByText("Stored on this task")).not.toBeInTheDocument();
   });
 });
