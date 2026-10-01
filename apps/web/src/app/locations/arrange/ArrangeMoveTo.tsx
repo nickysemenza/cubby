@@ -4,12 +4,8 @@ import { FolderSimplePlusIcon } from "@phosphor-icons/react/dist/csr/FolderSimpl
 import { useState } from "react";
 import { match } from "ts-pattern";
 
-import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
-import { Stack } from "~/components/layout";
+import { LocationMoveDialog } from "~/app/_components/locations/location-move-dialog";
 import { Button } from "~/components/ui/button";
-import { DialogFormActions } from "~/components/ui/dialog-form-actions";
-import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -33,6 +29,8 @@ export type ArrangeMoveTarget =
       roots: InfLocation[];
     }
   | { kind: "item"; drag: ItemDragData; name: string; roots: InfLocation[] };
+
+const REFUSED = "Pick a different destination — that move isn't allowed.";
 
 /**
  * The pointer-free way to move something on the arrange surface.
@@ -69,10 +67,10 @@ export function ArrangeMoveTo({ target }: { target: ArrangeMoveTarget }) {
 }
 
 /**
- * Mounted only while open, so the per-row trigger costs nothing until used and
- * the location search stays off the surface's critical path. Commits through
- * the same mutation handlers as drag-and-drop, so optimistic tree surgery,
- * rollback and invalidation are identical.
+ * Commits through the same mutation handlers as drag-and-drop, so optimistic
+ * tree surgery, rollback and invalidation are identical. The real Home
+ * location is the top-level destination; the validity guards are the ones the
+ * drop monitor re-checks before firing.
  */
 function MoveToDialog({
   target,
@@ -82,119 +80,53 @@ function MoveToDialog({
   onClose: () => void;
 }) {
   const { moveLocation, moveItem } = useArrangeMutations();
-  const [destination, setDestination] =
-    useState<ComboboxItem<LocationShortcode> | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  // The real Home location is the top-level destination. Same validity guards
-  // the drop monitor re-checks before firing.
-  const commit = (destinationId: LocationShortcode | null) => {
-    const moved = match(target)
-      .with({ kind: "location" }, (t) => {
-        if (!isValidLocationDrop(t.roots, t.locationId, destinationId))
-          return false;
-        moveLocation(t.locationId, destinationId);
-        return true;
-      })
-      .with({ kind: "item" }, (t) => {
-        if (
-          destinationId === null ||
-          !isValidItemDrop(t.roots, t.drag.sourceLocationId, destinationId)
-        )
-          return false;
-        moveItem(t.drag, destinationId);
-        return true;
-      })
-      .exhaustive();
-
-    if (!moved) {
-      setError("Pick a different destination — that move isn't allowed.");
-      return;
-    }
-    onClose();
-  };
+  const isValid = (destinationId: LocationShortcode) =>
+    target.kind === "location"
+      ? isValidLocationDrop(target.roots, target.locationId, destinationId)
+      : isValidItemDrop(
+          target.roots,
+          target.drag.sourceLocationId,
+          destinationId,
+        );
 
   return (
-    <ResponsiveDialog
-      open
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
+    <LocationMoveDialog
       title={`Move ${target.name}`}
       description={
         target.kind === "location"
           ? "Choose the location this becomes a sublocation of."
           : "Choose the location to move this item to."
       }
-      footer={
-        <DialogFormActions
-          onCancel={onClose}
-          submitLabel="Move"
-          error={error}
-          submitDisabled={destination === null}
-          onSubmit={() => destination && commit(destination.id)}
-        />
+      submitLabel="Move"
+      onClose={onClose}
+      shortcut={
+        target.kind === "location"
+          ? { label: "Move to Home", locationId: target.roots[0]?.id }
+          : undefined
       }
-    >
-      <Stack gap="md">
-        {/* Lives in the body, not the footer: the phone sheet promotes the
-            footer's Cancel/Move into its header and hides the footer, which
-            would take this shortcut with it. */}
-        {target.kind === "location" && (
-          <Button
-            variant="outline"
-            disabled={!target.roots[0]}
-            onClick={() => {
-              const home = target.roots[0];
-              if (home) commit(home.id);
-            }}
-          >
-            Move to Home
-          </Button>
-        )}
-        <EntityReferencePicker
-          entity="location"
-          label="location"
-          mapItems={(items) =>
-            items.map((item) => {
-              const valid =
-                target.kind === "location"
-                  ? isValidLocationDrop(
-                      target.roots,
-                      target.locationId,
-                      item.id,
-                    )
-                  : isValidItemDrop(
-                      target.roots,
-                      target.drag.sourceLocationId,
-                      item.id,
-                    );
-              return valid
-                ? item
-                : {
-                    ...item,
-                    presentation: {
-                      ...item.presentation,
-                      group: {
-                        id: "unavailable",
-                        label: "Unavailable",
-                        order: 99,
-                      },
-                      disabledReason:
-                        target.kind === "location"
-                          ? "A location cannot move into itself or its descendants"
-                          : "Already the current location",
-                    },
-                  };
-            })
-          }
-          value={destination}
-          setValue={(item) => {
-            setDestination(item);
-            setError(null);
-          }}
-        />
-      </Stack>
-    </ResponsiveDialog>
+      disabledReason={(id) =>
+        isValid(id)
+          ? null
+          : target.kind === "location"
+            ? "A location cannot move into itself or its descendants"
+            : "Already the current location"
+      }
+      onConfirm={(destinationId) =>
+        match(target)
+          .with({ kind: "location" }, (t) => {
+            if (!isValidLocationDrop(t.roots, t.locationId, destinationId))
+              return REFUSED;
+            moveLocation(t.locationId, destinationId);
+            return null;
+          })
+          .with({ kind: "item" }, (t) => {
+            if (!isValid(destinationId)) return REFUSED;
+            moveItem(t.drag, destinationId);
+            return null;
+          })
+          .exhaustive()
+      }
+    />
   );
 }

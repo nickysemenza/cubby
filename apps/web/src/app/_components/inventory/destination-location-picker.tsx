@@ -1,11 +1,12 @@
 /**
- * Shared destination-location picker for the inventory "move" surfaces
- * (MoveInventoryDialog and session MoveToDialog).
+ * Shared destination-location field for the form-embedded move surfaces
+ * (MoveInventoryDialog and the sweep's missing-bin relocation). Single-subject
+ * move dialogs use `LocationMoveDialog` instead.
  *
- * They all chose a target location, surfaced a validation error, and enforced
- * "destination must differ from source" — with three different user-facing
- * strings. This module factors out the common field + validation while letting
- * each caller keep its exact copy via the `messages` override.
+ * They choose a target location, surface a validation error, and enforce
+ * "destination must differ from source" — with different user-facing strings.
+ * This module factors out the common field + validation while letting each
+ * caller keep its exact copy via the `messages` override.
  */
 
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
@@ -127,7 +128,7 @@ export function resolveDestination(
 }
 
 /**
- * The single-field destination form + error state used by the two move dialogs.
+ * The single-field destination form + error state used by the form-embedded move surfaces.
  * `reset` clears both the form and the error.
  */
 export function useDestinationLocationForm() {
