@@ -492,31 +492,46 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
         | { commandId: string; operationId: string }
         | undefined;
       try {
+        // Connect the browser only after the run has paused. The row exists
+        // before the broker is consulted, so posting on its first sight raced
+        // the pause and let browser evidence join the still-open submission,
+        // hiding how the agent settles a pending browser command.
         await waitFor(async () => {
-          const [operation] = await getDb(ctx.db)
-            .select({
-              operationId: runOperation.operationId,
-              result: runOperation.result,
-            })
-            .from(runOperation)
-            .where(
-              and(
-                eq(runOperation.runId, started.run.id),
-                eq(runOperation.kind, "browser_command"),
-              ),
-            )
-            .limit(1);
+          const [[operation], [run]] = await Promise.all([
+            getDb(ctx.db)
+              .select({
+                operationId: runOperation.operationId,
+                state: runOperation.state,
+                result: runOperation.result,
+              })
+              .from(runOperation)
+              .where(
+                and(
+                  eq(runOperation.runId, started.run.id),
+                  eq(runOperation.kind, "browser_command"),
+                ),
+              )
+              .limit(1),
+            getDb(ctx.db)
+              .select({ status: runTable.status })
+              .from(runTable)
+              .where(eq(runTable.id, started.run.id)),
+          ]);
           const parsed = z
             .object({ commandId: z.uuid() })
             .safeParse(operation?.result);
-          browserCommand = parsed.success
-            ? {
-                commandId: parsed.data.commandId,
-                operationId: operation?.operationId ?? "",
-              }
-            : undefined;
-          return Boolean(browserCommand?.operationId);
-        }, "Production service never persisted browser command");
+          browserCommand =
+            parsed.success && operation?.state === "completed"
+              ? {
+                  commandId: parsed.data.commandId,
+                  operationId: operation.operationId,
+                }
+              : undefined;
+          return (
+            Boolean(browserCommand?.operationId) &&
+            run?.status === "paused_offline"
+          );
+        }, "Production service never paused for the browser command");
       } catch (error) {
         throw new Error(
           `${error instanceof Error ? error.message : String(error)}\n${await workerdDiagnostic(ctx.db, started.run.id)}`,
@@ -567,6 +582,9 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
         runId: started.run.id,
       });
       expect(after).toEqual(before);
+      expect(
+        await (await model.fetch("https://model.test/violations")).json(),
+      ).toEqual([]);
     } finally {
       for (const [key, value] of previousHyperdrive) {
         if (value === undefined) delete process.env[key];
