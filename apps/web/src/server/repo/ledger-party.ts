@@ -18,25 +18,19 @@ import type {
 import { ledgerPartyOut } from "@cubby/schemas/ledger-party";
 import { type MealFoodAmount } from "@cubby/schemas/meal";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
-  device,
   expenseAttribution,
   financialAccount,
-  image,
-  imageSighting,
   inventoryEntry,
   ledgerParty,
-  ledgerTransfer,
   meal,
-  mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
-  photoGroupProposal,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
@@ -56,7 +50,10 @@ import {
   type ListReadRow,
 } from "~/server/repo/list-projection";
 import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge/core";
-import { policyDelete } from "~/server/repo/removal";
+import {
+  applyMergePolicy,
+  policyDelete,
+} from "~/server/repo/removal/dispositions";
 import { createEntityCrud } from "~/server/repo/repository";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -622,166 +619,112 @@ export async function mergeLedgerParties(
         "CONSTRAINT_VIOLATION",
         "Only ledger parties of one non-household kind can be merged.",
       );
-    const shares = await tx
-      .select({
-        expenseId: expenseAttribution.expenseId,
-        role: expenseAttribution.role,
-        weight: expenseAttribution.weight,
-      })
-      .from(expenseAttribution)
-      .where(
-        and(
-          inArray(expenseAttribution.ledgerPartyId, [keepId, ...loserIds]),
-          notDeleted(expenseAttribution),
-        ),
-      );
-    const sharesByExpenseRole = new Map<string, typeof shares>();
-    for (const share of shares) {
-      const key = `${share.expenseId}:${share.role}`;
-      sharesByExpenseRole.set(key, [
-        ...(sharesByExpenseRole.get(key) ?? []),
-        share,
-      ]);
-    }
-    for (const group of sharesByExpenseRole.values()) {
-      const foldedWeight = group.reduce(
-        (total, share) => total + share.weight,
-        0,
-      );
-      if (!Number.isSafeInteger(foldedWeight))
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "Merged attribution weights exceed the safe integer range.",
-        );
-    }
-    await tx
-      .update(expenseAttribution)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          inArray(expenseAttribution.ledgerPartyId, [keepId, ...loserIds]),
-          notDeleted(expenseAttribution),
-        ),
-      );
-    for (const [_key, group] of sharesByExpenseRole) {
-      const first = group[0]!;
-      await tx.insert(expenseAttribution).values({
-        expenseId: first.expenseId,
-        role: first.role,
-        ledgerPartyId: keepId,
-        weight: group.reduce((total, share) => total + share.weight, 0),
-      });
-    }
-    attributionEdgesRepointed = shares.length;
     const partyIds = [keepId, ...loserIds];
-    await lockMealRecipePortionReferences(tx, partyIds);
-    portionEdgesRepointed = await foldMealRecipePortions(tx, keepId, loserIds);
-    foodEntryEdgesRepointed = (
-      await tx
-        .update(mealFoodEntry)
-        .set({ ledgerPartyId: keepId })
-        .where(
-          and(
-            inArray(mealFoodEntry.ledgerPartyId, loserIds),
-            notDeleted(mealFoodEntry),
-          ),
-        )
-        .returning({ id: mealFoodEntry.id })
-    ).length;
-    const [accountCount] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(financialAccount)
-      .where(
-        and(
-          inArray(financialAccount.ledgerPartyId, loserIds),
-          notDeleted(financialAccount),
-        ),
-      );
-    accountEdgesRepointed = accountCount?.n ?? 0;
-    const ownedInventory = await tx.query.inventoryEntry.findMany({
-      where: and(
-        inArray(inventoryEntry.ownerLedgerPartyId, loserIds),
-        notDeleted(inventoryEntry),
-      ),
-      columns: { id: true },
-      orderBy: inventoryEntry.id,
+    const repointed = await applyMergePolicy(tx, {
+      entity: "ledgerParty",
+      policy: LEDGER_PARTY_MERGE_EDGE_POLICY,
+      keepId,
+      loserIds,
+      liveOnly: true,
+      overrides: {
+        // Colliding weighted shares are summed per expense and role.
+        "ExpenseAttribution.ledgerPartyId": async () => {
+          const shares = await tx
+            .select({
+              expenseId: expenseAttribution.expenseId,
+              role: expenseAttribution.role,
+              weight: expenseAttribution.weight,
+            })
+            .from(expenseAttribution)
+            .where(
+              and(
+                inArray(expenseAttribution.ledgerPartyId, [
+                  keepId,
+                  ...loserIds,
+                ]),
+                notDeleted(expenseAttribution),
+              ),
+            );
+          const sharesByExpenseRole = new Map<string, typeof shares>();
+          for (const share of shares) {
+            const key = `${share.expenseId}:${share.role}`;
+            sharesByExpenseRole.set(key, [
+              ...(sharesByExpenseRole.get(key) ?? []),
+              share,
+            ]);
+          }
+          for (const group of sharesByExpenseRole.values()) {
+            const foldedWeight = group.reduce(
+              (total, share) => total + share.weight,
+              0,
+            );
+            if (!Number.isSafeInteger(foldedWeight))
+              throw createAppError(
+                "CONSTRAINT_VIOLATION",
+                "Merged attribution weights exceed the safe integer range.",
+              );
+          }
+          await tx
+            .update(expenseAttribution)
+            .set({ deletedAt: new Date() })
+            .where(
+              and(
+                inArray(expenseAttribution.ledgerPartyId, [
+                  keepId,
+                  ...loserIds,
+                ]),
+                notDeleted(expenseAttribution),
+              ),
+            );
+          for (const [_key, group] of sharesByExpenseRole) {
+            const first = group[0]!;
+            await tx.insert(expenseAttribution).values({
+              expenseId: first.expenseId,
+              role: first.role,
+              ledgerPartyId: keepId,
+              weight: group.reduce((total, share) => total + share.weight, 0),
+            });
+          }
+          attributionEdgesRepointed = shares.length;
+        },
+        "MealRecipePortion.ledgerPartyId": async () => {
+          await lockMealRecipePortionReferences(tx, partyIds);
+          portionEdgesRepointed = await foldMealRecipePortions(
+            tx,
+            keepId,
+            loserIds,
+          );
+        },
+        // Ownership moves through the ownership mutation so its audit and
+        // inheritance rules run per entry.
+        "InventoryEntry.ownerLedgerPartyId": async () => {
+          const ownedInventory = await tx.query.inventoryEntry.findMany({
+            where: and(
+              inArray(inventoryEntry.ownerLedgerPartyId, loserIds),
+              notDeleted(inventoryEntry),
+            ),
+            columns: { id: true },
+            orderBy: inventoryEntry.id,
+          });
+          for (const row of ownedInventory) {
+            await applyInventoryOwnershipInTransaction(
+              tx,
+              row.id,
+              { ownershipMode: "person", ownerLedgerPartyId: keepId },
+              undefined,
+              actor,
+            );
+          }
+          inventoryEdgesRepointed = ownedInventory.length;
+        },
+      },
     });
-    for (const row of ownedInventory) {
-      await applyInventoryOwnershipInTransaction(
-        tx,
-        row.id,
-        { ownershipMode: "person", ownerLedgerPartyId: keepId },
-        undefined,
-        actor,
-      );
-    }
-    inventoryEdgesRepointed = ownedInventory.length;
-    const [transferCount] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(ledgerTransfer)
-      .where(
-        and(
-          or(
-            inArray(ledgerTransfer.fromPartyId, loserIds),
-            inArray(ledgerTransfer.toPartyId, loserIds),
-          ),
-          notDeleted(ledgerTransfer),
-        ),
-      );
-    transferEdgesRepointed = transferCount?.n ?? 0;
-    await tx
-      .update(financialAccount)
-      .set({ ledgerPartyId: keepId })
-      .where(
-        and(
-          inArray(financialAccount.ledgerPartyId, loserIds),
-          notDeleted(financialAccount),
-        ),
-      );
-    deviceEdgesRepointed = (
-      await tx
-        .update(device)
-        .set({ ledgerPartyId: keepId })
-        .where(and(inArray(device.ledgerPartyId, loserIds), notDeleted(device)))
-        .returning({ id: device.id })
-    ).length;
-    await tx
-      .update(imageSighting)
-      .set({ ledgerPartyId: keepId })
-      .where(
-        and(
-          inArray(imageSighting.ledgerPartyId, loserIds),
-          notDeleted(imageSighting),
-        ),
-      );
-    await tx
-      .update(image)
-      .set({ capturedByPartyId: keepId })
-      .where(
-        and(inArray(image.capturedByPartyId, loserIds), notDeleted(image)),
-      );
-    await tx
-      .update(photoGroupProposal)
-      .set({ inventoryOwnerPartyId: keepId })
-      .where(inArray(photoGroupProposal.inventoryOwnerPartyId, loserIds));
-    await tx
-      .update(ledgerTransfer)
-      .set({ fromPartyId: keepId })
-      .where(
-        and(
-          inArray(ledgerTransfer.fromPartyId, loserIds),
-          notDeleted(ledgerTransfer),
-        ),
-      );
-    await tx
-      .update(ledgerTransfer)
-      .set({ toPartyId: keepId })
-      .where(
-        and(
-          inArray(ledgerTransfer.toPartyId, loserIds),
-          notDeleted(ledgerTransfer),
-        ),
-      );
+    foodEntryEdgesRepointed = repointed["MealFoodEntry.ledgerPartyId"] ?? 0;
+    accountEdgesRepointed = repointed["FinancialAccount.ledgerPartyId"] ?? 0;
+    deviceEdgesRepointed = repointed["Device.ledgerPartyId"] ?? 0;
+    transferEdgesRepointed =
+      (repointed["LedgerTransfer.fromPartyId"] ?? 0) +
+      (repointed["LedgerTransfer.toPartyId"] ?? 0);
     merged = (
       await finalizeMerge(tx, {
         entity: "ledgerParty",

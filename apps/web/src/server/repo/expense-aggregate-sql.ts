@@ -7,7 +7,7 @@
  *
  * Lives at the repo root rather than inside either `expense/` or `project/`
  * on purpose: `repo/expense/*` already imports from `repo/project/*` in one
- * direction (`expense/crud.ts` imports the project barrel for
+ * direction (`expense/crud.ts` imports `project/crud` for
  * `assertProjectLive`; `expense/lookup.ts` imports `project/subtree` for its
  * project-presence condition). Adding the reverse edge — either analytics
  * file importing the other's directory directly — would put `repo/project`

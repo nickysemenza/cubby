@@ -37,7 +37,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { linkValues, liveLinks } from "~/server/repo/entity-links";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
-import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
+import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 import { linkRelationAdapter } from "~/server/repo/relation-mutation-adapter";
 import {

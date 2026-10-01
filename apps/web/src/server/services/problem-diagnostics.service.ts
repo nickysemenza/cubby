@@ -17,32 +17,40 @@ import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { proposeSizeFromTitle } from "~/lib/title-unit-size";
 import type { Database } from "~/server/db";
 import { findOrphanEntities } from "~/server/repo/entity-edge-source";
+import { findPartiallyImportedCookbooks } from "~/server/repo/problems/detectors-cookbook";
 import {
-  countDependencyCycles,
   countEntitiesMissingEmbeddings,
-  countReferentialLivenessViolations,
-  findDependencyCycles,
+  findEntitiesMissingEmbeddingsPage,
+} from "~/server/repo/problems/detectors-embedding";
+import {
   findDuplicateFinancialAccountSourceAliases,
   findDuplicateFinancialTransactionSourceRefs,
-  findDuplicateProductIdentities,
-  findDuplicateSpendCandidates,
-  findDuplicateVendors,
-  findEntitiesMissingEmbeddingsPage,
   findIncompleteStatementImports,
   findInvalidFinancialJson,
-  findManufacturerSpellingVariants,
-  findOpenRunFindings,
-  findOrphanedProducts,
-  findParentRecipesWithDeletedSubRecipes,
-  findPartiallyImportedCookbooks,
-  findProductsWithoutUnitMappings,
   findProvisionalFinancialAccounts,
+} from "~/server/repo/problems/detectors-financial";
+import { findOpenRunFindings } from "~/server/repo/problems/detectors-import";
+import {
+  countDependencyCycles,
+  countReferentialLivenessViolations,
+  findDependencyCycles,
+  findReferentialLivenessViolations,
+} from "~/server/repo/problems/detectors-integrity";
+import {
+  findDuplicateVendors,
+  findManufacturerSpellingVariants,
+} from "~/server/repo/problems/detectors-label-variants";
+import {
+  findDuplicateProductIdentities,
+  findOrphanedProducts,
+  findProductsWithoutUnitMappings,
   findWeightSoldProducts,
   findProductsWithUpcGaps,
-  findReferentialLivenessViolations,
   findToolsUsedOutsideOwnership,
-} from "~/server/repo/problems";
-import { computeAttentionItems } from "~/server/repo/project";
+} from "~/server/repo/problems/detectors-product";
+import { findDuplicateSpendCandidates } from "~/server/repo/problems/detectors-purchase";
+import { findParentRecipesWithDeletedSubRecipes } from "~/server/repo/problems/detectors-recipe";
+import { computeAttentionItems } from "~/server/repo/project/attention";
 import { readCachedUpcLookups } from "~/server/repo/upc-lookup-cache";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";

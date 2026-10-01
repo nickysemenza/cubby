@@ -6,14 +6,16 @@ import { locationContract } from "~/contracts/location.contract";
 import type { Database } from "~/server/db";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
-  buildLocationTree,
   ensureGlobalUnknownLocation,
-  getLocationInventoryBreakdown,
-  getLocationsByShortcodes,
-  getLocationValuationSummary,
   locationSearch,
-  reparentLocationsInBulk,
-} from "~/server/repo/location";
+} from "~/server/repo/location/crud";
+import { getLocationsByShortcodes } from "~/server/repo/location/lookup";
+import { reparentLocationsInBulk } from "~/server/repo/location/reparent";
+import {
+  buildLocationTree,
+  getLocationInventoryBreakdown,
+} from "~/server/repo/location/tree";
+import { getLocationValuationSummary } from "~/server/repo/location/valuation";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { bindWorkflow, workflow } from "~/server/workflow-runtime";

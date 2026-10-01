@@ -31,7 +31,7 @@ import {
   diffUnorderedIdSet,
   logAuditEntry,
 } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   associatePendingImages,
   batchUpdateWithCaseWhen,
@@ -56,7 +56,7 @@ import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validatio
  * the `blockedByIds` replacement set (delete-then-insert `taskDependency`
  * rows) inside the same transaction as the column update.
  */
-import { policyDelete } from "~/server/repo/removal";
+import { policyDelete } from "~/server/repo/removal/dispositions";
 import { createEntityReader } from "~/server/repo/repository";
 import {
   type EntityRef,

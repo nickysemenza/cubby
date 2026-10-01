@@ -18,7 +18,7 @@ import { linkValues, ofLinkKind } from "~/server/repo/entity-links";
 import { getDb } from "./database-helpers";
 import { getEntityGraph, readEntityGraph } from "./entity-graph";
 import { getEntityGraphExplore } from "./entity-graph-explore";
-import { createExpense } from "./expense";
+import { createExpense } from "./expense/crud";
 import { createGardenEntry, createPlanting } from "./garden";
 import { attachPurchaseProducts } from "./purchase-products";
 import {

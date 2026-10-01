@@ -8,8 +8,8 @@ import { upsertCookbook } from "./cookbook";
 import { getDb } from "./database-helpers";
 import { getEntityGraph } from "./entity-graph";
 import { getEntityGraphExplore } from "./entity-graph-explore";
-import { createExpense } from "./expense";
-import { upsertCookbookRecipe } from "./recipe";
+import { createExpense } from "./expense/crud";
+import { upsertCookbookRecipe } from "./recipe/crud";
 import {
   createIngredientFixture as createIngredient,
   createInventoryFixture as createInventory,

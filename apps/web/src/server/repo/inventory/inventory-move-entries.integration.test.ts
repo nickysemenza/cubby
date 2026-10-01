@@ -11,12 +11,10 @@ import { describe, expect, it } from "vitest";
 import { auditLog, inventoryEntry } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { amountFromColumns } from "~/server/repo/database-helpers";
-import {
-  createInventoryEntry,
-  moveInventoryEntries,
-} from "~/server/repo/inventory";
-import { createLocation } from "~/server/repo/location";
-import { createProduct } from "~/server/repo/product";
+import { moveInventoryEntries } from "~/server/repo/inventory/bulk";
+import { createInventoryEntry } from "~/server/repo/inventory/crud";
+import { createLocation } from "~/server/repo/location/crud";
+import { createProduct } from "~/server/repo/product/crud";
 import {
   makeLocationInput,
   makeProductInput,

@@ -13,12 +13,12 @@ import {
   type CookbookImportContext,
   upsertCookbookRecipeFromCookbook,
 } from "./import-recipe-convert";
-import { createIngredient } from "./ingredient";
+import { createIngredient } from "./ingredient/crud";
 import {
   type CookbookRef,
   getRecipeByID,
   upsertCookbookRecipe,
-} from "./recipe";
+} from "./recipe/crud";
 import {
   ingredientRef,
   makeCookbookExtraction,

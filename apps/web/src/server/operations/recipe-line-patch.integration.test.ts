@@ -8,7 +8,7 @@ import {
 } from "~/server/entity-kernel";
 import { callMcpTool, kernelRequestContext } from "~/server/mcp/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
-import { findOrCreateIngredient } from "~/server/repo/ingredient";
+import { findOrCreateIngredient } from "~/server/repo/ingredient/crud";
 import { ingredientRef, makeRecipeInput } from "~/server/repo/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 

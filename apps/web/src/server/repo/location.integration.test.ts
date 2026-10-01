@@ -20,15 +20,15 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { getDb } from "./database-helpers";
 import { createGardenEntry, createPlanting } from "./garden";
-import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
+import { createInventoryEntry, deleteInventoryEntries } from "./inventory/crud";
 import {
-  buildLocationTree,
   bulkReparentLocations,
   createLocation,
   deleteLocations,
   getLocationById,
-} from "./location";
-import { createProduct } from "./product";
+} from "./location/crud";
+import { buildLocationTree } from "./location/tree";
+import { createProduct } from "./product/crud";
 import {
   createInventoryFixture,
   createLocationFixture,

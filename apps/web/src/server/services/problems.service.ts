@@ -58,35 +58,37 @@ import { formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import { type Database, withConnection } from "~/server/db";
 import { countCullablePendingImages } from "~/server/repo/image";
+import { findOrCreateIngredient } from "~/server/repo/ingredient/crud";
+import { deleteIngredients } from "~/server/repo/ingredient/deletion";
+import { findCoverageTotals as findCoverageTotalsRepo } from "~/server/repo/problems/detectors-coverage";
+import { countEntitiesMissingEmbeddings } from "~/server/repo/problems/detectors-embedding";
+import { loadAllocationDefectPresenters } from "~/server/repo/problems/detectors-financial";
 import {
-  deleteIngredients,
-  findOrCreateIngredient,
-} from "~/server/repo/ingredient";
-import {
-  applyReparsedStaleLines,
-  countEntitiesMissingEmbeddings,
-  countReparseableLines,
-  findCoverageTotals as findCoverageTotalsRepo,
   findIngredientsWithUnusedAliases,
+  pruneUnusedAliases,
+} from "~/server/repo/problems/detectors-ingredient";
+import {
   findLinkedProductIds,
-  findStaleIngredientParses,
-  loadAllocationDefectPresenters,
   loadProductsForCoverage,
   loadSoldButStockedPresenterTotals,
-  loadVendorLogoPresenterCounts,
-  pruneUnusedAliases,
-  type ReparsedStaleLineWrite,
   synthesizeEffectiveMappings,
-} from "~/server/repo/problems";
+} from "~/server/repo/problems/detectors-product";
+import { loadVendorLogoPresenterCounts } from "~/server/repo/problems/detectors-vendor";
 import {
-  countProductsWithNoImagesWithGtin,
-  deleteProducts,
+  applyReparsedStaleLines,
+  countReparseableLines,
+  findStaleIngredientParses,
+  type ReparsedStaleLineWrite,
+} from "~/server/repo/problems/reparse";
+import { countProductsWithNoImagesWithGtin } from "~/server/repo/product/analytics";
+import {
   getProductConversionCoverageFreshness,
   loadProductConversionCoverageProjection,
   type ProductConversionCoverageFreshness,
   type ProductConversionCoverageProjection,
   writeProductConversionCoverageProjection,
-} from "~/server/repo/product";
+} from "~/server/repo/product/conversion-coverage";
+import { deleteProducts } from "~/server/repo/product/crud";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { computeAttentionItems } from "~/server/repo/project/attention";
 import { countStaleRecipeTotals } from "~/server/repo/recipe/totals";

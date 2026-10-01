@@ -8,14 +8,10 @@ import { projectCreateFromTasksWorkflow } from "~/server/operations/project.serv
 import { linkValues } from "~/server/repo/entity-links";
 
 import { insertAndReturn } from "./database-helpers";
-import {
-  deleteProjects,
-  getProjectByID,
-  getProjectDependencyGraph,
-  projectTreePage,
-  updateProject,
-} from "./project";
-import { getTaskByShortcode, updateTask } from "./task";
+import { deleteProjects, getProjectByID, updateProject } from "./project/crud";
+import { getProjectDependencyGraph } from "./project/dependency-graph";
+import { projectTreePage } from "./project/tree";
+import { getTaskByShortcode, updateTask } from "./task/crud";
 
 describe("project repository", () => {
   const ctx = withTestDb();

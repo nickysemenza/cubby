@@ -25,7 +25,7 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   associatePendingImages,
   getDb,
@@ -45,7 +45,7 @@ import {
   type ListProjection,
   wantsListGroup,
 } from "~/server/repo/list-projection";
-import { deleteByPolicy } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal/dispositions";
 import { createEntityReader } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,

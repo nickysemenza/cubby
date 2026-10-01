@@ -41,14 +41,14 @@ import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
+import { findProductsWithNoImages } from "~/server/repo/product/analytics";
+import { findUnbarcodedBookByTitle } from "~/server/repo/product/book-title-match";
 import {
-  findProductByGtin,
-  findProductsWithNoImages,
   getProductByShortcode,
   quickCreateProduct,
   updateProduct,
-} from "~/server/repo/product";
-import { findUnbarcodedBookByTitle } from "~/server/repo/product/book-title-match";
+} from "~/server/repo/product/crud";
+import { findProductByGtin } from "~/server/repo/product/lookup";
 import {
   resolveCreatedOrInvariant,
   resolveLiveShortcode,

@@ -24,7 +24,7 @@ import {
   computeChanges,
   logAuditEntries,
 } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   amountToColumns,
   getDb,
@@ -35,7 +35,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { loadProductPricing } from "~/server/repo/product/pricing";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { cascadeRemoval } from "~/server/repo/removal/core";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { assertLiveTargets, inventoryAuditRow } from "./helpers";

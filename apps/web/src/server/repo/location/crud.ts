@@ -60,7 +60,7 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   associatePendingImages,
   buildOrderBy,
@@ -99,7 +99,7 @@ import {
 } from "~/server/repo/list-projection";
 import { parseLocationType } from "~/server/repo/location/parse-type";
 import { loadProductPricing } from "~/server/repo/product/pricing";
-import { deleteByPolicy } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal/dispositions";
 import {
   resolveAllPresent,
   resolveLiveShortcode,

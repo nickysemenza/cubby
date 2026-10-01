@@ -82,7 +82,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { observeOperationPhase } from "~/server/observed-request";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   assertNoDependents,
   associatePendingImages,
@@ -143,7 +143,7 @@ import {
 } from "~/server/repo/product-category-sql";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import { relatedSortExpression } from "~/server/repo/related-view";
-import { deleteByPolicy } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal/dispositions";
 import { createEntityReader } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,

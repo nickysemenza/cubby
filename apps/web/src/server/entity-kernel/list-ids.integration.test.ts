@@ -5,7 +5,7 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
-import { findOrCreateIngredient } from "~/server/repo/ingredient";
+import { findOrCreateIngredient } from "~/server/repo/ingredient/crud";
 import {
   createInventoryFixture,
   createLocationFixture,

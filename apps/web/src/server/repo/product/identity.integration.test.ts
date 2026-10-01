@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   deleteProducts,
-  findProductByGtin,
   getProductByID,
   patchProductExternalIds,
-} from "~/server/repo/product";
+} from "~/server/repo/product/crud";
+import { findProductByGtin } from "~/server/repo/product/lookup";
 import {
   createProductFixture as createProduct,
   makeProductInput,

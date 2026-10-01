@@ -21,9 +21,9 @@ import {
   getDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { getExpenseByID } from "~/server/repo/expense";
 import { replaceExpenseAttributionRole } from "~/server/repo/expense-attribution";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { getExpenseByID } from "~/server/repo/expense/crud";
+import { cascadeRemoval } from "~/server/repo/removal/core";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 

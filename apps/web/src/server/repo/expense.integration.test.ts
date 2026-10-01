@@ -28,18 +28,20 @@ import {
 } from "~/server/operations/expense.server";
 import { getAuditLog } from "~/server/repo/audit-log";
 import {
-  createExpense,
-  deleteExpenses,
   expenseAnalytics,
-  expenseList,
   expenseMonthlySummary,
   expenseTradeAffinity,
+} from "~/server/repo/expense/analytics";
+import {
+  createExpense,
+  deleteExpenses,
   getExpenseByShortcode,
   setExpensesCostType,
   updateExpense,
-} from "~/server/repo/expense";
+} from "~/server/repo/expense/crud";
 import { updateExpensesInBulk } from "~/server/repo/expense/crud";
-import { createProduct } from "~/server/repo/product";
+import { expenseList } from "~/server/repo/expense/lookup";
+import { createProduct } from "~/server/repo/product/crud";
 import { getPurchaseExpenses, purchaseList } from "~/server/repo/purchase";
 import {
   makeExpenseInput,

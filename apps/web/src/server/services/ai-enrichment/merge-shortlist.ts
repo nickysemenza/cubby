@@ -17,7 +17,7 @@ import { findSemanticEntityCandidates } from "~/server/repo/entity-embedding-sea
 import {
   getIngredientMergeCandidatesByIds,
   searchIngredientsForMerge,
-} from "~/server/repo/ingredient";
+} from "~/server/repo/ingredient/search";
 import {
   embedQuery,
   semanticEmbeddingsConfigured,

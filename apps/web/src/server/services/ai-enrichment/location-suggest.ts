@@ -1,6 +1,6 @@
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/features";
 import type { AiSelectionSpec } from "~/server/ai/selection";
-import type { LocationPutAwayCandidate } from "~/server/repo/location";
+import type { LocationPutAwayCandidate } from "~/server/repo/location/lookup";
 
 /** Bound prompt size; tell the model when candidates are omitted. */
 const MAX_LOCATION_CANDIDATES = 400;

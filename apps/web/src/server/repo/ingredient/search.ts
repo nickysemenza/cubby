@@ -43,7 +43,7 @@ import {
 import {
   attachDataQuality,
   loadDataQualities,
-} from "~/server/repo/data-quality";
+} from "~/server/repo/data-quality/hydrate";
 import {
   buildSearchConditions,
   countWhere,
@@ -77,7 +77,7 @@ import {
   cookbookOnlyForIngredientSql,
   liveRecipeCountForIngredientSql,
   ownRecipeCountForIngredientSql,
-} from "../recipe";
+} from "../recipe/helpers";
 import { buildIngredientWhere } from "./internal-types";
 import {
   dbIngredientToAPI,

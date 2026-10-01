@@ -22,7 +22,7 @@ import {
   notDeleted,
   unwrapDb,
 } from "~/server/repo/database-helpers";
-import { deleteByPolicy } from "~/server/repo/removal";
+import { deleteByPolicy } from "~/server/repo/removal/dispositions";
 
 export const INGREDIENT_DELETE_EDGE_POLICY = {
   "MealFoodEntry.ingredientId": {

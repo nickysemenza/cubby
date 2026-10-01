@@ -22,12 +22,9 @@ import type { Database } from "~/server/db";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   expenseAnalytics,
-  expenseList,
   expenseMonthlySummary,
   expenseTradeAffinity,
-  getExpenseByID,
-  matchExpenses,
-} from "~/server/repo/expense";
+} from "~/server/repo/expense/analytics";
 import {
   buildExpenseAnalysisGrid,
   expenseAnalysisWhere,
@@ -46,14 +43,15 @@ import {
   selectedExpenseFacetValues,
   type ExpenseFacetId,
 } from "~/server/repo/expense/analyze";
+import { getExpenseByID } from "~/server/repo/expense/crud";
+import { expenseList } from "~/server/repo/expense/lookup";
 import {
   buildExpenseWhereClause,
   resolveExpenseProjectAllocationScope,
 } from "~/server/repo/expense/lookup";
-import {
-  confirmInventoryExpenseBeneficiary,
-  loadEffectiveInventoryOwnershipById,
-} from "~/server/repo/inventory";
+import { matchExpenses } from "~/server/repo/expense/match";
+import { loadEffectiveInventoryOwnershipById } from "~/server/repo/inventory/ownership";
+import { confirmInventoryExpenseBeneficiary } from "~/server/repo/inventory/ownership-mutations";
 import { listAll } from "~/server/repo/list-all";
 import {
   getPurchaseExpenses,

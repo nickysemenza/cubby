@@ -27,7 +27,7 @@ import {
 import {
   attachDataQuality,
   loadDataQualities,
-} from "~/server/repo/data-quality";
+} from "~/server/repo/data-quality/hydrate";
 import {
   buildSearchConditions,
   formatSearchTerm,
@@ -46,7 +46,7 @@ import {
   type ProductPricing,
 } from "~/server/repo/product/pricing";
 
-import { computeRecipeUsages, dbRecipeToTopLevel } from "../recipe";
+import { computeRecipeUsages, dbRecipeToTopLevel } from "../recipe/helpers";
 
 type IngredientSelect = typeof ingredient.$inferSelect;
 type ProductSelect = RowWithOptionalAliases<typeof product.$inferSelect> & {

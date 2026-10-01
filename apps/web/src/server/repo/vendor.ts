@@ -44,7 +44,7 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { entityAttachment, image, purchase, vendor } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   correlated,
   getDb,
@@ -67,14 +67,17 @@ import {
   wantsListGroup,
   type ListProjection,
 } from "~/server/repo/list-projection";
+import { planSlotCollisions } from "~/server/repo/merge/collisions";
 import {
   finalizeMerge,
-  planSlotCollisions,
   repointEdge,
   resolveMergeTargets,
-} from "~/server/repo/merge";
+} from "~/server/repo/merge/core";
 import { foldChargeInto } from "~/server/repo/purchase";
-import { applyMergePolicy, policyDelete } from "~/server/repo/removal";
+import {
+  applyMergePolicy,
+  policyDelete,
+} from "~/server/repo/removal/dispositions";
 import {
   resolveLiveShortcode,
   resolveOrThrow,

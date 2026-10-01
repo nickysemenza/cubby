@@ -15,7 +15,7 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { getProductByShortcode, productList } from ".";
+import { getProductByShortcode, productList } from "./crud";
 import { listProductsRead } from "./crud";
 
 const priceRead = z.object({

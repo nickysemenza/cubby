@@ -31,8 +31,8 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge";
-import { applyMergePolicy } from "~/server/repo/removal";
+import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge/core";
+import { applyMergePolicy } from "~/server/repo/removal/dispositions";
 
 type IngredientSurvivorChanges = {
   mergedFrom: { from: null; to: string[] };

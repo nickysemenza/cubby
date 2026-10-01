@@ -1,14 +1,14 @@
 import type { ActorContext } from "@cubby/schemas/context";
 
 import type { Database } from "~/server/db";
-import { createExpense } from "~/server/repo/expense";
+import { createExpense } from "~/server/repo/expense/crud";
 import { createFinancialAccount } from "~/server/repo/financial-account";
 import { createFinancialTransaction } from "~/server/repo/financial-transaction";
 import { createLedgerParty } from "~/server/repo/ledger-party";
 import { createProductCategory } from "~/server/repo/product-category";
-import { createProject } from "~/server/repo/project";
+import { createProject } from "~/server/repo/project/crud";
 import { createPurchase } from "~/server/repo/purchase";
-import { createTask } from "~/server/repo/task";
+import { createTask } from "~/server/repo/task/crud";
 import { createVendor } from "~/server/repo/vendor";
 import { createVendorAccount } from "~/server/repo/vendor-account";
 

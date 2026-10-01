@@ -29,15 +29,13 @@ import {
 } from "~/server/operations/product.server";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { amountFromColumns } from "~/server/repo/database-helpers";
-import {
-  addInventoryEntries,
-  createInventoryEntry,
-} from "~/server/repo/inventory";
+import { addInventoryEntries } from "~/server/repo/inventory/bulk";
+import { createInventoryEntry } from "~/server/repo/inventory/crud";
 import {
   createLocation,
   ensureGlobalUnknownLocation,
-} from "~/server/repo/location";
-import { createProduct } from "~/server/repo/product";
+} from "~/server/repo/location/crud";
+import { createProduct } from "~/server/repo/product/crud";
 import {
   makeLocationInput,
   makeProductInput,

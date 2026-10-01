@@ -18,7 +18,7 @@ import {
 
 import { getSmartCollectionDetail, listSmartCollections } from "./collection";
 import { getDb } from "./database-helpers";
-import { updateLocation } from "./location";
+import { updateLocation } from "./location/crud";
 import { attachPurchaseProducts } from "./purchase-products";
 import {
   createInventoryFixture,

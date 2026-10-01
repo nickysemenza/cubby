@@ -37,7 +37,6 @@ import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   cookbook,
-  device,
   entityAttachment,
   entityExternalId,
   entityLink,
@@ -46,7 +45,6 @@ import {
   inventoryEntry,
   location,
   mealFoodEntry,
-  photoGroupProposal,
   planting,
   product,
   productCategory,
@@ -67,21 +65,23 @@ import {
 import { linkQuantity, liveLinks } from "~/server/repo/entity-links";
 import { impact, present, sideEffect } from "~/server/repo/impact";
 import {
-  assertDistinctMergeTargets,
-  finalizeMerge,
   foldAssociation,
   planSlotCollisions,
-  resolveMergeTargets,
   type SlotCollisionPlan,
-} from "~/server/repo/merge";
+} from "~/server/repo/merge/collisions";
+import {
+  assertDistinctMergeTargets,
+  finalizeMerge,
+  resolveMergeTargets,
+} from "~/server/repo/merge/core";
 import {
   getCategoryFeature,
   resolveProductCategory,
 } from "~/server/repo/product-category";
 import { repointProductMatchCandidatesTx } from "~/server/repo/product-match-candidate";
 import { unitMappingSides } from "~/server/repo/product/unit-mappings";
-import { cascadeRemoval } from "~/server/repo/removal";
-import { mergeRunTargets } from "~/server/repo/run-target-merge";
+import { cascadeRemoval } from "~/server/repo/removal/core";
+import { applyMergePolicy } from "~/server/repo/removal/dispositions";
 
 import { validateLiveEffectiveTrades } from "../inheritance-validation";
 import { markProductConversionCoverageInputStale } from "./conversion-coverage";
@@ -1348,7 +1348,6 @@ export const mergeProducts = async (
     mergeIds: input.mergeIds,
   });
 
-  // eslint-disable-next-line complexity -- merge folds every incoming Product edge atomically.
   return await withTransaction(db, async (tx) => {
     // Lock every row first so a concurrent merge or delete can't interleave and
     // leave a unique index deciding the outcome.
@@ -1385,327 +1384,350 @@ export const mergeProducts = async (
     const inventoryPlan = plan.inventory;
     const componentPlan = plan.components;
     const discardedUnitMappings: string[] = [];
-    const demotedExternalIds = await foldProductExternalIds(
-      tx,
-      keepId,
-      plan,
-      summary,
-    );
+    let demotedExternalIds: string[] = [];
 
-    if (inventoryPlan.repoint.length > 0) {
-      await tx
-        .update(inventoryEntry)
-        .set({ productId: keepId })
-        .where(
-          inArray(
-            inventoryEntry.id,
-            inventoryPlan.repoint.map((row) => row.id),
-          ),
-        );
-      summary.inventoryMoved = inventoryPlan.repoint.length;
-    }
-    let inventoryMerged = 0;
-    for (const { into, rows } of inventoryPlan.absorb) {
-      const absorbed = sumBy(rows, (row) => row.amount.value);
-      const to = { ...into.amount, value: into.amount.value + absorbed };
-      await tx
-        .update(inventoryEntry)
-        .set(amountToColumns(to))
-        .where(eq(inventoryEntry.id, into.id));
-      const absorbedIds = rows.map((row) => row.id);
-      await tx
-        .update(inventoryEntry)
-        .set({ deletedAt: now })
-        .where(inArray(inventoryEntry.id, absorbedIds));
-      const entries: AuditEntryInput[] = [
-        {
-          entityKind: "inventory",
-          entityId: into.id,
-          action: "update",
-          changes: { amount: { from: into.amount, to } },
+    const repointed = await applyMergePolicy(tx, {
+      entity: "product",
+      policy: PRODUCT_MERGE_EDGE_POLICY,
+      keepId,
+      loserIds,
+      liveOnly: true,
+      // Order is load-bearing for the partial unique indexes: slot-bearing
+      // rows fold before the plain repoints, and unit mappings before kits.
+      order: [
+        "EntityExternalId.entityId",
+        "InventoryEntry.productId",
+        "EntityAttachment.entityId",
+        "EntityLink[projectTool].to",
+        "EntityLink[purchaseProduct].to",
+        "EntityLink[wishCandidate].to",
+        "EntityLink[productComponent].from",
+        "EntityLink[productComponent].to",
+        "ProductUnitMapping.productId",
+      ],
+      overrides: {
+        "EntityExternalId.entityId": async () => {
+          demotedExternalIds = await foldProductExternalIds(
+            tx,
+            keepId,
+            plan,
+            summary,
+          );
         },
-      ];
-      await cascadeRemoval(tx, {
-        entity: "inventory",
-        ids: absorbedIds,
-        audit: { into: entries },
-      });
-      await logAuditEntries(tx, actor, entries);
-      inventoryMerged += rows.length;
-    }
-    summary.inventoryMerged = inventoryMerged;
+        "InventoryEntry.productId": async () => {
+          if (inventoryPlan.repoint.length > 0) {
+            await tx
+              .update(inventoryEntry)
+              .set({ productId: keepId })
+              .where(
+                inArray(
+                  inventoryEntry.id,
+                  inventoryPlan.repoint.map((row) => row.id),
+                ),
+              );
+            summary.inventoryMoved = inventoryPlan.repoint.length;
+          }
+          let inventoryMerged = 0;
+          for (const { into, rows } of inventoryPlan.absorb) {
+            const absorbed = sumBy(rows, (row) => row.amount.value);
+            const to = { ...into.amount, value: into.amount.value + absorbed };
+            await tx
+              .update(inventoryEntry)
+              .set(amountToColumns(to))
+              .where(eq(inventoryEntry.id, into.id));
+            const absorbedIds = rows.map((row) => row.id);
+            await tx
+              .update(inventoryEntry)
+              .set({ deletedAt: now })
+              .where(inArray(inventoryEntry.id, absorbedIds));
+            const entries: AuditEntryInput[] = [
+              {
+                entityKind: "inventory",
+                entityId: into.id,
+                action: "update",
+                changes: { amount: { from: into.amount, to } },
+              },
+            ];
+            await cascadeRemoval(tx, {
+              entity: "inventory",
+              ids: absorbedIds,
+              audit: { into: entries },
+            });
+            await logAuditEntries(tx, actor, entries);
+            inventoryMerged += rows.length;
+          }
+          summary.inventoryMerged = inventoryMerged;
+        },
+        "EntityAttachment.entityId": async () => {
+          // Four edges, one shape: re-point what fits, soft-delete the duplicate.
+          // An absorbed row here carries no data the survivor's row doesn't already
+          // have (the pair IS the row), so there is nothing to fold.
+          //
+          // Images are the exception, and it is about ORDER rather than data. The
+          // cover is whichever row sorts first under
+          // `asc(sortOrder), asc(createdAt)`, `sortOrder` defaults to 0 on every
+          // legacy row, and `foldAssociation` re-points without touching it — so a
+          // merged-in image that happened to be created earlier silently became the
+          // survivor's cover. (A barcode scan hijacked a product's cover exactly this
+          // way.) Read the survivor's own rows in their current order first, then
+          // renumber survivor-first once the fold has moved everything across.
+          const survivorImagesBefore = plan.survivorImageIds.map((id) => ({
+            id,
+          }));
+          // A direct keeper choice is authoritative.  Legacy null has no choice,
+          // so retain a surviving loser's explicit role when deduplicating the
+          // same image across Products.
+          for (const { into, rows } of plan.images.collision.absorb) {
+            if (into.purpose !== null) continue;
+            const purpose = rows.find((row) => row.purpose !== null)?.purpose;
+            if (purpose)
+              await tx
+                .update(entityAttachment)
+                .set({ purpose })
+                .where(eq(entityAttachment.id, into.id));
+          }
+          summary.imagesMoved = await foldAssociation(tx, {
+            column: "productId",
+            table: entityAttachment,
+            // A retry key was scoped to the loser; it must not become reusable
+            // against the survivor (ADR 0006).
+            repointValues: (entityId) => ({
+              entityId,
+              idempotencyKey: null,
+            }),
+            softDeleteValues: (deletedAt) => ({ deletedAt }),
+            rows: plan.images.rows,
+            keepId,
+            slotKey: (row) => row.imageId,
+            now,
+            plan: plan.images.collision,
+          });
+          if (summary.imagesMoved > 0 && survivorImagesBefore.length > 0) {
+            const survivorFirst = new Set(
+              survivorImagesBefore.map((row) => row.id),
+            );
+            const afterFold = await tx.query.entityAttachment.findMany({
+              where: and(
+                eq(entityAttachment.entityId, keepId),
+                notDeleted(entityAttachment),
+              ),
+              columns: { id: true },
+              orderBy: [
+                asc(entityAttachment.sortOrder),
+                asc(entityAttachment.createdAt),
+              ],
+            });
+            const ordered = [
+              ...survivorImagesBefore.map((row) => row.id),
+              ...afterFold
+                .map((row) => row.id)
+                .filter((id) => !survivorFirst.has(id)),
+            ];
+            for (const [index, id] of ordered.entries()) {
+              await tx
+                .update(entityAttachment)
+                .set({ sortOrder: index })
+                .where(eq(entityAttachment.id, id));
+            }
+          }
+        },
+        "EntityLink[projectTool].to": async () => {
+          summary.projectUsesMoved = await foldAssociation(tx, {
+            column: "productId",
+            table: entityLink,
+            repointValues: (productId) => ({ toEntityId: productId }),
+            softDeleteValues: (deletedAt) => ({ deletedAt }),
+            rows: plan.projectUses.rows,
+            keepId,
+            slotKey: (row) => row.projectId,
+            now,
+            plan: plan.projectUses.collision,
+          });
+        },
+        "EntityLink[purchaseProduct].to": async () => {
+          summary.purchaseLinksMoved = await foldAssociation(tx, {
+            column: "productId",
+            table: entityLink,
+            repointValues: (productId) => ({ toEntityId: productId }),
+            softDeleteValues: (deletedAt) => ({ deletedAt }),
+            rows: plan.purchases.rows,
+            keepId,
+            slotKey: (row) => row.purchaseId,
+            now,
+            plan: plan.purchases.collision,
+          });
+        },
+        "EntityLink[wishCandidate].to": async () => {
+          summary.wishCandidatesMoved = await foldAssociation(tx, {
+            column: "productId",
+            table: entityLink,
+            repointValues: (productId) => ({ toEntityId: productId }),
+            softDeleteValues: (deletedAt) => ({ deletedAt }),
+            rows: plan.wishes.rows,
+            keepId,
+            slotKey: (row) => row.wishId,
+            now,
+            plan: plan.wishes.collision,
+          });
+        },
+        // Composition, both directions. Nothing here needs its own audit
+        // entry: a dedupe drops a row identical to one that survives, and a
+        // sum preserves the total, so there is no value to name.
+        "EntityLink[productComponent].from": async () => {
+          if (componentPlan.kit.repoint.length > 0) {
+            await tx
+              .update(entityLink)
+              .set({ fromEntityId: keepId })
+              .where(
+                inArray(
+                  entityLink.id,
+                  componentPlan.kit.repoint.map((row) => row.id),
+                ),
+              );
+            summary.componentsMoved = componentPlan.kit.repoint.length;
+          }
+          if (componentPlan.kit.dedupe.length > 0) {
+            await tx
+              .update(entityLink)
+              .set({ deletedAt: now })
+              .where(
+                inArray(
+                  entityLink.id,
+                  componentPlan.kit.dedupe.map((row) => row.id),
+                ),
+              );
+            summary.componentsDeduped = componentPlan.kit.dedupe.length;
+          }
+        },
+        "EntityLink[productComponent].to": async () => {
+          if (componentPlan.part.repoint.length > 0) {
+            await tx
+              .update(entityLink)
+              .set({ toEntityId: keepId })
+              .where(
+                inArray(
+                  entityLink.id,
+                  componentPlan.part.repoint.map((row) => row.id),
+                ),
+              );
+            summary.kitLinksMoved = componentPlan.part.repoint.length;
+          }
+          let kitLinksSummed = 0;
+          for (const { into, rows } of componentPlan.part.absorb) {
+            // Summed per GROUP, not per row — one kit can list three parts that all
+            // merge into the survivor, and per-row updates would each read the
+            // unmutated `into.quantity` and overwrite rather than accumulate.
+            await tx
+              .update(entityLink)
+              .set({
+                quantity: into.quantity + sumBy(rows, (row) => row.quantity),
+              })
+              .where(eq(entityLink.id, into.id));
+            await tx
+              .update(entityLink)
+              .set({ deletedAt: now })
+              .where(
+                inArray(
+                  entityLink.id,
+                  rows.map((row) => row.id),
+                ),
+              );
+            kitLinksSummed += rows.length;
+          }
+          summary.kitLinksSummed = kitLinksSummed;
+        },
+        "ProductUnitMapping.productId": async () => {
+          const unitMappingPlan = plan.unitMappings;
 
-    // Four edges, one shape: re-point what fits, soft-delete the duplicate.
-    // An absorbed row here carries no data the survivor's row doesn't already
-    // have (the pair IS the row), so there is nothing to fold.
-    //
-    // Images are the exception, and it is about ORDER rather than data. The
-    // cover is whichever row sorts first under
-    // `asc(sortOrder), asc(createdAt)`, `sortOrder` defaults to 0 on every
-    // legacy row, and `foldAssociation` re-points without touching it — so a
-    // merged-in image that happened to be created earlier silently became the
-    // survivor's cover. (A barcode scan hijacked a product's cover exactly this
-    // way.) Read the survivor's own rows in their current order first, then
-    // renumber survivor-first once the fold has moved everything across.
-    const survivorImagesBefore = plan.survivorImageIds.map((id) => ({ id }));
-    // A direct keeper choice is authoritative.  Legacy null has no choice,
-    // so retain a surviving loser's explicit role when deduplicating the
-    // same image across Products.
-    for (const { into, rows } of plan.images.collision.absorb) {
-      if (into.purpose !== null) continue;
-      const purpose = rows.find((row) => row.purpose !== null)?.purpose;
-      if (purpose)
-        await tx
-          .update(entityAttachment)
-          .set({ purpose })
-          .where(eq(entityAttachment.id, into.id));
-    }
-    summary.imagesMoved = await foldAssociation(tx, {
-      column: "productId",
-      table: entityAttachment,
-      // A retry key was scoped to the loser; it must not become reusable
-      // against the survivor (ADR 0006).
-      repointValues: (entityId) => ({
-        entityId,
-        idempotencyKey: null,
-      }),
-      softDeleteValues: (deletedAt) => ({ deletedAt }),
-      rows: plan.images.rows,
-      keepId,
-      slotKey: (row) => row.imageId,
-      now,
-      plan: plan.images.collision,
+          if (unitMappingPlan.repoint.length > 0) {
+            await tx
+              .update(productUnitMappings)
+              .set({ productId: keepId })
+              .where(
+                inArray(
+                  productUnitMappings.id,
+                  unitMappingPlan.repoint.map((row) => row.id),
+                ),
+              );
+            summary.unitMappingsMoved = unitMappingPlan.repoint.length;
+          }
+          if (unitMappingPlan.absorbed.length > 0) {
+            await tx
+              .update(productUnitMappings)
+              .set({ deletedAt: now })
+              .where(
+                inArray(
+                  productUnitMappings.id,
+                  unitMappingPlan.absorbed.map(({ row }) => row.id),
+                ),
+              );
+            for (const { row, into, redundant } of unitMappingPlan.absorbed) {
+              if (redundant) {
+                summary.unitMappingsDeduped += 1;
+                continue;
+              }
+              summary.unitMappingsDiscarded.push({
+                from: row.a.unit,
+                to: row.b.unit,
+                keptRatio: ratioPerUnit(into, row.a.unit),
+                discardedRatio: ratioPerUnit(row, row.a.unit),
+                source: row.source,
+              });
+              discardedUnitMappings.push(
+                `${row.a.value} ${row.a.unit} = ${row.b.value} ${row.b.unit} (dropped; ${into.a.value} ${into.a.unit} = ${into.b.value} ${into.b.unit} stays)`,
+              );
+            }
+          }
+        },
+        // Money moving between products is an AUDITED change, exactly as it
+        // is on `updateExpense` and in `foldChargeInto`'s purchaseId re-point
+        // — net cost and the owned/sold window are derived from these rows.
+        "Expense.productId": async () => {
+          const movedExpenses = await tx
+            .update(expense)
+            .set({ productId: keepId })
+            .where(
+              and(
+                inArray(expense.productId, plan.loserIds),
+                notDeleted(expense),
+              ),
+            )
+            .returning({ id: expense.id });
+          summary.expensesMoved = movedExpenses.length;
+          await logAuditEntries(
+            tx,
+            actor,
+            movedExpenses.map(({ id }) => ({
+              entityKind: "expense" as const,
+              entityId: id,
+              action: "update" as const,
+              changes: { productId: { from: null, to: keepId } },
+            })),
+          );
+        },
+        "ProductConversionCoverage.productId": async () => {
+          if (plan.conversionCoverage.length > 0) {
+            await tx.delete(productConversionCoverage).where(
+              inArray(
+                productConversionCoverage.productId,
+                plan.conversionCoverage.map((row) =>
+                  parseEntityId("product", row.id),
+                ),
+              ),
+            );
+          }
+        },
+        // Pair endpoints are re-canonicalised together, so both edges are
+        // folded by one call keyed on the first.
+        "ProductMatchCandidate.productAId": () =>
+          repointProductMatchCandidatesTx(tx, keepId, plan.loserIds),
+        "ProductMatchCandidate.productBId": async () => {},
+      },
     });
-    if (summary.imagesMoved > 0 && survivorImagesBefore.length > 0) {
-      const survivorFirst = new Set(survivorImagesBefore.map((row) => row.id));
-      const afterFold = await tx.query.entityAttachment.findMany({
-        where: and(
-          eq(entityAttachment.entityId, keepId),
-          notDeleted(entityAttachment),
-        ),
-        columns: { id: true },
-        orderBy: [
-          asc(entityAttachment.sortOrder),
-          asc(entityAttachment.createdAt),
-        ],
-      });
-      const ordered = [
-        ...survivorImagesBefore.map((row) => row.id),
-        ...afterFold
-          .map((row) => row.id)
-          .filter((id) => !survivorFirst.has(id)),
-      ];
-      for (const [index, id] of ordered.entries()) {
-        await tx
-          .update(entityAttachment)
-          .set({ sortOrder: index })
-          .where(eq(entityAttachment.id, id));
-      }
-    }
-    summary.projectUsesMoved = await foldAssociation(tx, {
-      column: "productId",
-      table: entityLink,
-      repointValues: (productId) => ({ toEntityId: productId }),
-      softDeleteValues: (deletedAt) => ({ deletedAt }),
-      rows: plan.projectUses.rows,
-      keepId,
-      slotKey: (row) => row.projectId,
-      now,
-      plan: plan.projectUses.collision,
-    });
-    summary.purchaseLinksMoved = await foldAssociation(tx, {
-      column: "productId",
-      table: entityLink,
-      repointValues: (productId) => ({ toEntityId: productId }),
-      softDeleteValues: (deletedAt) => ({ deletedAt }),
-      rows: plan.purchases.rows,
-      keepId,
-      slotKey: (row) => row.purchaseId,
-      now,
-      plan: plan.purchases.collision,
-    });
-    summary.wishCandidatesMoved = await foldAssociation(tx, {
-      column: "productId",
-      table: entityLink,
-      repointValues: (productId) => ({ toEntityId: productId }),
-      softDeleteValues: (deletedAt) => ({ deletedAt }),
-      rows: plan.wishes.rows,
-      keepId,
-      slotKey: (row) => row.wishId,
-      now,
-      plan: plan.wishes.collision,
-    });
-
-    // Composition, both directions. Nothing here needs its own audit entry:
-    // a dedupe drops a row identical to one that survives, and a sum preserves
-    // the total, so unlike a discarded external id there is no value to name.
-    if (componentPlan.kit.repoint.length > 0) {
-      await tx
-        .update(entityLink)
-        .set({ fromEntityId: keepId })
-        .where(
-          inArray(
-            entityLink.id,
-            componentPlan.kit.repoint.map((row) => row.id),
-          ),
-        );
-      summary.componentsMoved = componentPlan.kit.repoint.length;
-    }
-    if (componentPlan.kit.dedupe.length > 0) {
-      await tx
-        .update(entityLink)
-        .set({ deletedAt: now })
-        .where(
-          inArray(
-            entityLink.id,
-            componentPlan.kit.dedupe.map((row) => row.id),
-          ),
-        );
-      summary.componentsDeduped = componentPlan.kit.dedupe.length;
-    }
-    if (componentPlan.part.repoint.length > 0) {
-      await tx
-        .update(entityLink)
-        .set({ toEntityId: keepId })
-        .where(
-          inArray(
-            entityLink.id,
-            componentPlan.part.repoint.map((row) => row.id),
-          ),
-        );
-      summary.kitLinksMoved = componentPlan.part.repoint.length;
-    }
-    let kitLinksSummed = 0;
-    for (const { into, rows } of componentPlan.part.absorb) {
-      // Summed per GROUP, not per row — one kit can list three parts that all
-      // merge into the survivor, and per-row updates would each read the
-      // unmutated `into.quantity` and overwrite rather than accumulate.
-      await tx
-        .update(entityLink)
-        .set({ quantity: into.quantity + sumBy(rows, (row) => row.quantity) })
-        .where(eq(entityLink.id, into.id));
-      await tx
-        .update(entityLink)
-        .set({ deletedAt: now })
-        .where(
-          inArray(
-            entityLink.id,
-            rows.map((row) => row.id),
-          ),
-        );
-      kitLinksSummed += rows.length;
-    }
-    summary.kitLinksSummed = kitLinksSummed;
-
-    const unitMappingPlan = plan.unitMappings;
-
-    if (unitMappingPlan.repoint.length > 0) {
-      await tx
-        .update(productUnitMappings)
-        .set({ productId: keepId })
-        .where(
-          inArray(
-            productUnitMappings.id,
-            unitMappingPlan.repoint.map((row) => row.id),
-          ),
-        );
-      summary.unitMappingsMoved = unitMappingPlan.repoint.length;
-    }
-    if (unitMappingPlan.absorbed.length > 0) {
-      await tx
-        .update(productUnitMappings)
-        .set({ deletedAt: now })
-        .where(
-          inArray(
-            productUnitMappings.id,
-            unitMappingPlan.absorbed.map(({ row }) => row.id),
-          ),
-        );
-      for (const { row, into, redundant } of unitMappingPlan.absorbed) {
-        if (redundant) {
-          summary.unitMappingsDeduped += 1;
-          continue;
-        }
-        summary.unitMappingsDiscarded.push({
-          from: row.a.unit,
-          to: row.b.unit,
-          keptRatio: ratioPerUnit(into, row.a.unit),
-          discardedRatio: ratioPerUnit(row, row.a.unit),
-          source: row.source,
-        });
-        discardedUnitMappings.push(
-          `${row.a.value} ${row.a.unit} = ${row.b.value} ${row.b.unit} (dropped; ${into.a.value} ${into.a.unit} = ${into.b.value} ${into.b.unit} stays)`,
-        );
-      }
-    }
-    const movedTasks = await tx
-      .update(task)
-      .set({ subjectProductId: keepId })
-      .where(
-        and(inArray(task.subjectProductId, plan.loserIds), notDeleted(task)),
-      )
-      .returning({ id: task.id });
-    summary.tasksMoved = movedTasks.length;
-    const movedLocations = await tx
-      .update(location)
-      .set({ productId: keepId })
-      .where(
-        and(inArray(location.productId, plan.loserIds), notDeleted(location)),
-      )
-      .returning({ id: location.id });
-    summary.locationsMoved = movedLocations.length;
-    const movedCookbooks = await tx
-      .update(cookbook)
-      .set({ productId: keepId })
-      .where(
-        and(inArray(cookbook.productId, plan.loserIds), notDeleted(cookbook)),
-      )
-      .returning({ id: cookbook.id });
-    summary.cookbooksMoved = movedCookbooks.length;
-    const movedDevices = await tx
-      .update(device)
-      .set({ productId: keepId })
-      .where(and(inArray(device.productId, plan.loserIds), notDeleted(device)))
-      .returning({ id: device.id });
-    summary.devicesMoved = movedDevices.length;
-    await tx
-      .update(photoGroupProposal)
-      .set({ productId: keepId, updatedAt: new Date() })
-      .where(inArray(photoGroupProposal.productId, plan.loserIds));
-    await tx
-      .update(mealFoodEntry)
-      .set({ productId: keepId })
-      .where(
-        and(
-          inArray(mealFoodEntry.productId, plan.loserIds),
-          notDeleted(mealFoodEntry),
-        ),
-      );
-    // Money moving between products is an AUDITED change, exactly as it is on
-    // `updateExpense` and in `foldChargeInto`'s purchaseId re-point — net cost
-    // and the owned/sold window are derived from these rows.
-    const movedExpenses = await tx
-      .update(expense)
-      .set({ productId: keepId })
-      .where(
-        and(inArray(expense.productId, plan.loserIds), notDeleted(expense)),
-      )
-      .returning({ id: expense.id });
-    summary.expensesMoved = movedExpenses.length;
-    // Preserve the keeper's target when both Products were inspected in the
-    // same run; re-pointing all rows at once would violate the unique
-    // `(runId, entityId)` index.
-    await mergeRunTargets(tx, keepId, plan.loserIds);
-    await logAuditEntries(
-      tx,
-      actor,
-      movedExpenses.map(({ id }) => ({
-        entityKind: "expense" as const,
-        entityId: id,
-        action: "update" as const,
-        changes: { productId: { from: null, to: keepId } },
-      })),
-    );
+    summary.tasksMoved = repointed["Task.subjectProductId"] ?? 0;
+    summary.locationsMoved = repointed["Location.productId"] ?? 0;
+    summary.cookbooksMoved = repointed["Cookbook.productId"] ?? 0;
+    summary.devicesMoved = repointed["Device.productId"] ?? 0;
 
     const folded = plan.aliases;
     summary.aliasesAdded = plan.aliasesAdded;
@@ -1722,19 +1744,6 @@ export const mergeProducts = async (
         ...buildPartialUpdateValues(carried),
       })
       .where(eq(product.id, keepId));
-
-    await repointProductMatchCandidatesTx(tx, keepId, plan.loserIds);
-
-    if (plan.conversionCoverage.length > 0) {
-      await tx.delete(productConversionCoverage).where(
-        inArray(
-          productConversionCoverage.productId,
-          plan.conversionCoverage.map((row) =>
-            parseEntityId("product", row.id),
-          ),
-        ),
-      );
-    }
 
     const survivorChanges = productMergeSurvivorChanges(
       plan,

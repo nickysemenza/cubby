@@ -32,8 +32,8 @@ import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { getDb, insertAndReturn } from "./database-helpers";
-import { getExpenseByShortcode } from "./expense";
-import { createProduct } from "./product";
+import { getExpenseByShortcode } from "./expense/crud";
+import { createProduct } from "./product/crud";
 import {
   deletePurchases,
   findOrCreatePurchase,

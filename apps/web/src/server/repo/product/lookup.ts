@@ -16,7 +16,7 @@ import { match } from "ts-pattern";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { Database } from "~/server/db";
 import { entityExternalId, inventoryEntry, product } from "~/server/db/schema";
-import { attachDataQuality } from "~/server/repo/data-quality";
+import { attachDataQuality } from "~/server/repo/data-quality/hydrate";
 import { getDb, imageOrder, notDeleted } from "~/server/repo/database-helpers";
 import {
   attachInventoryValuations,

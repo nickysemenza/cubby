@@ -54,10 +54,9 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
   dryRunPruneAliases: async (context) =>
     (await problemDetectors()).dryRunPruneAliases(context.db),
   recipeUsageByProduct: async (context, input) =>
-    (await import("~/server/repo/problems")).recipeUsageCountsByProduct(
-      context.db,
-      input.productShortcodes,
-    ),
+    (
+      await import("~/server/repo/problems/detectors-product")
+    ).recipeUsageCountsByProduct(context.db, input.productShortcodes),
   deleteUnused: async (context, input) =>
     (await problemWorkflows()).deleteUnusedIngredientsWorkflow(context, input),
   resolveRunFinding: async (context, input) =>

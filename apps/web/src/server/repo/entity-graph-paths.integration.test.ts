@@ -7,7 +7,7 @@ import { inventoryEntry, location } from "~/server/db/schema";
 
 import { getDb } from "./database-helpers";
 import { getEntityGraphPaths } from "./entity-graph-paths";
-import { createExpense } from "./expense";
+import { createExpense } from "./expense/crud";
 import { attachPurchaseProducts } from "./purchase-products";
 import {
   createImageFixture,

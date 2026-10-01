@@ -48,16 +48,13 @@ import {
 import {
   createInventoryEntry,
   getInventoryByLocationIds,
-} from "~/server/repo/inventory";
+} from "~/server/repo/inventory/crud";
 import {
   findLocationsNeedingAiDescription,
   getLocationById,
-} from "~/server/repo/location";
-import {
-  findProductByNameFuzzyManufacturer,
-  getProductByID,
-  quickCreateProduct,
-} from "~/server/repo/product";
+} from "~/server/repo/location/crud";
+import { getProductByID, quickCreateProduct } from "~/server/repo/product/crud";
+import { findProductByNameFuzzyManufacturer } from "~/server/repo/product/lookup";
 import {
   resolveCreatedOrInvariant,
   resolveLiveShortcode,

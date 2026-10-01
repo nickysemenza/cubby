@@ -2,7 +2,7 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { createOrReuseAttachedImage } from "~/server/repo/image";
-import { mergeProducts } from "~/server/repo/product";
+import { mergeProducts } from "~/server/repo/product/merge";
 import {
   createInventoryFixture,
   createLocationFixture,

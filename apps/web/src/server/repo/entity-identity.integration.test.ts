@@ -11,7 +11,7 @@ import {
 import { getAuditLog } from "~/server/repo/audit-log";
 import { getDb } from "~/server/repo/database-helpers";
 import { createUploadedImageRecord } from "~/server/repo/image";
-import { mergeProducts } from "~/server/repo/product";
+import { mergeProducts } from "~/server/repo/product/merge";
 import {
   createProductFixture,
   makeProductInput,

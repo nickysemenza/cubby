@@ -66,13 +66,13 @@ import {
   effectiveExpenseProjectSql,
   effectiveExpenseTradeSql,
 } from "~/server/repo/expense-inheritance";
-import { foldAssociation } from "~/server/repo/merge";
-import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
+import { foldAssociation } from "~/server/repo/merge/collisions";
 import { getCategoryFeature } from "~/server/repo/product-category";
 import {
   categoryFeatureInSql,
   categoryFeatureSql,
 } from "~/server/repo/product-category-sql";
+import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 import { loadProductOwnershipTimelines } from "~/server/repo/product/ownership";
 import { linkRelationAdapter } from "~/server/repo/relation-mutation-adapter";
 import {

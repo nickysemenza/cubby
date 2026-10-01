@@ -11,7 +11,7 @@ import type { ListEntity } from "~/entities/generated/entity-lists.gen";
 import { projectListRows } from "~/entities/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 
-import { loadDataQualities } from "./data-quality";
+import { loadDataQualities } from "./data-quality/hydrate";
 import {
   resolveEntityDisplayImageLists,
   withDisplayImages,

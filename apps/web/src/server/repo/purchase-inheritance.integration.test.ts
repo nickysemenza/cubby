@@ -11,8 +11,9 @@ import { getEntityRecommendations } from "~/server/services/entity-recommendatio
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { getDb } from "./database-helpers";
-import { expenseList, getExpenseByShortcode, updateExpense } from "./expense";
 import { resolveDraftExpenseFields } from "./expense-inheritance";
+import { getExpenseByShortcode, updateExpense } from "./expense/crud";
+import { expenseList } from "./expense/lookup";
 import {
   deletePurchases,
   getPurchaseByID,

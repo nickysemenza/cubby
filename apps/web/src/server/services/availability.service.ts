@@ -38,7 +38,7 @@ import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
-import { getInventoryForProducts } from "~/server/repo/inventory";
+import { getInventoryForProducts } from "~/server/repo/inventory/crud";
 import {
   getRecipesByIDs,
   getSubRecipeClosure,

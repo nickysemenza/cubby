@@ -10,10 +10,13 @@ import {
   getMakeableWorkflow,
   duplicateWorkflow,
 } from "~/server/operations/recipe.server";
-import { getIngredientByID, updateIngredient } from "~/server/repo/ingredient";
-import { getInventoryForProducts } from "~/server/repo/inventory";
+import {
+  getIngredientByID,
+  updateIngredient,
+} from "~/server/repo/ingredient/crud";
+import { getInventoryForProducts } from "~/server/repo/inventory/crud";
 import { createMealWithEntityId } from "~/server/repo/meal/crud";
-import { createRecipe } from "~/server/repo/recipe";
+import { createRecipe } from "~/server/repo/recipe/crud";
 import {
   seedIngredientWithStock,
   createProductFixture,

@@ -13,9 +13,9 @@ import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import {
   createInventoryEntry,
   getInventoryByLocationIds,
-} from "~/server/repo/inventory";
-import { createLocation } from "~/server/repo/location";
-import { quickCreateProduct } from "~/server/repo/product";
+} from "~/server/repo/inventory/crud";
+import { createLocation } from "~/server/repo/location/crud";
+import { quickCreateProduct } from "~/server/repo/product/crud";
 import { makeLocationInput } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import type { UpcLookupPort } from "~/server/services/upc";

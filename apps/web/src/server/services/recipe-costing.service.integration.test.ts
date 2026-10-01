@@ -11,7 +11,7 @@ import {
   recomputeAllDurableWorkflow,
   recomputeStaleDurableWorkflow,
 } from "~/server/operations/recipe.server";
-import { updateProduct } from "~/server/repo/product";
+import { updateProduct } from "~/server/repo/product/crud";
 import { getRecipesByIDs } from "~/server/repo/recipe/crud";
 import { recipeList } from "~/server/repo/recipe/crud";
 import {
@@ -19,7 +19,7 @@ import {
   selectAllStaleRecipeIds,
 } from "~/server/repo/recipe/totals";
 
-import { findOrCreateIngredient } from "../repo/ingredient";
+import { findOrCreateIngredient } from "../repo/ingredient/crud";
 import {
   createProductFixture as createProduct,
   createRecipeFixture as createRecipe,

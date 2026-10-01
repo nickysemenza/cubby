@@ -11,7 +11,7 @@ import {
   createProductCategory,
   updateProductCategory,
 } from "~/server/repo/product-category";
-import { upsertCookbookRecipe } from "~/server/repo/recipe";
+import { upsertCookbookRecipe } from "~/server/repo/recipe/crud";
 import {
   createIngredientFixture,
   createImageFixture,

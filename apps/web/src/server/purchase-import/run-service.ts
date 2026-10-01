@@ -2261,7 +2261,8 @@ export async function markHistoryExpired(
         notDeleted(purchase),
       ),
     );
-  const { setDataException } = await import("~/server/repo/data-quality");
+  const { setDataException } =
+    await import("~/server/repo/data-quality/exceptions");
   const actor = buildActorContext(scope.actorUserId, "mcp", {
     runId: runEntityId.parse(input.runId),
   });

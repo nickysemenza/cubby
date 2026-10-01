@@ -20,7 +20,7 @@ import {
   resolveOrCreateWorkflow,
 } from "~/server/operations/ingredient.server";
 import { getAuditLog } from "~/server/repo/audit-log";
-import { deleteRecipes } from "~/server/repo/recipe";
+import { deleteRecipes } from "~/server/repo/recipe/crud";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { executeWorkflow, workflow } from "~/server/workflow-runtime";
@@ -29,16 +29,18 @@ import { getDb, withTransaction } from "./database-helpers";
 import { patchEntityRows } from "./entity-patch";
 import {
   createIngredient,
-  enrichmentWorkbenchIngredients,
-  getIngredientsByIDsLean,
-  deleteIngredients,
   findOrCreateIngredient,
   getIngredientByID,
-  mergeIngredients,
-  ingredientList,
   updateIngredient,
   updateIngredientsUsuallyOnHand,
-} from "./ingredient";
+} from "./ingredient/crud";
+import { deleteIngredients } from "./ingredient/deletion";
+import { mergeIngredients } from "./ingredient/merge";
+import {
+  enrichmentWorkbenchIngredients,
+  getIngredientsByIDsLean,
+  ingredientList,
+} from "./ingredient/search";
 import {
   createRecipeFixture as createRecipe,
   createPlantFixture,

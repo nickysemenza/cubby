@@ -6,9 +6,9 @@ import type {
   CalendarProjection,
 } from "~/server/calendar/caldav-types";
 import { getDb } from "~/server/repo/database-helpers";
-import { getMealByID } from "~/server/repo/meal";
+import { getMealByID } from "~/server/repo/meal/crud";
 import { createMealWithEntityId } from "~/server/repo/meal/crud";
-import { updateTask } from "~/server/repo/task";
+import { updateTask } from "~/server/repo/task/crud";
 
 import { executeCalDavWrite, loadCalDavProjection } from "./calendar-caldav";
 

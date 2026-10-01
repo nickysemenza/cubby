@@ -2,9 +2,9 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { TEST_ACTOR, TEST_HOME_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { createInventoryEntry } from "~/server/repo/inventory";
-import { createLocation, deleteLocations } from "~/server/repo/location";
-import { createProduct, deleteProducts } from "~/server/repo/product";
+import { createInventoryEntry } from "~/server/repo/inventory/crud";
+import { createLocation, deleteLocations } from "~/server/repo/location/crud";
+import { createProduct, deleteProducts } from "~/server/repo/product/crud";
 import {
   makeLocationInput,
   makeProductInput,

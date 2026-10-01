@@ -42,7 +42,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { touchDataQualityTargets } from "~/server/repo/data-quality";
+import { touchDataQualityTargets } from "~/server/repo/data-quality/touch";
 import {
   amountFromColumns,
   notDeleted,
@@ -53,7 +53,7 @@ import {
   syncChangedEffectivePrices,
 } from "~/server/repo/product/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
-import { cascadeRemoval } from "~/server/repo/removal";
+import { cascadeRemoval } from "~/server/repo/removal/core";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 export type DiscardProductInput = {

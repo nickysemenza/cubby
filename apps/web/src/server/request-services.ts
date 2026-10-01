@@ -3,7 +3,7 @@ import type { Database } from "~/server/db";
 import {
   findProductsByFoodIdentifier,
   getFoodLookupsForLinkedProducts,
-} from "~/server/repo/product";
+} from "~/server/repo/product/lookup";
 import {
   countProductsByFoodIdentifiers,
   findProductsByFoodIdentifiers,

@@ -16,7 +16,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { financialTransactionAllocation, purchase } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { touchDataQualityTargets } from "~/server/repo/data-quality";
+import { touchDataQualityTargets } from "~/server/repo/data-quality/touch";
 import { notDeleted } from "~/server/repo/database-helpers";
 import { cents } from "~/server/repo/money";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";

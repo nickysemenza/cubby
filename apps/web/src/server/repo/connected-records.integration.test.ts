@@ -13,7 +13,7 @@ import {
   getConnectedRecords,
 } from "./connected-records";
 import { getDb } from "./database-helpers";
-import { createExpense } from "./expense";
+import { createExpense } from "./expense/crud";
 import { createPlanting } from "./garden";
 import { attachPurchaseProducts } from "./purchase-products";
 import {
