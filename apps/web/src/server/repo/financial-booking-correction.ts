@@ -54,20 +54,15 @@ async function reimbursementDestination(
   const target = await getDb(db).query.purchase.findFirst({
     where: and(eq(purchase.id, purchaseId), notDeleted(purchase)),
   });
-  if (!target?.spendingCategoryId)
-    return fail(
-      "Categorize the original Purchase before attaching its reimbursement.",
-    );
-  const category = await getDb(db).query.spendingCategory.findFirst({
-    where: (category, { eq, isNull }) =>
-      and(
-        eq(category.id, target!.spendingCategoryId!),
-        isNull(category.deletedAt),
-      ),
-  });
-  if (!category)
-    return fail("The original Purchase's category is no longer live.");
-  const categoryName = category.name;
+  if (!target) return fail("The original Purchase is no longer live.");
+  const categoryId = target.spendingCategoryId;
+  const category = categoryId
+    ? await getDb(db).query.spendingCategory.findFirst({
+        where: (category, { eq, isNull }) =>
+          and(eq(category.id, categoryId), isNull(category.deletedAt)),
+      })
+    : null;
+  const categoryName = category?.name ?? null;
   let trade = target.defaultTrade;
   if (target.defaultProjectId) {
     const project = await getDb(db).query.project.findFirst({
@@ -240,23 +235,11 @@ export async function commitFinancialBookingCorrection(
         review.transactionId,
       );
       if (review.action.kind === "attach_reimbursement") {
-        const targetId = await resolveOrThrow(
-          txDb,
-          "purchase",
-          review.action.purchaseId,
-        );
-        const target = await getDb(txDb).query.purchase.findFirst({
-          where: eq(purchase.id, targetId),
-        });
-        const category = await getDb(txDb).query.spendingCategory.findFirst({
-          where: (category, { eq }) =>
-            eq(category.id, target!.spendingCategoryId!),
-        });
         for (const line of review.lines)
           await updateExpense(
             txDb,
             line.expenseId,
-            { purchaseId: review.action.purchaseId, spendingCategoryId: null },
+            { purchaseId: review.action.purchaseId },
             actor,
           );
         await updateFinancialTransaction(
@@ -266,10 +249,6 @@ export async function commitFinancialBookingCorrection(
             allocations: [
               { purchaseId: review.action.purchaseId, amount: review.amount },
             ],
-            spendingCategoryId: parseShortcodeFor(
-              "spendingCategory",
-              category!.shortcode,
-            ),
           },
           actor,
         );

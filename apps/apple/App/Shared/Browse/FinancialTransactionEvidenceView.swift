@@ -107,11 +107,14 @@ struct FinancialTransactionEvidenceView: View {
             choosingCategory = true
         } label: {
             LabeledContent(
-                "Spending category",
-                value: category?.title ?? (purchase == nil ? "Choose category" : "Use purchase category"))
+                "Category override",
+                value: category?.title ?? "Use automatic classification")
         }
         .disabled(busy)
         .accessibilityIdentifier("financial.booking.category")
+        if category != nil {
+            Button("Use automatic classification") { category = nil }.disabled(busy)
+        }
         Button {
             choosingPurchase = true
         } label: {
@@ -137,7 +140,7 @@ struct FinancialTransactionEvidenceView: View {
         }
         .disabled(busy)
         Button("Review Expense booking") { Task { await prepareBooking() } }
-            .disabled(busy || (category == nil && purchase == nil) || (purchase == nil && vendor == nil))
+            .disabled(busy || (purchase == nil && vendor == nil))
             .accessibilityIdentifier("financial.booking.preview")
         if let preview {
             LabeledContent("Name", value: preview.name)
@@ -175,7 +178,7 @@ struct FinancialTransactionEvidenceView: View {
     }
 
     private func resetSelections() {
-        category = row.raw["spendingCategoryId"]?.stringValue.map { EntityPick(id: $0, title: $0) }
+        category = nil
         purchase = row.raw["purchaseId"]?.stringValue.map { EntityPick(id: $0, title: $0) }
         vendor = nil
         economicRole = "vendor"

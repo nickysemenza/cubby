@@ -1,3 +1,5 @@
+import { vendorSpendingProfile } from "../spending-classification.js";
+import { spendingCategoryShortcode } from "../identifier-fields.js";
 import { defineEntity } from "./definition.js";
 import { vendorShortcode } from "../identifier-fields.js";
 import { imageOut } from "./field-primitives.js";
@@ -29,6 +31,11 @@ export default defineEntity({
     icons: { phosphor: "Storefront", sfSymbol: "storefront", emoji: "🏪" },
     detail: {
       additionalSectionOverrides: [
+        {
+          kind: "slot",
+          id: "spending-classification",
+          title: "Spending classification",
+        },
         { kind: "slot", id: "order-mail", title: "Order email" },
         {
           kind: "relation",
@@ -60,6 +67,39 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        key: "spendingProfile",
+        kind: "enum",
+        control: {
+          kind: "select",
+          options: [
+            { value: "unspecified", label: "Unspecified" },
+            { value: "mixed_retail", label: "Mixed retailer" },
+            { value: "food_retail", label: "Groceries" },
+            { value: "restaurant", label: "Restaurant" },
+            { value: "coffee_shop", label: "Coffee shop" },
+          ],
+        },
+        display: { list: true, detail: true },
+        validation: {
+          read: vendorSpendingProfile.default("unspecified"),
+          create: vendorSpendingProfile.default("unspecified"),
+          update: vendorSpendingProfile.optional(),
+        },
+      },
+      {
+        key: "defaultSpendingCategoryId",
+        kind: "identifier",
+        nullable: true,
+        reference: { entity: "spendingCategory" },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { list: true, detail: true },
+        validation: {
+          read: spendingCategoryShortcode.nullable().default(null),
+          create: spendingCategoryShortcode.nullable().default(null),
+          update: spendingCategoryShortcode.nullable().optional(),
+        },
+      },
       {
         key: "evidenceExpectation",
         kind: "enum",
@@ -380,6 +420,12 @@ export default defineEntity({
       },
     ],
     storage: [
+      {
+        key: "spendingProfile",
+        specialized: "enum:spendingProfile",
+        defaultValue: "unspecified",
+      },
+      { key: "defaultSpendingCategoryId", reference: "spendingCategory" },
       { key: "evidenceExpectation", specialized: "enum:evidenceExpectation" },
       {
         key: "id",
@@ -413,6 +459,8 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "spendingProfile",
+      "defaultSpendingCategoryId",
       "evidenceExpectation",
       "name",
       "website",
@@ -425,6 +473,8 @@ export default defineEntity({
       "notes",
     ],
     update: [
+      "spendingProfile",
+      "defaultSpendingCategoryId",
       "evidenceExpectation",
       "name",
       "website",
@@ -438,6 +488,8 @@ export default defineEntity({
     ],
     bulk: [],
     audit: [
+      "spendingProfile",
+      "defaultSpendingCategoryId",
       "evidenceExpectation",
       "name",
       "website",
@@ -467,6 +519,8 @@ export default defineEntity({
       fields: {
         capture: ["name", "website", "notes"],
         full: [
+          "spendingProfile",
+          "defaultSpendingCategoryId",
           "evidenceExpectation",
           "name",
           "website",
@@ -483,6 +537,8 @@ export default defineEntity({
       update: ["full", "identity"],
     },
     output: [
+      "spendingProfile",
+      "defaultSpendingCategoryId",
       "evidenceExpectation",
       "id",
       "name",
@@ -510,6 +566,7 @@ export default defineEntity({
   storage: {
     indexes: [{ on: ["name"], unique: true, where: "{deletedAt} IS NULL" }],
     checks: [
+      { column: "spendingProfile" },
       { column: "orderEvidence", nullClause: true },
       {
         name: "Vendor_returnWindowDays_check",
@@ -708,6 +765,23 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "defaultSpendingCategory",
+      label: "Default spending category",
+      target: "spendingCategory",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Vendor.defaultSpendingCategoryId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "Vendor.defaultSpendingCategoryId", direction: "incoming" },
+        ],
+      },
+    },
     {
       key: "logo",
       label: "Logo image",

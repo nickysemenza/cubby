@@ -52,7 +52,7 @@ describe("reviewed finance suggestions", () => {
     return suggestFields(ctx.db, runId, input, { jev });
   }
 
-  it.each(["financialTransaction", "purchase", "expense"] as const)(
+  it.each(["purchase", "expense"] as const)(
     "%s selects a live child with parent context and applies only after review",
     async (entity) => {
       const parent = await insertWithShortcode(ctx.db, "spendingCategory", {

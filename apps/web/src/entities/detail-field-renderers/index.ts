@@ -21,6 +21,7 @@ import { productDetailFields } from "./product";
 import { productCategoryDetailFields } from "./product-category";
 import { recipeDetailFields } from "./recipe";
 import { runDetailFields } from "./run";
+import { renderSpendingCategorySummary } from "./spending-category-summary";
 import { vendorDetailFields } from "./vendor";
 import { wishDetailFields } from "./wish";
 
@@ -52,6 +53,9 @@ export const detailRendererCoverage = {
     effectiveOwnership: implemented(inventoryDetailFields.effectiveOwnership),
   },
   expense: {
+    "expense-spending-category": implemented(
+      expenseDetailFields["expense-spending-category"],
+    ),
     "expense-project": implemented(expenseDetailFields["expense-project"]),
   },
   product: {
@@ -98,7 +102,15 @@ export const detailRendererCoverage = {
       financialAccountDetailFields["financial-account-card-numbers"],
     ),
   },
+  purchase: {
+    "spending-category-summary": implemented((record) => ({
+      value: renderSpendingCategorySummary(record.spendingCategorySummary),
+    })),
+  },
   financialTransaction: {
+    "spending-category-summary": implemented(
+      financialTransactionDetailFields["spending-category-summary"],
+    ),
     "financial-transaction-vendor-inference": implemented(
       financialTransactionDetailFields[
         "financial-transaction-vendor-inference"
@@ -156,6 +168,8 @@ const detailCoverageFor = (
       return detailRendererCoverage.run;
     case "financialAccount":
       return detailRendererCoverage.financialAccount;
+    case "purchase":
+      return detailRendererCoverage.purchase;
     case "financialTransaction":
       return detailRendererCoverage.financialTransaction;
     case "ledgerTransfer":

@@ -56,8 +56,10 @@ import {
 import {
   type ExpenseAllocationProjectScope,
   expenseAllocationExistsSql,
+  expenseJointAllocationSql,
   loadExpenseProjectAllocations,
 } from "../expense-project-allocation";
+import { loadExpenseSpendingAllocations } from "../expense-spending-allocation";
 import { completeListReader } from "../list-read-adapters";
 import { dbExpenseToAPI } from "./helpers";
 
@@ -183,11 +185,24 @@ export const resolveExpenseProjectAllocationScope = async (
     return { projectIds: [] };
   }
   const projectIds = selectedIds.map((id) => parseEntityId("project", id));
-  if (projectIds.length === 0 && !filters.projectPresenceFilter)
+  const categoryCodes = filters.spendingCategoryId
+    ? [filters.spendingCategoryId].flat()
+    : [];
+  const categoryIds = await toUuids(db, categoryCodes, "spendingCategory");
+  if (
+    projectIds.length === 0 &&
+    !filters.projectPresenceFilter &&
+    categoryCodes.length === 0 &&
+    !filters.spendingCategoryPresenceFilter
+  )
     return undefined;
   return {
     projectIds: projectIds.length > 0 ? projectIds : undefined,
     presence: filters.projectPresenceFilter,
+    spendingCategoryIds: categoryCodes.length
+      ? categoryIds.map((id) => parseEntityId("spendingCategory", id))
+      : undefined,
+    categoryPresence: filters.spendingCategoryPresenceFilter,
   };
 };
 
@@ -199,7 +214,18 @@ const projectFilterCondition = async (
   if (!scope) return undefined;
   // The presence sentinel ORs with the selected projects, so "Kitchen or
   // unassigned" remains one filter rather than an impossible conjunction.
-  return expenseAllocationExistsSql(sql`${expense.id}`, scope);
+  return inArray(
+    expense.id,
+    getDb(db)
+      .select({ id: expense.id })
+      .from(expense)
+      .where(
+        and(
+          notDeleted(expense),
+          expenseAllocationExistsSql(sql`${expense.id}`, scope),
+        ),
+      ),
+  );
 };
 
 const requestedReferenceCondition = (
@@ -290,7 +316,21 @@ export const buildExpenseWhereClause = async (
   const projectCondition =
     options && "projectScope" in options
       ? options.projectScope
-        ? expenseAllocationExistsSql(sql`${expense.id}`, options.projectScope)
+        ? inArray(
+            expense.id,
+            getDb(db)
+              .select({ id: expense.id })
+              .from(expense)
+              .where(
+                and(
+                  notDeleted(expense),
+                  expenseAllocationExistsSql(
+                    sql`${expense.id}`,
+                    options.projectScope,
+                  ),
+                ),
+              ),
+          )
         : undefined
       : await projectFilterCondition(db, filters);
   // The `(none)` / `Has project` sentinels OR with that selection instead of
@@ -332,7 +372,12 @@ export const buildExpenseWhereClause = async (
   // before the conditions below. `trade` is stripped from `storedFilters`
   // (below) and applied instead by `tradeCondition`, an uncorrelated
   // sub-select — see its doc above.
-  const storedFilters = { ...filters, trade: undefined };
+  const storedFilters = {
+    ...filters,
+    trade: undefined,
+    spendingCategoryId: undefined,
+    spendingCategoryPresenceFilter: undefined,
+  };
   return expenseScaffold.where(storedFilters, [
     filters.ledgerPartyId === undefined
       ? undefined
@@ -429,6 +474,10 @@ const resolveExpenseSort = (sort: SortParams) => {
   const dirSql =
     sort.direction === "asc" ? "asc nulls last" : "desc nulls last";
 
+  if (sort.orderBy === "spendingCategoryId")
+    return [
+      sql`(SELECT string_agg(DISTINCT a."spendingCategoryName", ', ' ORDER BY a."spendingCategoryName") FROM (${expenseJointAllocationSql(sql`ARRAY["expense".id]`)}) a) ${sql.raw(dirSql)}`,
+    ];
   if (sort.orderBy === "projectId") {
     const direction =
       sort.direction === "asc" ? sql`asc nulls last` : sql`desc nulls last`;
@@ -532,7 +581,7 @@ const hydrateExpenseRows = async (
       rows.map((row) => ({ ...row, id: row.shortcode })),
       projection,
     );
-  const [allocations, dataQualities] = await Promise.all([
+  const [allocations, dataQualities, spendingAllocations] = await Promise.all([
     loadListGroup(projection, "relations", () =>
       loadExpenseProjectAllocations(
         db,
@@ -543,6 +592,12 @@ const hydrateExpenseRows = async (
       loadDataQualities(
         db,
         "expense",
+        rows.map((row) => row.id),
+      ),
+    ),
+    loadListGroup(projection, "relations", () =>
+      loadExpenseSpendingAllocations(
+        db,
         rows.map((row) => row.id),
       ),
     ),
@@ -575,6 +630,7 @@ const hydrateExpenseRows = async (
       attributions,
       sourceClaims: row.sourceClaims ?? [],
       projectAllocations: allocationsByExpense.get(row.id) ?? [],
+      spendingCategoryAllocations: spendingAllocations?.get(row.id),
     };
   });
   const mapRow = (row: (typeof selectedRows)[number]) =>

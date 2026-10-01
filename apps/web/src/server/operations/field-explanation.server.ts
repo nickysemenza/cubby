@@ -12,6 +12,7 @@ import {
 import { cookbookShortcode } from "@cubby/schemas/identifiers";
 import { imageProvenanceEvidence } from "@cubby/schemas/image-capture-fields";
 import { effectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
+import { spendingCategoryAllocationsSchema } from "@cubby/schemas/spending-classification";
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
@@ -277,6 +278,37 @@ function dependencySources(
   });
 }
 
+function explainAllocatedCategorySources(
+  projection: JsonRecord,
+  explanation: Explanation,
+): Source[] | null {
+  if (
+    explanation.ruleId === "expense.effective-spending-category" &&
+    readExplanationPath(projection, "fieldResolutions.spendingCategoryId.mode")
+      .value === "allocated"
+  ) {
+    return spendingCategoryAllocationsSchema
+      .parse(projection.spendingCategoryAllocations)
+      .map((share): Source => ({
+        label: share.spendingCategoryId
+          ? "Category share"
+          : "Unclassified share",
+        entity: share.spendingCategoryId
+          ? {
+              entityKind: "spendingCategory",
+              entityId: share.spendingCategoryId,
+            }
+          : null,
+        value: {
+          amount: share.amount,
+          basis: share.basis,
+          incomplete: share.incomplete,
+        },
+      }));
+  }
+  return null;
+}
+
 /** Resolver-specific traces only interpret values already present in the same
  * public projection. They never rerun the underlying precedence or totals.
  * `hasResolution` is true when a typed `FieldResolution` was already read for
@@ -289,6 +321,11 @@ export function explainProjectionSources(
   value: Json,
   hasResolution = false,
 ): Source[] {
+  const categorySources = explainAllocatedCategorySources(
+    projection,
+    explanation,
+  );
+  if (categorySources) return categorySources;
   if (
     explanation.ruleId === "expense.effective-project" &&
     readExplanationPath(projection, "fieldResolutions.projectId.mode").value ===

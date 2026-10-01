@@ -40,6 +40,8 @@ async function category(name: string, sortOrder: number) {
   return createProductCategory(
     ctx.db,
     {
+      spendingCategoryId: null,
+      spendingCategoryMode: "inherit",
       name,
       aliases: [],
       description: null,

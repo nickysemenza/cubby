@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
 import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
 import { gotoAuthenticatedPage, selectComboboxItem } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
 
-test("saved transaction categories display their readable label and effective expectation", async ({
+test("linked Expense categories display their readable label and transaction expectation", async ({
   page,
   baseURL,
 }) => {
@@ -29,6 +30,21 @@ test("saved transaction categories display their readable label and effective ex
     name: tag,
     identity: { kind: "credit_card", issuer: null, network: "visa" },
   });
+  const vendorId = await create("vendors", { name: tag });
+  const purchaseId = await create("purchases", {
+    vendorId,
+    date: "2026-09-10",
+    evidenceExpectation: "not_expected",
+  });
+  await create("expenses", {
+    name: `${tag} meal`,
+    purchaseId,
+    cost: 23,
+    date: "2026-09-10",
+    costType: "materials",
+    trade: "other",
+    spendingCategoryId: categoryId,
+  });
   const transactionId = await create("financial-transactions", {
     accountId,
     amount: 23,
@@ -36,7 +52,7 @@ test("saved transaction categories display their readable label and effective ex
     kind: "purchase",
     status: "posted",
     postedDate: "2026-09-10",
-    spendingCategoryId: categoryId,
+    purchaseId,
   });
   const saved = await page.request.get(
     `/api/v1/financial-transactions/${transactionId}`,
@@ -45,7 +61,8 @@ test("saved transaction categories display their readable label and effective ex
   expect(
     z
       .object({
-        spendingCategoryId: z.string(),
+        spendingCategoryId: z.null(),
+        spendingCategorySummary: spendingCategorySummarySchema,
         evidenceExpectation: z.null(),
         coverage: z.object({ expectation: z.string() }),
         fieldResolutions: z.object({
@@ -54,7 +71,13 @@ test("saved transaction categories display their readable label and effective ex
       })
       .parse(await saved.json()),
   ).toMatchObject({
-    spendingCategoryId: categoryId,
+    spendingCategoryId: null,
+    spendingCategorySummary: {
+      state: "single",
+      categories: [{ id: categoryId, name: categoryName, amount: null }],
+      complete: true,
+      amountsKnown: false,
+    },
     evidenceExpectation: null,
     coverage: { expectation: "not_expected" },
     fieldResolutions: {
@@ -63,7 +86,7 @@ test("saved transaction categories display their readable label and effective ex
         storedValue: null,
         value: "not_expected",
         fallbackValue: "not_expected",
-        sourceEntity: { entityKind: "spendingCategory", entityId: categoryId },
+        sourceEntity: { entityKind: "purchase", entityId: purchaseId },
         canReset: false,
       },
     },
@@ -81,7 +104,7 @@ test("saved transaction categories display their readable label and effective ex
   await enrichment;
   await expect(row).toBeVisible();
   await expect(row.getByLabel("Loading field")).toHaveCount(0);
-  const category = row.locator(`a[href="/spending-categories/${categoryId}"]`);
+  const category = row.getByText(categoryName, { exact: true });
   await expect(category).toBeVisible();
   await expect(category).toHaveText(categoryName);
   const headers = await page.getByRole("columnheader").allTextContents();
@@ -97,9 +120,9 @@ test("saved transaction categories display their readable label and effective ex
   );
   expect(
     z
-      .object({ evidenceExpectation: z.null(), spendingCategoryId: z.string() })
+      .object({ evidenceExpectation: z.null(), spendingCategoryId: z.null() })
       .parse(await unchanged.json()),
-  ).toEqual({ evidenceExpectation: null, spendingCategoryId: categoryId });
+  ).toEqual({ evidenceExpectation: null, spendingCategoryId: null });
   const updated = await page.request.patch(
     `/api/v1/financial-transactions/${transactionId}`,
     {
@@ -163,7 +186,11 @@ test("saved transaction categories display their readable label and effective ex
       },
     });
   await expect(
-    page.getByText("From spending category", { exact: true }).first(),
+    page
+      .locator(
+        `[data-slot="field-resolution"] a[href="/purchases/${purchaseId}"]`,
+      )
+      .first(),
   ).toBeVisible();
 });
 
@@ -193,20 +220,13 @@ test("draft category edits hide obsolete policy provenance while the replacement
     evidenceExpectation: "not_expected",
     productExpectation: "not_expected",
   });
-  const accountId = await create("financial-accounts", {
-    name: tag,
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
-  });
-  const transactionId = await create("financial-transactions", {
-    accountId,
-    amount: 23,
-    merchant: tag,
-    kind: "purchase",
-    status: "posted",
-    postedDate: "2026-09-10",
+  const vendorId = await create("vendors", { name: tag });
+  const purchaseId = await create("purchases", {
+    vendorId,
+    date: "2026-09-10",
     spendingCategoryId: oldCategory,
   });
-  await gotoAuthenticatedPage(page, `/financial-transactions/${transactionId}`);
+  await gotoAuthenticatedPage(page, `/purchases/${purchaseId}`);
   const suggestionRequest = z.object({
     json: z.object({
       operation: z.string(),
@@ -215,9 +235,7 @@ test("draft category edits hide obsolete policy provenance while the replacement
       }),
     }),
   });
-  const persisted = await page.request.get(
-    `/api/v1/financial-transactions/${transactionId}`,
-  );
+  const persisted = await page.request.get(`/api/v1/purchases/${purchaseId}`);
   expect(
     z
       .object({
@@ -231,9 +249,7 @@ test("draft category edits hide obsolete policy provenance while the replacement
     value: "required",
     sourceEntity: { entityId: oldCategory },
   });
-  await page
-    .getByRole("button", { name: /Edit Financial Transaction/i })
-    .click();
+  await page.getByRole("button", { name: /Edit Purchase/i }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   const oldSource = dialog.locator(
@@ -262,7 +278,7 @@ test("draft category edits hide obsolete policy provenance while the replacement
   try {
     await selectComboboxItem(
       page,
-      dialog.getByRole("combobox", { name: /Spending category/i }),
+      dialog.getByRole("combobox", { name: /Fallback category/i }),
       newCategoryName,
     );
     await expect.poll(() => requestBlocked).toBe(true);
@@ -271,9 +287,7 @@ test("draft category edits hide obsolete policy provenance while the replacement
   } finally {
     releaseRequest();
   }
-  const saved = await page.request.get(
-    `/api/v1/financial-transactions/${transactionId}`,
-  );
+  const saved = await page.request.get(`/api/v1/purchases/${purchaseId}`);
   expect(
     z
       .object({ spendingCategoryId: z.string(), evidenceExpectation: z.null() })
@@ -283,13 +297,13 @@ test("draft category edits hide obsolete policy provenance while the replacement
     evidenceExpectation: null,
   });
   await dialog
-    .getByRole("button", { name: "Save transaction", exact: true })
+    .getByRole("button", { name: "Save changes", exact: true })
     .click();
   await expect(dialog).toHaveCount(0);
   await expect
     .poll(async () => {
       const response = await page.request.get(
-        `/api/v1/financial-transactions/${transactionId}`,
+        `/api/v1/purchases/${purchaseId}`,
       );
       return z
         .object({

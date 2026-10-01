@@ -85,6 +85,7 @@ import {
 import type { AnyColumn } from "drizzle-orm";
 
 import {
+  vendor,
   aiUsage,
   auditLog,
   cookbook,
@@ -803,6 +804,22 @@ export const ENTITY_EDGES = {
     ...externalIdEdgesFor("product"),
   },
   spendingCategory: edges({
+    "ProductCategory.spendingCategoryId": {
+      column: productCategory.spendingCategoryId,
+      role: "reference",
+      label: "Product category mappings",
+      description:
+        "A reviewed Product Category maps spending to this category.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Vendor.defaultSpendingCategoryId": {
+      column: vendor.defaultSpendingCategoryId,
+      role: "reference",
+      label: "Merchant spending defaults",
+      description:
+        "A reviewed merchant context defaults spending to this category.",
+      liveness: { kind: "must-target-live" },
+    },
     "SpendingCategory.parentId": {
       column: spendingCategory.parentId,
       role: "hierarchy",

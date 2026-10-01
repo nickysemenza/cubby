@@ -12,6 +12,8 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 
 import { unwrapDb } from "./database-helpers";
+import { effectiveExpenseSpendingCategorySql } from "./expense-category-resolution";
+export { effectiveExpenseSpendingCategorySql } from "./expense-category-resolution";
 import { resolveLiveShortcode } from "./shortcode-resolver";
 
 // Alias-qualified columns preserve correlation when Drizzle compiles a
@@ -25,14 +27,6 @@ const categoryPolicy = (
 ) => sql`(
   SELECT ${column("ep_category", field)} FROM "SpendingCategory" ep_category
   WHERE ep_category.id = ${categoryId} AND ep_category."deletedAt" IS NULL
-)`;
-
-export const effectiveExpenseSpendingCategorySql = (
-  alias: string,
-): SQL => sql`COALESCE(
-  ${column(alias, "spendingCategoryId")},
-  (SELECT ep_purchase."spendingCategoryId" FROM "Purchase" ep_purchase
-   WHERE ep_purchase.id = ${column(alias, "purchaseId")} AND ep_purchase."deletedAt" IS NULL)
 )`;
 
 const purchaseEvidenceFallbackSql = (alias: string): SQL => sql`COALESCE(

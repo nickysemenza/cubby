@@ -408,13 +408,16 @@ async function spendingCategoryRoster(
 }
 
 function spendingCategorySpec(
-  entity: "financialTransaction" | "purchase" | "expense",
+  entity: "purchase" | "expense",
 ): ReferenceSuggestSpec<SpendingCategoryCandidate> {
   return {
     kind: "reference",
     entity: "spendingCategory",
     maxCandidates: Number.MAX_SAFE_INTEGER,
     rules:
+      (entity === "purchase"
+        ? "This proposal changes an explicit fallback only; it never classifies all linked Expense lines or replaces mixed line classifications. "
+        : "Classify this Expense line only, using its own purpose and Product evidence. Preserve adjustment and reimbursement roles; a transaction link alone supplies no item-dollar attribution. ") +
       "Choose the most specific existing spending category supported by the transaction or purchase evidence. Saved linked evidence preserves signed amounts, principal versus adjustment lines, reimbursement roles and split settlements. When saved purpose or linked spending clearly identifies what a reimbursement repays, choose that original spending category (for example restaurant dinner), without treating the reimbursement as new purchased goods. A payment provider name, credit/debit direction, or income/refund kind alone cannot establish that purpose. Do not count tax, shipping, refunds or reimbursements as separate purchased goods; mixed goods or split allocations can support different categories, so choose none when no single category represents the reviewed subject. Truncated evidence is incomplete. Compare the full tree and parent names. The imported bank/CSV Source Category is a clue, not an authoritative household category. Never create or invent categories. Choose none when the roster or evidence does not support a choice. Return a reviewed proposal only; preserve any explicit category until the user applies a change.",
     roster: spendingCategoryRoster,
     idOf: (c) => c.id,
@@ -461,9 +464,6 @@ function expectationSpec(
 }
 
 export const FIELD_SUGGEST_REGISTRY = {
-  "financialTransaction.spendingCategoryId": spendingCategorySpec(
-    "financialTransaction",
-  ),
   "purchase.spendingCategoryId": spendingCategorySpec("purchase"),
   "expense.spendingCategoryId": spendingCategorySpec("expense"),
   "vendor.evidenceExpectation": expectationSpec("vendor"),

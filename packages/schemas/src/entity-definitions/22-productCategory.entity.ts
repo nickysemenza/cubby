@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 import { optionalFieldResolutionsSchema } from "../field-resolution.js";
+import { spendingCategoryMappingMode } from "../spending-classification.js";
+import { spendingCategoryShortcode } from "../identifier-fields.js";
 import { productCategoryShortcode } from "../identifier-fields.js";
 import { productCategoryFeature } from "../product-category-fields.js";
 import { defineEntity } from "./definition.js";
@@ -15,6 +17,15 @@ export default defineEntity({
   identifiers: { brand: "ProductCategoryId", shortcode: "CAT-" },
   presentation: {
     titleField: "name",
+    detail: {
+      additionalSectionOverrides: [
+        {
+          kind: "slot",
+          id: "spending-classification",
+          title: "Spending classification",
+        },
+      ],
+    },
     domain: null,
     description: "An editable product classification path.",
     emptyState: {
@@ -24,7 +35,6 @@ export default defineEntity({
       actionLabel: "Add product category",
     },
     icons: { phosphor: "Tag", sfSymbol: "tag", emoji: "🏷️" },
-    detail: {},
     list: {
       read: {
         relations: ["parentId", "parentName", "path"],
@@ -42,6 +52,37 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        key: "spendingCategoryMode",
+        kind: "enum",
+        control: {
+          kind: "select",
+          options: [
+            { value: "inherit", label: "Inherit" },
+            { value: "mapped", label: "Mapped" },
+            { value: "blocked", label: "Keep unresolved" },
+          ],
+        },
+        display: { list: true, detail: true },
+        validation: {
+          read: spendingCategoryMappingMode.default("inherit"),
+          create: spendingCategoryMappingMode.default("inherit"),
+          update: spendingCategoryMappingMode.optional(),
+        },
+      },
+      {
+        key: "spendingCategoryId",
+        kind: "identifier",
+        nullable: true,
+        reference: { entity: "spendingCategory" },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { list: true, detail: true },
+        validation: {
+          read: spendingCategoryShortcode.nullable().default(null),
+          create: spendingCategoryShortcode.nullable().default(null),
+          update: spendingCategoryShortcode.nullable().optional(),
+        },
+      },
       {
         key: "fieldResolutions",
         kind: "json",
@@ -332,6 +373,12 @@ export default defineEntity({
     ],
     storage: [
       {
+        key: "spendingCategoryMode",
+        specialized: "enum:spendingCategoryMode",
+        defaultValue: "inherit",
+      },
+      { key: "spendingCategoryId", reference: "spendingCategory" },
+      {
         key: "id",
         specialized: "primary-key:ProductCategoryId",
       },
@@ -350,6 +397,8 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "spendingCategoryMode",
+      "spendingCategoryId",
       "name",
       "aliases",
       "description",
@@ -358,6 +407,8 @@ export default defineEntity({
       "feature",
     ],
     update: [
+      "spendingCategoryMode",
+      "spendingCategoryId",
       "name",
       "aliases",
       "description",
@@ -367,6 +418,8 @@ export default defineEntity({
     ],
     bulk: [],
     audit: [
+      "spendingCategoryMode",
+      "spendingCategoryId",
       "name",
       "aliases",
       "description",
@@ -382,6 +435,8 @@ export default defineEntity({
       fields: {
         capture: ["name", "parentId"],
         full: [
+          "spendingCategoryMode",
+          "spendingCategoryId",
           "name",
           "aliases",
           "description",
@@ -395,6 +450,8 @@ export default defineEntity({
       update: ["full", "identity"],
     },
     output: [
+      "spendingCategoryMode",
+      "spendingCategoryId",
       "fieldResolutions",
       "id",
       "name",
@@ -441,6 +498,11 @@ export default defineEntity({
       { on: ["feature"] },
     ],
     checks: [
+      { column: "spendingCategoryMode" },
+      {
+        name: "ProductCategory_spending_mapping_check",
+        sql: "({spendingCategoryMode} = 'mapped') = ({spendingCategoryId} IS NOT NULL)",
+      },
       { name: "ProductCategory_sortOrder_check", sql: "{sortOrder} >= 0" },
       { column: "feature", nullClause: true },
     ],
@@ -464,6 +526,23 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "spendingCategory",
+      label: "Mapped spending category",
+      target: "spendingCategory",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "ProductCategory.spendingCategoryId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "ProductCategory.spendingCategoryId", direction: "incoming" },
+        ],
+      },
+    },
     {
       key: "parent",
       label: "Parent category",

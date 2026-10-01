@@ -52,11 +52,6 @@ export const financialTransactionChecks = defineEntityChecks({
       missing: (t) => sql`(${t.merchant} IS NULL OR trim(${t.merchant}) = '')`,
       fingerprint: (t) => [sql`${t.merchant}`],
     },
-    financial_transaction_spending_category: {
-      expected: (t) => financialTransactionRequiresBookingSql(getTableName(t)),
-      missing: (t) => sql`${t.spendingCategoryId} IS NULL`,
-      fingerprint: (t) => [sql`${t.spendingCategoryId}`],
-    },
     financial_transaction_evidence_expectation: {
       expected: (t) => financialTransactionRequiresBookingSql(getTableName(t)),
       missing: (t) =>

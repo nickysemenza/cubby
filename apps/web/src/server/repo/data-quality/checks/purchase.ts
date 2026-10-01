@@ -124,9 +124,13 @@ export const purchaseChecks = defineEntityChecks({
       missing: (t) => sql`NOT ${hasExpenses(t)}`,
       fingerprint: (t) => [expenseCount(t)],
     },
-    purchase_spending_category: {
-      missing: (t) => sql`${t.spendingCategoryId} IS NULL`,
-      fingerprint: (t) => [sql`${t.spendingCategoryId}`],
+    purchase_spending_category_origin: {
+      expected: (t) => sql`${t.spendingCategoryId} IS NOT NULL`,
+      missing: (t) => sql`${t.spendingCategoryOrigin} = 'legacy'`,
+      fingerprint: (t) => [
+        sql`${t.spendingCategoryId}`,
+        sql`${t.spendingCategoryOrigin}`,
+      ],
     },
     purchase_evidence_expectation: {
       missing: (t) => sql`${expectation(t)} = 'unknown'`,

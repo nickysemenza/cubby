@@ -43,6 +43,15 @@ function transactionResponse({
         itemizationCoverage: "unknown",
         productsCoverage: "unknown",
         spendingCategoryName: null,
+        spendingCategorySummary: {
+          state: "unclassified",
+          categories: [],
+          lineCount: 0,
+          categorizedLineCount: 0,
+          uncategorizedLineCount: 0,
+          complete: false,
+          amountsKnown: false,
+        },
         coverage: {
           expectation: "unknown",
           booking: "missing",

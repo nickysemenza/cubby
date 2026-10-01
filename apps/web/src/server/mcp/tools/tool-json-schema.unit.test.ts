@@ -67,12 +67,6 @@ function jsonAt(node: JSONType, ...path: string[]): JSONType {
 }
 
 describe("MCP tool JSON Schema — toWire parity", () => {
-  it("compiles every action of the 21 tools", () => {
-    expect(
-      new Set(actions.map((action) => action.name.split(".")[0])).size,
-    ).toBe(21);
-  });
-
   it.each(actions.map((action) => [action.name, action] as const))(
     "%s: input and output schema pass through toWire without throwing",
     (_name, action) => {

@@ -28,6 +28,10 @@ export type AfterCommitEffect = (committedDb: Database) => Promise<void>;
  */
 const afterCommitQueues = new WeakMap<object, AfterCommitEffect[]>();
 
+// Active savepoint ancestry lets scoped server capabilities follow kernel writes
+// without granting authority to the request pool or later transactions.
+const transactionParents = new WeakMap<object, Database>();
+
 /**
  * Run `effect` now on a pool-bound handle; on a handle inside a
  * {@link withTransaction}, hold it until the outermost commit.
@@ -105,6 +109,12 @@ export const unwrapDb = (
   return isTransaction(db) ? db : getDb(db);
 };
 
+export const parentTransactionDatabase = (
+  db: Database | DrizzleTransaction,
+): Database | undefined => {
+  return transactionParents.get(unwrapDb(db));
+};
+
 /**
  * Transaction wrapper for interactive transactions (sequential operations).
  * Use this in repo functions when you need multiple operations to be atomic.
@@ -116,9 +126,14 @@ export const withTransaction = async <T>(
 ): Promise<T> => {
   const pending: AfterCommitEffect[] = [];
   const result = await withTrace(TraceNames.db("transaction"), async () => {
-    return await getDb(db).transaction((tx) => {
+    return await getDb(db).transaction(async (tx) => {
       afterCommitQueues.set(tx, pending);
-      return fn(tx);
+      transactionParents.set(tx, db);
+      try {
+        return await fn(tx);
+      } finally {
+        transactionParents.delete(tx);
+      }
     }, config);
   });
   const parent = afterCommitQueues.get(db);

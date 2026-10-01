@@ -1,3 +1,4 @@
+import { spendingCategorySummarySchema } from "../spending-classification";
 import { optionalFieldResolutionsSchema } from "../field-resolution";
 import { purchaseEvidenceCoverage } from "../purchase-evidence-policy";
 import { spendingCategoryShortcode } from "../identifier-fields";
@@ -81,6 +82,7 @@ export default defineEntity({
           "itemizationCoverage",
           "productsCoverage",
           "coverage",
+          "spendingCategorySummary",
           "fieldResolutions",
           "expenseCount",
           "unpricedExpenseCount",
@@ -221,7 +223,48 @@ export default defineEntity({
         },
       },
       {
+        key: "spendingCategorySummary",
+        kind: "json",
+        labelOverride: "Expense categories",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Live Expense category allocations" }],
+        },
+        display: {
+          list: true,
+          detail: true,
+          renderer: {
+            detail: "spending-category-summary",
+            list: "spending-category-summary",
+          },
+        },
+        explanation: {
+          ruleId: "purchase.expense-category-summary",
+          description:
+            "Category amounts come from the live Expense ledger and its canonical adjustment allocations. The Purchase fallback is not its category summary.",
+        },
+        validation: {
+          read: spendingCategorySummarySchema,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "spendingCategoryOrigin",
+        kind: "enum",
+        labelOverride: "Fallback provenance",
+        display: { detail: true },
+        validation: {
+          read: z.enum(["legacy", "manual", "source"]).default("legacy"),
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "spendingCategoryId",
+        labelOverride: "Fallback category",
+        description:
+          "Explicit fallback used only when an Expense has no more specific classification. Mixed Purchase categories come from its Expense lines.",
         kind: "identifier",
         nullable: true,
         reference: { entity: "spendingCategory" },
@@ -827,6 +870,11 @@ export default defineEntity({
     ],
     storage: [
       { key: "spendingCategoryId", reference: "spendingCategory" },
+      {
+        key: "spendingCategoryOrigin",
+        specialized: "enum:spendingCategoryOrigin",
+        defaultValue: "legacy",
+      },
       { key: "evidenceExpectation", specialized: "enum:evidenceExpectation" },
       { key: "itemizationEvidence", defaultValue: false },
       {
@@ -893,6 +941,7 @@ export default defineEntity({
       "date",
       "statedTotal",
       "notes",
+      "spendingCategoryOrigin",
     ],
     sort: {
       fields: [
@@ -949,8 +998,10 @@ export default defineEntity({
       "itemizationCoverage",
       "productsCoverage",
       "coverage",
+      "spendingCategorySummary",
       "fieldResolutions",
       "spendingCategoryId",
+      "spendingCategoryOrigin",
       "evidenceExpectation",
       "itemizationEvidence",
       "id",
@@ -1008,6 +1059,7 @@ export default defineEntity({
       { trigram: "displayLabel" },
     ],
     checks: [
+      { column: "spendingCategoryOrigin" },
       {
         name: "Purchase_statedTotal_whole_cent_check",
         sql: "{statedTotal} IS NULL OR abs({statedTotal} * 100 - round({statedTotal} * 100)) < 0.0000001",
@@ -1516,10 +1568,11 @@ export default defineEntity({
           message: "Purchase has no live Expenses.",
         },
         {
-          id: "purchase_spending_category",
+          id: "purchase_spending_category_origin",
           facet: "identity",
-          label: "Spending category",
-          message: "Purchase has no default spending category.",
+          label: "Review legacy fallback",
+          message:
+            "This stored Purchase fallback predates classification provenance. Review it before treating it as a deliberate default.",
         },
         {
           id: "purchase_evidence_expectation",

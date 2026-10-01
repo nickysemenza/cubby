@@ -29,9 +29,10 @@ import {
   databaseForTransaction,
 } from "./database-helpers";
 import { createExpense } from "./expense";
+import { spendingClassificationRevision } from "./expense-category-resolution";
 import { lockFinancialEvidenceKeys } from "./financial-evidence";
 import { updateFinancialTransaction } from "./financial-transaction";
-import { createPurchase, updatePurchase } from "./purchase";
+import { createPurchase } from "./purchase";
 import { resolveOrThrow } from "./shortcode-resolver";
 
 export async function digestValue<T extends object>(value: T) {
@@ -114,13 +115,15 @@ async function bookingCategory(
   const categoryId = input.spendingCategoryId
     ? await resolveOrThrow(db, "spendingCategory", input.spendingCategoryId)
     : inheritedCategoryId;
-  if (!categoryId) return fail("Choose a spending category before booking.");
+  if (!categoryId) return null;
   const category = await getDb(db).query.spendingCategory.findFirst({
     where: (category, { eq, isNull }) =>
       and(eq(category.id, categoryId), isNull(category.deletedAt)),
   });
-  if (!category) return fail("The spending category is no longer live.");
-  return category;
+  if (!category && input.spendingCategoryId)
+    return fail("The spending category is no longer live.");
+  // Retired inherited defaults leave display unclassified; only explicit intent refuses.
+  return category ?? null;
 }
 async function bookingAction(
   db: Database,
@@ -222,10 +225,9 @@ export async function previewFinancialBooking(
   const decision = {
     ...input,
     categoryOverride: input.spendingCategoryId,
-    spendingCategoryId: parseShortcodeFor(
-      "spendingCategory",
-      category.shortcode,
-    ),
+    spendingCategoryId: category
+      ? parseShortcodeFor("spendingCategory", category.shortcode)
+      : null,
     action,
   };
   const snapshot = await digestValue({
@@ -235,6 +237,7 @@ export async function previewFinancialBooking(
     allocations,
     account,
     category,
+    classificationRevision: await spendingClassificationRevision(db),
   });
   return financialBookingPreview.parse({
     ...decision,
@@ -250,13 +253,6 @@ export async function previewFinancialBooking(
 async function replayBooking(db: Database, review: FinancialBookingPreview) {
   const row = await transactionForBooking(db, review);
   if (!row.bookingDecisionFingerprint) return null;
-  const reviewedCategoryId = await resolveOrThrow(
-    db,
-    "spendingCategory",
-    review.spendingCategoryId,
-  );
-  if (row.spendingCategoryId !== reviewedCategoryId)
-    return fail("The approved spending category changed.");
   if (
     row.bookingDecisionFingerprint !==
       (await digestValue(financialBookingPreview.parse(review))) ||
@@ -342,7 +338,6 @@ export async function commitFinancialBooking(
             txDb,
             purchaseCreateInput.parse({
               vendorId: review.vendorId,
-              spendingCategoryId: review.spendingCategoryId,
               defaultTrade: review.trade,
               date: fresh.date,
               displayLabel: fresh.name,
@@ -350,34 +345,6 @@ export async function commitFinancialBooking(
             actor,
           )
         ).output.id;
-      if (
-        fresh.action === "link_existing" ||
-        review.categoryOverride === null
-      ) {
-        const targetId = await resolveOrThrow(txDb, "purchase", target);
-        const currentTarget = await getDb(txDb).query.purchase.findFirst({
-          where: eq(purchase.id, targetId),
-        });
-        const reviewedCategoryId = await resolveOrThrow(
-          txDb,
-          "spendingCategory",
-          review.spendingCategoryId,
-        );
-        if (
-          currentTarget?.spendingCategoryId &&
-          currentTarget.spendingCategoryId !== reviewedCategoryId
-        )
-          return fail(
-            "The existing Purchase uses a different spending category. Review its classification first.",
-          );
-        if (!currentTarget?.spendingCategoryId)
-          await updatePurchase(
-            txDb,
-            target,
-            { spendingCategoryId: review.spendingCategoryId },
-            actor,
-          );
-      }
       let expenseId = null;
       if (fresh.action === "create_aggregate") {
         const created = await createExpense(
@@ -387,9 +354,7 @@ export async function commitFinancialBooking(
             cost: fresh.amount,
             date: fresh.date,
             purchaseId: target,
-            spendingCategoryId: review.purchaseId
-              ? review.categoryOverride
-              : null,
+            spendingCategoryId: review.categoryOverride,
             economicRole: review.economicRole,
             costType: review.costType,
             trade: review.trade,
@@ -408,7 +373,6 @@ export async function commitFinancialBooking(
         txDb,
         review.transactionId,
         {
-          spendingCategoryId: review.spendingCategoryId,
           allocations: [{ purchaseId: target, amount: fresh.amount }],
         },
         actor,

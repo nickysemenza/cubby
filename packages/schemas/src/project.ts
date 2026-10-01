@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { spendingCategoryShortcode } from "./identifiers";
 import {
   hasValidExpenseDate,
   EXPENSE_DATE_REQUIRED_MESSAGE,
@@ -473,6 +474,8 @@ export const expenseBulkCostTypeInput = z.object({
 export type ExpenseBulkCostTypeInput = z.infer<typeof expenseBulkCostTypeInput>;
 
 export const expenseFilterFields = {
+  spendingCategoryId: entityFilterList(spendingCategoryShortcode).optional(),
+  spendingCategoryPresenceFilter: presenceFilter,
   ...expenseBaseFilterFields,
   /** Expenses attributed to the given ledger part(ies) (`ExpenseAttribution`). */
   ledgerPartyId: oneOrMany(ledgerPartyShortcode).optional(),
@@ -719,6 +722,7 @@ export const expenseAnalyticsOut = z.object({
 export type ExpenseAnalyticsOut = z.infer<typeof expenseAnalyticsOut>;
 
 export const expenseAnalyzeRowDimensionSchema = z.enum([
+  "spendingCategory",
   "trade",
   "costType",
   "month",
@@ -730,6 +734,7 @@ export type ExpenseAnalyzeRowDimension = z.infer<
 >;
 
 export const expenseAnalyzeColumnDimensionSchema = z.enum([
+  "spendingCategory",
   "trade",
   "costType",
   "month",

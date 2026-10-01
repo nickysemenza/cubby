@@ -89,6 +89,7 @@ const crud = createEntityCrud({
   ) => buildPartialUpdateValues(data),
   auditUpdateFields: [
     "name",
+    "aliases",
     "parentId",
     "evidenceExpectation",
     "productExpectation",
@@ -156,6 +157,18 @@ export const spendingCategoryRepository = defineRepository("spendingCategory", {
         code: "block-children",
         effect: "block",
         description: "Reparent child categories before deleting their parent.",
+      },
+      "ProductCategory.spendingCategoryId": {
+        code: "block-product-mappings",
+        effect: "block",
+        description:
+          "Update Product Category spending mappings before deleting their target.",
+      },
+      "Vendor.defaultSpendingCategoryId": {
+        code: "block-vendor-defaults",
+        effect: "block",
+        description:
+          "Update merchant spending defaults before deleting their target.",
       },
       "Purchase.spendingCategoryId": {
         code: "block-purchases",

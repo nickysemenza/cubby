@@ -42,7 +42,7 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
       .object({ item: z.object({ id: z.string() }) })
       .parse(await response.json()).item.id;
   };
-  const categoryId = await create("spending-categories", {
+  await create("spending-categories", {
     name: "Synthetic reviewed dining",
     evidenceExpectation: "not_expected",
     productExpectation: "not_expected",
@@ -63,7 +63,6 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     kind: "purchase",
     status: "posted",
     postedDate: "2026-09-10",
-    spendingCategoryId: categoryId,
   });
   await gotoAuthenticatedPage(
     page,
@@ -74,6 +73,11 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     page,
     page.getByRole("combobox", { name: "Vendor", exact: true }),
     vendorName,
+  );
+  await selectComboboxItem(
+    page,
+    page.getByRole("combobox", { name: "Spending category", exact: true }),
+    "Synthetic reviewed dining",
   );
   await page
     .getByRole("button", { name: "Review Expense", exact: true })

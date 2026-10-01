@@ -5,6 +5,7 @@ import {
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import type { JevPort } from "~/server/ai/jev";
 import {
@@ -28,9 +29,9 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { suggestFields } from "./suggest-fields";
 
-// Failure modes: linked receipt evidence omitted; duplicate settlement edges
-// double its weight; proposing writes before review; changed Product/allocation
-// evidence still permits a previously reviewed category to overwrite the record.
+// Failure modes: linked receipt evidence omitted; proposing writes before review;
+// changed Product or line evidence still permits a reviewed category to overwrite
+// the authoritative Expense; retired or sibling lines leak into its proposal.
 describe("reviewed linked finance category suggestions", () => {
   const ctx = withTestDb();
   async function fixture() {
@@ -116,11 +117,8 @@ describe("reviewed linked finance category suggestions", () => {
     });
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const suggest = (
-      entity:
-        | "financialTransaction"
-        | "purchase"
-        | "expense" = "financialTransaction",
-      entityId: string = charge.shortcode,
+      entity: "purchase" | "expense" = "expense",
+      entityId: string = line.shortcode,
     ) =>
       suggestFields(
         ctx.db,
@@ -152,7 +150,7 @@ describe("reviewed linked finance category suggestions", () => {
       context,
     };
   }
-  it("uses persisted linked evidence, deduplicates settlement paths and refuses changed Product or allocation evidence before applying", async () => {
+  it("uses persisted own-line evidence and refuses changed Product or cost before applying", async () => {
     const f = await fixture();
     const proposal = (await f.suggest()).suggestions.spendingCategoryId;
     expect(proposal?.value).toBe(f.category.shortcode);
@@ -161,15 +159,31 @@ describe("reviewed linked finance category suggestions", () => {
     expect(subject).toContain("Fixture black crew shirt");
     expect(subject).toContain('"productQuantity":2');
     expect(subject).not.toContain("Unsaved misleading restaurant");
-    expect(subject.split("Fixture crew shirt line")).toHaveLength(2);
+    const linkedEvidence = subject.split(
+      "\nSaved linked evidence (mixed lines remain distinct; truncation means incomplete evidence):\n",
+    )[1];
+    if (!linkedEvidence) throw new Error("Missing linked finance evidence");
+    const evidence = z
+      .object({
+        savedRecord: z.object({ shortcode: z.string(), name: z.string() }),
+        lines: z.array(z.object({ shortcode: z.string(), name: z.string() })),
+      })
+      .parse(JSON.parse(linkedEvidence));
+    // The saved record and descriptive basis may repeat its name. The linked
+    // line collection must still contain exactly one copy of this Expense.
+    expect(evidence.savedRecord).toEqual({
+      shortcode: f.line.shortcode,
+      name: "Fixture crew shirt line",
+    });
+    expect(evidence.lines).toEqual([evidence.savedRecord]);
     const stored = async () =>
       (
         await getDb(ctx.db)
           .select()
-          .from(financialTransaction)
-          .where(eq(financialTransaction.id, f.charge.id))
+          .from(expense)
+          .where(eq(expense.id, f.line.id))
       )[0]?.spendingCategoryId;
-    expect(await stored()).toBe(f.explicit.id);
+    expect(await stored()).toBeNull();
     if (!proposal?.financeReview || !proposal.value)
       throw new Error("Missing reviewed proposal");
     const apply = () =>
@@ -185,17 +199,17 @@ describe("reviewed linked finance category suggestions", () => {
       .set({ name: "Fixture changed drill" })
       .where(eq(product.id, f.good.entityId));
     await expect(apply()).rejects.toThrow(/changed.*review again/i);
-    expect(await stored()).toBe(f.explicit.id);
+    expect(await stored()).toBeNull();
     await getDb(ctx.db)
       .update(product)
       .set({ name: "Fixture black crew shirt" })
       .where(eq(product.id, f.good.entityId));
     await getDb(ctx.db)
-      .update(financialTransactionAllocation)
-      .set({ amount: 20 })
-      .where(eq(financialTransactionAllocation.id, f.allocation.id));
+      .update(expense)
+      .set({ cost: 20 })
+      .where(eq(expense.id, f.line.id));
     await expect(apply()).rejects.toThrow(/changed.*review again/i);
-    expect(await stored()).toBe(f.explicit.id);
+    expect(await stored()).toBeNull();
     const fresh = (await f.suggest()).suggestions.spendingCategoryId;
     if (!fresh?.financeReview || !fresh.value)
       throw new Error("Missing fresh proposal");
@@ -234,25 +248,13 @@ describe("reviewed linked finance category suggestions", () => {
       purchaseId: f.purchase.id,
       deletedAt: new Date(),
     });
-    const retired = await insertWithShortcode(ctx.db, "purchase", {
-      date: "2026-09-01",
-      vendorId: f.vendor.id,
-      displayLabel: "Fixture retired order",
-      deletedAt: new Date(),
-    });
-    await getDb(ctx.db).insert(financialTransactionAllocation).values({
-      transactionId: f.charge.id,
-      purchaseId: retired.id,
-      amount: 5,
-    });
-    await f.suggest();
+    await f.suggest("purchase", f.purchase.shortcode);
     const mixed = f.jev.mock.calls.at(-1)![0].state;
     expect(mixed).toContain("Fixture shipment tax");
     expect(mixed).toContain('"lineKind":"tax"');
     expect(mixed).toContain('"economicRole":"reimbursement"');
     expect(mixed).toContain('"cost":-8');
     expect(mixed).not.toContain("Fixture retired aggregate");
-    expect(mixed).not.toContain("Fixture retired order");
     await f.suggest("expense", f.line.shortcode);
     const ownLine = f.jev.mock.calls.at(-1)![0].state;
     expect(ownLine).toContain("Fixture black crew shirt");
@@ -271,7 +273,7 @@ describe("reviewed linked finance category suggestions", () => {
   it("revokes reviews for scalar, roster meaning, quantity and inherited-versus-explicit category drift", async () => {
     const f = await fixture();
     const apply = async (
-      entity: "financialTransaction" | "expense",
+      entity: "expense",
       entityId: string,
       change: () => Promise<void>,
     ) => {
@@ -290,13 +292,13 @@ describe("reviewed linked finance category suggestions", () => {
         ),
       ).rejects.toThrow(/changed.*review again/i);
     };
-    await apply("financialTransaction", f.charge.shortcode, async () => {
+    await apply("expense", f.line.shortcode, async () => {
       await getDb(ctx.db)
-        .update(financialTransaction)
-        .set({ merchant: "Fixture different shop" })
-        .where(eq(financialTransaction.id, f.charge.id));
+        .update(expense)
+        .set({ name: "Fixture different line" })
+        .where(eq(expense.id, f.line.id));
     });
-    await apply("financialTransaction", f.charge.shortcode, async () => {
+    await apply("expense", f.line.shortcode, async () => {
       await getDb(ctx.db)
         .update(spendingCategory)
         .set({ name: "Fixture changed category meaning" })

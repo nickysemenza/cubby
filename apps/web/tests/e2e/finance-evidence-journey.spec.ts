@@ -37,7 +37,6 @@ test("books categorized spending and reimbursements without inventing receipts",
     kind: "purchase",
     status: "posted",
     postedDate: "2026-09-10",
-    spendingCategoryId: categoryId,
   });
   const preview = await page.request.post(
     "/api/v1/financialTransaction/previewBooking",
@@ -68,7 +67,6 @@ test("books categorized spending and reimbursements without inventing receipts",
     kind: "income",
     status: "posted",
     postedDate: "2026-09-12",
-    spendingCategoryId: categoryId,
   });
   const creditPreview = await page.request.post(
     "/api/v1/financialTransaction/previewBooking",
@@ -170,7 +168,6 @@ test("moves an early reimbursement and converts reviewed booking atomically", as
       kind: amount < 0 ? "income" : "purchase",
       status: "posted",
       postedDate: "2026-09-10",
-      spendingCategoryId: categoryId,
     });
     const review = await post("previewBooking", {
       transactionId,

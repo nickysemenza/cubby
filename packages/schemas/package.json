@@ -147,6 +147,8 @@
     "./image-sighting-fields": "./src/image-sighting-fields.ts",
     "./image-capture-fields": "./src/image-capture-fields.ts",
     "./spending-category": "./src/spending-category.ts",
+    "./spending-classification": "./src/spending-classification.ts",
+    "./spending-classification-review": "./src/spending-classification-review.ts",
     "./purchase-evidence-policy": "./src/purchase-evidence-policy.ts"
   },
   "scripts": {

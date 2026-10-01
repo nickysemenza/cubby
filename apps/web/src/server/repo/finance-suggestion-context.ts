@@ -4,7 +4,7 @@ import {
   type FinanceCategoryApplyInput,
   financeCategoryReviewSchema,
 } from "@cubby/schemas/ai";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -17,6 +17,11 @@ import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contr
 import { createAppError } from "~/server/errors/app-error";
 
 import { unwrapDb, withTransactionDatabase } from "./database-helpers";
+import {
+  expenseSpendingCategoryResolutionSql,
+  spendingClassificationRevision,
+} from "./expense-category-resolution";
+import { loadExpenseSpendingAllocations } from "./expense-spending-allocation";
 import { resolveOrThrow } from "./shortcode-resolver";
 
 const evidenceRow = z.record(z.string(), z.json());
@@ -30,11 +35,7 @@ type FinanceEntity = keyof typeof financeTables;
 export function isFinanceCategoryEntity(
   entity: string,
 ): entity is FinanceEntity {
-  return (
-    entity === "financialTransaction" ||
-    entity === "purchase" ||
-    entity === "expense"
-  );
+  return entity === "purchase" || entity === "expense";
 }
 const rootFields = {
   financialTransaction: [
@@ -149,7 +150,7 @@ export async function loadFinanceSuggestionContext(
       await database.execute(sql`
     SELECT p.shortcode, p."displayLabel", p."orderId", p.date, p.notes,
       v.shortcode AS "vendorId", v.name AS vendor, v.notes AS "vendorNotes",
-      p."spendingCategoryId" AS "storedSpendingCategoryId", c.shortcode AS "spendingCategoryId", c.name AS "spendingCategory"
+      p."spendingCategoryId" AS "storedSpendingCategoryId", p."spendingCategoryOrigin", c.shortcode AS "spendingCategoryId", c.name AS "spendingCategory"
     FROM "Purchase" p LEFT JOIN "Vendor" v ON v.id = p."vendorId" AND v."deletedAt" IS NULL
     LEFT JOIN "SpendingCategory" c ON c.id = p."spendingCategoryId" AND c."deletedAt" IS NULL
     WHERE p.id IN (${links}) ORDER BY p.shortcode LIMIT 101
@@ -162,7 +163,8 @@ export async function loadFinanceSuggestionContext(
     SELECT e.shortcode, e.name, e.cost, e."productQuantity", e.date, e.notes, e."lineKind", e."lineBasis", e."economicRole", e."costType", e.trade,
       p.shortcode AS purchase, g.shortcode AS product, g.name AS "productName", g.manufacturer, g.model, g.notes AS "productNotes",
       pc.shortcode AS "productCategoryId", pc.name AS "productCategory",
-      e."spendingCategoryId" AS "storedSpendingCategoryId", c.shortcode AS "spendingCategoryId", c.name AS "spendingCategory"
+      e."spendingCategoryId" AS "storedSpendingCategoryId", c.shortcode AS "spendingCategoryId", c.name AS "spendingCategory",
+      ${expenseSpendingCategoryResolutionSql("e")} AS "classification"
     FROM "Expense" e LEFT JOIN "Purchase" p ON p.id = e."purchaseId" AND p."deletedAt" IS NULL
     LEFT JOIN "Product" g ON g.id = e."productId" AND g."deletedAt" IS NULL
     LEFT JOIN "ProductCategory" pc ON pc.id = g."categoryId" AND pc."deletedAt" IS NULL
@@ -191,10 +193,21 @@ export async function loadFinanceSuggestionContext(
   `)
     ).rows,
   );
+  const classificationRevision = await spendingClassificationRevision(db);
+  const categoryAllocations =
+    entity === "expense"
+      ? ((
+          await loadExpenseSpendingAllocations(db, [
+            parseEntityId("expense", id),
+          ])
+        ).get(parseEntityId("expense", id)) ?? [])
+      : [];
   const truncated =
     purchases.length > 100 || lines.length > 200 || allocations.length > 100;
   const subject = JSON.stringify({
     savedRecord: root,
+    classificationRevision,
+    categoryAllocations,
     purchases: purchases.slice(0, 100),
     allocations: allocations.slice(0, 100),
     lines: lines.slice(0, 200),
@@ -223,6 +236,11 @@ export async function applyFinanceCategorySuggestion(
   input: FinanceCategoryApplyInput,
 ) {
   const review = financeCategoryReviewSchema.parse(input);
+  if (!isFinanceCategoryEntity(review.entity))
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Classify Expense lines or review the Purchase fallback; transactions carry source evidence only.",
+    );
   return withTransactionDatabase(
     context.db,
     async (db) => {

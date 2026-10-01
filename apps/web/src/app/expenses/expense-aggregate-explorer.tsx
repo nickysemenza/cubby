@@ -62,6 +62,7 @@ const ROW_DIMENSIONS: readonly {
   { value: "trade", label: "Trade" },
   { value: "costType", label: "Cost category" },
   { value: "month", label: "Month" },
+  { value: "spendingCategory", label: "Spending category" },
   { value: "project", label: "Project" },
   { value: "vendor", label: "Vendor" },
 ];
@@ -73,6 +74,7 @@ const COLUMN_DIMENSIONS: readonly {
   { value: "trade", label: "Trade" },
   { value: "costType", label: "Cost category" },
   { value: "month", label: "Month" },
+  { value: "spendingCategory", label: "Spending category" },
 ];
 
 const PROJECTIONS: readonly {

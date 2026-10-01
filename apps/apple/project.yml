@@ -40,7 +40,7 @@ settings:
     "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: Y9A97FXT63
-    MARKETING_VERSION: "2.1"
+    MARKETING_VERSION: "2.2"
     CURRENT_PROJECT_VERSION: "2"
 
 packages:

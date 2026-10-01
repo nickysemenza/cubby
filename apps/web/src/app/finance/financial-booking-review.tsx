@@ -76,7 +76,7 @@ export function FinancialBookingReview({
     financialTransaction.commitBooking.mutationOptions(),
   );
   if (!expectsBookingReview(transaction)) return null;
-  const categoryId = category?.id ?? transaction.spendingCategoryId;
+  const categoryId = category?.id ?? null;
   const busy = preview.isPending || commit.isPending;
   return (
     <Stack gap="sm">

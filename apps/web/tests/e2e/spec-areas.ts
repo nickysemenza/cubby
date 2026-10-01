@@ -525,6 +525,16 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
+    file: "spending-classification-review.spec.ts",
+    globs: [
+      `${WEB}/src/app/finance/**`,
+      `${WEB}/src/server/repo/expense*`,
+      `${WEB}/src/server/repo/spending-classification*`,
+      `${WEB}/src/server/repo/product-category.ts`,
+      `${WEB}/src/server/repo/vendor.ts`,
+    ],
+  },
+  {
     file: "financial-booking-review.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/financial-transactions*`,

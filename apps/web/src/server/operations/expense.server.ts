@@ -36,6 +36,7 @@ import {
   loadExpenseAnalysisCauses,
   loadExpenseAnalysisPeriod,
   loadExpenseEntityFacetOptions,
+  loadExpenseFacetAllocationScope,
   loadExpenseFacetWhere,
   loadExpenseOrderIdFacetOptions,
   loadExpensePresenceFacetOptions,
@@ -272,6 +273,9 @@ const expenseFacetItemDefinition = workflow<Database, ExpenseFacetItemInput>(
   .call("where", ({ context }, { input }) =>
     loadExpenseFacetWhere(context, input.filters, input.id),
   )
+  .call("allocationScope", ({ context }, { input }) =>
+    loadExpenseFacetAllocationScope(context, input.filters, input.id),
+  )
   .branch("facetKind", {
     when: async (_, { input }) => isExpenseScalarFacet(input.id),
     whenTrue: (branch) =>
@@ -299,12 +303,14 @@ const expenseFacetItemDefinition = workflow<Database, ExpenseFacetItemInput>(
                     context,
                     input.input.where,
                     requireExpenseEntityFacet(input.input.input.id),
+                    input.input.allocationScope,
                   ),
                 presence: ({ context }, { input }) =>
                   loadExpensePresenceFacetOptions(
                     context,
                     input.input.where,
                     requireExpenseEntityFacet(input.input.input.id),
+                    input.input.allocationScope,
                   ),
               })
               .output(({ input, options }) => ({

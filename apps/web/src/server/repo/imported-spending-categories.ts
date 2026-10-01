@@ -1,17 +1,13 @@
 import { createHash } from "node:crypto";
 
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import {
-  executeEntity,
-  type EntityKernelContext,
-} from "~/server/entity-kernel";
+import type { EntityKernelContext } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 
-import { unwrapDb, withTransactionDatabase } from "./database-helpers";
+import { unwrapDb } from "./database-helpers";
 
 const sourceRow = z.object({ id: z.string(), name: z.string() });
 const categoryRow = z.object({ id: z.string(), name: z.string() });
@@ -21,7 +17,7 @@ const linkedRow = z.object({
 });
 const normalized = (name: string) => name.trim().toLowerCase();
 
-/** Imported labels are evidence, not guessed policy. Preview/apply never infers receipt expectations. */
+/** Statement labels remain immutable source evidence; this legacy preview never writes policy. */
 export async function previewImportedSpendingCategories(db: Database) {
   const database = unwrapDb(db);
   const transactions = z.array(sourceRow).parse(
@@ -89,78 +85,13 @@ export async function previewImportedSpendingCategories(db: Database) {
   };
 }
 
-/** Apply an unchanged reviewed plan through ordinary audited entity writes in one transaction. */
+/** Older rollout callers must not promote statement labels into deliberate Purchase defaults. */
 export async function applyImportedSpendingCategories(
-  ctx: EntityKernelContext,
-  fingerprint: string,
-) {
-  return withTransactionDatabase(
-    ctx.db,
-    async (db) => {
-      const plan = await previewImportedSpendingCategories(db);
-      if (plan.fingerprint !== fingerprint)
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "Imported category preview changed; review a fresh preview before applying.",
-        );
-      const context = { ...ctx, db };
-      const categories = new Map<string, string>();
-      for (const category of plan.categories) {
-        if (category.existingId)
-          categories.set(normalized(category.name), category.existingId);
-        else {
-          const created = await executeEntity(context, {
-            action: "create",
-            entity: "spendingCategory",
-            data: {
-              name: category.name,
-              parentId: null,
-              evidenceExpectation: "unknown",
-              productExpectation: "unknown",
-            },
-          });
-          categories.set(normalized(category.name), created.item.id);
-        }
-      }
-      for (const transaction of plan.transactions) {
-        const category = categories.get(normalized(transaction.name));
-        if (!category)
-          throw new Error(
-            "Reviewed transaction category is missing from the plan",
-          );
-        await executeEntity(context, {
-          action: "update",
-          entity: "financialTransaction",
-          id: parseShortcodeFor("financialTransaction", transaction.id),
-          data: {
-            spendingCategoryId: parseShortcodeFor("spendingCategory", category),
-          },
-        });
-      }
-      for (const purchase of plan.purchases) {
-        const category = categories.get(normalized(purchase.name));
-        if (!category)
-          throw new Error(
-            "Reviewed purchase category is missing from the plan",
-          );
-        await executeEntity(context, {
-          action: "update",
-          entity: "purchase",
-          id: parseShortcodeFor("purchase", purchase.id),
-          data: {
-            spendingCategoryId: parseShortcodeFor("spendingCategory", category),
-          },
-        });
-      }
-      return {
-        createdCategories: plan.categories.filter(
-          (category) => category.existingId === null,
-        ).length,
-        transactions: plan.transactions.length,
-        purchases: plan.purchases.length,
-        unresolvedPurchases: plan.unresolvedPurchases,
-      };
-    },
-    { isolationLevel: "repeatable read" },
+  _ctx: EntityKernelContext,
+  _fingerprint: string,
+): Promise<never> {
+  throw createAppError(
+    "CONSTRAINT_VIOLATION",
+    "Statement category backfill is retired. Use reviewed spending classification mappings or explicit Expense categories; original statement labels remain source evidence.",
   );
 }

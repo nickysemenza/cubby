@@ -186,7 +186,7 @@ it("resolves draft receipt policy against changed vendor and category dependenci
       await resolveDraftEvidenceFields(ctx.db, {
         entity: "financialTransaction",
         basis: {
-          spendingCategoryId: category.shortcode,
+          purchaseId: purchase.shortcode,
           evidenceExpectation: null,
         },
       }),
@@ -194,11 +194,11 @@ it("resolves draft receipt policy against changed vendor and category dependenci
   ).toMatchObject({
     mode: "inherit",
     storedValue: null,
-    value: "required",
-    fallbackValue: "required",
+    value: "not_expected",
+    fallbackValue: "not_expected",
     sourceEntity: {
-      entityKind: "spendingCategory",
-      entityId: category.shortcode,
+      entityKind: "purchase",
+      entityId: purchase.shortcode,
     },
   });
 });

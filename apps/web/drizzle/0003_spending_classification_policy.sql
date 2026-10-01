@@ -1,0 +1,5 @@
+ALTER TABLE "Purchase" ADD COLUMN "spendingCategoryOrigin" text DEFAULT 'legacy' NOT NULL;--> statement-breakpoint
+ALTER TABLE "SpendingCategory" ADD COLUMN "aliases" text[] DEFAULT '{}'::text[] NOT NULL;--> statement-breakpoint
+ALTER TABLE "ProductCategory" ADD CONSTRAINT "ProductCategory_spendingCategoryMode_check" CHECK ("ProductCategory"."spendingCategoryMode" IN ('inherit', 'mapped', 'blocked'));--> statement-breakpoint
+ALTER TABLE "ProductCategory" ADD CONSTRAINT "ProductCategory_spending_mapping_check" CHECK (("ProductCategory"."spendingCategoryMode" = 'mapped') = ("ProductCategory"."spendingCategoryId" IS NOT NULL));--> statement-breakpoint
+ALTER TABLE "Vendor" ADD CONSTRAINT "Vendor_spendingProfile_check" CHECK ("Vendor"."spendingProfile" IN ('unspecified', 'mixed_retail', 'food_retail', 'restaurant', 'coffee_shop'));

@@ -5,6 +5,15 @@ import {
   financialBookingPreview,
   financialBookingResult,
 } from "@cubby/schemas/financial-booking";
+import { productCreateInput } from "@cubby/schemas/product";
+import { productCategoryCreateInput } from "@cubby/schemas/product-category";
+import { expenseCreateInput } from "@cubby/schemas/project";
+import { purchaseCreateInput } from "@cubby/schemas/purchase";
+import {
+  spendingClassificationReviewInput,
+  spendingClassificationReviewPreview,
+} from "@cubby/schemas/spending-classification-review";
+import { sql } from "drizzle-orm";
 import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { spendingCategoryCreateInput } from "@cubby/schemas/spending-category";
@@ -21,6 +30,8 @@ import path from "node:path";
 import type { Pool } from "pg";
 import { z } from "zod";
 
+import { unwrapDb } from "~/server/repo/database-helpers";
+import { expenseSpendingCategoryResolutionSql } from "~/server/repo/expense-category-resolution";
 import { httpContract } from "~/lib/generated/http-contract.gen";
 import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
 import {
@@ -613,6 +624,7 @@ export async function runSwiftStatementCsvScenario(input: ScenarioInput) {
   await verifyPagedDuplicates();
   const final = await verifyDateMatching();
   const booking = await verifySharedBooking(input, target);
+  const classification = await verifySpendingClassification(input, booking);
   console.log(
     "[headless-csv-e2e] Swift file preview, explicit review, exact retry, and ambiguous date attachment verified",
   );
@@ -640,18 +652,28 @@ export async function runSwiftStatementCsvScenario(input: ScenarioInput) {
           "both-dates-outside-window-no-candidate",
           "shared-swift-booking-preview-no-writes",
           "shared-swift-reviewed-booking-and-replay",
+          "shared-swift-historical-mapping-preview-no-writes",
+          "shared-swift-classification-stale-review-refusal",
+          "shared-swift-reviewed-historical-mapping",
+          "shared-swift-explicit-expense-purpose-and-reset",
         ],
         createdTransactions: after.transactions - before.transactions,
         seededCanonicalTransactions: 3,
         recordedEvidence: final.evidence - before.evidence,
         nativeInvocations: invocation,
         booking,
+        classification: classification.result,
       },
       null,
       2,
     )}\n`,
   );
-  return [evidencePath, refusalWirePath, ...refusalEvidence];
+  return [
+    evidencePath,
+    refusalWirePath,
+    ...refusalEvidence,
+    ...classification.evidence,
+  ];
 }
 
 async function verifySharedBooking(
@@ -705,7 +727,6 @@ async function verifySharedBooking(
       financialBookingInput.parse({
         transactionId,
         vendorId: vendor.id,
-        spendingCategoryId: category.id,
       }),
     ),
   );
@@ -731,6 +752,8 @@ async function verifySharedBooking(
   const raw = await invoke("--input-file", argsPath, previewPath);
   const preview = financialBookingPreview
     .extend({
+      spendingCategoryId:
+        financialBookingPreview.shape.spendingCategoryId.default(null),
       categoryOverride:
         financialBookingPreview.shape.categoryOverride.default(null),
       funderName: financialBookingPreview.shape.funderName.default(null),
@@ -766,5 +789,286 @@ async function verifySharedBooking(
       (await countExpenses()) === before + 1,
     "Shared native reviewed booking duplicated or lost its aggregate",
   );
-  return { previewWrites: 0, expenseDelta: 1, replayed: true };
+  return {
+    previewWrites: 0,
+    expenseDelta: 1,
+    replayed: true,
+    expenseId: first.expenseId,
+    categoryId: category.id,
+  };
+}
+
+/** The CLI shares the app review session; only synthetic fixtures bypass file ingress. */
+async function verifySpendingClassification(
+  input: ScenarioInput,
+  booking: { expenseId: string; categoryId: string },
+) {
+  const context = buildKernelContext(
+    buildScenarioDatabase(input.pool),
+    testUserId(input.userId),
+  );
+  const category = await createFixtureWithContext(
+    context,
+    "productCategory",
+    productCategoryCreateInput.parse({ name: "Synthetic CLI apparel" }),
+  );
+  const product = await createFixtureWithContext(
+    context,
+    "product",
+    productCreateInput.parse({
+      name: "Synthetic CLI crew shirt",
+      manufacturer: "Synthetic CLI textiles",
+      categoryId: category.id,
+    }),
+  );
+  const vendor = await createFixtureWithContext(
+    context,
+    "vendor",
+    vendorCreateInput.parse({ name: "Synthetic CLI apparel vendor" }),
+  );
+  const purchase = await createFixtureWithContext(
+    context,
+    "purchase",
+    purchaseCreateInput.parse({ vendorId: vendor.id, date: "2026-08-18" }),
+  );
+  const line = await createFixtureWithContext(
+    context,
+    "expense",
+    expenseCreateInput.parse({
+      name: "Synthetic CLI itemized shirt",
+      trade: "other",
+      productId: product.id,
+      productQuantity: 1,
+      purchaseId: purchase.id,
+      cost: 12,
+      date: "2026-08-18",
+      costType: "materials",
+      lineBasis: "item_line",
+    }),
+  );
+  const alternate = await createFixtureWithContext(
+    context,
+    "spendingCategory",
+    spendingCategoryCreateInput.parse({
+      name: "Synthetic CLI alternative purpose",
+    }),
+  );
+  const evidence: string[] = [];
+  let invocation = 0;
+  const invoke = async (flag: string, file: string, expectStale = false) => {
+    const output = path.join(
+      input.artifacts,
+      `native-classification-${++invocation}.json`,
+    );
+    const diagnostic = `${output}.stderr.txt`;
+    await writeFile(diagnostic, "");
+    try {
+      await input.runNative(
+        [
+          "headless-spending-classification",
+          "--base-url",
+          input.origin,
+          flag,
+          file,
+        ],
+        output,
+        diagnostic,
+      );
+    } catch (error) {
+      if (!expectStale) throw error;
+      const refusal = (await readFile(diagnostic, "utf8")).trim();
+      requireFact(
+        refusal ===
+          "HTTP 400 BAD_REQUEST: Spending classification or history changed after preview; review a fresh preview before applying.",
+        `Unexpected classification refusal: ${refusal}`,
+      );
+      evidence.push(diagnostic);
+      return output;
+    }
+    requireFact(
+      !expectStale,
+      "Swift classification accepted a stale historical review",
+    );
+    evidence.push(output);
+    return output;
+  };
+  const preview = async (
+    value: z.input<typeof spendingClassificationReviewInput>,
+  ) => {
+    const file = path.join(
+      input.artifacts,
+      `synthetic-classification-input-${invocation + 1}.json`,
+    );
+    await writeFile(
+      file,
+      JSON.stringify(spendingClassificationReviewInput.parse(value)),
+    );
+    const output = await invoke("--input-file", file);
+    const raw: unknown = JSON.parse(await readFile(output, "utf8"));
+    // Generated Encodable omits null category identifiers/names on the uncategorized delta.
+    const decoded = spendingClassificationReviewPreview
+      .extend({
+        categoryDeltas: z.array(
+          spendingClassificationReviewPreview.shape.categoryDeltas.element.extend(
+            {
+              spendingCategoryId:
+                spendingClassificationReviewPreview.shape.categoryDeltas.element.shape.spendingCategoryId.default(
+                  null,
+                ),
+              spendingCategoryName:
+                spendingClassificationReviewPreview.shape.categoryDeltas.element.shape.spendingCategoryName.default(
+                  null,
+                ),
+            },
+          ),
+        ),
+      })
+      .parse(raw);
+    return { output, decoded };
+  };
+  const apply = async (review: { output: string }) => {
+    const output = await invoke("--review-file", review.output);
+    const raw: unknown = JSON.parse(await readFile(output, "utf8"));
+    requireFact(
+      z.object({ applied: z.boolean() }).parse(raw).applied,
+      "Swift review session did not confirm the completed Apply",
+    );
+  };
+  const readState = async () => {
+    const result = await unwrapDb(context.db).execute(sql`
+      SELECT e.shortcode, e.cost, e."lineBasis", e."productId", e."updatedAt", e.xmin::text AS version,
+        c.shortcode AS stored, ${expenseSpendingCategoryResolutionSql("e")} AS resolution
+      FROM "Expense" e LEFT JOIN "SpendingCategory" c ON c.id = e."spendingCategoryId"
+      WHERE e.shortcode IN (${line.id}, ${booking.expenseId}) ORDER BY e.shortcode
+    `);
+    return z
+      .array(
+        z.object({
+          shortcode: z.string(),
+          cost: z.number(),
+          lineBasis: z.string(),
+          productId: z.string().nullable(),
+          updatedAt: z.unknown(),
+          version: z.string(),
+          stored: z.string().nullable(),
+          resolution: z
+            .object({
+              categoryId: z.string().nullable(),
+              value: z.string().nullable(),
+            })
+            .catchall(z.json()),
+        }),
+      )
+      .parse(result.rows);
+  };
+  const storedMapping = async () =>
+    (
+      await input.pool.query(
+        'SELECT "spendingCategoryMode", "spendingCategoryId" FROM "ProductCategory" WHERE shortcode = $1',
+        [category.id],
+      )
+    ).rows;
+  const before = await readState();
+  const beforeMapping = await storedMapping();
+  const mapping = {
+    action: "productCategory",
+    productCategoryId: category.id,
+    spendingCategoryMode: "mapped",
+    spendingCategoryId: booking.categoryId,
+  } as const;
+  const initial = await preview(mapping);
+  requireFact(
+    initial.decoded.expenseCount >= 2 &&
+      initial.decoded.changedExpenseCount === 1,
+    "Swift mapping preview omitted its existing historical item line",
+  );
+  requireFact(
+    JSON.stringify(await readState()) === JSON.stringify(before) &&
+      JSON.stringify(await storedMapping()) === JSON.stringify(beforeMapping),
+    "Swift mapping preview wrote history or policy",
+  );
+  const explicit = await preview({
+    action: "expenses",
+    expenseIds: [line.id],
+    spendingCategoryId: alternate.id,
+  });
+  await apply(explicit);
+  const beforeRefusal = await readState();
+  await invoke("--review-file", initial.output, true);
+  requireFact(
+    JSON.stringify(await readState()) === JSON.stringify(beforeRefusal) &&
+      JSON.stringify(await storedMapping()) === JSON.stringify(beforeMapping),
+    "Stale mapping refusal changed policy or Expense history",
+  );
+  const fresh = await preview(mapping);
+  await apply(fresh);
+  const mapped = await readState();
+  requireFact(
+    mapped.find((entry) => entry.shortcode === line.id)?.stored ===
+      alternate.id,
+    "Historical mapping overwrote the reviewed explicit Expense purpose",
+  );
+  const resetLine = await preview({
+    action: "expenses",
+    expenseIds: [line.id],
+    spendingCategoryId: null,
+  });
+  await apply(resetLine);
+  const inherited = (await readState()).find(
+    (entry) => entry.shortcode === line.id,
+  );
+  requireFact(
+    inherited?.stored === null &&
+      inherited.resolution.value === booking.categoryId,
+    "Reset did not reveal the newly mapped Product category",
+  );
+  const aggregateBefore = (await readState()).find(
+    (entry) => entry.shortcode === booking.expenseId,
+  );
+  requireFact(
+    aggregateBefore?.stored === null &&
+      aggregateBefore.productId === null &&
+      aggregateBefore.lineBasis === "allocation",
+    "CSV booking materialized classification or fabricated itemization",
+  );
+  const explicitAggregate = await preview({
+    action: "expenses",
+    expenseIds: [booking.expenseId],
+    spendingCategoryId: booking.categoryId,
+  });
+  await apply(explicitAggregate);
+  requireFact(
+    (await readState()).find((entry) => entry.shortcode === booking.expenseId)
+      ?.stored === booking.categoryId,
+    "Explicit imported Expense purpose did not persist after review",
+  );
+  const resetAggregate = await preview({
+    action: "expenses",
+    expenseIds: [booking.expenseId],
+    spendingCategoryId: null,
+  });
+  await apply(resetAggregate);
+  const reset = (await readState()).find(
+    (entry) => entry.shortcode === booking.expenseId,
+  );
+  requireFact(
+    reset?.stored === null &&
+      reset.resolution.categoryId === null &&
+      reset.cost === aggregateBefore.cost &&
+      reset.productId === null &&
+      reset.lineBasis === "allocation",
+    "Imported Expense reset changed money, itemization, or retained its override",
+  );
+  return {
+    evidence,
+    result: {
+      historicalLines: 1,
+      previewWrites: 0,
+      staleRefused: true,
+      explicitOverridePreserved: true,
+      inheritedMappingAfterReset: true,
+      importedPurposeReset: true,
+      nativeInvocations: invocation,
+    },
+  };
 }

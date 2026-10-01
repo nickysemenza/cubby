@@ -8,9 +8,10 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
 import type { PresenceFilter, SortParams } from "@cubby/schemas/pagination";
 import { type AppErrorReason, parseShortcode } from "@cubby/shared";
-import type { AnyColumn, SQL, SQLWrapper } from "drizzle-orm";
+import type { AnyColumn, SQLWrapper } from "drizzle-orm";
 import {
   and,
+  SQL,
   arrayOverlaps,
   asc,
   eq,
@@ -510,8 +511,9 @@ export const correlated = <T>(fragment: string): SQL<T> =>
  * table scan, where `= ANY` stays an index scan (measured on production:
  * 270 buffers against 3).
  */
-export const uuidArrayParam = (ids: readonly string[]): SQL =>
-  sql`${`{${[...new Set(ids)].join(",")}}`}::uuid[]`;
+// Trusted correlated SQL arrays retain their column references instead of being bound as values.
+export const uuidArrayParam = (ids: readonly string[] | SQL): SQL =>
+  ids instanceof SQL ? ids : sql`${`{${[...new Set(ids)].join(",")}}`}::uuid[]`;
 
 export const eqAny = <TColumn extends AnyColumn, TValue>(
   column: TColumn,

@@ -663,15 +663,24 @@ async function enrichUniverse(
     }
   }
   const spendingCategoryCode = shortcodeByPrefix.get("SPC-");
-  if (spendingCategoryCode)
+  if (spendingCategoryCode) {
+    const categoryId = await resolveOrThrow(
+      db,
+      "spendingCategory",
+      spendingCategoryCode,
+    );
     await insertWithShortcode(db, "spendingCategory", {
       name: "Delete policy fixture child category",
-      parentId: await resolveOrThrow(
-        db,
-        "spendingCategory",
-        spendingCategoryCode,
-      ),
+      parentId: categoryId,
     });
+    // A mapping reference and its mode must satisfy the paired CHECK; the
+    // generic single-column edge probe cannot create this valid source row.
+    await insertWithShortcode(db, "productCategory", {
+      name: "Delete policy fixture mapped category",
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: categoryId,
+    });
+  }
   const image = await createImageFixture(db, "delete-policy");
   for (const code of shortcodeByPrefix.values()) {
     if (!attachableImageEntityId.safeParse(code).success) continue;

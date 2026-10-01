@@ -21,6 +21,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
 import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { capitalize, sortBy, uniq } from "es-toolkit";
 
@@ -92,6 +93,10 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import {
+  emptySpendingCategorySummary,
+  loadTransactionSpendingCategorySummaries,
+} from "./expense-category-summary";
 import { parseCompleteListRead } from "./list-read-adapters";
 import {
   financialTransactionCoverageSql,
@@ -183,15 +188,21 @@ const hydrate = async (
   rows: FinancialTransactionRow[],
 ): Promise<FinancialTransactionOut[]> => {
   const ids = rows.map((row) => row.id);
-  const [dataQualities, sourceRefs] = await Promise.all([
+  const [dataQualities, sourceRefs, categorySummaries] = await Promise.all([
     loadDataQualities(db, "financialTransaction", ids),
     settlementRefsFor(db, ids),
+    loadTransactionSpendingCategorySummaries(db, ids),
   ]);
   return enrichFinancialTransactionsWithVendorInference(
     db,
     rows.map((row) =>
       // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-      toOut(row, dataQualities.get(row.id)!, sourceRefs.get(row.id) ?? []),
+      toOut(
+        row,
+        dataQualities.get(row.id)!,
+        sourceRefs.get(row.id) ?? [],
+        categorySummaries.get(row.id) ?? emptySpendingCategorySummary(),
+      ),
     ),
   );
 };
@@ -200,6 +211,7 @@ const toOut = (
   row: FinancialTransactionRow,
   dataQuality: DataQuality,
   sourceRefs: SettlementRef[],
+  spendingCategorySummary: SpendingCategorySummary,
 ): FinancialTransactionOut => {
   const allocations = (row.allocations ?? []).map((allocation) => ({
     purchaseId: parseShortcodeFor("purchase", allocation.purchaseId),
@@ -228,6 +240,7 @@ const toOut = (
       : null,
     spendingCategoryName: row.spendingCategoryName,
     fieldResolutions: row.fieldResolutions,
+    spendingCategorySummary,
     evidenceExpectation: row.evidenceExpectation,
     bookingCoverage: row.coverage.booking,
     documentCoverage: row.coverage.document,
@@ -293,11 +306,14 @@ const hydrateTransactionsRead = async (
   projection: ListProjection,
 ) => {
   const ids = rows.map((row) => row.id);
-  const [qualities, refs] = await Promise.all([
+  const [qualities, refs, categorySummaries] = await Promise.all([
     loadListGroup(projection, "quality", () =>
       loadDataQualities(db, "financialTransaction", ids),
     ),
     loadListGroup(projection, "relations", () => settlementRefsFor(db, ids)),
+    loadListGroup(projection, "derived", () =>
+      loadTransactionSpendingCategorySummaries(db, ids),
+    ),
   ]);
   const values = rows.map((row) => {
     const allocations = (row.allocations ?? []).map((value) => ({
@@ -307,6 +323,10 @@ const hydrateTransactionsRead = async (
     return {
       ...row,
       fieldResolutions: row.fieldResolutions,
+      ...listGroupFields(projection, "derived", () => ({
+        spendingCategorySummary:
+          categorySummaries?.get(row.id) ?? emptySpendingCategorySummary(),
+      })),
       bookingCoverage: row.coverage.booking,
       documentCoverage: row.coverage.document,
       itemizationCoverage: row.coverage.itemization,
@@ -539,10 +559,7 @@ const getFinancialTransactionByShortcode =
 
 async function resolveForeignKeys(
   db: Database | DrizzleTransaction,
-  data: Pick<
-    FinancialTransactionCreateInput,
-    "accountId" | "purchaseId" | "spendingCategoryId"
-  >,
+  data: Pick<FinancialTransactionCreateInput, "accountId" | "purchaseId">,
 ) {
   const accountId = await resolveOrThrow(
     db,
@@ -551,9 +568,6 @@ async function resolveForeignKeys(
   );
   return {
     accountId,
-    spendingCategoryId: data.spendingCategoryId
-      ? await resolveOrThrow(db, "spendingCategory", data.spendingCategoryId)
-      : null,
   };
 }
 
@@ -859,16 +873,6 @@ export async function updateFinancialTransaction(
     const values = buildPartialUpdateValues({
       ...writableData,
       accountId,
-      spendingCategoryId:
-        data.spendingCategoryId === undefined
-          ? undefined
-          : data.spendingCategoryId === null
-            ? null
-            : await resolveOrThrow(
-                tx,
-                "spendingCategory",
-                data.spendingCategoryId,
-              ),
     });
 
     // The create input rejects a purchaseId/allocations pair that disagrees;

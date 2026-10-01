@@ -96,6 +96,17 @@ struct EntityRowPresentation: Sendable, Hashable {
                 let field = descriptor.fields.first(where: { $0.key == columnID || $0.columnId == columnID })
             else { return }
             let key = field.key
+            if field.listRenderer == .spendingCategorySummary,
+                let value = row.raw[key],
+                let summary = try? JSONDecoder.cubby().decode(
+                    SpendingCategorySummary.self, from: JSONEncoder.cubby().encode(value))
+            {
+                let names = summary.categories.map(\.name).joined(separator: ", ")
+                let text =
+                    names.isEmpty ? summary.classificationLabel : "\(summary.classificationLabel): \(names)"
+                facts.append(Fact(id: key, label: label ?? field.label, value: text))
+                return
+            }
             if let renderer = field.listRenderer,
                 case .implemented = NativePresentationCoverage.list(renderer),
                 let source = RecipeSourcePresentation.parse(row.raw[key])

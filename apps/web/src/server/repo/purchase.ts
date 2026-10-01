@@ -27,9 +27,11 @@ import type {
 } from "@cubby/schemas/purchase";
 import {
   purchaseListItemOut,
+  purchaseOut,
   RECONCILIATION_TOLERANCE,
   reconcilePurchase,
 } from "@cubby/schemas/purchase";
+import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
 import { parseShortcode } from "@cubby/shared";
 import {
@@ -145,6 +147,10 @@ import {
 } from "~/server/repo/shortcode-utils";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
+import {
+  emptySpendingCategorySummary,
+  loadPurchaseSpendingCategorySummaries,
+} from "./expense-category-summary";
 import {
   effectiveExpenseProjectSql,
   effectiveExpenseTradeSql,
@@ -362,6 +368,7 @@ const purchaseColumns = {
   orderId: purchase.orderId,
   displayLabel: purchase.displayLabel,
   date: purchase.date,
+  spendingCategoryOrigin: purchase.spendingCategoryOrigin,
   spendingCategoryShortcode: sql<
     string | null
   >`(SELECT shortcode FROM "SpendingCategory" WHERE id = "Purchase"."spendingCategoryId" AND "deletedAt" IS NULL)`,
@@ -390,6 +397,7 @@ const purchaseColumns = {
 type PurchaseRow = {
   coverage: PurchaseOut["coverage"];
   fieldResolutions: PurchaseOut["fieldResolutions"];
+  spendingCategoryOrigin: string;
   spendingCategoryShortcode: string | null;
   evidenceExpectation: PurchaseOut["evidenceExpectation"];
   itemizationEvidence: boolean;
@@ -425,6 +433,7 @@ const dbPurchaseToAPI = (
   dataQuality: PurchaseOut["dataQuality"],
   images: PurchaseOut["images"] = [],
   financial: PurchaseFinancialAggregate = emptyPurchaseFinancialAggregate(),
+  spendingCategorySummary: SpendingCategorySummary = emptySpendingCategorySummary(),
 ): PurchaseOut => ({
   id: parseShortcodeFor("purchase", row.shortcode),
   vendorId: parseShortcodeFor("vendor", row.vendorShortcode),
@@ -434,6 +443,9 @@ const dbPurchaseToAPI = (
   defaultProjectId: row.defaultProjectShortcode
     ? parseShortcodeFor("project", row.defaultProjectShortcode)
     : null,
+  spendingCategoryOrigin: purchaseOut.shape.spendingCategoryOrigin.parse(
+    row.spendingCategoryOrigin,
+  ),
   spendingCategoryId: row.spendingCategoryShortcode
     ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
     : null,
@@ -441,6 +453,7 @@ const dbPurchaseToAPI = (
   itemizationEvidence: row.itemizationEvidence,
   coverage: row.coverage,
   fieldResolutions: row.fieldResolutions,
+  spendingCategorySummary,
   bookingCoverage: row.coverage.booking,
   documentCoverage: row.coverage.document,
   itemizationCoverage: row.coverage.itemization,
@@ -738,15 +751,18 @@ export const purchaseListRead = async (
         hydrateListRead(db, "purchase", rows, projection, {
           media: true,
           load: () =>
-            loadListGroup(projection, "derived", () =>
-              loadPurchaseFinancialAggregates(
-                db,
-                rows.map((row) => row.id),
-              ),
-            ),
-          mapRow: (row, { loaded: financials }) => {
+            loadListGroup(projection, "derived", async () => {
+              const ids = rows.map((row) => row.id);
+              const [financials, categories] = await Promise.all([
+                loadPurchaseFinancialAggregates(db, ids),
+                loadPurchaseSpendingCategorySummaries(db, ids),
+              ]);
+              return { financials, categories };
+            }),
+          mapRow: (row, { loaded: derived }) => {
             const financial =
-              financials?.get(row.id) ?? emptyPurchaseFinancialAggregate();
+              derived?.financials.get(row.id) ??
+              emptyPurchaseFinancialAggregate();
             return {
               ...row,
               id: parseShortcodeFor("purchase", row.shortcode),
@@ -787,6 +803,9 @@ export const purchaseListRead = async (
               ...listGroupFields(projection, "derived", () => ({
                 coverage: row.coverage!,
                 fieldResolutions: row.fieldResolutions,
+                spendingCategorySummary:
+                  derived?.categories.get(row.id) ??
+                  emptySpendingCategorySummary(),
                 bookingCoverage: row.coverage!.booking,
                 documentCoverage: row.coverage!.document,
                 itemizationCoverage: row.coverage!.itemization,
@@ -866,16 +885,18 @@ export const getPurchaseByID = async (
   db: Database,
   id: PurchaseId,
 ): Promise<PurchaseOut> => {
-  const [rows, images, financialByPurchase, dataQualities] = await Promise.all([
-    getDb(db)
-      .select(purchaseColumns)
-      .from(purchase)
-      .where(and(eq(purchase.id, id), notDeleted(purchase)))
-      .limit(1),
-    loadPurchaseImages(db, id),
-    loadPurchaseFinancialAggregates(db, [id]),
-    loadDataQualities(db, "purchase", [id]),
-  ]);
+  const [rows, images, financialByPurchase, dataQualities, categorySummaries] =
+    await Promise.all([
+      getDb(db)
+        .select(purchaseColumns)
+        .from(purchase)
+        .where(and(eq(purchase.id, id), notDeleted(purchase)))
+        .limit(1),
+      loadPurchaseImages(db, id),
+      loadPurchaseFinancialAggregates(db, [id]),
+      loadDataQualities(db, "purchase", [id]),
+      loadPurchaseSpendingCategorySummaries(db, [id]),
+    ]);
   const [row] = rows;
   if (!row) {
     throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
@@ -885,6 +906,7 @@ export const getPurchaseByID = async (
     dataQualities.get(id)!,
     images,
     financialByPurchase.get(id),
+    categorySummaries.get(id),
   );
 };
 
@@ -1049,6 +1071,7 @@ export const createPurchase = async (
       spendingCategoryId: data.spendingCategoryId
         ? await resolveOrThrow(tx, "spendingCategory", data.spendingCategoryId)
         : null,
+      spendingCategoryOrigin: data.spendingCategoryId ? "manual" : "legacy",
       evidenceExpectation: data.evidenceExpectation,
       itemizationEvidence: data.itemizationEvidence,
       defaultTrade: data.defaultTrade,
@@ -1090,6 +1113,10 @@ const resolvePurchaseCategoryUpdate = async (
   shortcode == null
     ? shortcode
     : resolveOrThrow(tx, "spendingCategory", shortcode);
+
+const reviewedPurchaseCategoryOrigin = (
+  value: PurchaseUpdateData["spendingCategoryId"],
+): "manual" | undefined => (value === undefined ? undefined : "manual");
 
 export const updatePurchase = async (
   db: Database,
@@ -1181,6 +1208,9 @@ export const updatePurchase = async (
         ),
         spendingCategoryId: await resolvePurchaseCategoryUpdate(
           tx,
+          data.spendingCategoryId,
+        ),
+        spendingCategoryOrigin: reviewedPurchaseCategoryOrigin(
           data.spendingCategoryId,
         ),
         evidenceExpectation: data.evidenceExpectation,
@@ -1476,6 +1506,15 @@ export const splitExpense = async (
       if (projectIds.length !== parts.length) {
         throw new Error("Default project resolution lost its correlation");
       }
+      const spendingCategoryIds = await Promise.all(
+        parts.map((part) =>
+          part.spendingCategoryId === undefined
+            ? original.spendingCategoryId
+            : part.spendingCategoryId === null
+              ? null
+              : resolveOrThrow(tx, "spendingCategory", part.spendingCategoryId),
+        ),
+      );
       const preparedParts = parts.map((part, index) => {
         const productId = partProductIds[index] ?? null;
         const projectId = projectIds[index];
@@ -1486,6 +1525,12 @@ export const splitExpense = async (
         }
         const lineKind =
           part.lineKind ?? inferExpenseLineKind({ name: part.name, productId });
+        if (original.lineBasis === "allocation" && productId !== null) {
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Unitemized allocations cannot link a Product. Review actual itemization through the receipt replacement workflow.",
+          );
+        }
         if (lineKind !== "principal" && productId !== null) {
           throw createAppError(
             "CONSTRAINT_VIOLATION",
@@ -1504,6 +1549,7 @@ export const splitExpense = async (
           productId,
           projectId,
           lineKind,
+          spendingCategoryId: spendingCategoryIds[index] ?? null,
         };
       });
 
@@ -1519,7 +1565,13 @@ export const splitExpense = async (
       );
 
       const inserted: ExpenseId[] = [];
-      for (const { part, productId, projectId, lineKind } of preparedParts) {
+      for (const {
+        part,
+        productId,
+        projectId,
+        lineKind,
+        spendingCategoryId,
+      } of preparedParts) {
         await validateExpenseInheritance(tx, {
           lineKind,
           projectId,
@@ -1532,7 +1584,7 @@ export const splitExpense = async (
           cost: part.cost,
           date: original.date,
           economicRole: original.economicRole,
-          spendingCategoryId: original.spendingCategoryId,
+          spendingCategoryId,
           bookingTransactionCode: original.bookingTransactionCode,
           lineBasis: original.lineBasis,
           lineKind,
@@ -1800,6 +1852,7 @@ const carryChargeMetadata = async (
 ) => {
   const selection = {
     spendingCategoryId: purchase.spendingCategoryId,
+    spendingCategoryOrigin: purchase.spendingCategoryOrigin,
     evidenceExpectation: purchase.evidenceExpectation,
     itemizationEvidence: purchase.itemizationEvidence,
     vendorExpenseCount: purchaseVendorExpenseCount,
@@ -1844,6 +1897,10 @@ const carryChargeMetadata = async (
       survivor.spendingCategoryId,
       dead.spendingCategoryId,
     ),
+    spendingCategoryOrigin:
+      survivor.spendingCategoryId == null && dead.spendingCategoryId != null
+        ? dead.spendingCategoryOrigin
+        : undefined,
     evidenceExpectation: carryMissing(
       survivor.evidenceExpectation,
       dead.evidenceExpectation,

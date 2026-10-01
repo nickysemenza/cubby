@@ -1,3 +1,5 @@
+import { productCategoryCreateInput } from "@cubby/schemas/product-category";
+import { effectiveExpenseSpendingCategorySql } from "~/server/repo/expense-category-resolution";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -14,6 +16,7 @@ import {
   commitPurchaseImportInput,
   preparePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
+import { orderMailDecisionOut } from "@cubby/schemas/order-mail-review";
 import { photoRunReviewResponse } from "@cubby/schemas/photo-import-run";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { vendorAccountCreateInput } from "@cubby/schemas/vendor-account";
@@ -54,6 +57,7 @@ import { attachFileToEntity } from "~/server/services/image-storage.service";
 import { createEvidenceHarnessContext, createFixture } from "./e2e-fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect } from "./e2e-test";
+import { dispatchesOperation, operationResult } from "./dispatch-wire";
 
 export const EVIDENCE_SOURCES = ["gmail", "retailer", "photo", "csv"] as const;
 export type EvidenceSource = (typeof EVIDENCE_SOURCES)[number];
@@ -147,6 +151,15 @@ export async function createConvergenceHarness(
       productExpectation: "required",
     }),
   );
+  const productCategory = await createFixture(
+    page,
+    "productCategory",
+    productCategoryCreateInput.parse({
+      name: `${name} apparel`,
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: category.id,
+    }),
+  );
   const vendorId = await resolveOrThrow(db, "vendor", vendor.id);
   const accountId = await resolveOrThrow(db, "vendorAccount", account.id);
   const cardId = await resolveOrThrow(db, "financialAccount", card.id);
@@ -186,12 +199,25 @@ export async function createConvergenceHarness(
   };
   const readProduct = async () => {
     const [found] = await database
-      .select({ shortcode: schema.product.shortcode })
+      .select({
+        shortcode: schema.product.shortcode,
+        categoryId: schema.product.categoryId,
+      })
       .from(schema.product)
       .where(
         and(eq(schema.product.name, productName), notDeleted(schema.product)),
       )
       .limit(1);
+    if (found && found.categoryId === null) {
+      const classified = await page.request.patch(
+        `/api/v1/products/${found.shortcode}`,
+        {
+          headers: { Origin: baseURL },
+          data: { categoryId: productCategory.id },
+        },
+      );
+      expect(classified.ok(), await classified.text()).toBe(true);
+    }
     productCode = found?.shortcode;
     return productCode;
   };
@@ -521,7 +547,11 @@ export async function createConvergenceHarness(
               ? { kind: "existing", existingId: productCode }
               : {
                   kind: "create",
-                  create: { name: productName, manufacturer: name },
+                  create: {
+                    name: productName,
+                    manufacturer: name,
+                    categoryId: productCategory.id,
+                  },
                 },
             inventory: {
               locationId: location.id,
@@ -618,7 +648,7 @@ export async function createConvergenceHarness(
         transactionId: transaction.shortcode,
         purchaseId: receipt?.shortcode,
         vendorId: vendor.id,
-        spendingCategoryId: category.id,
+        spendingCategoryId: null,
         trade: "other",
       },
       financialBookingPreview,
@@ -656,22 +686,45 @@ export async function createConvergenceHarness(
     if (!purchase || !transaction)
       throw new Error("Imported settlement evidence missing");
     await gotoAuthenticatedPage(page, `/vendors/${vendor.id}`);
-    await page
-      .getByRole("button", { name: "Link", exact: true })
-      .click()
-      .catch(async (error: Error) => {
-        const { rows } = await database.execute(sql`
+    const mail = page
+      .locator("#order-mail")
+      .getByRole("article")
+      .filter({ hasText: orderId });
+    const [decisionResponse] = await Promise.all([
+      page.waitForResponse((response) =>
+        dispatchesOperation(response.request(), "vendor.decideOrderMail"),
+      ),
+      mail
+        .getByRole("button", { name: "Link", exact: true })
+        .click()
+        .catch(async (error: Error) => {
+          const { rows } = await database.execute(sql`
           SELECT e.event, e."orderId", d.decision, p.shortcode AS "purchaseCode"
           FROM "OrderMailEvent" e JOIN "OrderMail" m ON m.id = e."orderMailId"
           LEFT JOIN "OrderMailCandidateDecision" d ON d."eventId" = e.id
           LEFT JOIN "Purchase" p ON p.id = d."purchaseId"
           WHERE m."messageId" = ${`synthetic-message-${token}`}
         `);
-        throw new Error(
-          `${error.message}\n${JSON.stringify({ path: new URL(page.url()).pathname, headings: await page.getByRole("heading").allTextContents(), candidates: rows })}`,
-        );
-      });
-    await expect(page.getByText("linked", { exact: true })).toBeVisible();
+          throw new Error(
+            `${error.message}\n${JSON.stringify({ path: new URL(page.url()).pathname, headings: await page.getByRole("heading").allTextContents(), candidates: rows })}`,
+          );
+        }),
+    ]);
+    expect(
+      await operationResult(
+        decisionResponse,
+        "vendor.decideOrderMail",
+        orderMailDecisionOut,
+      ),
+    ).toMatchObject({
+      purchaseId: purchase.shortcode,
+      decision: "linked",
+    });
+    // The mutation's vendor invalidation also refreshes connected records;
+    // its reviewed response precedes the worklist's streamed refetch.
+    await expect(mail.getByText("linked", { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
     expect(purchase.shortcode).toBe(bookedPurchaseCode);
     return { purchaseCode: purchase.shortcode, productCode, photoRunId };
   }
@@ -684,7 +737,7 @@ export async function createConvergenceHarness(
         (SELECT count(*)::int FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" WHERE p."vendorId" = ${vendorId} AND e."deletedAt" IS NULL AND p."deletedAt" IS NULL) AS expenses,
         (SELECT count(*)::int FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" JOIN "Product" product ON product.id = e."productId" WHERE p."vendorId" = ${vendorId} AND e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND product.name = ${productName} AND product."deletedAt" IS NULL) AS "productLines",
         (SELECT count(*)::int FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" t ON t.id = a."transactionId" JOIN "Purchase" p ON p.id = a."purchaseId" WHERE t."accountId" = ${cardId} AND a."deletedAt" IS NULL AND t."deletedAt" IS NULL AND p."vendorId" = ${vendorId} AND p."orderId" = ${orderId} AND p."deletedAt" IS NULL) AS "settledPurchases",
-        (SELECT count(*)::int FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" JOIN "SpendingCategory" c ON c.id = COALESCE(e."spendingCategoryId", p."spendingCategoryId") WHERE p."vendorId" = ${vendorId} AND e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND c.shortcode = ${category.id} AND c."deletedAt" IS NULL) AS "categorizedExpenses",
+        (SELECT count(*)::int FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" JOIN "SpendingCategory" c ON c.id = ${effectiveExpenseSpendingCategorySql("e")} WHERE p."vendorId" = ${vendorId} AND e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND c.shortcode = ${category.id} AND c."deletedAt" IS NULL) AS "categorizedExpenses",
         (SELECT round(sum(e.cost) * 100)::int FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" WHERE p."vendorId" = ${vendorId} AND e."deletedAt" IS NULL AND p."deletedAt" IS NULL) AS spend,
         (SELECT count(*)::int FROM "FinancialTransaction" WHERE "accountId" = ${cardId} AND "deletedAt" IS NULL) AS transactions,
         (SELECT round(sum(a.amount) * 100)::int FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" t ON t.id = a."transactionId" WHERE t."accountId" = ${cardId} AND a."deletedAt" IS NULL AND t."deletedAt" IS NULL) AS settlement,

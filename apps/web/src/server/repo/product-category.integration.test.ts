@@ -35,6 +35,8 @@ describe("product category hierarchy", () => {
     const group = await createProductCategory(
       ctx.db,
       {
+        spendingCategoryId: null,
+        spendingCategoryMode: "inherit",
         name: "Counted group",
         aliases: [],
         description: null,
@@ -47,6 +49,8 @@ describe("product category hierarchy", () => {
     const type = await createProductCategory(
       ctx.db,
       {
+        spendingCategoryId: null,
+        spendingCategoryMode: "inherit",
         name: "Counted type",
         aliases: [],
         description: null,
@@ -119,6 +123,8 @@ describe("product category hierarchy", () => {
       createProductCategory(
         ctx.db,
         {
+          spendingCategoryId: null,
+          spendingCategoryMode: "inherit",
           name,
           aliases: [],
           description: null,
@@ -229,6 +235,8 @@ describe("product category hierarchy", () => {
     const root = await createProductCategory(
       ctx.db,
       {
+        spendingCategoryId: null,
+        spendingCategoryMode: "inherit",
         name: "Custom root",
         aliases: [],
         description: null,
@@ -241,6 +249,8 @@ describe("product category hierarchy", () => {
     const group = await createProductCategory(
       ctx.db,
       {
+        spendingCategoryId: null,
+        spendingCategoryMode: "inherit",
         name: "Custom group",
         aliases: [],
         description: null,
@@ -253,6 +263,8 @@ describe("product category hierarchy", () => {
     const type = await createProductCategory(
       ctx.db,
       {
+        spendingCategoryId: null,
+        spendingCategoryMode: "inherit",
         name: "Custom type",
         aliases: [],
         description: null,
@@ -284,6 +296,8 @@ describe("product category hierarchy", () => {
       createProductCategory(
         ctx.db,
         {
+          spendingCategoryId: null,
+          spendingCategoryMode: "inherit",
           name: "Too deep",
           aliases: [],
           description: null,
@@ -298,6 +312,8 @@ describe("product category hierarchy", () => {
     const destinationRoot = await createProductCategory(
       ctx.db,
       {
+        spendingCategoryId: null,
+        spendingCategoryMode: "inherit",
         name: "Destination root",
         aliases: [],
         description: null,
@@ -310,6 +326,8 @@ describe("product category hierarchy", () => {
     const destinationGroup = await createProductCategory(
       ctx.db,
       {
+        spendingCategoryId: null,
+        spendingCategoryMode: "inherit",
         name: "Destination group",
         aliases: [],
         description: null,
@@ -389,6 +407,8 @@ describe("product category hierarchy", () => {
       createProductCategory(
         ctx.db,
         {
+          spendingCategoryId: null,
+          spendingCategoryMode: "inherit",
           name: "Second food root",
           aliases: [],
           description: null,
@@ -407,6 +427,8 @@ describe("product category hierarchy", () => {
     const foodType = await createProductCategory(
       ctx.db,
       {
+        spendingCategoryId: null,
+        spendingCategoryMode: "inherit",
         name: "Evidence food type",
         aliases: [],
         description: null,
@@ -419,6 +441,8 @@ describe("product category hierarchy", () => {
     const bookType = await createProductCategory(
       ctx.db,
       {
+        spendingCategoryId: null,
+        spendingCategoryMode: "inherit",
         name: "Evidence book type",
         aliases: [],
         description: null,
@@ -431,6 +455,8 @@ describe("product category hierarchy", () => {
     const unboundRoot = await createProductCategory(
       ctx.db,
       {
+        spendingCategoryId: null,
+        spendingCategoryMode: "inherit",
         name: "Unbound evidence destination",
         aliases: [],
         description: null,
@@ -481,6 +507,8 @@ describe("product category hierarchy", () => {
     const foodType = await createProductCategory(
       ctx.db,
       {
+        spendingCategoryId: null,
+        spendingCategoryMode: "inherit",
         name: "Inherited trade food type",
         aliases: [],
         description: null,
@@ -493,6 +521,8 @@ describe("product category hierarchy", () => {
     const destination = await createProductCategory(
       ctx.db,
       {
+        spendingCategoryId: null,
+        spendingCategoryMode: "inherit",
         name: "Inherited trade destination",
         aliases: [],
         description: null,

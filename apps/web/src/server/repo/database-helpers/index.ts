@@ -10,6 +10,7 @@ export {
   databaseForTransaction,
   getDb,
   isTransaction,
+  parentTransactionDatabase,
   unwrapDb,
   withTransaction,
   withTransactionDatabase,

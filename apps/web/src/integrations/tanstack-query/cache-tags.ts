@@ -204,6 +204,7 @@ export const ripple = {
   /** Taxonomy moves change Product evidence and inherited food-project costs. */
   productCategory: rippleTags(productBase, [
     ["productCategory"],
+    ["financialTransaction"],
     ["inventory"],
   ]),
   /**
@@ -400,6 +401,9 @@ export const ripple = {
   spendingCategory: rippleTags([
     FIELD_SUGGESTIONS,
     ["spendingCategory"],
+    ["productCategory"],
+    ["vendor"],
+    ["project"],
     ["purchase"],
     ["expense"],
     ["financialTransaction"],
@@ -407,6 +411,7 @@ export const ripple = {
   ]),
   vendor: rippleTags([
     FIELD_SUGGESTIONS,
+    ["project"],
     ["expense"],
     ["financialTransaction"],
     ["vendor"],
