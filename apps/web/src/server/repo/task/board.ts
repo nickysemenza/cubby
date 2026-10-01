@@ -13,6 +13,7 @@
 import type { TaskBoardInput, TaskBoardOut } from "@cubby/schemas/project";
 
 import type { Database } from "~/server/db";
+import { listAll } from "~/server/repo/list-all";
 
 import { taskList } from "./lookup";
 
@@ -25,11 +26,13 @@ export async function getTaskBoard(
 ): Promise<TaskBoardOut> {
   const intrinsic = { ...input, topLevelOnly: true };
   const [activeResult, doneResult] = await Promise.all([
-    taskList(
-      db,
-      { ...intrinsic, completion: "open" },
-      [{ orderBy: "createdAt", direction: "desc" }],
-      { pageIndex: 0, pageSize: 100_000 },
+    listAll((pagination) =>
+      taskList(
+        db,
+        { ...intrinsic, completion: "open" },
+        [{ orderBy: "createdAt", direction: "desc" }],
+        pagination,
+      ),
     ),
     taskList(
       db,

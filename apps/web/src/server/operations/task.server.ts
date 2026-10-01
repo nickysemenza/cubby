@@ -6,6 +6,7 @@ import type { z } from "zod";
 import { taskContract } from "~/contracts/task.contract";
 import type { Database } from "~/server/db";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { listAll } from "~/server/repo/list-all";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import {
   getTaskBoard,
@@ -18,8 +19,6 @@ import {
 } from "~/server/repo/task";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
 import { bindWorkflow, workflow } from "~/server/workflow-runtime";
-
-const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 } as const;
 
 /**
  * `task.bulkReorder` stays bespoke — it is positional, not a field patch, so
@@ -72,11 +71,13 @@ export const taskHandlers = implementOperationDomain(taskContract, {
     listActionableTasks(context.db, input ?? {}),
   chartData: async (context, input) =>
     (
-      await taskList(
-        context.db,
-        input,
-        [{ orderBy: "createdAt", direction: "desc" }],
-        FETCH_ALL,
+      await listAll((pagination) =>
+        taskList(
+          context.db,
+          input,
+          [{ orderBy: "createdAt", direction: "desc" }],
+          pagination,
+        ),
       )
     ).data,
   summary: (context) => getTaskSummary(context.db),

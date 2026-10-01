@@ -9,6 +9,7 @@ import {
   purchaseShortcode,
 } from "./identifiers";
 import { amount } from "./codec";
+import { MAX_PAGE_SIZE } from "./pagination";
 import { productCategoryShortcode } from "./identifier-fields";
 import { productCategoryFeature } from "./product-category-fields";
 import { tradeSchema } from "./project";
@@ -216,10 +217,15 @@ export const collectionMatrixInput = z.object({
   pagination: z
     .object({
       pageIndex: z.number().int().nonnegative().default(0),
-      pageSize: z.number().int().min(1).max(500).default(500),
+      pageSize: z
+        .number()
+        .int()
+        .min(1)
+        .max(MAX_PAGE_SIZE)
+        .default(MAX_PAGE_SIZE),
     })
     .optional()
-    .default({ pageIndex: 0, pageSize: 500 }),
+    .default({ pageIndex: 0, pageSize: MAX_PAGE_SIZE }),
 });
 
 export const collectionMatrixRowOut = z.object({
