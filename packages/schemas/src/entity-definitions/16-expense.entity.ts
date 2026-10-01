@@ -1052,6 +1052,9 @@ export default defineEntity({
       { on: ["date"] },
       { on: ["costType"] },
       { on: ["lineKind"] },
+      // Transaction coverage reads a transaction's booked lines by code many
+      // times per row; unindexed, a financial transaction list page took ~600 ms.
+      { on: ["bookingTransactionCode"] },
       { trigram: "name" },
     ],
     checks: [
