@@ -64,23 +64,25 @@ export function useStagedMerge<TOutput>(
             reason: `A ${entity} merge is already running.`,
           }
         : { status: "available" },
-    dialog: (
-      <EntityMergeDialog
-        entity={entity}
-        rows={rows}
-        keeper={rows[0]}
-        initialAliasIds={rows.slice(1).map((row) => row.id)}
-        open={rows.length > 0}
-        onOpenChange={(open) => {
-          if (!open) finish(false);
-        }}
-        onConfirm={async (keepId, mergeIds) => {
-          await mutation.mutateAsync({ keepId, mergeIds });
-          finish(true);
-        }}
-        isPending={mutation.isPending}
-      />
-    ),
+    // Mounted only while staged so a closed form never runs its hooks.
+    dialog:
+      rows.length > 0 ? (
+        <EntityMergeDialog
+          entity={entity}
+          rows={rows}
+          keeper={rows[0]}
+          initialAliasIds={rows.slice(1).map((row) => row.id)}
+          open={rows.length > 0}
+          onOpenChange={(open) => {
+            if (!open) finish(false);
+          }}
+          onConfirm={async (keepId, mergeIds) => {
+            await mutation.mutateAsync({ keepId, mergeIds });
+            finish(true);
+          }}
+          isPending={mutation.isPending}
+        />
+      ) : null,
   };
 }
 

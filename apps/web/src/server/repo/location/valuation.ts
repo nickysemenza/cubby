@@ -25,11 +25,14 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
-import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import {
+  isTransaction,
+  notDeleted,
+  unwrapDb,
+} from "~/server/repo/database-helpers";
 import {
   type InventoryValuations,
   loadInventoryValuations,
-  loadLiveInventoryValuations,
 } from "~/server/repo/inventory/valuation";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 import { rollupLocationValuations } from "~/server/services/location-valuation-rollup";
@@ -163,46 +166,64 @@ export const loadLocationValuationInputs = async (
   locations: ValuationLocationRow[];
 }> => {
   const client = unwrapDb(db);
-  const valuations = entryValuations ?? (await loadLiveInventoryValuations(db));
-  const entryRows = await client
-    .select({
-      id: inventoryEntry.id,
-      locationId: inventoryEntry.locationId,
-      placement: inventoryEntry.placement,
-      productName: product.name,
-    })
-    .from(inventoryEntry)
-    .innerJoin(product, eq(inventoryEntry.productId, product.id))
-    .where(notDeleted(inventoryEntry));
-  const entries = entryRows.map((row) => ({
-    ...row,
-    valuation: valuations.get(row.id) ?? null,
-  }));
-  // Every live location, product-linked or not: the tree must be whole for the
-  // rollup to walk it.
-  const rows = await client
-    .select({
-      id: location.id,
-      parentId: location.parentId,
-      productId: location.productId,
-    })
-    .from(location)
-    .where(notDeleted(location));
-  // A second small query rather than a correlated price subquery in the select:
-  // locations number in the low hundreds, and `effectiveProductPriceSql` is raw
-  // SQL that has to be handed the enclosing query's exact alias — a mismatch is
-  // a runtime `missing FROM-clause entry`, invisible to typecheck and to every
-  // tier below integration. The loader has no alias to get wrong. (It silently
-  // broke this compute; see repo/location/valuation.integration.test.ts.)
-  const prices = await loadEffectiveProductPricesById(
-    db,
-    uniq(rows.flatMap((row) => (row.productId ? [row.productId] : []))),
-  );
-  const locations = rows.map((row) => ({
-    id: row.id,
-    parentId: row.parentId,
-    productPrice: row.productId ? (prices.get(row.productId) ?? null) : null,
-  }));
+  // One inventory read feeds both the valuation and the rollup (it used to be
+  // read twice), and the inventory and location sides are independent.
+  const inventorySide = async () => {
+    const entryRows = await client
+      .select({
+        id: inventoryEntry.id,
+        productId: inventoryEntry.productId,
+        amountValue: inventoryEntry.amountValue,
+        amountUnit: inventoryEntry.amountUnit,
+        locationId: inventoryEntry.locationId,
+        placement: inventoryEntry.placement,
+        productName: product.name,
+      })
+      .from(inventoryEntry)
+      .innerJoin(product, eq(inventoryEntry.productId, product.id))
+      .where(notDeleted(inventoryEntry));
+    const valuations =
+      entryValuations ?? (await loadInventoryValuations(db, entryRows));
+    return entryRows.map(({ id, locationId, placement, productName }) => ({
+      id,
+      locationId,
+      placement,
+      productName,
+      valuation: valuations.get(id) ?? null,
+    }));
+  };
+  const locationSide = async () => {
+    // Every live location, product-linked or not: the tree must be whole for
+    // the rollup to walk it.
+    const rows = await client
+      .select({
+        id: location.id,
+        parentId: location.parentId,
+        productId: location.productId,
+      })
+      .from(location)
+      .where(notDeleted(location));
+    // A second small query rather than a correlated price subquery in the
+    // select: locations number in the low hundreds, and
+    // `effectiveProductPriceSql` is raw SQL that has to be handed the enclosing
+    // query's exact alias — a mismatch is a runtime `missing FROM-clause
+    // entry`, invisible to typecheck and to every tier below integration. The
+    // loader has no alias to get wrong. (It silently broke this compute; see
+    // repo/location/valuation.integration.test.ts.)
+    const prices = await loadEffectiveProductPricesById(
+      db,
+      uniq(rows.flatMap((row) => (row.productId ? [row.productId] : []))),
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      parentId: row.parentId,
+      productPrice: row.productId ? (prices.get(row.productId) ?? null) : null,
+    }));
+  };
+  // A transaction-bound client cannot run two queries at once.
+  const [entries, locations] = isTransaction(db)
+    ? [await inventorySide(), await locationSide()]
+    : await Promise.all([inventorySide(), locationSide()]);
   return { entries, locations };
 };
 

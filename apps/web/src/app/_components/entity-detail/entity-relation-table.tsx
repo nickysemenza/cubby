@@ -39,6 +39,7 @@ import {
   listEntities,
   type ListEntity,
 } from "~/entities/generated/entity-lists.gen";
+import { useHydrated } from "~/hooks/useHydrated";
 import {
   entityGraph,
   entityList,
@@ -438,20 +439,7 @@ function ConnectionEvidenceCell({ id }: { id: string }) {
   );
 }
 
-/**
- * A relation section's body: the target entity's own list, scoped to this
- * record through the declared descriptor, over the shared list workbench so
- * the rows carry the target's registered row actions. No checkbox column or
- * toolbar (`selectable: false`, `toolbarMode="none"`) — a scoped ledger row
- * still gets its own `…` menu.
- */
-export function EntityRelationTable({
-  plan,
-  recordId,
-  title,
-  emptyLabel,
-  operations = productionOperations,
-}: {
+type EntityRelationTableProps = {
   plan: RelationSectionPlan;
   recordId: string;
   title: string;
@@ -460,7 +448,81 @@ export function EntityRelationTable({
   emptyLabel?: string;
   /** Injectable transport seam for tests; production keeps the real one. */
   operations?: EntityRelationTableOperations;
-}) {
+};
+
+/** Rows a loading relation shows: its limit when small, else three. */
+const skeletonRowsFor = (plan: RelationSectionPlan) =>
+  plan.limit != null ? Math.min(plan.limit, 3) : 3;
+
+/**
+ * Relation rows are only fetched in the browser, so the server and the first
+ * client render show this static skeleton. Building the full list stack just
+ * to draw a skeleton cost every detail page one table setup per relation
+ * section of server CPU.
+ */
+function RelationStaticSkeleton({ rows }: { rows: number }) {
+  const columns = 4;
+  return (
+    <table
+      className="w-full border-collapse text-xs"
+      aria-busy
+      aria-label="Loading"
+    >
+      <thead>
+        <tr>
+          {Array.from({ length: columns }, (_, index) => (
+            <th key={index} className="h-8 border-b border-border px-2">
+              <span className="sr-only">Loading column</span>
+              <div aria-hidden className="h-2.5 w-16 rounded-sm bg-muted" />
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {Array.from({ length: rows }, (_, rowIndex) => (
+          <tr key={rowIndex} className="h-7 border-b border-border/60">
+            {Array.from({ length: columns }, (_, cellIndex) => (
+              <td key={cellIndex} className="px-2">
+                {cellIndex === 0 && rowIndex === 0 ? (
+                  <span className="sr-only">Loading</span>
+                ) : null}
+                <div
+                  aria-hidden
+                  className="h-3 rounded-sm bg-muted"
+                  style={{
+                    width: `${40 + ((cellIndex * 17 + rowIndex * 11) % 40)}%`,
+                  }}
+                />
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/**
+ * A relation section's body: the target entity's own list, scoped to this
+ * record through the declared descriptor, over the shared list workbench so
+ * the rows carry the target's registered row actions. No checkbox column or
+ * toolbar (`selectable: false`, `toolbarMode="none"`) — a scoped ledger row
+ * still gets its own `…` menu.
+ */
+export function EntityRelationTable(props: EntityRelationTableProps) {
+  const hydrated = useHydrated();
+  if (!hydrated)
+    return <RelationStaticSkeleton rows={skeletonRowsFor(props.plan)} />;
+  return <LiveEntityRelationTable {...props} />;
+}
+
+function LiveEntityRelationTable({
+  plan,
+  recordId,
+  title,
+  emptyLabel,
+  operations = productionOperations,
+}: EntityRelationTableProps) {
   const { target } = plan;
   const listQueryOptions: ListQueryOptionsFn<RelationFilters, RelationRow> =
     useCallback(
@@ -565,7 +627,7 @@ export function EntityRelationTable({
     return (
       <RelationLoadingSkeleton
         table={list.workbench.table}
-        rows={plan.limit != null ? Math.min(plan.limit, 3) : 3}
+        rows={skeletonRowsFor(plan)}
       />
     );
   }

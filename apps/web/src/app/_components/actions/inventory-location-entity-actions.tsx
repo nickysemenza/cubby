@@ -50,16 +50,18 @@ function useMoveInventoryEntityAction(): EntityActionHandles {
         />
       );
     },
-    dialog: (
-      <MoveInventoryDialog
-        open={staged.items.length > 0}
-        onOpenChange={(open) => {
-          if (!open) staged.finish(false);
-        }}
-        items={staged.items}
-        onSuccess={() => staged.finish(true)}
-      />
-    ),
+    // Mounted only while staged so a closed form never runs its hooks.
+    dialog:
+      staged.items.length > 0 ? (
+        <MoveInventoryDialog
+          open={staged.items.length > 0}
+          onOpenChange={(open) => {
+            if (!open) staged.finish(false);
+          }}
+          items={staged.items}
+          onSuccess={() => staged.finish(true)}
+        />
+      ) : null,
   };
 }
 
@@ -142,16 +144,18 @@ function useMoveLocationUnderAction(): EntityActionHandles {
         />
       );
     },
-    dialog: (
-      <BulkReparentLocationsDialog
-        open={staged.items.length > 0}
-        onOpenChange={(open) => {
-          if (!open) staged.finish(false);
-        }}
-        locations={staged.items}
-        onSuccess={() => staged.finish(true)}
-      />
-    ),
+    // Mounted only while staged so a closed form never runs its hooks.
+    dialog:
+      staged.items.length > 0 ? (
+        <BulkReparentLocationsDialog
+          open={staged.items.length > 0}
+          onOpenChange={(open) => {
+            if (!open) staged.finish(false);
+          }}
+          locations={staged.items}
+          onSuccess={() => staged.finish(true)}
+        />
+      ) : null,
   };
 }
 

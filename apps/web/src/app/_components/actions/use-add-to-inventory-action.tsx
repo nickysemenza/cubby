@@ -45,6 +45,49 @@ export function useAddToInventoryAction(): EntityActionHandles {
     setStaged(rows.map(asBulkAddProduct));
   }, []);
 
+  const run = useCallback(
+    async (rows: readonly EntityActionRow[]) => {
+      stage(rows);
+      // The write happens in the dialog, so the bar's job is done once the
+      // rows are staged — and the selection survives, because a cancelled
+      // dialog should leave the operator where they were.
+      return { success: true };
+    },
+    [stage],
+  );
+
+  return {
+    run,
+    rowMenuItem: (row) => (
+      <VerbMenuItem
+        key="add-to-inventory"
+        verb="addToInventory"
+        onSelect={(event) => {
+          event.stopPropagation();
+          stage([row]);
+        }}
+      />
+    ),
+    // Mounted only while staged: every list, table and detail plate holds an
+    // action registry, and a closed dialog's form, queries and mutation
+    // otherwise run in each of them, on the server too.
+    dialog:
+      staged.length > 0 ? (
+        <StagedAddToInventoryDialog
+          staged={staged}
+          onClose={() => setStaged([])}
+        />
+      ) : null,
+  };
+}
+
+function StagedAddToInventoryDialog({
+  staged,
+  onClose,
+}: {
+  staged: BulkAddProduct[];
+  onClose: () => void;
+}) {
   // One staged product is the only case that can carry the kit warning, and
   // it is the case every surface but the selection bar produces. Fetching the
   // detail here rather than taking it as a prop is what moved the warning off
@@ -78,38 +121,14 @@ export function useAddToInventoryAction(): EntityActionHandles {
     };
   }, [detail, soleProduct]);
 
-  const run = useCallback(
-    async (rows: readonly EntityActionRow[]) => {
-      stage(rows);
-      // The write happens in the dialog, so the bar's job is done once the
-      // rows are staged — and the selection survives, because a cancelled
-      // dialog should leave the operator where they were.
-      return { success: true };
-    },
-    [stage],
+  return (
+    <ProductBulkAddToInventoryDialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      products={soleWithDetail ? [soleWithDetail] : staged}
+      accounting={accounting}
+    />
   );
-
-  return {
-    run,
-    rowMenuItem: (row) => (
-      <VerbMenuItem
-        key="add-to-inventory"
-        verb="addToInventory"
-        onSelect={(event) => {
-          event.stopPropagation();
-          stage([row]);
-        }}
-      />
-    ),
-    dialog: (
-      <ProductBulkAddToInventoryDialog
-        open={staged.length > 0}
-        onOpenChange={(open) => {
-          if (!open) setStaged([]);
-        }}
-        products={soleWithDetail ? [soleWithDetail] : staged}
-        accounting={accounting}
-      />
-    ),
-  };
 }

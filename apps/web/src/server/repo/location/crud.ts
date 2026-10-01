@@ -74,6 +74,7 @@ import {
   imageJoinBindings,
   imageOrder,
   type ListReadIntent,
+  isTransaction,
   mapImages,
   notDeleted,
   rangeConditions,
@@ -1341,6 +1342,14 @@ export const getLocationById = async (
   db: Database | DrizzleTransaction,
   id: LocationId,
 ): Promise<InfLocation> => {
+  // The whole-tree valuation depends on nothing below, so it starts now rather
+  // than after the record and ancestor reads. A transaction-bound client
+  // cannot run queries concurrently, so it keeps the sequential order.
+  const earlyValuations = isTransaction(db)
+    ? undefined
+    : computeLocationValuations(db);
+  // Awaited below; this only stops a not-found throw from leaving it unhandled.
+  earlyValuations?.catch(() => undefined);
   const res = await unwrapDb(db).query.location.findFirst({
     where: and(eq(location.id, id), notDeleted(location)),
     ...relations.location.full,
@@ -1428,7 +1437,7 @@ export const getLocationById = async (
       loadStockItemsByLocation(db, [id, ...childIds]),
       // A whole-tree compute: this location's own valuation is a rollup over
       // its entire subtree, which nothing scoped to `id`/`childIds` can produce.
-      computeLocationValuations(db),
+      earlyValuations ?? computeLocationValuations(db),
       // Root, every direct child and the whole ancestor chain — everywhere
       // `buildLocationWithChildren` recurses into below.
       loadDataQualities(db, "location", [id, ...childIds, ...parentChainIds]),
