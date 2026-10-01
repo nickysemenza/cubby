@@ -15,6 +15,7 @@ const webRoot = path.resolve(
 const lanes: { name: string; args: string[] }[] = [
   { name: "headless", args: ["--headless"] },
   { name: "headless:photo", args: ["--headless", "--photo"] },
+  { name: "headless:statement-csv", args: ["--headless", "--statement-csv"] },
   { name: "headless:wardrobe", args: ["--headless", "--photo", "--purchase"] },
   { name: "sim", args: ["--video"] },
   { name: "sim:layout", args: ["--layout", "--video"] },

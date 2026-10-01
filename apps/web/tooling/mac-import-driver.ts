@@ -66,6 +66,7 @@ export class MacImportDriver {
 
   private invoke<T>(args: string[], schema: z.ZodType<T>, attempt = 0): T {
     let output: string;
+    let subprocessFailure: unknown;
     try {
       output = execFileSync(this.helper, args, {
         encoding: "utf8",
@@ -76,6 +77,7 @@ export class MacImportDriver {
       const failure = z.object({ stdout: z.string().min(1) }).safeParse(error);
       if (!failure.success) throw error;
       output = failure.data.stdout;
+      subprocessFailure = error;
     }
     const envelope = z
       .object({
@@ -98,6 +100,7 @@ export class MacImportDriver {
       }
       throw new Error(`Native Mac helper ${args[0]} failed: ${diagnostic}`);
     }
+    if (subprocessFailure) throw subprocessFailure;
     return schema.parse(envelope.data);
   }
 

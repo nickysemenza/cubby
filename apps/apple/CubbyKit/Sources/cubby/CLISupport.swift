@@ -40,7 +40,10 @@ enum CLI {
     /// Runs `body`, translating `CubbyAPIError` and `AuthError` into the one-line stderr format
     /// the CLI promises ("HTTP <status> <code>: <message>") and exit code 1. Any other error
     /// (a bad `--json-body`, for instance) is left for ArgumentParser's default reporting.
-    static func run(_ body: () async throws -> Void) async throws {
+    static func run(
+        isolation: isolated (any Actor)? = #isolation,
+        _ body: () async throws -> Void
+    ) async throws {
         do {
             try await body()
         } catch let error as CubbyAPIError {

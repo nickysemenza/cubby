@@ -21,8 +21,24 @@ Run `pnpm test:e2e:sim -- --headless --statement-csv` for Swift CSV file preview
 and reviewed import through generated OpenAPI calls. The disposable Worker
 journey checks physical occurrences, exact retry, ambiguous date matches,
 canonical charge preservation, and no implicit Expense or stock creation. Its
+shared booking session also previews without writes, commits the saved review,
+and replays it without duplicating economics. Run this lane directly or with
+`pnpm test:e2e:local -- headless:statement-csv`. Its
 sanitized results and replay command are checksummed under
 `artifacts/headless-e2e/statement-csv/`.
+
+Keep import workflow state in `CubbyKit`: CSV preview and decisions, transaction
+booking/correction review, Run/photo review commands, and the macOS browser bridge
+are shared with the CLI. Matching, categorization, receipt expectations, and
+economic writes remain backend operations. SwiftUI owns presentation, pickers,
+confirmation dialogs, and navigation.
+
+Use headless CLI journeys for import behavior and retry coverage. Keep Mac smoke
+tests for file selection, navigation, sign-in controls, and review/save actions;
+use the longer composed Mac journey when a change crosses those UI boundaries.
+The browser CLI shares the real executor and bridge, but browser Apple Events
+still need a permissioned graphical macOS session. CLI/server workflows do not
+need an unlocked screen.
 
 ## Recommended loop
 

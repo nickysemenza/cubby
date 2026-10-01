@@ -6,16 +6,9 @@ struct StatementCsvImportView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var choosingFile = false
-    @State private var fileName = ""
-    @State private var fileText = ""
-    @State private var preview: StatementCsvPreviewOut?
-    @State private var reviewRows: [FinancialStatementImportPreviewRow] = []
-    @State private var result: StatementCsvCommitOut?
+    @State private var session = StatementCsvReviewSession()
     @State private var error: String?
     @State private var busy = false
-    @State private var selected = Set<String>()
-    @State private var kinds: [String: FinancialTransactionKind] = [:]
-    @State private var attachments: [String: String] = [:]
     @State private var usesMapping = false
 
     @State private var source = "bank-csv"
@@ -34,10 +27,12 @@ struct StatementCsvImportView: View {
     @State private var pendingValue = "pending"
     @State private var sign = StatementCsvColumnMapping.SignPayload.chargesNegative
 
+    private var fileName: String { session.input?.fileName ?? "" }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xxl) {
-                if let result {
+                if let result = session.result {
                     completion(result)
                 } else {
                     VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
@@ -46,7 +41,7 @@ struct StatementCsvImportView: View {
                             .foregroundStyle(.secondary)
                     }
                     fileSummary
-                    if let preview {
+                    if let preview = session.preview {
                         if preview.needsMapping {
                             mappingSection(preview.headers)
                         } else {
@@ -211,7 +206,7 @@ struct StatementCsvImportView: View {
                 .padding(FieldGuideTokens.Space.sm)
             }
             LazyVStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
-                ForEach(reviewRows, id: \.key) { row in
+                ForEach(session.reviewRows, id: \.key) { row in
                     VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
                         transactionHeading {
                             Text(row.proposed.merchant ?? row.proposed.rawDescription ?? "Statement row")
@@ -235,24 +230,24 @@ struct StatementCsvImportView: View {
                             Toggle(
                                 "Attach source to existing transaction",
                                 isOn: Binding(
-                                    get: { selected.contains(row.key) },
+                                    get: { session.selected.contains(row.key) },
                                     set: { enabled in
                                         if enabled {
-                                            selected.insert(row.key)
+                                            session.selected.insert(row.key)
                                         } else {
-                                            selected.remove(row.key)
-                                            attachments.removeValue(forKey: row.key)
+                                            session.selected.remove(row.key)
+                                            session.attachments.removeValue(forKey: row.key)
                                         }
                                     }
                                 )
                             )
                             .accessibilityIdentifier("statement.csv.attach.\(row.key)")
-                            if selected.contains(row.key) {
+                            if session.selected.contains(row.key) {
                                 Picker(
                                     "Existing transaction",
                                     selection: Binding(
-                                        get: { attachments[row.key] ?? "" },
-                                        set: { attachments[row.key] = $0 }
+                                        get: { session.attachments[row.key] ?? "" },
+                                        set: { session.attachments[row.key] = $0 }
                                     )
                                 ) {
                                     Text("Choose transaction").tag("")
@@ -270,24 +265,24 @@ struct StatementCsvImportView: View {
                             Toggle(
                                 "Record transaction",
                                 isOn: Binding(
-                                    get: { selected.contains(row.key) },
+                                    get: { session.selected.contains(row.key) },
                                     set: { enabled in
                                         if enabled {
-                                            selected.insert(row.key)
-                                            kinds[row.key] = row.proposed.kind
+                                            session.selected.insert(row.key)
+                                            session.kinds[row.key] = row.proposed.kind
                                         } else {
-                                            selected.remove(row.key)
+                                            session.selected.remove(row.key)
                                         }
                                     }
                                 )
                             )
                             .accessibilityIdentifier("statement.csv.select.\(row.key)")
-                            if selected.contains(row.key) {
+                            if session.selected.contains(row.key) {
                                 Picker(
                                     "Kind",
                                     selection: Binding(
-                                        get: { kinds[row.key] ?? row.proposed.kind },
-                                        set: { kinds[row.key] = $0 }
+                                        get: { session.kinds[row.key] ?? row.proposed.kind },
+                                        set: { session.kinds[row.key] = $0 }
                                     )
                                 ) {
                                     ForEach(FinancialTransactionKind.allCases, id: \.self) { kind in
@@ -318,13 +313,15 @@ struct StatementCsvImportView: View {
                     .disabled(busy)
             }
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-                Text("\(selected.count) decisions selected · \(reviewRows.count) candidates reviewed")
-                    .font(.fieldGuideTitle)
-                Button("Confirm \(selected.count) decisions and save source rows") {
+                Text(
+                    "\(session.selected.count) decisions selected · \(session.reviewRows.count) candidates reviewed"
+                )
+                .font(.fieldGuideTitle)
+                Button("Confirm \(session.selected.count) decisions and save source rows") {
                     Task { await commit() }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(busy || hasUnresolvedAttachment)
+                .disabled(busy || session.hasUnresolvedAttachment)
                 .accessibilityIdentifier("statement.csv.confirm")
                 Text("All source rows are saved, including rows you leave unselected.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -340,15 +337,8 @@ struct StatementCsvImportView: View {
         return layout { content() }
     }
 
-    private var hasUnresolvedAttachment: Bool {
-        reviewRows.contains { row in
-            row.status == .possibleExisting && selected.contains(row.key)
-                && (attachments[row.key] ?? "").isEmpty
-        }
-    }
-
     private func fileInput() -> StatementCsvFileInput {
-        var input = StatementCsvFileInput(fileName: fileName, text: fileText)
+        var input = session.input ?? StatementCsvFileInput(fileName: "", text: "")
         if usesMapping {
             input.mapping = .init(
                 source: source, account: account, accountColumn: accountColumn,
@@ -364,26 +354,16 @@ struct StatementCsvImportView: View {
         busy = true
         defer { busy = false }
         error = nil
-        result = nil
-        preview = nil
-        reviewRows = []
+        session.replaceInput(nil)
         usesMapping = false
-        selected = []
-        kinds = [:]
-        attachments = [:]
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
         do {
             let data = try Data(contentsOf: url)
-            guard data.count <= 5_000_000, let text = String(data: data, encoding: .utf8) else {
-                throw StatementFileError.invalidFile
-            }
-            fileName = url.lastPathComponent
-            fileText = text
-            let value = try await appModel.client.previewStatementCsv(
-                .init(fileName: fileName, text: fileText))
-            preview = value
-            reviewRows = value.preview?.rows ?? []
+            let input = try StatementCsvReviewSession.fileInput(
+                fileName: url.lastPathComponent, contents: data)
+            session.replaceInput(input)
+            let value = try await session.prepare(using: appModel.client)
             if value.needsMapping {
                 usesMapping = true
                 dateColumn = value.headers.first(where: { $0.localizedCaseInsensitiveContains("date") }) ?? ""
@@ -408,9 +388,7 @@ struct StatementCsvImportView: View {
         defer { busy = false }
         error = nil
         do {
-            let value = try await appModel.client.previewStatementCsv(fileInput())
-            preview = value
-            reviewRows = value.preview?.rows ?? []
+            _ = try await session.prepare(fileInput(), using: appModel.client)
         } catch {
             Diagnostics.report(error, context: "Map statement CSV")
             self.error = error.localizedDescription
@@ -418,16 +396,11 @@ struct StatementCsvImportView: View {
     }
 
     private func loadMore() async {
-        guard let preview, preview.hasMore else { return }
         busy = true
         defer { busy = false }
         error = nil
         do {
-            var input = fileInput()
-            input.previewOffset = preview.previewOffset + (preview.preview?.rows.count ?? 0)
-            let next = try await appModel.client.previewStatementCsv(input)
-            reviewRows.append(contentsOf: next.preview?.rows ?? [])
-            self.preview = next
+            try await session.loadMore(using: appModel.client)
         } catch {
             Diagnostics.report(error, context: "Review more statement rows")
             self.error = error.localizedDescription
@@ -439,32 +412,12 @@ struct StatementCsvImportView: View {
         defer { busy = false }
         error = nil
         do {
-            let file = fileInput()
-            let choices: StatementCsvCommitInput.SelectedPayload = selected.sorted().compactMap { key in
-                if let transactionId = attachments[key], !transactionId.isEmpty {
-                    return .init(key: key, transactionId: transactionId)
-                }
-                guard let kind = kinds[key] else { return nil }
-                return .init(key: key, kind: kind)
-            }
-            var input = StatementCsvCommitInput(fileName: file.fileName, text: file.text, selected: choices)
-            input.mapping = file.mapping
-            result = try await appModel.client.commitStatementCsv(input)
-            selected = []
-            attachments = [:]
-            let value = try await appModel.client.previewStatementCsv(file)
-            preview = value
-            reviewRows = value.preview?.rows ?? []
+            try await session.commit(using: appModel.client)
         } catch {
             Diagnostics.report(error, context: "Save statement CSV")
             self.error = error.localizedDescription
         }
     }
-}
-
-private enum StatementFileError: LocalizedError {
-    case invalidFile
-    var errorDescription: String? { "Choose a UTF-8 CSV smaller than 5 MB." }
 }
 
 #Preview(traits: .modifier(SignedInPreview())) {
