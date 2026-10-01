@@ -161,7 +161,7 @@ console.error = (...args: unknown[]) => {
     for (const arg of args) {
       if (arg instanceof Error) {
         holder.error = arg;
-      } else if (typeof arg === "object" && arg !== null) {
+      } else if (arg instanceof Object) {
         for (const value of Object.values(arg)) {
           if (value instanceof Error) holder.error = value;
         }
