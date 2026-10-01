@@ -40,6 +40,12 @@ The browser CLI shares the real executor and bridge, but browser Apple Events
 still need a permissioned graphical macOS session. CLI/server workflows do not
 need an unlocked screen.
 
+`pnpm test:e2e:sim -- --headless --photo` uploads through Swift, saves the shared
+Run review, and approves those exact proposals through the CLI. It checks the
+resulting Products and item/label attachments without launching a browser or app.
+Web batch approval, image rendering, processing failures, and restart navigation
+remain covered by `apps/web/tests/e2e/photo-group-review.spec.ts`.
+
 ## Recommended loop
 
 1. Edit a `CubbyKit` algorithm or model and run its focused Swift test. For a

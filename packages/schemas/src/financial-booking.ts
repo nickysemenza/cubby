@@ -21,10 +21,10 @@ export const financialBookingInput = z.object({
 });
 export const financialBookingPreview = financialBookingInput.extend({
   spendingCategoryId: spendingCategoryShortcode,
-  categoryOverride: spendingCategoryShortcode.nullable(),
+  categoryOverride: spendingCategoryShortcode.nullable().default(null),
   action: z.enum(["create_aggregate", "link_existing"]),
   accountName: z.string(),
-  funderName: z.string().nullable(),
+  funderName: z.string().nullable().default(null),
   existingBookedAmount: wholeCentAmount,
   previouslySettledAmount: wholeCentAmount,
   remainingBookedAmount: wholeCentAmount,
@@ -59,15 +59,15 @@ export const financialBookingCorrectionPreview =
     snapshot: z.string(),
     amount: wholeCentAmount,
     targetName: z.string(),
-    categoryName: z.string().nullable(),
-    projectName: z.string().nullable(),
-    trade: tradeSchema.nullable(),
+    categoryName: z.string().nullable().default(null),
+    projectName: z.string().nullable().default(null),
+    trade: tradeSchema.nullable().default(null),
     lines: z.array(
       z.object({
         expenseId: expenseShortcode,
         title: z.string(),
         amount: wholeCentAmount,
-        notes: z.string().nullable(),
+        notes: z.string().nullable().default(null),
       }),
     ),
   });

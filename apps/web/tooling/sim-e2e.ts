@@ -12,7 +12,7 @@ import {
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
-import { chromium, expect, request } from "@playwright/test";
+import { request } from "@playwright/test";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { z } from "zod";
@@ -852,105 +852,39 @@ async function runHeadlessPhotoScenario(
       await proposalPool.end();
     }
     const proposedAt = performance.now();
-    const browser = await chromium.launch();
-    try {
-      const state = await context.storageState();
-      state.cookies = state.cookies.filter(
-        (cookie) => !cookie.name.endsWith("session_data"),
-      );
-      const browserContext = await browser.newContext({
-        storageState: state,
-        viewport: { width: 1280, height: 900 },
-        recordVideo: { dir: artifacts, size: { width: 1280, height: 900 } },
-      });
-      const page = await browserContext.newPage();
-      try {
-        await page.goto(`${url.origin}/runs/${runID}`);
-        await expect(
-          page.getByRole("heading", { name: "Photo review" }),
-        ).toBeVisible();
-        for (const [name, expectedPhotos] of [
-          ["Synthetic Gray Crew Shirt", 2],
-          ["Synthetic Brown Boots", 1],
-        ] as const) {
-          await page
-            .getByRole("navigation", { name: "Photo item groups" })
-            .getByRole("button", { name: new RegExp(name) })
-            .click();
-          const card = page.locator('[data-slot="card"]').filter({
-            has: page.getByRole("heading", { name }),
-          });
-          await expect
-            .poll(() =>
-              card
-                .locator("img")
-                .evaluateAll(
-                  (images) =>
-                    images.filter(
-                      (image) =>
-                        image instanceof HTMLImageElement &&
-                        image.complete &&
-                        image.naturalWidth > 0,
-                    ).length,
-                ),
-            )
-            .toBe(expectedPhotos);
-          await page
-            .getByRole("checkbox", {
-              name: `Select ${name} for batch approval`,
-            })
-            .check();
-        }
-        const approveAll = page.getByRole("button", {
-          name: "Approve 2 selected items",
-        });
-        await expect(approveAll).toBeDisabled();
-        await exercisePhotoProcessingJobs(imageIDs);
-        await expect(approveAll).toBeEnabled({ timeout: 15_000 });
-        await approveAll.click();
-        await expect(
-          page.getByText("Completed", { exact: true }).first(),
-        ).toBeVisible();
-        // A restart copies exactly the inputs the run shows, and each run
-        // links to the other.
-        const restartInputs = async () => {
-          await page.getByText("Restart inputs", { exact: true }).click();
-          return z
-            .looseObject({ targets: z.array(z.unknown()) })
-            .parse(
-              JSON.parse(
-                await page.getByLabel("Restart inputs JSON").innerText(),
-              ),
-            );
-        };
-        const originalInputs = await restartInputs();
-        expect(originalInputs.targets).toHaveLength(imageIDs.length);
-        await page
-          .getByRole("button", { name: "Start new run with same inputs" })
-          .click();
-        await expect(page).not.toHaveURL(new RegExp(`/${runID}$`));
-        const successorID = page.url().split("/").at(-1) ?? "";
-        await expect(
-          page.getByRole("link", { name: runID, exact: true }),
-        ).toBeVisible();
-        expect(await restartInputs()).toEqual(originalInputs);
-        await page.goto(`${url.origin}/runs/${runID}`);
-        await expect(
-          page.getByRole("link", { name: successorID, exact: true }),
-        ).toBeVisible();
-        await expect(
-          page.getByRole("button", {
-            name: "Start another run with same inputs",
-          }),
-        ).toBeVisible();
-      } finally {
-        await browserContext.close();
-        const videoPath = await page.video()?.path();
-        if (videoPath) console.log(`[${lane}] Web review video: ${videoPath}`);
-      }
-    } finally {
-      await browser.close();
-    }
+    await exercisePhotoProcessingJobs(imageIDs);
+    const reviewPath = path.join(artifacts, "native-photo-reviewed.json");
+    await run(
+      nativeBuildBinary,
+      [
+        "run-review",
+        "--base-url",
+        url.origin,
+        runID,
+        "--save-review",
+        reviewPath,
+      ],
+      repoRoot,
+      path.join(artifacts, "native-photo-review-output.json"),
+    );
+    // Commit exactly the proposals saved by the shared native review session.
+    await run(
+      nativeBuildBinary,
+      [
+        "run-review",
+        "--base-url",
+        url.origin,
+        runID,
+        "--review-file",
+        reviewPath,
+        "--approve-group",
+        "synthetic-shirt",
+        "--approve-group",
+        "synthetic-boots",
+      ],
+      repoRoot,
+      path.join(artifacts, "native-photo-approved.json"),
+    );
     const reviewedAt = performance.now();
     const pool = new Pool({ connectionString: databaseURL });
     try {
@@ -1000,7 +934,7 @@ async function runHeadlessPhotoScenario(
       await pool.end();
     }
     console.log(
-      `[${lane}] Photo stages: native upload ${(nativeReady - scenarioStarted).toFixed(0)}ms; MCP proposal ${(proposedAt - nativeReady).toFixed(0)}ms; processing and browser review ${(reviewedAt - proposedAt).toFixed(0)}ms; final checks ${(performance.now() - reviewedAt).toFixed(0)}ms`,
+      `[${lane}] Photo stages: native upload ${(nativeReady - scenarioStarted).toFixed(0)}ms; MCP proposal ${(proposedAt - nativeReady).toFixed(0)}ms; processing and CLI review ${(reviewedAt - proposedAt).toFixed(0)}ms; final checks ${(performance.now() - reviewedAt).toFixed(0)}ms`,
     );
     console.log(`[${lane}] Proposal submission and reviewer approval verified`);
   } finally {
