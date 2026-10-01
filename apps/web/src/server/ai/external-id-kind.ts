@@ -17,6 +17,7 @@ import {
   externalIdKind,
   type ExternalIdKind,
 } from "@cubby/schemas/external-id";
+import { BARCODE_RE } from "@cubby/shared/upc";
 
 import { classifyWithJev } from "~/server/ai/classify";
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/features";
@@ -43,12 +44,14 @@ function regexFastPath(
   const source = input.source.trim().toLowerCase();
   const identifier = input.identifier.trim();
   if (source === "amazon" && /^B0[A-Z0-9]{8}$/.test(identifier)) return "asin";
-  if (/^\d{8,14}$/.test(identifier)) {
-    return source === "home-depot" &&
-      identifier.length === HOME_DEPOT_INTERNET_NUMBER_LENGTH
-      ? "internet_number"
-      : "gtin_14";
+  if (
+    source === "home-depot" &&
+    /^\d+$/.test(identifier) &&
+    identifier.length === HOME_DEPOT_INTERNET_NUMBER_LENGTH
+  ) {
+    return "internet_number";
   }
+  if (BARCODE_RE.test(identifier)) return "gtin_14";
   return null;
 }
 

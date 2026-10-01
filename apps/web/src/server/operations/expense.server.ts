@@ -54,6 +54,7 @@ import {
   confirmInventoryExpenseBeneficiary,
   loadEffectiveInventoryOwnershipById,
 } from "~/server/repo/inventory";
+import { listAll } from "~/server/repo/list-all";
 import {
   getPurchaseExpenses,
   getPurchaseLinkIdentityByID,
@@ -80,8 +81,6 @@ export {
   expenseFacetCountsOut,
 };
 
-const FETCH_ALL = { pageIndex: 0, pageSize: 100_000 } as const;
-
 type ExpenseFilters = z.output<typeof expenseFiltersSchema>;
 
 export const expenseChartDataWorkflow = async (
@@ -89,11 +88,13 @@ export const expenseChartDataWorkflow = async (
   input: ExpenseFilters,
 ) =>
   (
-    await expenseList(
-      db,
-      input,
-      [{ orderBy: "date", direction: "asc" }],
-      FETCH_ALL,
+    await listAll((pagination) =>
+      expenseList(
+        db,
+        input,
+        [{ orderBy: "date", direction: "asc" }],
+        pagination,
+      ),
     )
   ).data;
 

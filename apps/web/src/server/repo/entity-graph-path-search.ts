@@ -4,6 +4,7 @@ import type {
   EntityGraphPath,
   EntityGraphPathsOutput,
 } from "@cubby/schemas/entity-graph";
+import { chunk } from "es-toolkit";
 
 export type GraphPathSearchLimits = {
   maxDepth: number;
@@ -49,14 +50,6 @@ type Side = {
 };
 
 export type GraphPathSearchResult = Omit<EntityGraphPathsOutput, "nodes">;
-
-const chunks = <T>(items: readonly T[], size: number): T[][] => {
-  const result: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    result.push(items.slice(index, index + size));
-  }
-  return result;
-};
 
 const trailKey = (trail: Trail): string =>
   `${trail.nodeRefs.map((ref) => entityRefKey(ref.entityKind, ref.entityId)).join(">")}|${trail.edgeIds.join(">")}`;
@@ -227,7 +220,7 @@ export async function searchEntityGraphPaths(
     }
 
     const next = new Map<string, EntityRef>();
-    for (const roots of chunks(side.frontier, limits.maxRootsPerRead)) {
+    for (const roots of chunk(side.frontier, limits.maxRootsPerRead)) {
       let offset = 0;
       let hasMore = true;
       while (hasMore) {

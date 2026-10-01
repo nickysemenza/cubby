@@ -18,7 +18,7 @@ import {
   entityTimelineInputSchema,
   getEntityTimelineOutputSchema,
 } from "~/entities/generated/entity-timelines.gen";
-import { executeEntity } from "~/server/entity-kernel";
+import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import {
   entityBrowserMutationCommandSchema,
   entityBrowserMutationResultSchema,
@@ -52,15 +52,11 @@ export const entityDetailHandlers = implementOperationDomain(
       input: entityDetailInputSchema,
       output: (input) => getEntityDetailOutputSchema(input.entity).nullable(),
       run: async (context, input) => {
-        const result = await executeEntity(context, {
-          action: "get",
+        const result = await executeEntityAs(context, "get", {
           entity: input.entity,
           id: input.shortcode,
           missing: "null",
         });
-        if (result.action !== "get") {
-          throw new Error("Entity kernel returned the wrong action");
-        }
         return result.item === null
           ? null
           : getEntityDetailOutputSchema(input.entity).parse(result.item);

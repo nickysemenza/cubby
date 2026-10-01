@@ -10,6 +10,7 @@ import {
 } from "@cubby/schemas/mutation-side-effects";
 import {
   buildPaginatedResponse,
+  DEFAULT_PAGE_SIZE,
   listGroupSummarySchema,
   type PaginationParams,
 } from "@cubby/schemas/pagination";
@@ -59,7 +60,10 @@ type EntityListInput<TFilters = unknown> = {
   groupBy?: string;
 };
 
-const DEFAULT_PAGINATION: PaginationParams = { pageIndex: 0, pageSize: 10 };
+const DEFAULT_PAGINATION: PaginationParams = {
+  pageIndex: 0,
+  pageSize: DEFAULT_PAGE_SIZE,
+};
 
 const entityListSearchSchema = z
   .object({ searchQuery: z.string().trim().min(1).max(100).optional() })

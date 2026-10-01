@@ -1,4 +1,14 @@
 /** Cloudflare-native custom spans; non-Worker callers run without tracing. */
+import {
+  type CfTracing,
+  enterManualSpan,
+  enterSpan,
+  enterSynchronousManualSpan,
+  NOOP_TRACE_SPAN,
+  type SpanAttr,
+  type TraceSpan,
+  wrapCfSpan,
+} from "@cubby/worker-tracing";
 import { z } from "zod";
 
 declare const __CF_WORKERS__: boolean | undefined;
@@ -9,23 +19,9 @@ const isCloudflareWorkerBuild = (
 ): flag is true => flag === true;
 const IS_CF = isCloudflareWorkerBuild();
 
-/** Minimal shape of the `cloudflare:workers` `tracing` API we depend on. */
-interface CfSpan {
-  setAttribute(key: string, value: string | number | boolean | undefined): void;
-  readonly isTraced: boolean;
-  end(): void;
-}
-interface CfTracing {
-  enterSpan<T>(name: string, cb: (span: CfSpan) => T): T;
-  startActiveSpan<T>(name: string, cb: (span: CfSpan) => T): T;
-  getActiveSpan?(): CfSpan | undefined;
-}
-
 const cfRuntimeModuleSchema = z.object({
   tracing: z.custom<CfTracing>(),
 });
-
-const traceExceptionSchema = z.union([z.instanceof(Error), z.string()]);
 
 // Lazily import the runtime built-in only in the CF bundle. The specifier is
 // indirected + `@vite-ignore`d so `vite dev` (Node, which can't resolve
@@ -70,62 +66,13 @@ export const TraceNames = {
   job: (kind: string) => `job.${kind}`,
 } as const;
 
-type Attr = string | number | boolean | undefined;
-
 /**
- * Minimal span surface our call sites use. Cloudflare spans mark thrown errors
- * automatically through {@link withTrace}; callers only need
- * `setError` for non-throwing failures (for example, a rejected Start result).
+ * Minimal span surface our call sites use. Thrown errors are marked by
+ * {@link withTrace}; callers only need `setError` for non-throwing failures
+ * (for example, a rejected Start result). The implementation lives in
+ * `@cubby/worker-tracing`, shared with the downstream Workers.
  */
-export interface AppSpan {
-  /**
-   * False when this request was not sampled, so nothing set on the span will be
-   * exported. Gate *expensive* attribute work on it (string slicing, object
-   * building) — a plain literal attribute is cheaper to set than to guard.
-   * Always true while every Worker runs `head_sampling_rate: 1`; the point is
-   * that lowering the rate is then a wrangler edit, not a code change.
-   */
-  readonly isRecording: boolean;
-  setAttribute(key: string, value: Attr): void;
-  setAttributes(attrs: Record<string, Attr>): void;
-  /** Mark the span as errored (degrades to attributes in the CF backend). */
-  setError(message?: string): void;
-  /** Record an exception (degrades to an attribute in the CF backend). */
-  recordException<TError>(error: TError): void;
-}
-
-const NOOP_SPAN: AppSpan = {
-  isRecording: false,
-  setAttribute() {},
-  setAttributes() {},
-  setError() {},
-  recordException() {},
-};
-
-const wrapCf = (span: CfSpan): AppSpan => ({
-  isRecording: span.isTraced,
-  setAttribute: (k, v) => {
-    if (v !== undefined) span.setAttribute(k, v);
-  },
-  setAttributes: (attrs) => {
-    for (const [k, v] of Object.entries(attrs))
-      if (v !== undefined) span.setAttribute(k, v);
-  },
-  setError: () => {
-    span.setAttribute("error", true);
-  },
-  recordException: (error) => {
-    const parsed = traceExceptionSchema.safeParse(error);
-    span.setAttribute(
-      "error.type",
-      parsed.success
-        ? parsed.data instanceof Error
-          ? parsed.data.name || "Error"
-          : "string"
-        : "NonErrorThrow",
-    );
-  },
-});
+export type AppSpan = TraceSpan;
 
 /**
  * Run `fn` inside a Cloudflare span, mark thrown errors, and end it when work
@@ -134,50 +81,24 @@ const wrapCf = (span: CfSpan): AppSpan => ({
 export const withTrace = async <T>(
   name: string,
   fn: (span: AppSpan) => Promise<T>,
-  attributes?: Record<string, Attr>,
+  attributes?: Record<string, SpanAttr>,
 ): Promise<T> => {
   if (IS_CF) {
-    const tracing = await getCfTracing();
-    return tracing.enterSpan(name, async (cfSpan) => {
-      const span = wrapCf(cfSpan);
-      if (attributes) span.setAttributes(attributes);
-      try {
-        return await fn(span);
-      } catch (error) {
-        span.recordException(error);
-        span.setError();
-        throw error;
-      }
-      // CF auto-ends the span when the returned promise settles.
-    });
+    return enterSpan(await getCfTracing(), name, fn, { attributes });
   }
-
-  return fn(NOOP_SPAN);
+  return fn(NOOP_TRACE_SPAN);
 };
 
 /** Run work under a span whose lifetime is explicitly ended by the caller. */
 export const withManualTrace = async <T>(
   name: string,
   fn: (span: AppSpan, end: () => void) => Promise<T>,
-  attributes?: Record<string, Attr>,
+  attributes?: Record<string, SpanAttr>,
 ): Promise<T> => {
   if (IS_CF) {
-    const tracing = await getCfTracing();
-    return tracing.startActiveSpan(name, async (cfSpan) => {
-      const span = wrapCf(cfSpan);
-      if (attributes) span.setAttributes(attributes);
-      try {
-        return await fn(span, () => cfSpan.end());
-      } catch (error) {
-        span.recordException(error);
-        span.setError();
-        cfSpan.end();
-        throw error;
-      }
-    });
+    return enterManualSpan(await getCfTracing(), name, fn, { attributes });
   }
-
-  return fn(NOOP_SPAN, () => {});
+  return fn(NOOP_TRACE_SPAN, () => {});
 };
 
 /** Synchronous work uses the native runtime warmed by its enclosing span. */
@@ -186,18 +107,8 @@ export const withSynchronousManualTrace = <T>(
   fn: (span: AppSpan, end: () => void) => T,
 ): T => {
   const tracing = IS_CF ? cfTracing : undefined;
-  if (!tracing) return fn(NOOP_SPAN, () => {});
-  return tracing.startActiveSpan(name, (cfSpan) => {
-    const span = wrapCf(cfSpan);
-    try {
-      return fn(span, () => cfSpan.end());
-    } catch (error) {
-      span.recordException(error);
-      span.setError();
-      cfSpan.end();
-      throw error;
-    }
-  });
+  if (!tracing) return fn(NOOP_TRACE_SPAN, () => {});
+  return enterSynchronousManualSpan(tracing, name, fn);
 };
 
 /**
@@ -279,12 +190,12 @@ export const getRequestId = (
 
 /** Annotate a native active span when the caller has no span reference. */
 export const annotateActiveSpanError = (
-  attributes: Record<string, Attr>,
+  attributes: Record<string, SpanAttr>,
   failure?: { message: string; exception?: unknown },
 ): void => {
   const active = IS_CF ? cfTracing?.getActiveSpan?.() : undefined;
   if (!active) return;
-  const span = wrapCf(active);
+  const span = wrapCfSpan(active);
   span.setAttributes(attributes);
   if (failure) {
     span.setError();

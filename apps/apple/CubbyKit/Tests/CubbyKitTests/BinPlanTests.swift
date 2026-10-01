@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import CubbyKit
@@ -68,6 +69,73 @@ struct BinPlanTests {
         {
         } else {
             Issue.record("expected unknownLabel")
+        }
+    }
+
+    /// Shared with `sweep-bin-plan.unit.test.ts` (`packages/shared/golden-vectors/bin-plan.json`):
+    /// the verdict, reason and copy must agree with the web module this file ports.
+    @Test func matchesTheSharedGoldenVectors() throws {
+        struct Node: Decodable {
+            let code: String
+            let name: String
+            let parent: String?
+        }
+        struct Case: Decodable {
+            let anchor: String
+            let scanned: String
+            let verdict: String
+            let reason: String?
+            let message: String?
+            let adoptName: String?
+            let currentParentName: String?
+        }
+        struct File: Decodable {
+            let nodes: [Node]
+            let cases: [Case]
+        }
+        let file = try GoldenVectors.decode(File.self, named: "bin-plan")
+
+        func json(_ node: Node) -> [String: Any] {
+            [
+                "id": node.code, "name": node.name, "aliases": [String](), "tags": [String](),
+                "type": node.parent == nil ? "house" : "box", "product": NSNull(),
+                "lastBulkInventory": NSNull(), "aiDescription": NSNull(), "images": [String](),
+                "valuation": NSNull(), "createdAt": "2026-01-01T00:00:00.000Z",
+                "updatedAt": "2026-01-01T00:00:00.000Z", "childCount": 0, "directItemCount": 0,
+                "totalItemCount": 0,
+                "dataQuality": [
+                    "status": "complete", "score": 100, "facets": [String](), "gaps": [String](),
+                    "exceptions": [String](), "relatedGaps": [String](), "relatedExceptions": [String](),
+                ] as [String: Any],
+                "children": file.nodes.filter { $0.parent == node.code }.map(json),
+            ]
+        }
+        let roots = file.nodes.filter { $0.parent == nil }.map(json)
+        let data = try JSONSerialization.data(withJSONObject: roots)
+        let tree = LocationTree(roots: try JSONDecoder.cubby().decode([LocationTreeNode].self, from: data))
+
+        for c in file.cases {
+            let verdict = BinPlan.plan(
+                scanned: LocationCode(c.scanned), anchor: LocationCode(c.anchor), in: tree)
+            switch (c.verdict, verdict) {
+            case ("confirm", .confirm):
+                break
+            case ("adopt", .adopt(let bin)):
+                #expect(bin.name == c.adoptName, "\(c.anchor) <- \(c.scanned)")
+                #expect(bin.currentParentName == c.currentParentName, "\(c.anchor) <- \(c.scanned)")
+            case ("refuse", .refuse(let reason, let message)):
+                let label: String
+                switch reason {
+                case .self: label = "self"
+                case .root: label = "root"
+                case .ancestor: label = "ancestor"
+                case .unknownLabel: label = "unknownLabel"
+                }
+                #expect(label == c.reason, "\(c.anchor) <- \(c.scanned)")
+                #expect(message == c.message?.replacingOccurrences(of: "{verb}", with: "counting"))
+            default:
+                Issue.record("\(c.anchor) <- \(c.scanned): expected \(c.verdict), got \(verdict)")
+            }
         }
     }
 }

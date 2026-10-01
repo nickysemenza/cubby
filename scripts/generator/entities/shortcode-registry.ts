@@ -43,41 +43,53 @@ const valueOf = (object: ObjectExpression, name: string) => {
  * shortcode schemas are built from this registry, so it must exist before the
  * first declaration can load (a fresh checkout has no generated files).
  */
-export const renderShortcodeRegistryArtifact =
-  async (): Promise<EntityArtifacts> => {
-    const files = (await readdir(SPEC_DIRECTORY))
-      .filter((name) => name.endsWith(".entity.ts"))
-      .sort((left, right) => left.localeCompare(right));
-    const prefixes: Record<string, string> = {};
-    for (const name of files) {
-      const path = resolve(SPEC_DIRECTORY, name);
-      const program = parseSync(path, await readFile(path, "utf8")).program;
-      const exported = program.body.find(
-        (statement) => statement.type === "ExportDefaultDeclaration",
+export const renderShortcodeRegistryArtifacts = async (): Promise<
+  readonly EntityArtifacts[]
+> => {
+  const files = (await readdir(SPEC_DIRECTORY))
+    .filter((name) => name.endsWith(".entity.ts"))
+    .sort((left, right) => left.localeCompare(right));
+  const prefixes: Record<string, string> = {};
+  for (const name of files) {
+    const path = resolve(SPEC_DIRECTORY, name);
+    const program = parseSync(path, await readFile(path, "utf8")).program;
+    const exported = program.body.find(
+      (statement) => statement.type === "ExportDefaultDeclaration",
+    );
+    const call =
+      exported?.type === "ExportDefaultDeclaration"
+        ? exported.declaration
+        : undefined;
+    const declaration =
+      call?.type === "CallExpression" ? call.arguments[0] : undefined;
+    if (declaration?.type !== "ObjectExpression")
+      throw new EntityDeclarationError(
+        `${name} must export default defineEntity({...}).`,
       );
-      const call =
-        exported?.type === "ExportDefaultDeclaration"
-          ? exported.declaration
-          : undefined;
-      const declaration =
-        call?.type === "CallExpression" ? call.arguments[0] : undefined;
-      if (declaration?.type !== "ObjectExpression")
-        throw new EntityDeclarationError(
-          `${name} must export default defineEntity({...}).`,
-        );
-      const key = literal(valueOf(declaration, "key"), `${name} key`);
-      const identifiers = valueOf(declaration, "identifiers");
-      if (identifiers?.type !== "ObjectExpression" || key === null)
-        throw new EntityDeclarationError(
-          `${name} must declare key and identifiers literally.`,
-        );
-      const shortcode = literal(
-        valueOf(identifiers, "shortcode"),
-        `${name} identifiers.shortcode`,
+    const key = literal(valueOf(declaration, "key"), `${name} key`);
+    const identifiers = valueOf(declaration, "identifiers");
+    if (identifiers?.type !== "ObjectExpression" || key === null)
+      throw new EntityDeclarationError(
+        `${name} must declare key and identifiers literally.`,
       );
-      if (shortcode !== null) prefixes[key] = shortcode;
-    }
-    return {
+    const shortcode = literal(
+      valueOf(identifiers, "shortcode"),
+      `${name} identifiers.shortcode`,
+    );
+    if (shortcode !== null) prefixes[key] = shortcode;
+  }
+  // The stable per-entity import surface (`productShortcode` /
+  // `ProductShortcode`, >150 sites): each is the schema-map entry, never a
+  // second `makeShortcodeSchema` call.
+  const named = Object.keys(prefixes)
+    .map(
+      (type) =>
+        `export const ${type}Shortcode = SHORTCODE_SCHEMA.${type};\n` +
+        `export type ${type[0]?.toUpperCase()}${type.slice(1)}Shortcode = ShortcodeFor<"${type}">;\n`,
+    )
+    .join("");
+  return [
+    {
       relativePath: "packages/shared/src/generated/shortcode-registry.gen.ts",
       source:
         generatedHeader +
@@ -87,5 +99,13 @@ export const renderShortcodeRegistryArtifact =
           comment: "// Generated shortcode registry stays one entity per line.",
         }) +
         "export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;\n",
-    };
-  };
+    },
+    {
+      relativePath: "packages/shared/src/generated/shortcode-named.gen.ts",
+      source:
+        generatedHeader +
+        'import { SHORTCODE_SCHEMA, type ShortcodeFor } from "../shortcode-schema";\n\n' +
+        named,
+    },
+  ];
+};

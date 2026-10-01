@@ -17,6 +17,7 @@ import type { Database } from "~/server/db";
 import {
   type EntityKernelContext,
   executeEntity,
+  executeEntityAs,
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
@@ -120,16 +121,13 @@ export async function resolveWithProductCandidatesWorkflow(
 }
 
 export async function mergeWorkflow(
-  context: Parameters<typeof executeEntity>[0],
+  context: Parameters<typeof executeEntityAs>[0],
   input: z.input<typeof ingredientMergeInput>,
 ) {
-  const result = await executeEntity(context, {
-    action: "merge",
+  const result = await executeEntityAs(context, "merge", {
     entity: "ingredient",
     data: input,
   });
-  if (result.action !== "merge")
-    throw new Error("Entity kernel returned the wrong action");
   return {
     ingredient: ingredientOut.parse(result.item),
     mergeSummary: ingredientMergeOut.shape.mergeSummary.parse(

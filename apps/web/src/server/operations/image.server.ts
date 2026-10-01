@@ -17,7 +17,7 @@ import { imageContract } from "~/contracts/image.contract";
 import type { Database } from "~/server/db";
 import {
   type EntityKernelContext,
-  executeEntity,
+  executeEntityAs,
 } from "~/server/entity-kernel";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
@@ -166,17 +166,13 @@ async function listImages(
   context: EntityKernelContext,
   input: z.output<typeof imageBrowserListInput>,
 ) {
-  const result = await executeEntity(context, {
-    action: "list",
+  const result = await executeEntityAs(context, "list", {
     entity: "image",
     filters: input.filters,
     sort: input.sort,
     pagination: input.pagination,
     groupBy: input.groupBy,
   });
-  if (result.action !== "list") {
-    throw new Error("Image list returned the wrong entity action");
-  }
   return { items: result.items, meta: result.meta };
 }
 
@@ -185,15 +181,11 @@ async function getImage(
   id: string,
   missing: "error" | "null",
 ) {
-  const result = await executeEntity(context, {
-    action: "get",
+  const result = await executeEntityAs(context, "get", {
     entity: "image",
     id,
     missing,
   });
-  if (result.action !== "get") {
-    throw new Error("Image detail returned the wrong entity action");
-  }
   return result.item;
 }
 
@@ -236,15 +228,11 @@ export const imageHandlers = implementOperationDomain(imageContract, {
     recordImageAnalysis(context, input.id, input.analysis),
   update: async (context, input) => {
     // Update the stored row, then reload the enriched projection consumers render.
-    const result = await executeEntity(context, {
-      action: "update",
+    await executeEntityAs(context, "update", {
       entity: "image",
       id: input.id,
       data: input.data,
     });
-    if (result.action !== "update") {
-      throw new Error("Image update returned the wrong entity action");
-    }
     const refreshed = await getImage(context, input.id, "error");
     if (refreshed === null)
       throw new Error("Updated image could not be reloaded");
@@ -259,14 +247,10 @@ export const imageHandlers = implementOperationDomain(imageContract, {
     return attachExistingImageWorkflow(context.db, context.actorContext, input);
   },
   delete: async (context, input) => {
-    const result = await executeEntity(context, {
-      action: "delete",
+    const result = await executeEntityAs(context, "delete", {
       entity: "image",
       ids: input.ids,
     });
-    if (result.action !== "delete") {
-      throw new Error("Image delete returned the wrong entity action");
-    }
     return {
       deleted: result.deletedReferences.length,
       sideEffects: result.sideEffects,

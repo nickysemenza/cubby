@@ -2,7 +2,6 @@ import {
   type ExternalIdInput,
   GTIN_KIND,
   GTIN_SOURCE,
-  normalizeGtin,
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
@@ -199,11 +198,13 @@ export function externalIdSlotUnchanged(
  * worse failure — nothing downstream can tell it happened.
  */
 function requireCanonicalGtin(value: string): string {
-  const normalized = normalizeGtin(value.trim());
-  if (normalized === null) {
+  // The recipebridge normalizer is canonical (8/12/13/14 digits, or a valid
+  // ISBN); `normalizeGtin` is its wasm-free twin and cannot resolve ISBN-10.
+  const normalized = wasm.scan_code_gtin14(value);
+  if (normalized == null) {
     throw createAppError(
       "PRODUCT_GTIN_INVALID",
-      `“${value}” is not a barcode — expected 8-14 digits.`,
+      `“${value}” is not a barcode — expected 8, 12, 13 or 14 digits, or a valid ISBN.`,
     );
   }
   return normalized;

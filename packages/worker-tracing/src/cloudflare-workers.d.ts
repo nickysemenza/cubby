@@ -5,6 +5,8 @@
 declare module "cloudflare:workers" {
   interface CfSpan {
     setAttribute(key: string, value?: boolean | number | string): void;
+    readonly isTraced: boolean;
+    end(): void;
   }
   export const tracing: {
     enterSpan<T, A extends unknown[]>(
@@ -12,5 +14,11 @@ declare module "cloudflare:workers" {
       callback: (span: CfSpan, ...args: A) => T,
       ...args: A
     ): T;
+    startActiveSpan<T, A extends unknown[]>(
+      name: string,
+      callback: (span: CfSpan, ...args: A) => T,
+      ...args: A
+    ): T;
+    getActiveSpan?(): CfSpan | undefined;
   };
 }

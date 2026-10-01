@@ -209,7 +209,7 @@ export const EXTERNAL_ID_KIND_RULES = `You are a product external-identifier cla
 
 Rules:
 1. An Amazon identifier starting "B0" followed by 8 alphanumeric characters is "asin".
-2. 8-14 digits is normally a barcode ("gtin_14") — UNLESS the source is "home-depot" and it is exactly 9 digits, which is Home Depot's own "internet_number", not a barcode.
+2. 8, 12, 13 or 14 digits is normally a barcode ("gtin_14") — UNLESS the source is "home-depot" and it is exactly 9 digits, which is Home Depot's own "internet_number", not a barcode.
 3. An identifier that reads as the product's own manufacturer model/part number (matches or closely resembles the given manufacturer) is "item_number".
 4. A source that is a professional parts distributor (McMaster-Carr, Grainger, DigiKey, and similar) is "catalog_number".
 5. A source that is a consumer retailer (Lowe's, Target, Walmart, Costco, and similar) is "retailer_sku".

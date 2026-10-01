@@ -4,10 +4,9 @@ import { and, eq, gte, isNotNull, isNull, lte, ne } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { orderMail, orderMailEvent } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { cents } from "~/server/repo/money";
 
 import { uniqueOrderSubsetForCharge } from "../writer-policy";
-
-const cents = (value: number) => Math.round(value * 100);
 
 interface HuntWindow {
   ledgerPartyId: LedgerPartyId;

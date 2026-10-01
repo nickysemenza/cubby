@@ -5,7 +5,10 @@ import type {
   LedgerPartyId,
   LedgerPartyShortcode,
 } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  ENTITY_NOT_FOUND_REASON,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type {
   LedgerPartyCreateInput,
   LedgerPartyFilters,
@@ -36,7 +39,7 @@ import {
   photoGroupProposal,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   amountJsonSql,
   amountToColumns,
@@ -54,7 +57,7 @@ import {
 } from "~/server/repo/list-projection";
 import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge/core";
 import { policyDelete } from "~/server/repo/removal";
-import { createEntityReader } from "~/server/repo/repository";
+import { createEntityCrud } from "~/server/repo/repository";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -304,14 +307,64 @@ const getById = async (
   return row;
 };
 
-const reader = createEntityReader<
-  LedgerPartyRow,
-  LedgerPartyOut,
-  "ledgerParty"
->({
+/**
+ * Locks the row, then refuses the kind transitions the stored state forbids.
+ * Runs before the crud reads its before-state so the check and the write see
+ * the same row.
+ */
+const assertKindTransition = async (
+  tx: Database | DrizzleTransaction,
+  id: LedgerPartyId,
+  data: LedgerPartyUpdateData,
+) => {
+  const [before] = await unwrapDb(tx)
+    .select()
+    .from(ledgerParty)
+    .where(and(eq(ledgerParty.id, id), notDeleted(ledgerParty)))
+    .for("update")
+    .limit(1);
+  if (!before)
+    throw createAppError(
+      ENTITY_NOT_FOUND_REASON.ledgerParty,
+      `Ledger party not found: ${id}`,
+    );
+  if (
+    data.kind !== undefined &&
+    (before.kind === "household" || data.kind === "household") &&
+    data.kind !== before.kind
+  ) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "The singleton household ledger party cannot change kind.",
+    );
+  }
+  if (before.kind !== "guest" && data.kind === "guest") {
+    const [mappedAccount] = await unwrapDb(tx)
+      .select({ id: financialAccount.id })
+      .from(financialAccount)
+      .where(
+        and(
+          eq(financialAccount.ledgerPartyId, id),
+          notDeleted(financialAccount),
+        ),
+      )
+      .limit(1);
+    if (mappedAccount)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "A ledger party mapped by a live financial account cannot become a guest.",
+      );
+  }
+};
+
+const reader = createEntityCrud({
   entity: "ledgerParty",
+  table: ledgerParty,
   fetchById: getById,
   fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
+  prepare: assertKindTransition,
+  toUpdate: (data: LedgerPartyUpdateData) => buildPartialUpdateValues(data),
+  auditUpdateFields: [...entityFieldModels.ledgerParty.audit],
 });
 
 export const getLedgerPartyByShortcode = reader.getByShortcode;
@@ -382,62 +435,7 @@ export async function updateLedgerParty(
   actor: ActorContext,
 ) {
   const id = await resolveOrThrow(db, "ledgerParty", shortcode);
-  await withTransaction(db, async (tx) => {
-    const [before] = await tx
-      .select()
-      .from(ledgerParty)
-      .where(and(eq(ledgerParty.id, id), notDeleted(ledgerParty)))
-      .for("update")
-      .limit(1);
-    if (!before)
-      throw createAppError(
-        "LEDGER_PARTY_NOT_FOUND",
-        `Ledger party not found: ${shortcode}`,
-      );
-    if (
-      data.kind !== undefined &&
-      (before.kind === "household" || data.kind === "household") &&
-      data.kind !== before.kind
-    ) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "The singleton household ledger party cannot change kind.",
-      );
-    }
-    if (before.kind !== "guest" && data.kind === "guest") {
-      const [mappedAccount] = await tx
-        .select({ id: financialAccount.id })
-        .from(financialAccount)
-        .where(
-          and(
-            eq(financialAccount.ledgerPartyId, id),
-            notDeleted(financialAccount),
-          ),
-        )
-        .limit(1);
-      if (mappedAccount)
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "A ledger party mapped by a live financial account cannot become a guest.",
-        );
-    }
-    const values = buildPartialUpdateValues(data);
-    await tx
-      .update(ledgerParty)
-      .set(values)
-      .where(and(eq(ledgerParty.id, id), notDeleted(ledgerParty)));
-    const changes = computeChanges(before, { ...before, ...values }, [
-      ...entityFieldModels.ledgerParty.audit,
-    ]);
-    if (changes)
-      await logAuditEntry(tx, actor, {
-        entityKind: "ledgerParty",
-        entityId: id,
-        action: "update",
-        changes,
-      });
-  });
-  return { output: await reader.getByID(db, id), entityId: id };
+  return { output: await reader.update(db, id, data, actor), entityId: id };
 }
 
 const refuseHouseholdParty = async (

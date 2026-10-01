@@ -5,11 +5,14 @@ import {
   searchResponseSchema,
   type UPCLookupResponse,
 } from "@cubby/upc-contract";
+import { createLogger } from "@cubby/worker-tracing";
 import { chunk } from "es-toolkit";
 
 import { env } from "~/env";
 import { getBindingFetcher } from "~/server/cf-env";
 import { TraceNames, withTrace } from "~/server/tracing";
+
+const log = createLogger("UPC Lookup");
 
 const DEFAULT_TIMEOUT_MS = 5000;
 
@@ -81,8 +84,8 @@ export class UPCLookupClient {
           // A 404 just means the UPC isn't in the lookup DB — an expected miss,
           // not a failure. Only warn on genuinely unexpected statuses.
           if (res.status !== 404) {
-            console.warn(
-              `[UPC Lookup] Failed for ${upc}: ${res.status} ${res.statusText}${await this.errorBody(res)}`,
+            log.warn(
+              `Failed for ${upc}: ${res.status} ${res.statusText}${await this.errorBody(res)}`,
             );
           }
           return null;
@@ -92,18 +95,16 @@ export class UPCLookupClient {
         const parsed = productLookupResponseSchema.safeParse(data);
 
         if (!parsed.success) {
-          console.warn("[UPC Lookup] Response parse error:", parsed.error);
+          log.warn("Response parse error", { error: parsed.error });
           return null;
         }
 
         return parsed.data;
       } catch (error) {
         if (error instanceof Error && error.name === "TimeoutError") {
-          console.warn(
-            `[UPC Lookup] Timeout for ${upc} after ${this.timeoutMs}ms`,
-          );
+          log.warn(`Timeout for ${upc} after ${this.timeoutMs}ms`);
         } else {
-          console.warn(`[UPC Lookup] Error for ${upc}:`, error);
+          log.warn(`Error for ${upc}`, { error });
         }
         return null;
       }
@@ -139,8 +140,8 @@ export class UPCLookupClient {
           );
 
           if (!res.ok) {
-            console.warn(
-              `[UPC Lookup] Batch failed: ${res.status} ${res.statusText}${await this.errorBody(res)}`,
+            log.warn(
+              `Batch failed: ${res.status} ${res.statusText}${await this.errorBody(res)}`,
             );
             failure ??= new Error(`UPC batch lookup failed (${res.status})`);
             failedUpcs.push(...batch);
@@ -149,10 +150,7 @@ export class UPCLookupClient {
 
           const parsed = bulkLookupResponseSchema.safeParse(await res.json());
           if (!parsed.success) {
-            console.warn(
-              "[UPC Lookup] Batch response parse error:",
-              parsed.error,
-            );
+            log.warn("Batch response parse error", { error: parsed.error });
             failure ??= new Error(
               "UPC batch lookup returned an invalid response",
             );
@@ -166,11 +164,9 @@ export class UPCLookupClient {
           }
         } catch (error) {
           if (error instanceof Error && error.name === "TimeoutError") {
-            console.warn(
-              `[UPC Lookup] Batch timeout after ${this.timeoutMs}ms`,
-            );
+            log.warn(`Batch timeout after ${this.timeoutMs}ms`);
           } else {
-            console.warn("[UPC Lookup] Batch error:", error);
+            log.warn("Batch error", { error });
           }
           failure ??=
             error instanceof Error
@@ -212,16 +208,13 @@ export class UPCLookupClient {
         // here silently produced the wrong shape (claimed `cached` present).
         const parsed = searchResponseSchema.safeParse(await res.json());
         if (!parsed.success) {
-          console.warn(
-            "[UPC Lookup] Search response parse error:",
-            parsed.error,
-          );
+          log.warn("Search response parse error", { error: parsed.error });
           return { products: [], total: 0 };
         }
         return parsed.data;
       } catch (error) {
         if (error instanceof Error && error.name === "TimeoutError") {
-          console.warn(`[UPC Lookup] Search timeout after ${this.timeoutMs}ms`);
+          log.warn(`Search timeout after ${this.timeoutMs}ms`);
         }
         return { products: [], total: 0 };
       }

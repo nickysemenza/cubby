@@ -15,7 +15,7 @@ import type {
   TimelineEntity,
 } from "~/entities/generated/entity-timelines.gen";
 import { householdDateTime, householdLocalDate } from "~/lib/household-date";
-import { executeEntity } from "~/server/entity-kernel";
+import { executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
@@ -107,8 +107,7 @@ async function loadRecords(
     for (let at = 0; at < pageIds.length; at += ID_GET_CONCURRENCY) {
       const results = await Promise.all(
         pageIds.slice(at, at + ID_GET_CONCURRENCY).map((id) =>
-          executeEntity(context, {
-            action: "get",
+          executeEntityAs(context, "get", {
             entity,
             id,
             missing: "null",
@@ -116,23 +115,18 @@ async function loadRecords(
         ),
       );
       for (const result of results) {
-        if (result.action !== "get")
-          throw new Error("Entity kernel returned the wrong action");
         if (result.item !== null)
           records.push(timelineRowSchema.parse(result.item));
       }
     }
     return { records, totalCount: window.ids.length };
   }
-  const result = await executeEntity(context, {
-    action: "list",
+  const result = await executeEntityAs(context, "list", {
     entity,
     filters,
     sort: [{ orderBy: "createdAt", direction: window.order }],
     pagination,
   });
-  if (result.action !== "list")
-    throw new Error("Entity kernel returned the wrong action");
   return {
     records: result.items.map((item) => timelineRowSchema.parse(item)),
     totalCount: result.meta.totalCount,

@@ -10,7 +10,7 @@ import {
 } from "@cubby/schemas/purchase";
 
 import { purchaseContract } from "~/contracts/purchase.contract";
-import { executeEntity } from "~/server/entity-kernel";
+import { executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { listPurchaseOrderMail } from "~/server/purchase-import/gmail/review";
@@ -117,13 +117,12 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
       advisory: true,
       candidates: await Promise.all(
         candidates.map(async ({ transactionId, ...rank }) => {
-          const result = await executeEntity(context, {
-            action: "get",
+          const result = await executeEntityAs(context, "get", {
             entity: "financialTransaction",
             id: parseShortcodeFor("financialTransaction", transactionId),
             missing: "error",
           });
-          if (result.action !== "get" || !result.item)
+          if (!result.item)
             throw new Error(
               "Entity kernel returned the wrong financial transaction detail",
             );
@@ -142,13 +141,12 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
   splitWithDelta: async (context, input) => {
     // Read before the split runs — the original row is soft-deleted by the
     // time `purchase.split` returns, so its cost has to be captured first.
-    const original = await executeEntity(context, {
-      action: "get",
+    const original = await executeEntityAs(context, "get", {
       entity: "expense",
       id: input.expenseId,
       missing: "error",
     });
-    if (original.action !== "get" || !original.item)
+    if (!original.item)
       throw new Error("Entity kernel returned the wrong expense detail");
     const items = await splitExpenseWorkflow(context, input);
     const { originalCost, partsSum, delta } = splitExpenseDelta(

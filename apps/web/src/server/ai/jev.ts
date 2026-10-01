@@ -3,6 +3,7 @@
  * Jev over Workers AI. The chat-tier counterpart is `run-feature.ts`.
  */
 import type { Confidence } from "@cubby/schemas/ai";
+import { retryWithBackoff } from "@cubby/shared/retry";
 import { z } from "zod";
 
 import type { AiDecisionFeature } from "~/server/ai/features";
@@ -52,21 +53,6 @@ function retryDelay(
     Number.isFinite(retryAfterMs) ? retryAfterMs : 0,
   );
   return elapsedMs + delayMs < JEV_DEADLINE_MS ? delayMs : null;
-}
-
-function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
-  signal.throwIfAborted();
-  return new Promise((resolve, reject) => {
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(signal.reason);
-    };
-    const timer = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, delayMs);
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
 }
 
 const jevChoiceInputSchema = z.object({
@@ -170,41 +156,49 @@ async function requestJev(
   let attempt = 0;
   let gatewayLogId: string | null = null;
   try {
-    while (attempt < JEV_MAX_ATTEMPTS) {
-      attempt += 1;
-      controller.signal.throwIfAborted();
-      const response = await fetch(
-        `${gatewayBaseURL("workers-ai")}/run/${feature.model}`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(input),
-          signal: controller.signal,
-        },
+    const { response, body } = await retryWithBackoff(
+      async () => {
+        attempt += 1;
+        controller.signal.throwIfAborted();
+        const attemptResponse = await fetch(
+          `${gatewayBaseURL("workers-ai")}/run/${feature.model}`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(input),
+            signal: controller.signal,
+          },
+        );
+        gatewayLogId = attemptResponse.headers.get("cf-aig-log-id");
+        return {
+          response: attemptResponse,
+          body: attemptResponse.ok
+            ? ""
+            : await attemptResponse.text().catch(() => ""),
+        };
+      },
+      {
+        signal: controller.signal,
+        delayFor: (outcome) =>
+          outcome.ok && !outcome.value.response.ok
+            ? retryDelay(
+                outcome.value.response,
+                attempt,
+                performance.now() - startedAt,
+              )
+            : null,
+      },
+    );
+    if (!response.ok) {
+      throw Object.assign(
+        new Error(
+          `Jev request failed (${response.status}): ${body.slice(0, 200)}`,
+        ),
+        { status: response.status },
       );
-      gatewayLogId = response.headers.get("cf-aig-log-id");
-      if (!response.ok) {
-        const body = await response.text().catch(() => "");
-        const delayMs = retryDelay(
-          response,
-          attempt,
-          performance.now() - startedAt,
-        );
-        if (delayMs !== null) {
-          await waitForRetry(delayMs, controller.signal);
-          continue;
-        }
-        throw Object.assign(
-          new Error(
-            `Jev request failed (${response.status}): ${body.slice(0, 200)}`,
-          ),
-          { status: response.status },
-        );
-      }
-      parsed = parseJevResponse(await response.json().catch(() => undefined));
-      return parsed;
     }
-    throw new Error("Jev exhausted its request attempts.");
+    parsed = parseJevResponse(await response.json().catch(() => undefined));
+    return parsed;
   } catch (error) {
     throw wrapAiGatewayError(error, {
       model: feature.model,

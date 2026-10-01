@@ -123,6 +123,12 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   it names. `EntityManifestTests` decodes the bundled manifest so a mismatch fails CI.
 - `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` — from `uniffi-bindgen`. Regenerate with
   `node scripts/ensure-apple-ffi.ts` (or `apps/apple/scripts/build-rust.sh` directly).
+- Rules that exist on both platforms but are not shared code are pinned by JSON vectors in
+  `packages/shared/golden-vectors/` (`gtin.json`, `image-url.json`, `bin-plan.json`). The Swift
+  tests (`ScanCodeTests`, `ImageTransformTests`, `BinPlanTests`) and the web/Rust tests read the
+  same files; change a rule by editing the vector first, then both implementations. The GTIN
+  rule itself is single-sourced in `recipebridge::scan_code_gtin14` (ISBN-10/13 or 8/12/13/14
+  digits; general GTIN check digits are not enforced).
 - The `CubbyAPI` target — swift-openapi-generator's typed client and schema types, generated at
   build time by its SwiftPM plugin from `Sources/CubbyAPI/openapi.json` (a copy of
   `apps/web/src/lib/generated/http-openapi.gen.json`) and `openapi-generator-config.yaml`, both

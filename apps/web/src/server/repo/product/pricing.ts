@@ -12,6 +12,7 @@ import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { getDb, notDeleted, unwrapDb } from "~/server/repo/database-helpers";
+import { round2 } from "~/server/repo/money";
 import {
   costWeighted,
   kitAncestorCteSql,
@@ -66,8 +67,8 @@ const derivedPriceExact = (aggregate: PricingAggregate): number | null =>
     ? aggregate.knownCost / aggregate.knownUnitCount
     : null;
 
-const round2 = (value: number | null): number | null =>
-  value === null ? null : Math.round(value * 100) / 100;
+const roundOrNull = (value: number | null): number | null =>
+  value === null ? null : round2(value);
 
 /**
  * Resolve the public pricing contract from the manual override and the live
@@ -78,7 +79,7 @@ export const resolveProductPricing = (
   explicitPrice: number | null,
   aggregate: PricingAggregate = EMPTY_AGGREGATE,
 ): ProductPricing => {
-  const derivedPrice = round2(derivedPriceExact(aggregate));
+  const derivedPrice = roundOrNull(derivedPriceExact(aggregate));
   const effectivePrice = explicitPrice ?? derivedPrice;
   return {
     derivedPrice,

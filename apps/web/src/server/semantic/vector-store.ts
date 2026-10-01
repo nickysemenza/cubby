@@ -8,6 +8,7 @@ import type {
   SearchableEntityRef,
 } from "@cubby/schemas/search";
 import { searchableEntitySchema } from "@cubby/schemas/search";
+import { chunk } from "es-toolkit";
 import { z } from "zod";
 
 import { getVectorIndex } from "~/server/cf-env";
@@ -88,13 +89,6 @@ const parseVectorId = (id: string): SearchableEntityRef | undefined => {
 
 /** Vectorize caps a single Worker `upsert`/`deleteByIds` at 1000 vectors. */
 const MUTATION_BATCH = 1000;
-
-const chunk = <T>(items: ReadonlyArray<T>, size: number): T[][] => {
-  const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size)
-    out.push(items.slice(i, i + size));
-  return out;
-};
 
 const queryOptions = (opts: VectorQueryOptions): VectorizeQueryOptions => {
   const options: VectorizeQueryOptions = {

@@ -36,6 +36,7 @@ import {
   type EntityMutationCommand,
   type EntityQueryCommand,
   type EntityResultFor,
+  type EntityResultForAction,
   entityCommandSchema,
   entityBrowserMutationResultSchema,
   type EntityResolveCommand,
@@ -274,4 +275,44 @@ export async function executeEntity(
       return executeRelationMutation(ctx, command);
     }
   }
+}
+
+type CommandOf<Action extends EntityCommand["action"]> = Extract<
+  EntityCommand,
+  { action: Action }
+>;
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
+  ? Omit<T, K>
+  : never;
+
+/**
+ * {@link executeEntity} for a caller that issues one known action and needs
+ * that action's result: the kernel's answer is checked against `action` once
+ * here, so a workflow does not repeat a "returned the wrong action" guard just
+ * to narrow the union.
+ */
+export async function executeEntityAs<
+  const Action extends EntityCommand["action"],
+  const Command extends DistributiveOmit<CommandOf<Action>, "action">,
+>(
+  ctx: EntityKernelContext,
+  action: Action,
+  command: Command,
+): Promise<EntityResultForAction<Action, Command["entity"]>> {
+  // SAFETY: `Command` is the action-less shape of an `Action` command, so
+  // restoring `action` rebuilds a member of the command union.
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- the generic spread cannot be proven to be a union member; executeEntity re-parses it.
+  const result = await executeEntity(ctx, {
+    ...command,
+    action,
+  } as unknown as EntityCommand);
+  if (result.action !== action) {
+    throw new Error(
+      `Entity kernel answered a ${action} command with a ${result.action} result`,
+    );
+  }
+  // SAFETY: the guard proves the result's action is `Action`; the kernel
+  // returns the command's own entity.
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- the guard above narrows by value, not by the generic Action.
+  return result as unknown as EntityResultForAction<Action, Command["entity"]>;
 }

@@ -1,3 +1,4 @@
+import { retryWithBackoff, sleep as defaultSleep } from "@cubby/shared/retry";
 import { z } from "zod";
 
 import {
@@ -79,7 +80,7 @@ export const createGmailApiClient = ({
   accessToken,
   baseUrl = DEFAULT_BASE_URL,
   fetcher = fetch,
-  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  sleep = defaultSleep,
 }: GmailApiClientOptions): GmailProvider => {
   if (!accessToken.trim()) throw new Error("Gmail access token is required");
 
@@ -87,25 +88,31 @@ export const createGmailApiClient = ({
     path: string,
     params?: URLSearchParams,
   ): Promise<T> => {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const response = await fetcher(pathFor(baseUrl, path, params), {
-        headers: {
-          accept: "application/json",
-          authorization: `Bearer ${accessToken}`,
-        },
-      });
-      if (response.ok) {
-        // SAFETY: Each caller supplies the Gmail endpoint's owned response type;
-        // normalization validates all fields before they cross into persistence.
-        return (await response.json()) as T;
-      }
-      if ((response.status === 429 || response.status >= 500) && attempt < 2) {
-        await sleep(retryDelay(response, attempt));
-        continue;
-      }
-      throw await parseError(response);
+    const response = await retryWithBackoff(
+      () =>
+        fetcher(pathFor(baseUrl, path, params), {
+          headers: {
+            accept: "application/json",
+            authorization: `Bearer ${accessToken}`,
+          },
+        }),
+      {
+        sleep,
+        // Three attempts; only throttling and server errors are transient.
+        delayFor: (outcome, attempt) =>
+          outcome.ok &&
+          (outcome.value.status === 429 || outcome.value.status >= 500) &&
+          attempt < 2
+            ? retryDelay(outcome.value, attempt)
+            : null,
+      },
+    );
+    if (response.ok) {
+      // SAFETY: Each caller supplies the Gmail endpoint's owned response type;
+      // normalization validates all fields before they cross into persistence.
+      return (await response.json()) as T;
     }
-    throw new Error("Gmail retry loop exhausted");
+    throw await parseError(response);
   };
 
   return {

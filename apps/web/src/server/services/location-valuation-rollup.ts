@@ -11,9 +11,10 @@ import type { LocationId } from "@cubby/schemas/identifiers";
 import type { LocationValuation } from "@cubby/schemas/location";
 import { isMiscProduct } from "@cubby/shared";
 
+import { round2 } from "~/server/repo/money";
+
 // Inventory valuations are cents-precision reals; summing them can leave float
-// dust, so round each persisted total to two decimals.
-const round2 = (n: number): number => Math.round(n * 100) / 100;
+// dust, so each persisted total is rounded to two decimals with `round2`.
 
 interface DirectAgg {
   valuation: number;

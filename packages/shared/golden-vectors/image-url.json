@@ -1,0 +1,31 @@
+{
+  "_doc": "Cloudflare image-transform vectors. Read by apps/web/src/lib/image-url.ts tests and apps/apple CubbyKit ImageTransform tests. `{bucket}` is the platform's R2 public origin. `rewrites[].width` is the rendered CSS width; `out: null` means the URL is returned unchanged.",
+  "rungs": [128, 640, 2048],
+  "widths": [
+    { "rendered": 16, "rung": 128 },
+    { "rendered": 64, "rung": 128 },
+    { "rendered": 65, "rung": 640 },
+    { "rendered": 320, "rung": 640 },
+    { "rendered": 321, "rung": 2048 },
+    { "rendered": 1600, "rung": 2048 },
+    { "rendered": 5000, "rung": 2048 }
+  ],
+  "rewrites": [
+    {
+      "in": "{bucket}/products/abc.jpg",
+      "width": 64,
+      "out": "{bucket}/cdn-cgi/image/width=128,quality=80,format=auto,fit=scale-down/products/abc.jpg"
+    },
+    {
+      "in": "{bucket}/products/abc.jpg?v=2",
+      "width": 100,
+      "out": "{bucket}/cdn-cgi/image/width=640,quality=80,format=auto,fit=scale-down/products/abc.jpg?v=2"
+    },
+    {
+      "in": "{bucket}/cdn-cgi/image/width=640,quality=80,format=auto,fit=scale-down/products/abc.jpg",
+      "width": 64,
+      "out": null
+    },
+    { "in": "https://example.com/products/abc.jpg", "width": 64, "out": null }
+  ]
+}
