@@ -32,7 +32,10 @@ appId: com.nickysemenza.cubby
 - extendedWaitUntil:
     visible: "In effect"
     timeout: 30000
+- assertVisible:
+    id: "field.explanation.effective-value"
 - assertVisible: "\\$40\\.00"
+- assertVisible: "Override on this product"
 - assertVisible: "Without the override"
 - scrollUntilVisible:
     element:
@@ -40,11 +43,6 @@ appId: com.nickysemenza.cubby
     direction: DOWN
     timeout: 30000
 - assertVisible: "\\$25\\.00"
-- scrollUntilVisible:
-    element: "Manual valuation price"
-    direction: DOWN
-    timeout: 30000
-- assertVisible: "Expense-derived unit price"
 - scrollUntilVisible:
     element:
       id: "field.explanation.close"

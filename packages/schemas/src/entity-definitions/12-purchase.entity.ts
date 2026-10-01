@@ -58,6 +58,7 @@ export default defineEntity({
             "cost",
             "productId",
             "spendingCategoryId",
+            "projectId",
             "lineKind",
             "costType",
             "trade",
