@@ -233,6 +233,7 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/api/workflow-stream/$operation.ts",
   ],
   "product-clarity.spec.ts": [
+    "apps/web/src/routes/_authenticated/product-categories.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/products.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/purchases.$shortcode.tsx",
   ],
