@@ -440,10 +440,10 @@ test("feature explanation ladders ancestry and calls a root binding set here", a
     name: `${name} child`,
     parentId: taxonomyShortcode("household"),
   });
-  const explanation = page.getByRole("button", {
-    name: "How feature is determined",
-    exact: true,
-  });
+  // The record's own field, not a Subcategories row's rail button.
+  const explanation = page.locator(
+    'button[aria-label="How feature is determined"]:not(table button)',
+  );
 
   await gotoAuthenticatedPage(
     page,
