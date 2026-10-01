@@ -189,6 +189,36 @@ const failOnUndefinedImport: NonNullable<
   handler(level, log);
 };
 
+/**
+ * zod's namespace re-exports every locale, and better-auth reads that
+ * namespace by computed key, so all ~50 locales (~270 KB) stayed in the Worker.
+ * The app only uses zod's default English messages.
+ */
+function cfZodLocalesStub(): Plugin {
+  return {
+    name: "cf-zod-locales-stub",
+    enforce: "pre",
+    applyToEnvironment(env) {
+      return env.name === "ssr";
+    },
+    resolveId(source, importer) {
+      if (
+        source === "../locales/index.js" &&
+        /\/zod\/v4\/(classic|core|mini)\//.test(
+          importer?.replaceAll("\\", "/") ?? "",
+        )
+      )
+        return (
+          path.join(path.dirname(importer), "../locales/en.js") + "?en-only"
+        );
+    },
+    load(id) {
+      if (id.endsWith("?en-only"))
+        return `export { default as en } from ${JSON.stringify(id.slice(0, -"?en-only".length))};`;
+    },
+  };
+}
+
 function cfSentryShim(): Plugin {
   const shim = path.resolve(__dirname, "src/lib/sentry-cf-shim.ts");
   return {
@@ -329,6 +359,7 @@ export default defineConfig(async ({ command }) => {
       cfPgNativeStub(),
       cfWasmPlugin(),
       cfSentryShim(),
+      cfZodLocalesStub(),
       wasm(),
       devtools({
         // Keep the runtime devtools available to the production lazy chunk;

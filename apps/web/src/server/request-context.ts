@@ -10,9 +10,9 @@ import { and, eq } from "drizzle-orm";
 import { env } from "~/env";
 import { auth as betterAuth } from "~/lib/auth";
 import { getBindingFetcher } from "~/server/cf-env";
-import { NotionClient } from "~/server/clients/notion";
+import type { NotionClient } from "~/server/clients/notion";
 import { createUpcLookupClient } from "~/server/clients/upc-lookup";
-import { USDAClient } from "~/server/clients/usda";
+import type { USDAClient } from "~/server/clients/usda";
 import { readDatabaseFreshness } from "~/server/database-freshness/client";
 import type { Database } from "~/server/db";
 import { boundedStaleDb, db } from "~/server/db";
@@ -77,12 +77,26 @@ export const buildCrudServices = (
   database: Database,
   opts?: { usdaFetcher?: typeof fetch },
 ) => {
-  const notionClient = env.NOTION_API_KEY
-    ? new NotionClient(env.NOTION_API_KEY)
+  // Built on first use: each client's SDK would otherwise load into every
+  // request, and most requests never call Notion or USDA.
+  const notionApiKey = env.NOTION_API_KEY;
+  const notionClient = notionApiKey
+    ? deferredService<NotionClient>(
+        async () =>
+          new (await import("~/server/clients/notion")).NotionClient(
+            notionApiKey,
+          ),
+        () => ({}),
+      )
     : null;
-  const usdaClient = new USDAClient(
-    env.USDA_API_URL,
-    opts?.usdaFetcher ?? getBindingFetcher("USDA_API"),
+  const usdaFetcher = opts?.usdaFetcher ?? getBindingFetcher("USDA_API");
+  const usdaClient = deferredService<USDAClient>(
+    async () =>
+      new (await import("~/server/clients/usda")).USDAClient(
+        env.USDA_API_URL,
+        usdaFetcher,
+      ),
+    () => ({}),
   );
   const upcLookupClient = createUpcLookupClient();
 

@@ -2,8 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { getPurchaseAgentQueue } from "~/server/cf-env";
-import { dispatchRunEvent } from "~/server/purchase-import/dispatch";
-import { startOrResumeRun } from "~/server/purchase-import/run-service";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { createRequestContext, requireActor } from "~/server/request-context";
 
@@ -42,6 +40,12 @@ export const Route = createFileRoute("/api/import/agent/sync")({
             { status: 503 },
           );
         }
+        // Loaded on request: run-service reaches the AI SDK stack, which would
+        // otherwise load into every Worker request.
+        const [{ dispatchRunEvent }, { startOrResumeRun }] = await Promise.all([
+          import("~/server/purchase-import/dispatch"),
+          import("~/server/purchase-import/run-service"),
+        ]);
         const run = await startOrResumeRun(context.db, {
           ledgerPartyId: party.id,
           vendorAccountId: accountId,
