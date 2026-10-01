@@ -72,63 +72,33 @@ never reused. Printed `P-` and `L-` labels still resolve.
 Everything hangs off **Product**. It covers groceries, clothes, tools,
 appliances, books and seed packets alike. ProductCategory says what kind of
 thing a Product is, and Inventory says where it is and how much. The other
-areas (food, garden, work, money) attach to that core. Arrows in the diagram
-say why each link exists; the tables below give cardinality.
+areas (food, garden, work, money) attach to that core. Arrows in the diagrams
+say why each link exists. Rounded boxes are entities from another section. The
+tables give cardinality.
 
 ```mermaid
-flowchart TB
-  subgraph Core["Things and places"]
-    ProductCategory -- "says what kind of thing" --> Product
-    Inventory -- "how much we have of" --> Product
-    Inventory -- "kept at" --> Location
-    Location -- "nested inside" --> Location
-    Wish -- "options we might buy" --> Product
-    Image -- "photos of (and of most other entities)" --> Product
-  end
-  subgraph Food
-    Recipe -- "calls for" --> Ingredient
-    Cookbook -- "where it came from" --> Recipe
-    Meal -- "what we cooked, scaled" --> Recipe
-  end
-  subgraph Garden
-    Plant -- "grown as" --> Planting
-    GardenEntry -- "notes or harvest from" --> Planting
-  end
-  subgraph Work
-    Project -- "broken into" --> Task
-  end
-  subgraph Money
-    Vendor -- "sold us" --> Purchase
-    VendorAccount -- "our login at" --> Vendor
-    Purchase -- "itemized into" --> Expense
-    SpendingCategory -- "what it was for" --> Expense
-    FinancialAccount -- "statement rows" --> FinancialTransaction
-    FinancialTransaction -- "paid for" --> Purchase
-  end
-  subgraph People["People and system"]
-    LedgerTransfer -- "reimburses between" --> LedgerParty
-    Device -- "app install of" --> LedgerParty
-    Run
-  end
-  Ingredient -- "bought as" --> Product
-  Product -. "nutrition from" .-> USDA[USDA food]
-  Product -- "seed packet grows" --> Plant
-  Cookbook -- "physical copy" --> Product
-  ProductCategory -- "default spending bucket" --> SpendingCategory
-  Planting -- "planted in" --> Location
-  Planting -- "scheduled by" --> Task
-  Project -- "used as a tool" --> Product
-  Task -- "maintains" --> Product
-  Expense -- "bought or returned" --> Product
-  Expense -- "spent on" --> Project
-  LedgerParty -- "paid for or shares" --> Expense
-  LedgerParty -- "ate" --> Meal
-  LedgerParty -- "owns" --> Inventory
-  FinancialAccount -- "belongs to" --> LedgerParty
-  Run -- "imported" --> Purchase
+flowchart LR
+  Product(("Product"))
+  Things["Things and places<br/>Inventory · Location · ProductCategory · Wish · Image"] -- "how much, where, what kind" --> Product
+  Food["Food<br/>Ingredient · Recipe · Cookbook · Meal · USDA food"] -- "ingredients are bought as" --> Product
+  Garden["Garden<br/>Plant · Planting · GardenEntry"] -- "grown from seed packets" --> Product
+  Work["Work<br/>Project · Task"] -- "maintains, uses as tools" --> Product
+  Money["Money<br/>Vendor · Purchase · Expense · accounts"] -- "bought or returned" --> Product
+  People["People and system<br/>LedgerParty · LedgerTransfer · Device · Run"] -- "paid for, ate, owns" --> Money
 ```
 
 ### Things and places
+
+```mermaid
+flowchart LR
+  ProductCategory -- "says what kind of thing" --> Product
+  Inventory -- "how much we have of" --> Product
+  Inventory -- "kept at" --> Location
+  Location -- "nested inside" --> Location
+  Wish -- "options we might buy" --> Product
+  Image -- "photos of (and of most other entities)" --> Product
+  ProductCategory -- "default spending bucket" --> SpendingCategory([SpendingCategory])
+```
 
 | Entity                     | What it is                                                                                                                                                | Relates to                                                                                                                                                                                                                                                 | Typical use                                                        |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
@@ -141,6 +111,17 @@ flowchart TB
 
 ### Food
 
+```mermaid
+flowchart LR
+  Cookbook -- "where it came from" --> Recipe
+  Meal -- "what we cooked, scaled" --> Recipe
+  Recipe -- "calls for" --> Ingredient
+  Ingredient -- "bought as" --> Product([Product])
+  Cookbook -- "physical copy" --> Product
+  Product -. "nutrition from" .-> USDA[USDA food]
+  LedgerParty([LedgerParty]) -- "ate" --> Meal
+```
+
 | Entity                | What it is                                                                         | Relates to                                                                               | Typical use                                                   |
 | --------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | **Ingredient** `ING-` | The brand-free recipe concept ("flour"), with aliases and a "usually on hand" flag | 1:N Product; 1:1 Recipe when it is a sub-recipe                                          | Recipe lines, staples, shopping                               |
@@ -151,6 +132,16 @@ flowchart TB
 
 ### Garden
 
+```mermaid
+flowchart LR
+  Product([Product]) -- "seed packet grows" --> Plant
+  Plant -- "grown as" --> Planting
+  Planting -- "planted in" --> Location([Location])
+  Planting -- "scheduled by" --> Task([Task])
+  GardenEntry -- "notes or harvest from" --> Planting
+  GardenEntry -- "logged at" --> Location
+```
+
 | Entity                 | What it is                                                        | Relates to                                                              | Typical use                                       |
 | ---------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------- |
 | **Plant** `PLANT-`     | A cultivar or species, with our yes/maybe/no verdict              | 1:N Planting; 1:N seed-packet Product; N:1 Ingredient                   | What we grow and whether it's worth growing again |
@@ -159,12 +150,33 @@ flowchart TB
 
 ### Work
 
+```mermaid
+flowchart LR
+  Project -- "broken into" --> Task
+  Project -- "used as a tool" --> Product([Product])
+  Task -- "maintains" --> Product
+  Expense([Expense]) -- "spent on" --> Project
+```
+
 | Entity             | What it is                                                        | Relates to                                                                                               | Typical use                               |
 | ------------------ | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | **Project** `PRJ-` | A household undertaking: renovation, garden season, yearly upkeep | 1:N Task, Expense; parent Project; N:M blocked-by Project; N:M Product via `projectTool`                 | Planning, cost rollups, tool cost per use |
 | **Task** `TSK-`    | A unit of work, with a trade                                      | N:1 Project (none means Inbox); subtasks; N:M blocked-by Task; N:1 subject Product (the item maintained) | To-dos, maintenance history               |
 
 ### Money
+
+```mermaid
+flowchart LR
+  VendorAccount -- "our login at" --> Vendor
+  Vendor -- "sold us" --> Purchase
+  Run([Run]) -- "imported" --> Purchase
+  Purchase -- "itemized into" --> Expense
+  SpendingCategory -- "what it was for" --> Expense
+  Expense -- "bought or returned" --> Product([Product])
+  Expense -- "spent on" --> Project([Project])
+  FinancialAccount -- "statement rows" --> FinancialTransaction
+  FinancialTransaction -- "paid for" --> Purchase
+```
 
 | Entity                          | What it is                                                          | Relates to                                                                        | Typical use                                                                                      |
 | ------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -177,6 +189,17 @@ flowchart TB
 | **FinancialTransaction** `FTX-` | A charge, refund or payment from a statement, as evidence only      | N:1 FinancialAccount; N:M Purchase via allocations that sum exactly to its amount | Reconciliation: match / mismatch / pending                                                       |
 
 ### People and system
+
+```mermaid
+flowchart LR
+  LedgerParty -- "paid for or shares" --> Expense([Expense])
+  LedgerParty -- "ate" --> Meal([Meal])
+  LedgerParty -- "owns" --> Inventory([Inventory])
+  FinancialAccount([FinancialAccount]) -- "belongs to" --> LedgerParty
+  LedgerTransfer -- "reimburses between" --> LedgerParty
+  Device -- "app install of" --> LedgerParty
+  Run -- "imported" --> Purchase([Purchase])
+```
 
 | Entity                    | What it is                                                                       | Relates to                                                                   | Typical use                                           |
 | ------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------- |
