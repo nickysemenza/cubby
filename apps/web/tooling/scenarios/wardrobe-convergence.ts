@@ -1,3 +1,4 @@
+import { makeMcpCaller } from "./mcp-caller";
 import { buildActorContext } from "@cubby/schemas/context";
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import {
@@ -43,7 +44,6 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   buildKernelContext,
   type KernelContext,
-  makeMcpCaller,
   buildScenarioDatabase,
   createFixtureWithContext,
 } from "./context";

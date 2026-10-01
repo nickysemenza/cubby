@@ -47,10 +47,14 @@ const { values: flags } = parseArgs({
   options: {
     apply: { type: "boolean", default: false },
     "copy-images": { type: "boolean", default: false },
+    // The objects were already copied out of band (e.g. `rclone copy`); only
+    // point `imageUrl` at them.
+    "link-images": { type: "boolean", default: false },
   },
 });
 const apply = flags.apply === true;
 const copyImages = flags["copy-images"] === true;
+const linkImages = copyImages || flags["link-images"] === true;
 if (copyImages && !apply) {
   throw new Error("--copy-images requires --apply");
 }
@@ -223,7 +227,7 @@ try {
         p.category,
         p.description,
         p.price_dollars,
-        copyImages && p.image_key ? publicImageUrl(p.image_key) : null,
+        linkImages && p.image_key ? publicImageUrl(p.image_key) : null,
         toDate(p.updated_at),
         p.source ?? "upcitemdb",
       ],
