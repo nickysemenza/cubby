@@ -5,7 +5,6 @@ import type {
   McpUsageDashboardOut,
   McpUsageWindow,
 } from "@cubby/schemas/telemetry";
-import { ResponsiveBar } from "@nivo/bar";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
@@ -19,6 +18,7 @@ import {
 import { z } from "zod";
 
 import { RankedBarBreakdown } from "~/app/_components/charts/kit";
+import { ResponsiveBar } from "~/app/_components/charts/nivo-responsive";
 import { useTableColumnLayout } from "~/app/_components/data-table/column-layout";
 import RTable from "~/app/_components/data-table/Table";
 import {

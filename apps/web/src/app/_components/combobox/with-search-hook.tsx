@@ -7,17 +7,20 @@ import type {
 import { infLocation } from "@cubby/schemas/location";
 import { productTopLevelOut } from "@cubby/schemas/product";
 import { useQuery } from "@tanstack/react-query";
+import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import type { z } from "zod";
 
 import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
 import { captureRequest } from "~/entities/editing/editor-requests";
+import type { EntityEditDialog as EntityEditDialogComponent } from "~/entities/editing/entity-edit-dialog";
 import { entityListFor, type EntityListParams } from "~/entities/entity-list";
 import {
   location,
   product,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 
 import {
   buildLocationComboboxItem,
@@ -40,10 +43,15 @@ import {
   type UseEntitySearchConfig,
 } from "./entity-search-hooks";
 
-const EntityEditDialog = lazy(() =>
-  import("~/entities/editing/entity-edit-dialog").then((module) => ({
-    default: module.EntityEditDialog,
-  })),
+const EntityEditDialog = browserOnlyLazy<
+  ComponentProps<typeof EntityEditDialogComponent>
+>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("~/entities/editing/entity-edit-dialog").then((module) => ({
+          default: module.EntityEditDialog,
+        })),
 );
 
 /** What a picker search source hands its combobox. */

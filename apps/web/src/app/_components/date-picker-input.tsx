@@ -2,9 +2,9 @@
 
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
+import type { ComponentProps } from "react";
 import {
   type FocusEvent,
-  lazy,
   Suspense,
   useEffect,
   useId,
@@ -13,11 +13,13 @@ import {
   useState,
 } from "react";
 
+import type { Calendar as CalendarComponent } from "~/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { parsePlainDateInput } from "~/lib/plain-date-input";
@@ -25,10 +27,13 @@ import { cn } from "~/lib/utils";
 
 // Keep react-day-picker out of the critical chunk — it's only needed once the
 // popover actually opens.
-const Calendar = lazy(() =>
-  import("~/components/ui/calendar").then((mod) => ({
-    default: mod.Calendar,
-  })),
+const Calendar = browserOnlyLazy<ComponentProps<typeof CalendarComponent>>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("~/components/ui/calendar").then((mod) => ({
+          default: mod.Calendar,
+        })),
 );
 
 interface DatePickerInputProps {

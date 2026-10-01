@@ -189,6 +189,56 @@ const failOnUndefinedImport: NonNullable<
   handler(level, log);
 };
 
+/**
+ * zod's namespace re-exports every locale, and better-auth reads that
+ * namespace by computed key, so all ~50 locales (~270 KB) stayed in the Worker.
+ * The app only uses zod's default English messages.
+ */
+function cfZodLocalesStub(): Plugin {
+  return {
+    name: "cf-zod-locales-stub",
+    enforce: "pre",
+    applyToEnvironment(env) {
+      return env.name === "ssr";
+    },
+    resolveId(source, importer) {
+      if (
+        source === "../locales/index.js" &&
+        importer &&
+        /\/zod\/v4\/(classic|core|mini)\//.test(importer.replaceAll("\\", "/"))
+      )
+        return `${path.join(path.dirname(importer), "../locales/en.js")}?en-only`;
+    },
+    load(id) {
+      if (id.endsWith("?en-only"))
+        return `export { default as en } from ${JSON.stringify(id.slice(0, -"?en-only".length))};`;
+    },
+  };
+}
+
+/**
+ * Each Phosphor icon module defines all six weights, but the app renders only
+ * these. Dropping the rest removes ~half of every icon's paths from both
+ * bundles. Using another weight renders an empty icon — add it here first.
+ */
+const PHOSPHOR_WEIGHTS = new Set(["regular", "bold", "fill"]);
+
+function phosphorWeights(): Plugin {
+  const iconDefinition = /@phosphor-icons\/react\/dist\/defs\/[^/]+\.es\.js$/;
+  // Entries are `[ "weight", element ]` pairs at two-space indent in the
+  // package's unminified ESM output; element bodies are indented deeper.
+  const entry = /\n {2}\[\n {4}"([a-z]+)",[\s\S]*?\n {2}\],?/g;
+  return {
+    name: "phosphor-weights",
+    transform(code, id) {
+      if (!iconDefinition.test(id.replaceAll("\\", "/"))) return null;
+      return code.replace(entry, (whole, weight: string) =>
+        PHOSPHOR_WEIGHTS.has(weight) ? whole : "",
+      );
+    },
+  };
+}
+
 function cfSentryShim(): Plugin {
   const shim = path.resolve(__dirname, "src/lib/sentry-cf-shim.ts");
   return {
@@ -274,7 +324,14 @@ export default defineConfig(async ({ command }) => {
       },
       ssr: {
         build: {
-          rolldownOptions: { onLog: failOnUndefinedImport },
+          // Vite leaves server output unminified by default; minified, the
+          // Worker upload drops from ~30 MB to ~16 MB. Names are kept so error
+          // names and stack frames stay readable.
+          minify: true,
+          rolldownOptions: {
+            onLog: failOnUndefinedImport,
+            output: { keepNames: true },
+          },
         },
       },
     },
@@ -322,6 +379,8 @@ export default defineConfig(async ({ command }) => {
       cfPgNativeStub(),
       cfWasmPlugin(),
       cfSentryShim(),
+      cfZodLocalesStub(),
+      phosphorWeights(),
       wasm(),
       devtools({
         // Keep the runtime devtools available to the production lazy chunk;

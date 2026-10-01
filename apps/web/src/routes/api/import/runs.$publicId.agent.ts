@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { proxyPurchaseAgentRequest } from "~/server/purchase-import/agent-proxy";
 import { createRequestContext, requireActor } from "~/server/request-context";
 
 async function handler(input: {
@@ -16,6 +15,9 @@ async function handler(input: {
       { error: "Member identity is required" },
       { status: 403 },
     );
+  // Loaded on request: the proxy reaches run-service and the AI SDK stack.
+  const { proxyPurchaseAgentRequest } =
+    await import("~/server/purchase-import/agent-proxy");
   return await proxyPurchaseAgentRequest({
     request: input.request,
     publicId: input.params.publicId,

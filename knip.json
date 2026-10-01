@@ -61,6 +61,7 @@
         "src/**/*.live-eval.ts!",
         "tests/**/*.{ts,tsx}!",
         "scripts/check-client-bundle.ts!",
+        "scripts/check-server-closure.ts!",
         "scripts/e2e-affected.ts!",
         "scripts/read-performance.ts!",
         "scripts/apple-preview-fixtures.ts!",

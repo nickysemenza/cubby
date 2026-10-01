@@ -1,8 +1,8 @@
 import type { ExpenseMonthlyAggregate } from "@cubby/schemas/project";
-import { ResponsiveBar } from "@nivo/bar";
 import { CalendarDotsIcon } from "@phosphor-icons/react/dist/csr/CalendarDots";
 import { useMemo } from "react";
 
+import { ResponsiveBar } from "~/app/_components/charts/nivo-responsive";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { monthLabel } from "~/app/projects/project-formatting";

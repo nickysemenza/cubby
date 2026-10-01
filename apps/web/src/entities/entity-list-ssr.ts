@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { QueryClient } from "@tanstack/react-query";
 
 import {
@@ -99,7 +99,9 @@ export function searchWithInitialFilter(
   entity: Entity,
   search: FilterPatch,
 ): FilterPatch {
-  const initial = entityInspectorMetadata[entity].list.initialFilter;
+  // The summary carries the same initial filter as the inspector metadata,
+  // which is ~350 KB the route loaders would otherwise load on every request.
+  const initial = entitySummary[entity].list.initialFilter;
   if (initial.length === 0) return search;
   const specs = getEntityFilters(entity);
   if (

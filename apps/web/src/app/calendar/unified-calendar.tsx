@@ -9,9 +9,9 @@ import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { addDays } from "date-fns";
+import type { ComponentProps } from "react";
 import {
   type CSSProperties,
-  lazy,
   type ReactNode,
   Suspense,
   useCallback,
@@ -42,6 +42,7 @@ import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { formatCalendarDay } from "~/lib/date-format";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
 import { formatEstimate } from "~/lib/nutrition-format";
@@ -49,6 +50,7 @@ import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
 
 import { CalendarAgenda } from "./calendar-agenda";
+import type { CalendarCreateDialog as CalendarCreateDialogComponent } from "./calendar-create-dialog";
 import type { CalendarFilters } from "./calendar-filters";
 import { KIND_ICONS } from "./calendar-icons";
 import { CalendarItemInspector } from "./calendar-item-inspector";
@@ -98,10 +100,15 @@ const FORTNIGHT_DENSITY = {
   "--ec-month-span-h": "1.75rem",
 } as CSSProperties;
 
-const LazyCalendarCreateDialog = lazy(() =>
-  import("./calendar-create-dialog").then(({ CalendarCreateDialog }) => ({
-    default: CalendarCreateDialog,
-  })),
+const LazyCalendarCreateDialog = browserOnlyLazy<
+  ComponentProps<typeof CalendarCreateDialogComponent>
+>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("./calendar-create-dialog").then(({ CalendarCreateDialog }) => ({
+          default: CalendarCreateDialog,
+        })),
 );
 
 const KIND_LABELS = {

@@ -4,10 +4,12 @@ import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
+import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 
 import { useEntityDisplayImage } from "~/app/_components/entity-media/entity-display-images";
+import type { EntityPreviewContent as EntityPreviewContentComponent } from "~/app/_components/EntityPreviewContent";
 import { ExternalLinkIcon } from "~/app/_components/ExternalLink";
 import {
   hoverPreviewEntities,
@@ -33,12 +35,18 @@ import {
   type EntityDetailParams,
   type EntityDetailRoute,
 } from "~/entities/entities";
+import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { cn } from "~/lib/utils";
 
-const EntityPreviewContent = lazy(() =>
-  import("~/app/_components/EntityPreviewContent").then((module) => ({
-    default: module.EntityPreviewContent,
-  })),
+const EntityPreviewContent = browserOnlyLazy<
+  ComponentProps<typeof EntityPreviewContentComponent>
+>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("~/app/_components/EntityPreviewContent").then((module) => ({
+          default: module.EntityPreviewContent,
+        })),
 );
 
 /**
