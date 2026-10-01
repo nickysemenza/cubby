@@ -135,12 +135,10 @@ final class Navigator {
     func open(_ link: CubbyLink) {
         launchLinkApplied = true
         switch link {
-        case .entity(.run, let id):
-            openPhotoReview(runID: id)
         case .entity(let key, let id):
             section = .browse
             #if os(macOS)
-                browseKey = key
+                browseKey = key.nativeActions.contains(.list) ? key : nil
                 selectRecord(RecordSelection(key: key, id: id), in: .browse)
             #else
                 paths[.browse] = [.entityDetail(key, id: id)]
