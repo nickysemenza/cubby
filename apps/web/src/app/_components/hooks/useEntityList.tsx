@@ -618,14 +618,8 @@ export function useEntityList<
           fields
             .map((field) => enrichmentState(row.id, field))
             .find((state) => state && state.state !== "ready");
-        const accessorFn =
-          "accessorFn" in column ? column.accessorFn : undefined;
         add({
           ...column,
-          accessorFn: accessorFn
-            ? (row, index) =>
-                stateFor(row) ? undefined : accessorFn(row, index)
-            : undefined,
           meta: attachCubbyColumnMeta<TData>({
             ...meta,
             valueUnavailable: (row) => Boolean(stateFor(row)),
