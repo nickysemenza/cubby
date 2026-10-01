@@ -183,7 +183,6 @@ async function main() {
           plannedMappings: preview.plannedMappings,
           preservedMappings: preview.preservedMappings,
           categoryDeltas,
-          rounding: preview.rounding,
         }),
       );
     }
