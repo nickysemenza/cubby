@@ -11,8 +11,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { ALL_SPECS_TRIGGERS, SPEC_AREAS } from "../tests/e2e/spec-areas.ts";
+import {
+  ALL_SPECS_TRIGGERS,
+  SPEC_AREAS,
+  SPEC_EXTRA_GLOBS,
+} from "../tests/e2e/spec-areas.ts";
+import { DERIVED_SPEC_GLOBS } from "../tests/e2e/spec-areas.derived.ts";
 import { computeAffected, runAffectedSpecs } from "./e2e-affected.ts";
+import { deriveSpecGlobs } from "./generate-spec-areas.ts";
 import {
   readWebBuildProvenance,
   writeWebBuildProvenance,
@@ -108,6 +114,23 @@ describe("spec-areas.ts manifest coverage", () => {
         0,
       );
     }
+  });
+});
+
+describe("derived spec areas", () => {
+  // The generated routes/feature dirs are the part of the map nobody should
+  // maintain by hand: a new route or a spec visiting a new URL changes them.
+  it("matches the routes the specs visit (rerun `node scripts/generate-spec-areas.ts`)", () => {
+    const webDir = path.resolve(E2E_DIR, "../..");
+    expect(DERIVED_SPEC_GLOBS).toEqual(deriveSpecGlobs(webDir));
+  });
+
+  it("keeps hand-written extras only for specs that exist", () => {
+    expect(
+      Object.keys(SPEC_EXTRA_GLOBS).filter(
+        (spec) => !(spec in DERIVED_SPEC_GLOBS),
+      ),
+    ).toEqual([]);
   });
 });
 

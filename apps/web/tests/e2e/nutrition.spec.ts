@@ -1,7 +1,7 @@
 import {
   clearNutritionCachePrerequisite,
   seedNutritionPrerequisite,
-} from "./e2e-fixtures";
+} from "./fixtures-recipes";
 import { waitForAppHydration, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

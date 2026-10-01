@@ -1,18 +1,10 @@
-import { productCreateInput } from "@cubby/schemas/product";
 import { testUserId } from "@cubby/schemas/testing";
 import type { Pool } from "pg";
 
-import * as schema from "~/server/db/schema";
-
-import {
-  taxonomyRootFixtures,
-  taxonomyShortcode,
-} from "../product-category-fixtures";
-import {
-  buildKernelContext,
-  buildScenarioDatabase,
-  createFixtureWithContext,
-} from "./context";
+import { seedBaseWorld } from "../factories/base-world";
+import { taxonomyShortcode } from "../product-category-fixtures";
+import { createEntity } from "../factories/create";
+import { buildKernelContext, buildScenarioDatabase } from "./context";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
 import { attachPurchaseProducts } from "~/server/repo/purchase-products";
@@ -53,35 +45,16 @@ export async function seedSimulatorScenario(
   name = SIM_PRODUCT_NAME,
   price: number | null = null,
 ): Promise<string> {
-  await pool.query(
-    `INSERT INTO "Location" (shortcode, name, aliases, tags, type, "parentId")
-     VALUES ('LOC-HM3E', 'Home', ARRAY[]::text[], ARRAY[]::text[], 'house', NULL)
-     ON CONFLICT (shortcode) DO NOTHING`,
-  );
   const db = buildScenarioDatabase(pool);
-  await db
-    .clientForRepository()
-    .insert(schema.productCategory)
-    .values(taxonomyRootFixtures)
-    .onConflictDoNothing();
+  await seedBaseWorld(db.clientForRepository());
   const context = buildKernelContext(db, testUserId(userId));
-  const product = await createFixtureWithContext(
-    context,
-    "product",
-    productCreateInput.parse({
-      name,
-      price,
-      aliases: [],
-      tags: [],
-      upc: null,
-      manufacturer: "Synthetic Works",
-      model: null,
-      notes: null,
-      expectedQuantity: null,
-      ingredientId: null,
-      categoryId: taxonomyShortcode("household"),
-    }),
-  );
+  const product = await createEntity(context, "product", {
+    name,
+    price,
+    manufacturer: "Synthetic Works",
+    model: null,
+    categoryId: taxonomyShortcode("household"),
+  });
   return product.id;
 }
 
@@ -98,10 +71,10 @@ export async function seedSimulatorProductClarity(
   );
   const db = buildScenarioDatabase(pool);
   const context = buildKernelContext(db, testUserId(userId));
-  const vendor = await createFixtureWithContext(context, "vendor", {
+  const vendor = await createEntity(context, "vendor", {
     name: "Synthetic Evidence Vendor",
   });
-  const purchase = await createFixtureWithContext(context, "purchase", {
+  const purchase = await createEntity(context, "purchase", {
     vendorId: vendor.id,
     orderId: "Synthetic Evidence Order",
     date: "2026-01-05",
@@ -116,7 +89,7 @@ export async function seedSimulatorProductClarity(
       future: true,
     },
   ]) {
-    await createFixtureWithContext(context, "expense", {
+    await createEntity(context, "expense", {
       date: "2026-01-05",
       costType: "materials",
       trade: "other",

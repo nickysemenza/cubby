@@ -5,13 +5,15 @@ import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 import { taxonomyShortcode } from "../../tooling/product-category-fixtures";
 import {
-  createEvidenceHarnessContext,
-  createFixture,
-  seedAuthenticatedMemberPrerequisite,
-  seedConcurrently,
   seedProductCategoryPrerequisite,
   seedProductPrerequisite,
-} from "./e2e-fixtures";
+} from "./fixtures-catalog";
+import {
+  createEvidenceHarnessContext,
+  createFixture,
+  ensureMemberParty,
+  seedConcurrently,
+} from "./fixtures-core";
 import { escapeRegExp, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
@@ -240,7 +242,7 @@ for (const state of ["owned", "exited", "uncertain"] as const) {
     page,
   }, testInfo) => {
     const name = uniqueName(testInfo, `Synthetic ${state} overview`);
-    await seedAuthenticatedMemberPrerequisite(page, `${name} member`);
+    await ensureMemberParty(page, name);
     const feature = state === "owned" ? "food" : "tools";
     const category = await seedProductCategoryPrerequisite(page, {
       name: `${name} category`,

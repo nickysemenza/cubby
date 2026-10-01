@@ -1,7 +1,7 @@
-import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import type { Page } from "@playwright/test";
 
-import { createFixture, seedProductPrerequisite } from "./e2e-fixtures";
+import { seedProductPrerequisite } from "./fixtures-catalog";
+import { createEntityFixture } from "./fixtures-core";
 
 /**
  * A product the ledger says was bought `bought` times, optionally with stock on
@@ -17,7 +17,7 @@ export async function seedLedgerProduct(
   },
 ) {
   const product = await seedProductPrerequisite(page, { name: opts.name });
-  await createFixture(page, "expense", {
+  await createEntityFixture(page, "expense", {
     name: `${opts.name} line`,
     cost: 10,
     date: "2026-01-05",
@@ -27,15 +27,11 @@ export async function seedLedgerProduct(
     productQuantity: opts.bought,
   });
   if (opts.stocked) {
-    await createFixture(
-      page,
-      "inventory",
-      inventoryCreatePayloadData.parse({
-        productId: product.id,
-        locationId: opts.stocked.locationId,
-        amount: { value: opts.stocked.quantity, unit: "each" },
-      }),
-    );
+    await createEntityFixture(page, "inventory", {
+      productId: product.id,
+      locationId: opts.stocked.locationId,
+      amount: { value: opts.stocked.quantity, unit: "each" },
+    });
   }
   return product;
 }

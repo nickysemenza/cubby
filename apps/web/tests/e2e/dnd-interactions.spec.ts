@@ -1,6 +1,6 @@
 import type { Page, TestInfo } from "@playwright/test";
 import { dragByKeyboard, waitForDndMutation } from "./dnd-helpers";
-import { seedTaskPrerequisite } from "./e2e-fixtures";
+import { seedTaskPrerequisite } from "./fixtures-catalog";
 import { gotoAuthenticatedPage, reloadAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

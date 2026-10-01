@@ -2,7 +2,7 @@ import {
   seedPlantPrerequisite,
   seedPlantingPrerequisite,
   seedTaskPrerequisite,
-} from "./e2e-fixtures";
+} from "./fixtures-catalog";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

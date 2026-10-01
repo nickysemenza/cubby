@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { initiateUploadWithoutEntityResponseSchema } from "@cubby/schemas/image";
 import { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
-import { locationCreateInput } from "@cubby/schemas/location";
+
 import { productWithFoodOut } from "@cubby/schemas/product";
 import {
   productCreateWithInventoryInput,
@@ -19,7 +19,8 @@ import { superJsonResultSchema } from "~/lib/superjson-wire";
 
 import { dispatchOperations } from "./dispatch-wire";
 
-import { createFixture, seedProductPrerequisite } from "./e2e-fixtures";
+import { seedProductPrerequisite } from "./fixtures-catalog";
+import { createEntityFixture } from "./fixtures-core";
 import {
   gotoAuthenticatedPage,
   reloadAuthenticatedPage,
@@ -57,21 +58,15 @@ const operationResult = async <Schema extends z.ZodType>(
 test("Photo item uploads a staged image and commits one Product with one each at the reviewed location", async ({
   page,
 }, testInfo) => {
-  const location = await createFixture(
-    page,
-    "location",
-    locationCreateInput.parse({
-      name: uniqueName(testInfo, "Synthetic photo capture shelf"),
-      type: "shelf",
-      parentId: null,
-      aliases: [],
-      tags: [],
-    }),
-  );
+  const location = await createEntityFixture(page, "location", {
+    name: uniqueName(testInfo, "Synthetic photo capture shelf"),
+    type: "shelf",
+    parentId: null,
+  });
   const existing = await seedProductPrerequisite(page, {
     name: uniqueName(testInfo, "Synthetic existing shelf item"),
   });
-  await createFixture(page, "inventory", {
+  await createEntityFixture(page, "inventory", {
     productId: existing.id,
     locationId: location.id,
     amount: { value: 1, unit: "each" },

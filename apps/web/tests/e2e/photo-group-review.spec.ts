@@ -1,11 +1,13 @@
 import {
-  seedPhotoGroupReviewRun,
   seedProductPrerequisite,
   seedInventoryPrerequisites,
   seedUnlinkedExpensePrerequisite,
+} from "./fixtures-catalog";
+import {
+  seedPhotoGroupReviewRun,
   seedPhotoReviewProcessingFailure,
   seedPhotoReviewLabelText,
-} from "./e2e-fixtures";
+} from "./fixtures-photos";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

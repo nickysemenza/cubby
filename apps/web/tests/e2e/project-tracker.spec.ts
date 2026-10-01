@@ -1,4 +1,4 @@
-import { seedTaskPrerequisite } from "./e2e-fixtures";
+import { seedTaskPrerequisite } from "./fixtures-catalog";
 import { openCommandPalette, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

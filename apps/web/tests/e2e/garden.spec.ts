@@ -1,11 +1,11 @@
 import { z } from "zod";
 
 import {
-  seedImagePrerequisite,
   seedPlantPrerequisite,
   seedLocationPrerequisite,
   seedPlantingPrerequisite,
-} from "./e2e-fixtures";
+} from "./fixtures-catalog";
+import { seedImagePrerequisite } from "./fixtures-photos";
 import {
   selectComboboxItem,
   waitForAppHydration,

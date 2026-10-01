@@ -1,4 +1,4 @@
-import { seedVendorDisplayPrerequisite } from "./e2e-fixtures";
+import { seedVendorDisplayPrerequisite } from "./fixtures-catalog";
 import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

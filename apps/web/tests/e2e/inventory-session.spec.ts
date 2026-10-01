@@ -1,7 +1,7 @@
 import {
   seedInventoryPrerequisites,
   seedLocationPrerequisite,
-} from "./e2e-fixtures";
+} from "./fixtures-catalog";
 import { seedLedgerProduct } from "./inventory-flow-fixtures";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import {

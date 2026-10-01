@@ -1,4 +1,4 @@
-import { seedStaplePlanningPrerequisite } from "./e2e-fixtures";
+import { seedStaplePlanningPrerequisite } from "./fixtures-recipes";
 import { escapeRegExp, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

@@ -1,10 +1,10 @@
 import {
-  seedConcurrently,
-  seedCookbookSourcePrerequisite,
   seedPlantPrerequisite,
   seedProductCategoryPrerequisite,
   seedProductPrerequisite,
-} from "./e2e-fixtures";
+} from "./fixtures-catalog";
+import { seedConcurrently } from "./fixtures-core";
+import { seedCookbookSourcePrerequisite } from "./fixtures-recipes";
 import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

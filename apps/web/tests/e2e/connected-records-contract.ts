@@ -7,7 +7,7 @@ import {
   seedProjectPrerequisite,
   seedTaskPrerequisite,
   seedVendorDisplayPrerequisite,
-} from "./e2e-fixtures";
+} from "./fixtures-catalog";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect } from "./e2e-test";
 

@@ -1,8 +1,8 @@
+import { seedProductCategoryPrerequisite } from "./fixtures-catalog";
 import {
   attachProductImagePrerequisite,
   seedImagePrerequisite,
-  seedProductCategoryPrerequisite,
-} from "./e2e-fixtures";
+} from "./fixtures-photos";
 import {
   gotoAuthenticatedPage,
   openProductFromPalette,

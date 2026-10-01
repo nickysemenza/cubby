@@ -1,4 +1,4 @@
-import { seedActivityHistory } from "./e2e-fixtures";
+import { seedActivityHistory } from "./fixtures-photos";
 import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

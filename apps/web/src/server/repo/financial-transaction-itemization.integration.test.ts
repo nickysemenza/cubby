@@ -117,70 +117,75 @@ describe("financial transaction itemization verdict", () => {
     return new Map(listed.data.map((row) => [row.merchant, row.itemization]));
   };
 
-  it("classifies each charge and filters by verdict", async () => {
-    const { purchase, line, charge } = await seed();
+  // Seeds ~a dozen purchases, lines, and charges serially; ~9s on CI already.
+  it(
+    "classifies each charge and filters by verdict",
+    { timeout: 30_000 },
+    async () => {
+      const { purchase, line, charge } = await seed();
 
-    const lump = await purchase("lump");
-    await line(lump, 100, false);
-    await charge(100, [{ purchaseId: lump, amount: 100 }]);
+      const lump = await purchase("lump");
+      await line(lump, 100, false);
+      await charge(100, [{ purchaseId: lump, amount: 100 }]);
 
-    const matched = await purchase("matched");
-    await line(matched, 30, true);
-    await line(matched, 20, true);
-    await charge(50, [{ purchaseId: matched, amount: 50 }]);
+      const matched = await purchase("matched");
+      await line(matched, 30, true);
+      await line(matched, 20, true);
+      await charge(50, [{ purchaseId: matched, amount: 50 }]);
 
-    const short = await purchase("short");
-    await line(short, 30, true);
-    await charge(45, [{ purchaseId: short, amount: 45 }]);
+      const short = await purchase("short");
+      await line(short, 30, true);
+      await charge(45, [{ purchaseId: short, amount: 45 }]);
 
-    // Two installments against one itemized purchase: neither charge is
-    // compared to the full set of lines on its own.
-    const shared = await purchase("shared");
-    await line(shared, 60, true);
-    await line(shared, 40, true);
-    await charge(60, [{ purchaseId: shared, amount: 60 }]);
-    await charge(40, [{ purchaseId: shared, amount: 40 }]);
+      // Two installments against one itemized purchase: neither charge is
+      // compared to the full set of lines on its own.
+      const shared = await purchase("shared");
+      await line(shared, 60, true);
+      await line(shared, 40, true);
+      await charge(60, [{ purchaseId: shared, amount: 60 }]);
+      await charge(40, [{ purchaseId: shared, amount: 40 }]);
 
-    // A voided sibling does not make the live charge shared.
-    const voided = await purchase("voided");
-    await line(voided, 21, true);
-    await charge(21, [{ purchaseId: voided, amount: 21 }]);
-    await charge(21, [{ purchaseId: voided, amount: 21 }], "void");
+      // A voided sibling does not make the live charge shared.
+      const voided = await purchase("voided");
+      await line(voided, 21, true);
+      await charge(21, [{ purchaseId: voided, amount: 21 }]);
+      await charge(21, [{ purchaseId: voided, amount: 21 }], "void");
 
-    // One charge split across two solo-charged purchases.
-    const splitA = await purchase("split-a");
-    const splitB = await purchase("split-b");
-    await line(splitA, 10, true);
-    await line(splitB, 15, true);
-    await charge(25, [
-      { purchaseId: splitA, amount: 10 },
-      { purchaseId: splitB, amount: 15 },
-    ]);
+      // One charge split across two solo-charged purchases.
+      const splitA = await purchase("split-a");
+      const splitB = await purchase("split-b");
+      await line(splitA, 10, true);
+      await line(splitB, 15, true);
+      await charge(25, [
+        { purchaseId: splitA, amount: 10 },
+        { purchaseId: splitB, amount: 15 },
+      ]);
 
-    await charge(7, []);
+      await charge(7, []);
 
-    const all = await verdicts();
-    expect(all.get("charge 7 0 posted")).toBe("bare");
-    expect(all.get("charge 100 1 posted")).toBe("lump");
-    expect(all.get("charge 50 1 posted")).toBe("itemized_match");
-    expect(all.get("charge 45 1 posted")).toBe("itemized_mismatch");
-    expect(all.get("charge 60 1 posted")).toBe("shared");
-    expect(all.get("charge 40 1 posted")).toBe("shared");
-    expect(all.get("charge 21 1 posted")).toBe("itemized_match");
-    expect(all.get("charge 25 2 posted")).toBe("itemized_match");
+      const all = await verdicts();
+      expect(all.get("charge 7 0 posted")).toBe("bare");
+      expect(all.get("charge 100 1 posted")).toBe("lump");
+      expect(all.get("charge 50 1 posted")).toBe("itemized_match");
+      expect(all.get("charge 45 1 posted")).toBe("itemized_mismatch");
+      expect(all.get("charge 60 1 posted")).toBe("shared");
+      expect(all.get("charge 40 1 posted")).toBe("shared");
+      expect(all.get("charge 21 1 posted")).toBe("itemized_match");
+      expect(all.get("charge 25 2 posted")).toBe("itemized_match");
 
-    const only = async (
-      itemization: FinancialTransactionFilters["itemization"],
-    ) =>
-      [...(await verdicts({ itemization })).keys()]
-        .filter((merchant) => merchant?.endsWith("posted"))
-        .sort();
-    expect(await only("shared")).toEqual([
-      "charge 40 1 posted",
-      "charge 60 1 posted",
-    ]);
-    expect(await only("bare")).toEqual(["charge 7 0 posted"]);
-    expect(await only("itemized_mismatch")).toEqual(["charge 45 1 posted"]);
-    expect(await only("lump")).toEqual(["charge 100 1 posted"]);
-  });
+      const only = async (
+        itemization: FinancialTransactionFilters["itemization"],
+      ) =>
+        [...(await verdicts({ itemization })).keys()]
+          .filter((merchant) => merchant?.endsWith("posted"))
+          .sort();
+      expect(await only("shared")).toEqual([
+        "charge 40 1 posted",
+        "charge 60 1 posted",
+      ]);
+      expect(await only("bare")).toEqual(["charge 7 0 posted"]);
+      expect(await only("itemized_mismatch")).toEqual(["charge 45 1 posted"]);
+      expect(await only("lump")).toEqual(["charge 100 1 posted"]);
+    },
+  );
 });

@@ -4,13 +4,13 @@ import { runShortcode } from "@cubby/schemas/identifiers";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 
+import { seedVendorDisplayPrerequisite } from "./fixtures-catalog";
 import {
-  seedVendorDisplayPrerequisite,
   seedFailedVendorMailSearchRun,
   seedLiveVendorMailSearchRun,
   seedPagedVendorMailSearchRun,
   seedVendorMailReviewPrerequisite,
-} from "./e2e-fixtures";
+} from "./fixtures-mail";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { unbatchFor } from "./dispatch-wire";

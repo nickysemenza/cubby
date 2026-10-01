@@ -1,8 +1,8 @@
 import {
-  seedImagePrerequisite,
   seedInventoryPrerequisites,
   seedTaskPrerequisite,
-} from "./e2e-fixtures";
+} from "./fixtures-catalog";
+import { seedImagePrerequisite } from "./fixtures-photos";
 import {
   SHORTCODE,
   waitForAppHydration,

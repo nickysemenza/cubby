@@ -15,6 +15,7 @@ import {
   nativeBundleFingerprint,
   prepareMacFixtureApp,
 } from "./mac-fixture-identity";
+import { seedBaseWorld } from "./factories/base-world";
 import { createMacRetailerFixture } from "./mac-retailer-fixture";
 import { macImportOrder } from "./mac-import-orders";
 import type { createMacComposedScenario } from "./mac-import-composed-scenario";
@@ -758,11 +759,8 @@ async function main(): Promise<void> {
     try {
       const { migrateDatabase } = await import("./db-migrate");
       await migrateDatabase(drizzle(pool));
-      // A freshly migrated database needs the same hierarchy root as the web E2E lane.
-      await pool.query(`
-        INSERT INTO "Location" (shortcode, name, aliases, tags, type, "parentId")
-        VALUES ('LOC-HM3E', 'Home', ARRAY[]::text[], ARRAY[]::text[], 'house', NULL)
-      `);
+      // A freshly migrated database needs the same base world as the web E2E lane.
+      await seedBaseWorld(drizzle(pool));
     } finally {
       await pool.end();
     }
