@@ -83,10 +83,12 @@ const columnHelper = createCubbyColumnHelper<ProductTreeRow>();
 
 // `components` is the one relation column outside the field model; every
 // declared column hides itself through `display.listHidden`.
-const PRODUCT_INITIAL_COLUMN_VISIBILITY = {
+// A function, not a module-level const: entity-display imports the list renderers
+// that import this module, so evaluating it at load hits the import cycle.
+const productInitialColumnVisibility = () => ({
   components: false,
   ...entityListHiddenColumns("product"),
-};
+});
 
 function useProductFilterOptions() {
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
@@ -496,7 +498,7 @@ export const productListOverride = defineListOverride<
         deletable: true as const,
         filterOptions,
         nameEditable,
-        initialColumnVisibility: PRODUCT_INITIAL_COLUMN_VISIBILITY,
+        initialColumnVisibility: productInitialColumnVisibility(),
         groupConfig: PRODUCT_GROUP_CONFIG,
       }),
       [filterOptions, nameEditable],

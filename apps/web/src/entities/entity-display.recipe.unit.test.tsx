@@ -27,9 +27,9 @@ import { createEntityDisplayColumns } from "./entity-display";
 interface RecipeRow {
   tags: string[] | null;
   servings: number | null;
-  costTotal: number | null;
-  caloriesTotal: number | null;
-  totalMinutes: number | null;
+  totals: null;
+  updatedAt: Date;
+  meta: { times: { totalMinutes: number } } | null;
   source: RecipeSource | null;
   meals: number;
   notes: string | null;
@@ -38,9 +38,9 @@ interface RecipeRow {
 const RECIPE_ROW: RecipeRow = {
   tags: ["dinner", "weeknight"],
   servings: 4,
-  costTotal: 12.5,
-  caloriesTotal: 640,
-  totalMinutes: 35,
+  totals: null,
+  updatedAt: new Date(),
+  meta: { times: { totalMinutes: 35 } },
   source: { type: "website", url: "https://www.example.com/recipe" },
   meals: 2,
   notes: "Fixture notes",
@@ -72,12 +72,10 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
 
 /**
  * Builds the recipe list's columns the same way `recipelist.tsx` does:
- * overrides for the six specialized columns (`yield`/`costTotal`/
- * `caloriesTotal`/`totalMinutes`/`meals` are `readKey: null` or `reference`
- * fields, so `createEntityDisplayColumns` throws without one; `tags` and
- * `tags` is overridden for inline editing; `source` is supplied by the named
- * manifest renderer, and `notes` stays generic to exercise the declaration's
- * own metadata.
+ * overrides for the specialized columns that keep a page-local cell
+ * (`servings`, `tags`, `meals`); `costTotal`, `caloriesTotal`, `totalMinutes`
+ * and `source` come from the declaration's named list renderers, and `notes`
+ * stays generic to exercise the declaration's own metadata.
  */
 function buildRecipeColumns() {
   const helper = createCubbyColumnHelper<RecipeRow>();
@@ -97,24 +95,6 @@ function buildRecipeColumns() {
         helper.accessor("servings", {
           id: "servings",
           cell: ({ row }) => <span>{row.original.servings} servings</span>,
-        }),
-      );
-      add(
-        helper.display({
-          id: "costTotal",
-          cell: ({ row }) => <span>${row.original.costTotal}</span>,
-        }),
-      );
-      add(
-        helper.display({
-          id: "caloriesTotal",
-          cell: ({ row }) => <span>{row.original.caloriesTotal} kcal</span>,
-        }),
-      );
-      add(
-        helper.display({
-          id: "totalMinutes",
-          cell: ({ row }) => <span>{row.original.totalMinutes} min</span>,
         }),
       );
       add(
@@ -168,6 +148,7 @@ describe("recipe list display columns", () => {
       "source",
       "totalMinutes",
       "dataQuality",
+      "dataGaps",
     ]);
   });
 
@@ -185,6 +166,7 @@ describe("recipe list display columns", () => {
       meals: "Meals",
       notes: "Notes",
       dataQuality: "Data quality",
+      dataGaps: "Data gaps",
     });
   });
 
@@ -223,9 +205,28 @@ describe("recipe list display columns", () => {
     });
   });
 
-  it("renders the costTotal override's own cell against the row", () => {
+  it("renders totalMinutes through the declared total-time renderer", () => {
+    render(<>{renderRecipeCell("totalMinutes", RECIPE_ROW)}</>);
+    expect(screen.getByText("35 min")).toBeVisible();
+  });
+
+  it("renders a pending costTotal through the declared estimate-cost renderer", () => {
     render(<>{renderRecipeCell("costTotal", RECIPE_ROW)}</>);
-    expect(screen.getByText("$12.5")).toBeVisible();
+    expect(screen.getByText("Pending")).toBeVisible();
+  });
+
+  it("rejects a legacy costTotal override beside the manifest renderer", () => {
+    const helper = createCubbyColumnHelper<RecipeRow>();
+    expect(() =>
+      createEntityDisplayColumns(
+        "recipe",
+        helper,
+        createCubbyColumnCollection((add) => {
+          add(helper.display({ id: "costTotal", cell: () => null }));
+        }),
+        { only: ["costTotal"] },
+      ),
+    ).toThrow("Manifest and legacy list renderers both claim recipe.costTotal");
   });
 
   it("renders Recipe Source through the manifest and stops row activation", () => {
@@ -277,9 +278,6 @@ describe("recipe list display columns", () => {
         createCubbyColumnCollection((add) => {
           add(helper.display({ id: "tags", cell: () => null }));
           add(helper.display({ id: "servings", cell: () => null }));
-          add(helper.display({ id: "costTotal", cell: () => null }));
-          add(helper.display({ id: "caloriesTotal", cell: () => null }));
-          add(helper.display({ id: "totalMinutes", cell: () => null }));
           add(helper.display({ id: "meals", cell: () => null }));
           add(helper.display({ id: "totals", cell: () => null }));
         }),

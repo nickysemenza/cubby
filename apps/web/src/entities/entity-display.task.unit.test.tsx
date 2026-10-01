@@ -152,6 +152,7 @@ describe("task list display columns", () => {
       "trade",
       "sortOrder",
       "dataQuality",
+      "dataGaps",
     ]);
   });
 
@@ -169,6 +170,7 @@ describe("task list display columns", () => {
       trade: "Trade",
       sortOrder: "Sort order",
       dataQuality: "Data quality",
+      dataGaps: "Data gaps",
     });
   });
 

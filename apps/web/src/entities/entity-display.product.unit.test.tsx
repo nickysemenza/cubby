@@ -37,7 +37,13 @@ interface ProductRow {
   expenseTotal: number;
   servingAsLocations: number;
   componentCount: number;
-  expectedQuantity: number;
+  quantityLedger: {
+    expectedQuantity: number;
+    acquiredUnits: number;
+    exitedUnits: number;
+    unknownAcquisitionLines: number;
+    unknownExitLines: number;
+  };
   quantityVariance: number | null;
   purchaseDate: string | null;
   tags: string[];
@@ -60,7 +66,13 @@ const PRODUCT_ROW: ProductRow = {
   expenseTotal: 42,
   servingAsLocations: 1,
   componentCount: 0,
-  expectedQuantity: 3,
+  quantityLedger: {
+    expectedQuantity: 3,
+    acquiredUnits: 3,
+    exitedUnits: 0,
+    unknownAcquisitionLines: 0,
+    unknownExitLines: 0,
+  },
   quantityVariance: 0,
   purchaseDate: "2026-09-01",
   tags: ["kitchen"],
@@ -95,12 +107,10 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
 
 /**
  * Builds the product list's columns the same way `productlist.tsx` does:
- * overrides for every field it renders specially, matched by column id —
- * including the two that `createEntityDisplayColumns` would otherwise
- * reject outright (`servingAsLocations` and `expectedQuantity` — the alias
- * for the `ledgerExpectedQuantity` field — are both `readKey: null`, since
- * their real values are nested under `quantityLedger` on the list row).
- * `dataQuality` is rendered by its manifest-declared `data-quality` renderer. `usdaUnavailable` and `onHandUnits` are
+ * overrides for every field it still renders specially, matched by column id.
+ * `ledgerExpectedQuantity`, `quantityVariance`, `tags` and `dataQuality` are
+ * rendered by their manifest-declared list renderers (the first two read
+ * `quantityLedger`, nested on the list row). `usdaUnavailable` and `onHandUnits` are
  * left generic to exercise the declaration's own width/format/mobile/sorting
  * metadata, same as the shared `declared width/format/mobile/sorting` block.
  */
@@ -185,26 +195,8 @@ function buildProductColumns() {
       );
       add(
         helper.display({
-          id: "ledgerExpectedQuantity",
-          cell: ({ row }) => <span>{row.original.expectedQuantity}</span>,
-        }),
-      );
-      add(
-        helper.display({
-          id: "quantityVariance",
-          cell: ({ row }) => <span>{row.original.quantityVariance}</span>,
-        }),
-      );
-      add(
-        helper.display({
           id: "purchaseDate",
           cell: ({ row }) => <span>{row.original.purchaseDate}</span>,
-        }),
-      );
-      add(
-        helper.display({
-          id: "tags",
-          cell: ({ row }) => <span>{row.original.tags.join(", ")}</span>,
         }),
       );
       add(
@@ -295,7 +287,7 @@ describe("product list display columns", () => {
     expect(screen.getByText("Tools")).toBeVisible();
   });
 
-  it("renders the expectedQuantity override (the ledgerExpectedQuantity alias) against the row", () => {
+  it("renders ledgerExpectedQuantity through the declared expected-quantity renderer", () => {
     render(<>{renderProductCell("ledgerExpectedQuantity", PRODUCT_ROW)}</>);
     expect(screen.getByText("3")).toBeVisible();
   });
@@ -322,10 +314,7 @@ describe("product list display columns", () => {
             "expenseTotal",
             "servingAsLocations",
             "componentCount",
-            "ledgerExpectedQuantity",
-            "quantityVariance",
             "purchaseDate",
-            "tags",
             "expenseCount",
           ]) {
             add(helper.display({ id, cell: () => null }));
