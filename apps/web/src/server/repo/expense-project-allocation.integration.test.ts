@@ -113,6 +113,9 @@ describe("expense project allocation", () => {
     expect(
       planText.match(/CTE principal_fact\n[^\n]*rows=(\d+) loops=1/u)?.[1],
     ).toBe("3");
+    // Project rollups never read the category, and resolving it per principal
+    // line made the whole-ledger project read ~10x slower.
+    expect(planText).not.toMatch(/CTE (ancestors|mapping|facts)\b/u);
 
     const rows = (await loadExpenseProjectAllocations(ctx.db, [tax.id])).sort(
       (a, b) => (a.projectName ?? "").localeCompare(b.projectName ?? ""),

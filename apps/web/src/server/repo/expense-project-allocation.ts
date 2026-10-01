@@ -57,6 +57,7 @@ type RawAllocationRow<T> = Omit<T, "sourceCents" | "attributedCents"> & {
 export const expenseJointAllocationSql = (
   expenseIds?: readonly ExpenseId[] | SQL,
   draft?: ExpenseSpendingCategoryResolutionDraft,
+  { categories = true }: { categories?: boolean } = {},
 ): SQL => sql`
   WITH ${
     expenseIds
@@ -68,7 +69,13 @@ export const expenseJointAllocationSql = (
   } principal_fact AS (
     SELECT e."id" AS "expenseId", e."purchaseId",
       ${effectiveExpenseProjectSql("e")} AS "projectId",
-      ${effectiveExpenseSpendingCategorySql("e", draft)} AS "spendingCategoryId",
+      ${
+        // Resolving a principal line's category walks its product's category
+        // ancestry per row; a project-only read skips it (~10x on the ledger).
+        categories
+          ? effectiveExpenseSpendingCategorySql("e", draft)
+          : sql`NULL::uuid`
+      } AS "spendingCategoryId",
       round(e."cost"::numeric * 100)::bigint AS cost_cents,
       live_purchase."id" IS NOT NULL AS live_purchase
     FROM ${
@@ -182,7 +189,7 @@ export const expenseProjectAllocationSql = (
     max(a."sourceCents"::bigint)::text AS "sourceCents",
     sum(a."attributedCents"::bigint)::text AS "attributedCents",
     a.basis, bool_or(a.incomplete) AS incomplete
-  FROM (${expenseJointAllocationSql(expenseIds)}) a
+  FROM (${expenseJointAllocationSql(expenseIds, undefined, { categories: false })}) a
   GROUP BY a."expenseId", a."purchaseId", a."projectId", a."projectShortcode", a."projectName", a.basis
 `;
 

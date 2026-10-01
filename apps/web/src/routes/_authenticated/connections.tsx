@@ -12,10 +12,12 @@ import {
 } from "~/entities/entities";
 import { pageTitle } from "~/lib/page-title";
 
+// A hand-typed or truncated link renders the unknown-view message instead of
+// failing search validation into a route error.
 const searchSchema = z.object({
-  source: entitySchema,
-  id: z.string().min(1),
-  view: z.string().min(1),
+  source: entitySchema.optional().catch(undefined),
+  id: z.string().min(1).optional().catch(undefined),
+  view: z.string().min(1).optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/_authenticated/connections")({
@@ -26,6 +28,7 @@ export const Route = createFileRoute("/_authenticated/connections")({
 
 function ConnectionsPage() {
   const { source, id, view } = Route.useSearch();
+  if (!source || !id || !view) return <UnknownConnectionView />;
   const relation = view.startsWith("relation:")
     ? entityManifest[source].relationships.find(
         (item) => item.key === view.slice(9) && item.cardinality === "many",
@@ -38,12 +41,7 @@ function ConnectionsPage() {
     (target && isBrowserRoutedEntity(target)
       ? entities[target].pluralLabel
       : "Connected records");
-  if (!target)
-    return (
-      <main className="p-6">
-        <h1 className="text-2xl font-semibold">Unknown connection view</h1>
-      </main>
-    );
+  if (!target) return <UnknownConnectionView />;
   return (
     <main className="mx-auto w-full max-w-6xl space-y-5 p-4 md:p-8">
       {isBrowserRoutedEntity(source) ? (
@@ -65,6 +63,14 @@ function ConnectionsPage() {
         initialOpenAll
         hideWhenEmpty={false}
       />
+    </main>
+  );
+}
+
+function UnknownConnectionView() {
+  return (
+    <main className="p-6">
+      <h1 className="text-2xl font-semibold">Unknown connection view</h1>
     </main>
   );
 }
