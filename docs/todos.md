@@ -1236,10 +1236,6 @@ PRs; unordered.
   `hooks/`, `app/_components/hooks/`, `lib/`, `misc/` and `server-functions/`.
   Move to `ui/` (primitives), `features/<domain>/`, `entity/` (generic shells)
   and `lib/` (pure utilities) with one codemod commit and nothing else in flight.
-- **Retire the `server/repo/*/index.ts` barrels.** Kernel repositories bypass
-  them; about 45 re-exported names have no production importer. Rewrite
-  importers per name with an import-aware codemod (not sed), leaving
-  `database-helpers`, which is a real module API with ~350 importers.
 - **One Cargo workspace for `recipebridge` and `cubby-ffi`.** They keep separate
   `Cargo.lock` files. Trap: member `[profile.*]` tables are ignored in a
   workspace and `wasm-pack` takes only `--dev/--profiling/--release`, so
@@ -1252,10 +1248,6 @@ PRs; unordered.
 - **One data-quality framework.** `repo/problems/detectors-*` and the declared
   checks in `repo/data-quality/` are two systems for "this record is wrong";
   make detectors declared checks and have Problems read their results.
-- **Retire the hand-written merges onto link dispositions.** Product, purchase,
-  vendor, ledger-party, plant and ingredient merges each repoint their own
-  relationships; move the remaining per-entity parts onto the generic
-  `EntityLink` merge path.
 - **Declare non-entity child tables in the manifest (`children:`)** so their
   DDL is generated like entity tables.
 - **Profile test cost before another pruning pass.** [PR #1273](https://github.com/nickysemenza/cubby/pull/1273) reduced literal
