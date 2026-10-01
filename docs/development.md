@@ -81,6 +81,11 @@ them, and stage incompatible changes as expand → migrate → deploy → cleanu
   churn after a parser bump.
 - `pnpm dev` gives each checkout its own database and Worker namespace on free
   ports. Discover the session with `pnpm dev:status -- --json`.
+- To sign in locally, click **Continue as local dev user** on the sign-in page,
+  or open `<origin>/__dev/login?next=/some/path`. Both sign in the seeded
+  synthetic dev user (`apps/web/tooling/dev/state.ts`) through better-auth.
+  The route exists only in the local dev Worker entry and the button only in
+  Vite dev builds; `check-client-bundle` rejects `/__dev/` in production output.
 - On macOS, each database or browser test command owns a disposable Apple
   `container` PostgreSQL/IntegreSQL pair, cleaned up on exit.
   - `CUBBY_TEST_SERVICES=warm` reuses fixed-name containers.

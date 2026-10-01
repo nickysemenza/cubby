@@ -50,17 +50,15 @@ export async function assertNoServerCodeInClient(
   );
 }
 
-export async function assertNoDevLoginInWorker(
-  workerDirectory: string,
-): Promise<void> {
-  for (const file of await walk(workerDirectory)) {
+const DEV_ONLY_ROUTES = ["/__dev/", "/__local-storage/s3/", "/cdn-cgi/local/"];
+
+export async function assertNoDevRoutes(directory: string): Promise<void> {
+  for (const file of await walk(directory)) {
     if (path.extname(file) !== ".js") continue;
     const code = await readFile(file, "utf8");
-    if (
-      ["/__dev/", "/__local-storage/s3/"].some((route) => code.includes(route))
-    ) {
+    if (DEV_ONLY_ROUTES.some((route) => code.includes(route))) {
       throw new Error(
-        `Local development route leaked into production Worker bundle: ${file}`,
+        `Local development route leaked into production bundle: ${file}`,
       );
     }
   }
@@ -71,7 +69,13 @@ const invokedPath = process.argv[1]
   : undefined;
 if (invokedPath === import.meta.url) {
   await assertNoServerCodeInClient(CLIENT_DIR);
+  // Dev-only links (sign-in's dev login, the footer's Local Explorer) are gated
+  // on import.meta.env.DEV, which every `vite build`, local preview included,
+  // replaces with false.
+  await assertNoDevRoutes(CLIENT_DIR);
   if (process.env.CUBBY_DEV_PREVIEW_BUILD !== "true")
-    await assertNoDevLoginInWorker(WORKER_DIR);
-  console.log("[check-client-bundle] no server-only code in dist/client");
+    await assertNoDevRoutes(WORKER_DIR);
+  console.log(
+    "[check-client-bundle] no server-only code or dev routes in production output",
+  );
 }
