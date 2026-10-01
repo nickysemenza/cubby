@@ -273,6 +273,10 @@ public struct FieldDescriptor: Codable, Sendable {
     public let placeholder: String?
     /// `today` seeds a date control on create.
     public let initial: String?
+    /// A literal create-time seed (`control.initial: { value }`); `initial` stays the `today` marker.
+    public let initialValue: JSONValue?
+    /// `true`/`false` override the create schema's required-ness for the editor; nil derives it.
+    public let controlRequired: Bool?
     /// Membership in the create / update payloads (the editor's visible field rosters).
     public let inCreate: Bool
     /// The create payload rejects this key absent: the editor must fill it before saving.
@@ -284,8 +288,12 @@ public struct FieldDescriptor: Codable, Sendable {
     public let listOrder: Int?
     public let listHidden: Bool
     public let width: String?
-    /// Cell formatter (`currency`, `signedCurrency`, `plainDate`, `timestamp`, `external-link`, `amount`).
+    /// Cell formatter (`currency`, `signedCurrency`, `plainDate`, `timestamp`, `external-link`, `amount`,
+    /// `presence`, `bytes`, `join`, `arrayCount`, `count`).
     public let format: String?
+    /// Where a field with no flat read key reads from on a row: dotted keys with optional `[n]` / `[]`
+    /// segments (`quantityLedger.locationCount`, `sourceRefs[].source`).
+    public let readPath: String?
     public let listRenderer: ListRendererID?
     public let detailRenderer: DetailRendererID?
     /// Mobile card placement of the list column, when declared.
@@ -502,6 +510,47 @@ public struct EntityPresentation: Codable, Sendable, Hashable {
     public let editSections: [EditSection]?
     public let readOnlyOnUpdate: [String]
     public let readOnlyWhen: [ReadOnlyRule]
+    /// Date pairs whose `end` may not precede their `start` in the editor.
+    public let editDateRanges: [EditDateRange]
+    /// Named list starting points (pinned filters, sort, column visibility).
+    public let savedViews: [SavedView]
+}
+
+public struct EditDateRange: Codable, Sendable, Hashable {
+    public let start: String
+    public let end: String
+}
+
+/// One pinned filter: `value` is a single value or, for multi-select kinds, a list.
+public struct SavedViewFilter: Codable, Sendable, Hashable {
+    public let id: String
+    public let values: [String]
+    public let isList: Bool
+}
+
+public struct SavedViewSort: Codable, Sendable, Hashable {
+    public let id: String
+    public let desc: Bool
+}
+
+public struct SavedViewFlow: Codable, Sendable, Hashable {
+    public let kind: String
+    public let label: String
+}
+
+/// A saved list view: applying it sets real column-filter state. Native decodes it for parity with
+/// the web view switcher; no native UI consumes it yet.
+public struct SavedView: Codable, Sendable, Hashable, Identifiable {
+    public let id: String
+    public let label: String
+    public let description: String
+    public let filters: [SavedViewFilter]
+    public let sort: [SavedViewSort]
+    public let flow: SavedViewFlow?
+    /// Column ids the view reveals (`true`) or hides (`false`) when applied.
+    public let columnVisibility: [String: Bool]
+    /// The Problems section this view also publishes, when declared.
+    public let problemKey: String?
 }
 
 public enum ListTotalFormat: String, Codable, Sendable, Hashable {

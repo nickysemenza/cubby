@@ -16,6 +16,7 @@ import {
   recipeTotals,
   recipeYieldSchema,
 } from "@cubby/schemas/recipe-shared";
+import { FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
 export default defineEntity({
   key: "recipe",
@@ -47,6 +48,30 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "no-instructions",
+          label: "No instructions",
+          description: "Recipes with no written instructions",
+          // The source exclusion is spelled as a POSITIVE list plus the `(none)`
+          // sentinel, not as a negation: `sourceType` is nullable, a NULL is a
+          // legacy hand-entered recipe that must stay visible, and `!= 'Book'`
+          // would evaluate UNKNOWN against it and drop it. Book and Notion recipes
+          // live elsewhere by design — the text isn't supposed to be here.
+          //
+          // `recipe-source-complement.unit.test.ts` pins the list to the full
+          // enum minus those two, so adding a fifth source can't silently exclude
+          // it from this worklist.
+          filters: [
+            { id: "instructions", value: "none" },
+            { id: "sourceType", value: ["Website", "Other", FILTER_NONE] },
+          ],
+          sort: [{ id: "name", desc: false }],
+          layout: {
+            columnVisibility: { sourceType: true },
+          },
+        },
+      ],
       read: {
         relations: ["forkedFromRecipeId", "forkedFromRecipeName", "meals"],
         derived: [

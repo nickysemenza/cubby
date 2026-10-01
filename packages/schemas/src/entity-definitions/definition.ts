@@ -137,6 +137,34 @@ export const LIST_PRESENTATION_CHOICES = [
 export const listPresentationLabel = (id: string): string | null =>
   LIST_PRESENTATION_CHOICES.find((choice) => choice.id === id)?.label ?? null;
 
+/**
+ * List/detail cell formatters a field may declare (`display.format`). Each
+ * platform's renderer switches on the same names:
+ *
+ * - `currency`, `signedCurrency`, `plainDate`, `timestamp`, `external-link`,
+ *   `amount`: one value, formatted.
+ * - `presence`: whether a value (a boolean, or anything non-empty) is there,
+ *   as a labelled pill (`display.valueOptions` `yes`/`no` rosters the labels).
+ * - `bytes`: a byte count as a human size.
+ * - `join`: a string array, comma-joined with `_` read as a space.
+ * - `count`: a known non-negative count; `0` renders as `0`, never a dash.
+ * - `arrayCount`: the length of an array value, rendered as a `count`.
+ */
+export const displayFormats = [
+  "currency",
+  "signedCurrency",
+  "plainDate",
+  "timestamp",
+  "external-link",
+  "amount",
+  "presence",
+  "bytes",
+  "join",
+  "arrayCount",
+  "count",
+] as const;
+export type DisplayFormat = (typeof displayFormats)[number];
+
 /** The three built-in renderers; every other view is a slot. */
 export const BUILT_IN_LIST_VIEWS = ["table", "shelf", "timeline"] as const;
 export const isSlotListView = (
@@ -232,11 +260,33 @@ const buildMetadataSchemas = () => {
       /** Editor placeholder text, generic-editor only. */
       placeholder: nonEmptyString().nullable().optional().default(null),
       /**
-       * A create-only initial value the generic editor derives at draft time
-       * instead of from the field's record/schema default. `"today"` is the
-       * only member today (the household's local calendar date).
+       * A create-only initial value the generic editor uses at draft time
+       * instead of the field's record/schema default: `"today"` (the
+       * household's local calendar date) or a literal `{ value }`.
        */
-      initial: z.literal("today").nullable().optional().default(null),
+      initial: z
+        .union([
+          z.literal("today"),
+          z
+            .object({
+              value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+            })
+            .strict(),
+        ])
+        .nullable()
+        .optional()
+        .default(null),
+      /**
+       * Whether the editor refuses a blank value. `null` derives it from the
+       * create schema (required there means required here); `true` requires
+       * a value the schema merely allows (a manufacturer); `false` exempts a
+       * value the schema requires but a more specific validator reports.
+       */
+      required: z
+        .boolean({ error: "must be a boolean" })
+        .nullable()
+        .optional()
+        .default(null),
       /**
        * A field whose value the decision tier (Jev) infers from the named
        * sibling fields (`basis`, model field keys of the same entity). The
@@ -270,6 +320,7 @@ const buildMetadataSchemas = () => {
         width,
         placeholder,
         initial,
+        required,
         suggest,
       }) => ({
         kind,
@@ -279,6 +330,7 @@ const buildMetadataSchemas = () => {
         width,
         placeholder,
         initial,
+        required,
         suggest,
       }),
     );
@@ -317,19 +369,15 @@ const buildMetadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
+      /**
+       * Where a field with no flat read key (`readKeyOverride: null`) is read
+       * from on a list or detail row: a dotted path with `[n]` indexing and
+       * an optional `[]` projection over an array (`quantityLedger.locationCount`,
+       * `sourceRefs[].source`, `category.path[0].name`).
+       */
+      readPath: nonEmptyString().nullable().optional().default(null),
       /** List cell formatter chosen by the shared column compiler. */
-      format: z
-        .enum([
-          "currency",
-          "signedCurrency",
-          "plainDate",
-          "timestamp",
-          "external-link",
-          "amount",
-        ])
-        .nullable()
-        .optional()
-        .default(null),
+      format: z.enum(displayFormats).nullable().optional().default(null),
       /**
        * Semantic renderer ids for values whose presentation cannot be derived
        * from kind/reference/format alone. The manifest chooses the renderer;
@@ -404,6 +452,7 @@ const buildMetadataSchemas = () => {
         detailOrderOverride,
         listOrderOverride,
         width,
+        readPath,
         format,
         renderer,
         mobile,
@@ -418,6 +467,7 @@ const buildMetadataSchemas = () => {
         detailOrder: detailOrderOverride,
         listOrder: listOrderOverride,
         width,
+        readPath,
         format,
         renderer,
         mobile,
@@ -651,6 +701,14 @@ const buildMetadataSchemas = () => {
       create: z.array(nonEmptyString()).min(1),
       update: z.array(nonEmptyString()).min(1),
       editorFields: z.array(nonEmptyString()).optional().default([]),
+      /**
+       * Fields an intent's editor refuses to leave blank although the
+       * canonical contract allows it (`schedule` needs its `dueDate`).
+       */
+      required: z
+        .record(nonEmptyString(), z.array(nonEmptyString()).min(1))
+        .optional()
+        .default({}),
     })
     .strict();
 
@@ -1081,6 +1139,85 @@ const buildMetadataSchemas = () => {
             )
             .optional()
             .default([]),
+          /**
+           * Named starting points for the list: pinned filters plus an
+           * optional sort and curated column visibility. Applying one sets
+           * real column-filter state, so a view and a shared link are the
+           * same thing. The compiler checks every filter id and value against
+           * `filters.descriptors` and every layout column against the
+           * declared list columns. `problem` additionally publishes the view
+           * as a Problems section.
+           */
+          savedViews: z
+            .array(
+              z
+                .object({
+                  id: nonEmptyString(),
+                  label: nonEmptyString(),
+                  description: nonEmptyString(),
+                  filters: z
+                    .array(
+                      z
+                        .object({
+                          id: nonEmptyString(),
+                          value: z.union([
+                            z.string(),
+                            z.array(z.string()).min(1),
+                          ]),
+                        })
+                        .strict(),
+                    )
+                    .min(1),
+                  /** A guided pass the view leads into. */
+                  flow: z
+                    .object({
+                      kind: z.enum(["recount-worklist", "shelf-triage"]),
+                      label: nonEmptyString(),
+                    })
+                    .strict()
+                    .nullable()
+                    .optional()
+                    .default(null),
+                  sort: z
+                    .array(
+                      z
+                        .object({
+                          id: nonEmptyString(),
+                          desc: z.boolean({ error: "must be a boolean" }),
+                        })
+                        .strict(),
+                    )
+                    .nullable()
+                    .optional()
+                    .default(null),
+                  /** Columns the view reveals (or hides) when applied. */
+                  layout: z
+                    .object({
+                      columnVisibility: z.record(
+                        nonEmptyString(),
+                        z.boolean({ error: "must be a boolean" }),
+                      ),
+                    })
+                    .strict()
+                    .nullable()
+                    .optional()
+                    .default(null),
+                  problem: z
+                    .object({
+                      key: nonEmptyString(),
+                      title: nonEmptyString(),
+                      description: nonEmptyString(),
+                      emptyMessage: nonEmptyString(),
+                    })
+                    .strict()
+                    .nullable()
+                    .optional()
+                    .default(null),
+                })
+                .strict(),
+            )
+            .optional()
+            .default([]),
           /** A custom list transport's search parameter (for example USDA's nameFilter). */
           primarySearch: z
             .object({ key: nonEmptyString(), placeholder: nonEmptyString() })
@@ -1148,11 +1285,13 @@ const buildMetadataSchemas = () => {
             read,
             shelfSubtitleOverride,
             initialFilter,
+            savedViews,
             primarySearch,
             tree,
             links,
             timeline,
           }) => ({
+            savedViews,
             views: viewOverrides,
             viewAliases,
             totals: totalOverrides,
@@ -1188,6 +1327,14 @@ const buildMetadataSchemas = () => {
             .nullable()
             .optional()
             .default(null),
+          /**
+           * Date pairs whose end may not precede their start; the editor
+           * reports it beside the end field.
+           */
+          dateRanges: z
+            .array(z.object({ start: fieldKey, end: fieldKey }).strict())
+            .optional()
+            .default([]),
           /** Fields the update editor shows read-only, unconditionally. */
           readOnlyOnUpdate: z.array(fieldKey).optional().default([]),
           /** Fields locked when `field` equals `equals` on the record. */
@@ -1230,11 +1377,13 @@ const buildMetadataSchemas = () => {
         .transform(
           ({
             sectionOverrides,
+            dateRanges,
             readOnlyOnUpdate,
             readOnlyWhen,
             hiddenWhen,
           }) => ({
             sections: sectionOverrides,
+            dateRanges,
             readOnlyOnUpdate,
             readOnlyWhen,
             hiddenWhen,

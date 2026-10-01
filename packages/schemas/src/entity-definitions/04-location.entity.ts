@@ -77,6 +77,85 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "undescribed",
+          label: "No AI description",
+          description: "Locations with photos that haven't been described yet",
+          // `location_ai_description`'s own `expected` is "has a displayable
+          // photo" (checks/location.ts) — describing a location with no photo
+          // isn't possible, so without that gate this would select a backlog
+          // nothing can drain.
+          filters: [{ id: "dataGaps", value: ["location_ai_description"] }],
+          problem: {
+            key: "locationsWithoutAiDescription",
+            title: "Missing AI Descriptions",
+            description:
+              "Locations with photos that haven't been analyzed by AI yet. Run backfill to generate descriptions for all.",
+            emptyMessage: "All locations with photos have AI descriptions.",
+          },
+          // Both hidden by default on this table, so the view has to reveal them —
+          // otherwise it selects rows on a signal nothing on screen explains.
+          layout: {
+            columnVisibility: { aiDescription: true, image: true },
+          },
+        },
+        {
+          id: "stale-recounts",
+          label: "Overdue a recount",
+          description: "Holding stock, not counted in 60 days (or ever)",
+          // Inventory never auto-decrements, so nothing but a deliberate recount
+          // restores a count's truth — an uncounted bin just drifts. Deliberately
+          // looser than the 30-day tint the location page shows: that nudges, this
+          // raises a row.
+          filters: [
+            { id: "inventoryEntries", value: "has" },
+            { id: "lastBulkInventory", value: "60" },
+          ],
+          // Oldest recount first. Never-recounted bins do NOT lead: `buildOrderBy`
+          // emits NULLS LAST in both directions, which is the house convention
+          // (revisited and kept 2026-07 — empties are found with presence filters,
+          // not by sort direction). The detector this replaced ordered `nulls
+          // first`; that behaviour is gone deliberately rather than by accident,
+          // and a one-column exception is exactly what the convention exists to
+          // prevent. They are still fully IN the section — the `IS NULL` half of
+          // the predicate is load-bearing — and the count includes them; they just
+          // don't fill the card's sample.
+          sort: [{ id: "lastBulkInventory", desc: false }],
+          problem: {
+            key: "staleLocations",
+            title: "Locations overdue a recount",
+            description:
+              "Holding stock whose count hasn't been checked against the shelf in 60 days — or ever.",
+            emptyMessage: "Every stocked location has been recounted recently.",
+          },
+          layout: {
+            columnVisibility: { lastBulkInventory: true, inventoryEntries: true },
+          },
+        },
+        {
+          id: "empty-leaves",
+          label: "Empty",
+          description: "Leaf locations holding nothing",
+          // Both halves are required. Without `children: none` this matches every
+          // shelf whose stock lives in its bins rather than directly on it, which
+          // is most of the tree and none of the worklist.
+          filters: [
+            { id: "inventoryEntries", value: "none" },
+            { id: "children", value: "none" },
+          ],
+          problem: {
+            key: "emptyLocations",
+            title: "Empty locations",
+            description:
+              "Leaf locations holding no stock — either not yet itemized, or genuinely empty.",
+            emptyMessage: "No empty locations.",
+          },
+          layout: {
+            columnVisibility: { children: true, inventoryEntries: true },
+          },
+        },
+      ],
       read: {
         relations: ["product", "children", "parent", "inventoryEntries"],
         derived: ["valuation"],

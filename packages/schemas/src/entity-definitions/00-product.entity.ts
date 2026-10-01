@@ -25,6 +25,7 @@ import {
 } from "@cubby/schemas/product-fields";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { fdcId } from "@cubby/usda";
+import { FILTER_ANY, FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
 import { productCategorySummary } from "../product-category-fields";
 export default defineEntity({
@@ -134,6 +135,339 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "shelf-disagrees",
+          label: "Shelf disagrees",
+          description: "Stocked products whose count differs from the ledger",
+          // Server-scoped to products that are BOTH stocked and in the ledger —
+          // see `quantityVarianceFilter` in the product repo. Neither half is
+          // optional: without "stocked" this is dominated by things correctly sold
+          // off, and without "in the ledger" by stocked products that have no
+          // product-linked Expense at all (a provenance gap, not a counting one).
+          //
+          // A broad shelf-reconciliation worklist: it never converges to zero,
+          // which is why it lives here rather than as a Problems section. The
+          // narrower acquisition-history gap — more recorded units gone than
+          // arrived — is surfaced separately as `negativeExpectedQuantity`.
+          filters: [{ id: "quantityVariance", value: "mismatched" }],
+          // Snapshots this product set, then recounts every location holding it —
+          // full bins, so the pass confirms the whole shelf rather than one row.
+          flow: { kind: "recount-worklist", label: "Recount these" },
+          // Both hidden by default on a table this wide, so the view has to reveal
+          // them — otherwise it selects rows on a signal nothing on screen explains.
+          // `servingAsLocations` joins them because a product can now be short
+          // while sitting in no inventory row at all: eight 7-gal totes bought,
+          // three in service as bins, five nowhere. Without the column the row
+          // reads as a bare -5 with an empty Location cell.
+          layout: {
+            columnVisibility: {
+              ledgerExpectedQuantity: true,
+              quantityVariance: true,
+              servingAsLocations: true,
+            },
+          },
+        },
+        {
+          id: "unknown-quantities",
+          label: "Missing quantities",
+          description: "Products whose expense lines don't establish a count",
+          // The data-entry backlog behind the `+N?` cue: a receipt that proves the
+          // cost but not the count leaves the expected quantity understated, and
+          // nothing infers one (a nullable quantity is never read as 1).
+          filters: [{ id: "ledgerExpectedQuantity", value: "unknown" }],
+          layout: {
+            columnVisibility: { ledgerExpectedQuantity: true },
+          },
+        },
+        {
+          id: "unlocated",
+          label: "Not on a shelf",
+          description:
+            "Bought, never sold, and held nowhere — not on a shelf, not a bin, not inside a kit",
+          // The other half of `shelf-disagrees`, and the half that view cannot
+          // reach: `quantityVarianceFilter` is scoped to products that are BOTH
+          // stocked and in the ledger, and `onHandUnitsSql` returns NULL for a
+          // zero-entry shelf — so a product the ledger says you own with nothing
+          // on a shelf matches neither "mismatched" nor "matched". It needs no new
+          // server predicate beyond `stockTracked`, only these filters combined.
+          //
+          // Converges by decision, not by category guessing: `stockTracked: null`
+          // is the undecided worklist, so a product leaves this view the moment
+          // it's reviewed — marked `false` (no shelf claim wanted: bananas,
+          // software) or `true` (shelf records are kept). Without that filter
+          // every consumable ever bought stayed "owned" here forever, because
+          // inventory never auto-decrements (a tenet); with it, the view shrinks
+          // as the operator works through the backlog instead of refilling on
+          // every grocery purchase. Still sorted by price so the money surfaces
+          // first while the backlog is large; `unlocated-durables` below is the
+          // shortcut, not the answer.
+          //
+          // `servingAsLocations: none` is what keeps this DISJOINT from
+          // `shelf-disagrees`. Presence has THREE forms — stock on a shelf, the bin
+          // itself, and stock held by a kit's parts — and this view means none of
+          // them. Without the second the HDX totes appeared here under "stocked
+          // nowhere" while three of them were bins in daily use, and the same rows
+          // showed in both views telling different stories.
+          //
+          // `components: none` is the third, and the same argument one step out. A
+          // kit that has been split into a composition record keeps the Expense and
+          // holds no stock of its own — the shelf claim moved to its parts — so a
+          // decomposed kit is not "stocked nowhere", it is stocked as its
+          // components. The parts are also the ACTIONABLE rows: an unstocked
+          // component carries its own projected `expectedQuantity` (the kit's units
+          // reach it through `productComponent`) and matches this view by itself, so
+          // admitting the parent too reports one gap twice and less precisely.
+          // Verified on production: all 25 kit parents leave, and every genuinely
+          // unaccounted component stays.
+          filters: [
+            { id: "ledgerExpectedQuantity", value: "positive" },
+            { id: "location", value: [FILTER_NONE] },
+            { id: "servingAsLocations", value: "none" },
+            { id: "stockTracked", value: "none" },
+            { id: "components", value: "none" },
+          ],
+          sort: [{ id: "price", desc: true }],
+          // A one-pass triage of exactly these rows: discard, stock, or park.
+          flow: { kind: "shelf-triage", label: "Triage these" },
+          // Every half of the signal: a filled Expected beside an empty Location,
+          // not a bin, not a kit, still undecided on stock tracking.
+          // `quantityVariance` is deliberately NOT revealed — on-hand units are
+          // NULL for this entire cohort, so it renders `—` on every row, and a dash
+          // reads as "unknown" when the actual fact is "none".
+          layout: {
+            columnVisibility: {
+              ledgerExpectedQuantity: true,
+              location: true,
+              servingAsLocations: true,
+              stockTracked: true,
+              components: true,
+            },
+          },
+        },
+        {
+          id: "unlocated-durables",
+          label: "Durables not on a shelf",
+          description: "Tools and storage the ledger says you own, stocked nowhere",
+          // A fast path into `unlocated`, not an authority over it: same question,
+          // narrowed to the categories whose members are objects you could go find.
+          //
+          // ⚠️ It has real false negatives, because `category` is a weak proxy for
+          // durability. The disappearance that motivated both views — Milwaukee
+          // PACKOUT wall plates, hooks and racks — is categorized `supplies` and
+          // `hardware`, so none of it would appear here. Widening to those two
+          // categories is not the fix: they also carry the screws and shop
+          // consumables this view exists to exclude, and doing so lands you back at
+          // ~1,600 rows. When a count here looks reassuring, check `unlocated`.
+          filters: [
+            { id: "ledgerExpectedQuantity", value: "positive" },
+            { id: "location", value: [FILTER_NONE] },
+            { id: "servingAsLocations", value: "none" },
+            { id: "stockTracked", value: "none" },
+            { id: "components", value: "none" },
+            {
+              id: "categoryFeature",
+              value: ["tools", "tool-accessories", "storage"],
+            },
+          ],
+          sort: [{ id: "price", desc: true }],
+          layout: {
+            columnVisibility: {
+              ledgerExpectedQuantity: true,
+              location: true,
+              servingAsLocations: true,
+              stockTracked: true,
+              components: true,
+              categoryId: true,
+              categoryFeature: true,
+            },
+          },
+        },
+        {
+          id: "consumed-on-projects",
+          label: "Consumed on projects",
+          description: "Bought for a project, stocked nowhere — likely built in",
+          // A fast path into `unlocated`, not an authority over it — the same
+          // relationship `unlocated-durables` has, aimed at the opposite half of
+          // the backlog. Where that view narrows to things you could go find, this
+          // one gathers the material that went INTO the house: the drainage
+          // composite buried behind the foundation, the walnut plywood milled into
+          // cabinets, the gas line in the ground.
+          //
+          // Project attachment is the signal, and it is EVIDENCE rather than proof.
+          // The cohort is genuinely mixed — a whole Amazon order attributed to a
+          // project drags its dog treats and socks along, and a Lutron dimmer sits
+          // beside the wire nuts — so this view deliberately does not decide
+          // anything. It sorts the backlog so the decision is cheap, and the row
+          // still leaves only when `stockTracked` is answered or an InventoryEntry
+          // appears. Blanket-sweeping what lands here is the mistake it exists to
+          // make visible, not to automate.
+          //
+          // Costs no new server predicate: `FILTER_ANY` on the related-projects
+          // column expands to `projectPresenceFilter: "has"`, which
+          // `relatedWhereConditions` already implements generically.
+          filters: [
+            { id: "ledgerExpectedQuantity", value: "positive" },
+            { id: "location", value: [FILTER_NONE] },
+            { id: "servingAsLocations", value: "none" },
+            { id: "stockTracked", value: "none" },
+            { id: "components", value: "none" },
+            { id: "related:product.projects", value: [FILTER_ANY] },
+          ],
+          sort: [{ id: "price", desc: true }],
+          layout: {
+            // `related:product.projects` is `defaultVisible: false` in the related
+            // registry, and a filtered column that cannot be seen reads as an
+            // unexplained row count.
+            columnVisibility: {
+              ledgerExpectedQuantity: true,
+              location: true,
+              servingAsLocations: true,
+              stockTracked: true,
+              components: true,
+              "related:product.projects": true,
+            },
+          },
+        },
+        {
+          id: "kits",
+          label: "Kits",
+          description: "Products made of other products",
+          // A category, not a defect — so no `problem` key. Nothing here converges
+          // to zero and nothing here is wrong; buying a combo kit is the normal
+          // way these arrive.
+          //
+          // Earns a view because no other facet finds them: kit categories are
+          // scattered across `hardware`, `tools`, `storage`, and `household`, since
+          // a kit takes the category of what it contains.
+          filters: [{ id: "components", value: "has" }],
+          layout: {
+            // `components` is the filtered column and must be revealed. `expected`
+            // and `price` come along because a kit's own numbers are the ones that
+            // project down to its parts — the kit keeps one Expense, and that row
+            // is what gives every component its cost basis and its units.
+            columnVisibility: {
+              components: true,
+              ledgerExpectedQuantity: true,
+              price: true,
+            },
+          },
+        },
+        {
+          id: "unpriced-stocked",
+          label: "Stocked but unpriced",
+          description: "On a shelf, with no price to value it by",
+          // `product_price`'s own `expected` is exactly this pairing (placement
+          // 'stock', not a `misc:` bucket) — see checks/product.ts. Unpriced stock
+          // is invisible to the location valuation rollup: a null price yields a
+          // null entry valuation and the rollup omits it.
+          //
+          // NARROWER than the old `location: FILTER_ANY` leg: that admitted any
+          // placement (including `installed`), while the check's `hasStock` is
+          // `placement = 'stock'` only. An installed, unpriced fixture no longer
+          // appears here.
+          filters: [{ id: "dataGaps", value: ["product_price"] }],
+          problem: {
+            key: "productsMissingPrice",
+            title: "Stocked products with no price",
+            description:
+              "On a shelf but carrying no price, so they are silently missing from every location's value.",
+            emptyMessage: "Every stocked product has a price.",
+          },
+          layout: {
+            columnVisibility: { dataGaps: true, price: true, location: true },
+          },
+        },
+        {
+          id: "unpriced-buckets",
+          label: "Unpriced buckets",
+          description: "`misc:` piles on a shelf, which have no unit price",
+          // Split from the view above rather than folded into it: a bucket is a
+          // heterogeneous pile and is *expected* to be unpriced, so counting it as
+          // a gap leaves that section permanently red. The per-location summary
+          // makes the same split (`miscNoPrice`, not `missingPricing`).
+          filters: [
+            { id: "location", value: [FILTER_ANY] },
+            { id: "price", value: "none-bucket" },
+          ],
+          problem: {
+            key: "unvaluedBucketProducts",
+            title: "Unvalued misc buckets",
+            description:
+              "Bucket rows on a shelf with no price. Pricing one is optional — it just makes its location's total less of an underestimate.",
+            emptyMessage: "Every misc bucket carries a price.",
+          },
+          layout: {
+            columnVisibility: { price: true, location: true },
+          },
+        },
+        {
+          id: "unmapped",
+          label: "No way to cost it",
+          description: "No price, no USDA key, and no unit mapping",
+          // Every path to a cost or a conversion is absent at once: no price to
+          // scale, no USDA key to look a food up by, no manual edge to convert
+          // through. Any ONE of them would make the product usable, which is why
+          // the three are AND-ed rather than reported separately.
+          filters: [
+            { id: "price", value: "none-real" },
+            { id: "food", value: "none" },
+            { id: "unitMappingQuality", value: "none" },
+            { id: "categoryFeature", value: ["food", FILTER_NONE] },
+          ],
+          problem: {
+            key: "productsWithoutMappings",
+            title: "Products with no conversion path",
+            description:
+              "No price, no USDA key, and no unit mapping — nothing can cost or convert these, so any recipe using them is under-covered.",
+            emptyMessage: "Every food product has at least one conversion path.",
+          },
+          layout: {
+            columnVisibility: {
+              price: true,
+              food: true,
+              unitMappingQuality: true,
+              categoryId: true,
+              categoryFeature: true,
+            },
+          },
+        },
+        {
+          id: "over-exited",
+          label: "Exit exceeds history",
+          description: "Recorded exits exceed the available acquisition history",
+          // This view is the `expectedQuantityMax: -1` worklist, and the detector
+          // that separately re-derived the same predicate with a grouped HAVING is
+          // gone.
+          //
+          // Deliberately LOOSER than "sold but still stocked", which keys on
+          // disposal Purchases. Not an inconsistency — a different question. "Was
+          // this sold off entirely?" treats a refund as innocent noise, which on
+          // live data it usually is; "do the units balance?" treats a return of 8
+          // outlet boxes as 8 real units going back to the store, and most negative
+          // lines in this ledger are exactly that, sitting inside a Purchase that
+          // nets positive. Requiring a disposal Purchase here missed most of the
+          // exited units.
+          //
+          // The card reads `quantityLedger` off the list row, which carries the
+          // unknown-quantity counts field-for-field. They change what the row
+          // MEANS: unquantified acquisition lines are data-entry debt (the missing
+          // count almost certainly explains the gap), while a fully quantified
+          // ledger is a genuine contradiction. Reporting the bare number would
+          // flatten those into the same red row.
+          filters: [{ id: "ledgerExpectedQuantity", value: "negative" }],
+          problem: {
+            key: "negativeExpectedQuantity",
+            title: "Exits exceed recorded acquisitions",
+            description:
+              "Recorded exits exceed recorded arrivals. Older acquisitions may predate the ledger, so review the available history before correcting a quantity.",
+            emptyMessage: "No product has more recorded exits than acquisitions.",
+          },
+          layout: {
+            columnVisibility: { ledgerExpectedQuantity: true },
+          },
+        },
+      ],
       read: {
         media: [
           "images",

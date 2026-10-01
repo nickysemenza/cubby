@@ -39,6 +39,28 @@ export default defineEntity({
     icons: { phosphor: "Package", sfSymbol: "cube.box", emoji: "🗃️" },
     detail: {},
     list: {
+      savedViews: [
+        {
+          id: "never-verified",
+          label: "Never verified",
+          description: "Entries whose count has never been checked against a shelf",
+          // `inventory_verified`'s own `expected` is `placement = 'stock'`
+          // (checks/inventory.ts) — the same guard the inventory list's default
+          // `placementFilter` applied. Installed fixtures never get a
+          // `verifiedAt` (nobody recounts a wired-in dimmer), so including them
+          // would make this list permanently undrainable.
+          filters: [{ id: "dataGaps", value: ["inventory_verified"] }],
+          // Oldest first — the longest-unverified entries lead.
+          sort: [{ id: "createdAt", desc: false }],
+          problem: {
+            key: "neverVerifiedInventory",
+            title: "Inventory never confirmed by a recount",
+            description:
+              "Entries whose count has never been checked against the shelf (oldest first). Recount the location they live in to clear them. `verifiedAt` only started being stamped when audit sessions landed, so most of the inventory starts here — this is a backlog to work down, not a list of mistakes.",
+            emptyMessage: "Every inventory entry has been verified at least once.",
+          },
+        },
+      ],
       read: {
         relations: ["product", "location", "ownerLedgerPartyId"],
         derived: ["valuation", "effectiveOwnership"],

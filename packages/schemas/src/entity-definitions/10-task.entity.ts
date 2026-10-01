@@ -7,9 +7,14 @@ import {
   projectShortcode,
   taskShortcode,
 } from "../identifier-fields.js";
-import { taskStatusSchema, tradeSchema } from "@cubby/schemas/task-fields";
+import {
+  taskStatusSchema,
+  taskStatusValues,
+  tradeSchema,
+} from "@cubby/schemas/task-fields";
 import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { imageOut } from "./field-primitives.js";
+import { FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
 const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
 export default defineEntity({
@@ -52,6 +57,28 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "inbox",
+          label: "Inbox",
+          description: "Open top-level tasks with no project",
+          filters: [
+            {
+              id: "status",
+              value: taskStatusValues.filter((status) => status !== "done"),
+            },
+            { id: "projectId", value: [FILTER_NONE] },
+            { id: "parentTaskId", value: [FILTER_NONE] },
+          ],
+        },
+        {
+          id: "completed",
+          label: "Completed",
+          description: "Finished tasks, including subtasks",
+          filters: [{ id: "status", value: ["done"] }],
+          sort: [{ id: "updatedAt", desc: true }],
+        },
+      ],
       read: {
         relations: [
           "projectId",

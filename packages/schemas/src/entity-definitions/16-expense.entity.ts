@@ -27,6 +27,7 @@ import {
 } from "@cubby/schemas/ledger-transfer-fields";
 import { wholeCentAmount } from "@cubby/schemas/money";
 import { tradeSchema } from "@cubby/schemas/task-fields";
+import { FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
 import {
   optionalFieldResolutionsSchema,
@@ -75,6 +76,116 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "planned",
+          label: "Planned",
+          description: "Committed spend that hasn't happened yet",
+          filters: [{ id: "future", value: "true" }],
+          // Ascending, so the soonest lands first. Undated rows sort last on
+          // Postgres's default NULLS LAST — no extra sort logic needed.
+          sort: [{ id: "date", desc: false }],
+        },
+        {
+          id: "unassigned",
+          label: "Unassigned",
+          description: "Spend never attributed to a project",
+          // The `(none)` sentinel of the Project column's own picklist — the same
+          // value a user gets by picking it by hand.
+          filters: [{ id: "projectId", value: [FILTER_NONE] }],
+        },
+        {
+          id: "unclassified",
+          label: "Unclassified",
+          description: "Trade 'other' with no cost recorded",
+          filters: [
+            { id: "trade", value: ["other"] },
+            { id: "cost", value: "none" },
+          ],
+        },
+        {
+          id: "unattached",
+          label: "Unattached",
+          description: "Expenses with no Purchase attached",
+          // The Purchase column keeps the vendor URL filter despite its new field ID.
+          filters: [{ id: "purchaseId", value: [FILTER_NONE] }],
+        },
+        {
+          id: "goods-no-product",
+          label: "Goods without a product",
+          description: "Purchased items and tools not yet linked to a Product",
+          // Narrowed to `principal` goods on purpose: services are labor and carry
+          // no product by design, and tax/shipping/discount/fee lines structurally
+          // can't hold one. Without both filters this reads as a far larger backlog
+          // than it is, because correctly product-free rows dominate the count.
+          //
+          // `lineBasis` excludes the third never-satisfiable class: deposits,
+          // balances and estimated materials/labor splits, which are slices of an
+          // un-itemized total rather than gaps. Small by count but they dominate
+          // the top of this cost-sorted list, because lump-sum structure
+          // correlates with size — the largest purchases are the ones paid in
+          // installments.
+          filters: [
+            { id: "lineKind", value: ["principal"] },
+            { id: "lineBasis", value: ["item_line"] },
+            { id: "costType", value: ["materials", "tools"] },
+            { id: "productId", value: "none" },
+          ],
+          sort: [{ id: "cost", desc: true }],
+        },
+        {
+          id: "legacy-goods",
+          label: "Legacy goods lines",
+          description: "Hand-entered goods with no product and no purchase",
+          // `goods-no-product` plus the no-purchase sentinel: rows typed straight
+          // into the ledger before the vendor roster existed, so there is no
+          // receipt to promote a Product from. Worth triaging by hand rather than
+          // batch-importing.
+          filters: [
+            { id: "lineKind", value: ["principal"] },
+            { id: "lineBasis", value: ["item_line"] },
+            { id: "costType", value: ["materials", "tools"] },
+            { id: "productId", value: "none" },
+            { id: "purchaseId", value: [FILTER_NONE] },
+          ],
+          sort: [{ id: "cost", desc: true }],
+        },
+        {
+          id: "unknown-quantities",
+          label: "Missing quantities",
+          description: "Product-linked lines that prove a cost but not a count",
+          // The editable half of the product list's view of the same name: that one
+          // names the affected Products, this one selects the rows that actually
+          // carry the writable field. It's the backlog behind the `+N?` cue on the
+          // relationship summary tables, whose `unknownAcquisitionQuantityCount`
+          // counts exactly these lines.
+          //
+          // No `lineKind`/`lineBasis`/`costType` narrowing, unlike `goods-no-product`
+          // above — `product: has` already does that work. A quantity is only
+          // meaningful once a line names a Product, and the tax/shipping/fee lines
+          // those filters exist to exclude never carry one (every product-linked
+          // Expense in the ledger is `principal`). Restating it would imply a
+          // distinction the data doesn't have.
+          filters: [
+            { id: "productId", value: "has" },
+            { id: "productQuantity", value: "none" },
+            // A planned line has no count yet by construction, not by omission —
+            // and the `+N?` cue skips it for the same reason.
+            { id: "future", value: "false" },
+          ],
+          // Deliberately NOT mirroring the cue's `cost > 0`: no cost preset
+          // expresses it (the closest, `credits`, is `costMax: 0`). The divergence
+          // is refunds and $0 lines, which are worth quantifying too — so this view
+          // is a superset of the cue, never a subset that hides work.
+          sort: [{ id: "cost", desc: true }],
+          // Visible by default, but visibility persists per user — someone who has
+          // hidden Quantity would otherwise land on a list selected on an invisible
+          // signal, with the one field they came to edit missing.
+          layout: {
+            columnVisibility: { productQuantity: true },
+          },
+        },
+      ],
       read: {
         relations: [
           "projectId",

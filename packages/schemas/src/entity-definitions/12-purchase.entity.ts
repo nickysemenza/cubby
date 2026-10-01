@@ -85,6 +85,35 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "needs-review",
+          label: "Needs review",
+          description: "Stated total the expense lines don't explain",
+          // `mismatch` is already the narrow signal: a purchase whose stated total
+          // differs from its expense total by more than tolerance AND whose posted
+          // refunds don't account for the gap. `refund_adjusted` is the explained
+          // case and stays out — this view is the money that doesn't add up.
+          filters: [{ id: "reconciliation", value: ["mismatch"] }],
+        },
+        {
+          id: "unsettled",
+          label: "No settlement evidence",
+          description:
+            "Orders with no posted transaction carrying proof of payment",
+          // Narrower than "has no transactions": the gap only clears for a POSTED
+          // transaction of a settlement kind that either carries a sourceRef or
+          // sits on a cash account. An expected refund or an evidence-free row
+          // doesn't close it. See `purchaseGapRaw`.
+          //
+          // This is a large list — a bit under half of all purchases — because it's
+          // dominated by Home Depot and Amazon, whose per-visit and per-shipment
+          // billing don't line up with per-order purchases. Combine it with the
+          // vendor filter to get at the scattered remainder.
+          filters: [{ id: "dataGaps", value: ["settlement_reference"] }],
+          sort: [{ id: "date", desc: true }],
+        },
+      ],
       read: {
         relations: [
           "vendorId",

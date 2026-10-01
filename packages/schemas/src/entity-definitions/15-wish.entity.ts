@@ -38,6 +38,14 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "hide-acquired",
+          label: "Hide acquired",
+          description: "Only items still on the list",
+          filters: [{ id: "acquiredAt", value: "false" }],
+        },
+      ],
       read: {
         relations: ["candidates"],
         derived: ["candidateCount", "priceRange"],

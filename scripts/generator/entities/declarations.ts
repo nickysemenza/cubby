@@ -16,6 +16,7 @@ import { validateRelationSections } from "./presentation.ts";
 import { browserRoutes } from "./render/routes.ts";
 import type {
   CompiledEntityPresentation,
+  DisplayFormat,
   EntityDeclarationMetadata,
   EntityFieldControlKind,
   EntityFieldKind,
@@ -129,7 +130,9 @@ type EntityFieldControl = Readonly<{
   /** Pairs with the next consecutive `"half"` field on one row. */
   width: "half" | null;
   placeholder: string | null;
-  initial: "today" | null;
+  initial: "today" | Readonly<{ value: string | number | boolean | null }> | null;
+  /** `null` derives required-ness from the create schema. */
+  required: boolean | null;
   suggest: Readonly<{
     basis: readonly string[];
     mode: "fill" | "prune";
@@ -208,14 +211,8 @@ export type EntityField = Readonly<{
     detailOrder: number | null;
     listOrder: number | null;
     width: "xs" | "sm" | "md" | "lg" | null;
-    format:
-      | "currency"
-      | "signedCurrency"
-      | "plainDate"
-      | "timestamp"
-      | "external-link"
-      | "amount"
-      | null;
+    readPath: string | null;
+    format: DisplayFormat | null;
     renderer: Readonly<{
       list: string | null;
       detail: string | null;
@@ -269,6 +266,7 @@ type EntityEditIntents = Readonly<{
   create: readonly string[];
   update: readonly string[];
   editorFields: readonly string[];
+  required: Readonly<Record<string, readonly string[]>>;
 }>;
 export type EntityFieldModel = Readonly<{
   fields: readonly EntityField[];

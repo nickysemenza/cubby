@@ -345,7 +345,12 @@ const fieldControlJSON = (
   controlOptions: options(control?.options ?? null),
   suggestion: control?.suggest ?? null,
   placeholder: control?.placeholder ?? null,
-  initial: control?.initial ?? null,
+  initial: control?.initial === "today" ? "today" : null,
+  initialValue:
+    control?.initial != null && control.initial !== "today"
+      ? control.initial.value
+      : null,
+  controlRequired: control?.required ?? null,
 });
 
 const fieldDisplayJSON = (
@@ -360,6 +365,7 @@ const fieldDisplayJSON = (
   listHidden: display.listHidden,
   width: display.width ?? null,
   format: display.format ?? null,
+  readPath: display.readPath ?? null,
   listRenderer: optionalMember(
     vocabulary,
     "ListRendererID",
@@ -567,6 +573,21 @@ const presentationJSON = (
             fields: [...section.fields],
             collapsed: section.collapsed,
           })),
+    editDateRanges: edit.dateRanges.map(({ start, end }) => ({ start, end })),
+    savedViews: list.savedViews.map((view) => ({
+      id: view.id,
+      label: view.label,
+      description: view.description,
+      filters: view.filters.map((filter) => ({
+        id: filter.id,
+        values: Array.isArray(filter.value) ? [...filter.value] : [filter.value],
+        isList: Array.isArray(filter.value),
+      })),
+      sort: (view.sort ?? []).map(({ id, desc }) => ({ id, desc })),
+      flow: view.flow === null ? null : { kind: view.flow.kind, label: view.flow.label },
+      columnVisibility: { ...(view.layout?.columnVisibility ?? {}) },
+      problemKey: view.problem?.key ?? null,
+    })),
     readOnlyOnUpdate: [...edit.readOnlyOnUpdate],
     readOnlyWhen: edit.readOnlyWhen.map((rule) => ({
       field: rule.field,

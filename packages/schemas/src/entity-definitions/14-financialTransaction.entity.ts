@@ -51,6 +51,26 @@ export default defineEntity({
   // human-identifying label that is never blank.
   presentation: {
     list: {
+      savedViews: [
+        {
+          id: "outstanding",
+          label: "Outstanding",
+          description: "Expected or pending — money that hasn't moved yet",
+          // The owed-money list: an expected refund a vendor never issued, or a
+          // credit still in flight. `postedDate` is null on these by construction
+          // (posted entries require one), so the sort is really "most recently
+          // recorded first".
+          filters: [{ id: "status", value: ["expected", "pending"] }],
+          sort: [{ id: "createdAt", desc: true }],
+        },
+        {
+          id: "unlinked",
+          label: "Not linked to a purchase",
+          description: "Settlement evidence with no order attached",
+          filters: [{ id: "purchasePresence", value: "none" }],
+          sort: [{ id: "postedDate", desc: true }],
+        },
+      ],
       read: {
         relations: [
           "accountId",

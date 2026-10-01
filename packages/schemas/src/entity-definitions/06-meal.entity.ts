@@ -61,6 +61,23 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "empty-cooked",
+          label: "No linked recipes",
+          description: "Cooked meals with no recipe recorded",
+          filters: [
+            { id: "mealKind", value: ["cooked"] },
+            { id: "related:meal.recipes", value: "none" },
+          ],
+          sort: [{ id: "date", desc: false }],
+          // The Recipes column is defaultVisible:false, so reveal the signal this
+          // view selects on.
+          layout: {
+            columnVisibility: { "related:meal.recipes": true },
+          },
+        },
+      ],
       read: {
         relations: ["recipes", "recipeNames"],
         derived: ["totals", "cost", "calories"],

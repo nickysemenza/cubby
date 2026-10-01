@@ -33,6 +33,66 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "needs-a-product",
+          label: "Needs a product",
+          description: "Used by one of your own recipes, with nothing to cost it",
+          // `ingredient_product`'s own `expected` is "not a sub-recipe, used by
+          // one of the household's own recipes" (checks/ingredient.ts) — the
+          // cookbook import supplies the overwhelming majority of ingredient
+          // usages on this database, and counting them turns ~24 actionable rows
+          // into ~1000. A cookbook recipe you can't cost is not a gap in your own
+          // data.
+          filters: [{ id: "dataGaps", value: ["ingredient_product"] }],
+          problem: {
+            key: "ingredientsWithoutProduct",
+            title: "Ingredients with no product",
+            description:
+              "Used by a recipe of your own but linked to no product, so nothing can price or convert them. Cookbook-only ingredients are excluded — costing someone else's book isn't the goal.",
+            emptyMessage: "Every ingredient your recipes use has a product.",
+          },
+          layout: {
+            columnVisibility: { ownRecipes: true },
+          },
+        },
+        {
+          id: "unused-with-product",
+          label: "Unused (has product)",
+          description: "Used in no recipe, but still linked to a product",
+          // `appearsInRecipes: none` already excludes recipe-as-ingredient pointer
+          // rows — `ingredientList` applies `isNull(ingredient.recipeId)`
+          // unconditionally — so a hit really is an ingredient no live recipe
+          // references, which is what the detector's own NOT EXISTS meant.
+          filters: [
+            { id: "appearsInRecipes", value: "none" },
+            { id: "product", value: "has" },
+          ],
+          problem: {
+            key: "unusedIngredientsWithProduct",
+            title: "Unused ingredients linked to a product",
+            description:
+              "Ingredients used in no recipe but still linked to a product. Deleting removes the ingredient and its product(s) — skipped if a product still has inventory.",
+            emptyMessage: "No unused product-linked ingredients.",
+          },
+        },
+        {
+          id: "unused-no-product",
+          label: "Unused",
+          description: "Used in no recipe and linked to no product",
+          filters: [
+            { id: "appearsInRecipes", value: "none" },
+            { id: "product", value: "none" },
+          ],
+          problem: {
+            key: "unusedIngredientsWithoutProduct",
+            title: "Unused ingredients",
+            description:
+              "Ingredients used in no recipe and linked to no product — safe to delete.",
+            emptyMessage: "No unused ingredients.",
+          },
+        },
+      ],
       read: {
         relations: ["product", "appearsInRecipes"],
         derived: ["ownRecipeCount"],

@@ -13,6 +13,7 @@ import {
   projectDateWindow,
   projectRollup,
 } from "@cubby/schemas/project-output-fields";
+import { projectStatusValues } from "../project-fields.js";
 import { z } from "zod";
 import { tradeSchema } from "@cubby/schemas/task-fields";
 import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
@@ -93,6 +94,20 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "active",
+          label: "Active",
+          description: "Projects that have not been completed",
+          filters: [{ id: "status", value: projectStatusValues.filter((status) => status !== "done") }],
+        },
+        {
+          id: "completed",
+          label: "Completed",
+          description: "Finished projects, including sub-projects",
+          filters: [{ id: "status", value: ["done"] }],
+        },
+      ],
       read: {
         relations: [
           "locations",
