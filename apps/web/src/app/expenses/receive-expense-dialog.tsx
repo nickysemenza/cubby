@@ -34,16 +34,10 @@ import {
   AmountFieldGroup,
   DEFAULT_AMOUNT_UNIT,
 } from "~/app/_components/inventory/amount-field-group";
+import { WorkflowDialog } from "~/components/dialogs/workflow-dialog";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { entityDetailFor } from "~/entities/entity-detail";
 import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -236,26 +230,23 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={close}>
-      <DialogContent size="md">
-        <DialogHeader>
-          <DialogTitle>Receive into Inventory</DialogTitle>
-          <DialogDescription>
-            Put what "{expenseName}" bought onto a shelf.
-          </DialogDescription>
-        </DialogHeader>
-        <FormProvider {...form}>
-          <FieldSuggestionProvider
-            entity="inventory"
-            mode="create"
-            staticBasis={{ productId }}
-            fieldKeys={["locationId"]}
-            paths={{ locationId: "location" }}
-          >
-            {body()}
-          </FieldSuggestionProvider>
-        </FormProvider>
-      </DialogContent>
-    </Dialog>
+    <WorkflowDialog
+      open={open}
+      onOpenChange={close}
+      title="Receive into Inventory"
+      description={`Put what "${expenseName}" bought onto a shelf.`}
+    >
+      <FormProvider {...form}>
+        <FieldSuggestionProvider
+          entity="inventory"
+          mode="create"
+          staticBasis={{ productId }}
+          fieldKeys={["locationId"]}
+          paths={{ locationId: "location" }}
+        >
+          {body()}
+        </FieldSuggestionProvider>
+      </FormProvider>
+    </WorkflowDialog>
   );
 };

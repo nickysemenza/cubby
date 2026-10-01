@@ -10,15 +10,8 @@ import {
 import { useEffect, useState } from "react";
 
 import { runHref } from "~/app/purchases/purchase-import-links";
+import { WorkflowDialog } from "~/components/dialogs/workflow-dialog";
 import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { StatusText } from "~/components/ui/status-text";
 import type {
@@ -133,59 +126,45 @@ export function TargetedProductBulkEnrichmentDialog({
     },
   });
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="lg">
-        <DialogHeader>
-          <DialogTitle>Enrich selected products</DialogTitle>
-          <DialogDescription>
-            Products are split into independent account runs. Busy accounts are
-            refused with their blocking run.
-          </DialogDescription>
-        </DialogHeader>
-        {launch.isPending ? (
-          <StatusText>Loading verified sources…</StatusText>
-        ) : null}
-        {launch.error ? (
-          <StatusText tone="destructive">{launch.error.message}</StatusText>
-        ) : null}
-        {launch.products ? (
-          <ProductTargetChecklist targets={targets} onChange={setTargets} />
-        ) : null}
-        {start.data?.runs
-          .flatMap((entry) => (entry.blockingRun ? [entry.blockingRun] : []))
-          .map((run) => (
-            <a
-              key={run.id}
-              href={runHref(run.id)}
-              className="text-sm text-primary hover:underline"
-            >
-              Open blocking run {run.id}
-            </a>
-          ))}
-        {start.isError ? (
-          <StatusText tone="destructive">{start.error.message}</StatusText>
-        ) : null}
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              onOpenChange(false);
-              onFinished(false);
-            }}
+    <WorkflowDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      size="lg"
+      title="Enrich selected products"
+      description="Products are split into independent account runs. Busy accounts are refused with their blocking run."
+      error={start.isError ? start.error.message : null}
+      onCancel={() => {
+        onOpenChange(false);
+        onFinished(false);
+      }}
+      primary={{
+        label: "Start enrichment",
+        pending: start.isPending,
+        disabled: selected.length === 0,
+        onClick: () => start.mutate(),
+      }}
+    >
+      {launch.isPending ? (
+        <StatusText>Loading verified sources…</StatusText>
+      ) : null}
+      {launch.error ? (
+        <StatusText tone="destructive">{launch.error.message}</StatusText>
+      ) : null}
+      {launch.products ? (
+        <ProductTargetChecklist targets={targets} onChange={setTargets} />
+      ) : null}
+      {start.data?.runs
+        .flatMap((entry) => (entry.blockingRun ? [entry.blockingRun] : []))
+        .map((run) => (
+          <a
+            key={run.id}
+            href={runHref(run.id)}
+            className="text-sm text-primary hover:underline"
           >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            disabled={selected.length === 0 || start.isPending}
-            onClick={() => start.mutate()}
-          >
-            Start enrichment
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            Open blocking run {run.id}
+          </a>
+        ))}
+    </WorkflowDialog>
   );
 }
 
@@ -258,82 +237,69 @@ export function TargetedImportLaunchDialog({
         );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="lg">
-        <DialogHeader>
-          <DialogTitle>
-            {purpose === "purchase_validation"
-              ? `Validate ingestion for ${targetLabel}`
-              : `Enrich ${targetLabel}`}
-          </DialogTitle>
-          <DialogDescription>
-            {purpose === "purchase_validation"
-              ? "Replay the chosen evidence without changing the purchase. A difference is recorded for review."
-              : "Only the listed empty fields can be filled. Existing product values remain untouched unless separately approved."}
-          </DialogDescription>
-        </DialogHeader>
-        {launch.isPending ? (
-          <StatusText>Loading import options…</StatusText>
-        ) : null}
-        {launch.isError ? (
-          <StatusText tone="destructive">{launch.error.message}</StatusText>
-        ) : null}
-        {launch.data && purpose === "purchase_validation" ? (
-          <PurchaseValidationSourcePicker
-            sources={launch.data.purchase?.sources ?? []}
-            disabled={!launch.data.purchase?.canValidate}
-            reason={launch.data.purchase?.reason ?? null}
-            selectedId={sourceId}
-            onSelect={setSourceId}
-          />
-        ) : null}
-        {launch.data && purpose === "product_enrichment" ? (
-          <ProductTargetChecklist targets={targets} onChange={setTargets} />
-        ) : null}
-        {start.data?.runs.some((entry) => entry.blockingRun) ? (
-          <div className="grid gap-1 border border-border bg-muted/30 p-3 text-sm">
-            <div className="flex items-center gap-2 font-medium">
-              <WarningCircleIcon className="size-3.5 text-warning" />
-              One account is already busy
-            </div>
-            {start.data.runs
-              .flatMap((entry) =>
-                entry.blockingRun ? [entry.blockingRun] : [],
-              )
-              .map((run) => (
-                <a
-                  key={run.id}
-                  className="w-fit text-primary hover:underline"
-                  href={runHref(run.id)}
-                >
-                  Open {run.id} ({run.status})
-                </a>
-              ))}
+    <WorkflowDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      size="lg"
+      title={
+        purpose === "purchase_validation"
+          ? `Validate ingestion for ${targetLabel}`
+          : `Enrich ${targetLabel}`
+      }
+      description={
+        purpose === "purchase_validation"
+          ? "Replay the chosen evidence without changing the purchase. A difference is recorded for review."
+          : "Only the listed empty fields can be filled. Existing product values remain untouched unless separately approved."
+      }
+      error={start.isError ? start.error.message : null}
+      primary={{
+        label:
+          purpose === "purchase_validation"
+            ? "Start validation"
+            : "Start enrichment",
+        pending: start.isPending,
+        disabled: !canStart,
+        onClick: () => start.mutate(),
+      }}
+    >
+      {launch.isPending ? (
+        <StatusText>Loading import options…</StatusText>
+      ) : null}
+      {launch.isError ? (
+        <StatusText tone="destructive">{launch.error.message}</StatusText>
+      ) : null}
+      {launch.data && purpose === "purchase_validation" ? (
+        <PurchaseValidationSourcePicker
+          sources={launch.data.purchase?.sources ?? []}
+          disabled={!launch.data.purchase?.canValidate}
+          reason={launch.data.purchase?.reason ?? null}
+          selectedId={sourceId}
+          onSelect={setSourceId}
+        />
+      ) : null}
+      {launch.data && purpose === "product_enrichment" ? (
+        <ProductTargetChecklist targets={targets} onChange={setTargets} />
+      ) : null}
+      {start.data?.runs.some((entry) => entry.blockingRun) ? (
+        <div className="grid gap-1 border border-border bg-muted/30 p-3 text-sm">
+          <div className="flex items-center gap-2 font-medium">
+            <WarningCircleIcon className="size-3.5 text-warning" />
+            One account is already busy
           </div>
-        ) : null}
-        {start.isError ? (
-          <StatusText tone="destructive">{start.error.message}</StatusText>
-        ) : null}
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            disabled={!canStart || start.isPending}
-            onClick={() => start.mutate()}
-          >
-            {purpose === "purchase_validation"
-              ? "Start validation"
-              : "Start enrichment"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          {start.data.runs
+            .flatMap((entry) => (entry.blockingRun ? [entry.blockingRun] : []))
+            .map((run) => (
+              <a
+                key={run.id}
+                className="w-fit text-primary hover:underline"
+                href={runHref(run.id)}
+              >
+                Open {run.id} ({run.status})
+              </a>
+            ))}
+        </div>
+      ) : null}
+    </WorkflowDialog>
   );
 }
 

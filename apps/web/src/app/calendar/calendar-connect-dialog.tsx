@@ -9,17 +9,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { WorkflowDialog } from "~/components/dialogs/workflow-dialog";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
 import { Button, buttonVariants } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "~/components/ui/dialog";
+import { DialogTrigger } from "~/components/ui/dialog";
 import { StatusText } from "~/components/ui/status-text";
 import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyTextWithToast } from "~/lib/clipboard";
@@ -378,71 +372,69 @@ export function CalendarConnectDialog() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger
-        render={
-          <Button variant="outline" size="sm">
-            <ArrowsClockwiseIcon className="size-3" aria-hidden />
-            Connect Calendar
-          </Button>
-        }
-      />
-      <DialogContent size="md">
-        <DialogHeader>
-          <DialogTitle>Connect Calendar</DialogTitle>
-          <DialogDescription>
-            Use Calendar as an editable Cubby account or add read-only
-            subscriptions.
-          </DialogDescription>
-        </DialogHeader>
-        {credential.error ? (
-          <CalendarAccessError
-            error={credential.error}
-            onRetry={() => void credential.refetch()}
+    <WorkflowDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Connect Calendar"
+      description="Use Calendar as an editable Cubby account or add read-only subscriptions."
+      trigger={
+        <DialogTrigger
+          render={
+            <Button variant="outline" size="sm">
+              <ArrowsClockwiseIcon className="size-3" aria-hidden />
+              Connect Calendar
+            </Button>
+          }
+        />
+      }
+    >
+      {credential.error ? (
+        <CalendarAccessError
+          error={credential.error}
+          onRetry={() => void credential.refetch()}
+        />
+      ) : (
+        <Stack gap="lg">
+          <CalendarAppPasswordSection
+            credential={credential.data}
+            issued={issued}
+            isRotating={rotateCredential.isPending}
+            isRevoking={revokeCredential.isPending}
+            // SILENT: `useActionMutation` already toasts the failure; the
+            // dialog stays open for a retry.
+            onRotate={() => void issuePassword().catch(() => undefined)}
+            // SILENT: `useActionMutation` already toasts the failure.
+            onRevoke={() =>
+              void revokeCredential
+                .mutateAsync(undefined)
+                .then(() => {
+                  setIssued(null);
+                  void credential.refetch();
+                })
+                .catch(() => undefined)
+            }
           />
-        ) : (
-          <Stack gap="lg">
-            <CalendarAppPasswordSection
-              credential={credential.data}
-              issued={issued}
-              isRotating={rotateCredential.isPending}
-              isRevoking={revokeCredential.isPending}
-              // SILENT: `useActionMutation` already toasts the failure; the
-              // dialog stays open for a retry.
-              onRotate={() => void issuePassword().catch(() => undefined)}
-              // SILENT: `useActionMutation` already toasts the failure.
-              onRevoke={() =>
-                void revokeCredential
-                  .mutateAsync(undefined)
-                  .then(() => {
-                    setIssued(null);
-                    void credential.refetch();
-                  })
-                  .catch(() => undefined)
-              }
-            />
-            <CalendarConnectionStatus
-              caldav={inspection.data?.caldav}
-              error={inspection.error}
-              isPending={inspection.isPending}
-            />
-            <CalendarSubscriptionSection
-              token={rotatedToken ?? feed.data?.token ?? null}
-              isPending={feed.isPending}
-              error={feed.error}
-              isRotating={rotateFeed.isPending}
-              // SILENT: `useActionMutation` already toasts the failure.
-              onCreateOrRotate={() =>
-                void rotateFeed
-                  .mutateAsync(undefined)
-                  .then((data) => setRotatedToken(data.token))
-                  .catch(() => undefined)
-              }
-              onRetry={() => void feed.refetch()}
-            />
-          </Stack>
-        )}
-      </DialogContent>
-    </Dialog>
+          <CalendarConnectionStatus
+            caldav={inspection.data?.caldav}
+            error={inspection.error}
+            isPending={inspection.isPending}
+          />
+          <CalendarSubscriptionSection
+            token={rotatedToken ?? feed.data?.token ?? null}
+            isPending={feed.isPending}
+            error={feed.error}
+            isRotating={rotateFeed.isPending}
+            // SILENT: `useActionMutation` already toasts the failure.
+            onCreateOrRotate={() =>
+              void rotateFeed
+                .mutateAsync(undefined)
+                .then((data) => setRotatedToken(data.token))
+                .catch(() => undefined)
+            }
+            onRetry={() => void feed.refetch()}
+          />
+        </Stack>
+      )}
+    </WorkflowDialog>
   );
 }

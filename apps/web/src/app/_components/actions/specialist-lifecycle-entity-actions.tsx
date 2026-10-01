@@ -1,6 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useNavigate } from "@tanstack/react-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import {
@@ -14,6 +14,7 @@ import { useActionMutation } from "../hooks/useActionMutation";
 import { VerbMenuItem } from "./action-verb-ui";
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
+import { useStagedRow } from "./use-staged-row";
 
 type StagedDeleteRow = EntityActionRow & {
   recipeCount?: number;
@@ -50,31 +51,9 @@ function useStagedSpecialistDelete({
   isPending,
   failureMessage,
 }: StagedSpecialistDeleteConfig): EntityActionHandles {
-  const [staged, setStaged] = useState<StagedDeleteRow | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-  const resolveRef = useRef<((result: { success: boolean }) => void) | null>(
-    null,
-  );
-
-  const finish = useCallback((success: boolean) => {
-    setStaged(null);
-    setFailure(null);
-    resolveRef.current?.({ success });
-    resolveRef.current = null;
-  }, []);
-
-  const stage = useCallback(
-    (rows: readonly EntityActionRow[]) => {
-      const row = rows[0];
-      if (!row) return Promise.resolve({ success: false });
-      resolveRef.current?.({ success: false });
-      setFailure(null);
-      setStaged(stageRow(row));
-      return new Promise<{ success: boolean }>((resolve) => {
-        resolveRef.current = resolve;
-      });
-    },
-    [stageRow],
+  const { staged, stage, finish } = useStagedRow(stageRow, () =>
+    setFailure(null),
   );
 
   return {
