@@ -48,7 +48,12 @@ function pendingResult(result: PurchaseImportServiceResult): boolean {
 export function purchaseImportTools(
   runId: string,
   serviceForRun: PurchaseImportServiceResolver,
+  onTerminate: () => void = () => {},
 ) {
+  const settle = <T>(result: { output: T; terminate: boolean }) => {
+    if (result.terminate) onTerminate();
+    return result;
+  };
   return [
     defineTool({
       name: "claim_next_import_work",
@@ -126,7 +131,7 @@ export function purchaseImportTools(
               command: data.command,
             }),
         );
-        return { output, terminate: pendingResult(output) };
+        return settle({ output, terminate: pendingResult(output) });
       },
     }),
     defineTool({
@@ -140,7 +145,7 @@ export function purchaseImportTools(
           runId,
           operationId: `browser-command:${data.operationId}`,
         });
-        return { output, terminate: pendingResult(output) };
+        return settle({ output, terminate: pendingResult(output) });
       },
     }),
     defineTool({
@@ -193,11 +198,11 @@ export function purchaseImportTools(
             }),
           );
         }
-        return {
+        return settle({
           output: { recorded: true, phase: data.phase },
           terminate:
             data.phase === "awaiting_approval" || data.phase === "review",
-        };
+        });
       },
     }),
     defineTool({
@@ -248,12 +253,13 @@ export function purchaseImportTools(
       input: v.object({ operationId }),
       output: serviceResult,
       durable: true,
-      run: async ({ data, step }) => ({
-        output: await step.do(`finish-run:${data.operationId}`, () =>
-          serviceForRun().finishRun({ runId, ...data }),
-        ),
-        terminate: true,
-      }),
+      run: async ({ data, step }) =>
+        settle({
+          output: await step.do(`finish-run:${data.operationId}`, () =>
+            serviceForRun().finishRun({ runId, ...data }),
+          ),
+          terminate: true,
+        }),
     }),
     defineTool({
       name: "stop_import_run_for_review",
@@ -273,12 +279,13 @@ export function purchaseImportTools(
       }),
       output: serviceResult,
       durable: true,
-      run: async ({ data, step }) => ({
-        output: await step.do(`stop-review:${data.operationId}`, () =>
-          serviceForRun().stopForReview({ runId, ...data }),
-        ),
-        terminate: true,
-      }),
+      run: async ({ data, step }) =>
+        settle({
+          output: await step.do(`stop-review:${data.operationId}`, () =>
+            serviceForRun().stopForReview({ runId, ...data }),
+          ),
+          terminate: true,
+        }),
     }),
   ] as const;
 }

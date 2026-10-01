@@ -24,6 +24,7 @@ type ModelFixture =
     };
 
 let fixture: ModelFixture | undefined;
+let violations: string[] = [];
 
 function sse(event: object) {
   return `data: ${JSON.stringify(event)}\n\n`;
@@ -88,6 +89,35 @@ function validationReplayed(body: unknown): boolean {
   return Object.values(record).some(validationReplayed);
 }
 
+const isFinishNudge = (item: unknown) =>
+  JSON.stringify(item).includes('<signal type=\\"run_not_finished\\">');
+
+/**
+ * Regression: the agent once nudged after a terminating tool (a pending
+ * browser command) and re-nudged each cycle from a stale guard, so under CI
+ * load it hit Flue's 32-cycle runaway ceiling before browser evidence joined.
+ * Either misbehavior is recorded deterministically, without needing the race;
+ * the harness reads them from `/violations`. Flue retries a model error
+ * response, so refusing the request would hide the misbehavior instead.
+ */
+function finishNudgeViolation(body: unknown): string | undefined {
+  const input = (body as { input?: unknown[] }).input ?? [];
+  const last = input.at(-1);
+  if (!isFinishNudge(last)) return undefined;
+  const before = input.at(-2) as
+    | { type?: string; call_id?: string }
+    | undefined;
+  if (before?.type === "function_call_output" && before.call_id === "browser-1")
+    return "Finish nudge after a pending browser command";
+  for (const item of input.slice(0, -1).reverse()) {
+    if ((item as { type?: string }).type === "function_call_output")
+      return undefined;
+    if (isFinishNudge(item))
+      return "Repeated finish nudge without a new tool call";
+  }
+  return undefined;
+}
+
 const call = (
   id: string,
   name: string,
@@ -106,13 +136,17 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/configure" && request.method === "POST") {
       fixture = (await request.json()) as ModelFixture;
+      violations = [];
       return new Response(null, { status: 204 });
     }
+    if (url.pathname === "/violations") return Response.json(violations);
     if (!fixture)
       return new Response("Fixture is not configured", { status: 409 });
 
     const body = await request.json();
     const requestBody = JSON.stringify(body);
+    const violation = finishNudgeViolation(body);
+    if (violation) violations.push(violation);
     if (fixture.mode === "photo") {
       if (!requestBody.includes("photo-claim"))
         return toolResponse(
