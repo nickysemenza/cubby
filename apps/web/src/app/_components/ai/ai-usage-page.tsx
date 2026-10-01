@@ -50,11 +50,10 @@ function formatTokens(value: number | null | undefined): string {
   return formatCount(value ?? 0);
 }
 
-function formatUsd(value: number | null | undefined): string {
-  return value == null
+const formatUsageCost = (value: number | null | undefined): string =>
+  value == null
     ? "unpriced"
     : formatCurrency(value, 6, { minimumFractionDigits: 4 });
-}
 
 function formatMs(value: number): string {
   if (value < 1000) return `${value}ms`;
@@ -181,7 +180,7 @@ export function UsageEntityLink({
 function CostCell({ value }: { value: number | null }) {
   return (
     <span className={value == null ? "text-muted-foreground" : undefined}>
-      {formatUsd(value)}
+      {formatUsageCost(value)}
     </span>
   );
 }
@@ -251,7 +250,7 @@ export function AiUsagePage() {
           />
           <UsageMetric
             label="USD cost"
-            value={formatUsd(totals.knownCost)}
+            value={formatUsageCost(totals.knownCost)}
             detail={
               totals.unpricedCalls > 0
                 ? `${formatTokens(totals.unpricedCalls)} calls unpriced`

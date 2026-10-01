@@ -8,8 +8,9 @@ import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { formatMinutesSeconds } from "~/lib/format-duration";
 
-import { formatMinuteRange, formatUsd } from "./import-helpers";
+import { formatMinuteRange } from "./import-helpers";
 import type { Book } from "./types";
+import { formatSmallCurrency } from "~/lib/utils";
 
 /** The one-line status that sits in the book card's header. */
 export function ExtractStatusLine({
@@ -117,7 +118,7 @@ export function ExtractProgressPanel({
             {progress.in_flight} in flight · {progress.failed} failed ·{" "}
             {progress.cached} cached · {progress.recipes_so_far} recipe
             {progress.recipes_so_far === 1 ? "" : "s"} ·{" "}
-            {formatUsd(progress.cost_so_far_usd)} spent ·{" "}
+            {formatSmallCurrency(progress.cost_so_far_usd)} spent ·{" "}
             {formatMinutesSeconds(progress.elapsed_ms)} elapsed
           </Description>
           <Description size="xs">
@@ -125,7 +126,7 @@ export function ExtractProgressPanel({
               progress.eta.remaining_low_ms,
               progress.eta.remaining_high_ms,
             )}{" "}
-            left · projected {formatUsd(progress.eta.projected_cost_usd)}
+            left · projected {formatSmallCurrency(progress.eta.projected_cost_usd)}
             {progress.active_models.length > 0 &&
               ` · ${progress.active_models.join(", ")}`}
           </Description>

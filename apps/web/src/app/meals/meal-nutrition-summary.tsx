@@ -28,6 +28,7 @@ import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { AddFoodDialog } from "./add-food-dialog";
 import { FoodAmountReadout } from "./food-amount-editor";
 import { MealNutritionEstimates } from "./meal-nutrition";
+import { roundTo } from "~/lib/utils";
 
 const MACROS = [
   { key: "kcal", label: "Calories", unit: "kcal" },
@@ -35,7 +36,7 @@ const MACROS = [
   { key: "carbs", label: "Carbs", unit: "g" },
   { key: "fat", label: "Fat", unit: "g" },
 ] as const;
-const number = (value: number) => Number(value.toFixed(1)).toLocaleString();
+const number = (value: number) => roundTo(value, 1).toLocaleString();
 function compactEstimate(estimate: MeasureEstimate, key: string) {
   if (!hasKnownEstimate(estimate)) return "—";
   const format =

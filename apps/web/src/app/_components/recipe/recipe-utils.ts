@@ -15,6 +15,7 @@ import { wasm } from "~/lib/wasm";
 import { tryFormatAmount } from "../inventory/format-amount";
 import type { RecipeTreeRow } from "./recipe-tree";
 import { formatYield } from "./recipe-yield";
+import { roundTo, formatCurrency } from "~/lib/utils";
 
 /** Format a gram weight as a display amount, e.g. 184.2 → "184 g". The single
  * grams formatter for the prep sheet, matrix, and shopping list. */
@@ -122,9 +123,9 @@ export function buildRecipeKicker(
       basis ? 1 / basis.divisor : 1,
     );
     parts.push(
-      `${formatEstimate(estimates.cost, (n) => `$${n.toFixed(2)}`)}${basis ? ` ${perUnitSuffix(basis.noun)}` : " total"}`,
+      `${formatEstimate(estimates.cost, (n) => `${formatCurrency(n)}`)}${basis ? ` ${perUnitSuffix(basis.noun)}` : " total"}`,
       `${formatEstimate(estimates.nutrition.kcal, (n) => `${Math.round(n)} kcal`)}${basis ? ` ${perUnitSuffix(basis.noun)}` : ""}`,
-      `${formatEstimate(estimates.nutrition.protein, (n) => `${Number(n.toFixed(1))} g protein`)}${basis ? ` ${perUnitSuffix(basis.noun)}` : ""}`,
+      `${formatEstimate(estimates.nutrition.protein, (n) => `${roundTo(n, 1)} g protein`)}${basis ? ` ${perUnitSuffix(basis.noun)}` : ""}`,
     );
   }
 
@@ -149,26 +150,26 @@ export function recipeMacroSegments(
 
   const parts: string[] = [];
   if (opts?.includeCost !== false)
-    parts.push(formatEstimate(estimates.cost, (n) => `$${n.toFixed(2)}`));
+    parts.push(formatEstimate(estimates.cost, (n) => `${formatCurrency(n)}`));
   parts.push(
     formatEstimate(estimates.nutrition.kcal, (n) => `${Math.round(n)} kcal`),
   );
   parts.push(
     formatEstimate(
       estimates.nutrition.protein,
-      (n) => `${Number(n.toFixed(1))} g P`,
+      (n) => `${roundTo(n, 1)} g P`,
     ),
   );
   parts.push(
     formatEstimate(
       estimates.nutrition.fat,
-      (n) => `${Number(n.toFixed(1))} g F`,
+      (n) => `${roundTo(n, 1)} g F`,
     ),
   );
   parts.push(
     formatEstimate(
       estimates.nutrition.carbs,
-      (n) => `${Number(n.toFixed(1))} g C`,
+      (n) => `${roundTo(n, 1)} g C`,
     ),
   );
 

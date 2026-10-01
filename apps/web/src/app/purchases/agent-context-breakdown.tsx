@@ -13,6 +13,7 @@ import {
   contextCallsFromMessages,
   summarizeContextCalls,
 } from "~/lib/agent-context-breakdown";
+import { formatCompactCount, formatCount } from "~/lib/utils";
 
 // Fixed sections first, then the largest tool results, then the grouped rest.
 // Neighbouring segments never share a hue family.
@@ -27,11 +28,6 @@ const SEGMENT_COLORS = [
   "bg-chart-7",
 ] as const;
 
-const exact = new Intl.NumberFormat();
-const compact = new Intl.NumberFormat(undefined, {
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
 
 /**
  * What filled each coordinator model call: one stacked bar per call, scaled
@@ -100,8 +96,8 @@ export function AgentContextPerCall({
                   tokens: row.values[segment.key] ?? 0,
                 }))
                 .filter((part) => part.tokens > 0);
-              const label = `Call ${row.call}${row.estimated ? " (estimated)" : ""}: ${exact.format(row.inputTokens)} input tokens, ${exact.format(row.cachedTokens)} cached; ${parts
-                .map((part) => `${part.label} ${exact.format(part.tokens)}`)
+              const label = `Call ${row.call}${row.estimated ? " (estimated)" : ""}: ${formatCount(row.inputTokens)} input tokens, ${formatCount(row.cachedTokens)} cached; ${parts
+                .map((part) => `${part.label} ${formatCount(part.tokens)}`)
                 .join(", ")}`;
               return (
                 <li
@@ -126,7 +122,7 @@ export function AgentContextPerCall({
                           style={{
                             width: `${(part.tokens / row.inputTokens) * 100}%`,
                           }}
-                          title={`${part.label}: ${exact.format(part.tokens)} tokens (${Math.round((part.tokens / row.inputTokens) * 100)}%)`}
+                          title={`${part.label}: ${formatCount(part.tokens)} tokens (${Math.round((part.tokens / row.inputTokens) * 100)}%)`}
                         />
                       ))}
                     </div>
@@ -141,7 +137,7 @@ export function AgentContextPerCall({
                   </div>
                   <span aria-hidden="true" className="text-right">
                     {row.estimated ? "≈" : null}
-                    {compact.format(row.inputTokens)}
+                    {formatCompactCount(row.inputTokens, 1)}
                   </span>
                 </li>
               );
@@ -154,7 +150,7 @@ export function AgentContextPerCall({
             <span />
             <span className="flex justify-between border-t border-border pt-0.5">
               <span>0</span>
-              <span>{compact.format(maxTokens)} input tokens</span>
+              <span>{formatCompactCount(maxTokens, 1)} input tokens</span>
             </span>
             <span />
           </div>
@@ -203,17 +199,17 @@ export function AgentContextPerCall({
                       {row.estimated ? " (estimated)" : null}
                     </TableHead>
                     <TableCell className="px-2 py-1 text-right">
-                      {exact.format(row.inputTokens)}
+                      {formatCount(row.inputTokens)}
                     </TableCell>
                     <TableCell className="px-2 py-1 text-right">
-                      {exact.format(row.cachedTokens)}
+                      {formatCount(row.cachedTokens)}
                     </TableCell>
                     {segments.map((segment) => (
                       <TableCell
                         key={segment.key}
                         className="px-2 py-1 text-right"
                       >
-                        {exact.format(row.values[segment.key] ?? 0)}
+                        {formatCount(row.values[segment.key] ?? 0)}
                       </TableCell>
                     ))}
                   </TableRow>

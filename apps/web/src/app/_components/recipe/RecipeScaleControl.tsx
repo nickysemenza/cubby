@@ -20,11 +20,12 @@ import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 
 import { resolveScaleFactor, type ScaleAnchor } from "./recipe-scaling";
 import { getIngredientName } from "./recipe-utils";
+import { roundTo } from "~/lib/utils";
 
 const QUICK_FACTORS = [0.5, 1, 2, 3] as const;
 
 const factorLabel = (f: number): string =>
-  f === 0.5 ? "½×" : `${Number.isInteger(f) ? f : Number(f.toFixed(2))}×`;
+  f === 0.5 ? "½×" : `${Number.isInteger(f) ? f : roundTo(f, 2)}×`;
 
 type AnchorMode = ScaleAnchor["type"];
 
@@ -162,7 +163,7 @@ export function RecipeScaleControl({
           render={
             <Button variant="outline" size="sm" className="max-sm:min-h-11">
               <ArrowsOutIcon className="mr-1 size-3" />
-              {scaled ? `${Number(factor.toFixed(2))}×` : "Custom"}
+              {scaled ? `${roundTo(factor, 2)}×` : "Custom"}
             </Button>
           }
         />

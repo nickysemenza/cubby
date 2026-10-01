@@ -22,7 +22,6 @@ import {
 } from "~/components/ui/table";
 import { formatMinutesSeconds } from "~/lib/format-duration";
 
-import { formatUsd } from "./import-helpers";
 import {
   flagSummary,
   reportCalls,
@@ -30,6 +29,7 @@ import {
   reportUnresolvedRefs,
   troubledChunks,
 } from "./run-report-view";
+import { formatSmallCurrency } from "~/lib/utils";
 
 /**
  * Where a run fell short, and what to do about it.
@@ -130,7 +130,7 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
     <Collapsible>
       <CollapsibleTrigger className="flex w-full items-center gap-1 text-left text-xs text-muted-foreground hover:text-foreground">
         <CaretDownIcon className="size-3" />
-        Run report — {formatUsd(report.total_cost_usd)}
+        Run report — {formatSmallCurrency(report.total_cost_usd)}
         {!report.cost_complete && "+"} · {formatMinutesSeconds(report.wall_ms)}{" "}
         · {calls.length} call{calls.length === 1 ? "" : "s"}
       </CollapsibleTrigger>
@@ -152,7 +152,7 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
                 <li key={usage.model}>
                   <span className="font-mono">{usage.model}</span> ·{" "}
                   {usage.calls} call{usage.calls === 1 ? "" : "s"}
-                  {usage.cost_usd != null && ` · ${formatUsd(usage.cost_usd)}`}
+                  {usage.cost_usd != null && ` · ${formatSmallCurrency(usage.cost_usd)}`}
                 </li>
               ))}
             </ul>
@@ -219,7 +219,7 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
                         {call.status ?? ""}
                       </TableCell>
                       <TableCell className="text-right text-2xs tabular-nums">
-                        {call.cost_usd != null ? formatUsd(call.cost_usd) : "—"}
+                        {call.cost_usd != null ? formatSmallCurrency(call.cost_usd) : "—"}
                       </TableCell>
                       <TableCell className="text-2xs">
                         {call.outcome?.outcome ?? ""}

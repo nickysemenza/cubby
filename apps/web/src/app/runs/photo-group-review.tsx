@@ -81,6 +81,7 @@ import {
   toGroupInput,
   type ProposalEdit,
 } from "./photo-review-model";
+import { formatCurrency } from "~/lib/utils";
 
 function postReview(runId: string, action: ReviewPhotoGroupsAction) {
   if (action.action === "save")
@@ -965,7 +966,7 @@ function PhotoProductSuggestions({
                         · {line.date ?? "Undated"} ·{" "}
                         {line.cost == null
                           ? "Cost unknown"
-                          : `$${line.cost.toFixed(2)}`}{" "}
+                          : `${formatCurrency(line.cost)}`}{" "}
                         ·{" "}
                         {line.productQuantity == null
                           ? "Quantity unknown"
@@ -1670,7 +1671,7 @@ function ExpenseLinkReview({
                   {line.date ?? "Undated"} ·{" "}
                   {line.cost == null
                     ? "Cost unknown"
-                    : `$${line.cost.toFixed(2)}`}{" "}
+                    : `${formatCurrency(line.cost)}`}{" "}
                   ·{" "}
                   {line.productQuantity == null
                     ? "Quantity unknown"

@@ -4,8 +4,9 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 
-import { formatCount, formatMinuteRange, formatUsd } from "./import-helpers";
+import { formatMinuteRange } from "./import-helpers";
 import type { BookEstimate } from "./types";
+import { formatSmallCurrency, formatCompactCount } from "~/lib/utils";
 
 /**
  * What one extraction will cost, shown BEFORE the first model call.
@@ -29,14 +30,14 @@ export function EstimatePanel({
       <Row align="center" justify="between" gap="sm" wrap>
         <Row as="span" wrap align="baseline" gap="sm">
           <span className="font-medium">
-            {formatUsd(estimate.costLow)}–{formatUsd(estimate.costHigh)}
+            {formatSmallCurrency(estimate.costLow)}–{formatSmallCurrency(estimate.costHigh)}
           </span>
           <Description as="span" size="xs">
             {formatMinuteRange(estimate.wallMsLow, estimate.wallMsHigh)} ·{" "}
             {estimate.chunks} chunk{estimate.chunks === 1 ? "" : "s"} ·{" "}
-            {formatCount(estimate.lines)} lines ·{" "}
-            {formatCount(estimate.inputTokens)} in /{" "}
-            {formatCount(estimate.outputTokens)} out tokens
+            {formatCompactCount(estimate.lines, 1)} lines ·{" "}
+            {formatCompactCount(estimate.inputTokens, 1)} in /{" "}
+            {formatCompactCount(estimate.outputTokens, 1)} out tokens
           </Description>
         </Row>
         <Button type="button" size="sm" onClick={onExtract} disabled={disabled}>

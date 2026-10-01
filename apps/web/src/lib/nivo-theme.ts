@@ -4,6 +4,8 @@
 //
 // NOTE: brand tokens are oklch/hex — never wrap them in hsl(var(...)); the
 // result is an invalid color and nivo silently falls back to its defaults.
+import { formatCompactCurrency } from "~/lib/number-format";
+
 export const nivoChartTheme = {
   text: { fill: "var(--foreground)", fontFamily: "var(--font-mono)" },
   axis: {
@@ -64,17 +66,11 @@ export const nivoBarChrome = {
   ...nivoMotion,
 } as const;
 
-const compactUsd = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  notation: "compact",
-});
-
 // Value axis for the currency bar charts. Nivo otherwise emits a tick per
 // gridline, and full "$120,000"-style labels collide once the range grows —
 // cap the count and use compact "$120K" labels. Spread extra props alongside:
 // axisBottom={nivoCurrencyAxis}.
 export const nivoCurrencyAxis = {
   tickValues: 5,
-  format: (v: number) => compactUsd.format(v),
+  format: (v: number) => formatCompactCurrency(v),
 } as const;

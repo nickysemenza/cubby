@@ -25,7 +25,7 @@ import type {
   CalculateTotalsResult,
   RecipeCosting,
 } from "~/lib/recipe-costing";
-import { cn, formatCurrency } from "~/lib/utils";
+import { cn, formatCurrency, roundTo } from "~/lib/utils";
 
 import {
   buildDisplayQuantities,
@@ -149,7 +149,7 @@ function VitalsPanel({
                 <dd className="font-mono text-xs tabular-nums">
                   {formatEstimate(
                     macro.estimate,
-                    (value) => `${Number(value.toFixed(1))} g`,
+                    (value) => `${roundTo(value, 1)} g`,
                   )}
                 </dd>
               </div>
