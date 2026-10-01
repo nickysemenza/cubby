@@ -1350,44 +1350,46 @@ export const getLocationById = async (
     throw createAppError("LOCATION_NOT_FOUND", `Location ${id} not found`);
   }
 
-  // Fetch parent chain recursively (up to 10 levels)
+  // The parent chain (up to 10 levels) in two round trips at any depth: one
+  // recursive walk for the ids, then one read with images. Like the walk it
+  // replaced, it does not filter deleted ancestors.
   let parentChain: LocationWithParentChild | null = null;
-  const parentChainIds: LocationId[] = [];
-  if (res.parentId) {
-    let currentParentId: LocationId | null = res.parentId;
-    let depth = 0;
-    const parents: Array<
-      typeof location.$inferSelect & {
-        images: Array<{
-          image: typeof image.$inferSelect;
-        }>;
-      }
-    > = [];
-
-    while (currentParentId && depth < 10) {
-      const parentData: (typeof parents)[number] | undefined = await unwrapDb(
-        db,
-      ).query.location.findFirst({
-        where: eq(location.id, currentParentId),
-        ...relations.location.withImages,
-      });
-
-      if (!parentData) break;
-
-      parents.unshift(parentData);
-      parentChainIds.push(parentData.id);
-      currentParentId = parentData.parentId;
-      depth++;
-    }
-
-    for (const parentData of parents) {
-      const parentWithRelations: LocationWithParentChild = {
+  const chainRows = res.parentId
+    ? (
+        await unwrapDb(db).execute<{ id: LocationId }>(sql`
+          WITH RECURSIVE chain AS (
+            SELECT ${location.id} AS id, ${location.parentId} AS "parentId", 1 AS depth
+            FROM ${location} WHERE ${location.id} = ${res.parentId}
+            UNION ALL
+            SELECT l."id", l."parentId", c.depth + 1
+            FROM ${location} l JOIN chain c ON l."id" = c."parentId"
+            WHERE c.depth < 10
+          )
+          SELECT id FROM chain ORDER BY depth
+        `)
+      ).rows
+    : [];
+  // Immediate parent first, matching the order data qualities are loaded in.
+  const parentChainIds = chainRows.map((row) => row.id);
+  if (parentChainIds.length > 0) {
+    const parentsById = new Map(
+      (
+        await unwrapDb(db).query.location.findMany({
+          where: inArray(location.id, parentChainIds),
+          ...relations.location.withImages,
+        })
+      ).map((parent) => [parent.id, parent]),
+    );
+    // Build root-first so the result is the immediate parent, linked upward.
+    for (const parentId of [...parentChainIds].reverse()) {
+      const parentData = parentsById.get(parentId);
+      if (!parentData) continue;
+      parentChain = {
         ...parentData,
         children: [],
         parent: parentChain,
         images: parentData.images,
       };
-      parentChain = parentWithRelations;
     }
   }
 

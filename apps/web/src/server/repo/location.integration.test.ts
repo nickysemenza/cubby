@@ -157,6 +157,37 @@ describe("bulkReparentLocations", () => {
       bulkReparentLocations(ctx.db, [TEST_HOME_ID], childId, ctx.actor),
     ).rejects.toThrow("Home cannot be reparented");
   });
+
+  it("links the whole ancestor chain from the immediate parent up to Home", async () => {
+    const room = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Workshop" }),
+      ctx.actor,
+    );
+    const shelf = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Shelf", parentId: room.id }),
+      ctx.actor,
+    );
+    const bin = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Bin", parentId: shelf.id }),
+      ctx.actor,
+    );
+    const binId = parseEntityId(
+      "location",
+      (await resolveLiveShortcode(ctx.db, bin.id, "location"))!,
+    );
+
+    const chain: (string | undefined)[] = [];
+    for (
+      let node = (await getLocationById(ctx.db, binId)).parent;
+      node;
+      node = node.parent
+    )
+      chain.push(node.id);
+    expect(chain).toEqual([shelf.id, room.id, TEST_HOME_SHORTCODE]);
+  });
 });
 
 describe("location kernel — bulkUpdate (the guards, through the kernel)", () => {
