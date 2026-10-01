@@ -127,7 +127,6 @@ describe("upsertRecipe", () => {
       sections: [
         {
           name: "Batter",
-          instructions: [],
           ingredients: [
             ingredientRef(testIngredients[0]!.id, {
               amounts: [{ value: 2, unit: "cups" }],

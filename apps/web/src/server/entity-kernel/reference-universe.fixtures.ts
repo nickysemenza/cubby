@@ -299,7 +299,7 @@ export async function seedReferenceUniverse(
   const project = await seed("project");
   const vendor = await seed("vendor");
   await seed("spendingCategory", { parentId: null });
-  await seed("ingredient");
+  const ingredient = await seed("ingredient");
   // Before planting: a planting's required plantId resolves through it.
   await seed("plant");
   const purchase = await seed("purchase");
@@ -338,11 +338,34 @@ export async function seedReferenceUniverse(
     locationId: storageLocation ? storageLocation.id : TEST_HOME_SHORTCODE,
   });
 
-  const recipe = await seed("recipe");
+  // The delete-policy matrix needs a RecipeSectionIngredient row to exercise the
+  // ingredient -> recipe-line edge; the factory's default recipe has no sections.
+  const recipe = await seed(
+    "recipe",
+    ingredient
+      ? {
+          sections: [
+            {
+              instructions: [{ instruction: "Mix" }],
+              ingredients: [
+                {
+                  type: "ingredient",
+                  ingredientId: ingredient.id,
+                  recipeId: null,
+                  amounts: [{ value: 1, unit: "cup" }],
+                },
+              ],
+            },
+          ],
+        }
+      : {},
+  );
   await seed("meal");
   await seed("wish");
-  const ledgerPartyA = await seed("ledgerParty");
-  const ledgerPartyB = await seed("ledgerParty");
+  // Financial and vendor accounts may map only to member/household parties; a
+  // random sample can draw "guest", which their creates reject.
+  const ledgerPartyA = await seed("ledgerParty", { kind: "member" });
+  const ledgerPartyB = await seed("ledgerParty", { kind: "member" });
   if (ledgerPartyB) record(ledgerPartyB.id);
 
   // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- see the walker block comment above
@@ -376,7 +399,7 @@ export async function seedReferenceUniverse(
   // `image` has no kernel create (see SKIPPED_ENTITIES); insert it directly.
   const image = await createImageFixture(db, "list-smoke");
   record(image.shortcode);
-  await seed("device");
+  await seed("device", { installationId: "reference-universe-install" });
 
   await seedPostPipelineCoverage(db, {
     seed,

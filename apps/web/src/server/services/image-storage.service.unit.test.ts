@@ -360,8 +360,8 @@ describe("image storage ports", () => {
 
     expect(storage.createdPending).toHaveLength(1);
     expect(consoleError).toHaveBeenCalledWith(
-      "image.cull-on-presign.failed",
-      expect.any(Error),
+      "[image-storage] cull-on-presign failed",
+      { error: expect.any(Error) },
     );
     consoleError.mockRestore();
   });

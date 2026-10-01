@@ -73,7 +73,6 @@ describe("entity graph cross-entity journey", () => {
         name: "Journey recipe",
         sections: [
           {
-            instructions: [],
             ingredients: [ingredientRef(ingredient.id)],
           },
         ],

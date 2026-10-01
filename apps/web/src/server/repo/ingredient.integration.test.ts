@@ -67,7 +67,6 @@ describe("ingredient", () => {
         sections: [
           {
             name: "Main",
-            instructions: [],
             ingredients: [ingredientRef(item.id)],
           },
         ],
