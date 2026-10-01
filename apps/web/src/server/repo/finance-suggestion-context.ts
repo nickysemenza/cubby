@@ -10,10 +10,9 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
-  executeEntity,
+  executeEntityAs,
   type EntityKernelContext,
 } from "~/server/entity-kernel";
-import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
 import { createAppError } from "~/server/errors/app-error";
 
 import { unwrapDb, withTransactionDatabase } from "./database-helpers";
@@ -260,17 +259,11 @@ export async function applyFinanceCategorySuggestion(
           "The saved finance record or linked evidence changed; review again before applying the category.",
         );
       await resolveOrThrow(db, "spendingCategory", input.spendingCategoryId);
-      const result = await executeEntity(
-        { ...context, db },
-        entityBrowserMutationCommandSchema.parse({
-          action: "update",
-          entity: review.entity,
-          id: parseShortcodeFor(review.entity, review.entityId),
-          data: { spendingCategoryId: input.spendingCategoryId },
-        }),
-      );
-      if (result.action !== "update")
-        throw new Error("Finance category Apply requires an update result.");
+      const result = await executeEntityAs({ ...context, db }, "update", {
+        entity: review.entity,
+        id: parseShortcodeFor(review.entity, review.entityId),
+        data: { spendingCategoryId: input.spendingCategoryId },
+      });
       return {
         entity: review.entity,
         entityId: review.entityId,

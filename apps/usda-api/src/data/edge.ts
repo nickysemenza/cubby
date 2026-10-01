@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import { countsSchema } from "@cubby/usda/contract";
 import type { FoodLookupParam, FoodSummary } from "@cubby/usda";
 import type { D1PreparedStatement } from "@cloudflare/workers-types";
@@ -22,6 +23,8 @@ import type { EdgeBindings, EdgeCachePort } from "./cloudflare-types.js";
 import { readFoodCache, writeFoodCache } from "./food-cache.js";
 import type { ListFoodsResult, USDADataSource } from "./types.js";
 import { z } from "zod";
+
+const log = createLogger("usda-edge");
 
 export {
   dataTypePredicate,
@@ -184,14 +187,15 @@ export function createEdgeUsdaDataSource(
             try {
               return countsSchema.parse(await cached.json());
             } catch (err) {
-              console.warn(
-                "[counts-cache] ignoring unparseable cached counts",
-                err,
-              );
+              log.warn("[counts-cache] ignoring unparseable cached counts", {
+                error: err,
+              });
             }
           }
         } catch (err) {
-          console.warn("[counts-cache] read failed; falling back to R2", err);
+          log.warn("[counts-cache] read failed; falling back to R2", {
+            error: err,
+          });
         }
       }
 
@@ -209,10 +213,9 @@ export function createEdgeUsdaDataSource(
           }),
         );
       } catch (err) {
-        console.warn(
-          "[counts-cache] write failed; continuing without cache",
-          err,
-        );
+        log.warn("[counts-cache] write failed; continuing without cache", {
+          error: err,
+        });
       }
       return counts;
     },

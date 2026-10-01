@@ -13,7 +13,6 @@ import {
   entityDetailInputSchema,
   getEntityDetailOutputSchema,
 } from "~/entities/generated/entity-details.gen";
-import { generatedEntityRelationListCommandSchema } from "~/entities/generated/entity-relation-lists.gen";
 import {
   entityTimelineInputSchema,
   getEntityTimelineOutputSchema,
@@ -100,15 +99,7 @@ export const entityGraphHandlers = implementOperationDomain(
     graphPaths: (context, input) => getEntityGraphPaths(context.db, input),
     connections: (context, input) => getEntityConnections(context.db, input),
     relation: async (context, input) => {
-      const result = await executeEntity(
-        context,
-        generatedEntityRelationListCommandSchema.parse({
-          action: "listRelation",
-          ...input,
-        }),
-      );
-      if (result.action !== "listRelation")
-        throw new Error("Entity kernel returned the wrong action");
+      const result = await executeEntityAs(context, "listRelation", input);
       const { action: _, ...list } = result;
       return list;
     },
@@ -122,9 +113,8 @@ export const entityMutationHandlers = implementOperationDomain(
       input: entityBrowserMutationCommandSchema,
       output: entityBrowserMutationResultSchema,
       run: async (context, input) => {
-        const command = entityBrowserMutationCommandSchema.parse(input);
         return entityBrowserMutationResultSchema.parse(
-          await executeEntity(context, command),
+          await executeEntity(context, input),
         );
       },
     },

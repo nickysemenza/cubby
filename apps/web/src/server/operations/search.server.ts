@@ -1,4 +1,5 @@
 import type { requestEmbeddingRefreshInputSchema } from "@cubby/schemas/search";
+import { createLogger } from "@cubby/worker-tracing";
 import type { z } from "zod";
 
 import {
@@ -27,6 +28,8 @@ import { implementSubscriptionDomain } from "~/server/subscription-domain.server
 import { getRequestId } from "~/server/tracing";
 
 import { findSimilarEntitiesWorkflow } from "./semantic-similarity.server";
+
+const log = createLogger("search-index-repair");
 
 type RefreshInput = z.output<typeof requestEmbeddingRefreshInputSchema>;
 export async function requestEmbeddingRefreshWorkflow(
@@ -123,7 +126,7 @@ export const searchStreamHandlers = implementSubscriptionDomain(
           errorRetention: "7 days",
         },
       });
-      console.log("[search-index-repair] Workflow started", {
+      log.info("Workflow started", {
         instanceId: instance.id,
         requestId: getRequestId(context.headers),
       });

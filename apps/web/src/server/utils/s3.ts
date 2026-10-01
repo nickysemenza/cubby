@@ -7,11 +7,14 @@ import {
   readResponseWithLimit,
   sanitizeExternalUrl,
 } from "@cubby/shared/external-fetch";
+import { createLogger } from "@cubby/worker-tracing";
 import { AwsClient } from "aws4fetch";
 
 import { env } from "~/env";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+
+const log = createLogger("fetchAndStoreImage");
 
 // SigV4 fetch signer for Cloudflare R2 (S3 API). aws4fetch is Workers-native and
 // runs identically in Node (vite dev) and Workers — no dev/prod split. R2 requires
@@ -224,8 +227,8 @@ export const fetchAndStoreImage = async (
     const response = await fetchExternalResponse(sourceUrl);
 
     if (!response.ok) {
-      console.error(
-        `[fetchAndStoreImage] Failed to fetch image from ${sanitizeExternalUrl(sourceUrl)}: ${response.status} ${response.statusText}`,
+      log.error(
+        `Failed to fetch image from ${sanitizeExternalUrl(sourceUrl)}: ${response.status} ${response.statusText}`,
       );
       return null;
     }
@@ -243,9 +246,7 @@ export const fetchAndStoreImage = async (
     const size = buffer.length;
 
     if (size === 0) {
-      console.error(
-        `[fetchAndStoreImage] Empty image from ${sanitizeExternalUrl(sourceUrl)}`,
-      );
+      log.error(`Empty image from ${sanitizeExternalUrl(sourceUrl)}`);
       return null;
     }
 
@@ -273,8 +274,8 @@ export const fetchAndStoreImage = async (
       error instanceof Error &&
       (error.name === "AbortError" || error.name === "TimeoutError")
     ) {
-      console.error(
-        `[fetchAndStoreImage] Timeout fetching image from ${sanitizeExternalUrl(sourceUrl)}`,
+      log.error(
+        `Timeout fetching image from ${sanitizeExternalUrl(sourceUrl)}`,
       );
       return null;
     }
@@ -287,7 +288,7 @@ export const fetchAndStoreImage = async (
     if (error instanceof ExternalFetchError) {
       throw createAppError("IMAGE_IMPORT_FAILED", error.message, error);
     }
-    console.error(`[fetchAndStoreImage] Error importing image:`, error);
+    log.error("Error importing image", { error });
     return null;
   }
 };

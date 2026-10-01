@@ -236,9 +236,12 @@ export interface EntityCrud<
   ) => Promise<TOut>;
 }
 
-/** The id sets an entity's `relations` hook reports, keyed by audited field. */
+/**
+ * The collections an entity's `relations` hook reports, keyed by audited
+ * field: id sets or row lists, compared structurally by the audit diff.
+ */
 type RelationSnapshot<TKey extends string> = Partial<
-  Record<TKey, readonly string[]>
+  Record<TKey, readonly unknown[]>
 >;
 
 /** {@link createEntityReader} plus the diff-audited column update. */

@@ -41,6 +41,7 @@ import {
 } from "@cubby/schemas/project";
 import { purchaseOut } from "@cubby/schemas/purchase";
 import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
+import { createLogger } from "@cubby/worker-tracing";
 import { sum, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
 
@@ -114,6 +115,8 @@ import {
 import type { UsdaFoodBatchPort } from "~/server/services/usda-helpers";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 import { traceAll, traceAllBounded } from "~/server/tracing";
+
+const log = createLogger("findCoverageProblems");
 
 // The embedding-coverage detector is gated HERE rather than in the repo, so the
 // repo stays pure data access and the env read stays in the service layer.
@@ -1309,8 +1312,8 @@ export const findCoverageProblems = async (
       // turn into a failed Problems page (or, worse, an empty healthy card):
       // leave the prior stale/unavailable rows intact, let the exact filters
       // fail closed, and return their existing freshness state to the UI.
-      console.warn(
-        `[findCoverageProblems] conversion projection rebuild failed; serving ${freshness.state} persisted projection: ${getErrorMessage(error)}`,
+      log.warn(
+        `conversion projection rebuild failed; serving ${freshness.state} persisted projection: ${getErrorMessage(error)}`,
       );
     }
   }

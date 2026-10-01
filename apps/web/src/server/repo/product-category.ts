@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import {
@@ -48,7 +49,7 @@ import {
   listReadOn,
   onDb,
 } from "~/server/repo/repository";
-import { createEntityReader } from "~/server/repo/repository";
+import { createEntityCrud } from "~/server/repo/repository";
 import {
   lookupEntityReferences,
   resolveOrThrow,
@@ -332,12 +333,8 @@ export const listProductCategories = completeListReader(
   listProductCategoriesRead,
 );
 
-const reader = createEntityReader<
-  CategoryRow,
-  ProductCategoryOut,
-  "productCategory",
-  Database | DrizzleTransaction
->({
+const crud = createEntityCrud({
+  table: productCategory,
   entity: "productCategory",
   fetchById: async (db, id) => {
     const [row] = await unwrapDb(db)
@@ -348,9 +345,11 @@ const reader = createEntityReader<
     return row;
   },
   fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
+  toUpdate: (values: Partial<typeof productCategory.$inferInsert>) => values,
+  auditUpdateFields: [...entityFieldModels.productCategory.audit],
 });
 
-export const getProductCategoryByShortcode = reader.getByShortcode;
+export const getProductCategoryByShortcode = crud.getByShortcode;
 
 const cleanAliases = (aliases: string[]) => [
   ...new Set(aliases.map((alias) => alias.trim()).filter(Boolean)),
@@ -481,7 +480,7 @@ export async function createProductCategory(
     });
     return parseEntityId("productCategory", row.id);
   });
-  return { output: await reader.getByID(db, id), entityId: id };
+  return { output: await crud.getByID(db, id), entityId: id };
 }
 
 export async function updateProductCategory(
@@ -581,24 +580,14 @@ export async function updateProductCategory(
       sortOrder: data.sortOrder,
       feature: data.feature,
     };
-    const values = Object.fromEntries(
-      Object.entries(patch).filter(([, value]) => value !== undefined),
-    );
+    const values = buildPartialUpdateValues(patch);
     if (Object.keys(values).length === 0) return;
-    await unwrapDb(tx)
-      .update(productCategory)
-      .set(values)
-      .where(eq(productCategory.id, id));
+    await crud.update(tx, id, values, actor);
     if (parentId !== undefined || data.feature !== undefined) {
       await assertAffectedProductsRemainAdmissible(tx, id);
     }
-    await logAuditEntry(tx, actor, {
-      entityKind: "productCategory",
-      entityId: id,
-      action: "update",
-    });
   });
-  return { output: await reader.getByID(db, id), entityId: id };
+  return { output: await crud.getByID(db, id), entityId: id };
 }
 
 /** A category bound to a behavior feature is structural; it cannot go. */

@@ -1,3 +1,5 @@
+import { createLogger } from "@cubby/worker-tracing";
+
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
 import type { UnparsedError } from "~/lib/error-utils";
 
@@ -8,6 +10,8 @@ import {
   WorkflowEffectError,
   type WorkflowExecutionOptions,
 } from "./execute";
+
+const log = createLogger("workflow");
 
 export type BulkWorkflowSummary<Item, Result> = {
   readonly succeeded: readonly { index: number; item: Item; result: Result }[];
@@ -212,7 +216,7 @@ export async function* executeBulkWorkflow<
     } catch (error) {
       // SILENT: diagnostic subscribers cannot roll back a write or block the
       // bulk run's own effect handling; a broken observer must not fail it.
-      console.error("Workflow observer failed", error);
+      log.error("observer failed", { error });
     }
   };
   const checkCancelled = () => {

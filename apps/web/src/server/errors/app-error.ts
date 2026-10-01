@@ -3,6 +3,7 @@ import {
   publicImpactItemSchema,
 } from "@cubby/schemas/entity-integrity";
 import { type AppErrorReason, AppErrors } from "@cubby/shared";
+import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
 import { annotateActiveSpanError } from "~/server/tracing";
@@ -71,11 +72,11 @@ export function createAppError(
 
   // Only log unexpected errors (5xx, etc.) - expected 4xx are normal business responses
   if (!isExpectedError) {
-    if (originalError) {
-      console.error(`[${reason}] ${message}`, originalError);
-    } else {
-      console.error(`[${reason}] ${message}`);
-    }
+    // The reason is the scope, so each AppError reason greps as its own tag.
+    createLogger(reason).error(
+      message,
+      originalError ? { error: originalError } : undefined,
+    );
   }
 
   // Expected errors annotate the native span without marking it as failed.

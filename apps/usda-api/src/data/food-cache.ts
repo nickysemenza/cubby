@@ -1,5 +1,8 @@
+import { createLogger } from "@cubby/worker-tracing";
 import { foodSummary, type FoodSummary } from "@cubby/usda";
 import type { D1Database } from "@cloudflare/workers-types";
+
+const log = createLogger("food-cache");
 
 const MAX_SQL_VARIABLES = 100;
 const FOOD_CACHE_TABLE = "food_cache";
@@ -30,10 +33,7 @@ export async function readFoodCache(
   try {
     await ensureFoodCacheTable(db);
   } catch (error) {
-    console.warn(
-      "[food-cache] table setup failed; continuing without cache",
-      error,
-    );
+    log.warn("table setup failed; continuing without cache", { error });
     return out;
   }
   for (let index = 0; index < fdcIds.length; index += MAX_SQL_VARIABLES - 1) {
@@ -50,14 +50,11 @@ export async function readFoodCache(
         try {
           out.set(row.fdc_id, foodSummary.parse(JSON.parse(row.data)));
         } catch (error) {
-          console.warn(
-            `[food-cache] ignoring unparseable cached food ${row.fdc_id}`,
-            error,
-          );
+          log.warn(`ignoring unparseable cached food ${row.fdc_id}`, { error });
         }
       }
     } catch (error) {
-      console.warn("[food-cache] read failed; treating cache as a miss", error);
+      log.warn("read failed; treating cache as a miss", { error });
     }
   }
   return out;
@@ -81,6 +78,6 @@ export async function writeFoodCache(
       ),
     );
   } catch (error) {
-    console.warn("[food-cache] write failed; continuing without cache", error);
+    log.warn("write failed; continuing without cache", { error });
   }
 }

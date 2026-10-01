@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import {
   flueImportRunPurpose,
   importRunAgentIdentity,
@@ -13,6 +14,8 @@ import { PurchaseImportRun } from "./purchase-import-run";
 import { dispatchPurchaseAgentEvent } from "./queue-dispatch";
 import { purchaseAgentSentryOptions } from "./sentry-bridge";
 import { purchaseImportService } from "./service";
+
+const log = createLogger("purchase-agent");
 
 type QueueService = ReturnType<typeof purchaseImportService>;
 
@@ -99,7 +102,7 @@ async function consumeMessage(
     span.setAttribute("dispatch.outcome", await deliverEvent(event, service));
     message.ack();
   } catch (error) {
-    console.error("purchase-agent queue event was not dispatched", error);
+    log.error("queue event was not dispatched", { error });
     // `withSentry` only auto-captures a throw that escapes the handler, and
     // this consumer never lets one escape, so report it here.
     Sentry.captureException(error);
@@ -127,7 +130,7 @@ async function consumeMessage(
         });
       }
     } catch (markError) {
-      console.error("purchase-agent could not mark the run failed", markError);
+      log.error("could not mark the run failed", { error: markError });
       Sentry.captureException(markError);
     }
     message.ack();

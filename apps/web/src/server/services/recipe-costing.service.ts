@@ -33,6 +33,7 @@ import type {
   StoredRecipeTotals,
 } from "@cubby/schemas/recipe-shared";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
+import { createLogger } from "@cubby/worker-tracing";
 import { keyBy, uniq } from "es-toolkit";
 import { z } from "zod";
 
@@ -75,6 +76,8 @@ import { TraceNames, withTrace } from "~/server/tracing";
 
 import { getIngredientsByIDs } from "./ingredient.service";
 import type { UsdaFoodBatchPort } from "./usda-helpers";
+
+const log = createLogger("recompute");
 
 const toRecipeTotals = (totals: CalculateTotalsResult): RecipeTotals =>
   totals.estimates;
@@ -356,7 +359,7 @@ export class RecipeCostingService {
           "recipe.recomputed": recomputed,
           duration_ms: ms,
         });
-        console.log(
+        log.info(
           `[recipe-totals] ${operation} recomputed ${recomputed} recipe(s) in ${ms}ms`,
         );
         return recomputed;
@@ -409,7 +412,7 @@ export class RecipeCostingService {
             staleParents,
             "recipe-costing.parent-cascade",
           );
-          console.log(
+          log.info(
             `[recompute-queue] published ${staleParents.length} stale parent recipe(s) for follow-up recompute`,
           );
         }
@@ -480,8 +483,8 @@ export class RecipeCostingService {
     // One line per processed chunk. `load+compute` is real wall-clock (it spans
     // DB reads + the USDA fetch, which are I/O so the workerd clock advances);
     // WASM CPU is invisible here by design (see computeTotalsInner).
-    console.log(
-      `[recompute] recipes=${todo.length} changed=${changedIds.length} fresh=${freshOnlyIds.length} load+compute=${loadMs}ms write=${writeMs}ms`,
+    log.info(
+      `recipes=${todo.length} changed=${changedIds.length} fresh=${freshOnlyIds.length} load+compute=${loadMs}ms write=${writeMs}ms`,
     );
     // Queue mode stops here: the parents are durably stale, and the caller
     // publishes every currently-stale parent after this chunk commits.
@@ -507,7 +510,7 @@ export class RecipeCostingService {
       });
     }
     const receipt = await this.publish(this.db, tasks, { source });
-    console.log(
+    log.info(
       `[recompute-queue] published recipes=${recipeIds.length} chunks=${tasks.length} transport=${receipt.transport} source=${source}`,
     );
   }

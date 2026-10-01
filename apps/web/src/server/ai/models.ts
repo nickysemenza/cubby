@@ -1,6 +1,9 @@
+import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
+
+const log = createLogger("ai/models");
 
 interface AiTokenUsage {
   inputTokens?: number | null;
@@ -212,7 +215,7 @@ export function getAiModelCatalog(): ReadonlyMap<string, AiModelCatalogEntry> {
     if (!parsed.success) {
       // Never fail the caller: pricing is telemetry, and an unpriced row is
       // already a visible state on /ai-usage. Cached so this logs once.
-      console.error("[ai/models] crate model catalog did not parse", {
+      log.error("crate model catalog did not parse", {
         error: parsed.error.message,
       });
     }

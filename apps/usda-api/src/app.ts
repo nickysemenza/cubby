@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import { Hono } from "hono";
 import type { Context, MiddlewareHandler, Next } from "hono";
 import { apiReference } from "@scalar/hono-api-reference";
@@ -5,6 +6,8 @@ import { countsSchema, errorSchema } from "@cubby/usda/contract";
 import { openApiDocument } from "./openapi.js";
 import { createFoodRoutes } from "./routes/foods.js";
 import type { USDADataSource } from "./data/types.js";
+
+const log = createLogger("usda-api");
 
 interface CreateUsdaAppOptions {
   middleware?: MiddlewareHandler[];
@@ -23,7 +26,7 @@ const httpLogger = async (c: Context, next: Next) => {
   const status = c.res.status;
   const userAgent = c.req.header("User-Agent") || "Unknown";
 
-  console.log(
+  log.info(
     `${timestamp} [${method}] ${url} - Status: ${status} - Duration: ${duration}ms - UA: ${userAgent}`,
   );
 };
@@ -51,7 +54,7 @@ export function createUsdaApp(
       c.header("Cache-Control", "public, max-age=3600");
       return c.json(counts, 200);
     } catch (e) {
-      console.error("Error getting counts:", e);
+      log.error("Error getting counts", { error: e });
       return c.json(
         errorSchema.parse({ error: "Failed to retrieve counts" }),
         500,

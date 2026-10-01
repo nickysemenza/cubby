@@ -6,9 +6,12 @@ import type {
   FoodSummary,
 } from "@cubby/usda";
 import { usdaContract } from "@cubby/usda/contract";
+import { createLogger } from "@cubby/worker-tracing";
 import { initClient } from "@ts-rest/core";
 
 import { TraceNames, withTrace } from "~/server/tracing";
+
+const log = createLogger("USDA");
 
 // Per-request abort ceiling for usda-api fetches. Generous for caller-side
 // transport overhead (not handler work): the fetch itself resolves in ~150ms now
@@ -121,10 +124,7 @@ export class USDAClient {
               // response into an application error — the response below is
               // already the real result; this `Cache.put` was only a
               // best-effort warm for the next 24h.
-              console.warn(
-                `[USDA] Cache write failed for ${args.path}:`,
-                error,
-              );
+              log.warn(`Cache write failed for ${args.path}`, { error });
             }
           }
 
@@ -139,11 +139,11 @@ export class USDAClient {
           // degrade past. Re-throw so callers surface it instead of silently
           // producing null/empty results (which would masquerade as "no data").
           if (error instanceof Error && error.name === "TimeoutError") {
-            console.warn(
-              `[USDA] Timeout after ${USDA_FETCH_TIMEOUT_MS}ms for ${args.path}`,
+            log.warn(
+              `Timeout after ${USDA_FETCH_TIMEOUT_MS}ms for ${args.path}`,
             );
           } else {
-            console.warn(`[USDA] Request failed for ${args.path}:`, error);
+            log.warn(`Request failed for ${args.path}`, { error });
           }
           throw error;
         }

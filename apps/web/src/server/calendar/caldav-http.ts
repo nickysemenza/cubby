@@ -1,5 +1,6 @@
 import { userId, type UserId } from "@cubby/schemas/identifiers";
 import { concatBytes } from "@cubby/shared/external-fetch";
+import { createLogger } from "@cubby/worker-tracing";
 import {
   DOMImplementation,
   DOMParser,
@@ -27,6 +28,8 @@ import {
   type CalDavResource,
 } from "./caldav-types";
 import { etagMatches } from "./contracts";
+
+const log = createLogger("caldav");
 
 const DAV = "DAV:";
 const CALDAV = "urn:ietf:params:xml:ns:caldav";
@@ -682,11 +685,11 @@ export function createCalDavHandler(
       // Anything else (an uncertain-write marker from a failed DO `write()`,
       // a thrown non-CalDavError) would otherwise vanish behind the generic
       // 503 with no trace in logs/Sentry.
-      console.error(
-        "[caldav] unhandled",
-        { method: request.method, path: new URL(request.url).pathname },
+      log.error("unhandled", {
+        method: request.method,
+        path: new URL(request.url).pathname,
         error,
-      );
+      });
       return new Response("Calendar temporarily unavailable", {
         status: 503,
         headers: { "Retry-After": "30" },

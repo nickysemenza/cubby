@@ -1,4 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { createLogger } from "@cubby/worker-tracing";
 
 import type {
   PhotoImportStageInput,
@@ -8,6 +9,8 @@ import type { Database } from "~/server/db";
 import { findReusableImagesBySha256 } from "~/server/repo/photo-import";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { initiateImageUploadWithoutEntity } from "~/server/services/image-storage.service";
+
+const log = createLogger("photo-import");
 
 export interface PhotoImportStagePorts {
   findReusable: typeof findReusableImagesBySha256;
@@ -64,7 +67,7 @@ export async function stagePhotoImport(
     } catch (error) {
       // SILENT: already surfaced to the caller as this item's `failed`/
       // `retryable` result below; there's no richer per-item channel here.
-      console.error("photo-import.stage-failed", {
+      log.error("stage-failed", {
         clientId: item.clientId,
         error,
       });

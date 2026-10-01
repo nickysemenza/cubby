@@ -62,8 +62,6 @@ import {
   orderMailCandidateDecision,
   purchase,
   purchasePaymentEvidence,
-  runEvidence,
-  runTarget,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -135,6 +133,7 @@ import {
 /** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
 import { deleteByPolicy } from "~/server/repo/removal";
 import { cascadeRemoval } from "~/server/repo/removal";
+import { mergeRunTargets } from "~/server/repo/run-target-merge";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,
@@ -2277,35 +2276,7 @@ export const mergePurchases = async (
     // A run can already target the keeper. Preserve that canonical target and
     // drop the colliding loser row before re-pointing the remaining history;
     // the unique (run, entity) index makes a bulk update unsafe here.
-    const targetedRuns = await tx
-      .select({ id: runTarget.id, runId: runTarget.runId })
-      .from(runTarget)
-      .where(inArray(runTarget.entityId, losers));
-    for (const target of targetedRuns) {
-      const [existing] = await tx
-        .select({ id: runTarget.id })
-        .from(runTarget)
-        .where(
-          and(
-            eq(runTarget.runId, target.runId),
-            eq(runTarget.entityId, keepId),
-          ),
-        )
-        .limit(1);
-      if (existing) {
-        await tx
-          .update(runEvidence)
-          .set({ targetId: existing.id })
-          .where(eq(runEvidence.targetId, target.id));
-        await tx.delete(runTarget).where(eq(runTarget.id, target.id));
-      } else {
-        await tx
-          .update(runTarget)
-          .set({ entityId: keepId, updatedAt: new Date() })
-          .where(eq(runTarget.id, target.id));
-      }
-    }
-
+    await mergeRunTargets(tx, keepId, losers);
     await logAuditEntries(tx, actor, [
       {
         entityKind: "purchase" as const,

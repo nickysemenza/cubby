@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { runEntityId, parseEntityId } from "@cubby/schemas/identifiers";
+import { sleep } from "@cubby/shared/retry";
 import { and, eq, inArray } from "drizzle-orm";
 import { createWorkerdHarness } from "tooling/purchase-agent-workerd-harness";
 import { withTestDb } from "tooling/test-setup";
@@ -114,7 +115,7 @@ async function poll(done: () => Promise<boolean>) {
   const deadline = Date.now() + RUN_TIMEOUT_MS;
   while (Date.now() < deadline) {
     if (await done()) return true;
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    await sleep(1_000);
   }
   return false;
 }

@@ -1,4 +1,5 @@
 import type { ProductId, RecipeId } from "@cubby/schemas/identifiers";
+import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
 import {
@@ -8,6 +9,8 @@ import {
 } from "~/server/repo/image";
 import { importImageFromUrl } from "~/server/services/image-storage.service";
 import type { UpcLookupPort } from "~/server/services/upc";
+
+const log = createLogger("importRecipeImageFromUrl");
 
 export type ImageUrlImportPort = typeof importImageFromUrl;
 
@@ -80,9 +83,7 @@ export const importRecipeImageFromUrl = async (
     });
 
     if (!imported) {
-      console.warn(
-        `[importRecipeImageFromUrl] Failed to import image for recipe ${recipeId}`,
-      );
+      log.warn(`Failed to import image for recipe ${recipeId}`);
       return null;
     }
 
@@ -90,10 +91,7 @@ export const importRecipeImageFromUrl = async (
 
     return { imageId: imported.imageId };
   } catch (error) {
-    console.error(
-      `[importRecipeImageFromUrl] Error importing image for recipe ${recipeId}:`,
-      error,
-    );
+    log.error(`Error importing image for recipe ${recipeId}`, { error });
     return null;
   }
 };

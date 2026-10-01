@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
 import {
@@ -47,6 +48,8 @@ import type {
 } from "~/server/start-operation.contract";
 import { type AppSpan, getRequestId } from "~/server/tracing";
 import type { Workload } from "~/server/workload";
+
+const log = createLogger("start-operation");
 
 export type StartOperationRequest = {
   headers: Headers;
@@ -460,16 +463,13 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
               },
             );
             if (normalized.publicError.code === "INTERNAL_SERVER_ERROR") {
-              console.error(
-                "[start-operation.failure]",
-                {
-                  operation: options.operation,
-                  stage,
-                  requestId,
-                  cfRayId: options.request.headers.get("cf-ray") ?? undefined,
-                },
-                normalized.observedError,
-              );
+              log.error("failure", {
+                operation: options.operation,
+                stage,
+                requestId,
+                cfRayId: options.request.headers.get("cf-ray") ?? undefined,
+                error: normalized.observedError,
+              });
             }
             const result: StartOperationResult<z.output<OutputSchema>> = {
               ok: false,

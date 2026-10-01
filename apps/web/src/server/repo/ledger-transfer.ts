@@ -28,7 +28,7 @@ import {
   ledgerTransfer,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   buildPartialUpdateValues,
@@ -55,7 +55,7 @@ import {
   listReadOn,
   onDb,
 } from "~/server/repo/repository";
-import { createEntityReader } from "~/server/repo/repository";
+import { createEntityCrud } from "~/server/repo/repository";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -262,18 +262,52 @@ const getById = async (
   return row;
 };
 
-const reader = createEntityReader<
-  LedgerTransferRow,
-  LedgerTransferOut,
-  "ledgerTransfer",
-  Database | DrizzleTransaction
->({
+/** Per-update work resolved before the audited column update: see `relations`. */
+type LedgerTransferChange = {
+  columns: Partial<typeof ledgerTransfer.$inferInsert>;
+  parties: { fromPartyId: LedgerPartyId; toPartyId: LedgerPartyId };
+  amount: number;
+  evidence: readonly FinancialTransactionId[];
+  sourceClaims: LedgerTransferUpdateData["sourceClaims"];
+};
+
+const crud = createEntityCrud({
+  table: ledgerTransfer,
   entity: "ledgerTransfer",
   fetchById: getById,
   fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
+  toUpdate: (change: LedgerTransferChange) =>
+    buildPartialUpdateValues({ ...change.columns, ...change.parties }),
+  auditUpdateFields: [...entityFieldModels.ledgerTransfer.audit],
+  // Source claims and evidence links live in child tables but are audited as
+  // fields: the diff reads them before and after they are rewritten.
+  relations: {
+    read: async (tx, id) => {
+      const [row] = await tx
+        .select({
+          sourceClaims: columns.sourceClaims,
+          evidenceTransactionIds: columns.evidenceTransactionIds,
+        })
+        .from(ledgerTransfer)
+        .where(eq(ledgerTransfer.id, id));
+      return row ?? {};
+    },
+    write: async (tx, id, change) => {
+      await replaceEvidence(
+        tx,
+        { id, ...change.parties, amount: change.amount },
+        change.evidence,
+      );
+      if (change.sourceClaims !== undefined)
+        await replaceLedgerSourceClaims(
+          tx,
+          { ledgerTransferId: id, targetAmount: change.amount },
+          change.sourceClaims ?? [],
+        );
+    },
+  },
 });
-
-export const getLedgerTransferByShortcode = reader.getByShortcode;
+export const getLedgerTransferByShortcode = crud.getByShortcode;
 
 async function resolvePartyIds(
   tx: DrizzleTransaction,
@@ -444,7 +478,7 @@ export async function createLedgerTransfer(
     });
     return created.id;
   });
-  return { output: await reader.getByID(db, id), entityId: id };
+  return { output: await crud.getByID(db, id), entityId: id };
 }
 
 export async function updateLedgerTransfer(
@@ -491,18 +525,9 @@ export async function updateLedgerTransfer(
               parseShortcodeFor("ledgerParty", before.toPartyShortcode),
           });
     const amount = data.amount ?? before.amount;
-    const {
-      sourceClaims: _sourceClaims,
-      evidenceTransactionIds: _evidenceTransactionIds,
-      ...columnData
-    } = data;
-    const values = buildPartialUpdateValues({ ...columnData, ...parties });
-    await tx
-      .update(ledgerTransfer)
-      .set(values)
-      .where(and(eq(ledgerTransfer.id, id), notDeleted(ledgerTransfer)));
+    const { sourceClaims, evidenceTransactionIds, ...columnData } = data;
     const evidence =
-      data.evidenceTransactionIds === undefined
+      evidenceTransactionIds === undefined
         ? await tx
             .select({ id: financialTransaction.id })
             .from(financialTransaction)
@@ -516,33 +541,16 @@ export async function updateLedgerTransfer(
         : await resolveAllOrThrow(
             tx,
             "financialTransaction",
-            data.evidenceTransactionIds ?? [],
+            evidenceTransactionIds ?? [],
           );
-    await replaceEvidence(tx, { id, ...parties, amount }, evidence);
-    if (data.sourceClaims !== undefined)
-      await replaceLedgerSourceClaims(
-        tx,
-        { ledgerTransferId: id, targetAmount: amount },
-        data.sourceClaims ?? [],
-      );
-    const after = await getById(tx, id);
-    if (!after)
-      throw createAppError(
-        "LEDGER_TRANSFER_NOT_FOUND",
-        `Ledger transfer not found after update: ${shortcode}`,
-      );
-    const changes = computeChanges(before, after, [
-      ...entityFieldModels.ledgerTransfer.audit,
-    ]);
-    if (changes)
-      await logAuditEntry(tx, actor, {
-        entityKind: "ledgerTransfer",
-        entityId: id,
-        action: "update",
-        changes,
-      });
+    await crud.update(
+      tx,
+      id,
+      { columns: columnData, parties, amount, evidence, sourceClaims },
+      actor,
+    );
   });
-  return { output: await reader.getByID(db, id), entityId: id };
+  return { output: await crud.getByID(db, id), entityId: id };
 }
 
 const ledgerTransferScaffold = listScaffold("ledgerTransfer", ledgerTransfer);

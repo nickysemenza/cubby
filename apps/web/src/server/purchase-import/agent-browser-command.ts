@@ -1,13 +1,5 @@
+import type { PurchaseAgentCommand } from "@cubby/schemas/purchase-agent-rpc";
 import type { BrowserBridgeOperation } from "@cubby/schemas/purchase-import";
-
-export type PurchaseAgentCommand = {
-  kind:
-    | "navigate_orders"
-    | "capture_order"
-    | "capture_pdf"
-    | "capture_screenshot";
-  target?: string;
-};
 
 /**
  * Resolve the model's semantic request into a self-contained broker command. A capture carries

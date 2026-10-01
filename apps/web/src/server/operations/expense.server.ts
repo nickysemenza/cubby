@@ -67,10 +67,10 @@ import {
   mutationEvents,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
-import { TraceNames, withTrace } from "~/server/tracing";
+import { TraceNames } from "~/server/tracing";
 import {
   bindWorkflow,
-  executeWorkflow,
+  tracedWorkflow,
   workflow,
 } from "~/server/workflow-runtime";
 
@@ -242,19 +242,11 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
   })
   .output(({ withinGridLimits }) => withinGridLimits);
 
-export const expenseAnalyzeWorkflow = Object.assign(
-  (db: Database, input: ExpenseAnalyzeInput) =>
-    withTrace(TraceNames.service("expense", "analyze"), async (span) => {
-      span.setAttributes(expenseAnalyzeTraceAttributes(input));
-      const result = await executeWorkflow(expenseAnalyzeDefinition, {
-        context: db,
-        input,
-      });
-      span.setAttributes(expenseAnalyzeTraceAttributes(input, result));
-      return result;
-    }),
-  { definition: expenseAnalyzeDefinition },
-);
+export const expenseAnalyzeWorkflow = tracedWorkflow({
+  name: TraceNames.service("expense", "analyze"),
+  definition: expenseAnalyzeDefinition,
+  attrs: expenseAnalyzeTraceAttributes,
+});
 
 type ExpenseFacetItemInput = {
   filters: ExpenseFilters;
@@ -352,19 +344,11 @@ const expenseFacetCountsDefinition = workflow<
     })),
   }));
 
-export const expenseFacetCountsWorkflow = Object.assign(
-  (db: Database, input: ExpenseFacetCountsInput) =>
-    withTrace(TraceNames.service("expense", "facetCounts"), async (span) => {
-      span.setAttributes(expenseFacetTraceAttributes(input));
-      const result = await executeWorkflow(expenseFacetCountsDefinition, {
-        context: db,
-        input,
-      });
-      span.setAttributes(expenseFacetTraceAttributes(input, result));
-      return result;
-    }),
-  { definition: expenseFacetCountsDefinition },
-);
+export const expenseFacetCountsWorkflow = tracedWorkflow({
+  name: TraceNames.service("expense", "facetCounts"),
+  definition: expenseFacetCountsDefinition,
+  attrs: expenseFacetTraceAttributes,
+});
 async function expenseInventoryOwnershipContext(
   db: Database,
   input: z.output<typeof expenseInventoryOwnershipContextInput>,
