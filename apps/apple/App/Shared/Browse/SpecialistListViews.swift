@@ -3,10 +3,84 @@ import Foundation
 import Observation
 import SwiftUI
 
-private enum SpecialistPhase: Equatable { case loading, ready, failed(String) }
+/// The load/phase seam every specialist layout (calendar, board, gallery, analytics) shares:
+/// the manifest names the layout id, the layout supplies only its fetch and its rows.
+@MainActor @Observable
+private final class SpecialistLoader<Value> {
+    enum Phase {
+        case loading
+        case ready(Value)
+        case failed(String)
+    }
 
-private func specialistError(_ error: Error) -> String {
-    (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+    private(set) var phase: Phase = .loading
+    private var filters = EntityFilterState()
+    private var fetch: (@MainActor (EntityFilterState) async throws -> Value)?
+
+    func load(
+        filters: EntityFilterState, fetch: @escaping @MainActor (EntityFilterState) async throws -> Value
+    ) async {
+        self.filters = filters
+        self.fetch = fetch
+        phase = .loading
+        do {
+            phase = .ready(try await fetch(filters))
+        } catch {
+            phase = .failed(error.userMessage)
+        }
+    }
+
+    func reload() async {
+        guard let fetch else { return }
+        await load(filters: filters, fetch: fetch)
+    }
+
+    /// Runs a mutation, then re-fetches; a failure replaces the screen with the raw error.
+    func perform(_ action: @MainActor () async throws -> Void) async {
+        do {
+            try await action()
+            await reload()
+        } catch {
+            phase = .failed(error.userMessage)
+        }
+    }
+}
+
+private struct SpecialistLoadView<Value, Content: View>: View {
+    private struct ReloadKey: Hashable {
+        let filters: EntityFilterState
+        let extra: AnyHashable
+    }
+
+    let loadingLabel: String
+    let filters: EntityFilterState
+    var reloadKey: AnyHashable = 0
+    let fetch: @MainActor (EntityFilterState) async throws -> Value
+    @ViewBuilder let content: (Value, SpecialistLoader<Value>) -> Content
+    @State private var loader = SpecialistLoader<Value>()
+
+    var body: some View {
+        Group {
+            switch loader.phase {
+            case .loading:
+                LoadingIndicator.screen(label: loadingLabel)
+            case .failed(let message):
+                ContentUnavailableView {
+                    Label("Couldn't load view", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(message)
+                } actions: {
+                    Button("Retry") { Task { await loader.reload() } }
+                }
+            case .ready(let value):
+                content(value, loader)
+            }
+        }
+        .task(id: ReloadKey(filters: filters, extra: reloadKey)) {
+            await loader.load(filters: filters, fetch: fetch)
+        }
+        .refreshControl { await loader.reload() }
+    }
 }
 
 private func wire(_ value: some Encodable) -> JSONValue {
@@ -14,280 +88,98 @@ private func wire(_ value: some Encodable) -> JSONValue {
 }
 
 private func dollars(_ value: JSONValue?) -> String {
-    (value?.doubleValue ?? 0).formatted(.currency(code: "USD"))
+    (value?.doubleValue ?? 0).usd
 }
 
-@MainActor @Observable
-private final class MealCalendarModel {
-    var month =
-        Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: .now)) ?? .now
-    private(set) var items: [JSONValue] = []
-    private(set) var phase: SpecialistPhase = .loading
-    private let client: CubbyClient
-    private var filters = EntityFilterState()
+private func isoDay(_ date: Date) -> String {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "yyyy-MM-dd"
+    return formatter.string(from: date)
+}
 
-    init(client: CubbyClient) { self.client = client }
-
-    func load(filters: EntityFilterState) async {
-        self.filters = filters
-        phase = .loading
-        let end = Calendar.current.date(byAdding: .month, value: 1, to: month) ?? month
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        do {
-            let response = try await client.mealCalendar(
-                from: formatter.string(from: month), to: formatter.string(from: end))
-            let monthItems = wire(response)["items"]?.arrayValue ?? []
-            if filters.isEmpty {
-                items = monthItems
-            } else {
-                var matched: Set<String> = []
-                var pageNumber = 1
-                while true {
-                    let page = try await client.list(
-                        EntityCatalog[.meal], page: pageNumber, pageSize: 200, filters: filters)
-                    matched.formUnion(page.items.map(\.id))
-                    if page.items.count < 200 { break }
-                    pageNumber += 1
-                }
-                items = monthItems.filter { $0["id"]?.stringValue.map(matched.contains) ?? false }
-            }
-            phase = .ready
-        } catch { phase = .failed(specialistError(error)) }
-    }
-
-    func shift(_ months: Int) async {
-        month = Calendar.current.date(byAdding: .month, value: months, to: month) ?? month
-        await load(filters: filters)
+private extension Array where Element: Hashable {
+    func uniqued() -> [Element] {
+        Array(Set(self)).sorted { String(describing: $0) < String(describing: $1) }
     }
 }
 
-@MainActor @Observable
-private final class TaskBoardModel {
-    private(set) var tasks: [JSONValue] = []
-    private(set) var doneCount = 0
-    private(set) var phase: SpecialistPhase = .loading
-    private let client: CubbyClient
-    private var filters: EntityFilterState
-
-    init(client: CubbyClient, filters: EntityFilterState) {
-        self.client = client
-        self.filters = filters
-    }
-
-    func load(filters: EntityFilterState) async {
-        self.filters = filters
-        phase = .loading
-        do {
-            let result = wire(try await client.taskBoard(filters: filters))
-            tasks = (result["active"]?.arrayValue ?? []) + (result["recentDone"]?.arrayValue ?? [])
-            doneCount = Int(result["doneCount"]?.doubleValue ?? 0)
-            phase = .ready
-        } catch { phase = .failed(specialistError(error)) }
-    }
-
-    func move(_ id: String, field: String, value: String) async {
-        do {
-            try await client.update(
-                EntityCatalog[.task], id: id,
-                patch: EntityPatch(values: [field: .string(value)]))
-            await load(filters: filters)
-        } catch { phase = .failed(specialistError(error)) }
-    }
-
-    func reorder(_ id: String, offset: Int, in lane: [JSONValue]) async {
-        guard let index = lane.firstIndex(where: { $0["id"]?.stringValue == id }),
-            lane.indices.contains(index + offset)
-        else { return }
-        var ordered = lane.compactMap { $0["id"]?.stringValue }
-        guard ordered.count == lane.count else { return }
-        ordered.swapAt(index, index + offset)
-        do {
-            for start in stride(from: 0, to: ordered.count, by: 200) {
-                let end = min(start + 200, ordered.count)
-                try await client.reorderTasks(
-                    (start..<end).map { (ordered[$0], Double($0 * 1024)) })
-            }
-            await load(filters: filters)
-        } catch { phase = .failed(specialistError(error)) }
-    }
-}
-
-@MainActor @Observable
-private final class LocationGalleryModel {
-    private(set) var locations: [LocationTreeNode] = []
-    private(set) var phase: SpecialistPhase = .loading
-    private let client: CubbyClient
-
-    init(client: CubbyClient) { self.client = client }
-
-    func load(filters: EntityFilterState) async {
-        phase = .loading
-        do {
-            let tree = try await client.locationTree()
-            var nodes: [LocationTreeNode] = []
-            func visit(_ node: LocationTreeNode) {
-                nodes.append(node)
-                node.childNodes.forEach(visit)
-            }
-            tree.roots.forEach(visit)
-            if filters.isEmpty {
-                locations = nodes
-            } else {
-                var matched: Set<String> = []
-                var pageNumber = 1
-                while true {
-                    let page = try await client.list(
-                        EntityCatalog[.location], page: pageNumber, pageSize: 200, filters: filters)
-                    matched.formUnion(page.items.map(\.id))
-                    if page.items.count < 200 { break }
-                    pageNumber += 1
-                }
-                locations = nodes.filter { matched.contains($0.id.rawValue) }
-            }
-            phase = .ready
-        } catch { phase = .failed(specialistError(error)) }
-    }
-}
-
-@MainActor @Observable
-private final class ProjectAnalyticsModel {
-    private(set) var summary: JSONValue = .null
-    private(set) var analytics: JSONValue = .null
-    private(set) var phase: SpecialistPhase = .loading
-    private let client: CubbyClient
-
-    init(client: CubbyClient) { self.client = client }
-
-    func load(filters: EntityFilterState) async {
-        phase = .loading
-        do {
-            let (summary, analytics) = try await client.projectAnalytics(filters: filters)
-            self.summary = wire(summary)
-            self.analytics = wire(analytics)
-            phase = .ready
-        } catch { phase = .failed(specialistError(error)) }
-    }
-}
-
-@MainActor @Observable
-private final class ExpenseAnalyticsModel {
-    private(set) var analytics: JSONValue = .null
-    private(set) var phase: SpecialistPhase = .loading
-    private let client: CubbyClient
-
-    init(client: CubbyClient) { self.client = client }
-
-    func load(filters: EntityFilterState) async {
-        phase = .loading
-        do {
-            analytics = wire(try await client.expenseAnalytics(filters: filters))
-            phase = .ready
-        } catch { phase = .failed(specialistError(error)) }
-    }
-}
-
-private struct SpecialistFailure: View {
-    let phase: SpecialistPhase
-    let retry: () -> Void
-    var body: some View {
-        switch phase {
-        case .loading: LoadingIndicator.screen(label: "Loading view")
-        case .failed(let message):
-            ContentUnavailableView {
-                Label("Couldn't load view", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(message)
-            } actions: {
-                Button("Retry", action: retry)
-            }
-        case .ready: EmptyView()
-        }
-    }
-}
+// MARK: - meal.calendar
 
 struct MealCalendarListView: View {
     let client: CubbyClient
     let filters: EntityFilterState
-    @State private var model: MealCalendarModel?
+    @State private var month =
+        Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: .now)) ?? .now
     @State private var selectedDay = 1
 
     var body: some View {
-        Group {
-            if let model {
-                switch model.phase {
-                case .ready:
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                            monthGrid(model)
-                            Panel {
-                                Text("\(selectedDay) \(model.month.formatted(.dateTime.month(.wide)))")
-                                    .font(.fieldGuideTitle)
-                                let meals = model.items.filter {
-                                    contains($0, on: selectedDay, in: model.month)
-                                }
-                                if meals.isEmpty {
-                                    Text("No meals planned").foregroundStyle(.secondary)
-                                }
-                                ForEach(meals.indices, id: \.self) { index in
-                                    let item = meals[index]
-                                    if let id = item["id"]?.stringValue {
-                                        NavigationLink(value: Route.entityDetail(.meal, id: id)) {
-                                            HStack {
-                                                Text(item["title"]?.stringValue ?? "Meal")
-                                                Spacer()
-                                                Image(systemName: "chevron.right")
-                                            }
-                                        }
+        let month = month
+        SpecialistLoadView(
+            loadingLabel: "Loading calendar", filters: filters, reloadKey: month,
+            fetch: { filters in try await Self.meals(client: client, month: month, filters: filters) }
+        ) { items, _ in
+            ScrollView {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
+                    monthGrid(items)
+                    Panel {
+                        Text("\(selectedDay) \(month.formatted(.dateTime.month(.wide)))")
+                            .font(.fieldGuideTitle)
+                        let meals = items.filter { contains($0, on: selectedDay) }
+                        if meals.isEmpty {
+                            Text("No meals planned").foregroundStyle(.secondary)
+                        }
+                        ForEach(meals.indices, id: \.self) { index in
+                            let item = meals[index]
+                            if let id = item["id"]?.stringValue {
+                                NavigationLink(value: Route.entityDetail(.meal, id: id)) {
+                                    HStack {
+                                        Text(item["title"]?.stringValue ?? "Meal")
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
                                     }
                                 }
                             }
                         }
-                        .padding(FieldGuideTokens.Space.lg)
                     }
-                case .loading, .failed:
-                    SpecialistFailure(phase: model.phase) { Task { await model.load(filters: filters) } }
                 }
-            } else {
-                LoadingIndicator.screen(label: "Loading calendar")
+                .padding(FieldGuideTokens.Space.lg)
             }
         }
-        .task(id: filters) {
-            if model == nil { model = MealCalendarModel(client: client) }
-            await model?.load(filters: filters)
-        }
-        .refreshControl { await model?.load(filters: filters) }
-        .onChange(of: model?.month) { selectedDay = 1 }
+        .onChange(of: month) { selectedDay = 1 }
     }
 
-    private func dateString(_ month: Date, day: Int) -> String {
-        let date = Calendar.current.date(byAdding: .day, value: day - 1, to: month) ?? month
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+    private static func meals(
+        client: CubbyClient, month: Date, filters: EntityFilterState
+    ) async throws -> [JSONValue] {
+        let end = Calendar.current.date(byAdding: .month, value: 1, to: month) ?? month
+        let response = try await client.mealCalendar(from: isoDay(month), to: isoDay(end))
+        let monthItems = wire(response)["items"]?.arrayValue ?? []
+        if filters.isEmpty { return monthItems }
+        let matched = try await client.listAllIDs(EntityCatalog[.meal], filters: filters)
+        return monthItems.filter { $0["id"]?.stringValue.map(matched.contains) ?? false }
     }
 
-    private func contains(_ item: JSONValue, on day: Int, in month: Date) -> Bool {
-        let date = dateString(month, day: day)
+    private func contains(_ item: JSONValue, on day: Int) -> Bool {
+        let date = isoDay(Calendar.current.date(byAdding: .day, value: day - 1, to: month) ?? month)
         guard let start = item["startDate"]?.stringValue,
             let end = item["endDateExclusive"]?.stringValue
         else { return false }
         return start <= date && date < end
     }
 
-    private func monthGrid(_ model: MealCalendarModel) -> some View {
+    private func monthGrid(_ items: [JSONValue]) -> some View {
         let calendar = Calendar.current
-        let count = calendar.range(of: .day, in: .month, for: model.month)?.count ?? 30
-        let leading = (calendar.component(.weekday, from: model.month) - calendar.firstWeekday + 7) % 7
+        let count = calendar.range(of: .day, in: .month, for: month)?.count ?? 30
+        let leading = (calendar.component(.weekday, from: month) - calendar.firstWeekday + 7) % 7
         let columns = Array(repeating: GridItem(.flexible()), count: 7)
         return Panel {
             HStack {
-                Button("Previous month", systemImage: "chevron.left") { Task { await model.shift(-1) } }
+                Button("Previous month", systemImage: "chevron.left") { shift(-1) }
                     .labelStyle(.iconOnly)
                 Spacer()
-                Text(model.month.formatted(.dateTime.month(.wide).year())).font(.fieldGuideTitle)
+                Text(month.formatted(.dateTime.month(.wide).year())).font(.fieldGuideTitle)
                 Spacer()
-                Button("Next month", systemImage: "chevron.right") { Task { await model.shift(1) } }
+                Button("Next month", systemImage: "chevron.right") { shift(1) }
                     .labelStyle(.iconOnly)
             }
             LazyVGrid(columns: columns, spacing: FieldGuideTokens.Space.sm) {
@@ -300,9 +192,7 @@ struct MealCalendarListView: View {
                         Color.clear.frame(height: 44)
                     } else {
                         let day = slot - leading + 1
-                        let number = model.items.filter {
-                            contains($0, on: day, in: model.month)
-                        }.count
+                        let number = items.filter { contains($0, on: day) }.count
                         Button {
                             selectedDay = day
                         } label: {
@@ -324,66 +214,71 @@ struct MealCalendarListView: View {
             }
         }
     }
+
+    private func shift(_ months: Int) {
+        month = Calendar.current.date(byAdding: .month, value: months, to: month) ?? month
+    }
+}
+
+// MARK: - task.board
+
+private struct TaskBoardData {
+    let tasks: [JSONValue]
+    let doneCount: Int
 }
 
 struct TaskBoardListView: View {
     let client: CubbyClient
     let filters: EntityFilterState
-    @State private var model: TaskBoardModel?
     @State private var selectedStatus = "not_started"
     @State private var laneField = "projectId"
 
     private let statuses = ["not_started", "later", "in_progress", "blocked", "done"]
 
     var body: some View {
-        Group {
-            if let model {
-                switch model.phase {
-                case .ready:
-                    List {
-                        Picker("Status", selection: $selectedStatus) {
-                            ForEach(statuses, id: \.self) {
-                                Text($0.replacingOccurrences(of: "_", with: " ").capitalized).tag($0)
-                            }
-                        }
-                        Picker("Lane", selection: $laneField) {
-                            Text("Project").tag("projectId")
-                            Text("Trade").tag("trade")
-                        }
-                        let visible = model.tasks.filter { $0["status"]?.stringValue == selectedStatus }
-                        let lanes = visible.map { $0[laneField]?.stringValue ?? "Unassigned" }.uniqued()
-                        ForEach(lanes, id: \.self) { lane in
-                            let laneTasks = visible.filter {
-                                ($0[laneField]?.stringValue ?? "Unassigned") == lane
-                            }
-                            Section(lane) {
-                                ForEach(Array(laneTasks.enumerated()), id: \.offset) { index, task in
-                                    taskRow(task, index: index, lane: laneTasks, model: model)
-                                }
-                            }
-                        }
-                        if selectedStatus == "done" {
-                            Text("\(model.doneCount) done in all; recent tasks shown")
-                                .foregroundStyle(.secondary)
+        SpecialistLoadView(
+            loadingLabel: "Loading board", filters: filters,
+            fetch: { filters in
+                let result = wire(try await client.taskBoard(filters: filters))
+                return TaskBoardData(
+                    tasks: (result["active"]?.arrayValue ?? []) + (result["recentDone"]?.arrayValue ?? []),
+                    doneCount: Int(result["doneCount"]?.doubleValue ?? 0))
+            }
+        ) { board, loader in
+            List {
+                Picker("Status", selection: $selectedStatus) {
+                    ForEach(statuses, id: \.self) {
+                        Text($0.replacingOccurrences(of: "_", with: " ").capitalized).tag($0)
+                    }
+                }
+                Picker("Lane", selection: $laneField) {
+                    Text("Project").tag("projectId")
+                    Text("Trade").tag("trade")
+                }
+                let visible = board.tasks.filter { $0["status"]?.stringValue == selectedStatus }
+                let lanes = visible.map { $0[laneField]?.stringValue ?? "Unassigned" }.uniqued()
+                ForEach(lanes, id: \.self) { lane in
+                    let laneTasks = visible.filter {
+                        ($0[laneField]?.stringValue ?? "Unassigned") == lane
+                    }
+                    Section(lane) {
+                        ForEach(Array(laneTasks.enumerated()), id: \.offset) { index, task in
+                            taskRow(task, index: index, lane: laneTasks, all: board.tasks, loader: loader)
                         }
                     }
-                case .loading, .failed:
-                    SpecialistFailure(phase: model.phase) { Task { await model.load(filters: filters) } }
                 }
-            } else {
-                LoadingIndicator.screen(label: "Loading board")
+                if selectedStatus == "done" {
+                    Text("\(board.doneCount) done in all; recent tasks shown")
+                        .foregroundStyle(.secondary)
+                }
             }
         }
-        .task(id: filters) {
-            if model == nil { model = TaskBoardModel(client: client, filters: filters) }
-            await model?.load(filters: filters)
-        }
-        .refreshControl { await model?.load(filters: filters) }
     }
 
     @ViewBuilder
     private func taskRow(
-        _ task: JSONValue, index: Int, lane: [JSONValue], model: TaskBoardModel
+        _ task: JSONValue, index: Int, lane: [JSONValue], all: [JSONValue],
+        loader: SpecialistLoader<TaskBoardData>
     ) -> some View {
         if let id = task["id"]?.stringValue {
             HStack {
@@ -393,205 +288,183 @@ struct TaskBoardListView: View {
                 Menu("Move", systemImage: "arrow.up.arrow.down") {
                     ForEach(statuses, id: \.self) { status in
                         Button(status.replacingOccurrences(of: "_", with: " ").capitalized) {
-                            Task { await model.move(id, field: "status", value: status) }
+                            Task { await move(id, field: "status", value: status, loader: loader) }
                         }
                     }
-                    ForEach(
-                        model.tasks.compactMap { $0[laneField]?.stringValue }.uniqued(), id: \.self
-                    ) { destination in
+                    ForEach(all.compactMap { $0[laneField]?.stringValue }.uniqued(), id: \.self) {
+                        destination in
                         Button("Lane: \(destination)") {
-                            Task { await model.move(id, field: laneField, value: destination) }
+                            Task { await move(id, field: laneField, value: destination, loader: loader) }
                         }
                     }
                     Button("Move earlier") {
-                        Task { await model.reorder(id, offset: -1, in: lane) }
+                        Task { await reorder(id, offset: -1, in: lane, loader: loader) }
                     }
                     .disabled(index == 0)
                     Button("Move later") {
-                        Task { await model.reorder(id, offset: 1, in: lane) }
+                        Task { await reorder(id, offset: 1, in: lane, loader: loader) }
                     }
                     .disabled(index == lane.count - 1)
                 }
             }
         }
     }
-}
 
-private extension Array where Element: Hashable {
-    func uniqued() -> [Element] {
-        Array(Set(self)).sorted { String(describing: $0) < String(describing: $1) }
+    private func move(
+        _ id: String, field: String, value: String, loader: SpecialistLoader<TaskBoardData>
+    ) async {
+        await loader.perform {
+            try await client.update(
+                EntityCatalog[.task], id: id, patch: EntityPatch(values: [field: .string(value)]))
+        }
+    }
+
+    private func reorder(
+        _ id: String, offset: Int, in lane: [JSONValue], loader: SpecialistLoader<TaskBoardData>
+    ) async {
+        guard let index = lane.firstIndex(where: { $0["id"]?.stringValue == id }),
+            lane.indices.contains(index + offset)
+        else { return }
+        var ordered = lane.compactMap { $0["id"]?.stringValue }
+        guard ordered.count == lane.count else { return }
+        ordered.swapAt(index, index + offset)
+        await loader.perform {
+            for start in stride(from: 0, to: ordered.count, by: 200) {
+                let end = min(start + 200, ordered.count)
+                try await client.reorderTasks((start..<end).map { (ordered[$0], Double($0 * 1024)) })
+            }
+        }
     }
 }
+
+// MARK: - location.gallery
 
 struct LocationGalleryListView: View {
     let client: CubbyClient
     let filters: EntityFilterState
-    @State private var model: LocationGalleryModel?
     @State private var type = "all"
 
     var body: some View {
-        Group {
-            if let model {
-                switch model.phase {
-                case .ready:
-                    List {
-                        Picker("Type", selection: $type) {
-                            Text("All").tag("all")
-                            ForEach(
-                                Array(Set(model.locations.compactMap { $0._type.rawValue })).sorted(),
-                                id: \.self
-                            ) {
-                                Text($0.capitalized).tag($0)
+        SpecialistLoadView(
+            loadingLabel: "Loading locations", filters: filters,
+            fetch: { filters in
+                let tree = try await client.locationTree()
+                var nodes: [LocationTreeNode] = []
+                func visit(_ node: LocationTreeNode) {
+                    nodes.append(node)
+                    node.childNodes.forEach(visit)
+                }
+                tree.roots.forEach(visit)
+                if filters.isEmpty { return nodes }
+                let matched = try await client.listAllIDs(EntityCatalog[.location], filters: filters)
+                return nodes.filter { matched.contains($0.id.rawValue) }
+            }
+        ) { locations, _ in
+            List {
+                Picker("Type", selection: $type) {
+                    Text("All").tag("all")
+                    ForEach(Array(Set(locations.map { $0._type.rawValue })).sorted(), id: \.self) {
+                        Text($0.capitalized).tag($0)
+                    }
+                }
+                ForEach(locations.filter { type == "all" || $0._type.rawValue == type }, id: \.id) { node in
+                    NavigationLink(value: Route.entityDetail(.location, id: node.id.rawValue)) {
+                        HStack {
+                            let url = node.images.first.flatMap {
+                                URL(string: $0.representations?.preferred ?? $0.url)
                             }
-                        }
-                        ForEach(
-                            model.locations.filter { type == "all" || $0._type.rawValue == type }, id: \.id
-                        ) { node in
-                            NavigationLink(value: Route.entityDetail(.location, id: node.id.rawValue)) {
-                                HStack {
-                                    let url = node.images.first.flatMap {
-                                        URL(string: $0.representations?.preferred ?? $0.url)
-                                    }
-                                    Thumb(url: url, size: 48, symbol: "shippingbox")
-                                    VStack(alignment: .leading) {
-                                        Text(node.name)
-                                        Text(
-                                            "\(node.totalItems) items · \(node.childNodes.count) sublocations"
-                                        )
-                                        .font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
+                            Thumb(url: url, size: 48, symbol: "shippingbox")
+                            VStack(alignment: .leading) {
+                                Text(node.name)
+                                Text("\(node.totalItems) items · \(node.childNodes.count) sublocations")
+                                    .font(.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
-                case .loading, .failed:
-                    SpecialistFailure(phase: model.phase) { Task { await model.load(filters: filters) } }
                 }
-            } else {
-                LoadingIndicator.screen(label: "Loading locations")
             }
         }
-        .task(id: filters) {
-            if model == nil { model = LocationGalleryModel(client: client) }
-            await model?.load(filters: filters)
-        }
-        .refreshControl { await model?.load(filters: filters) }
     }
 }
+
+// MARK: - project.analytics
 
 struct ProjectAnalyticsListView: View {
     let client: CubbyClient
     let filters: EntityFilterState
-    @State private var model: ProjectAnalyticsModel?
 
     var body: some View {
-        Group {
-            if let model {
-                switch model.phase {
-                case .ready:
-                    List {
-                        let summary = model.summary["summary"]
-                        Section("Portfolio") {
-                            LabeledContent(
-                                "Active projects",
-                                value: "\(Int(summary?["activeProjectCount"]?.doubleValue ?? 0))")
-                            LabeledContent(
-                                "Open tasks", value: "\(Int(summary?["openTaskCount"]?.doubleValue ?? 0))")
-                            LabeledContent(
-                                "Actual spend",
-                                value: dollars(summary?["actualSpend"])
-                            )
-                        }
-                        Section("Cost against estimate") {
-                            ForEach(
-                                Array((model.analytics["costVsEstimate"]?.arrayValue ?? []).enumerated()),
-                                id: \.offset
-                            ) { _, row in
-                                if let id = row["projectId"]?.stringValue {
-                                    NavigationLink(value: Route.entityDetail(.project, id: id)) {
-                                        VStack(alignment: .leading) {
-                                            Text(row["projectName"]?.stringValue ?? id)
-                                            Text("Actual \(dollars(row["actual"]))")
-                                                .font(.caption).foregroundStyle(.secondary)
-                                        }
-                                    }
+        SpecialistLoadView(
+            loadingLabel: "Loading analytics", filters: filters,
+            fetch: { filters in
+                let (summary, analytics) = try await client.projectAnalytics(filters: filters)
+                return (summary: wire(summary), analytics: wire(analytics))
+            }
+        ) { data, _ in
+            List {
+                let summary = data.summary["summary"]
+                Section("Portfolio") {
+                    LabeledContent(
+                        "Active projects", value: "\(Int(summary?["activeProjectCount"]?.doubleValue ?? 0))")
+                    LabeledContent("Open tasks", value: "\(Int(summary?["openTaskCount"]?.doubleValue ?? 0))")
+                    LabeledContent("Actual spend", value: dollars(summary?["actualSpend"]))
+                }
+                Section("Cost against estimate") {
+                    ForEach(
+                        Array((data.analytics["costVsEstimate"]?.arrayValue ?? []).enumerated()),
+                        id: \.offset
+                    ) { _, row in
+                        if let id = row["projectId"]?.stringValue {
+                            NavigationLink(value: Route.entityDetail(.project, id: id)) {
+                                VStack(alignment: .leading) {
+                                    Text(row["projectName"]?.stringValue ?? id)
+                                    Text("Actual \(dollars(row["actual"]))")
+                                        .font(.caption).foregroundStyle(.secondary)
                                 }
                             }
                         }
                     }
-                case .loading, .failed:
-                    SpecialistFailure(phase: model.phase) { Task { await model.load(filters: filters) } }
                 }
-            } else {
-                LoadingIndicator.screen(label: "Loading analytics")
             }
         }
-        .task(id: filters) {
-            if model == nil { model = ProjectAnalyticsModel(client: client) }
-            await model?.load(filters: filters)
-        }
-        .refreshControl { await model?.load(filters: filters) }
     }
 }
+
+// MARK: - expense.analytics
 
 struct ExpenseAnalyticsListView: View {
     let client: CubbyClient
     let filters: EntityFilterState
-    @State private var model: ExpenseAnalyticsModel?
 
     var body: some View {
-        Group {
-            if let model {
-                switch model.phase {
-                case .ready:
-                    List {
-                        Section("Spend") {
-                            LabeledContent(
-                                "Net",
-                                value: dollars(model.analytics["summary"]?["net"])
-                            )
-                            LabeledContent(
-                                "Expenses",
-                                value: "\(Int(model.analytics["summary"]?["count"]?.doubleValue ?? 0))")
-                        }
-                        Section("By month") {
-                            ForEach(
-                                Array((model.analytics["monthly"]?.arrayValue ?? []).enumerated()),
-                                id: \.offset
-                            ) { _, row in
+        SpecialistLoadView(
+            loadingLabel: "Loading analytics", filters: filters,
+            fetch: { filters in wire(try await client.expenseAnalytics(filters: filters)) }
+        ) { analytics, _ in
+            List {
+                Section("Spend") {
+                    LabeledContent("Net", value: dollars(analytics["summary"]?["net"]))
+                    LabeledContent(
+                        "Expenses", value: "\(Int(analytics["summary"]?["count"]?.doubleValue ?? 0))")
+                }
+                Section("By month") {
+                    ForEach(Array((analytics["monthly"]?.arrayValue ?? []).enumerated()), id: \.offset) {
+                        _, row in
+                        LabeledContent(row["month"]?.stringValue ?? "Month", value: dollars(row["net"]))
+                    }
+                }
+                Section("By project") {
+                    ForEach(Array((analytics["byProject"]?.arrayValue ?? []).enumerated()), id: \.offset) {
+                        _, row in
+                        if let id = row["projectId"]?.stringValue {
+                            NavigationLink(value: Route.entityDetail(.project, id: id)) {
                                 LabeledContent(
-                                    row["month"]?.stringValue ?? "Month",
-                                    value: dollars(row["net"]))
-                            }
-                        }
-                        Section("By project") {
-                            ForEach(
-                                Array((model.analytics["byProject"]?.arrayValue ?? []).enumerated()),
-                                id: \.offset
-                            ) { _, row in
-                                if let id = row["projectId"]?.stringValue {
-                                    NavigationLink(value: Route.entityDetail(.project, id: id)) {
-                                        LabeledContent(
-                                            row["projectName"]?.stringValue ?? id,
-                                            value:
-                                                dollars(row["net"])
-                                        )
-                                    }
-                                }
+                                    row["projectName"]?.stringValue ?? id, value: dollars(row["net"]))
                             }
                         }
                     }
-                case .loading, .failed:
-                    SpecialistFailure(phase: model.phase) { Task { await model.load(filters: filters) } }
                 }
-            } else {
-                LoadingIndicator.screen(label: "Loading analytics")
             }
         }
-        .task(id: filters) {
-            if model == nil { model = ExpenseAnalyticsModel(client: client) }
-            await model?.load(filters: filters)
-        }
-        .refreshControl { await model?.load(filters: filters) }
     }
 }

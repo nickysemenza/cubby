@@ -62,7 +62,7 @@ final class TodayModel {
                 // A newer refresh owns this section.
             } catch {
                 guard let self, generation == self.tasksGeneration else { return }
-                let message = self.message(for: error)
+                let message = error.userMessage
                 if let retained {
                     self.tasksError = message
                     self.tasks = .loaded(retained)
@@ -97,7 +97,7 @@ final class TodayModel {
                 // A newer refresh owns this section.
             } catch {
                 guard let self, generation == self.mealsGeneration else { return }
-                let message = self.message(for: error)
+                let message = error.userMessage
                 if let retained {
                     self.mealsError = message
                     self.meals = .loaded(retained)
@@ -132,7 +132,7 @@ final class TodayModel {
                 // A newer refresh owns this section.
             } catch {
                 guard let self, generation == self.problemsGeneration else { return }
-                let message = self.message(for: error)
+                let message = error.userMessage
                 if let retained {
                     self.problemsError = message
                     self.problems = .loaded(retained)
@@ -162,9 +162,5 @@ final class TodayModel {
     private var loadedProblems: ProblemsCount? {
         if case .loaded(let value) = problems { return value }
         return nil
-    }
-
-    private func message(for error: any Error) -> String {
-        (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
     }
 }

@@ -81,7 +81,7 @@ public final class GenericEntityEditModel {
             }
             seed(original: row.raw)
         } catch {
-            bannerError = GenericEntityListModel.describe(error)
+            bannerError = error.userMessage
         }
     }
 
@@ -307,10 +307,10 @@ public final class GenericEntityEditModel {
                 named[key] = named[key].map { "\($0); \(issue.message)" } ?? issue.message
             }
             fieldErrors = named
-            if named.isEmpty { bannerError = GenericEntityListModel.describe(error) }
+            if named.isEmpty { bannerError = error.userMessage }
             return
         }
-        bannerError = GenericEntityListModel.describe(error)
+        bannerError = error.userMessage
     }
 
     // MARK: - Seeding

@@ -88,7 +88,7 @@ struct StraysView: View {
                 summary = "Moved \(result.moved)\(skipped)."
             }
         } catch {
-            summary = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+            summary = error.userMessage
             Diagnostics.report(error, context: "capture.resolveStrays")
         }
     }

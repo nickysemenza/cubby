@@ -61,7 +61,7 @@ struct NearbyReceiptSearchView: View {
             if let merchant = context.merchant { LabeledContent("Merchant", value: merchant) }
             if let cents = context.amountInCents {
                 LabeledContent("Amount") {
-                    Text(Double(cents) / 100, format: .currency(code: "USD"))
+                    Text(Double(cents) / 100, format: .usd)
                 }
             }
         } footer: {

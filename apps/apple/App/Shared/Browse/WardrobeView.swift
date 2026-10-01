@@ -107,7 +107,7 @@ final class WardrobeModel {
             phase = .loaded
         } catch {
             guard requestGeneration == generation else { return }
-            phase = .failed((error as? CubbyAPIError)?.detail?.message ?? String(describing: error))
+            phase = .failed(error.userMessage)
             Diagnostics.report(error, context: "wardrobe.load")
         }
     }

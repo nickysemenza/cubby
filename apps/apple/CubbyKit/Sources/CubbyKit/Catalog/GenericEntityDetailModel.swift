@@ -113,7 +113,7 @@ public final class GenericEntityDetailModel {
             // A newer id or refresh owns the state now.
         } catch {
             guard generation == requestGeneration else { return }
-            let message = GenericEntityListModel.describe(error)
+            let message = error.userMessage
             if retainingContent {
                 refreshError = message
                 phase = .loaded

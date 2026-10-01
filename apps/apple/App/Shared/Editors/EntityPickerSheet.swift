@@ -200,7 +200,7 @@ struct EntityPickerSheet: View {
                 hits = results.map { EntityPick(id: $0.id, title: $0.title) }
                 searchError = nil
             } catch {
-                searchError = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+                searchError = error.userMessage
                 Diagnostics.report(error, context: "picker.search")
             }
             return

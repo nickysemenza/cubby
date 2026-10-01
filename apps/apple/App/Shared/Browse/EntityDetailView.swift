@@ -504,7 +504,7 @@ struct EntityDetailContent: View {
             timeline = try await appModel.client.timeline(
                 descriptor, filters: EntityFilterState(["ids": .many([row.id])]))
         } catch {
-            timelineError = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+            timelineError = error.userMessage
             Diagnostics.report(error, context: "detail.timeline")
         }
     }

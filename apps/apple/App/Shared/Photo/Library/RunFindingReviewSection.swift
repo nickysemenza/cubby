@@ -74,7 +74,7 @@ struct RunFindingReviewSection: View {
             Text("Original Expense").font(.caption.weight(.semibold))
             LabeledContent("Name", value: original["title"]?.stringValue ?? "Expense")
             if let amount = original["amount"]?.doubleValue {
-                LabeledContent("Amount", value: amount.formatted(.currency(code: "USD")))
+                LabeledContent("Amount", value: amount.formatted(.usd))
             }
             originalValue("Date", key: "date", original: original)
             originalValue("Project", key: "projectName", original: original)
@@ -90,7 +90,7 @@ struct RunFindingReviewSection: View {
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                     LabeledContent(
                         line["title"]?.stringValue ?? "Item \(index + 1)",
-                        value: (line["amount"]?.doubleValue ?? 0).formatted(.currency(code: "USD")))
+                        value: (line["amount"]?.doubleValue ?? 0).formatted(.usd))
                     originalValue("SKU", key: "sku", original: line)
                     originalValue("Seller", key: "seller", original: line)
                     if let quantity = line["quantity"]?.doubleValue {
@@ -108,7 +108,7 @@ struct RunFindingReviewSection: View {
                         if share["lineIndex"]?.doubleValue == Double(index) {
                             LabeledContent(
                                 "\((share["role"]?.stringValue ?? "Party").capitalized) · \(share["partyCode"]?.stringValue ?? "Party unresolved")",
-                                value: (share["amount"]?.doubleValue ?? 0).formatted(.currency(code: "USD")))
+                                value: (share["amount"]?.doubleValue ?? 0).formatted(.usd))
                         }
                     }
                 }

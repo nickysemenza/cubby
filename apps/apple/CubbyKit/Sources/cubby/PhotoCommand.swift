@@ -64,7 +64,7 @@ extension Photo {
                 do {
                     files[path] = try PhotoFile.importing(URL(fileURLWithPath: path))
                 } catch {
-                    errors[path] = Self.describe(error)
+                    errors[path] = error.userMessage
                 }
             }
 
@@ -96,7 +96,7 @@ extension Photo {
                             analyses[input.id] = try await analyzer.analyze(input)
                             analyzeMsByPath[input.id] = Date().timeIntervalSince(fileStart) * 1000
                         } catch {
-                            errors[input.id] = Self.describe(error)
+                            errors[input.id] = error.userMessage
                         }
                     }
                 }
@@ -253,13 +253,6 @@ extension Photo {
 
         private static func pad(_ text: String, _ width: Int) -> String {
             text.count >= width ? text : text + String(repeating: " ", count: width - text.count)
-        }
-
-        private static func describe(_ error: Error) -> String {
-            if let described = error as? LocalizedError, let description = described.errorDescription {
-                return description
-            }
-            return String(describing: error)
         }
     }
 }

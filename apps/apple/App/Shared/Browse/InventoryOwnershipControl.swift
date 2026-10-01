@@ -367,7 +367,7 @@ final class InventoryOwnershipModel {
             }
             return true
         } catch {
-            errorMessage = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+            errorMessage = error.userMessage
             Diagnostics.report(error, context: "inventory.ownership")
             return false
         }

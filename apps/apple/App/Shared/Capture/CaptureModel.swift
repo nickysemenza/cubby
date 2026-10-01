@@ -56,7 +56,7 @@ final class CaptureModel {
             tree = try await client.locationTree()
             locationError = nil
         } catch {
-            locationError = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+            locationError = error.userMessage
             Diagnostics.report(error, context: "capture.locations")
         }
     }
@@ -98,7 +98,7 @@ final class CaptureModel {
             }
             missingError = nil
         } catch {
-            missingError = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+            missingError = error.userMessage
         }
     }
 
@@ -110,7 +110,7 @@ final class CaptureModel {
             tree = try await client.locationTree()
             missingError = nil
         } catch {
-            missingError = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+            missingError = error.userMessage
         }
     }
 
@@ -119,7 +119,7 @@ final class CaptureModel {
             let unknown = try await client.ensureGlobalUnknownLocation()
             await moveMissing(id, to: unknown)
         } catch {
-            missingError = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+            missingError = error.userMessage
         }
     }
 }

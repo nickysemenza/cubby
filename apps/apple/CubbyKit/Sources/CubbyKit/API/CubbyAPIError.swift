@@ -185,3 +185,17 @@ public struct CubbyAPIError: Error, LocalizedError, Sendable {
         return CubbyAPIError(status: status, operationID: client.operationID, detail: nil)
     }
 }
+
+extension Error {
+    /// The one raw-diagnostic message every error surface shows (the trusted household sees
+    /// server codes and bodies unsoftened). An API error reads `CODE: message`; anything else
+    /// uses its `LocalizedError` text, then `String(describing:)`.
+    public var userMessage: String {
+        if let api = self as? CubbyAPIError {
+            let code = api.detail?.code ?? "HTTP_\(api.status)"
+            return "\(code): \(api.detail?.message ?? "Request failed")"
+        }
+        if let localized = (self as? LocalizedError)?.errorDescription { return localized }
+        return String(describing: self)
+    }
+}
