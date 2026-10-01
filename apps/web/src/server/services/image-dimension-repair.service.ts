@@ -8,6 +8,7 @@ import {
   countImagesMissingDimensions,
   selectImagesMissingDimensions,
 } from "~/server/repo/image";
+import { runBackfillBatches } from "~/server/services/backfill-batches";
 import { verifyImageRows } from "~/server/services/image-verification.service";
 
 type RepairPorts = {
@@ -32,44 +33,21 @@ export async function repairImageDimensions(
   input: RepairImageDimensionsInput,
   ports: RepairPorts = productionPorts,
 ): Promise<RepairImageDimensionsOut> {
-  let batches = 0;
-  let scanned = 0;
   let repaired = 0;
   let failed = 0;
-  let stopped: RepairImageDimensionsOut["stopped"] = "limit";
-  const seenPages = new Set<string>();
-
-  while (batches < input.maxBatches) {
-    const rows = await ports.select(db, input.batchSize);
-    if (rows.length === 0) {
-      stopped = "complete";
-      break;
-    }
-    const pageKey = rows
-      .map(({ id }) => id)
-      .sort()
-      .join(",");
-    if (seenPages.has(pageKey)) {
-      stopped = "no_progress";
-      break;
-    }
-    seenPages.add(pageKey);
-    const results = await ports.verify(db, rows);
-    batches += 1;
-    scanned += rows.length;
-    repaired += results.filter(
-      ({ storageStatus }) => storageStatus === "available",
-    ).length;
-    failed += results.filter(
-      ({ storageStatus }) => storageStatus !== "available",
-    ).length;
-    if (results.length === 0) {
-      stopped = "no_progress";
-      break;
-    }
-  }
-
-  const remaining = await ports.count(db);
-  if (remaining === 0) stopped = "complete";
-  return { batches, scanned, repaired, failed, remaining, stopped };
+  const result = await runBackfillBatches({
+    maxBatches: input.maxBatches,
+    batchSize: input.batchSize,
+    select: (batchSize) => ports.select(db, batchSize),
+    count: () => ports.count(db),
+    process: async (rows) => {
+      const results = await ports.verify(db, [...rows]);
+      for (const { storageStatus } of results) {
+        if (storageStatus === "available") repaired += 1;
+        else failed += 1;
+      }
+      return results.length > 0;
+    },
+  });
+  return { ...result, repaired, failed };
 }

@@ -1,3 +1,4 @@
+import { sleep } from "@cubby/shared/retry";
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
@@ -204,7 +205,7 @@ export async function withAiResponseCache<T>(args: {
     }
     if (claim.kind === "busy") {
       force = false;
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await sleep(250);
       continue;
     }
     const token = claim.token;
