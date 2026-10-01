@@ -8,6 +8,7 @@ import {
 } from "@cubby/schemas/import-run-agent";
 import {
   useAgentFinish,
+  useAgentStart,
   useInitialData,
   useMcpConnection,
   useModel,
@@ -17,6 +18,7 @@ import {
   useSkill,
   useTool,
   type AgentProps,
+  type StateSetter,
 } from "@flue/runtime";
 import * as v from "valibot";
 
@@ -39,6 +41,14 @@ type RunInitialData = {
   coordinatorModel?: string;
   purpose?: FlueImportRunPurpose;
 };
+
+/** The live value behind a state setter, which a render's value is not. */
+function currentState<T>(setState: StateSetter<T>): T {
+  let current: T | undefined;
+  setState((previous) => (current = previous));
+  // SAFETY: the functional update runs synchronously with the live value.
+  return current as T;
+}
 
 /** One durable Flue conversation per authoritative Run. */
 export function PurchaseImportRun({ id }: AgentProps) {
@@ -64,21 +74,27 @@ export function PurchaseImportRun({ id }: AgentProps) {
     contextBreakdown: takeContextBreakdown(),
   }));
 
-  // The model may stop talking without a terminal tool call. Tools that
-  // legitimately end a submission (`issue_browser_command` pending,
-  // `report_agent_progress` approval/review, finish, stop) terminate before
-  // this hook runs, so reaching it means the run is still `running` with no
-  // work in flight. Send the model back once per stretch of new tool calls;
-  // if it stops again without doing anything, let the submission settle and
-  // the server's reconcile moves the run to review.
-  const [nudgedAt, setNudgedAt] = usePersistentState(
-    "finishNudgeToolCalls",
-    -1,
-  );
+  // The model may stop talking without a terminal tool call. Send it back
+  // once per stretch of new tool calls; if it stops again without doing
+  // anything, let the submission settle and the server's reconcile moves the
+  // run to review. Flue also runs this hook after a tool that legitimately
+  // ends the submission (`issue_browser_command` pending,
+  // `report_agent_progress` approval/review, finish, stop), so those tools
+  // mark the response settled and the hook leaves it alone; each delivery,
+  // including browser evidence joining the live response, clears the mark.
+  //
+  // Flue re-runs this hook within one response without re-rendering, so the
+  // render's state values go stale after the first cycle: read them through
+  // the setters. A stale guard nudged a waiting run every cycle into Flue's
+  // 32-cycle runaway ceiling.
+  const [, setSettledByTool] = usePersistentState("finishSettledByTool", false);
+  const [, setNudgedAt] = usePersistentState("finishNudgeToolCalls", -1);
+  useAgentStart(() => setSettledByTool(false));
   useAgentFinish(({ response, append }) => {
     if (!workflow.finishNudge) return;
+    if (currentState(setSettledByTool)) return;
     const calls = response.toolCalls.length;
-    if (calls === nudgedAt) return;
+    if (currentState(setNudgedAt) === calls) return;
     setNudgedAt(calls);
     append({
       kind: "signal",
@@ -89,7 +105,9 @@ export function PurchaseImportRun({ id }: AgentProps) {
 
   // Mounted by name from the manifest; purpose is fixed for a durable run, so
   // the set is stable across renders.
-  for (const tool of purchaseImportTools(runId, serviceForCurrentRun))
+  for (const tool of purchaseImportTools(runId, serviceForCurrentRun, () =>
+    setSettledByTool(true),
+  ))
     // oxlint-disable-next-line react-hooks/rules-of-hooks
     if (manifest.agentTools.some((name) => name === tool.name)) useTool(tool);
 
