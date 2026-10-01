@@ -61,41 +61,50 @@ export async function retryWithBackoff<T>(
 }
 
 export interface PollUntilOptions {
+  /** Names the wait in the timeout error. */
+  label: string;
   timeoutMs?: number;
   intervalMs?: number;
-  /** Checked before every probe; a true result fails the wait immediately. */
+  /** Checked before every attempt; true abandons the wait. */
   aborted?: () => boolean;
+  /** Treat a throw from `read` as "not ready yet" instead of failing the wait. */
+  retryOnError?: boolean;
   signal?: AbortSignal;
   /** Injected by tests that must not really wait. */
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 
 /**
- * Re-run `probe` until it resolves (a throw means "not yet") or `timeoutMs`
- * elapses, returning what it resolved with. The last failure rides on the
- * timeout error's `cause`, so a wait that never succeeds says why.
+ * Re-run `read` until it returns a value other than `undefined`, then return
+ * it. A throw fails the wait unless `retryOnError` is set; the last throw rides
+ * on the timeout error's `cause`. The one deadline loop for server, scripts,
+ * and tooling waits.
  */
 export async function pollUntil<T>(
-  label: string,
-  probe: () => Promise<T>,
+  read: () => Promise<T | undefined> | T | undefined,
   {
+    label,
     timeoutMs = 60_000,
-    intervalMs = 200,
+    intervalMs = 250,
     aborted = () => false,
+    retryOnError = false,
     signal,
     sleep: wait = sleep,
-  }: PollUntilOptions = {},
+  }: PollUntilOptions,
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   let failure: unknown;
   while (Date.now() < deadline) {
     if (aborted()) throw new Error(`${label} wait aborted`);
     try {
-      return await probe();
+      const value = await read();
+      if (value !== undefined) return value;
+      failure = undefined;
     } catch (error) {
+      if (!retryOnError) throw error;
       failure = error;
-      await wait(intervalMs, signal);
     }
+    await wait(intervalMs, signal);
   }
   throw new Error(`Timed out waiting for ${label}`, { cause: failure });
 }

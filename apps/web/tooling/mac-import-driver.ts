@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { pollUntil } from "../../../scripts/lib/poll.ts";
+import { pollUntil } from "@cubby/shared/retry";
 import { setTimeout } from "node:timers/promises";
 import { z } from "zod";
 

@@ -1,4 +1,4 @@
-import { pollUntil } from "../../../scripts/lib/poll.ts";
+import { pollUntil } from "@cubby/shared/retry";
 import { testServiceConfig } from "./test-service-config";
 import { hashSchemaTemplateInputs } from "./schema-template-inputs";
 import {

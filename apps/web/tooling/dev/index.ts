@@ -15,7 +15,7 @@ import {
 import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { pollUntil } from "../../../../scripts/lib/poll.ts";
+import { pollUntil } from "@cubby/shared/retry";
 import { runOrThrow } from "../../../../scripts/lib/run.ts";
 import { Pool } from "pg";
 import { z } from "zod";

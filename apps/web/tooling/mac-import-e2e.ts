@@ -3,7 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { pollUntil } from "../../../scripts/lib/poll.ts";
+import { pollUntil } from "@cubby/shared/retry";
 import { runOrThrow } from "../../../scripts/lib/run.ts";
 import { request } from "@playwright/test";
 import { z } from "zod";

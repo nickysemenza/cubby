@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { isIP } from "node:net";
 
-import { pollUntil } from "./poll.ts";
+import { pollUntil } from "../../packages/shared/src/retry.ts";
 
 /**
  * Low-level `container` CLI wrapper shared by scripts/test-services.ts

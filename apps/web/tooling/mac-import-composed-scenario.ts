@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { pollUntil } from "../../../scripts/lib/poll.ts";
+import { pollUntil } from "@cubby/shared/retry";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";

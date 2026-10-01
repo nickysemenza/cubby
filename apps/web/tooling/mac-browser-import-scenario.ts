@@ -2,7 +2,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
-import { pollUntil } from "../../../scripts/lib/poll.ts";
+import { pollUntil } from "@cubby/shared/retry";
 import { Pool } from "pg";
 import { z } from "zod";
 import {

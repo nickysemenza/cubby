@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
-import { pollUntil } from "../../../scripts/lib/poll.ts";
+import { pollUntil } from "@cubby/shared/retry";
 import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
 import { spawnToExit } from "../../../scripts/lib/run.ts";
 import { createHash, randomBytes } from "node:crypto";

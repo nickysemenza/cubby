@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { pollUntil } from "../../../scripts/lib/poll.ts";
+import { pollUntil } from "@cubby/shared/retry";
 import { setTimeout } from "node:timers/promises";
 import { z } from "zod";
 
