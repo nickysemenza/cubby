@@ -6,7 +6,14 @@ import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
 import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ComponentProps,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Row, Stack } from "~/components/layout";
@@ -27,11 +34,15 @@ import {
 } from "~/entities/entities";
 import { useIsMobile } from "~/hooks/useMobile";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { cn } from "~/lib/utils";
 
 import { EntityGraphPicker } from "./entity-graph-picker";
 import { graphBranchKey, graphRefKey } from "./entity-graph-state";
-import type { GraphMapCamera } from "./graph-map-canvas";
+import type {
+  GraphMapCamera,
+  GraphMapCanvas as GraphMapCanvasComponent,
+} from "./graph-map-canvas";
 import { graphBranchCount, parseGraphRecord } from "./graph-map-state";
 import { PhysicalConnectionsPanel } from "./physical-connections";
 import {
@@ -39,10 +50,18 @@ import {
   type GraphExplorerOperations,
 } from "./use-graph-explorer";
 
-const GraphMapCanvas = lazy(() =>
-  import("./graph-map-canvas").then((module) => ({
-    default: module.GraphMapCanvas,
-  })),
+const GraphLoading = () => <output>Loading graph…</output>;
+
+const GraphMapCanvas = browserOnlyLazy<
+  ComponentProps<typeof GraphMapCanvasComponent>
+>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("./graph-map-canvas").then((module) => ({
+          default: module.GraphMapCanvas,
+        })),
+  GraphLoading,
 );
 
 export function GraphExplorer({
@@ -309,7 +328,7 @@ export function GraphExplorer({
             }}
             inert={listing}
           >
-            <Suspense fallback={<output>Loading graph…</output>}>
+            <Suspense fallback={<GraphLoading />}>
               <GraphMapCanvas
                 key={canvasGeneration}
                 camera={camera}
