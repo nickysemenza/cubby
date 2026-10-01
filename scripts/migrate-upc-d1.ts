@@ -55,8 +55,9 @@ if (copyImages && !apply) {
   throw new Error("--copy-images requires --apply");
 }
 
-interface ManualProduct {
+interface D1Product {
   upc: string;
+  source: string | null;
   name: string;
   manufacturer: string | null;
   brand: string | null;
@@ -135,16 +136,18 @@ const d1SelectAll = <T>(table: string, columns: string, where = ""): T[] => {
   }
 };
 
-const products = d1SelectAll<ManualProduct>(
+const products = d1SelectAll<D1Product>(
   "products",
-  "upc, name, manufacturer, brand, category, description, price_dollars, image_key, updated_at",
-  "WHERE source = 'manual'",
+  // Every cached product, not only hand-entered ones: migration 0006 empties
+  // the Postgres cache, and the free upstream tier is ~100 lookups a day.
+  "upc, source, name, manufacturer, brand, category, description, price_dollars, image_key, updated_at",
+  "",
 );
-const manualUpcs = new Set(products.map((p) => p.upc));
+const productUpcs = new Set(products.map((p) => p.upc));
 const misses = d1SelectAll<MissRow>(
   "upc_misses",
   "upc, last_checked_at",
-).filter((m) => !manualUpcs.has(m.upc));
+).filter((m) => !productUpcs.has(m.upc));
 const imageKeys = [
   ...new Set(products.flatMap((p) => (p.image_key ? [p.image_key] : []))),
 ];
@@ -156,7 +159,7 @@ const publicImageUrl = (key: string) =>
   `${MAIN_R2_PUBLIC_URL}/${MAIN_R2_PREFIX}/upc-images/${key}`;
 
 console.log(
-  `D1 ${D1_DATABASE_NAME}: ${products.length} manual products, ${misses.length} miss rows, ${imageKeys.length} referenced R2 images`,
+  `D1 ${D1_DATABASE_NAME}: ${products.length} products, ${misses.length} miss rows, ${imageKeys.length} referenced R2 images`,
 );
 console.log("Sample product:", products[0] ?? "(none)");
 console.log("Sample miss:", misses[0] ?? "(none)");
@@ -205,12 +208,13 @@ try {
     await client.query(
       `INSERT INTO "UpcLookupCache"
          (upc, name, manufacturer, brand, category, description, "priceDollars", "imageUrl", source, status, "fetchedAt")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'manual', 'ready', $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, 'ready', $9)
        ON CONFLICT (upc) DO UPDATE SET
          name = EXCLUDED.name, manufacturer = EXCLUDED.manufacturer, brand = EXCLUDED.brand,
          category = EXCLUDED.category, description = EXCLUDED.description,
          "priceDollars" = EXCLUDED."priceDollars", "imageUrl" = EXCLUDED."imageUrl",
-         source = 'manual', status = 'ready', "fetchedAt" = EXCLUDED."fetchedAt"`,
+         source = EXCLUDED.source, status = 'ready', "fetchedAt" = EXCLUDED."fetchedAt"
+       WHERE "UpcLookupCache".source <> 'manual' OR EXCLUDED.source = 'manual'`,
       [
         p.upc,
         p.name,
@@ -221,6 +225,7 @@ try {
         p.price_dollars,
         copyImages && p.image_key ? publicImageUrl(p.image_key) : null,
         toDate(p.updated_at),
+        p.source ?? "upcitemdb",
       ],
     );
   }
@@ -241,5 +246,5 @@ try {
   await client.end();
 }
 console.log(
-  `\nUpserted ${products.length} manual products and up to ${misses.length} miss rows.`,
+  `\nUpserted ${products.length} products and up to ${misses.length} miss rows.`,
 );

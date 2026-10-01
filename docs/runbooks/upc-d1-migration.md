@@ -2,8 +2,9 @@
 
 UPC lookups now run in the main Worker against Postgres `UpcLookupCache`, with
 upcitemdb as the upstream fallback (`apps/web/src/server/services/upc/`). The
-old Worker's hand-entered (`manual`) products and its checked-miss rows must be
-copied across once, before the old Worker is deleted.
+old Worker's cached products (hand-entered `manual` rows included) and its
+checked-miss rows must be copied across once, after migration 0006 (which
+empties the old name-less cache rows) and before the old Worker is deleted.
 
 1. Dry run (reads D1 only; prints counts, samples and the referenced R2
    `upc-images` keys):
