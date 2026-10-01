@@ -11,6 +11,7 @@
         "scripts/check-security-audit.ts!",
         "scripts/ensure-apple-ffi.ts!",
         "scripts/ensure-wasm.ts!",
+        "scripts/typecheck-web.ts!",
         "scripts/migrate-upc-d1.ts!",
         "scripts/generator/main.ts!",
         // Reached from hooks, CI, or package scripts rather than an import

@@ -9,8 +9,7 @@
     //
     // The default buildinfo path is beside this tsconfig, which is what keeps
     // parallel worktrees from clobbering each other's cache — do not point it
-    // at a shared location. The file carries only relative paths, so it stays
-    // valid when copied into a new worktree; see `.worktreeinclude`.
+    // at a shared location. `scripts/typecheck-web.ts` discards it once stale.
     "incremental": true,
     "target": "ES2022",
     "jsx": "react-jsx",
