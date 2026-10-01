@@ -3,7 +3,8 @@ import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { setTimeout } from "node:timers/promises";
+import { pollUntil } from "@cubby/shared/retry";
+import { runOrThrow } from "../../../scripts/lib/run.ts";
 import { request } from "@playwright/test";
 import { z } from "zod";
 import {
@@ -160,11 +161,10 @@ async function holdFailedFixture(): Promise<void> {
   console.log(
     `[mac-import-e2e] Failed fixture held for at most 180 seconds: ${state}; create ${release} to clean up early`,
   );
-  const deadline = Date.now() + 180_000;
-  while (Date.now() < deadline) {
-    if (interrupted || existsSync(release)) break;
-    await setTimeout(1000);
-  }
+  await pollUntil(
+    () => (interrupted || existsSync(release) ? true : undefined),
+    { label: "diagnostic release", timeoutMs: 180_000, intervalMs: 1000 },
+  ).catch(() => undefined);
 }
 
 async function run(
@@ -173,19 +173,17 @@ async function run(
   environment = process.env,
 ): Promise<void> {
   console.log(`[mac-import-e2e] ${program} ${args.join(" ")}`);
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(program, args, {
-      cwd: repoRoot,
-      stdio: "inherit",
-      env: environment,
-    });
-    activeChild = child;
-    child.once("error", reject);
-    child.once("close", (code) => {
+  await runOrThrow(program, args, {
+    cwd: repoRoot,
+    stdio: "inherit",
+    env: environment,
+    describe: (status) => `${program} exited ${status}`,
+    onSpawn: (child) => {
+      activeChild = child;
+    },
+    onClose: () => {
       activeChild = undefined;
-      if (code === 0) resolve();
-      else reject(new Error(`${program} exited ${code}`));
-    });
+    },
   });
 }
 
@@ -199,7 +197,7 @@ function installScenarioEnvironment(storageURL: string): () => void {
     R2_BUCKET_NAME: "e2e-bucket",
     R2_PUBLIC_URL: storageURL,
     R2_KEY_PREFIX: "e2e",
-    UPC_LOOKUP_API_URL: "http://127.0.0.1:9/",
+    UPC_UPSTREAM_DISABLED: "true",
     USDA_API_URL: "http://127.0.0.1:9/",
     AI_GATEWAY_API_KEY: "",
   })) {

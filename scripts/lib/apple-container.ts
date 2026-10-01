@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { isIP } from "node:net";
-import { setTimeout as delay } from "node:timers/promises";
+
+import { pollUntil } from "../../packages/shared/src/retry.ts";
 
 /**
  * Low-level `container` CLI wrapper shared by scripts/test-services.ts
@@ -115,32 +116,23 @@ export async function stopAndRemove(
     await containerCli(["delete", name]);
 }
 
+/** Wait until `probe` stops throwing. */
 export async function waitFor(
   label: string,
   probe: () => Promise<string | void>,
   {
     timeoutMs = 60_000,
     intervalMs = 200,
-    aborted = () => false,
-  }: {
-    timeoutMs?: number;
-    intervalMs?: number;
-    aborted?: () => boolean;
-  } = {},
+    aborted,
+  }: { timeoutMs?: number; intervalMs?: number; aborted?: () => boolean } = {},
 ): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  let failure: unknown;
-  while (Date.now() < deadline) {
-    if (aborted()) throw new Error(`${label} wait aborted`);
-    try {
+  await pollUntil(
+    async () => {
       await probe();
-      return;
-    } catch (error) {
-      failure = error;
-      await delay(intervalMs);
-    }
-  }
-  throw new Error(`Timed out waiting for ${label}`, { cause: failure });
+      return true;
+    },
+    { label, timeoutMs, intervalMs, aborted, retryOnError: true },
+  );
 }
 
 /** Any HTTP response establishes reachability; callers validate their own API separately. */

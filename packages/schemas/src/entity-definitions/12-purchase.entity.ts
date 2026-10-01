@@ -85,6 +85,35 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "needs-review",
+          label: "Needs review",
+          description: "Stated total the expense lines don't explain",
+          // `mismatch` is already the narrow signal: a purchase whose stated total
+          // differs from its expense total by more than tolerance AND whose posted
+          // refunds don't account for the gap. `refund_adjusted` is the explained
+          // case and stays out — this view is the money that doesn't add up.
+          filters: [{ id: "reconciliation", value: ["mismatch"] }],
+        },
+        {
+          id: "unsettled",
+          label: "No settlement evidence",
+          description:
+            "Orders with no posted transaction carrying proof of payment",
+          // Narrower than "has no transactions": the gap only clears for a POSTED
+          // transaction of a settlement kind that either carries a sourceRef or
+          // sits on a cash account. An expected refund or an evidence-free row
+          // doesn't close it. See `purchaseGapRaw`.
+          //
+          // This is a large list — a bit under half of all purchases — because it's
+          // dominated by Home Depot and Amazon, whose per-visit and per-shipment
+          // billing don't line up with per-order purchases. Combine it with the
+          // vendor filter to get at the scattered remainder.
+          filters: [{ id: "dataGaps", value: ["settlement_reference"] }],
+          sort: [{ id: "date", desc: true }],
+        },
+      ],
       read: {
         relations: [
           "vendorId",
@@ -426,6 +455,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          renderer: { list: "vendor-cell" },
         },
         validation: {
           read: vendorShortcode,
@@ -442,7 +472,11 @@ export default defineEntity({
           sectionOverride: "identity",
           placeholder: "Vendor order / receipt #",
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          renderer: { list: "order-link" },
+        },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -630,7 +664,7 @@ export default defineEntity({
       {
         key: "expenseCount",
         kind: "number",
-        display: { list: true },
+        display: { list: true, renderer: { list: "expense-count" } },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
@@ -663,7 +697,14 @@ export default defineEntity({
         // legitimately disagree — see the reconciliation note on `statedTotal`.
         key: "expenseTotal",
         kind: "number",
-        display: { list: true, format: "currency" },
+        // `SUM(Expense.cost)`: a negative total (a net credit) reads as money
+        // in, a positive one (spend) stays neutral.
+        display: {
+          list: true,
+          width: "sm",
+          format: "signedCurrency",
+          mobile: { slot: "trailing", priority: 5 },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
@@ -689,6 +730,7 @@ export default defineEntity({
         kind: "json",
         display: {
           list: true,
+          renderer: { list: "reconciliation-status" },
           valueOptions: [
             { value: "match", label: "Reconciles", color: "var(--positive)" },
             {
@@ -735,6 +777,7 @@ export default defineEntity({
         kind: "json",
         display: {
           list: true,
+          renderer: { list: "financial-settlement" },
           // Roster for `financialReconciliation.status`.
           valueOptions: [
             { value: "unknown", label: "No evidence", color: "var(--slate)" },
@@ -828,6 +871,14 @@ export default defineEntity({
       {
         key: "transactionCount",
         kind: "number",
+        labelOverride: "Transactions",
+        display: {
+          list: true,
+          listHidden: true,
+          width: "xs",
+          readPath: "financialReconciliation.transactionCount",
+          format: "count",
+        },
         provenance: {
           kind: "derived",
           sources: [

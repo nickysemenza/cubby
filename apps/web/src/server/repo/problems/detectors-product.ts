@@ -16,6 +16,7 @@ import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ProblemItem } from "@cubby/schemas/problems";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { isMiscProduct } from "@cubby/shared";
+import { createLogger } from "@cubby/worker-tracing";
 import {
   and,
   eq,
@@ -86,6 +87,8 @@ import { unitMappingSides } from "~/server/repo/product/unit-mappings";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
 import { buildTimelineGates } from "~/server/repo/project/tools";
 import { effectiveTaskSubjectProductSql } from "~/server/repo/task-project-inheritance";
+
+const log = createLogger("problems");
 
 type ProductWithUpcGapCandidate = {
   id: ProductId;
@@ -641,10 +644,9 @@ export const synthesizeEffectiveMappings = (
   try {
     return getAllUnitMappingsFromProduct(p);
   } catch (error) {
-    console.error(
-      `Failed to synthesize mappings for product ${p.id} (${p.name}):`,
+    log.error(`Failed to synthesize mappings for product ${p.id} (${p.name})`, {
       error,
-    );
+    });
     return null;
   }
 };

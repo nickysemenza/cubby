@@ -6,10 +6,8 @@ import type {
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
-import {
-  getInventoryEntryByShortcode,
-  getProductStockRows,
-} from "~/server/repo/inventory";
+import { getInventoryEntryByShortcode } from "~/server/repo/inventory/crud";
+import { getProductStockRows } from "~/server/repo/inventory/scan";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 

@@ -56,7 +56,7 @@ import { previewOperation } from "~/server/operations/entity-integrity-preview.s
 import { resolveWithProductCandidatesWorkflow } from "~/server/operations/ingredient.server";
 import { recipeLineCoverage } from "~/server/operations/recipe.server";
 import { resolveOrCreatePlants } from "~/server/repo/plant";
-import { resolveProductNames } from "~/server/repo/product";
+import { resolveProductNames } from "~/server/repo/product/resolve-names";
 
 import {
   batchInputSchema,

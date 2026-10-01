@@ -5,7 +5,7 @@ import { type Accept, type FileRejection, useDropzone } from "react-dropzone";
 
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { cn } from "~/lib/utils";
+import { cn, roundTo } from "~/lib/utils";
 
 interface FileDropFieldProps {
   accept: string;
@@ -36,8 +36,8 @@ function acceptedTypes(accept: string): Accept | undefined {
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes)) return "the configured limit";
   if (bytes < 1024) return `${bytes} bytes`;
-  if (bytes < 1024 ** 2) return `${Number((bytes / 1024).toFixed(2))} KB`;
-  return `${Number((bytes / 1024 ** 2).toFixed(2))} MB`;
+  if (bytes < 1024 ** 2) return `${roundTo(bytes / 1024, 2)} KB`;
+  return `${roundTo(bytes / 1024 ** 2, 2)} MB`;
 }
 
 function rejectionMessages(

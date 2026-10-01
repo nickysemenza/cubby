@@ -4,16 +4,16 @@ import {
   type NutritionTotals,
   withMacros,
 } from "@cubby/schemas/nutrition";
-import {
-  type RecipeOut,
-  recipeOut,
-  sectionIngredientOut,
-} from "@cubby/schemas/recipe";
+import { type RecipeOut, recipeOut } from "@cubby/schemas/recipe";
 import {
   testCompleteDataQuality,
   testEntityId,
   testShortcode,
 } from "@cubby/schemas/testing";
+import {
+  testIngredientLine,
+  testSubRecipeLine,
+} from "@cubby/schemas/testing/recipe";
 import { err, ok } from "neverthrow";
 import { describe, expect, it } from "vitest";
 const unavailableNutrition = buildNutrition(() => ({
@@ -44,23 +44,10 @@ const ingredientKey = (id: string) => testShortcode("ingredient", `ING-${id}`);
 const rowKey = (id: string) => testEntityId("recipe", `usage-${id}`);
 
 const mkRow = (id: string, grams: number): IngredientDataItem => ({
-  ...sectionIngredientOut.parse({
+  ...testIngredientLine({
     id: rowKey(id),
-    type: "ingredient",
-    amounts: [],
-    modifier: null,
-    rawLine: null,
-    recipe: null,
-    ingredient: {
-      id: ingredientKey(id),
-      name: id,
-      aliases: [],
-      naKinds: [],
-      createdAt: new Date("2026-01-01"),
-      updatedAt: new Date("2026-01-01"),
-    },
-    createdAt: new Date("2026-01-01"),
-    updatedAt: new Date("2026-01-01"),
+    ingredientId: ingredientKey(id),
+    name: id,
   }),
   sectionName: null,
   priceInfo: {
@@ -84,23 +71,10 @@ const mkPricedRow = (
   };
   if (upper != null) priceAmount.upper_value = upper;
   return {
-    ...sectionIngredientOut.parse({
+    ...testIngredientLine({
       id: rowKey(id),
-      type: "ingredient",
-      amounts: [],
-      modifier: null,
-      rawLine: null,
-      recipe: null,
-      ingredient: {
-        id: ingredientKey(id),
-        name: id,
-        aliases: [],
-        naKinds: [],
-        createdAt: new Date("2026-01-01"),
-        updatedAt: new Date("2026-01-01"),
-      },
-      createdAt: new Date("2026-01-01"),
-      updatedAt: new Date("2026-01-01"),
+      ingredientId: ingredientKey(id),
+      name: id,
     }),
     sectionName: null,
     priceInfo: {
@@ -149,23 +123,10 @@ const mkCosting = (
 });
 
 const ing = (id: string, ingredientId: string, name: string) =>
-  sectionIngredientOut.parse({
+  testIngredientLine({
     id: testEntityId("recipe", `usage-${id}`),
-    type: "ingredient",
-    amounts: [],
-    modifier: null,
-    rawLine: null,
-    recipe: null,
-    ingredient: {
-      id: testShortcode("ingredient", `ING-${ingredientId}`),
-      name,
-      aliases: [],
-      naKinds: [],
-      createdAt: new Date("2026-01-01"),
-      updatedAt: new Date("2026-01-01"),
-    },
-    createdAt: new Date("2026-01-01"),
-    updatedAt: new Date("2026-01-01"),
+    ingredientId: testShortcode("ingredient", `ING-${ingredientId}`),
+    name: name,
   });
 
 // Sub-recipe references carry a written amount, because that's what the engine
@@ -178,24 +139,11 @@ const sub = (
   name: string,
   amounts: ReadonlyArray<{ value: number; unit: string }> = [],
 ) =>
-  sectionIngredientOut.parse({
+  testSubRecipeLine({
     id: testEntityId("recipe", `usage-${id}`),
-    type: "recipe",
-    amounts,
-    modifier: null,
-    rawLine: null,
-    ingredient: null,
-    recipe: {
-      id: recipeKey(recipeId),
-      name,
-      meta: null,
-      forkedFromRecipeId: null,
-      forkedFromRecipeName: null,
-      createdAt: new Date("2026-01-01"),
-      updatedAt: new Date("2026-01-01"),
-    },
-    createdAt: new Date("2026-01-01"),
-    updatedAt: new Date("2026-01-01"),
+    recipeId: recipeKey(recipeId),
+    name: name,
+    amounts: [...amounts],
   });
 
 const recipe = (

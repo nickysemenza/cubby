@@ -46,8 +46,8 @@ import {
   type ListReadRow,
   wantsListGroup,
 } from "~/server/repo/list-projection";
-import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge";
-import { applyMergePolicy } from "~/server/repo/removal";
+import { finalizeMerge, resolveMergeTargets } from "~/server/repo/merge/core";
+import { applyMergePolicy } from "~/server/repo/removal/dispositions";
 import { createEntityCrud } from "~/server/repo/repository";
 import {
   lookupEntityReferences,

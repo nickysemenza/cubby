@@ -88,7 +88,7 @@ final class LocationPhotoPassModel {
             }
             phase = .ready
         } catch {
-            phase = .failed((error as? CubbyAPIError)?.detail?.message ?? String(describing: error))
+            phase = .failed(error.userMessage)
         }
     }
 

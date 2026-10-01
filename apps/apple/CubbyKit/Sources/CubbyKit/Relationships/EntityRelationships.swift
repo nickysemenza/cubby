@@ -377,7 +377,7 @@ public final class EntityRelationshipsModel {
             // A new source or depth owns the graph now.
         } catch {
             guard generation == requestGeneration else { return }
-            pageErrors[branch.id] = Self.describe(error)
+            pageErrors[branch.id] = error.userMessage
         }
         guard generation == requestGeneration else { return }
         pageTasks[branch.id] = nil
@@ -459,7 +459,7 @@ public final class EntityRelationshipsModel {
                 acceptingRecommendationID == recommendationID
             {
                 acceptTask = nil
-                acceptError = Self.describe(error)
+                acceptError = error.userMessage
                 acceptingRecommendationID = nil
             }
             return nil
@@ -517,7 +517,7 @@ public final class EntityRelationshipsModel {
         } catch is CancellationError {
             // A new source or depth owns the state now.
         } catch {
-            if generation == requestGeneration { graphError = Self.describe(error) }
+            if generation == requestGeneration { graphError = error.userMessage }
         }
 
         do {
@@ -528,7 +528,7 @@ public final class EntityRelationshipsModel {
         } catch is CancellationError {
             // A new source or depth owns the state now.
         } catch {
-            if generation == requestGeneration { recommendationError = Self.describe(error) }
+            if generation == requestGeneration { recommendationError = error.userMessage }
         }
 
         guard generation == requestGeneration else { return }
@@ -554,14 +554,5 @@ public final class EntityRelationshipsModel {
         acceptTask = nil
         acceptingRecommendationID = nil
         pagingBranchIDs = []
-    }
-
-    private static func describe(_ error: any Error) -> String {
-        if let apiError = error as? CubbyAPIError {
-            let code = apiError.detail?.code ?? "HTTP_\(apiError.status)"
-            let message = apiError.detail?.message ?? "Request failed"
-            return "\(code): \(message)"
-        }
-        return String(describing: error)
     }
 }

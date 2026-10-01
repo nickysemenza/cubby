@@ -1,9 +1,7 @@
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
-import { vendorCreateInput } from "@cubby/schemas/vendor";
+import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { createPurchase } from "~/server/repo/purchase";
 import {
   createIngredientFixture,
   createInventoryFixture,
@@ -15,7 +13,6 @@ import {
   makeProductInput,
   makeRecipeInput,
 } from "~/server/repo/repo.fixtures";
-import { createVendor } from "~/server/repo/vendor";
 
 import { findCoverageTotals } from "./detectors-coverage";
 
@@ -89,24 +86,14 @@ describe("coverage totals", () => {
       TEST_ACTOR,
     );
     // A vendor counts only once it has a live purchase.
-    const transacted = await createVendor(
-      ctx.db,
-      vendorCreateInput.parse({ name: "Coverage transacted vendor" }),
-      ctx.actor,
-    );
-    await createVendor(
-      ctx.db,
-      vendorCreateInput.parse({ name: "Coverage idle vendor" }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        date: "2026-08-01",
-        vendorId: transacted.output.id,
-      }),
-      ctx.actor,
-    );
+    const transacted = await createRepoEntity(ctx, "vendor", {
+      name: "Coverage transacted vendor",
+    });
+    await createRepoEntity(ctx, "vendor", { name: "Coverage idle vendor" });
+    await createRepoEntity(ctx, "purchase", {
+      date: "2026-08-01",
+      vendorId: transacted.output.id,
+    });
 
     const after = await findCoverageTotals(ctx.db);
     const delta = (key: keyof typeof after) => after[key] - before[key];

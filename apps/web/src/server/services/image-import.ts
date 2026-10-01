@@ -1,7 +1,6 @@
 import type { ProductId, RecipeId } from "@cubby/schemas/identifiers";
+import { createLogger } from "@cubby/worker-tracing";
 
-import { env } from "~/env";
-import type { UpcLookupPort } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import {
   associateImagesWithProduct,
@@ -9,6 +8,9 @@ import {
   recipeHasImages,
 } from "~/server/repo/image";
 import { importImageFromUrl } from "~/server/services/image-storage.service";
+import type { UpcLookupPort } from "~/server/services/upc";
+
+const log = createLogger("importRecipeImageFromUrl");
 
 export type ImageUrlImportPort = typeof importImageFromUrl;
 
@@ -40,10 +42,7 @@ export const importImageFromUPC = async (
   const upcData = await upcLookupClient.lookup(upc);
   if (!upcData?.imageUrl) return null;
 
-  const fullImageUrl = new URL(
-    upcData.imageUrl,
-    env.UPC_LOOKUP_API_URL,
-  ).toString();
+  const fullImageUrl = upcData.imageUrl;
   const imported = await importImageFromUrl(db, {
     sourceUrl: fullImageUrl,
     filenamePrefix: `upc-${upc}`,
@@ -84,9 +83,7 @@ export const importRecipeImageFromUrl = async (
     });
 
     if (!imported) {
-      console.warn(
-        `[importRecipeImageFromUrl] Failed to import image for recipe ${recipeId}`,
-      );
+      log.warn(`Failed to import image for recipe ${recipeId}`);
       return null;
     }
 
@@ -94,10 +91,7 @@ export const importRecipeImageFromUrl = async (
 
     return { imageId: imported.imageId };
   } catch (error) {
-    console.error(
-      `[importRecipeImageFromUrl] Error importing image for recipe ${recipeId}:`,
-      error,
-    );
+    log.error(`Error importing image for recipe ${recipeId}`, { error });
     return null;
   }
 };

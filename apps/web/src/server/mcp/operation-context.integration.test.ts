@@ -9,8 +9,8 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { McpOperationContext } from "~/server/mcp/operation-context";
-import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import { createRecipe } from "~/server/repo/recipe";
+import { findOrCreateIngredient } from "~/server/repo/ingredient/crud";
+import { createRecipe } from "~/server/repo/recipe/crud";
 import { selectStaleRecipeIds } from "~/server/repo/recipe/totals";
 import {
   createImageFixture,

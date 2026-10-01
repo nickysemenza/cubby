@@ -524,11 +524,9 @@ export const deriveRelationSections = (
         relation: relation.key,
         filter,
         columns: target.fieldModel.fields
-          .filter(
-            (field) =>
-              field.display.list &&
-              (field.readKey !== null || field.display.renderer?.list != null),
-          )
+          // A flat read key keeps the embedded table to scalar facts; the
+          // path-read and renderer-built columns belong to the full list.
+          .filter((field) => field.display.list && field.readKey !== null)
           .map((field) => field.display.columnId ?? field.key),
         prefill: filterOverride?.prefill ?? null,
         sort: null,

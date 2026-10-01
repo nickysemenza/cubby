@@ -1,7 +1,6 @@
 import {
   type MealCreateInput,
   mealAddRecipeInput,
-  mealCreateInput,
   shoppingListInput,
 } from "@cubby/schemas/meal";
 import {
@@ -11,6 +10,7 @@ import {
 } from "@cubby/schemas/nutrition";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import { eq } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -82,7 +82,7 @@ describe("meal recipe preparations", () => {
     );
     const target = await createMealWithEntityId(
       ctx.db,
-      mealCreateInput.parse({ date: "2026-09-22", mealKind: "takeout" }),
+      buildEntity("meal", { date: "2026-09-22", mealKind: "takeout" }),
       ctx.actor,
     );
     const context = { db: ctx.db, actorContext: ctx.actor };
@@ -111,7 +111,7 @@ describe("meal recipe preparations", () => {
 
     const unreviewed = await createMealWithEntityId(
       ctx.db,
-      mealCreateInput.parse({ date: "2026-09-22", mealKind: "takeout" }),
+      buildEntity("meal", { date: "2026-09-22", mealKind: "takeout" }),
       ctx.actor,
     );
     const preserved = await addRecipeToMealWorkflow(
@@ -157,7 +157,7 @@ describe("meal recipe preparations", () => {
       ctx.actor,
     );
     await createTestMeal(
-      mealCreateInput.parse({
+      buildEntity("meal", {
         date: "2026-09-24",
         name: "Synthetic lunch plan",
         recipes: [
@@ -225,7 +225,7 @@ describe("meal recipe preparations", () => {
     );
     const source = await createMealWithEntityId(
       ctx.db,
-      mealCreateInput.parse({ date: "2026-09-21", name: "Two servings" }),
+      buildEntity("meal", { date: "2026-09-21", name: "Two servings" }),
       ctx.actor,
     );
     const first = await addRecipeToMeal(
@@ -320,14 +320,14 @@ describe("meal recipe preparations", () => {
 
     const [source, target, eater] = await Promise.all([
       createTestMeal(
-        mealCreateInput.parse({
+        buildEntity("meal", {
           date: "2026-08-31",
           name: "Cook night",
           recipes: [{ recipeId: recipeFixture.id, scale: 1 }],
         }),
       ),
       createTestMeal(
-        mealCreateInput.parse({ date: "2026-09-01", name: "Leftovers" }),
+        buildEntity("meal", { date: "2026-09-01", name: "Leftovers" }),
       ),
       createLedgerParty(
         ctx.db,
@@ -469,7 +469,7 @@ describe("meal recipe preparations", () => {
     );
     const [source, member, household] = await Promise.all([
       createTestMeal(
-        mealCreateInput.parse({
+        buildEntity("meal", {
           date: "2026-09-08",
           recipes: [{ recipeId: recipeFixture.id, scale: 1 }],
         }),

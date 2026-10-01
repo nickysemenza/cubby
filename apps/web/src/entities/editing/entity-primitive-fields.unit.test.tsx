@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { sleep } from "@cubby/shared/retry";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { FormProvider, useForm } from "react-hook-form";
@@ -310,7 +311,7 @@ describe("EntityPrimitiveFields", () => {
     expect(notes).toHaveAttribute("placeholder", "Recipe notes");
     fireEvent.change(notes, { target: { value: "" } });
     fireEvent.submit(screen.getByRole("button", { name: "Save notes" }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await sleep(0);
     expect(submitted).toEqual({ notes: null });
   });
 
@@ -344,7 +345,7 @@ describe("EntityPrimitiveFields", () => {
     });
     fireEvent.click(screen.getByRole("checkbox", { name: "Usually on hand" }));
     fireEvent.submit(screen.getByRole("button", { name: "Save nested" }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await sleep(0);
     expect(submitted).toEqual({
       draft: { name: "Flour", usuallyOnHand: true },
     });
@@ -375,7 +376,7 @@ describe("EntityPrimitiveFields", () => {
     });
     fireEvent.submit(screen.getByRole("button", { name: "Save" }));
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await sleep(0);
     expect(submitted).toEqual({ name: "Flour", usuallyOnHand: true });
   });
 
@@ -450,7 +451,7 @@ describe("EntityPrimitiveFields", () => {
       });
       fireEvent.change(input, { target: { value: "" } });
       fireEvent.submit(screen.getByRole("button", { name: "Save" }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await sleep(0);
       expect(submitted).toEqual({ [field]: expected });
     },
   );

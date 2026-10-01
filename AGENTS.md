@@ -56,6 +56,36 @@
   model/effort pair, and use its compact handoff contract. Preserve an explicit
   user model choice and the current main session.
 
+## Generic by default
+
+Cubby's entities share one declaration spine, and every client — web, iOS and
+macOS, HTTP/OpenAPI, MCP, and the server — should need as little hand-written
+per-entity code as possible.
+
+- **Manifest first.** Entity behavior (fields, shapes, filters, sorts, list
+  columns, edit intents, validation, relations, saved views, presentation) is
+  declared in `packages/schemas/src/entity-definitions/*.entity.ts` and
+  generated for every client. Add a capability to the declaration and the
+  generic renderer/runtime, then delete the per-entity twin; keep a remaining
+  exception explicit in the declaration or a typed hook registry.
+- **Same shapes everywhere.** Entities reuse field names, field kinds, display
+  formats, and record shapes (ids and shortcodes, timestamps, notes, tags,
+  images, provenance, money). Reach for an existing kind or format before
+  inventing one.
+- **Derive types; never restate them.** TypeScript types come from Zod
+  (`z.infer`), generated manifests, Drizzle, or `Pick`/`Omit` of those; Swift
+  types come from the generated OpenAPI and entity manifest. Cross-Worker RPCs
+  share one Zod contract.
+- **Generate over hand-write.** Code that is a function of declarations or
+  contracts belongs in `pnpm generate` output with a drift check.
+- **Reuse before writing.** Search [generic paths](docs/agents/generic-paths.md)
+  and the codebase for an existing helper or generic path, and extend it rather
+  than fork it.
+- **Finish migrations.** A change that introduces a generic path moves every
+  caller, or records the remainder in a shrink-only baseline. Never leave two
+  live paths silently. Lint rules in `tools/oxlint/cubby/` and shrink-only
+  boundary tests enforce the common cases.
+
 ## Product constraints
 
 The [README tenets](README.md#tenets) are binding: inventory never

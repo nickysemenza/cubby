@@ -198,6 +198,75 @@ function providerId(source: string, record: Record<string, string>) {
   return source === "monarch" ? record.Id?.trim() || null : null;
 }
 
+/** One normalized CSV row as the preview row and the recorded evidence row. */
+function buildStatementRow(input: {
+  index: number;
+  source: string;
+  fingerprint: string;
+  rowPosition: number;
+  providerId: string | null;
+  account: string;
+  date: string;
+  providerAmount: number;
+  merchant: string | null;
+  rawDescription: string;
+  category: string | null;
+  notes: string | null;
+  pending: boolean;
+}) {
+  const providerStatus = input.pending
+    ? ("pending" as const)
+    : ("posted" as const);
+  return {
+    preview: {
+      key: String(input.index + 1),
+      importFingerprint: input.fingerprint,
+      rowPosition: input.rowPosition,
+      providerTransactionId: input.providerId,
+      providerStatus,
+      source: input.source,
+      account: input.account,
+      date: input.date,
+      amount: input.providerAmount,
+      merchant: input.merchant,
+      originalStatement: input.rawDescription,
+      category: input.category,
+      notes: input.notes,
+    },
+    record: {
+      rowPosition: input.rowPosition,
+      providerTransactionId: input.providerId,
+      accountDescriptor: input.account,
+      statementDate: input.date,
+      providerAmount: input.providerAmount,
+      merchant: input.merchant,
+      rawDescription: input.rawDescription,
+      sourceCategory: input.category,
+      providerStatus,
+      providerNotes: input.notes,
+    },
+    pending: input.pending,
+  };
+}
+
+/** Splits built rows into the previewable (posted, nonzero) set and counts. */
+function assembleParsedStatement(
+  header: Pick<
+    ParsedStatementCsv,
+    "source" | "label" | "fingerprint" | "dateKind"
+  >,
+  normalized: ReturnType<typeof buildStatementRow>[],
+): ParsedStatementCsv {
+  const nonzero = normalized.filter((row) => row.record.providerAmount !== 0);
+  return {
+    ...header,
+    rows: nonzero.filter((row) => !row.pending).map((row) => row.preview),
+    recordRows: normalized.map((row) => row.record),
+    pending: nonzero.filter((row) => row.pending).length,
+    zeroValueRows: normalized.length - nonzero.length,
+  };
+}
+
 export function parseMappedStatementCsv(
   text: string,
   label: string,
@@ -269,48 +338,26 @@ export function parseMappedStatementCsv(
       mappedValue(record, mapping.status).toLowerCase() ===
         mapping.pendingValue.trim().toLowerCase(),
     );
-    return {
-      preview: {
-        key: String(index + 1),
-        importFingerprint: fingerprint,
-        rowPosition,
-        providerTransactionId: providerId(source, record),
-        providerStatus: pending ? ("pending" as const) : ("posted" as const),
-        source,
-        account,
-        date,
-        amount: providerAmount,
-        merchant,
-        originalStatement: rawDescription,
-        category,
-        notes,
-      },
-      record: {
-        rowPosition,
-        providerTransactionId: providerId(source, record),
-        accountDescriptor: account,
-        statementDate: date,
-        providerAmount,
-        merchant,
-        rawDescription,
-        sourceCategory: category,
-        providerStatus: pending ? ("pending" as const) : ("posted" as const),
-        providerNotes: notes,
-      },
+    return buildStatementRow({
+      index,
+      source,
+      fingerprint,
+      rowPosition,
+      providerId: providerId(source, record),
+      account,
+      date,
+      providerAmount,
+      merchant,
+      rawDescription,
+      category,
+      notes,
       pending,
-    };
+    });
   });
-  const nonzero = normalized.filter((row) => row.record.providerAmount !== 0);
-  return {
-    source,
-    label,
-    fingerprint,
-    rows: nonzero.filter((row) => !row.pending).map((row) => row.preview),
-    recordRows: normalized.map((row) => row.record),
-    pending: nonzero.filter((row) => row.pending).length,
-    zeroValueRows: records.length - nonzero.length,
-    dateKind: "unknown",
-  };
+  return assembleParsedStatement(
+    { source, label, fingerprint, dateKind: "unknown" },
+    normalized,
+  );
 }
 
 function accountWithMask(account: string, mask: string): string {
@@ -440,53 +487,36 @@ export function parseStatementCsv(
     } = normalizeKnownRow(source, record, index);
     if (!rawDescription && providerAmount !== 0)
       throw new Error(`Row ${index + 1} has no statement description`);
-    return {
-      preview: {
-        key: String(index + 1),
-        importFingerprint: fingerprint,
-        rowPosition,
-        providerTransactionId: providerId(source, record),
-        providerStatus: pending ? ("pending" as const) : ("posted" as const),
-        source,
-        account,
-        date,
-        amount: providerAmount,
-        merchant,
-        originalStatement: rawDescription,
-        category,
-        notes,
-      },
-      record: {
-        rowPosition,
-        providerTransactionId: providerId(source, record),
-        accountDescriptor: account,
-        statementDate: date,
-        providerAmount,
-        merchant,
-        rawDescription,
-        sourceCategory: category,
-        providerStatus: pending ? ("pending" as const) : ("posted" as const),
-        providerNotes: notes,
-      },
+    return buildStatementRow({
+      index,
+      source,
+      fingerprint,
+      rowPosition,
+      providerId: providerId(source, record),
+      account,
+      date,
+      providerAmount,
+      merchant,
+      rawDescription,
+      category,
+      notes,
       pending,
-    };
+    });
   });
-  const nonzero = normalized.filter((row) => row.record.providerAmount !== 0);
-  return {
-    source,
-    label,
-    fingerprint,
-    rows: nonzero.filter((row) => !row.pending).map((row) => row.preview),
-    recordRows: normalized.map((row) => row.record),
-    pending: nonzero.filter((row) => row.pending).length,
-    zeroValueRows: records.length - nonzero.length,
-    dateKind:
-      source === "monarch"
-        ? "posted"
-        : source === "apple-card"
-          ? "transaction"
-          : "unknown",
-  };
+  return assembleParsedStatement(
+    {
+      source,
+      label,
+      fingerprint,
+      dateKind:
+        source === "monarch"
+          ? "posted"
+          : source === "apple-card"
+            ? "transaction"
+            : "unknown",
+    },
+    normalized,
+  );
 }
 
 export function previewStatementBatch(

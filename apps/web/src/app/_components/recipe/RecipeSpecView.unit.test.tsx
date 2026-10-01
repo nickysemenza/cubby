@@ -5,15 +5,13 @@ import {
 } from "@cubby/schemas/nutrition";
 import {
   type RecipeOut,
-  recipeOut,
   type SectionIngredientOut,
-  sectionIngredientOut,
 } from "@cubby/schemas/recipe";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import {
-  testCompleteDataQuality,
-  testEntityId,
-  testShortcode,
-} from "@cubby/schemas/testing";
+  testIngredientLine,
+  testEmptyRecipe,
+} from "@cubby/schemas/testing/recipe";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { ok } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -46,45 +44,16 @@ afterEach(() => {
 });
 
 const ingredient = (id: string, name: string): SectionIngredientOut =>
-  sectionIngredientOut.parse({
+  testIngredientLine({
     id: testEntityId("recipe", `usage-${id}`),
-    type: "ingredient",
-    amounts: [],
-    modifier: null,
-    rawLine: null,
-    recipe: null,
-    ingredient: {
-      id: testShortcode("ingredient", `ING-${id}`),
-      name,
-      aliases: [],
-      naKinds: [],
-      createdAt: new Date("2026-01-01"),
-      updatedAt: new Date("2026-01-01"),
-    },
-    createdAt: new Date("2026-01-01"),
-    updatedAt: new Date("2026-01-01"),
+    ingredientId: testShortcode("ingredient", `ING-${id}`),
+    name: name,
   });
 
 const rowKey = (id: string) => testEntityId("recipe", `usage-${id}`);
 
 const recipe = (id: string, name: string): RecipeOut =>
-  recipeOut.parse({
-    id: testShortcode("recipe", `RCP-${id}`),
-    name,
-    meta: null,
-    yield: null,
-    servings: null,
-    notes: null,
-    forkedFromRecipeId: null,
-    forkedFromRecipeName: null,
-    source: null,
-    images: [],
-    sections: [],
-    tags: [],
-    createdAt: new Date("2026-01-01"),
-    updatedAt: new Date("2026-01-01"),
-    dataQuality: testCompleteDataQuality(),
-  });
+  testEmptyRecipe({ id: testShortcode("recipe", `RCP-${id}`), name: name });
 
 const costing = (): RecipeCosting => ({
   rows: ["flour", "water"].map((id) => ({

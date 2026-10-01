@@ -1,3 +1,4 @@
+import { pollUntil } from "@cubby/shared/retry";
 import { testServiceConfig } from "./test-service-config";
 import { hashSchemaTemplateInputs } from "./schema-template-inputs";
 import {
@@ -37,6 +38,7 @@ import type {
 } from "../src/server/entity-kernel/adapter";
 import type { EntityKernelEntity } from "../src/server/entity-kernel/contracts";
 import { migrateDatabase } from "./db-migrate";
+import type { CreatableEntity, EntityOverrides } from "./factories/build";
 import { z } from "zod";
 
 let client: IntegreSQLClient | undefined;
@@ -435,22 +437,20 @@ async function waitForLockWaiter(db: Database): Promise<void> {
   // `env.ts`, whose validation would fail there.
   // oxlint-disable-next-line no-restricted-imports -- lazy by design, see above
   const { getDb } = await import("../src/server/repo/database-helpers/core");
-  const deadline = Date.now() + LOCK_POLL_TIMEOUT_MS;
-  for (;;) {
-    const result = await getDb(db).execute(sql`
-      SELECT count(*) AS "count" FROM pg_stat_activity
-      WHERE datname = current_database() AND wait_event_type = 'Lock'
-    `);
-    const waiting = Number(result.rows[0]?.count ?? 0);
-    if (waiting > 0) return;
-    if (Date.now() >= deadline) {
-      throw new Error(
-        "raceUniqueInsert: no session started waiting on a lock within " +
-          `${LOCK_POLL_TIMEOUT_MS}ms`,
-      );
-    }
-    await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_INTERVAL_MS));
-  }
+  await pollUntil(
+    async () => {
+      const result = await getDb(db).execute(sql`
+        SELECT count(*) AS "count" FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock'
+      `);
+      return Number(result.rows[0]?.count ?? 0) > 0 ? true : undefined;
+    },
+    {
+      label: "raceUniqueInsert: a session waiting on a lock",
+      timeoutMs: LOCK_POLL_TIMEOUT_MS,
+      intervalMs: LOCK_POLL_INTERVAL_MS,
+    },
+  );
 }
 
 /**
@@ -542,7 +542,7 @@ export async function seedEntity<E extends EntityKernelEntity>(
   overrides?: SeedOverrides<E>,
 ): Promise<EntityPublicOutput<E>> {
   const [
-    { mock },
+    { buildEntity },
     { parseEntityPublicOutput },
     { createTestRequestContext },
     { requireActor },
@@ -550,7 +550,7 @@ export async function seedEntity<E extends EntityKernelEntity>(
     { ENTITY_KERNEL_BINDINGS, ENTITY_KERNEL_OPERATIONS },
     { ENTITY_KERNEL_ENTITIES },
   ] = await Promise.all([
-    import("../src/lib/test/mock-schema"),
+    import("./factories/build"),
     // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/entity-kernel/adapter"),
     // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
@@ -572,7 +572,13 @@ export async function seedEntity<E extends EntityKernelEntity>(
     throw new Error(`seedEntity: "${entity}" is not kernel-creatable`);
   }
 
-  const input = mock(binding.schemas.createInput, { overrides });
+  // SAFETY: the guard above proved this entity has a create input, which is
+  // exactly what makes it a factory-creatable entity; `overrides` is a sparse
+  // patch over that same create input.
+  const input = buildEntity(
+    entity as CreatableEntity,
+    overrides as EntityOverrides<CreatableEntity>,
+  );
   const baseContext = createTestRequestContext(db, {
     auth: { userId: testUserId("test-user-id") },
   });

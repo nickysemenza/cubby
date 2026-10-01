@@ -7,10 +7,8 @@ import { isCollectionTag } from "@cubby/shared/collection-tag";
 
 import type { Database } from "~/server/db";
 import { findSimilarEntitiesWorkflow } from "~/server/operations/semantic-similarity.server";
-import {
-  getProductsByShortcodes,
-  getProductsSharingTags,
-} from "~/server/repo/product";
+import { getProductsSharingTags } from "~/server/repo/product/analytics";
+import { getProductsByShortcodes } from "~/server/repo/product/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   getActiveSuggestionDismissalKeys,

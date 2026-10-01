@@ -100,15 +100,16 @@ export const entityGraphHandlers = implementOperationDomain(
     graphPaths: (context, input) => getEntityGraphPaths(context.db, input),
     connections: (context, input) => getEntityConnections(context.db, input),
     relation: async (context, input) => {
-      const result = await executeEntity(
+      // The parse brands the ids; the input's entity is a union, so the
+      // parsed command (not the raw input) is what executeEntityAs accepts.
+      const result = await executeEntityAs(
         context,
+        "listRelation",
         generatedEntityRelationListCommandSchema.parse({
           action: "listRelation",
           ...input,
         }),
       );
-      if (result.action !== "listRelation")
-        throw new Error("Entity kernel returned the wrong action");
       const { action: _, ...list } = result;
       return list;
     },

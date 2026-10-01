@@ -2,7 +2,8 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { findOrCreateIngredient, ingredientList } from "./ingredient";
+import { findOrCreateIngredient } from "./ingredient/crud";
+import { ingredientList } from "./ingredient/search";
 import { writeProductConversionCoverageProjection } from "./product/conversion-coverage";
 import {
   createProductFixture,

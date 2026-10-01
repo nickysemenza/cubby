@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import pg from "pg";
 
 import { databaseStatementForTrace } from "~/lib/db-query-telemetry";
@@ -10,6 +11,8 @@ import {
 } from "./db-observability";
 import { databaseClientOrdinal } from "./db-pg-client";
 import { TraceNames, withTrace } from "./tracing";
+
+const log = createLogger("db-acquire");
 
 export type RequestDbRole = "strong" | "bounded-stale";
 
@@ -385,9 +388,7 @@ export const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
         });
         const durationMs = Math.round(performance.now() - startedAt);
         if (durationMs > 500) {
-          console.warn(
-            `[db-acquire] transaction=${inTransaction} duration_ms=${durationMs}`,
-          );
+          log.warn(`transaction=${inTransaction} duration_ms=${durationMs}`);
         }
         transactionState.set(client, inTransaction);
         return traceClient(client, role);

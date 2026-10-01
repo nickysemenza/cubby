@@ -1,5 +1,4 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { projectCreateInput } from "@cubby/schemas/project";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -9,6 +8,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { createEvidenceHarnessContext } from "./fixtures-core";
 import { uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+import { buildEntity } from "tooling/factories/build";
 
 const censusGroup = z.object({
   state: z.string(),
@@ -75,7 +75,7 @@ test("real Worker reads and freshness writes release database sockets after quie
     const name = uniqueName(testInfo, "Synthetic socket lifecycle");
     const created = await page.request.post("/api/v1/projects", {
       headers: { Origin: baseURL! },
-      data: projectCreateInput.parse({ name, kind: "household" }),
+      data: buildEntity("project", { name, kind: "household" }),
     });
     expect(created.status(), scrubErrorMessage(await created.text())).toBe(201);
     const id = z

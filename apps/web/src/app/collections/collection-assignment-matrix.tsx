@@ -30,11 +30,11 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
+import { DialogFormActions } from "~/components/ui/dialog-form-actions";
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -192,6 +192,7 @@ function NewCollectionDialog({
   const [memberId, setMemberId] = useState("");
   const nameId = useId();
   const memberSelectId = useId();
+  const formId = useId();
   const slug = normalizeCollectionSlug(name);
 
   const create = useMutation({
@@ -224,6 +225,7 @@ function NewCollectionDialog({
       />
       <DialogContent size="md">
         <form
+          id={formId}
           onSubmit={(event) => {
             event.preventDefault();
             if (!slug || !memberId) return;
@@ -270,14 +272,13 @@ function NewCollectionDialog({
                 Choose from the current filtered page.
               </p>
             </Stack>
-            <DialogFooter>
-              <Button
-                type="submit"
-                disabled={!slug || !memberId || create.isPending}
-              >
-                Create Collection
-              </Button>
-            </DialogFooter>
+            <DialogFormActions
+              form={formId}
+              onCancel={() => handleOpenChange(false)}
+              submitLabel="Create Collection"
+              pending={create.isPending}
+              submitDisabled={!slug || !memberId}
+            />
           </Stack>
         </form>
       </DialogContent>

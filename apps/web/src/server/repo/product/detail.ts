@@ -1,23 +1,21 @@
-import { entityRefKey } from "@cubby/schemas/entity";
-import type { LocationId } from "@cubby/schemas/identifiers";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { parseShortcode } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { observeOperationPhase } from "~/server/observed-request";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
-import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
-import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient";
+import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient/search";
 import { enrichProductRowsWithInventoryValuations } from "~/server/repo/inventory/valuation";
-import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
-import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
+import {
+  getProductCoverImageUrlsByProductIds,
+  hydrateProductLocationBreadcrumbs,
+} from "~/server/repo/product/crud";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import {
   dbProductToAPI,
@@ -29,7 +27,6 @@ import {
   EMPTY_QUANTITY_LEDGER,
   loadProductDetailQuantityLedgers,
 } from "~/server/repo/product/quantity-ledger";
-import type { ProductDeepDB } from "~/server/repo/product/types";
 
 import { loadProductOwnershipEvidence } from "./ownership-evidence";
 
@@ -39,53 +36,6 @@ interface ProductDetailReadContext {
 }
 
 const PRODUCT_DETAIL_OPERATION = startOperationDefinition("entity.detail");
-
-/** Resolve the relation data needed by Product location rows without N+1 walks. */
-const hydrateProductLocationBreadcrumbs = async (
-  db: Database,
-  rows: ProductDeepDB[],
-): Promise<ProductDeepDB[]> => {
-  const locationIds = uniq(
-    rows.flatMap((row) => [
-      ...row.inventoryEntry.map((entry) => entry.location.id),
-      ...(row.locations ?? []).map((loc) => loc.id),
-    ]),
-  );
-  const ancestorsById = await loadLocationAncestorsWithIds(db, locationIds);
-  const displayImages = await resolveEntityDisplayImages(
-    db,
-    uniq([
-      ...locationIds,
-      ...[...ancestorsById.values()].flatMap((chain) =>
-        chain.map((rung) => rung.locationId),
-      ),
-    ]).map((entityId) => ({ entityKind: "location" as const, entityId })),
-  );
-  const displayImageOf = (id: LocationId) =>
-    displayImages.get(entityRefKey("location", id)) ?? null;
-  const breadcrumbOf = (id: LocationId) =>
-    (ancestorsById.get(id) ?? []).map(({ locationId, ...rung }) => ({
-      ...rung,
-      displayImage: displayImageOf(locationId),
-    }));
-
-  return rows.map((row) => ({
-    ...row,
-    inventoryEntry: row.inventoryEntry.map((entry) => ({
-      ...entry,
-      location: {
-        ...entry.location,
-        ancestors: breadcrumbOf(entry.location.id),
-        displayImage: displayImageOf(entry.location.id),
-      },
-    })),
-    locations: row.locations?.map((loc) => ({
-      ...loc,
-      ancestors: breadcrumbOf(loc.id),
-      displayImage: displayImageOf(loc.id),
-    })),
-  }));
-};
 
 const emptyRecipeUsages = {
   recipeUsages: [],

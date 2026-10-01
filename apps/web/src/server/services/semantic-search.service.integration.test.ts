@@ -1,7 +1,7 @@
 import { entityRefKey } from "@cubby/schemas/entity";
-import { expenseCreateInput } from "@cubby/schemas/project";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
 import { fromPartial } from "@total-typescript/shoehorn";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -21,7 +21,6 @@ import {
 import { requestEmbeddingRefreshWorkflow } from "~/server/operations/search.server";
 import { findSimilarEntitiesWorkflow } from "~/server/operations/semantic-similarity.server";
 import { getStoredEmbeddingHashes } from "~/server/repo/entity-embedding-refresh";
-import { createExpense } from "~/server/repo/expense";
 import {
   createProductFixture as createProduct,
   makeExpenseInput,
@@ -491,12 +490,10 @@ describe("semantic search background tasks", () => {
     // embeddable, so `countAwaitingWork`/`settleAwaitingWork` must never
     // count or publish a refresh for it (see `unembeddedDocumentsSql`'s
     // `embeddableEntityKindsSql` filter).
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({ name: "Example unembeddable expense" }),
-      ),
-      ctx.actor,
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({ name: "Example unembeddable expense" }),
     );
     const published: Array<{ task: { kind: string } }> = [];
     setCfEnv(

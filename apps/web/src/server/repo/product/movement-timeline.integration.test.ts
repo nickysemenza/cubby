@@ -1,7 +1,7 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { createExpense } from "~/server/repo/expense";
+import { createExpense } from "~/server/repo/expense/crud";
 import {
   createProductFixture,
   makeExpenseInput,

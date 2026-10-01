@@ -9,6 +9,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { pollUntil } from "@cubby/shared/retry";
 import { stripVTControlCharacters } from "node:util";
 import {
   chromium,
@@ -21,7 +22,7 @@ import { productId } from "@cubby/schemas/identifiers";
 import { searchIndexRepairCountersSchema } from "@cubby/schemas/maintenance";
 import { dashboardCountsOut } from "@cubby/schemas/dashboard";
 import { foodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { productLookupResponseSchema } from "@cubby/upc-contract";
+import { productLookupResponseSchema } from "~/contracts/upc.schemas";
 import { AwsClient } from "aws4fetch";
 import { Pool } from "pg";
 import { z } from "zod";
@@ -174,39 +175,47 @@ async function start(session: (typeof sessions)[number]) {
   void running.done.catch((error) => {
     exited = error;
   });
-  const deadline = Date.now() + 180_000;
-  while (Date.now() < deadline) {
-    if (exited) throw exited;
-    try {
-      const response = await fetch(`${session.profile.origin}/__dev/ready`, {
-        signal: AbortSignal.timeout(3_000),
-      });
-      const ready = readySchema.parse(await response.json());
-      assert.equal(ready.devId, session.profile.id);
-      assert.equal(ready.database, session.profile.name);
-      const manifest = sessionSchema.parse(
-        JSON.parse(
-          await readFile(
-            path.join(session.profile.stateDir, "session.json"),
-            "utf8",
-          ),
-        ),
-      );
-      if (
-        response.ok &&
-        ready.ready &&
-        ready.fixturesReady &&
-        manifest.readiness === "ready"
-      )
-        return manifest;
-    } catch {
-      // Boot, schema setup and seeding are distinct supervisor phases.
-    }
-    await delay(250);
+  try {
+    return await pollUntil(
+      async () => {
+        if (exited) throw exited;
+        try {
+          const response = await fetch(
+            `${session.profile.origin}/__dev/ready`,
+            { signal: AbortSignal.timeout(3_000) },
+          );
+          const ready = readySchema.parse(await response.json());
+          assert.equal(ready.devId, session.profile.id);
+          assert.equal(ready.database, session.profile.name);
+          const manifest = sessionSchema.parse(
+            JSON.parse(
+              await readFile(
+                path.join(session.profile.stateDir, "session.json"),
+                "utf8",
+              ),
+            ),
+          );
+          if (
+            response.ok &&
+            ready.ready &&
+            ready.fixturesReady &&
+            manifest.readiness === "ready"
+          )
+            return manifest;
+        } catch (error) {
+          if (exited) throw error;
+          // Boot, schema setup and seeding are distinct supervisor phases.
+        }
+        return undefined;
+      },
+      { label: "isolated development startup", timeoutMs: 180_000 },
+    );
+  } catch (error) {
+    throw new Error(
+      `Isolated development startup failed; ${running.output().slice(-8_000)}`,
+      { cause: error },
+    );
   }
-  throw new Error(
-    `Isolated development startup timed out; ${running.output().slice(-8_000)}`,
-  );
 }
 
 async function stop(session: (typeof sessions)[number]) {
@@ -502,7 +511,7 @@ try {
     true,
   );
   await check(
-    "real UPC service binding reads its persisted synthetic fixture",
+    "UPC lookup serves its persisted synthetic UpcLookupCache fixture",
     async () => {
       const upcResponse = await context.request.get(
         "/api/v1/upc/lookup?upc=012345678905",
@@ -678,16 +687,13 @@ try {
       );
       const id = productId.parse(row.rows[0]?.id);
       const expected = `[background-tasks] embedding unconfigured product:${id}`;
-      const deadline = Date.now() + 30_000;
-      let consumed = false;
-      while (Date.now() < deadline) {
-        consumed = first.queueEvents.has(expected);
-        if (consumed) break;
-        await delay(250);
-      }
-      assert(
-        consumed,
-        "Worker's real background queue did not consume the created synthetic Product",
+      await pollUntil(
+        () => (first.queueEvents.has(expected) ? true : undefined),
+        {
+          label:
+            "Worker's real background queue consuming the created synthetic Product",
+          timeoutMs: 30_000,
+        },
       );
       evidence.realBackgroundQueueConsumed = true;
     },
@@ -718,38 +724,38 @@ try {
         })
         .parse(await created.json());
       const detailPath = `${workflowPath}/${createdBody.result.id}${workerSelector}`;
-      const deadline = Date.now() + 60_000;
-      let completed = false;
-      while (Date.now() < deadline) {
-        const response = await context.request.get(detailPath);
-        assert.equal(response.status(), 200);
-        const detail = z
-          .object({
-            success: z.literal(true),
-            result: z.object({
-              status: z.string(),
-              output: z.unknown().optional(),
-              error: z.object({ message: z.string() }).nullish(),
-            }),
-          })
-          .parse(await response.json());
-        assert.notEqual(
-          detail.result.status,
-          "errored",
-          detail.result.error?.message ?? "Workflow errored",
-        );
-        if (detail.result.status === "complete") {
+      await pollUntil(
+        async () => {
+          const response = await context.request.get(detailPath);
+          assert.equal(response.status(), 200);
+          const detail = z
+            .object({
+              success: z.literal(true),
+              result: z.object({
+                status: z.string(),
+                output: z.unknown().optional(),
+                error: z.object({ message: z.string() }).nullish(),
+              }),
+            })
+            .parse(await response.json());
+          assert.notEqual(
+            detail.result.status,
+            "errored",
+            detail.result.error?.message ?? "Workflow errored",
+          );
+          if (detail.result.status !== "complete") return undefined;
           const output = searchIndexRepairCountersSchema.parse(
             detail.result.output,
           );
           assert(output.scanned > 0);
           evidence.workflowScannedSyntheticEntities = output.scanned;
-          completed = true;
-          break;
-        }
-        await delay(250);
-      }
-      assert(completed, "Real SearchIndexRepair Workflow did not complete");
+          return true;
+        },
+        {
+          label: "real SearchIndexRepair Workflow completion",
+          timeoutMs: 60_000,
+        },
+      );
       evidence.realWorkflowCompleted = true;
     },
     true,

@@ -1,10 +1,13 @@
 import { RECIPE_RECOMPUTE_CHUNK_SIZE } from "@cubby/schemas/background-tasks";
 import type { RecipeId } from "@cubby/schemas/identifiers";
+import { createLogger } from "@cubby/worker-tracing";
 
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { selectStaleRecipeIds } from "~/server/repo/recipe/totals";
 
 import type { RecipeCostingService } from "./recipe-costing.service";
+
+const log = createLogger("repair-on-read");
 
 /** Best-effort, bounded repair shared by every totals-dependent read. */
 export async function repairStaleRecipesForRead(
@@ -26,7 +29,7 @@ export async function repairStaleRecipesForRead(
         try {
           await recipeCosting.recomputeQueued(chunk);
         } catch (error) {
-          console.warn(`[${source}] repair-on-read failed`, {
+          log.warn(`[${source}] failed`, {
             recipes: chunk,
             error,
           });

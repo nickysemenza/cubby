@@ -10,7 +10,7 @@ import {
 } from "~/server/db/schema";
 
 import { getDb } from "./database-helpers";
-import { upsertRecipe } from "./recipe";
+import { upsertRecipe } from "./recipe/crud";
 import {
   createIngredients,
   ingredientRef,
@@ -127,7 +127,6 @@ describe("upsertRecipe", () => {
       sections: [
         {
           name: "Batter",
-          instructions: [],
           ingredients: [
             ingredientRef(testIngredients[0]!.id, {
               amounts: [{ value: 2, unit: "cups" }],

@@ -13,41 +13,48 @@ import { UpcEnrichmentFreshness, ProblemItem } from "@cubby/schemas/problems";
 import type { ProjectAttentionItem } from "@cubby/schemas/project";
 
 import type { DiagnosticKey } from "~/entities/problem-query";
-import { env } from "~/env";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { proposeSizeFromTitle } from "~/lib/title-unit-size";
-import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import { findOrphanEntities } from "~/server/repo/entity-edge-source";
+import { findPartiallyImportedCookbooks } from "~/server/repo/problems/detectors-cookbook";
 import {
-  countDependencyCycles,
   countEntitiesMissingEmbeddings,
-  countReferentialLivenessViolations,
-  findDependencyCycles,
+  findEntitiesMissingEmbeddingsPage,
+} from "~/server/repo/problems/detectors-embedding";
+import {
   findDuplicateFinancialAccountSourceAliases,
   findDuplicateFinancialTransactionSourceRefs,
-  findDuplicateProductIdentities,
-  findDuplicateSpendCandidates,
-  findDuplicateVendors,
-  findEntitiesMissingEmbeddingsPage,
   findIncompleteStatementImports,
   findInvalidFinancialJson,
-  findManufacturerSpellingVariants,
-  findOpenRunFindings,
-  findOrphanedProducts,
-  findParentRecipesWithDeletedSubRecipes,
-  findPartiallyImportedCookbooks,
-  findProductsWithoutUnitMappings,
   findProvisionalFinancialAccounts,
+} from "~/server/repo/problems/detectors-financial";
+import { findOpenRunFindings } from "~/server/repo/problems/detectors-import";
+import {
+  countDependencyCycles,
+  countReferentialLivenessViolations,
+  findDependencyCycles,
+  findReferentialLivenessViolations,
+} from "~/server/repo/problems/detectors-integrity";
+import {
+  findDuplicateVendors,
+  findManufacturerSpellingVariants,
+} from "~/server/repo/problems/detectors-label-variants";
+import {
+  findDuplicateProductIdentities,
+  findOrphanedProducts,
+  findProductsWithoutUnitMappings,
   findWeightSoldProducts,
   findProductsWithUpcGaps,
-  findReferentialLivenessViolations,
   findToolsUsedOutsideOwnership,
-} from "~/server/repo/problems";
-import { computeAttentionItems } from "~/server/repo/project";
+} from "~/server/repo/problems/detectors-product";
+import { findDuplicateSpendCandidates } from "~/server/repo/problems/detectors-purchase";
+import { findParentRecipesWithDeletedSubRecipes } from "~/server/repo/problems/detectors-recipe";
+import { computeAttentionItems } from "~/server/repo/project/attention";
 import { readCachedUpcLookups } from "~/server/repo/upc-lookup-cache";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
+import type { UpcLookupService } from "~/server/services/upc";
 
 type DiagnosticStatus =
   | { state: "healthy" }
@@ -68,7 +75,7 @@ export type DiagnosticSampleResult = DiagnosticMetadata & {
 export type DiagnosticCountResult = DiagnosticMetadata & { count: number };
 export type DiagnosticResult = DiagnosticSampleResult | DiagnosticCountResult;
 
-export type UpcLookupBatchPort = Pick<UPCLookupClient, "lookupBatch">;
+export type UpcLookupBatchPort = Pick<UpcLookupService, "lookupBatch">;
 
 export type DiagnosticRunOptions = {
   upcLookupClient?: UpcLookupBatchPort;
@@ -176,10 +183,7 @@ async function runUpcProposals(
         candidate.effectivePrice == null && lookup.priceDollars != null
           ? lookup.priceDollars
           : null,
-      imageUrl:
-        !candidate.hasImage && lookup.imageUrl
-          ? new URL(lookup.imageUrl, env.UPC_LOOKUP_API_URL).toString()
-          : null,
+      imageUrl: !candidate.hasImage && lookup.imageUrl ? lookup.imageUrl : null,
     };
     if (
       proposed.manufacturer == null &&

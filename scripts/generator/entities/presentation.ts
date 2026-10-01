@@ -313,6 +313,7 @@ const checkEditSectionCoverage = (
     );
 };
 
+// oxlint-disable-next-line eslint/complexity -- Edit checks enumerate each declared rule family in one pass.
 const checkEdit = (
   edit: EntityPresentation["edit"],
   fieldModel: EntityFieldModel,
@@ -325,6 +326,16 @@ const checkEdit = (
   }
   if (edit.sections !== null && edit.sections !== undefined)
     checkEditSectionCoverage(edit.sections, fieldModel, context);
+  for (const [index, range] of edit.dateRanges.entries()) {
+    const where = `edit.dateRanges[${index}]`;
+    for (const key of [range.start, range.end]) {
+      const field = lookup.edit(key, where);
+      if (field.kind !== "date")
+        throw new EntityDeclarationError(
+          `${context}.${where} names ${key}, which is not a date field.`,
+        );
+    }
+  }
   for (const key of edit.readOnlyOnUpdate)
     lookup.edit(key, "edit.readOnlyOnUpdate");
   for (const [index, rule] of edit.readOnlyWhen.entries()) {
@@ -472,6 +483,7 @@ export const compilePresentation = (
       read: list.read,
       shelf: { subtitle: shelfSubtitle },
       initialFilter: list.initialFilter,
+      savedViews: list.savedViews,
       primarySearch: list.primarySearch,
       tree: list.tree,
       actions: list.actions ?? (capabilities.delete !== null ? ["delete"] : []),

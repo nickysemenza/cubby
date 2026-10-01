@@ -4,21 +4,21 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import type { UpcLookupPort } from "~/server/clients/upc-lookup";
+import type { UPCLookupResponse } from "~/contracts/upc.schemas";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import {
   createInventoryEntry,
   getInventoryByLocationIds,
-} from "~/server/repo/inventory";
-import { createLocation } from "~/server/repo/location";
-import { quickCreateProduct } from "~/server/repo/product";
+} from "~/server/repo/inventory/crud";
+import { createLocation } from "~/server/repo/location/crud";
+import { quickCreateProduct } from "~/server/repo/product/crud";
 import { makeLocationInput } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import type { UpcLookupPort } from "~/server/services/upc";
 
 import {
   resolveScanStrays,
@@ -146,7 +146,7 @@ describe("resolveScanStrays", () => {
     const target = await makeLocation("New shelf");
     const product = await quickCreateProduct(
       ctx.db,
-      { name: "Stray book", upc: "012345678911" },
+      { name: "Stray book", upc: "012345678912" },
       TEST_ACTOR,
     );
     const productId = parseEntityId(

@@ -1,7 +1,7 @@
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
-import type { LocationPutAwayCandidate } from "~/server/repo/location";
+import type { LocationPutAwayCandidate } from "~/server/repo/location/lookup";
 
 import { locationSuggestionSpec } from "./location-suggest";
 

@@ -57,7 +57,7 @@ import {
   diffUnorderedIdSet,
   logAuditEntry,
 } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   associatePendingImages,
   buildPartialUpdateValues,

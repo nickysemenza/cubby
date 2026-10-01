@@ -9,6 +9,7 @@
 import type { Confidence } from "@cubby/schemas/ai";
 import type { RunId, IngredientId } from "@cubby/schemas/identifiers";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import { createLogger } from "@cubby/worker-tracing";
 
 import { runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
@@ -19,6 +20,8 @@ import {
   type UsdaLookupPort,
   type UsdaShortlistEntry,
 } from "./usda-shortlist";
+
+const log = createLogger("suggestUsdaFoodBatch");
 
 export type { UsdaLookupPort } from "./usda-shortlist";
 
@@ -135,10 +138,7 @@ async function suggestUsdaFoodBatchWithPorts<TDatabase>(
       if (result.status === "fulfilled") {
         out.push({ name: item.name, ...result.value });
       } else {
-        console.error(
-          `[suggestUsdaFoodBatch] ${item.name} failed:`,
-          result.reason,
-        );
+        log.error(`${item.name} failed`, { error: result.reason });
         out.push({
           name: item.name,
           food: null,

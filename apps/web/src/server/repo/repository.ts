@@ -67,12 +67,12 @@ import {
   updateLiveAndReturn,
   withTransactionOn,
 } from "~/server/repo/database-helpers";
+import { type RemovableEntity } from "~/server/repo/removal/core";
+import { executeDeleteWithEffects } from "~/server/repo/removal/delete-effects";
 import {
   deleteByPolicy,
   type DeleteHooks,
-  executeDeleteWithEffects,
-  type RemovableEntity,
-} from "~/server/repo/removal";
+} from "~/server/repo/removal/dispositions";
 import {
   resolveLiveShortcode,
   resolveOrThrow,
@@ -236,9 +236,12 @@ export interface EntityCrud<
   ) => Promise<TOut>;
 }
 
-/** The id sets an entity's `relations` hook reports, keyed by audited field. */
+/**
+ * The collections an entity's `relations` hook reports, keyed by audited
+ * field: id sets or row lists, compared structurally by the audit diff.
+ */
 type RelationSnapshot<TKey extends string> = Partial<
-  Record<TKey, readonly string[]>
+  Record<TKey, readonly unknown[]>
 >;
 
 /** {@link createEntityReader} plus the diff-audited column update. */

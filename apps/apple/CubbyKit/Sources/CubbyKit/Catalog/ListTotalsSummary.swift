@@ -32,6 +32,6 @@ public enum ListTotalsSummary {
     }
 
     private static func currency(_ value: Double, locale: Locale) -> String {
-        value.formatted(.currency(code: "USD").locale(locale))
+        value.formatted(.usd.locale(locale))
     }
 }

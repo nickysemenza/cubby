@@ -8,7 +8,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { expenseProjectRecommendationContext } from "~/server/repo/expense/project-recommendations";
-import { getInventoryEntryByShortcode } from "~/server/repo/inventory";
+import { getInventoryEntryByShortcode } from "~/server/repo/inventory/crud";
 
 import { getPlacementRecommendation } from "./placement-recommendation.service";
 import {

@@ -1,7 +1,5 @@
-import {
-  productCategoryCreateInput,
-  productCategoryUpdateData,
-} from "@cubby/schemas/product-category";
+import { productCategoryUpdateData } from "@cubby/schemas/product-category";
+import { buildEntity } from "tooling/factories/build";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -13,7 +11,7 @@ import {
   createProductCategory,
   updateProductCategory,
 } from "~/server/repo/product-category";
-import { upsertCookbookRecipe } from "~/server/repo/recipe";
+import { upsertCookbookRecipe } from "~/server/repo/recipe/crud";
 import {
   createIngredientFixture,
   createImageFixture,
@@ -337,7 +335,7 @@ describe("data quality: pantry and garden entities", () => {
     // case covers both `category_description` and `category_feature`.
     const gap = await createProductCategory(
       ctx.db,
-      productCategoryCreateInput.parse({ name: "DQ category gap" }),
+      buildEntity("productCategory", { name: "DQ category gap" }),
       TEST_ACTOR,
     );
 

@@ -42,7 +42,7 @@ final class MealNutritionModel {
                 // A newer refresh owns this summary.
             } catch {
                 guard let self, generation == self.generation else { return }
-                let message = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+                let message = error.userMessage
                 if let retained {
                     self.state = .loaded(retained)
                     self.refreshError = message

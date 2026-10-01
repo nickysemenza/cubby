@@ -1,5 +1,5 @@
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { testShortcode } from "@cubby/schemas/testing";
+import { createRepoEntity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -7,8 +7,7 @@ import { inventoryEntry, location } from "~/server/db/schema";
 
 import { getDb } from "./database-helpers";
 import { getEntityGraphPaths } from "./entity-graph-paths";
-import { createExpense } from "./expense";
-import { createPurchase } from "./purchase";
+import { createExpense } from "./expense/crud";
 import { attachPurchaseProducts } from "./purchase-products";
 import {
   createImageFixture,
@@ -56,18 +55,14 @@ describe("entity graph path repository", () => {
       },
       ctx.actor,
     );
-    const purchase = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        vendorId: vendor.output.id,
-        orderId: "PATH-ORDER",
-        displayLabel: "Path purchase",
-        date: "2026-09-08",
-        statedTotal: 10,
-        notes: null,
-      }),
-      ctx.actor,
-    );
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      orderId: "PATH-ORDER",
+      displayLabel: "Path purchase",
+      date: "2026-09-08",
+      statedTotal: 10,
+      notes: null,
+    });
     await Promise.all([
       createExpense(
         ctx.db,

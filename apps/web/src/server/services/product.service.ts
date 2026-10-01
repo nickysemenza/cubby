@@ -20,17 +20,17 @@ import { createAppError } from "~/server/errors/app-error";
 import { observeOperationPhase } from "~/server/observed-request";
 
 import type { UsdaFoodLookupPort } from "../clients/usda";
-import { getRecipeUsagesForIngredient } from "../repo/ingredient";
+import { getRecipeUsagesForIngredient } from "../repo/ingredient/search";
 import {
   createProduct as createProductRepo,
-  foodLookupParamFromProduct,
   getProductByID as getProductByIDRepo,
   getProductImagesByProductIds,
   getProductsForFoodLookup,
-  getProductUnitMappingsByProductIds,
   updateProduct as updateProductRepo,
-} from "../repo/product";
+} from "../repo/product/crud";
+import { foodLookupParamFromProduct } from "../repo/product/helpers";
 import { loadProductOwnershipEvidence } from "../repo/product/ownership-evidence";
+import { getProductUnitMappingsByProductIds } from "../repo/product/unit-mappings";
 import {
   resolveAllOrThrow,
   resolveCreatedOrInvariant,

@@ -8,6 +8,7 @@ import {
   countImagesStaleMetadata,
   selectImagesForMetadataExtraction,
 } from "~/server/repo/image";
+import { runBackfillBatches } from "~/server/services/backfill-batches";
 import { extractAndStoreImageMetadata } from "~/server/services/image-metadata-extraction.service";
 
 type BackfillPorts = {
@@ -34,48 +35,26 @@ export async function backfillImageMetadata(
   input: BackfillImageMetadataInput,
   ports: BackfillPorts = productionPorts,
 ): Promise<BackfillImageMetadataOut> {
-  let batches = 0;
-  let scanned = 0;
   let extracted = 0;
   let skipped = 0;
-  let stopped: BackfillImageMetadataOut["stopped"] = "limit";
-  const seenPages = new Set<string>();
-
-  while (batches < input.maxBatches) {
-    const rows = await ports.select(db, input.batchSize);
-    if (rows.length === 0) {
-      stopped = "complete";
-      break;
-    }
-    const pageKey = rows
-      .map(({ id }) => id)
-      .sort()
-      .join(",");
-    if (seenPages.has(pageKey)) {
-      stopped = "no_progress";
-      break;
-    }
-    seenPages.add(pageKey);
-    batches += 1;
-    scanned += rows.length;
-
-    let progressed = false;
-    for (const row of rows) {
-      const outcome = await ports.extract(db, row.id);
-      if (outcome === "succeeded") {
-        extracted += 1;
-        progressed = true;
-      } else {
-        skipped += 1;
+  const result = await runBackfillBatches({
+    maxBatches: input.maxBatches,
+    batchSize: input.batchSize,
+    select: (batchSize) => ports.select(db, batchSize),
+    count: () => ports.count(db),
+    process: async (rows) => {
+      let progressed = false;
+      for (const row of rows) {
+        const outcome = await ports.extract(db, row.id);
+        if (outcome === "succeeded") {
+          extracted += 1;
+          progressed = true;
+        } else {
+          skipped += 1;
+        }
       }
-    }
-    if (!progressed) {
-      stopped = "no_progress";
-      break;
-    }
-  }
-
-  const remaining = await ports.count(db);
-  if (remaining === 0) stopped = "complete";
-  return { batches, scanned, extracted, skipped, remaining, stopped };
+      return progressed;
+    },
+  });
+  return { ...result, extracted, skipped };
 }

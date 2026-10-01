@@ -3,6 +3,7 @@ import {
   mcpTelemetryIdentitySchema,
   telemetryMessageV1Schema,
 } from "@cubby/schemas/telemetry";
+import { createLogger } from "@cubby/worker-tracing";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type {
   CallToolRequest,
@@ -18,6 +19,8 @@ import {
   getToolActionNames,
   getToolEntityExtractor,
 } from "./tool-registration";
+
+const log = createLogger("MCP telemetry");
 
 const telemetryExtraSchema = z.strictObject({
   identity: mcpTelemetryIdentitySchema,
@@ -160,7 +163,7 @@ export function installToolCallTelemetryHandler(server: McpServer): void {
               ...telemetry.data.identity,
             });
           } catch (error) {
-            console.error("[MCP telemetry] failed to record tool call", {
+            log.error("failed to record tool call", {
               toolName: callName,
               error,
             });

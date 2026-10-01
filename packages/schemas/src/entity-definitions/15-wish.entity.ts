@@ -38,6 +38,14 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "hide-acquired",
+          label: "Hide acquired",
+          description: "Only items still on the list",
+          filters: [{ id: "acquiredAt", value: "false" }],
+        },
+      ],
       read: {
         relations: ["candidates"],
         derived: ["candidateCount", "priceRange"],
@@ -262,7 +270,8 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["name"],
+        // A wish has nothing worth deferring: capture is the full form.
+        capture: ["name", "notes", "candidateProductIds", "acquired"],
         full: ["name", "notes", "candidateProductIds", "acquired"],
         identity: ["name", "notes", "candidateProductIds"],
         acquisition: ["acquired"],

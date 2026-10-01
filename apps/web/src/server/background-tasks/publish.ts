@@ -7,6 +7,7 @@ import {
   BACKGROUND_TASK_MESSAGE_VERSION,
   type BackgroundTaskMessageInput,
 } from "@cubby/schemas/queue-messages";
+import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/tanstackstart-react";
 
 import type { UnparsedError } from "~/lib/error-utils";
@@ -15,6 +16,8 @@ import type { Database } from "~/server/db";
 import { runAfterCommit } from "~/server/repo/database-helpers/core";
 
 import type { BackgroundQueueProducer } from "../background-queue-types";
+
+const log = createLogger("background-tasks");
 
 /** Cloudflare accepts at most 100 messages per `sendBatch`. */
 export const MAX_TASKS_PER_SEND = 100;
@@ -113,9 +116,7 @@ export async function publishBackgroundTasks(
   const queue = getBackgroundQueue();
   if (queue) {
     await sendToQueue(queue, tasks);
-    console.log(
-      `[background-tasks] published count=${tasks.length} source=${options.source}`,
-    );
+    log.info(`published count=${tasks.length} source=${options.source}`);
     return { transport: "queue", count: tasks.length };
   }
   await runInline(db, tasks);
@@ -135,13 +136,13 @@ export async function enqueueBackgroundTask(
 ): Promise<boolean> {
   const queue = getBackgroundQueue();
   if (!queue) {
-    console.warn(
-      `[background-tasks] no queue binding; not enqueued kind=${task.kind} source=${options.source}`,
+    log.warn(
+      `no queue binding; not enqueued kind=${task.kind} source=${options.source}`,
     );
     return false;
   }
   await sendToQueue(queue, [task]);
-  console.log(`[background-tasks] published count=1 source=${options.source}`);
+  log.info(`published count=1 source=${options.source}`);
   return true;
 }
 
@@ -175,7 +176,7 @@ function publishCommitted(
   const publication = publishBackgroundTasks(db, tasks, options)
     .then(() => undefined)
     .catch((error: UnparsedError) => {
-      console.error("[background-tasks] publication failed", {
+      log.error("publication failed", {
         source: options.source,
         count: tasks.length,
         error,

@@ -11,6 +11,7 @@ import {
   readResponseWithLimit,
   validateExternalHttpUrl,
 } from "@cubby/shared/external-fetch";
+import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
@@ -27,6 +28,8 @@ import {
   generateImageKey,
   uploadToS3,
 } from "~/server/utils/s3";
+
+const log = createLogger("vendor-logo");
 
 type LogoCandidate = {
   bytes: Buffer;
@@ -223,7 +226,9 @@ async function fetchAndAttachVendorLogoWithPorts<
     // rethrown below (`error`); losing the rollback itself only strands
     // the uploaded R2 object, and must not replace the original failure.
     await ports.deleteUploadedObject(key).catch((cleanupError) => {
-      console.error("Failed to roll back vendor logo object:", cleanupError);
+      log.error("Failed to roll back vendor logo object", {
+        error: cleanupError,
+      });
     });
     throw error;
   }

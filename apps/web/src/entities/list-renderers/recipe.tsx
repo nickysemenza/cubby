@@ -1,0 +1,165 @@
+import { hasKnownEstimate } from "@cubby/schemas/nutrition";
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+
+import { createCubbyColumnCollection } from "~/app/_components/data-table/table-features";
+import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import {
+  formatRecipeTime,
+  getServingBasis,
+  perUnitSuffix,
+} from "~/app/_components/recipe/recipe-utils";
+import { totalsLookStuck } from "~/app/recipes/recipe-totals-staleness";
+import { Row, Stack } from "~/components/layout";
+import { Button } from "~/components/ui/button";
+import { NoneValue } from "~/components/ui/none-value";
+import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { scaleEstimate } from "~/lib/nutrition-estimates";
+import { formatEstimate } from "~/lib/nutrition-format";
+import { formatCurrency } from "~/lib/utils";
+
+import type { ListRenderer, ListRowOf } from "../list-renderer-types";
+
+type RecipeRow = ListRowOf<"recipe">;
+
+/**
+ * The cell shown when a recipe's totals are null but it's plausibly stuck: a
+ * "Pending" marker plus, on the cost column, a one-click recompute.
+ */
+function StuckTotalsCell({
+  recipe,
+  withAction,
+}: {
+  recipe: RecipeRow;
+  withAction: boolean;
+}) {
+  const recompute = useActionMutation({
+    mutationFn: recipeOperations.recomputeOne.mutationOptions,
+    success: "Recomputed recipe totals.",
+  });
+  const notCosted = (
+    <span className="text-2xs text-muted-foreground">Pending</span>
+  );
+  if (!withAction) return notCosted;
+  return (
+    <Row align="center" gap="xs">
+      {notCosted}
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        disabled={recompute.isPending}
+        title="Recompute this recipe's cost and nutrition"
+        onClick={(e) => {
+          e.stopPropagation();
+          recompute.mutate({ id: recipe.id });
+        }}
+      >
+        <ArrowCounterClockwiseIcon
+          className={recompute.isPending ? "animate-spin" : ""}
+        />
+        Recompute
+      </Button>
+    </Row>
+  );
+}
+
+const formatKcal = (value: number) => `${Math.round(value)} kcal`;
+
+/** One estimate column (cost or calories) over the recipe's stored totals. */
+const estimateColumn =
+  (metric: "cost" | "kcal"): ListRenderer<"recipe"> =>
+  (helper) => {
+    const getEstimate = (row: RecipeRow) =>
+      metric === "cost" ? row.totals?.cost : row.totals?.nutrition.kcal;
+    const format = metric === "cost" ? formatCurrency : formatKcal;
+    return createCubbyColumnCollection((add) => {
+      add(
+        helper.accessor(
+          (row) => {
+            const estimate = getEstimate(row);
+            return estimate && hasKnownEstimate(estimate)
+              ? estimate.lower
+              : undefined;
+          },
+          {
+            id: metric === "cost" ? "costTotal" : "caloriesTotal",
+            header: metric === "cost" ? "Cost" : "Calories",
+            meta: {
+              numeric: true,
+              className: "w-32",
+              mobile: {
+                slot: "trailing",
+                priority: metric === "cost" ? 5 : 10,
+              },
+            },
+            sortUndefined: "last",
+            cell: (info) => {
+              const recipe = info.row.original;
+              const estimate = getEstimate(recipe);
+              if (!estimate || estimate.status === "pending")
+                return totalsLookStuck(recipe) ? (
+                  <StuckTotalsCell
+                    recipe={recipe}
+                    withAction={metric === "cost"}
+                  />
+                ) : (
+                  <span className="text-muted-foreground">Pending</span>
+                );
+              const perItem = getServingBasis(recipe);
+              return (
+                <Stack gap="xs">
+                  <span
+                    title={
+                      hasKnownEstimate(estimate)
+                        ? `${estimate.coverage.covered}/${estimate.coverage.total} ingredient rows covered`
+                        : undefined
+                    }
+                  >
+                    {formatEstimate(estimate, format)}
+                  </span>
+                  {perItem && hasKnownEstimate(estimate) && (
+                    <div className="text-2xs text-muted-foreground">
+                      {formatEstimate(
+                        scaleEstimate(estimate, 1 / perItem.divisor),
+                        format,
+                      )}{" "}
+                      {perUnitSuffix(perItem.noun, { short: true })}
+                    </div>
+                  )}
+                </Stack>
+              );
+            },
+          },
+        ),
+      );
+    });
+  };
+
+// Accessor on `totalMinutes` so sorting and the range filter are the server's
+// column, while the cell prints the source's own prose.
+const time: ListRenderer<"recipe"> = (helper) =>
+  createCubbyColumnCollection((add) => {
+    add(
+      helper.accessor((row) => row.meta?.times?.totalMinutes ?? undefined, {
+        id: "totalMinutes",
+        header: "Time",
+        meta: {
+          numeric: true,
+          className: "w-24",
+          mobile: { slot: "meta", priority: 25 },
+        },
+        sortUndefined: "last",
+        cell: (info) => {
+          const times = info.row.original.meta?.times;
+          const label = formatRecipeTime(times?.total, times?.totalMinutes);
+          return label ?? <NoneValue />;
+        },
+      }),
+    );
+  });
+
+export const recipeListRenderers = {
+  "estimate-cost": estimateColumn("cost"),
+  "estimate-kcal": estimateColumn("kcal"),
+  "total-time": time,
+} as const;

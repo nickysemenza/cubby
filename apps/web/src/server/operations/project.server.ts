@@ -16,18 +16,18 @@ import { projectContract } from "~/contracts/project.contract";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { createProjectFromTasks } from "~/server/repo/project/create-from-tasks";
+import { projectDashboardSummary } from "~/server/repo/project/dashboard-summary";
+import { getProjectDependencyGraph } from "~/server/repo/project/dependency-graph";
+import { projectPortfolioAnalytics } from "~/server/repo/project/portfolio-analytics";
+import { projectToolGallery } from "~/server/repo/project/tool-gallery";
+import { projectToolMatrix } from "~/server/repo/project/tool-matrix";
 import {
-  getProjectDependencyGraph,
-  projectDashboardSummary,
-  projectPortfolioAnalytics,
-  projectToolMatrix,
-  projectToolGallery,
-  projectTreePage,
   repointProjectUses,
   setProjectToolUsage,
   suggestProjectTools,
-} from "~/server/repo/project";
-import { createProjectFromTasks } from "~/server/repo/project/create-from-tasks";
+} from "~/server/repo/project/tools";
+import { projectTreePage } from "~/server/repo/project/tree";
 import {
   resolveAllOrThrow,
   resolveOrThrow,

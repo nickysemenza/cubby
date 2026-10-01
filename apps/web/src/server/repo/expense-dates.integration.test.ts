@@ -7,8 +7,12 @@ import { UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { expense } from "~/server/db/schema";
 
 import { getDb } from "./database-helpers";
-import { createExpense, getExpenseByShortcode, updateExpense } from "./expense";
 import { expenseAnalytics, expenseMonthlySummary } from "./expense/analytics";
+import {
+  createExpense,
+  getExpenseByShortcode,
+  updateExpense,
+} from "./expense/crud";
 import { updateExpensesInBulk } from "./expense/crud";
 import {
   getProductMovementTimeline,

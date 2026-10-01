@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { productUnitMappings } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { createProduct, updateProduct } from "~/server/repo/product";
+import { createProduct, updateProduct } from "~/server/repo/product/crud";
 import { makeProductInput } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 

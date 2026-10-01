@@ -62,8 +62,14 @@ export function Image({
   const hasSrc = typeof src === "string" && src.length > 0;
 
   // If a CF transform fails (e.g. transformation outage), retry once with the
-  // original URL before giving up to the fallback tile.
-  const [triedOriginal, setTriedOriginal] = useState(false);
+  // original URL before giving up to the fallback tile. Failures are keyed to
+  // the `src` they describe, not a bare boolean: the node is not remounted
+  // when its `src` prop changes (an inline-edited vendor logo), so a boolean
+  // set by the previous URL would pin the new one to the fallback forever.
+  const [triedOriginalFor, setTriedOriginalFor] = useState<string | null>(null);
+  const [erroredFor, setErroredFor] = useState<string | null>(null);
+  const triedOriginal = hasSrc && triedOriginalFor === src;
+  const errored = hasSrc && erroredFor === src;
 
   const transformedSrc =
     hasSrc && displayWidth != null
@@ -84,7 +90,6 @@ export function Image({
   const [isLoading, setIsLoading] = useState(
     () => !(effectiveSrc != null && loadedSrcs.has(effectiveSrc)),
   );
-  const [errored, setErrored] = useState(false);
 
   const markLoaded = useCallback(() => {
     if (effectiveSrc != null) loadedSrcs.add(effectiveSrc);
@@ -147,10 +152,10 @@ export function Image({
         onError={() => {
           // First failure of a transformed URL → fall back to the original.
           if (useTransform) {
-            setTriedOriginal(true);
+            setTriedOriginalFor(src as string);
             return;
           }
-          setErrored(true);
+          setErroredFor(src as string);
           setIsLoading(false);
         }}
         className={cn(

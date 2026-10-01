@@ -449,7 +449,7 @@ describe("entity edit definitions", () => {
       ),
     ).toMatchObject({
       ok: false,
-      issues: [{ field: "dueDate", message: "Date is required" }],
+      issues: [{ field: "dueDate", message: "This field is required." }],
     });
 
     const actualExpense = resolveEntityEdit(entityEditRegistry, {

@@ -8,7 +8,7 @@ import {
   product as productTable,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
-import { setProductsStockTracked } from "~/server/repo/product";
+import { setProductsStockTracked } from "~/server/repo/product/crud";
 
 import {
   createInventoryFixture,

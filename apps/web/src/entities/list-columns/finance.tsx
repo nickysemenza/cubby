@@ -8,44 +8,22 @@ import type {
   FinancialTransactionOut,
   FinancialTransactionSourceOptionsOut,
 } from "@cubby/schemas/financial-transaction";
-import type {
-  LedgerPartyFilters,
-  LedgerPartyOut,
-} from "@cubby/schemas/ledger-party";
-import type {
-  LedgerTransferFilters,
-  LedgerTransferOut,
-} from "@cubby/schemas/ledger-transfer";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
-import {
-  createCubbyColumnCollection,
-  createCubbyColumnHelper,
-  type CubbyColumnCollection,
-} from "~/app/_components/data-table/table-features";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
-import { PossibleVendor } from "~/app/finance/possible-vendor";
-import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityListHiddenColumns } from "~/entities/entity-display";
-import { fieldEnumOptions } from "~/entities/enum-field-display";
-import { relationshipFieldProvenance } from "~/entities/field-provenance";
 import {
   financialTransaction,
   entityFilterOptions,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { presenceCellOptions } from "~/lib/select-options";
 
-import { defineListOverride, interleaveDeclared } from "./types";
+import { defineListOverride } from "./types";
 
 /* ---------------------------------------------------------------------- */
 /* Financial accounts                                                      */
 /* ---------------------------------------------------------------------- */
-
-const accountHelper = createCubbyColumnHelper<FinancialAccountOut>();
 
 export const financialAccountListOverride = defineListOverride<
   FinancialAccountOut,
@@ -56,32 +34,8 @@ export const financialAccountListOverride = defineListOverride<
       mutationFn: entityMutationOptionsFactory("financialAccount", "delete"),
       entity: "financialAccount",
     });
-    const overrides = useMemo(
-      () =>
-        createCubbyColumnCollection<FinancialAccountOut>((add) => {
-          add(
-            accountHelper.accessor("identity", {
-              header: "Identity",
-              meta: { className: "w-40" },
-              cell: (i) =>
-                renderOptionCell(
-                  i.getValue().kind,
-                  fieldEnumOptions("financialAccount", "identity"),
-                ),
-            }),
-          );
-          add(
-            accountHelper.accessor((r) => r.sourceAliases.length, {
-              id: "sourceAliases",
-              header: "Aliases",
-              meta: { numeric: true, className: "w-24" },
-            }),
-          );
-        }),
-      [],
-    );
     const list = useMemo(() => ({ deletable }), [deletable]);
-    return { overrides, list };
+    return { list };
   },
 });
 
@@ -89,17 +43,8 @@ export const financialAccountListOverride = defineListOverride<
 /* Financial transactions                                                  */
 /* ---------------------------------------------------------------------- */
 
-const transactionHelper = createCubbyColumnHelper<FinancialTransactionOut>();
-const PURCHASE_PRESENCE_OPTIONS = presenceCellOptions("purchase");
 const NO_OPTIONS: FilterOptionsOut = { items: [], nextCursor: null };
 const NO_SOURCES: FinancialTransactionSourceOptionsOut = [];
-
-// `purchasePresence` is a filter-hosting synthetic column outside the field
-// model.
-const FINANCIAL_TRANSACTION_INITIAL_COLUMN_VISIBILITY = {
-  purchasePresence: false,
-  ...entityListHiddenColumns("financialTransaction"),
-};
 
 export const financialTransactionListOverride = defineListOverride<
   FinancialTransactionOut,
@@ -138,97 +83,13 @@ export const financialTransactionListOverride = defineListOverride<
       ),
       entity: "financialTransaction",
     });
-    const overrides = useMemo(
-      () =>
-        createCubbyColumnCollection<FinancialTransactionOut>((add) => {
-          add(
-            transactionHelper.accessor("vendorInference", {
-              id: "vendorInference",
-              header: "Possible vendor",
-              enableSorting: false,
-              meta: { className: "w-48", mobile: { slot: "hidden" } },
-              cell: (info) =>
-                info.getValue() ? (
-                  <PossibleVendor inference={info.getValue()} compact />
-                ) : (
-                  <NoneValue />
-                ),
-            }),
-          );
-          add(
-            transactionHelper.accessor(
-              (r) => r.sourceRefs.map((ref) => ref.source).join(", "),
-              {
-                id: "sourceRefs",
-                header: "Source",
-                enableSorting: false,
-                meta: { className: "w-32" },
-                cell: (i) => i.getValue() || <NoneValue />,
-              },
-            ),
-          );
-        }),
-      [],
-    );
-    const compose = useMemo(
-      () => (declared: CubbyColumnCollection<FinancialTransactionOut>) =>
-        createCubbyColumnCollection<FinancialTransactionOut>((add) => {
-          const { rest } = interleaveDeclared(declared, add);
-          // Hidden by default: exists so `purchasePresence` is a column-backed
-          // spec rather than a urlOnly one; derived from `purchaseId`'s
-          // presence, not a scalar of its own.
-          add(
-            transactionHelper.accessor((r) => r.purchaseId, {
-              id: "purchasePresence",
-              header: "Linked",
-              enableSorting: false,
-              meta: {
-                provenance: relationshipFieldProvenance(
-                  "financialTransaction",
-                  "purchase",
-                ),
-                className: "w-24",
-              },
-              cell: (i) =>
-                renderOptionCell(
-                  i.getValue() ? "yes" : "no",
-                  PURCHASE_PRESENCE_OPTIONS,
-                ),
-            }),
-          );
-          rest();
-        }),
-      [],
-    );
     const list = useMemo(
       () => ({
         deletable,
         filterOptions,
-        initialColumnVisibility:
-          FINANCIAL_TRANSACTION_INITIAL_COLUMN_VISIBILITY,
       }),
       [deletable, filterOptions],
     );
-    return { overrides, compose, list };
+    return { list };
   },
-});
-
-/* ---------------------------------------------------------------------- */
-/* Ledger parties and transfers                                            */
-/* ---------------------------------------------------------------------- */
-
-/** Read-only: created through the household contribution ledger. */
-export const ledgerPartyListOverride = defineListOverride<
-  LedgerPartyOut,
-  LedgerPartyFilters
->({
-  use: () => ({}),
-});
-
-/** Read-only: transfers are recorded through the contribution ledger. */
-export const ledgerTransferListOverride = defineListOverride<
-  LedgerTransferOut,
-  LedgerTransferFilters
->({
-  use: () => ({}),
 });

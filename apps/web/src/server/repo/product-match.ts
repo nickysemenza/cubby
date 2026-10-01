@@ -32,7 +32,7 @@ import {
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { liveLinks } from "~/server/repo/entity-links";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
-import { loadInheritedProductOwners } from "~/server/repo/inventory";
+import { loadInheritedProductOwners } from "~/server/repo/inventory/ownership";
 
 /*
  * Raw, hand-qualified EXISTS predicates: an interpolated column renders

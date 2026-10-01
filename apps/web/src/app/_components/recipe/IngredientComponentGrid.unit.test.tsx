@@ -3,16 +3,12 @@ import {
   type NutritionTotals,
   withMacros,
 } from "@cubby/schemas/nutrition";
+import { type SectionIngredientOut } from "@cubby/schemas/recipe";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import {
-  recipeOut,
-  type SectionIngredientOut,
-  sectionIngredientOut,
-} from "@cubby/schemas/recipe";
-import {
-  testCompleteDataQuality,
-  testEntityId,
-  testShortcode,
-} from "@cubby/schemas/testing";
+  testIngredientLine,
+  testEmptyRecipe,
+} from "@cubby/schemas/testing/recipe";
 import { act, render, screen, within } from "@testing-library/react";
 import { ok } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -49,46 +45,17 @@ afterEach(() => {
 });
 
 const recipe = (id: string, name: string) =>
-  recipeOut.parse({
-    id: testShortcode("recipe", id),
-    name,
-    meta: null,
-    yield: null,
-    servings: null,
-    notes: null,
-    forkedFromRecipeId: null,
-    forkedFromRecipeName: null,
-    source: null,
-    images: [],
-    sections: [],
-    tags: [],
-    createdAt: new Date("2026-01-01"),
-    updatedAt: new Date("2026-01-01"),
-    dataQuality: testCompleteDataQuality(),
-  });
+  testEmptyRecipe({ id: testShortcode("recipe", id), name: name });
 
 const ingredient = (
   id: string,
   name: string,
   ingredientId = id,
 ): SectionIngredientOut =>
-  sectionIngredientOut.parse({
+  testIngredientLine({
     id: testEntityId("recipe", `usage-${id}`),
-    type: "ingredient",
-    amounts: [],
-    modifier: null,
-    rawLine: null,
-    recipe: null,
-    ingredient: {
-      id: testShortcode("ingredient", `ING-${ingredientId}`),
-      name,
-      aliases: [],
-      naKinds: [],
-      createdAt: new Date("2026-01-01"),
-      updatedAt: new Date("2026-01-01"),
-    },
-    createdAt: new Date("2026-01-01"),
-    updatedAt: new Date("2026-01-01"),
+    ingredientId: testShortcode("ingredient", `ING-${ingredientId}`),
+    name: name,
   });
 
 const costing = (

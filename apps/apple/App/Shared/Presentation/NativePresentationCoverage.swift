@@ -52,6 +52,15 @@ enum NativePresentationCoverage {
         case .recipeSource, .spendingCategorySummary: .implemented
         case .dataQuality:
             .unsupported("Data-quality status and score are available on web.")
+        case .expectedQuantity, .quantityVariance, .estimateCost, .estimateKcal, .totalTime,
+            .mealCost, .unitPrice, .valuationSummary, .financialSettlement,
+            .reconciliationStatus, .expenseCount:
+            .unsupported("This computed figure is available on web.")
+        case .tagLinks, .recipeLinks, .productLink, .usdaFoodLink, .vendorCell, .orderLink,
+            .possibleVendor:
+            .unsupported("This linked cell is available on web; the field reads as a reference natively.")
+        case .uploadedImage:
+            .unsupported("The thumbnail is drawn from the row image natively.")
         }
     }
 

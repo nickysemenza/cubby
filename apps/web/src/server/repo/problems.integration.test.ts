@@ -4,13 +4,11 @@ import type {
   PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { mealCreateInput } from "@cubby/schemas/meal";
 import { buildNutrition } from "@cubby/schemas/nutrition";
-import {
-  type ExpenseCreateInput,
-  expenseCreateInput,
-} from "@cubby/schemas/project";
+import { type ExpenseCreateInput } from "@cubby/schemas/project";
 import { eq, sql } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
+import { createRepoEntity } from "tooling/factories/repo";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -37,12 +35,12 @@ import { runDiagnostic } from "../services/problem-diagnostics.service";
 import { findViewProblems } from "../services/problem-views.service";
 import { findFastProblems } from "../services/problems.service";
 import { createTestRequestContext } from "../testing/request-context";
-import { setDataException } from "./data-quality";
+import { setDataException } from "./data-quality/exceptions";
 import { getDb } from "./database-helpers";
-import { createExpense, updateExpense } from "./expense";
+import { updateExpense } from "./expense/crud";
 import { updateFinancialTransaction } from "./financial-transaction";
 import { createMealWithEntityId } from "./meal/crud";
-import { findEntitiesMissingEmbeddings } from "./problems";
+import { findEntitiesMissingEmbeddings } from "./problems/detectors-embedding";
 import { getPurchaseByID, purchaseList, updatePurchase } from "./purchase";
 import {
   createIngredientFixture,
@@ -76,13 +74,7 @@ describe("problems — unlinked exit expenses", () => {
   const ctx = withTestDb();
 
   const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
-    unwrap(
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse(makeExpenseInput(overrides)),
-        ctx.actor,
-      ),
-    );
+    unwrap(createRepoEntity(ctx, "expense", makeExpenseInput(overrides)));
 
   it("reports only itemized principal lines from disposal purchases", async () => {
     const sharedPurchase = {
@@ -280,12 +272,10 @@ describe("problems — missing embeddings", () => {
   // `embeddingSources` roster in `detectors-embedding.ts`, so this exercises
   // the shared mechanism rather than a per-entity special case.
   it("never reports a financial (searchable-but-not-embeddable) entity as missing", async () => {
-    const { output: expense } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({ name: "Example financial-only expense" }),
-      ),
-      ctx.actor,
+    const { output: expense } = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({ name: "Example financial-only expense" }),
     );
 
     const missing = await findEntitiesMissingEmbeddings(
@@ -360,7 +350,7 @@ describe("problems — understated meal cost", () => {
     const meal = (
       await createMealWithEntityId(
         ctx.db,
-        mealCreateInput.parse({
+        buildEntity("meal", {
           date: "2026-09-01",
           name: "Coverage dinner",
           recipes: [{ recipeId: incomplete.id }, { recipeId: complete.id }],
@@ -449,7 +439,7 @@ describe("problems — understated meal cost", () => {
     const meal = (
       await createMealWithEntityId(
         ctx.db,
-        mealCreateInput.parse({
+        buildEntity("meal", {
           date: "2026-09-02",
           name: "Unpriced dinner",
           recipes: [
@@ -485,13 +475,7 @@ describe("problems — charges not reconciling", () => {
   const ctx = withTestDb();
 
   const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
-    unwrap(
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse(makeExpenseInput(overrides)),
-        ctx.actor,
-      ),
-    );
+    unwrap(createRepoEntity(ctx, "expense", makeExpenseInput(overrides)));
 
   const setStated = (id: PurchaseShortcode, statedTotal: number) =>
     unwrap(updatePurchase(ctx.db, id, { statedTotal }, ctx.actor));
@@ -621,13 +605,7 @@ describe("problems — duplicate spend candidates", () => {
   const ctx = withTestDb();
 
   const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
-    unwrap(
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse(makeExpenseInput(overrides)),
-        ctx.actor,
-      ),
-    );
+    unwrap(createRepoEntity(ctx, "expense", makeExpenseInput(overrides)));
 
   const candidates = async () =>
     (await findFastProblems(ctx.db)).duplicateSpendCandidates;
@@ -689,13 +667,7 @@ describe("problems — purchase financial settlement mismatches", () => {
   const ctx = withTestDb();
 
   const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
-    unwrap(
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse(makeExpenseInput(overrides)),
-        ctx.actor,
-      ),
-    );
+    unwrap(createRepoEntity(ctx, "expense", makeExpenseInput(overrides)));
 
   const seedAccount = () =>
     insertWithShortcode(ctx.db, "financialAccount", {
@@ -943,18 +915,16 @@ describe("problems — weight-sold products", () => {
   /** Book `costs` as priced principal expense lines against one product. */
   const bookLines = async (productId: ProductShortcode, costs: number[]) => {
     for (const [i, cost] of costs.entries()) {
-      await createExpense(
-        ctx.db,
-        expenseCreateInput.parse(
-          makeExpenseInput({
-            name: `line ${i}`,
-            cost,
-            productId,
-            productQuantity: 1,
-            lineKind: "principal",
-          }),
-        ),
-        ctx.actor,
+      await createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: `line ${i}`,
+          cost,
+          productId,
+          productQuantity: 1,
+          lineKind: "principal",
+        }),
       );
     }
   };

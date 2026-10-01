@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -8,9 +8,8 @@ import { upsertCookbook } from "./cookbook";
 import { getDb } from "./database-helpers";
 import { getEntityGraph } from "./entity-graph";
 import { getEntityGraphExplore } from "./entity-graph-explore";
-import { createExpense } from "./expense";
-import { createPurchase } from "./purchase";
-import { upsertCookbookRecipe } from "./recipe";
+import { createExpense } from "./expense/crud";
+import { upsertCookbookRecipe } from "./recipe/crud";
 import {
   createIngredientFixture as createIngredient,
   createInventoryFixture as createInventory,
@@ -74,7 +73,6 @@ describe("entity graph cross-entity journey", () => {
         name: "Journey recipe",
         sections: [
           {
-            instructions: [],
             ingredients: [ingredientRef(ingredient.id)],
           },
         ],
@@ -106,18 +104,14 @@ describe("entity graph cross-entity journey", () => {
       },
       ctx.actor,
     );
-    const purchase = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        vendorId: vendor.output.id,
-        orderId: "journey-order",
-        displayLabel: "Journey purchase",
-        date: "2026-09-08",
-        statedTotal: 10,
-        notes: null,
-      }),
-      ctx.actor,
-    );
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      orderId: "journey-order",
+      displayLabel: "Journey purchase",
+      date: "2026-09-08",
+      statedTotal: 10,
+      notes: null,
+    });
     const expense = await createExpense(
       ctx.db,
       makeExpenseInput({

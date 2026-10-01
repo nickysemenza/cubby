@@ -4,9 +4,8 @@ import type {
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { expenseCreateInput } from "@cubby/schemas/project";
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { and, eq, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -19,9 +18,7 @@ import {
 } from "~/server/db/schema";
 
 import { getDb, insertAndReturn, notDeleted } from "./database-helpers";
-import { createExpense } from "./expense";
 import {
-  createPurchase,
   deletePurchases,
   findOrCreatePurchase,
   getPurchaseByID,
@@ -135,45 +132,33 @@ describe("vendor repository — spend rollup", () => {
   it("spend is SUM(expense.cost), never the charge's statedTotal", async () => {
     const vendorId = await findOrCreateVendor(ctx.db, "Spend Rollup Vendor");
     const vendorShortcode = (await getVendorByID(ctx.db, vendorId)).id;
-    const { output: charge } = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        date: "2024-01-15",
-        vendorId: vendorShortcode,
-        orderId: "SPEND-1",
-        // Wildly wrong on purpose. `statedTotal` is only a reconciliation cue;
-        // if it ever reached `spend` this assertion would read 99999.
-        statedTotal: 99999,
-      }),
-      ctx.actor,
-    );
+    const { output: charge } = await createRepoEntity(ctx, "purchase", {
+      date: "2024-01-15",
+      vendorId: vendorShortcode,
+      orderId: "SPEND-1",
+      // Wildly wrong on purpose. `statedTotal` is only a reconciliation cue;
+      // if it ever reached `spend` this assertion would read 99999.
+      statedTotal: 99999,
+    });
 
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        name: "spend line",
-        trade: "other",
-        costType: "materials",
-        cost: 100,
-        purchaseId: charge.id,
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "expense", {
+      date: "2024-01-15",
+      name: "spend line",
+      trade: "other",
+      costType: "materials",
+      cost: 100,
+      purchaseId: charge.id,
+    });
     // A negative line (a refund) is real spend and must net in — never filtered
     // out, or the vendor's total stops reconciling.
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        name: "spend refund",
-        trade: "other",
-        costType: "materials",
-        cost: -25,
-        purchaseId: charge.id,
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "expense", {
+      date: "2024-01-15",
+      name: "spend refund",
+      trade: "other",
+      costType: "materials",
+      cost: -25,
+      purchaseId: charge.id,
+    });
 
     const row = await getVendorByID(ctx.db, vendorId);
     expect(row.spend).toBe(75);
@@ -195,11 +180,11 @@ describe("vendor coverage", () => {
       ["2026-09-30", null],
       ["2026-10-01", "OUTSIDE-LATEST"],
     ] as const) {
-      await createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({ date, vendorId: vendorRow.id, orderId }),
-        ctx.actor,
-      );
+      await createRepoEntity(ctx, "purchase", {
+        date,
+        vendorId: vendorRow.id,
+        orderId,
+      });
     }
 
     await expect(
@@ -322,16 +307,14 @@ describe("vendor repository — mergeVendors", () => {
     (await getVendorByID(ctx.db, id)).id;
 
   const addLine = async (name: string, cost: number, purchaseId: PurchaseId) =>
-    createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name,
-          cost,
-          purchaseId: (await getPurchaseByID(ctx.db, purchaseId)).id,
-        }),
-      ),
-      ctx.actor,
+    createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name,
+        cost,
+        purchaseId: (await getPurchaseByID(ctx.db, purchaseId)).id,
+      }),
     );
 
   const attachDocumentRow = async (purchaseId: PurchaseId, label: string) => {
@@ -359,16 +342,12 @@ describe("vendor repository — mergeVendors", () => {
     orderId: string | null,
     statedTotal: number | null = null,
   ): Promise<PurchaseId> => {
-    const { output: created } = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        date: "2024-01-15",
-        vendorId: await vendorCode(vendorId),
-        orderId,
-        statedTotal,
-      }),
-      ctx.actor,
-    );
+    const { output: created } = await createRepoEntity(ctx, "purchase", {
+      date: "2024-01-15",
+      vendorId: await vendorCode(vendorId),
+      orderId,
+      statedTotal,
+    });
     const id = await resolveLiveShortcode(ctx.db, created.id, "purchase");
     if (!id) throw new Error(`purchase not found: ${created.id}`);
     return parseEntityId("purchase", id);

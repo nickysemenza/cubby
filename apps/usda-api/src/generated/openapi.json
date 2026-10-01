@@ -134,8 +134,7 @@
                             },
                             "gtin_upc": {
                               "type": "string",
-                              "pattern": "^\\d{8}$|^\\d{12,14}$",
-                              "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
+                              "pattern": "^\\d{8}$|^\\d{12,14}$"
                             },
                             "ingredients": {
                               "type": ["string", "null"]
@@ -378,8 +377,7 @@
                                 },
                                 "gtin_upc": {
                                   "type": "string",
-                                  "pattern": "^\\d{8}$|^\\d{12,14}$",
-                                  "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
+                                  "pattern": "^\\d{8}$|^\\d{12,14}$"
                                 },
                                 "ingredients": {
                                   "type": ["string", "null"]
@@ -570,8 +568,7 @@
                       },
                       "gtin_upc": {
                         "type": "string",
-                        "pattern": "^\\d{8}$|^\\d{12,14}$",
-                        "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
+                        "pattern": "^\\d{8}$|^\\d{12,14}$"
                       }
                     },
                     "required": ["kind", "gtin_upc"],
@@ -660,8 +657,7 @@
                                       },
                                       "gtin_upc": {
                                         "type": "string",
-                                        "pattern": "^\\d{8}$|^\\d{12,14}$",
-                                        "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
+                                        "pattern": "^\\d{8}$|^\\d{12,14}$"
                                       },
                                       "ingredients": {
                                         "type": ["string", "null"]
@@ -870,8 +866,7 @@
                             },
                             "gtin_upc": {
                               "type": "string",
-                              "pattern": "^\\d{8}$|^\\d{12,14}$",
-                              "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
+                              "pattern": "^\\d{8}$|^\\d{12,14}$"
                             }
                           },
                           "required": ["kind", "gtin_upc"],
@@ -963,8 +958,7 @@
                                   },
                                   "gtin_upc": {
                                     "type": "string",
-                                    "pattern": "^\\d{8}$|^\\d{12,14}$",
-                                    "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
+                                    "pattern": "^\\d{8}$|^\\d{12,14}$"
                                   },
                                   "ingredients": {
                                     "type": ["string", "null"]

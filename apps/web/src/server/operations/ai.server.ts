@@ -8,6 +8,7 @@ import {
   type RunId,
   type LocationId,
 } from "@cubby/schemas/identifiers";
+import { createLogger } from "@cubby/worker-tracing";
 import type { z } from "zod";
 
 import { aiContract, aiStreamsContract } from "~/contracts/ai.contract";
@@ -50,6 +51,8 @@ import {
   type BulkWorkflowSummary,
   workflow,
 } from "~/server/workflow-runtime";
+
+const log = createLogger("precomputeEnrichmentProposals");
 
 /** The actor's AI run for the hour: every AI operation opens it once with
  * `ensureRun` before calling out. */
@@ -147,10 +150,7 @@ const precomputeEnrichmentDefinition = defineBulkWorkflow({
   concurrency: 5,
   progress: (proposal) => proposal,
   errorProgress: (error, item) => {
-    console.error(
-      `[precomputeEnrichmentProposals] ${item.name} failed:`,
-      error,
-    );
+    log.error(`${item.name} failed`, { error });
     return {
       id: item.id,
       usda: {

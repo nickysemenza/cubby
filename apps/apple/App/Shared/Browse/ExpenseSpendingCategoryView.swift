@@ -12,7 +12,7 @@ struct ExpenseSpendingCategoryView: View {
             ForEach(Array(allocations.enumerated()), id: \.offset) { _, allocation in
                 LabeledContent {
                     if let amount = allocation.amount {
-                        Text(amount.formatted(.currency(code: "USD"))).monospacedDigit()
+                        Text(amount.formatted(.usd)).monospacedDigit()
                     } else {
                         Text("Unpriced").foregroundStyle(.secondary)
                     }

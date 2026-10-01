@@ -179,7 +179,7 @@ struct ScanLookupSheet: View {
                 outcome = result
             }
         } catch {
-            errorMessage = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+            errorMessage = error.userMessage
             Diagnostics.report(error, context: "scanLookup.resolve")
         }
     }
@@ -193,7 +193,7 @@ struct ScanLookupSheet: View {
             dismiss()
             model.navigator.openInPlace(.entity(.product, id: found.product.id.rawValue))
         } catch {
-            errorMessage = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+            errorMessage = error.userMessage
             Diagnostics.report(error, context: "scanLookup.createProduct")
         }
     }

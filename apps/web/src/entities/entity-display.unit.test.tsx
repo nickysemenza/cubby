@@ -411,6 +411,7 @@ describe("declared entity displays", () => {
         { id: "kind", header: "Kind" },
         { id: "notes", header: "Notes" },
         { id: "dataQuality", header: "Data quality" },
+        { id: "dataGaps", header: "Data gaps" },
       ]);
       expect(details[0]).toMatchObject({
         cellIsOverride: false,
@@ -507,11 +508,10 @@ describe("declared entity displays", () => {
   describe("declared width/format/mobile/sorting", () => {
     // Most of `product`'s `list: true` roster is plain scalars, exercised
     // here with zero overrides — the cleanest surface for the generic
-    // mapping itself. Two fields still force an override regardless
-    // (`servingAsLocations` and `ledgerExpectedQuantity` are nested under
-    // `quantityLedger` on the list row, so `readKey: null`), matching
-    // `apps/web/src/app/products/productlist.tsx`; `dataQuality` comes from
-    // its manifest-declared renderer.
+    // mapping itself. `servingAsLocations` still forces an override (it is
+    // nested on the list row, so `readKey: null`), matching
+    // `apps/web/src/app/products/productlist.tsx`; `dataQuality` and
+    // `ledgerExpectedQuantity` come from their manifest-declared renderers.
     interface ProductRow {
       fdc_id: number | null;
       manufacturer: string;
@@ -537,14 +537,14 @@ describe("declared entity displays", () => {
       primaryGtin: null,
     };
 
-    // The two fields that force an override, minimally stood in (a plain
+    // The field that forces an override, minimally stood in (a plain
     // `cell: () => null` display column) — same shape as the task fixture's
     // required overrides above.
     function buildProductOverrides<TRecord extends object>(
       helper: ReturnType<typeof createCubbyColumnHelper<TRecord>>,
     ) {
       return createCubbyColumnCollection<TRecord>((add) => {
-        for (const id of ["servingAsLocations", "ledgerExpectedQuantity"]) {
+        for (const id of ["servingAsLocations"]) {
           add(helper.display({ id, cell: () => null }));
         }
       });
@@ -610,8 +610,10 @@ describe("declared entity displays", () => {
       expect(byId.manufacturer?.className).toBe("w-40");
       expect(byId.model?.className).toBe("w-40");
       expect(byId.notes?.className).toBe("w-40");
-      // No declared width (e.g. ledgerExpectedQuantity, usdaUnavailable) stays unset.
-      expect(byId.ledgerExpectedQuantity?.className).toBeUndefined();
+      // No declared width (e.g. usdaUnavailable) stays unset; a named
+      // renderer's own column meta (expected-quantity's w-24) passes through.
+      expect(byId.usdaUnavailable?.className).toBeUndefined();
+      expect(byId.ledgerExpectedQuantity?.className).toBe("w-24");
     });
 
     it("passes declared mobile placement straight through as column meta", () => {

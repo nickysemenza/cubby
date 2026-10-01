@@ -10,12 +10,12 @@ import { describe, expect, it } from "vitest";
 import { inventoryEntry } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { amountFromColumns } from "~/server/repo/database-helpers";
-import { createInventoryEntry } from "~/server/repo/inventory";
+import { createInventoryEntry } from "~/server/repo/inventory/crud";
 import {
   createLedgerParty,
   mergeLedgerParties,
 } from "~/server/repo/ledger-party";
-import { mergeProducts } from "~/server/repo/product";
+import { mergeProducts } from "~/server/repo/product/merge";
 import {
   createLocationFixture,
   createProductFixture,

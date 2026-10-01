@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { expense, inventoryEntry, runFinding } from "~/server/db/schema";
 import { receiveExpenseInventoryWorkflow } from "~/server/operations/inventory.server";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { createInventoryEntry } from "~/server/repo/inventory";
+import { createInventoryEntry } from "~/server/repo/inventory/crud";
 import {
   createLocationFixture,
   createProductFixture,

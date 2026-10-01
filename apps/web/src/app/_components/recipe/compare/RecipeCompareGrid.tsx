@@ -19,7 +19,7 @@ import { formatEstimate } from "~/lib/nutrition-format";
 import { costPerNutrient, proteinPer100Kcal } from "~/lib/nutrition-intel";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
-import { formatCurrency } from "~/lib/utils";
+import { formatCurrency, roundTo } from "~/lib/utils";
 
 import { compactRound } from "../recipe-scaling-pct";
 import { RecipeSourceLink, sourceLabel } from "../recipe-source";
@@ -508,7 +508,7 @@ export const RecipeCompareGrid: React.FC<{
               c.estimates
                 ? formatEstimate(
                     c.estimates.nutrition.protein,
-                    (n) => `${Number(n.toFixed(1))} g`,
+                    (n) => `${roundTo(n, 1)} g`,
                   )
                 : DASH
             }

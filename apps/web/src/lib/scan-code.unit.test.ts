@@ -32,7 +32,7 @@ describe("resolveScanCode", () => {
     },
   );
 
-  it.each(["012345678905", "4006381333932", "12345670", "12345678901234"])(
+  it.each(["012345678905", "5901234123457", "12345670", "12345678901231"])(
     "accepts product barcode %s",
     (raw) => {
       expect(resolveScanCode(raw)).toEqual({

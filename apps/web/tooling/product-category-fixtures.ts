@@ -87,3 +87,43 @@ export const taxonomyRootFixtures = taxonomyFeatures.map(
     feature,
   }),
 );
+
+const ROW_CREATED_AT = new Date("2024-01-01T00:00:00.000Z");
+const ROW_UPDATED_AT = new Date("2024-01-02T00:00:00.000Z");
+
+/**
+ * A live Product row as the repository mappers receive it, with every column
+ * set to a neutral value. Mapper tests override the columns they assert on.
+ */
+const productRowDefaults = {
+  shortcode: "PRD-TEST",
+  name: "Flour",
+  manufacturer: "Generic",
+  tags: [],
+  upc: null,
+  fdc_id: null,
+  growsPlantId: null,
+  model: null,
+  notes: null,
+  expectedQuantity: null,
+  createdAt: ROW_CREATED_AT,
+  updatedAt: ROW_UPDATED_AT,
+  deletedAt: null,
+  ingredientId: null,
+  categoryId: taxonomyId("food"),
+  category: categorySummaryFixture("food"),
+  classificationEvidence: "",
+  price: 4.5,
+  usdaUnavailable: null,
+  acquisitionOrigin: "unknown" as const,
+  stockTracked: null,
+  labelNutrition: null,
+};
+
+/** A Product DB row; overrides replace (not intersect with) the defaults. */
+export const productRowFixture = <TOverrides extends object>(
+  overrides: TOverrides,
+): Omit<typeof productRowDefaults, keyof TOverrides> & TOverrides => ({
+  ...productRowDefaults,
+  ...overrides,
+});

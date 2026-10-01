@@ -57,13 +57,9 @@ import {
   expenseAttribution,
   financialTransactionAllocation,
   image,
-  importSourceClaim,
   ledgerSourceClaim,
   orderMailCandidateDecision,
   purchase,
-  purchasePaymentEvidence,
-  runEvidence,
-  runTarget,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -72,11 +68,9 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
-import {
-  gapCondition,
-  loadDataQualities,
-  touchDataQualityTargets,
-} from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
+import { gapCondition } from "~/server/repo/data-quality/sql";
+import { touchDataQualityTargets } from "~/server/repo/data-quality/touch";
 import {
   buildPartialUpdateValues,
   correlated,
@@ -93,7 +87,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { repointLinkEnd } from "~/server/repo/entity-links";
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
@@ -124,7 +117,7 @@ import {
   finalizeMerge,
   repointEdge,
   resolveMergeTargets,
-} from "~/server/repo/merge";
+} from "~/server/repo/merge/core";
 import { syncChangedEffectivePrices } from "~/server/repo/product/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
 import {
@@ -132,9 +125,12 @@ import {
   loadPurchaseFinancialAggregates,
   type PurchaseFinancialAggregate,
 } from "~/server/repo/purchase-financial-aggregates";
+import { cascadeRemoval } from "~/server/repo/removal/core";
 /** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
-import { deleteByPolicy } from "~/server/repo/removal";
-import { cascadeRemoval } from "~/server/repo/removal";
+import {
+  applyMergePolicy,
+  deleteByPolicy,
+} from "~/server/repo/removal/dispositions";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,
@@ -2017,19 +2013,6 @@ const moveChargeImages = async (
     );
 };
 
-const moveChargeProducts = async (
-  tx: DrizzleTransaction,
-  deadId: PurchaseId,
-  survivorId: PurchaseId,
-) => {
-  await repointLinkEnd(tx, {
-    kind: "purchaseProduct",
-    end: "from",
-    keepId: survivorId,
-    loserIds: [deadId],
-  });
-};
-
 /** Fold charge contents with audited expense re-pointing; callers own index ordering. */
 export const foldChargeInto = async (
   tx: DrizzleTransaction,
@@ -2053,67 +2036,71 @@ export const foldChargeInto = async (
 
   await preservePurchaseItemAttribution(tx, [deadId], survivorId);
 
-  const moved = await repointEdge(tx, "purchase", "Expense.purchaseId", {
-    from: [deadId],
-    to: survivorId,
-    liveOnly: true,
-  });
-
-  await logAuditEntries(
-    tx,
-    actor,
-    moved.map((id) => ({
-      entityKind: "expense" as const,
-      entityId: id,
-      action: "update" as const,
-      changes: { purchaseId: { from: deadId, to: survivorId } },
-    })),
-  );
-
   // Settlement allocations move onto the survivor, and where BOTH purchases held
   // a slice of the SAME transaction the two slices are SUMMED into one row.
   //
-  // ⚠️ `onConflictDoNothing` — what the images and product links below correctly
-  // use — is exactly wrong here and must never be copied onto this edge. An
+  // ⚠️ `onConflictDoNothing` — what the images below correctly use — is exactly
+  // wrong for allocations and must never be copied onto that edge. An
   // allocation carries an amount, so skipping the duplicate would destroy that
   // money-shaped evidence and leave the transaction's allocations no longer
-  // summing to its amount.
+  // summing to its amount. The mirror column is re-derived from the surviving
+  // allocations rather than repointed: a transaction holding a slice of both
+  // purchases collapses to a single slice and becomes singly linked again.
   //
-  // The mirror column is deliberately NOT repointed. It is re-derived from the
-  // surviving allocations instead, because a transaction holding a slice of both
-  // purchases collapses to a single slice on the survivor and becomes singly
-  // linked again — a null→non-null move `repointEdge` could never produce.
-  await moveChargeAllocations(tx, deadId, survivorId, actor);
-
-  // Duplicate document/product links collapse instead of aborting the merge.
-  await moveChargeImages(tx, deadId, survivorId);
-  await moveChargeProducts(tx, deadId, survivorId);
-  await tx
-    .update(importSourceClaim)
-    .set({ purchaseId: survivorId, updatedAt: new Date() })
-    .where(eq(importSourceClaim.purchaseId, deadId));
-  await tx
-    .update(purchasePaymentEvidence)
-    .set({ purchaseId: survivorId, updatedAt: new Date() })
-    .where(eq(purchasePaymentEvidence.purchaseId, deadId));
-  const mailDecisions = await tx
-    .select()
-    .from(orderMailCandidateDecision)
-    .where(eq(orderMailCandidateDecision.purchaseId, deadId));
-  if (mailDecisions.length) {
-    await tx
-      .delete(orderMailCandidateDecision)
-      .where(eq(orderMailCandidateDecision.purchaseId, deadId));
-    await tx
-      .insert(orderMailCandidateDecision)
-      .values(
-        mailDecisions.map((decision) => ({
-          ...decision,
-          purchaseId: survivorId,
-        })),
-      )
-      .onConflictDoNothing();
-  }
+  // Everything else follows the declared `PURCHASE_MERGE_EDGE_POLICY`; these
+  // overrides are the edges whose move is not a plain column write.
+  let moved: string[] = [];
+  await applyMergePolicy(tx, {
+    entity: "purchase",
+    policy: PURCHASE_MERGE_EDGE_POLICY,
+    keepId: survivorId,
+    loserIds: [deadId],
+    liveOnly: true,
+    overrides: {
+      "Expense.purchaseId": async () => {
+        moved = await repointEdge(tx, "purchase", "Expense.purchaseId", {
+          from: [deadId],
+          to: survivorId,
+          liveOnly: true,
+        });
+        await logAuditEntries(
+          tx,
+          actor,
+          moved.map((id) => ({
+            entityKind: "expense" as const,
+            entityId: id,
+            action: "update" as const,
+            changes: { purchaseId: { from: deadId, to: survivorId } },
+          })),
+        );
+      },
+      "FinancialTransactionAllocation.purchaseId": () =>
+        moveChargeAllocations(tx, deadId, survivorId, actor),
+      // Duplicate document links collapse instead of aborting the merge.
+      "EntityAttachment.entityId": () =>
+        moveChargeImages(tx, deadId, survivorId),
+      // An existing survivor decision wins a conflict.
+      "OrderMailCandidateDecision.purchaseId": async () => {
+        const mailDecisions = await tx
+          .select()
+          .from(orderMailCandidateDecision)
+          .where(eq(orderMailCandidateDecision.purchaseId, deadId));
+        if (mailDecisions.length === 0) return;
+        await tx
+          .delete(orderMailCandidateDecision)
+          .where(eq(orderMailCandidateDecision.purchaseId, deadId));
+        await tx
+          .insert(orderMailCandidateDecision)
+          .values(
+            mailDecisions.map((decision) => ({
+              ...decision,
+              purchaseId: survivorId,
+            })),
+          )
+          .onConflictDoNothing();
+      },
+    },
+  });
 
   // Evidence-changing invariant: this fold re-points Expenses,
   // FinancialTransactions, and documents onto the survivor. The next quality
@@ -2274,38 +2261,6 @@ export const mergePurchases = async (
         .set({ orderId: adopted.orderId })
         .where(eq(purchase.id, keepId));
     }
-    // A run can already target the keeper. Preserve that canonical target and
-    // drop the colliding loser row before re-pointing the remaining history;
-    // the unique (run, entity) index makes a bulk update unsafe here.
-    const targetedRuns = await tx
-      .select({ id: runTarget.id, runId: runTarget.runId })
-      .from(runTarget)
-      .where(inArray(runTarget.entityId, losers));
-    for (const target of targetedRuns) {
-      const [existing] = await tx
-        .select({ id: runTarget.id })
-        .from(runTarget)
-        .where(
-          and(
-            eq(runTarget.runId, target.runId),
-            eq(runTarget.entityId, keepId),
-          ),
-        )
-        .limit(1);
-      if (existing) {
-        await tx
-          .update(runEvidence)
-          .set({ targetId: existing.id })
-          .where(eq(runEvidence.targetId, target.id));
-        await tx.delete(runTarget).where(eq(runTarget.id, target.id));
-      } else {
-        await tx
-          .update(runTarget)
-          .set({ entityId: keepId, updatedAt: new Date() })
-          .where(eq(runTarget.id, target.id));
-      }
-    }
-
     await logAuditEntries(tx, actor, [
       {
         entityKind: "purchase" as const,

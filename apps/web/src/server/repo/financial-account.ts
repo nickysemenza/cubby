@@ -27,8 +27,8 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { logAuditEntry } from "~/server/repo/audit-log";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   buildPartialUpdateValues,
   matchesStringValues,
@@ -51,7 +51,7 @@ import {
   listReadOn,
   onDb,
 } from "~/server/repo/repository";
-import { createEntityReader } from "~/server/repo/repository";
+import { createEntityCrud } from "~/server/repo/repository";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
@@ -288,24 +288,35 @@ export const listFinancialAccounts = completeListReader(
   listFinancialAccountsRead,
 );
 
-const financialAccountReader = createEntityReader<
-  FinancialAccountRow,
-  FinancialAccountOut,
-  "financialAccount",
-  Database | DrizzleTransaction
->({
+/**
+ * The audited-update unit: `update` runs the before-state read, column UPDATE,
+ * diff audit and re-read in one transaction. Its row carries the raw
+ * `ledgerPartyId` / `providerVendorId` beside the list columns so the audit
+ * diffs the reference columns, not only their display shortcodes.
+ */
+const financialAccountCrud = createEntityCrud({
+  table: financialAccount,
   entity: "financialAccount",
   fetchById: async (db, id) => {
-    const [row] = await selectAccounts(db)
+    const [row] = await unwrapDb(db)
+      .select({
+        ...columns,
+        ledgerPartyId: financialAccount.ledgerPartyId,
+        providerVendorId: financialAccount.providerVendorId,
+      })
+      .from(financialAccount)
       .where(and(eq(financialAccount.id, id), notDeleted(financialAccount)))
       .limit(1);
     return row;
   },
   fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
+  toUpdate: (data: Partial<typeof financialAccount.$inferInsert>) =>
+    buildPartialUpdateValues(data),
+  auditUpdateFields: [...entityFieldModels.financialAccount.audit],
 });
 
-const getFinancialAccountByID = financialAccountReader.getByID;
-const getFinancialAccountByShortcode = financialAccountReader.getByShortcode;
+const getFinancialAccountByID = financialAccountCrud.getByID;
+const getFinancialAccountByShortcode = financialAccountCrud.getByShortcode;
 
 async function assertAliasesAvailable(
   db: Database | DrizzleTransaction,
@@ -443,7 +454,7 @@ export async function updateFinancialAccount(
   actor: ActorContext,
 ) {
   const accountId = await resolveOrThrow(db, "financialAccount", id);
-  await withTransaction(db, async (tx) => {
+  const output = await withTransaction(db, async (tx) => {
     const [before] = await tx
       .select()
       .from(financialAccount)
@@ -533,29 +544,9 @@ export async function updateFinancialAccount(
     if (ledgerPartyId !== undefined) updateData.ledgerPartyId = ledgerPartyId;
     if (providerVendorId !== undefined)
       updateData.providerVendorId = providerVendorId;
-    const values = buildPartialUpdateValues(updateData);
-    await tx
-      .update(financialAccount)
-      .set(values)
-      .where(
-        and(eq(financialAccount.id, accountId), notDeleted(financialAccount)),
-      );
-    const after = { ...before, ...values };
-    const changes = computeChanges(before, after, [
-      ...entityFieldModels.financialAccount.audit,
-    ]);
-    if (changes)
-      await logAuditEntry(tx, actor, {
-        entityKind: "financialAccount",
-        entityId: accountId,
-        action: "update",
-        changes,
-      });
+    return financialAccountCrud.update(tx, accountId, updateData, actor);
   });
-  return {
-    output: await getFinancialAccountByID(db, accountId),
-    entityId: accountId,
-  };
+  return { output, entityId: accountId };
 }
 
 export const financialAccountRepository = defineRepository("financialAccount", {

@@ -10,10 +10,11 @@
 //   ensure.ts --postinstall  generate if stale, but skip a filtered install
 //                            that left out the web app's dependencies
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { digestFiles } from "../lib/tree-digest.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // Every root the generator reads: its own code, the packages the declarations
@@ -48,14 +49,10 @@ const fingerprint = () => {
     return null;
   }
   const files = listing.split("\0").filter(Boolean).sort();
-  const hash = createHash("sha256");
-  for (const file of files) {
-    const path = join(ROOT, file);
-    // A tracked file deleted in the working tree is still listed.
-    if (!existsSync(path)) continue;
-    hash.update(file).update("\0").update(readFileSync(path)).update("\0");
-  }
-  return hash.digest("hex");
+  return digestFiles(
+    ROOT,
+    files.map((file) => join(ROOT, file)),
+  );
 };
 
 if (

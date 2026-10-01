@@ -4,12 +4,9 @@ import { describe, it } from "vitest";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { runProgress } from "~/server/db/schema";
-// `ChildCascade` deliberately comes through the barrel: these assertions lock
-// the interface callers use, not this module's private implementation.
-import type { ChildCascade } from "~/server/repo/removal";
 
 import type { RemovableEntity } from "./core";
-import { removeEntity } from "./entity";
+import { type ChildCascade, removeEntity } from "./entity";
 
 const ACTOR: ActorContext = buildActorContext(testUserId("user-1"));
 

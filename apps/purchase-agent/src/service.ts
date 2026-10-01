@@ -1,10 +1,29 @@
 /**
  * The web Worker's named WorkerEntrypoint is the only authority over Cubby's
  * database, documents, browser broker, and member ownership. This Worker has
- * no database or browser bindings by design.
+ * no database or browser bindings by design. The input shapes are the shared
+ * RPC contract (`@cubby/schemas/purchase-agent-rpc`), also what the
+ * entrypoint in `apps/web/src/cf-server.ts` takes its types from.
  */
 import type { CloudflareContext } from "@flue/runtime/cloudflare";
+import type {
+  AgentProgressEvent,
+  AgentUsageEvent,
+  auditBatchInput,
+  importOrderEvidenceInput,
+  issueBrowserCommandInput,
+  markHistoryExpiredInput,
+  markRunFailedInput,
+  purchaseAgentEventRef,
+  purchaseAgentOperationRef,
+  purchaseAgentRunRef,
+  reconcileSettledRunInput,
+  saveNavigationHintsInput,
+  stopForReviewInput,
+} from "@cubby/schemas/purchase-agent-rpc";
 import { z } from "zod";
+
+export type { AgentUsageEvent };
 
 const purchaseImportServiceResult = z
   .record(z.string(), z.unknown())
@@ -19,118 +38,53 @@ interface PurchaseImportMcpAccess {
   mcpUrl: string;
 }
 
-export interface AgentUsageEvent {
-  runId: string;
-  eventId: string;
-  provider: string;
-  model: string;
-  feature: "purchase_import_agent";
-  operation: string;
-  attempt: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
-  durationMs: number;
-  status: "succeeded" | "failed";
-  gatewayLogId?: string;
-  estimatedCost?: number;
-}
-
-interface AgentProgressEvent {
-  runId: string;
-  eventId: string;
-  phase: string;
-  currentItem?: string;
-  awaitingApproval?: boolean;
-  detail?: string;
-}
+type RunRef = z.infer<typeof purchaseAgentRunRef>;
+type EventRef = z.infer<typeof purchaseAgentEventRef>;
+type OperationRef = z.infer<typeof purchaseAgentOperationRef>;
 
 export interface PurchaseImportService {
-  loadRunScope(input: { runId: string }): Promise<PurchaseImportServiceResult>;
-  canDispatchCoordinator(input: {
-    runId: string;
-    eventId: string;
-  }): Promise<boolean>;
-  acknowledgeCoordinator(input: {
-    runId: string;
-    eventId: string;
-  }): Promise<boolean>;
-  claimNextWork(input: {
-    runId: string;
-    operationId: string;
-  }): Promise<PurchaseImportServiceResult>;
-  extractReceiptEvidence(input: {
-    runId: string;
-    operationId: string;
-  }): Promise<PurchaseImportServiceResult>;
-  extractRunEvidence(input: {
-    runId: string;
-    operationId: string;
-  }): Promise<PurchaseImportServiceResult>;
-  acquireMcpAccess(input: { runId: string }): Promise<PurchaseImportMcpAccess>;
+  loadRunScope(input: RunRef): Promise<PurchaseImportServiceResult>;
+  canDispatchCoordinator(input: EventRef): Promise<boolean>;
+  acknowledgeCoordinator(input: EventRef): Promise<boolean>;
+  claimNextWork(input: OperationRef): Promise<PurchaseImportServiceResult>;
+  extractReceiptEvidence(
+    input: OperationRef,
+  ): Promise<PurchaseImportServiceResult>;
+  extractRunEvidence(input: OperationRef): Promise<PurchaseImportServiceResult>;
+  acquireMcpAccess(input: RunRef): Promise<PurchaseImportMcpAccess>;
   mcpFetch(request: Request): Promise<Response>;
-  issueBrowserCommand(input: {
-    runId: string;
-    operationId: string;
-    command: {
-      kind:
-        | "navigate_orders"
-        | "capture_order"
-        | "capture_pdf"
-        | "capture_screenshot";
-      target?: string;
-    };
-  }): Promise<PurchaseImportServiceResult>;
-  readBrowserCommandResult(input: {
-    runId: string;
-    operationId: string;
-  }): Promise<PurchaseImportServiceResult>;
-  importOrderEvidence(input: {
-    runId: string;
-    operationId: string;
-    commandId: string;
-  }): Promise<PurchaseImportServiceResult>;
-  saveNavigationHints(input: {
-    runId: string;
-    operationId: string;
-    hints: Array<{ url: string; label?: string }>;
-  }): Promise<PurchaseImportServiceResult>;
-  markHistoryExpired(input: {
-    runId: string;
-    operationId: string;
-    earliestAvailableOrderAt: string;
-  }): Promise<PurchaseImportServiceResult>;
-  finishRun(input: {
-    runId: string;
-    operationId: string;
-  }): Promise<PurchaseImportServiceResult>;
-  stopForReview(input: {
-    runId: string;
-    operationId: string;
-    reason:
-      | "navigation_ambiguity"
-      | "unreadable_evidence"
-      | "provider_failure"
-      | "other";
-    detail?: string;
-  }): Promise<PurchaseImportServiceResult>;
+  issueBrowserCommand(
+    input: z.infer<typeof issueBrowserCommandInput>,
+  ): Promise<PurchaseImportServiceResult>;
+  readBrowserCommandResult(
+    input: OperationRef,
+  ): Promise<PurchaseImportServiceResult>;
+  importOrderEvidence(
+    input: z.infer<typeof importOrderEvidenceInput>,
+  ): Promise<PurchaseImportServiceResult>;
+  saveNavigationHints(
+    input: z.infer<typeof saveNavigationHintsInput>,
+  ): Promise<PurchaseImportServiceResult>;
+  markHistoryExpired(
+    input: z.infer<typeof markHistoryExpiredInput>,
+  ): Promise<PurchaseImportServiceResult>;
+  auditBatch(
+    input: z.infer<typeof auditBatchInput>,
+  ): Promise<PurchaseImportServiceResult>;
+  finishRun(input: OperationRef): Promise<PurchaseImportServiceResult>;
+  stopForReview(
+    input: z.infer<typeof stopForReviewInput>,
+  ): Promise<PurchaseImportServiceResult>;
   recordAgentUsage(input: AgentUsageEvent): Promise<void>;
   updateAgentProgress(
     input: AgentProgressEvent,
   ): Promise<{ recorded: boolean }>;
-  markRunFailed(input: {
-    runId: string;
-    operationId: string;
-    failureCode: "flue_failed" | "flue_aborted";
-    detail?: string;
-    dispatchEventId?: string;
-  }): Promise<PurchaseImportServiceResult>;
-  reconcileSettledRun(input: {
-    runId: string;
-    operationId: string;
-    detail?: string;
-  }): Promise<{ reconciled: boolean; status: string }>;
+  markRunFailed(
+    input: z.infer<typeof markRunFailedInput>,
+  ): Promise<PurchaseImportServiceResult>;
+  reconcileSettledRun(
+    input: z.infer<typeof reconcileSettledRunInput>,
+  ): Promise<{ reconciled: boolean; status: string }>;
 }
 
 const serviceBindingSchema = z.object({

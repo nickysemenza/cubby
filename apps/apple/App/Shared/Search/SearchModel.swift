@@ -164,7 +164,7 @@ final class SearchModel {
         } catch {
             guard generation == searchGeneration else { return }
             Diagnostics.report(error, context: "search.query")
-            phase = .failed((error as? CubbyAPIError)?.detail?.message ?? String(describing: error))
+            phase = .failed(error.userMessage)
             searchTask = nil
         }
     }

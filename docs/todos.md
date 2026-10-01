@@ -636,18 +636,8 @@ See also the image operational passes at the end of this file.
   declared checks in `repo/data-quality/` are two systems for "this record is
   wrong"; make detectors declared checks and have Problems read their results.
 
-- 🟢 **Retire the hand-written merges onto link dispositions.** Product,
-  purchase, vendor, ledger-party, plant, and ingredient merges each repoint
-  their own relationships; move the per-entity parts onto the generic
-  `EntityLink` merge path.
-
 - 🟢 **Declare non-entity child tables in the manifest (`children:`)** so
   their DDL is generated like entity tables.
-
-- 🟢 **Retire the `server/repo/*/index.ts` barrels.** Kernel repositories
-  bypass them; about 45 re-exported names have no production importer. Rewrite
-  importers per name with an import-aware codemod (not sed), leaving
-  `database-helpers` (~350 importers).
 
 - 🤔 **Completeness score exceptions.** Every scored entity declares
   `capabilities.dataQuality` (see `docs/entities.md` → "Data quality").
@@ -830,11 +820,6 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   page except health and the switch), by every queue consumer (leave messages
   unacked), and by Flue run workflows before each step; toggle from Settings
   and MCP.
-
-- 🟢 **Fold `apps/upc-lookup` into the main worker.** Web already caches UPC
-  lookups in `UpcLookupCache`. Export D1's `manual` products and miss rows
-  first, move the upcitemdb adapter into `server/services/upc/`, then delete
-  the Worker and `packages/upc-contract`. `apps/usda-api` stays separate.
 
 - 🟢 **Use Wrangler's local R2 binding for isolated object-storage tests.**
   Local dev uses `apps/web/tooling/local-r2*`, not a binding; production

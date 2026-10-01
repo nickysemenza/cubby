@@ -10,6 +10,7 @@ import type { recipeLinePatchFields } from "~/contracts/recipe.contract";
 import {
   type EntityKernelContext,
   executeEntity,
+  executeEntityAs,
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 
@@ -124,13 +125,12 @@ export async function patchRecipeLine(
   context: EntityKernelContext,
   input: { recipeId: RecipeShortcode; lineId: string; patch: RecipeLinePatch },
 ) {
-  const detail = await executeEntity(context, {
-    action: "get",
+  const detail = await executeEntityAs(context, "get", {
     entity: "recipe",
     id: input.recipeId,
     missing: "error",
   });
-  if (detail.action !== "get" || detail.entity !== "recipe" || !detail.item)
+  if (!detail.item)
     throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
   const { sections, line } = buildRecipeLinePatch(
     detail.item,

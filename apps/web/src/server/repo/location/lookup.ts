@@ -29,7 +29,7 @@ import {
 
 import type { Database } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { categorySummarySql } from "~/server/repo/product-category-sql";

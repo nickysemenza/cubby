@@ -8,6 +8,52 @@ import { Button } from "~/components/ui/button";
 import { DialogFormActions } from "~/components/ui/dialog-form-actions";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 
+/** A disabled-reason resolver that refuses every location in `sources`. */
+export const refuseSourceLocations =
+  (sources: readonly LocationShortcode[]) =>
+  (locationId: LocationShortcode): string | null =>
+    sources.includes(locationId) ? "Already the current location" : null;
+
+/**
+ * The one location combobox for move destinations: locations `disabledReason`
+ * refuses stay visible in an "Unavailable" group with the reason.
+ */
+export function LocationDestinationPicker({
+  label,
+  value,
+  setValue,
+  disabledReason,
+}: {
+  label: string;
+  value: ComboboxItem<LocationShortcode> | null;
+  setValue: (item: ComboboxItem<LocationShortcode> | null) => void;
+  disabledReason: (locationId: LocationShortcode) => string | null;
+}) {
+  return (
+    <EntityReferencePicker
+      entity="location"
+      label={label}
+      mapItems={(items) =>
+        items.map((item) => {
+          const reason = disabledReason(item.id);
+          return reason === null
+            ? item
+            : {
+                ...item,
+                presentation: {
+                  ...item.presentation,
+                  group: { id: "unavailable", label: "Unavailable", order: 99 },
+                  disabledReason: reason,
+                },
+              };
+        })
+      }
+      value={value}
+      setValue={setValue}
+    />
+  );
+}
+
 /**
  * The one "pick a destination location" dialog for single-subject moves (the
  * arrange surface's Move to… and the recount session's move). It only chooses
@@ -16,7 +62,7 @@ import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
  * Mount it only while open: the location search stays off the caller's
  * critical path until the dialog is used. Bulk inventory moves keep
  * `BulkActionDialog` (it previews per-row effects) but share the same picker
- * field via `DestinationLocationField`.
+ * via `LocationDestinationPicker`.
  */
 export function LocationMoveDialog({
   title,
@@ -92,28 +138,9 @@ export function LocationMoveDialog({
             {shortcut.label}
           </Button>
         )}
-        <EntityReferencePicker
-          entity="location"
+        <LocationDestinationPicker
           label="location"
-          mapItems={(items) =>
-            items.map((item) => {
-              const reason = disabledReason(item.id);
-              return reason === null
-                ? item
-                : {
-                    ...item,
-                    presentation: {
-                      ...item.presentation,
-                      group: {
-                        id: "unavailable",
-                        label: "Unavailable",
-                        order: 99,
-                      },
-                      disabledReason: reason,
-                    },
-                  };
-            })
-          }
+          disabledReason={disabledReason}
           value={destination}
           setValue={(item) => {
             setDestination(item);

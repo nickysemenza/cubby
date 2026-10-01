@@ -38,20 +38,13 @@ const definition = defineBulkWorkflow({
   progress: (result: number) => result,
 });
 const state = (): State => ({ writes: [], effects: [], finalized: [] });
-const deferred = () => {
-  let resolve!: () => void;
-  const promise = new Promise<void>((complete) => {
-    resolve = complete;
-  });
-  return { promise, resolve };
-};
 
 describe("bulk workflow execution", () => {
   it("bounds concurrent windows and finalizes every started item on early close", async () => {
     const context = state();
     const started: number[] = [];
-    const bothStarted = deferred();
-    const release = deferred();
+    const bothStarted = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
     const stream = executeBulkWorkflow(
       {
         ...definition,

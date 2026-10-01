@@ -40,18 +40,28 @@ fn compact_isbn(value: &str) -> String {
         .collect()
 }
 
-/// ISBN-13 check digit over the first 12 digits (alternating x1/x3 weights).
-/// `first_twelve` is expected to be 12 ASCII digits; a caller that violates
-/// that gets a well-defined (if meaningless) digit back rather than a panic.
-fn isbn13_check_digit(first_twelve: &str) -> char {
-    let sum: u32 = first_twelve
+/// GS1 check digit (mod-10, weights x3/x1 alternating from the digit next to
+/// the check position) over `body`, the code without its check digit. One rule
+/// for EAN-8, UPC-A, EAN-13 (ISBN-13 included) and GTIN-14. `body` is expected
+/// to be ASCII digits; a caller that violates that gets a well-defined (if
+/// meaningless) digit back rather than a panic.
+fn gs1_check_digit(body: &str) -> char {
+    let sum: u32 = body
         .chars()
+        .rev()
         .enumerate()
-        .map(|(i, c)| c.to_digit(10).unwrap_or(0) * if i % 2 == 0 { 1 } else { 3 })
+        .map(|(i, c)| c.to_digit(10).unwrap_or(0) * if i % 2 == 0 { 3 } else { 1 })
         .sum();
     // `(10 - sum % 10) % 10` is always in 0..=9, so `from_digit` never fails;
     // the fallback is unreachable, not a real error path.
     char::from_digit((10 - sum % 10) % 10, 10).unwrap_or('0')
+}
+
+/// An 8/12/13/14 digit barcode whose last digit is its GS1 check digit.
+fn is_valid_gtin(value: &str) -> bool {
+    matches!(value.len(), 8 | 12 | 13 | 14)
+        && value.chars().all(|c| c.is_ascii_digit())
+        && value.ends_with(gs1_check_digit(&value[..value.len() - 1]))
 }
 
 /// ISBN-10 check digit over the first 9 digits (descending x10..x2 weights,
@@ -99,7 +109,7 @@ fn is_valid_isbn13(value: &str) -> bool {
         return false;
     }
     let (first_twelve, last) = value.split_at(12);
-    isbn13_check_digit(first_twelve).to_string() == last
+    gs1_check_digit(first_twelve).to_string() == last
 }
 
 /// `isbn13` is already-validated 13 ASCII digits (every caller below checked
@@ -136,7 +146,7 @@ pub fn normalize_isbn(value: &str) -> Option<NormalizedIsbn> {
     }
     if is_valid_isbn10(&compact) {
         let first_twelve = format!("978{}", &compact[..9]);
-        let check_digit = isbn13_check_digit(&first_twelve);
+        let check_digit = gs1_check_digit(&first_twelve);
         return Some(from_isbn13(&format!("{first_twelve}{check_digit}")));
     }
     if is_valid_isbn13(&compact) {
@@ -209,19 +219,18 @@ pub fn product_code_search_terms(value: &str) -> Vec<String> {
 
 /// Classify a raw scanner code as a GTIN-14: a valid ISBN-10/ISBN-13 (per
 /// [`normalize_isbn`]) normalizes to its `gtin14`; otherwise a compact
-/// all-digit string of a plausible barcode length (8/12/13/14, matching
-/// EAN-8/UPC-A/EAN-13/GTIN-14) is zero-padded to 14. Anything else -- letters,
-/// the wrong digit count, empty input -- is `None`.
+/// all-digit string of a barcode length (8/12/13/14, matching
+/// EAN-8/UPC-A/EAN-13/GTIN-14) whose GS1 check digit is correct is
+/// zero-padded to 14. Anything else -- letters, the wrong digit count, a bad
+/// check digit, empty input -- is `None`. The pure-TS `normalizeGtin`
+/// (`@cubby/shared/upc`) applies the same check digit.
 #[wasm_bindgen]
 pub fn scan_code_gtin14(raw: &str) -> Option<String> {
     if let Some(normalized) = normalize_isbn(raw) {
         return Some(normalized.gtin14);
     }
     let compact = compact_isbn(raw);
-    if matches!(compact.len(), 8 | 12 | 13 | 14) && compact.chars().all(|c| c.is_ascii_digit()) {
-        return Some(format!("{compact:0>14}"));
-    }
-    None
+    is_valid_gtin(&compact).then(|| format!("{compact:0>14}"))
 }
 
 #[cfg(test)]
@@ -363,8 +372,8 @@ mod tests {
             Some("00012345678905".to_string())
         );
         assert_eq!(
-            scan_code_gtin14("12345678"),
-            Some("00000012345678".to_string())
+            scan_code_gtin14("12345670"),
+            Some("00000012345670".to_string())
         );
     }
 
@@ -372,6 +381,27 @@ mod tests {
     fn scan_code_gtin14_rejects_non_codes() {
         assert_eq!(scan_code_gtin14("abc"), None);
         assert_eq!(scan_code_gtin14(""), None);
+    }
+
+    #[test]
+    fn scan_code_gtin14_rejects_a_bad_check_digit_at_every_length() {
+        // 8 / 12 / 13 / 14 digits, each with its check digit off by one.
+        for code in [
+            "12345678",
+            "012345678900",
+            "4006381333932",
+            "00012345678900",
+        ] {
+            assert_eq!(scan_code_gtin14(code), None, "code {code:?}");
+        }
+        for code in [
+            "12345670",
+            "012345678905",
+            "4006381333931",
+            "00012345678905",
+        ] {
+            assert!(scan_code_gtin14(code).is_some(), "code {code:?}");
+        }
     }
 
     /// Shared with the pure-TS normalizer in `@cubby/schemas/external-id`, the

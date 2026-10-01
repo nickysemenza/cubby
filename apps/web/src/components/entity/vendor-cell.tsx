@@ -1,8 +1,6 @@
-import { useState } from "react";
-
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
-import { transformedImageUrl } from "~/lib/image-url";
+import { Image } from "~/components/ui/image";
 import { cn } from "~/lib/utils";
 import { vendorMonogram } from "~/lib/vendor-logo";
 
@@ -43,48 +41,24 @@ export function VendorMark({
   logo?: VendorLogo;
   className?: string;
 }) {
-  // The failure is remembered per URL rather than as a bare boolean: this node
-  // is not remounted when a vendor is edited inline (same component instance,
-  // new `vendor` prop), so a boolean set by the *previous* vendor's broken logo
-  // would survive the swap and pin the new vendor to a monogram forever. Keying
-  // the state to the URL it describes self-corrects on every change, with no
-  // effect and no extra render pass.
-  //
-  const [failedUrl, setFailedUrl] = useState<string | null>(null);
-
-  const shared = cn("size-4 shrink-0", className);
-
-  // Null relations avoid a request entirely. A failed DB-resolved image URL
-  // falls back to the same first-class monogram without guessing another key.
-  if (!hasVendorLogo(logo) || failedUrl === logo.url) {
-    return (
-      <span
-        aria-hidden
-        className={cn(
-          shared,
-          "flex items-center justify-center border border-border bg-muted font-mono text-2xs leading-none text-slate",
-        )}
-      >
-        {vendorMonogram(vendor)}
-      </span>
-    );
-  }
-
-  const url = logo.url;
+  // `Image` remembers a load failure per URL (this node is not remounted when
+  // a vendor is edited inline), and a missing or failed logo falls back to the
+  // same first-class monogram without guessing another key.
+  const logoUrl = hasVendorLogo(logo) ? logo.url : undefined;
 
   return (
     <span
       aria-hidden
       className={cn(
-        shared,
-        "flex items-center justify-center border border-border bg-muted p-px",
+        "flex size-4 shrink-0 items-center justify-center border border-border bg-muted p-px font-mono text-2xs leading-none text-slate",
+        className,
       )}
     >
-      <img
-        src={transformedImageUrl(url, MARK_PX)}
+      <Image
+        src={logoUrl}
         alt=""
-        loading="lazy"
-        onError={() => setFailedUrl(url)}
+        displayWidth={MARK_PX}
+        fallback={vendorMonogram(vendor)}
         className="size-full object-contain grayscale transition-[filter] group-hover/row:grayscale-0 max-sm:grayscale-0"
       />
     </span>

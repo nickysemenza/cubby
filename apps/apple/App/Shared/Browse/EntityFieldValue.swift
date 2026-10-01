@@ -23,7 +23,7 @@ nonisolated enum EntityFieldValue {
         case "currency": return money(value)
         case "signedCurrency":
             guard let amount = number(value) else { return nil }
-            return (amount > 0 ? "+" : "") + amount.formatted(.currency(code: "USD"))
+            return (amount > 0 ? "+" : "") + amount.formatted(.usd)
         case "plainDate", "timestamp": return date(value)
         case "amount": return amount(value)
         case "external-link":
@@ -97,7 +97,7 @@ nonisolated enum EntityFieldValue {
 
     static func money(_ value: JSONValue?) -> String? {
         guard let amount = number(value) else { return nil }
-        return amount.formatted(.currency(code: "USD"))
+        return amount.formatted(.usd)
     }
 
     /// `{ value, unit }` is Cubby's amount shape; a bare number means units.

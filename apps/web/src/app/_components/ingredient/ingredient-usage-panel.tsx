@@ -5,14 +5,7 @@ import { Link } from "@tanstack/react-router";
 
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
+import { StaticTable } from "~/components/ui/static-table";
 import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
@@ -128,44 +121,42 @@ function UsageTable({
   totalRecipes: number;
 }) {
   return (
-    <Table
+    <StaticTable
+      rows={rows}
+      rowKey={(row) => row.ingredientId}
       containerClassName="border border-[var(--border)]"
       className="min-w-[26rem] table-auto"
-    >
-      <TableHeader>
-        <TableRow>
-          <TableHead>Ingredient</TableHead>
-          <TableHead className="text-right">Recipes</TableHead>
-          <TableHead className="text-right">% of recipes</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row) => {
-          const pct =
-            totalRecipes > 0
-              ? Math.round((row.recipeCount / totalRecipes) * 100)
-              : 0;
-          return (
-            <TableRow key={row.ingredientId}>
-              <TableCell className="whitespace-normal">
-                <Link
-                  to="/ingredients/$shortcode"
-                  params={{ shortcode: row.ingredientId }}
-                  className="hover:underline"
-                >
-                  {row.name}
-                </Link>
-              </TableCell>
-              <TableCell className="text-right tabular-nums">
-                {row.recipeCount}
-              </TableCell>
-              <TableCell className="text-right text-muted-foreground tabular-nums">
-                {pct}%
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+      columns={[
+        {
+          id: "ingredient",
+          header: "Ingredient",
+          cellClassName: "whitespace-normal",
+          cell: (row) => (
+            <Link
+              to="/ingredients/$shortcode"
+              params={{ shortcode: row.ingredientId }}
+              className="hover:underline"
+            >
+              {row.name}
+            </Link>
+          ),
+        },
+        {
+          id: "recipes",
+          header: "Recipes",
+          headClassName: "text-right",
+          cellClassName: "text-right tabular-nums",
+          cell: (row) => row.recipeCount,
+        },
+        {
+          id: "share",
+          header: "% of recipes",
+          headClassName: "text-right",
+          cellClassName: "text-right text-muted-foreground tabular-nums",
+          cell: (row) =>
+            `${totalRecipes > 0 ? Math.round((row.recipeCount / totalRecipes) * 100) : 0}%`,
+        },
+      ]}
+    />
   );
 }

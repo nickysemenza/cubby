@@ -33,31 +33,33 @@ import {
 import { getErrorMessage } from "~/lib/error-utils";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
-  discardProductUnits,
+  listKitComponentRows,
+  listKitMembership,
+  listProductComponents,
+} from "~/server/repo/product-components";
+import {
   getCategoryDistribution,
   getProductExternalIdSourceOptions,
   getProductManufacturerOptions,
+} from "~/server/repo/product/analytics";
+import { createProductWithInventory } from "~/server/repo/product/capture";
+import {
   getProductPickerItemsByIds,
   getProductsByShortcodes,
   patchProductExternalIds,
   productSearch,
   quickCreateProduct,
-  resolveProductNames,
-} from "~/server/repo/product";
-import {
-  listKitComponentRows,
-  listKitMembership,
-  listProductComponents,
-} from "~/server/repo/product-components";
-import { createProductWithInventory } from "~/server/repo/product/capture";
+} from "~/server/repo/product/crud";
+import { discardProductUnits } from "~/server/repo/product/discard";
 import { findProductExternalIdCollisions } from "~/server/repo/product/external-id-collisions";
 import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
 import { previewProductMergeDecisions } from "~/server/repo/product/merge";
 import { loadProductQuantitySummaries } from "~/server/repo/product/quantity-ledger";
+import { resolveProductNames } from "~/server/repo/product/resolve-names";
 import {
   listProductProjectUses,
   setProductProjectUses,
-} from "~/server/repo/project";
+} from "~/server/repo/project/tools";
 import { listProductPurchases } from "~/server/repo/purchase-products";
 import {
   bindShortcodeResolver,

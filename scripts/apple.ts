@@ -24,6 +24,8 @@
 // "Debugging on device"). This covers the "just put it on the phone" case the
 // `-NoDebugger` schemes exist for.
 import { spawnSync } from "node:child_process";
+
+import { captureSyncChecked, runSyncChecked } from "./lib/run.ts";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -109,31 +111,10 @@ const run = (
   program: string,
   arguments_: readonly string[],
   cwd: string = ROOT,
-) => {
-  process.stdout.write(`$ ${program} ${arguments_.join(" ")}\n`);
-  const started = performance.now();
-  const result = spawnSync(program, arguments_, { cwd, stdio: "inherit" });
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    throw new Error(`${program} exited with status ${result.status}`);
-  }
-  const seconds = ((performance.now() - started) / 1000).toFixed(1);
-  process.stdout.write(`==> ${program} (${seconds}s)\n`);
-};
+) => runSyncChecked(program, arguments_, cwd);
 
-const capture = (program: string, arguments_: readonly string[]): string => {
-  const result = spawnSync(program, arguments_, {
-    cwd: ROOT,
-    encoding: "utf8",
-  });
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    throw new Error(
-      `${program} ${arguments_.join(" ")} exited with status ${result.status}\n${result.stderr}`,
-    );
-  }
-  return result.stdout;
-};
+const capture = (program: string, arguments_: readonly string[]): string =>
+  captureSyncChecked(program, arguments_, ROOT);
 
 // Always the full three-slice xcframework: it is one Nx cache entry shared by
 // every command and every worktree, where a one-slice build would be a

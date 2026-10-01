@@ -504,7 +504,7 @@ public final class PhotoImportRunSession {
             } catch {
                 self.progress = await uploader.progress
                 self.failedAnalysisPhotos = await uploader.failedAnalysisPhotos
-                self.phase = .failed(Self.message(for: error))
+                self.phase = .failed(error.userMessage)
             }
             self.task = nil
         }
@@ -534,15 +534,5 @@ public final class PhotoImportRunSession {
     /// them), so calling `start(_:)` again with the same photos picks up where this left off.
     public func cancel() {
         task?.cancel()
-    }
-
-    private static func message(for error: any Error) -> String {
-        if let error = error as? PhotoImportRunUploader.Failure {
-            return error.errorDescription ?? String(describing: error)
-        }
-        if let error = error as? CubbyAPIError {
-            return error.detail?.message ?? "HTTP \(error.status)"
-        }
-        return String(describing: error)
     }
 }

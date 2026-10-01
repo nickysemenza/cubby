@@ -8,6 +8,7 @@
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import { toStoredTotals } from "@cubby/schemas/nutrition";
 import type { StoredRecipeTotals } from "@cubby/schemas/recipe-shared";
+import { createLogger } from "@cubby/worker-tracing";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -23,6 +24,8 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { TraceNames, withTrace } from "~/server/tracing";
+
+const log = createLogger("recompute");
 
 const recipeTotalsAreStale = sql`(${recipe.totalsComputedAt} IS NULL OR ${recipe.totals} IS NULL)`;
 
@@ -420,9 +423,9 @@ export const commitRecipeTotals = async (
         else changedParents.add(parent);
       }
     if (cyclic.size > 0) {
-      console.warn(
-        `[recompute] sub-recipe cycle: not re-staling ${cyclic.size} parent(s) that are also descendants`,
-        [...cyclic],
+      log.warn(
+        `sub-recipe cycle: not re-staling ${cyclic.size} parent(s) that are also descendants`,
+        { cyclic: [...cyclic] },
       );
     }
     await markRecipesStaleReturningTransitioned(tx, [...changedParents]);

@@ -13,10 +13,8 @@ import { aggregateTotals } from "~/lib/nutrition-estimates";
 import type { Database } from "~/server/db";
 import { getMealNutritionRows } from "~/server/repo/meal/food";
 import { batchTotalsFor, yieldBasisFor } from "~/server/repo/meal/portions";
-import {
-  foodLookupParamFromProduct,
-  getProductsByShortcodes,
-} from "~/server/repo/product";
+import { getProductsByShortcodes } from "~/server/repo/product/crud";
+import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { getIngredientsByIDs } from "./ingredient.service";

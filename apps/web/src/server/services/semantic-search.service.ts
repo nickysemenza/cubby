@@ -1,5 +1,6 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
+import { createLogger } from "@cubby/worker-tracing";
 
 import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
@@ -13,6 +14,8 @@ import {
 import { productionVectorStore } from "~/server/semantic/vector-store";
 import { hydrateSearchHitRefs } from "~/server/services/search.service";
 import { TraceNames, withTrace } from "~/server/tracing";
+
+const log = createLogger("semantic-search");
 
 export interface SemanticProductCandidate {
   item: SearchHit & { entityId: string; name: string };
@@ -73,7 +76,7 @@ export async function semanticProductCandidates(
   try {
     return await semanticSearchCandidates(db, query, limit, ["product"], runId);
   } catch (error) {
-    console.warn("semantic.product-candidates.failed", {
+    log.warn("product-candidates failed", {
       query,
       message: getErrorMessage(error),
     });

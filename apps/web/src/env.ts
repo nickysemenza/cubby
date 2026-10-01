@@ -14,8 +14,8 @@ export const env = createEnv({
     R2_PUBLIC_URL: z.string().url(),
     R2_KEY_PREFIX: z.string().min(1).default("cubby-dev"),
     USDA_API_URL: z.string().url().default("http://localhost:8080/"),
-    UPC_LOOKUP_API_URL: z.string().url(),
-    UPC_LOOKUP_API_KEY: z.string().min(1).optional(),
+    // Dev/E2E: skip the upcitemdb fallback and answer from UpcLookupCache only.
+    UPC_UPSTREAM_DISABLED: z.enum(["true", "false"]).default("false"),
     BETTER_AUTH_SECRET: z.string().min(1),
     BETTER_AUTH_URL: z.string().url().optional(),
     // Personal instance: signup is closed unless this is explicitly "true".
@@ -49,8 +49,7 @@ export const env = createEnv({
     R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
     R2_KEY_PREFIX: process.env.R2_KEY_PREFIX,
     USDA_API_URL: process.env.USDA_API_URL,
-    UPC_LOOKUP_API_URL: process.env.UPC_LOOKUP_API_URL,
-    UPC_LOOKUP_API_KEY: process.env.UPC_LOOKUP_API_KEY,
+    UPC_UPSTREAM_DISABLED: process.env.UPC_UPSTREAM_DISABLED,
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
     ALLOW_SIGNUP: process.env.ALLOW_SIGNUP,

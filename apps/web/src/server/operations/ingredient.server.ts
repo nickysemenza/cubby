@@ -22,12 +22,12 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { withTransaction } from "~/server/repo/database-helpers";
+import { resolveOrCreateIngredients } from "~/server/repo/ingredient/crud";
+import { findUnlinkedProductCandidates } from "~/server/repo/ingredient/crud";
 import {
   getIngredientMatches,
   getRecipeUsagesForIngredient,
-  resolveOrCreateIngredients,
-} from "~/server/repo/ingredient";
-import { findUnlinkedProductCandidates } from "~/server/repo/ingredient/crud";
+} from "~/server/repo/ingredient/search";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
   enrichmentWorkbench,

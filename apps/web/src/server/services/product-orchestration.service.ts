@@ -29,6 +29,7 @@ import type {
 } from "@cubby/schemas/product";
 import type { ScanAtLocationCode } from "@cubby/schemas/scan";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { createLogger } from "@cubby/worker-tracing";
 import { uniq } from "es-toolkit";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
@@ -36,29 +37,31 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { type ResolvedProductCode, resolveProductScan } from "~/lib/scan-code";
 import { wasm } from "~/lib/wasm";
-import type { UpcLookupPort } from "~/server/clients/upc-lookup";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
+import { findProductsWithNoImages } from "~/server/repo/product/analytics";
+import { findUnbarcodedBookByTitle } from "~/server/repo/product/book-title-match";
 import {
-  findProductByGtin,
-  findProductsWithNoImages,
   getProductByShortcode,
   quickCreateProduct,
   updateProduct,
-} from "~/server/repo/product";
-import { findUnbarcodedBookByTitle } from "~/server/repo/product/book-title-match";
+} from "~/server/repo/product/crud";
+import { findProductByGtin } from "~/server/repo/product/lookup";
 import {
   resolveCreatedOrInvariant,
   resolveLiveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { readCachedUpcLookups } from "~/server/repo/upc-lookup-cache";
+import type { UpcLookupPort } from "~/server/services/upc";
 
 import { importImageFromUPC } from "./image-import";
 import { runMutationSideEffects } from "./mutation-side-effects";
 import type { ProductWriteActions } from "./product.service";
 import type { RecipeCostingService } from "./recipe-costing.service";
+
+const log = createLogger("product-orchestration");
 
 interface ProductWriteServices {
   db: Database;
@@ -97,7 +100,7 @@ async function importCoverPhoto(
     await importImageFromUPC(db, upcLookupClient, code, productId);
     return [];
   } catch (error) {
-    console.error(`[${source}] Image import failed:`, error);
+    log.error(`[${source}] Image import failed`, { error });
     return [
       scrubErrorMessage(
         `Cover photo import for ${code} failed: ${getErrorMessage(error)}`,

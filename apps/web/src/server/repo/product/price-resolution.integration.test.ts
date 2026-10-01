@@ -1,5 +1,5 @@
 import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
-import { expenseCreateInput } from "@cubby/schemas/project";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -8,7 +8,6 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
-import { createExpense } from "~/server/repo/expense";
 import {
   createProductFixture,
   makeExpenseInput,
@@ -16,7 +15,7 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { getProductByShortcode, productList } from ".";
+import { getProductByShortcode, productList } from "./crud";
 import { listProductsRead } from "./crud";
 
 const priceRead = z.object({
@@ -43,17 +42,15 @@ describe("Product valuation price resolution on canonical reads", () => {
       }),
       ctx.actor,
     );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "Synthetic quantified clamp purchase",
-          cost: 20,
-          productId: product.id,
-          productQuantity: 4,
-        }),
-      ),
-      ctx.actor,
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Synthetic quantified clamp purchase",
+        cost: 20,
+        productId: product.id,
+        productQuantity: 4,
+      }),
     );
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),

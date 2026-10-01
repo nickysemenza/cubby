@@ -43,9 +43,9 @@ import {
 } from "~/server/purchase-import/writer";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { getUploadedImageProcessingSource } from "~/server/repo/image-processing";
-import { getLocationById } from "~/server/repo/location";
-import { getProductByID } from "~/server/repo/product";
-import { getRecipeByID } from "~/server/repo/recipe";
+import { getLocationById } from "~/server/repo/location/crud";
+import { getProductByID } from "~/server/repo/product/crud";
+import { getRecipeByID } from "~/server/repo/recipe/crud";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { ensureRun } from "~/server/runs/ensure-run";
 import { embedTexts } from "~/server/semantic/embeddings";

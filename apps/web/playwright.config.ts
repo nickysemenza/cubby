@@ -18,7 +18,7 @@ const e2eProcessEnvDefaults = {
   R2_ENDPOINT: "http://localhost:9000",
   R2_BUCKET_NAME: "e2e",
   R2_PUBLIC_URL: "http://localhost:9000",
-  UPC_LOOKUP_API_URL: "http://127.0.0.1:9/",
+  UPC_UPSTREAM_DISABLED: "true",
   BETTER_AUTH_SECRET: "e2e-test-secret",
 };
 for (const [key, value] of Object.entries(e2eProcessEnvDefaults)) {

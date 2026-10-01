@@ -64,31 +64,23 @@ actor SpotlightIndexer {
     private static func items(for descriptor: EntityDescriptor, client: CubbyClient) async throws
         -> [CSSearchableItem]
     {
-        var items: [CSSearchableItem] = []
-        var page = 1
-        while items.count < maxPerKind {
-            // Only stocked products earn a Spotlight entry; everything else is indexed whole.
-            let result =
-                descriptor.key == .product
-                ? try await client.stockedProducts(page: page, pageSize: pageSize)
-                : try await client.list(descriptor, page: page, pageSize: pageSize)
-            for row in result.items {
-                let attributes = CSSearchableItemAttributeSet(contentType: .text)
-                attributes.title = row.title
-                attributes.contentDescription = row.subtitle ?? descriptor.singular.capitalized
-                attributes.keywords = [descriptor.singular, descriptor.plural, row.id]
-                attributes.thumbnailURL = row.imageURL
-                items.append(
-                    CSSearchableItem(
-                        uniqueIdentifier: uniqueIdentifier(descriptor.key, id: row.id),
-                        domainIdentifier: "cubby.\(descriptor.key.rawValue)",
-                        attributeSet: attributes
-                    )
-                )
-            }
-            if result.items.count < pageSize || page * pageSize >= result.meta.totalCount { break }
-            page += 1
+        // Only stocked products earn a Spotlight entry; everything else is indexed whole.
+        let rows = try await ListPage.collectAll(limit: maxPerKind, pageSize: pageSize) { page, size in
+            descriptor.key == .product
+                ? try await client.stockedProducts(page: page, pageSize: size)
+                : try await client.list(descriptor, page: page, pageSize: size)
         }
-        return items
+        return rows.map { row in
+            let attributes = CSSearchableItemAttributeSet(contentType: .text)
+            attributes.title = row.title
+            attributes.contentDescription = row.subtitle ?? descriptor.singular.capitalized
+            attributes.keywords = [descriptor.singular, descriptor.plural, row.id]
+            attributes.thumbnailURL = row.imageURL
+            return CSSearchableItem(
+                uniqueIdentifier: uniqueIdentifier(descriptor.key, id: row.id),
+                domainIdentifier: "cubby.\(descriptor.key.rawValue)",
+                attributeSet: attributes
+            )
+        }
     }
 }

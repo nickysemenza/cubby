@@ -80,7 +80,6 @@ function workerdWebConfig(databaseUrl: string) {
   config.services = (config.services ?? []).map((service) => {
     const replacements: Record<string, string> = {
       USDA_API: "local-offline-peers",
-      UPC_LOOKUP: "local-offline-peers",
       PURCHASE_AGENT: "purchase-agent",
     };
     const binding = String(service.binding ?? "");
@@ -152,6 +151,7 @@ export function createWorkerdHarness(
           R2_ACCESS_KEY_ID: "dummy",
           R2_SECRET_ACCESS_KEY: "dummy",
           USDA_API_URL: "http://127.0.0.1:9/",
+          UPC_UPSTREAM_DISABLED: "true",
         },
         secrets: { BETTER_AUTH_SECRET: "workerd-test-secret" },
       },

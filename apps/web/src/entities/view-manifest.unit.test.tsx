@@ -11,7 +11,6 @@ import {
   FILTER_ANY,
   FILTER_NONE,
   isMultiFilterKind,
-  partitionFilterSpecs,
 } from "./filters";
 import {
   compileProblemFilters,
@@ -29,39 +28,14 @@ const entityFromKey = (value: string): Entity | undefined =>
 // stays alias-free regardless — that's a property of the module, not the test.
 
 describe("view manifest", () => {
-  it("only pins filters that exist as specs for the same entity", () => {
-    // The whole point of a view being a declaration rather than a code path:
-    // applying it must set state the table can actually round-trip through the
-    // URL. A typo'd column id would set a filter no column owns — invisible,
-    // and unclearable except by Reset.
-    for (const [entity, views] of Object.entries(viewManifest)) {
-      const parsedEntity = entityFromKey(entity);
-      if (!parsedEntity) continue;
-      const specIds = new Set(
-        getEntityFilters(parsedEntity).map((s) => s.columnId),
-      );
-      for (const view of views ?? []) {
-        for (const filter of view.filters) {
-          expect(
-            specIds.has(filter.id),
-            `view "${view.id}" on "${entity}" pins unknown filter "${filter.id}"`,
-          ).toBe(true);
-        }
-      }
-    }
-  });
-
+  // Filter ids, urlOnly descriptors, static range presets, value kinds, ids and
+  // layout/sort columns are checked at generation time
+  // (`validateSavedViews` in scripts/generator/entities/compile.ts).
   it("never pins a range preset that expands to nothing", () => {
     // The silent-widening case (#785): a range spec returns an EMPTY patch for
     // any preset outside its closed set, and `buildFiltersFromManifest` merges
-    // that empty patch as a no-op. The constraint vanishes and the view selects
-    // every row while still looking filtered.
-    //
-    // `compileProblemFilters` throws on this, but only for Problem-BACKED
-    // views. Every other saved view — `product/shelf-disagrees`,
-    // `product/unlocated`, `unlocated-durables`, `consumed-on-projects` and the
-    // rest — reaches `buildFiltersFromManifest` directly and is unprotected. So
-    // ask the SAME predicate here, of the whole manifest.
+    // that empty patch as a no-op. The compiler checks static presets; this
+    // asks the runtime expander, which also covers `expandRef` presets.
     for (const [entity, views] of Object.entries(viewManifest)) {
       const parsedEntity = entityFromKey(entity);
       if (!parsedEntity) continue;
@@ -72,42 +46,9 @@ describe("view manifest", () => {
         expect(
           unexpanded,
           `view "${entity}/${view.id}" pins range filter "${unexpanded?.id}" = ` +
-            `"${String(unexpanded?.value)}", which expands to nothing — the ` +
-            "filter would be dropped and the view would match every row",
+            `"${String(unexpanded?.value)}", which expands to nothing`,
         ).toBeUndefined();
       }
-    }
-  });
-
-  it("never pins a urlOnly spec", () => {
-    // The subtler half of the check above: a urlOnly id passes it (the spec
-    // does exist) but does nothing at runtime, because applying a view writes
-    // `columnFilters` and `partitionFilterSpecs` keeps urlOnly specs out of
-    // that state entirely. The view would light up its checkmark and select
-    // every row. `financialTransaction/unlinked` is only correct because
-    // `purchasePresence` was promoted to column-backed first.
-    for (const [entity, views] of Object.entries(viewManifest)) {
-      const parsedEntity = entityFromKey(entity);
-      if (!parsedEntity) continue;
-      const [, urlOnly] = partitionFilterSpecs(getEntityFilters(parsedEntity));
-      const urlOnlyIds = new Set(urlOnly.map((spec) => spec.columnId));
-      for (const view of views ?? []) {
-        for (const filter of view.filters) {
-          expect(
-            urlOnlyIds.has(filter.id),
-            `view "${view.id}" on "${entity}" pins urlOnly filter "${filter.id}"`,
-          ).toBe(false);
-        }
-      }
-    }
-  });
-
-  it("uses ids that are unique per entity", () => {
-    for (const [entity, views] of Object.entries(viewManifest)) {
-      const ids = (views ?? []).map((v) => v.id);
-      expect(new Set(ids).size, `duplicate view id on "${entity}"`).toBe(
-        ids.length,
-      );
     }
   });
 

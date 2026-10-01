@@ -86,9 +86,9 @@ final class PhotoEntityChooserModel {
         dateError = nil
         recentError = nil
         if hasDateMatches {
-            do { try await loadDatePage(1, replace: true) } catch { dateError = Self.describe(error) }
+            do { try await loadDatePage(1, replace: true) } catch { dateError = error.userMessage }
         }
-        do { try await loadRecentPage(1, replace: true) } catch { recentError = Self.describe(error) }
+        do { try await loadRecentPage(1, replace: true) } catch { recentError = error.userMessage }
         isLoading = false
     }
 
@@ -104,9 +104,9 @@ final class PhotoEntityChooserModel {
         dateError = nil
         recentError = nil
         if hasDateMatches {
-            do { try await loadDatePage(1, replace: true) } catch { dateError = Self.describe(error) }
+            do { try await loadDatePage(1, replace: true) } catch { dateError = error.userMessage }
         }
-        do { try await loadRecentPage(1, replace: true) } catch { recentError = Self.describe(error) }
+        do { try await loadRecentPage(1, replace: true) } catch { recentError = error.userMessage }
         isLoading = false
     }
 
@@ -122,7 +122,7 @@ final class PhotoEntityChooserModel {
         guard hasDateMatches, hasMoreDateMatches, !isLoadingDateNextPage else { return }
         isLoadingDateNextPage = true
         defer { isLoadingDateNextPage = false }
-        do { try await loadDatePage(datePage + 1, replace: false) } catch { dateError = Self.describe(error) }
+        do { try await loadDatePage(datePage + 1, replace: false) } catch { dateError = error.userMessage }
     }
 
     func loadMoreRecents() async {
@@ -130,7 +130,7 @@ final class PhotoEntityChooserModel {
         isLoadingRecentNextPage = true
         defer { isLoadingRecentNextPage = false }
         do { try await loadRecentPage(recentPage + 1, replace: false) } catch {
-            recentError = Self.describe(error)
+            recentError = error.userMessage
         }
     }
 
@@ -227,14 +227,5 @@ final class PhotoEntityChooserModel {
     private static func plainDate(_ date: Date, calendar: Calendar) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
-    }
-
-    private static func describe(_ error: Error) -> String {
-        if let apiError = error as? CubbyAPIError {
-            let code = apiError.detail?.code ?? "HTTP_\(apiError.status)"
-            let message = apiError.detail?.message ?? "Request failed"
-            return "\(code): \(message)"
-        }
-        return String(describing: error)
     }
 }

@@ -35,7 +35,6 @@
     "**/dist/**",
     "**/drizzle/**",
     "**/node_modules/**",
-    "apps/upc-lookup/public/**",
     "apps/usda-api/data/**",
     "apps/web/src/components/reui/**",
     "apps/web/src/components/ui/**",
@@ -305,6 +304,132 @@
             ]
           }
         ]
+      }
+    },
+    {
+      "files": [
+        "apps/web/src/server/**/*.ts",
+        "apps/web/src/cf-server.ts",
+        "apps/usda-api/src/**/*.ts",
+        "apps/purchase-agent/src/**/*.ts",
+        "packages/*/src/**/*.ts"
+      ],
+      "excludeFiles": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.live-eval.ts",
+        "packages/worker-tracing/src/log.ts"
+      ],
+      "rules": {
+        "cubby/no-raw-console": "error"
+      }
+    },
+    {
+      "files": ["apps/web/src/**/*.ts", "apps/web/src/**/*.tsx"],
+      "excludeFiles": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.live-eval.ts",
+        "apps/web/src/lib/number-format.ts",
+        "apps/web/src/lib/utils.ts"
+      ],
+      "rules": {
+        "cubby/no-ad-hoc-number-format": "error",
+        "cubby/no-unbounded-page-size": "error"
+      }
+    },
+    {
+      "files": ["apps/web/src/server/**/*.ts"],
+      "excludeFiles": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.live-eval.ts",
+        "apps/web/src/server/entity-kernel/execute.ts"
+      ],
+      "rules": {
+        "cubby/no-kernel-action-guard": "error"
+      }
+    },
+    {
+      "files": ["apps/web/src/**/*.tsx"],
+      "excludeFiles": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.live-eval.ts",
+        "apps/web/src/components/ui/**",
+        "apps/web/src/components/reui/**"
+      ],
+      "rules": {
+        "cubby/no-raw-table": "error"
+      }
+    },
+    {
+      "files": [
+        "apps/web/**/*.test.ts",
+        "apps/web/**/*.test.tsx",
+        "apps/web/tooling/**/*.ts",
+        "apps/web/tests/**/*.ts"
+      ],
+      "rules": {
+        "cubby/no-hand-parsed-create-input": "error"
+      }
+    },
+    {
+      "files": [
+        "apps/web/src/app/_components/ai/ai-usage-page.tsx",
+        "apps/web/src/app/_components/charts/kit.tsx",
+        "apps/web/src/app/_components/dev/mcp-usage-dashboard.tsx",
+        "apps/web/src/app/_components/labels/label-summary.tsx",
+        "apps/web/src/app/_components/nutrition/NutrientDensityStats.tsx",
+        "apps/web/src/app/_components/perf-overlay/index.tsx",
+        "apps/web/src/app/_components/recipe/RecipeMagazineView.tsx",
+        "apps/web/src/app/_components/recipe/compare/RecipeCompareGrid.tsx",
+        "apps/web/src/app/_components/recipe/cookbook-import/run-report-panel.tsx",
+        "apps/web/src/app/_components/units/NutrientsSummary.tsx",
+        "apps/web/src/app/_components/visualizations/recipe-cost-treemap.tsx",
+        "apps/web/src/app/cookbooks/cookbook-run-report.tsx",
+        "apps/web/src/app/purchases/financial-settlement.tsx",
+        "apps/web/src/app/purchases/purchase-import-run-detail.tsx",
+        "apps/web/src/app/runs/run-history.tsx",
+        "apps/web/src/entities/detail-field-renderers/image-capture.tsx",
+        "apps/web/src/lib/format-duration.ts",
+        "apps/web/src/lib/wasm-execution.ts",
+        "apps/web/src/server/calendar/ics.ts",
+        "apps/web/src/server/repo/financial-transaction-allocations.ts",
+        "apps/web/src/server/services/product-match-ranking.ts"
+      ],
+      "rules": {
+        "cubby/no-ad-hoc-number-format": "off"
+      }
+    },
+    {
+      "files": ["packages/schemas/src/pagination.ts"],
+      "rules": {
+        "cubby/no-raw-console": "off"
+      }
+    },
+    {
+      "files": [
+        "apps/web/src/app/_components/entity-detail/entity-relation-table.tsx",
+        "apps/web/src/app/_components/merge/entity-merge-dialog.tsx",
+        "apps/web/src/app/_components/perf-overlay/index.tsx",
+        "apps/web/src/app/_components/recipe/compare/RecipeCompareGrid.tsx",
+        "apps/web/src/app/docs/_components/GuideDoc.tsx",
+        "apps/web/src/app/projects/charts/task-status-board.tsx",
+        "apps/web/src/app/projects/tool-matrix-page.tsx",
+        "apps/web/src/components/markdown.tsx",
+        "apps/web/src/components/matrix/cross-tab-table.tsx"
+      ],
+      "rules": {
+        "cubby/no-raw-table": "off"
       }
     }
   ]

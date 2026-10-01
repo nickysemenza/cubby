@@ -476,8 +476,8 @@ export const productConversionCoverage = pgTable(
  * Product. A product can gain or lose an empty field without invalidating the
  * provider's answer; proposal membership is re-evaluated from this cache.
  *
- * `status=ready` includes a provider miss: it is a successfully checked UPC
- * with no useful fields, not an outage. Provider outages deliberately do not
+ * `status=ready` includes a provider miss (`name` null): it is a successfully
+ * checked UPC with no useful fields, not an outage. Provider outages deliberately do not
  * overwrite a previous answer, so callers can distinguish stale data from an
  * unavailable provider.
  */
@@ -485,10 +485,16 @@ export const upcLookupCache = pgTable(
   "UpcLookupCache",
   {
     upc: text("upc").primaryKey(),
+    /** Null on a checked miss; `manual` rows (hand-entered) are never refreshed. */
+    name: text("name"),
     manufacturer: text("manufacturer"),
     brand: text("brand"),
+    category: text("category"),
+    description: text("description"),
     priceDollars: doublePrecision("priceDollars"),
     imageUrl: text("imageUrl"),
+    /** `manual` | `upcitemdb`; see UPC_SOURCE_NAMES. */
+    source: text("source").notNull().default("upcitemdb"),
     status: text("status").notNull().default("ready"),
     fetchedAt: timestamp("fetchedAt", { mode: "date" }).notNull(),
   },

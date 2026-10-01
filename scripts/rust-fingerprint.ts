@@ -7,10 +7,12 @@
 // incompatible local parser checkout.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { digestTree } from "./lib/tree-digest.ts";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // Cargo.lock is skipped: the resolved graph it encodes is already hashed via
@@ -31,19 +33,11 @@ const PRUNE = new Set([
 
 // Include assets consumed by include_str!/include_bytes!, additions and deletions.
 // Checkout paths and mtimes aren't inputs: identical worktrees share one artifact.
+// A missing crate root is a broken input, not an empty one: fail loudly.
 export const sourceDigest = (directory: string): string => {
-  const hash = createHash("sha256");
-  for (const entry of readdirSync(directory, { withFileTypes: true }).sort(
-    (left, right) => left.name.localeCompare(right.name),
-  )) {
-    if (PRUNE.has(entry.name)) continue;
-    const path = join(directory, entry.name);
-    const digest = entry.isDirectory()
-      ? sourceDigest(path)
-      : createHash("sha256").update(readFileSync(path)).digest("hex");
-    hash.update(JSON.stringify([entry.name, digest]));
-  }
-  return hash.digest("hex");
+  if (!existsSync(directory))
+    throw new Error(`Rust source directory not found: ${directory}`);
+  return digestTree(directory, { skip: (name) => PRUNE.has(name) });
 };
 
 export const sourceInputs = (roots: string[], workspace: string): string =>

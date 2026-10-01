@@ -68,6 +68,7 @@ import {
   RUN_TARGET_STATE_LABEL,
   RUN_TARGET_STATE_VARIANT,
 } from "~/lib/run-target-state";
+import { formatCurrency } from "~/lib/utils";
 
 import {
   LIVE_RUN_STATUSES,
@@ -965,7 +966,7 @@ function PhotoProductSuggestions({
                         · {line.date ?? "Undated"} ·{" "}
                         {line.cost == null
                           ? "Cost unknown"
-                          : `$${line.cost.toFixed(2)}`}{" "}
+                          : `${formatCurrency(line.cost)}`}{" "}
                         ·{" "}
                         {line.productQuantity == null
                           ? "Quantity unknown"
@@ -1670,7 +1671,7 @@ function ExpenseLinkReview({
                   {line.date ?? "Undated"} ·{" "}
                   {line.cost == null
                     ? "Cost unknown"
-                    : `$${line.cost.toFixed(2)}`}{" "}
+                    : `${formatCurrency(line.cost)}`}{" "}
                   ·{" "}
                   {line.productQuantity == null
                     ? "Quantity unknown"

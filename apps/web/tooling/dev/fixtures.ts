@@ -127,6 +127,7 @@ export async function seedDevDatabase(options: {
     if (pack === "core") {
       const { seedCorpus } = await import("../scenarios/corpus");
       await seedCorpus(pool, userId);
+      await seedUpcLookupFixture(pool);
     } else {
       const { seedLocalFixturePack } = await import("./scenarios");
       await seedLocalFixturePack(pool, userId, pack, options.baseURL);
@@ -149,4 +150,13 @@ export async function seedDevDatabase(options: {
   } finally {
     await pool.end();
   }
+}
+
+/** One synthetic barcode answer so the lookup path is exercised without upstream calls. */
+async function seedUpcLookupFixture(pool: Pool): Promise<void> {
+  await pool.query(
+    `INSERT INTO "UpcLookupCache" (upc, name, manufacturer, brand, category, description, "priceDollars", source, status, "fetchedAt")
+     VALUES ('012345678905', 'Synthetic cotton shirt', 'Synthetic Works', 'Synthetic', 'Clothing', 'Local synthetic barcode fixture', 18, 'manual', 'ready', now())
+     ON CONFLICT (upc) DO NOTHING`,
+  );
 }

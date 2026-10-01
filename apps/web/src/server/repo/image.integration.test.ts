@@ -5,9 +5,9 @@ import {
   userId,
 } from "@cubby/schemas/identifiers";
 import { getImageByIdSchema } from "@cubby/schemas/image";
-import { projectCreateInput } from "@cubby/schemas/project";
 import { generateShortcode } from "@cubby/shared";
 import { asc, eq, inArray } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -47,7 +47,6 @@ import {
   getImageHashIndex,
   setImagePerceptualHashes,
 } from "./image";
-import { createProject } from "./project";
 import { insertWithShortcode } from "./shortcode-utils";
 import { findOrCreateVendor } from "./vendor";
 
@@ -254,11 +253,9 @@ describe("image repository", () => {
 
   it("deduplicates association retries while still finalizing pending uploads", async () => {
     const projectId = (
-      await createProject(
-        ctx.db,
-        projectCreateInput.parse({ name: "Idempotent photo project" }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "project", {
+        name: "Idempotent photo project",
+      })
     ).entityId;
     const pending = await createPendingImageRecord(ctx.db, {
       key: `images/${crypto.randomUUID()}.jpg`,
@@ -312,11 +309,9 @@ describe("image repository", () => {
 
   it("rejects unavailable pending image associations before writing", async () => {
     const projectId = (
-      await createProject(
-        ctx.db,
-        projectCreateInput.parse({ name: "Unavailable photo project" }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "project", {
+        name: "Unavailable photo project",
+      })
     ).entityId;
     const failed = await createPendingImageRecord(ctx.db, {
       key: `images/${crypto.randomUUID()}.jpg`,
@@ -376,11 +371,9 @@ describe("image repository", () => {
 
   it("culls only expired unassociated pending images", async () => {
     const projectId = (
-      await createProject(
-        ctx.db,
-        projectCreateInput.parse({ name: "Pending photo cleanup project" }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "project", {
+        name: "Pending photo cleanup project",
+      })
     ).entityId;
     const expired = await createPendingImageRecord(ctx.db, {
       key: `images/${crypto.randomUUID()}.jpg`,
@@ -723,13 +716,7 @@ describe("image repository — purchase (charge) documents", () => {
       ).row;
 
     const makeProject = async (name: string) =>
-      (
-        await createProject(
-          ctx.db,
-          projectCreateInput.parse({ name }),
-          ctx.actor,
-        )
-      ).entityId;
+      (await createRepoEntity(ctx, "project", { name })).entityId;
 
     const rawImageRows = async (imageId: string) =>
       await getDb(ctx.db).select().from(image).where(eq(image.id, imageId));
@@ -827,11 +814,7 @@ describe("image repository — purchase (charge) documents", () => {
   describe("imageList reference-presence filter", () => {
     it("reports an unattached UPLOADED row and skips everything still spoken for", async () => {
       const projectId = (
-        await createProject(
-          ctx.db,
-          projectCreateInput.parse({ name: "Unreferenced Sweep" }),
-          ctx.actor,
-        )
+        await createRepoEntity(ctx, "project", { name: "Unreferenced Sweep" })
       ).entityId;
 
       const orphan = await createUploadedImageRecord(ctx.db, {

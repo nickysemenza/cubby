@@ -376,22 +376,32 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   );
 }
 
-// Helper for handling required textarea fields
-export function RequiredTextareaField<
-  TFieldValues extends FieldValues = FieldValues,
->({
+const describedBy = (ids: Array<string | null>) =>
+  ids.filter(Boolean).join(" ") || undefined;
+
+/**
+ * The one textarea field primitive. `nullable` maps an emptied box to `null`;
+ * `description` and `rows` tune the surrounding group and box.
+ */
+export function TextareaField<TFieldValues extends FieldValues = FieldValues>({
   form,
   name,
   label,
   placeholder,
+  description,
   rows = 3,
+  nullable = false,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: FieldPathByValue<TFieldValues, string | null | undefined>;
   label: string;
-  placeholder: string;
+  placeholder?: string;
+  description?: ReactNode;
   rows?: number;
+  nullable?: boolean;
 }) {
+  const descriptionId = `${name}-description`;
+  const errorId = `${name}-error`;
   return (
     <Controller
       control={form.control}
@@ -399,17 +409,32 @@ export function RequiredTextareaField<
       render={({ field, fieldState }) => (
         <FormFieldGroup
           htmlFor={name}
+          descriptionId={descriptionId}
+          errorId={errorId}
           label={label}
+          description={description}
           invalid={fieldState.invalid}
           error={fieldState.error}
         >
           <Textarea
             id={name}
-            placeholder={placeholder}
             {...field}
+            value={field.value ?? ""}
+            placeholder={placeholder}
             className="min-h-0 px-2 py-1"
             rows={rows}
+            onChange={(event) =>
+              field.onChange(
+                event.target.value === "" && nullable
+                  ? null
+                  : event.target.value,
+              )
+            }
             aria-invalid={fieldState.invalid}
+            aria-describedby={describedBy([
+              description ? descriptionId : null,
+              fieldState.error ? errorId : null,
+            ])}
           />
         </FormFieldGroup>
       )}

@@ -5,7 +5,6 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { type output as ZodOutput, type ZodSchema, z } from "zod";
 
 import type { ListReadRow } from "~/entities/list-read-fields";
-import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import {
@@ -25,6 +24,7 @@ import {
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
+import type { UpcLookupService } from "~/server/services/upc";
 import type { USDAService } from "~/server/services/usda.service";
 export interface EntityKernelContext {
   /**
@@ -36,7 +36,7 @@ export interface EntityKernelContext {
   usdaClient: USDAClient;
   /** Optional service facade for specialized MCP reads outside the kernel. */
   usdaService?: USDAService;
-  upcLookupClient: UPCLookupClient;
+  upcLookupClient: UpcLookupService;
   services: {
     recipeCosting: RecipeCostingService;
   };

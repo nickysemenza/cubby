@@ -1,6 +1,7 @@
 import { defineEntity } from "./definition.js";
 import { cookbookProductSummary } from "@cubby/schemas/cookbook-fields";
 import { cookbookShortcode } from "../identifier-fields.js";
+import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 export default defineEntity({
   key: "cookbook",
@@ -134,7 +135,8 @@ export default defineEntity({
         key: "coverUrl",
         kind: "text",
         nullable: true,
-        display: { list: true, detail: true },
+        // The list shows the cover as the standard image column (`images`).
+        display: { detail: true },
         provenance: {
           kind: "derived",
           sources: [{ entity: "image", relation: "cover" }],
@@ -153,6 +155,16 @@ export default defineEntity({
           create: null,
           update: null,
         },
+      },
+      {
+        key: "images",
+        kind: "json",
+        display: { list: true, standard: "image" },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "image", relation: "cover" }],
+        },
+        validation: { read: z.array(imageOut), create: null, update: null },
       },
       {
         key: "sourceRecipeCount",

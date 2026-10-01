@@ -1,5 +1,5 @@
-import { taskCreateInput } from "@cubby/schemas/project";
 import { and, eq } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -18,7 +18,7 @@ import {
   updatePlanting,
 } from "~/server/repo/garden";
 import { plantingRepository } from "~/server/repo/garden/repository";
-import { createLocation } from "~/server/repo/location";
+import { createLocation } from "~/server/repo/location/crud";
 import {
   createPlantFixture,
   createProductFixture,
@@ -477,7 +477,7 @@ describe("garden workflows", () => {
     );
     const task = await createTask(
       ctx.db,
-      taskCreateInput.parse({
+      buildEntity("task", {
         trade: "other",
         name: "Task delete detach task",
       }),
@@ -575,7 +575,7 @@ describe("garden workflows", () => {
     );
     const task = await createTask(
       ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "Task filter task" }),
+      buildEntity("task", { trade: "other", name: "Task filter task" }),
       TEST_ACTOR,
     );
     const linked = await createPlanting(

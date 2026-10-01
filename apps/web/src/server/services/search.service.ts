@@ -8,6 +8,7 @@ import {
   searchHitSchema,
   searchableEntities,
 } from "@cubby/schemas/search";
+import { createLogger } from "@cubby/worker-tracing";
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -33,6 +34,8 @@ import {
   type VectorStorePort,
 } from "~/server/semantic/vector-store";
 import { TraceNames, withTrace } from "~/server/tracing";
+
+const log = createLogger("search");
 
 const candidateSchema = searchHitSchema
   .omit({ imageUrl: true, locationPath: true })
@@ -279,7 +282,7 @@ export async function findRelatedSearchCandidates(
     });
     return { status: "ready", results };
   } catch (error) {
-    console.warn("search.related.failed", { message: getErrorMessage(error) });
+    log.warn("related failed", { message: getErrorMessage(error) });
     return { status: "unavailable", results: [] };
   }
 }

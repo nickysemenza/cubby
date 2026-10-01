@@ -1,8 +1,8 @@
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
-import { taskCreateInput } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fromAny } from "@total-typescript/shoehorn";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -17,14 +17,10 @@ import {
   refreshSearchDocument,
 } from "~/server/repo/search-document";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
-import {
-  createTask,
-  getTaskByShortcode,
-  taskList,
-  updateTask,
-} from "~/server/repo/task";
 import { listActionableTasks } from "~/server/repo/task/actionable";
+import { getTaskByShortcode, updateTask } from "~/server/repo/task/crud";
 import { updateTasksInBulk } from "~/server/repo/task/crud";
+import { taskList } from "~/server/repo/task/lookup";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -32,16 +28,14 @@ describe("task reorder workflow", () => {
   const ctx = withTestDb();
 
   it("returns persisted ranks and dispatches effects after a successful reorder", async () => {
-    const first = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "First ranked task" }),
-      ctx.actor,
-    );
-    const second = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "Second ranked task" }),
-      ctx.actor,
-    );
+    const first = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "First ranked task",
+    });
+    const second = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "Second ranked task",
+    });
     const result = await taskBulkReorderWorkflow(
       ctx.db,
       {
@@ -92,46 +86,30 @@ describe("task repository — scoped list search", () => {
   const ctx = withTestDb();
 
   it("intersects exact/text search with legacy and status filters before count and pagination", async () => {
-    const exact = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "scope exact search",
-        status: "done",
-      }),
-      ctx.actor,
-    );
-    const prefixCompetitor = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: `alpha ${exact.output.id} scope alternate`,
-        status: "done",
-      }),
-      ctx.actor,
-    );
+    const exact = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "scope exact search",
+      status: "done",
+    });
+    const prefixCompetitor = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: `alpha ${exact.output.id} scope alternate`,
+      status: "done",
+    });
     const pageRows = await Promise.all(
       ["one", "two", "three"].map((suffix) =>
-        createTask(
-          ctx.db,
-          taskCreateInput.parse({
-            trade: "other",
-            name: `scope page marker ${suffix}`,
-            status: "done",
-          }),
-          ctx.actor,
-        ),
+        createRepoEntity(ctx, "task", {
+          trade: "other",
+          name: `scope page marker ${suffix}`,
+          status: "done",
+        }),
       ),
     );
-    const excluded = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "scope page marker excluded",
-        status: "not_started",
-      }),
-      ctx.actor,
-    );
+    const excluded = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "scope page marker excluded",
+      status: "not_started",
+    });
     await Promise.all(
       [exact, prefixCompetitor, ...pageRows, excluded].map(({ entityId }) =>
         refreshSearchDocument(ctx.db, "task", entityId),
@@ -192,21 +170,18 @@ describe("task repository — listActionableTasks", () => {
   const ctx = withTestDb();
 
   it("builds the transitive chain (A blocked by B, B blocked by C -> A's chain = [B, C])", async () => {
-    const { output: c } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "task c" }),
-      ctx.actor,
-    );
-    const { output: b } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "task b" }),
-      ctx.actor,
-    );
-    const { output: a } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "task a" }),
-      ctx.actor,
-    );
+    const { output: c } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "task c",
+    });
+    const { output: b } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "task b",
+    });
+    const { output: a } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "task a",
+    });
     await updateTask(ctx.db, b.id, { blockedByIds: [c.id] }, ctx.actor);
     await updateTask(ctx.db, a.id, { blockedByIds: [b.id] }, ctx.actor);
 
@@ -218,21 +193,18 @@ describe("task repository — listActionableTasks", () => {
   });
 
   it("rejects a multi-hop dependency cycle without replacing prior edges", async () => {
-    const { output: a } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "task cycle a" }),
-      ctx.actor,
-    );
-    const { output: b } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "task cycle b" }),
-      ctx.actor,
-    );
-    const { output: c } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "task cycle c" }),
-      ctx.actor,
-    );
+    const { output: a } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "task cycle a",
+    });
+    const { output: b } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "task cycle b",
+    });
+    const { output: c } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "task cycle c",
+    });
     await updateTask(ctx.db, a.id, { blockedByIds: [b.id] }, ctx.actor);
     await updateTask(ctx.db, b.id, { blockedByIds: [c.id] }, ctx.actor);
 
@@ -245,16 +217,14 @@ describe("task repository — listActionableTasks", () => {
   });
 
   it("serializes opposite dependency writes so only one side can commit", async () => {
-    const { output: a } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "dependency race a" }),
-      ctx.actor,
-    );
-    const { output: b } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "dependency race b" }),
-      ctx.actor,
-    );
+    const { output: a } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "dependency race a",
+    });
+    const { output: b } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "dependency race b",
+    });
 
     const results = await Promise.allSettled([
       updateTask(ctx.db, a.id, { blockedByIds: [b.id] }, ctx.actor),
@@ -270,14 +240,10 @@ describe("task repository — listActionableTasks", () => {
   });
 
   it("backstops task self dependency with a database CHECK", async () => {
-    const { entityId } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "raw self dependency task",
-      }),
-      ctx.actor,
-    );
+    const { entityId } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "raw self dependency task",
+    });
 
     await expect(
       getDb(ctx.db)
@@ -291,31 +257,22 @@ describe("task repository — subtasks (parentTaskId)", () => {
   const ctx = withTestDb();
 
   it("rejects a parent that is itself a subtask — only one level of nesting", async () => {
-    const { output: grandparent } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "grandparent" }),
-      ctx.actor,
-    );
-    const { output: parent } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "parent",
-        parentTaskId: grandparent.id,
-      }),
-      ctx.actor,
-    );
+    const { output: grandparent } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "grandparent",
+    });
+    const { output: parent } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "parent",
+      parentTaskId: grandparent.id,
+    });
 
     await expect(
-      createTask(
-        ctx.db,
-        taskCreateInput.parse({
-          trade: "other",
-          name: "grandchild",
-          parentTaskId: parent.id,
-        }),
-        ctx.actor,
-      ),
+      createRepoEntity(ctx, "task", {
+        trade: "other",
+        name: "grandchild",
+        parentTaskId: parent.id,
+      }),
     ).rejects.toThrow(/only one level/i);
   });
 });
@@ -350,11 +307,10 @@ describe("task kernel — bulkUpdate", () => {
   };
 
   it("rejects a partially missing selection before changing any task", async () => {
-    const { output: task } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "atomic task patch" }),
-      ctx.actor,
-    );
+    const { output: task } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "atomic task patch",
+    });
 
     await expect(
       bulkUpdate([task.id, testShortcode("task", "TSK-ZZZZ")], {
@@ -367,20 +323,15 @@ describe("task kernel — bulkUpdate", () => {
   });
 
   it("reports a cascaded subtask as an exact deleted reference", async () => {
-    const { output: parent } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "delete parent" }),
-      ctx.actor,
-    );
-    const { output: subtask } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "delete child",
-        parentTaskId: parent.id,
-      }),
-      ctx.actor,
-    );
+    const { output: parent } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "delete parent",
+    });
+    const { output: subtask } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "delete child",
+      parentTaskId: parent.id,
+    });
 
     const result = await executeEntity(kernelContext(), {
       action: "delete",
@@ -416,16 +367,12 @@ describe("task kernel — bulkUpdate", () => {
   });
 
   it("refuses half a due-date window rather than nulling the other half", async () => {
-    const { output: t } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "kernel due window",
-        dueDate: "2024-03-01",
-        dueEndDate: "2024-03-05",
-      }),
-      ctx.actor,
-    );
+    const { output: t } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "kernel due window",
+      dueDate: "2024-03-01",
+      dueEndDate: "2024-03-05",
+    });
 
     await expect(
       bulkUpdate([t.id], { dueDate: "2024-04-01" }),
@@ -449,20 +396,15 @@ describe("updateTasksInBulk status patch", () => {
   const ctx = withTestDb();
 
   it("accepts mixed selections, audits only changes, and refuses a missing ID", async () => {
-    const changed = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ trade: "other", name: "Bulk status pending" }),
-      ctx.actor,
-    );
-    const unchanged = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "Bulk status already done",
-        status: "done",
-      }),
-      ctx.actor,
-    );
+    const changed = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "Bulk status pending",
+    });
+    const unchanged = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "Bulk status already done",
+      status: "done",
+    });
     const ids = [changed.output.id, unchanged.output.id];
 
     for (const _attempt of [1, 2]) {

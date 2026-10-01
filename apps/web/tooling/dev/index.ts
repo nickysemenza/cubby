@@ -15,6 +15,8 @@ import {
 import net from "node:net";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { pollUntil } from "@cubby/shared/retry";
+import { runOrThrow } from "../../../../scripts/lib/run.ts";
 import { Pool } from "pg";
 import { z } from "zod";
 import {
@@ -119,21 +121,14 @@ async function run(
   args: string[],
   extra: Record<string, string> = {},
 ): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: profile.repoRoot,
-      env: { ...devProcessEnvironment(profile), ...extra },
-      stdio: "inherit",
-      detached: supervising,
-    });
-    ownedChildren.add(child);
-    child.once("close", () => ownedChildren.delete(child));
-    child.once("error", reject);
-    child.once("close", (code) =>
-      code === 0
-        ? resolve()
-        : reject(new Error(`${command} ${args[0]} exited ${code}`)),
-    );
+  await runOrThrow(command, args, {
+    cwd: profile.repoRoot,
+    env: { ...devProcessEnvironment(profile), ...extra },
+    stdio: "inherit",
+    detached: supervising,
+    describe: (status) => `${command} ${args[0]} exited ${status}`,
+    onSpawn: (child) => ownedChildren.add(child),
+    onClose: (child) => ownedChildren.delete(child),
   });
 }
 function installEnvironment(profile: DevProfile): void {
@@ -156,12 +151,19 @@ async function readiness(session: Session) {
     throw new Error(`Runtime is not ready (${response.status})`);
   return body;
 }
+/** Wait up to `timeoutMs` for `isAlive` to turn false; the caller re-checks and decides. */
+const untilGone = (isAlive: () => boolean, timeoutMs: number) =>
+  pollUntil(() => (isAlive() ? undefined : true), {
+    label: "process exit",
+    timeoutMs,
+    intervalMs: 100,
+  }).catch(() => undefined);
+
 async function stop(profile: DevProfile): Promise<void> {
   const session = readSession(profile);
   if (!session) return;
   if (alive(session)) process.kill(session.supervisorPid, "SIGTERM");
-  for (let attempt = 0; attempt < 50 && alive(session); attempt++)
-    await delay(100);
+  await untilGone(() => alive(session), 5000);
   if (alive(session))
     throw new Error(
       "Development supervisor did not stop; persistent data retained",
@@ -172,12 +174,10 @@ async function stop(profile: DevProfile): Promise<void> {
     processIdentity(session.runtimePid) === session.runtimeIdentity;
   if (runtimeAlive() && session.runtimePid) {
     process.kill(-session.runtimePid, "SIGTERM");
-    for (let attempt = 0; attempt < 50 && runtimeAlive(); attempt++)
-      await delay(100);
+    await untilGone(runtimeAlive, 5000);
     if (runtimeAlive()) {
       process.kill(-session.runtimePid, "SIGKILL");
-      for (let attempt = 0; attempt < 20 && runtimeAlive(); attempt++)
-        await delay(100);
+      await untilGone(runtimeAlive, 2000);
     }
     if (runtimeAlive())
       throw new Error("Owned runtime did not stop; persistent data retained");

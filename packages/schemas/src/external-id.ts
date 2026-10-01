@@ -1,4 +1,8 @@
-import { BARCODE_RE } from "@cubby/shared/upc";
+import {
+  BARCODE_CHECK_DIGIT_MESSAGE,
+  BARCODE_RE,
+  isGtin,
+} from "@cubby/shared/upc";
 import { z } from "zod";
 
 export const externalIdSource = z
@@ -45,8 +49,9 @@ export const isGtinKind = (kind: ExternalIdKind): boolean => kind === GTIN_KIND;
  * The canonical GTIN-14 form — the identity every encoding of one barcode
  * shares.
  *
- * Returns null for anything that is not an 8, 12, 13 or 14 digit barcode
- * (`BARCODE_RE`). That guard is load-bearing on the SQL side: Postgres
+ * Returns null for anything that is not an 8, 12, 13 or 14 digit barcode with
+ * a correct GS1 check digit (`isGtin`). The length guard is load-bearing on
+ * the SQL side: Postgres
  * `lpad(x, 14, '0')` TRUNCATES longer input rather than erroring, so a
  * silently-truncated value would collide with a real barcode under the global
  * `(source, kind, externalId)` unique.
@@ -58,7 +63,7 @@ export const isGtinKind = (kind: ExternalIdKind): boolean => kind === GTIN_KIND;
  * ISBN-10 or a hyphenated code must use the wasm function, not this one.
  */
 export const normalizeGtin = (value: string): string | null =>
-  BARCODE_RE.test(value) ? value.padStart(14, "0") : null;
+  isGtin(value) ? value.padStart(14, "0") : null;
 
 export const displayGtin = (value: string): string =>
   value.replace(/^0+/, "").padStart(12, "0");
@@ -79,7 +84,11 @@ export const displayGtin = (value: string): string =>
 export const gtin = z
   .string()
   .trim()
-  .regex(BARCODE_RE, "a barcode is 8, 12, 13, or 14 digits")
+  .regex(BARCODE_RE, {
+    message: "a barcode is 8, 12, 13, or 14 digits",
+    abort: true,
+  })
+  .refine(isGtin, BARCODE_CHECK_DIGIT_MESSAGE)
   .transform((value) => value.padStart(14, "0"))
   .pipe(z.string().regex(/^\d{14}$/))
   .describe("Barcode (UPC/EAN/GTIN); stored canonically as GTIN-14");

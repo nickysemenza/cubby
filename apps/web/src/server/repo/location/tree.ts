@@ -26,7 +26,7 @@ import {
   location,
   product,
 } from "~/server/db/schema";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   getDb,
   imageOrder,

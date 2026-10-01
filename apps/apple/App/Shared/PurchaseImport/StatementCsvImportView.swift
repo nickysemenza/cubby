@@ -213,7 +213,7 @@ struct StatementCsvImportView: View {
                                 .font(.fieldGuideTitle)
                                 .fixedSize(horizontal: false, vertical: true)
                             if !dynamicTypeSize.isAccessibilitySize { Spacer() }
-                            Text(row.proposed.amount, format: .currency(code: "USD"))
+                            Text(row.proposed.amount, format: .usd)
                                 .font(.fieldGuideData)
                                 .fixedSize()
                         }

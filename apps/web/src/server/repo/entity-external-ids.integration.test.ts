@@ -1,9 +1,7 @@
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
-import { expenseCreateInput } from "@cubby/schemas/project";
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { and, eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -27,16 +25,11 @@ import { entityExternalId } from "~/server/db/schema";
  */
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
-import { loadDataQualities } from "./data-quality";
+import { loadDataQualities } from "./data-quality/hydrate";
 import { getDb } from "./database-helpers";
-import { createExpense } from "./expense";
-import { createFinancialAccount } from "./financial-account";
-import {
-  createFinancialTransaction,
-  updateFinancialTransaction,
-} from "./financial-transaction";
-import { updateProduct } from "./product";
-import { createPurchase, getPurchaseByID } from "./purchase";
+import { updateFinancialTransaction } from "./financial-transaction";
+import { updateProduct } from "./product/crud";
+import { getPurchaseByID } from "./purchase";
 import { getNotionRecipePageIds, upsertNotionRecipe } from "./recipe/crud";
 import {
   createProductFixture as createProduct,
@@ -52,16 +45,12 @@ describe("EntityExternalId", () => {
 
   const mkAccount = async (name: string) =>
     (
-      await createFinancialAccount(
-        ctx.db,
-        financialAccountCreateInput.parse({
-          name,
-          identity: { kind: "credit_card", issuer: null, network: "visa" },
-          cardNumbers: [],
-          sourceAliases: [],
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialAccount", {
+        name,
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        cardNumbers: [],
+        sourceAliases: [],
+      })
     ).output;
 
   const mkTransaction = async (
@@ -70,18 +59,14 @@ describe("EntityExternalId", () => {
     extra: Partial<z.input<typeof financialTransactionCreateInput>> = {},
   ) =>
     (
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId,
-          kind: "purchase",
-          status: "pending",
-          amount: 12.5,
-          sourceRefs,
-          ...extra,
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId,
+        kind: "purchase",
+        status: "pending",
+        amount: 12.5,
+        sourceRefs,
+        ...extra,
+      })
     ).output;
 
   // By shortcode through Entity: a deleted transaction no longer resolves.
@@ -157,29 +142,21 @@ describe("EntityExternalId", () => {
     const account = await mkAccount("Settlement Visa");
     const vendorId = await findOrCreateVendor(ctx.db, "Settlement Vendor");
     const purchase = (
-      await createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({
-          date: "2026-03-02",
-          vendorId: (await getVendorByID(ctx.db, vendorId)).id,
-          orderId: "settle-by-ref-1",
-        }),
-        ctx.actor,
-      )
-    ).output;
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        name: "Settled line",
+      await createRepoEntity(ctx, "purchase", {
         date: "2026-03-02",
-        trade: "other",
-        costType: "materials",
-        cost: 40,
-        purchaseId: purchase.id,
-        future: false,
-      }),
-      ctx.actor,
-    );
+        vendorId: (await getVendorByID(ctx.db, vendorId)).id,
+        orderId: "settle-by-ref-1",
+      })
+    ).output;
+    await createRepoEntity(ctx, "expense", {
+      name: "Settled line",
+      date: "2026-03-02",
+      trade: "other",
+      costType: "materials",
+      cost: 40,
+      purchaseId: purchase.id,
+      future: false,
+    });
     const transaction = await mkTransaction(
       account.id,
       [{ source: "monarch", externalId: "mon-settle-1" }],

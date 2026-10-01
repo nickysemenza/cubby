@@ -3,8 +3,7 @@ import { useState } from "react";
 
 import { ChipsInput } from "~/app/_components/forms/chips-input";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { Button } from "~/components/ui/button";
-import { DialogFooter } from "~/components/ui/dialog";
+import { DialogFormActions } from "~/components/ui/dialog-form-actions";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
@@ -47,18 +46,13 @@ export function CookbookEditDialog({
       }}
       title="Edit cookbook"
       footer={
-        <DialogFooter className="gap-2 sm:justify-end">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={save}
-            disabled={update.isPending || !name.trim()}
-          >
-            Save changes
-          </Button>
-        </DialogFooter>
+        <DialogFormActions
+          onCancel={onClose}
+          submitLabel="Save changes"
+          pending={update.isPending}
+          submitDisabled={!name.trim()}
+          onSubmit={save}
+        />
       }
     >
       <div className="space-y-3">

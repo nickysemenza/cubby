@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
 import { executeEntity } from "~/server/entity-kernel";
-import { createExpense } from "~/server/repo/expense";
+import { createExpense } from "~/server/repo/expense/crud";
 import { createFinancialAccount } from "~/server/repo/financial-account";
 import { createFinancialTransaction } from "~/server/repo/financial-transaction";
 import { getSearchDocumentEmbeddingText } from "~/server/repo/search-document";

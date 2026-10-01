@@ -185,7 +185,7 @@ public final class EntityListEnrichmentModel {
                 guard let self, self.generation == current, !Task.isCancelled else { return }
                 for id in request.ids {
                     for group in groups {
-                        self.states[id, default: [:]][group] = .failed(GenericEntityListModel.describe(error))
+                        self.states[id, default: [:]][group] = .failed(error.userMessage)
                     }
                 }
             }
@@ -208,7 +208,7 @@ public final class EntityListEnrichmentModel {
                 self.isLoadingSummary = false
             } catch {
                 guard let self, self.generation == current, !Task.isCancelled else { return }
-                self.summaryError = GenericEntityListModel.describe(error)
+                self.summaryError = error.userMessage
                 self.isLoadingSummary = false
             }
         }

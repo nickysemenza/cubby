@@ -2,11 +2,14 @@ import {
   type TelemetryMessageV1,
   telemetryMessageV1Schema,
 } from "@cubby/schemas/telemetry";
+import { createLogger } from "@cubby/worker-tracing";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import { getExecutionCtx, getTelemetryQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { persistTelemetryMessages } from "~/server/repo/telemetry";
+
+const log = createLogger("telemetry");
 
 export interface TelemetryPorts {
   readonly getTelemetryQueue: typeof getTelemetryQueue;
@@ -41,7 +44,7 @@ export async function emitTelemetry(
   // queue round trip into each of them — five tool calls in an agent turn paid
   // five. waitUntil keeps the send alive past the response instead.
   const delivered = queue.send(event).catch((error: UnparsedError) => {
-    console.error("[telemetry] failed to enqueue event", {
+    log.error("failed to enqueue event", {
       type: event.type,
       eventId: event.eventId,
       error,

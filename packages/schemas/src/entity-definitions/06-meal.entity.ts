@@ -61,6 +61,23 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "empty-cooked",
+          label: "No linked recipes",
+          description: "Cooked meals with no recipe recorded",
+          filters: [
+            { id: "mealKind", value: ["cooked"] },
+            { id: "related:meal.recipes", value: "none" },
+          ],
+          sort: [{ id: "date", desc: false }],
+          // The Recipes column is defaultVisible:false, so reveal the signal this
+          // view selects on.
+          layout: {
+            columnVisibility: { "related:meal.recipes": true },
+          },
+        },
+      ],
       read: {
         relations: ["recipes", "recipeNames"],
         derived: ["totals", "cost", "calories"],
@@ -171,6 +188,9 @@ export default defineEntity({
           kind: "select",
           options: selectControlOptions.mealKind,
           suggest: { basis: ["name"] },
+          // The storage default is a DB literal, so the create schema stays
+          // optional with no Zod default to read.
+          initial: { value: "cooked" },
         },
         display: {
           list: true,
@@ -196,6 +216,7 @@ export default defineEntity({
         key: "recipes",
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
+        display: { list: true, renderer: { list: "recipe-links" } },
         provenance: {
           kind: "relation",
           sources: [{ entity: "recipe", relation: "recipes" }],
@@ -338,6 +359,12 @@ export default defineEntity({
         key: "costTotal",
         kind: "json",
         nullable: true,
+        labelOverride: "Cost",
+        display: {
+          list: true,
+          columnIdOverride: "cost",
+          renderer: { list: "meal-cost" },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "recipe", relation: "recipes" }],

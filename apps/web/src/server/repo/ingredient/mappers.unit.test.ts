@@ -8,10 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { Database } from "~/server/db";
 
-import {
-  categorySummaryFixture,
-  taxonomyId,
-} from "../../../../tooling/product-category-fixtures";
+import { productRowFixture } from "../../../../tooling/product-category-fixtures";
 import {
   dbIngredientToAPI,
   dbIngredientToTopLevel,
@@ -47,31 +44,10 @@ const unusedDatabase = new Database(() => {
   throw new Error("Ingredient mapper unexpectedly accessed the database");
 });
 
-const baseProduct = {
+const baseProduct = productRowFixture({
   id: PRODUCT_ID,
-  shortcode: "PRD-TEST",
-  name: "Flour",
-  manufacturer: "Generic",
-  tags: [],
-  upc: null,
-  fdc_id: null,
-  growsPlantId: null,
-  model: null,
-  notes: null,
-  expectedQuantity: null,
-  createdAt: CREATED_AT,
-  updatedAt: UPDATED_AT,
-  deletedAt: null,
   ingredientId: INGREDIENT_ID,
-  categoryId: taxonomyId("food"),
-  category: categorySummaryFixture("food"),
-  classificationEvidence: "",
-  price: 4.5,
-  usdaUnavailable: null,
-  acquisitionOrigin: "unknown" as const,
-  stockTracked: null,
-  labelNutrition: null,
-};
+});
 
 const baseIngredient = {
   id: INGREDIENT_ID,

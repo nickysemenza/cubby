@@ -51,6 +51,26 @@ export default defineEntity({
   // human-identifying label that is never blank.
   presentation: {
     list: {
+      savedViews: [
+        {
+          id: "outstanding",
+          label: "Outstanding",
+          description: "Expected or pending — money that hasn't moved yet",
+          // The owed-money list: an expected refund a vendor never issued, or a
+          // credit still in flight. `postedDate` is null on these by construction
+          // (posted entries require one), so the sort is really "most recently
+          // recorded first".
+          filters: [{ id: "status", value: ["expected", "pending"] }],
+          sort: [{ id: "createdAt", desc: true }],
+        },
+        {
+          id: "unlinked",
+          label: "Not linked to a purchase",
+          description: "Settlement evidence with no order attached",
+          filters: [{ id: "purchasePresence", value: "none" }],
+          sort: [{ id: "postedDate", desc: true }],
+        },
+      ],
       read: {
         relations: [
           "accountId",
@@ -368,10 +388,37 @@ export default defineEntity({
         },
       },
       {
+        // Hosts the purchase-presence header filter: whether the charge is
+        // linked to a purchase, read from the mirror column above.
+        key: "purchasePresence",
+        kind: "boolean",
+        labelOverride: "Linked",
+        display: {
+          list: true,
+          listHidden: true,
+          width: "xs",
+          readPath: "purchaseId",
+          format: "presence",
+          valueOptions: [
+            { value: "yes", label: "Has purchase", color: "var(--slate)" },
+            {
+              value: "no",
+              label: "No purchase",
+              color: "var(--muted-foreground)",
+            },
+          ],
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "purchase", relation: "purchase" }],
+        },
+      },
+      {
         key: "kind",
         kind: "enum",
         control: {
           kind: "select",
+          initial: { value: "purchase" },
           options: [
             { value: "purchase", label: "Purchase", color: "var(--primary)" },
             { value: "refund", label: "Refund", color: "var(--positive)" },
@@ -408,6 +455,7 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
+          initial: { value: "pending" },
           options: [
             { value: "expected", label: "Expected", color: "var(--slate)" },
             { value: "pending", label: "Pending", color: "var(--slate)" },
@@ -430,7 +478,14 @@ export default defineEntity({
       {
         key: "amount",
         kind: "number",
-        control: { kind: "number", renderer: "money" },
+        // The canonical non-zero refinement reports a blank or zero amount
+        // with its own message, so the generic required check steps aside.
+        control: {
+          kind: "number",
+          renderer: "money",
+          initial: { value: 0 },
+          required: false,
+        },
         display: {
           list: true,
           detail: true,
@@ -540,6 +595,8 @@ export default defineEntity({
           detail: true,
           renderer: { detail: "financial-transaction-source-refs" },
           listHidden: true,
+          readPath: "sourceRefs[].source",
+          format: "join",
         },
         validation: {
           read: financialTransactionSourceRefs,
@@ -678,7 +735,10 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          renderer: { detail: "financial-transaction-vendor-inference" },
+          renderer: {
+            list: "possible-vendor",
+            detail: "financial-transaction-vendor-inference",
+          },
           listHidden: true,
         },
         provenance: {

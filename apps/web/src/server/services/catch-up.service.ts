@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/tanstackstart-react";
 
 import { publishBackgroundTasks } from "~/server/background-tasks/publish";
@@ -12,6 +13,8 @@ import {
   claimCatchUp,
   releaseCatchUpClaim,
 } from "~/server/repo/catch-up-claim";
+
+const log = createLogger("catch-up");
 
 export { claimCatchUp } from "~/server/repo/catch-up-claim";
 
@@ -67,7 +70,7 @@ export async function recoverMissedWork(db: Database) {
   const offline =
     offlineResult.status === "fulfilled" ? offlineResult.value : null;
   const stale = staleResult.status === "fulfilled" ? staleResult.value : null;
-  console.log("[catch-up] purchase runs expired", {
+  log.info("purchase runs expired", {
     offlineExpired: offline?.expired,
     staleExpired: stale?.expired,
     staleFailures: stale?.failures.length,
@@ -111,9 +114,7 @@ export async function discoverPurchases(db: Database) {
   ]);
   const { clientId, clientSecret } = await gmailCredentials();
   if (!clientId || !clientSecret)
-    console.log(
-      "[catch-up] Gmail discovery skipped: Google OAuth is not configured",
-    );
+    log.info("Gmail discovery skipped: Google OAuth is not configured");
   const [huntResult, gmailResult] = await Promise.allSettled([
     discoverImportHunts(db),
     clientId && clientSecret
@@ -145,7 +146,7 @@ export async function discoverPurchases(db: Database) {
   const summary = gmailResult.status === "fulfilled" ? gmailResult.value : null;
   const huntsDispatched =
     dispatchResult[0]?.status === "fulfilled" ? dispatchResult[0].value : 0;
-  console.log("[catch-up] purchase discovery", {
+  log.info("purchase discovery", {
     huntsCreated,
     huntsDispatched,
     gmailAttempted: summary?.attempted,

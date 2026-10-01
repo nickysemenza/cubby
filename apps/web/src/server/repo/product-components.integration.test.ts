@@ -16,13 +16,13 @@ import { entityLink, image, product } from "~/server/db/schema";
 import { linkValues, liveLinks, ofLinkKind } from "~/server/repo/entity-links";
 
 import { getDb } from "./database-helpers";
-import { deleteProducts, updateProduct } from "./product";
 import {
   attachProductComponents,
   detachProductComponents,
   listKitMembership,
   listProductComponents,
 } from "./product-components";
+import { deleteProducts, updateProduct } from "./product/crud";
 import { attachPurchaseProducts } from "./purchase-products";
 import {
   createImageFixture,

@@ -186,7 +186,7 @@ public final class EntityListSearchModel {
             if rows.isEmpty {
                 failInitial(error, generation: generation)
             } else {
-                refreshError = Self.describe(error)
+                refreshError = error.userMessage
                 phase = .loaded
             }
         }
@@ -218,7 +218,7 @@ public final class EntityListSearchModel {
             phase = .loaded
         } catch {
             guard generation == requestGeneration else { return }
-            nextPageError = Self.describe(error)
+            nextPageError = error.userMessage
             phase = .loaded
         }
     }
@@ -245,15 +245,6 @@ public final class EntityListSearchModel {
 
     private func failInitial(_ error: Error, generation: Int) {
         guard generation == requestGeneration else { return }
-        phase = .failed(Self.describe(error))
-    }
-
-    private static func describe(_ error: Error) -> String {
-        if let apiError = error as? CubbyAPIError {
-            let code = apiError.detail?.code ?? "HTTP_\(apiError.status)"
-            let message = apiError.detail?.message ?? "Request failed"
-            return "\(code): \(message)"
-        }
-        return String(describing: error)
+        phase = .failed(error.userMessage)
     }
 }

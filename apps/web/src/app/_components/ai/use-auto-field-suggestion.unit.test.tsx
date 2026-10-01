@@ -4,6 +4,7 @@ import type {
   FieldSuggestionsInput,
   FieldSuggestionsOut,
 } from "@cubby/schemas/ai";
+import { sleep } from "@cubby/shared/retry";
 import {
   act,
   fireEvent,
@@ -60,22 +61,6 @@ function operationsReturning(
       return respond(input);
     }),
   };
-}
-
-/** A real, short delay — used only to assert a call did *not* happen, which
- * `waitFor` (a positive-assertion poll) cannot express. */
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function deferredFinanceApply() {
-  let resolve!: (value: z.output<typeof financeCategoryApplyOut>) => void;
-  const promise = new Promise<z.output<typeof financeCategoryApplyOut>>(
-    (complete) => {
-      resolve = complete;
-    },
-  );
-  return { promise, resolve };
 }
 
 /** Reads the DOM-rendered `isDirty` indicator a `Probe` mounts for `target`. */
@@ -520,7 +505,7 @@ describe("useAutoFieldSuggestion", () => {
       target: { value: "replace a valve" },
     });
     await waitFor(() => expect(calls).toHaveLength(1));
-    await delay(FIELD_SUGGEST_DEBOUNCE_MS);
+    await sleep(FIELD_SUGGEST_DEBOUNCE_MS);
     expect(form.getValues("trade")).toBe("");
   });
 
@@ -657,7 +642,7 @@ describe("useAutoFieldSuggestion", () => {
     });
     await waitFor(() => expect(calls).toHaveLength(1));
     // Give the (never-taken) auto-fill effect a chance to run before asserting.
-    await delay(100);
+    await sleep(100);
 
     expect(form.getValues("trade")).toBe("plumbing");
     expect(isDirtyText("trade")).toBe("true");
@@ -683,7 +668,7 @@ describe("useAutoFieldSuggestion", () => {
       target: { value: "install cabinets" },
     });
     await waitFor(() => expect(calls).toHaveLength(1));
-    await delay(100);
+    await sleep(100);
     expect(screen.getByLabelText("trade")).toHaveValue("");
     expect(calls[0]?.basisMode).toBe("provided");
   });
@@ -706,7 +691,8 @@ describe("useAutoFieldSuggestion", () => {
         fingerprint: "a".repeat(64),
       },
     };
-    const pending = deferredFinanceApply();
+    const pending =
+      Promise.withResolvers<z.output<typeof financeCategoryApplyOut>>();
     const transport = vi.fn(async () => await pending.promise);
     const operations = {
       ...operationsReturning(() => ({
@@ -738,7 +724,7 @@ describe("useAutoFieldSuggestion", () => {
         screen.getByTestId("seed-items-spendingCategoryId").textContent,
       ).toContain("Fixture clothing"),
     );
-    await delay(FIELD_SUGGEST_DEBOUNCE_MS + 20);
+    await sleep(FIELD_SUGGEST_DEBOUNCE_MS + 20);
     fireEvent.click(
       screen.getByRole("button", { name: "Apply spendingCategoryId" }),
     );
@@ -785,7 +771,8 @@ describe("useAutoFieldSuggestion", () => {
           fingerprint: "a".repeat(64),
         },
       };
-      const pending = deferredFinanceApply();
+      const pending =
+        Promise.withResolvers<z.output<typeof financeCategoryApplyOut>>();
       const transport = vi.fn(async () => await pending.promise);
       const operations = {
         ...operationsReturning(() => ({
@@ -819,7 +806,7 @@ describe("useAutoFieldSuggestion", () => {
           screen.getByTestId("seed-items-spendingCategoryId").textContent,
         ).toContain("Fixture clothing"),
       );
-      await delay(FIELD_SUGGEST_DEBOUNCE_MS + 20);
+      await sleep(FIELD_SUGGEST_DEBOUNCE_MS + 20);
       fireEvent.click(
         screen.getByRole("button", { name: "Apply spendingCategoryId" }),
       );
@@ -874,7 +861,7 @@ describe("useAutoFieldSuggestion", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Apply trade" })).toBeEnabled(),
     );
-    await delay(50);
+    await sleep(50);
 
     expect(form.getValues("trade")).toBe("");
     expect(isDirtyText("trade")).toBe("false");
@@ -920,7 +907,7 @@ describe("useAutoFieldSuggestion", () => {
       fireEvent.change(screen.getByLabelText("name"), {
         target: { value: short },
       });
-      await delay(FIELD_SUGGEST_DEBOUNCE_MS + 150);
+      await sleep(FIELD_SUGGEST_DEBOUNCE_MS + 150);
       expect(calls).toHaveLength(0);
 
       fireEvent.change(screen.getByLabelText("name"), {
@@ -955,7 +942,7 @@ describe("useAutoFieldSuggestion", () => {
     }
 
     await waitFor(() => expect(calls).toHaveLength(1));
-    await delay(150);
+    await sleep(150);
     expect(calls).toHaveLength(1);
     expect(calls[0]?.basis.name).toBe("hang c");
   });
@@ -1039,7 +1026,7 @@ describe("useAutoFieldSuggestion", () => {
       { wrapper: harness.wrapper },
     );
 
-    await delay(FIELD_SUGGEST_DEBOUNCE_MS + 150);
+    await sleep(FIELD_SUGGEST_DEBOUNCE_MS + 150);
     expect(calls).toHaveLength(0);
 
     fireEvent.change(screen.getByLabelText("productId"), {

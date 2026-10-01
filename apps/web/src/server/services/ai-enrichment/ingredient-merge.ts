@@ -14,6 +14,7 @@ import {
   type IngredientShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import { createLogger } from "@cubby/worker-tracing";
 
 import { runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
@@ -24,6 +25,8 @@ import {
   type MergeShortlistEntry,
   type MergeShortlistPort,
 } from "./merge-shortlist";
+
+const log = createLogger("suggestIngredientMergeBatch");
 
 export interface IngredientMergeAiPort {
   select: typeof runAiSelection<MergeShortlistEntry>;
@@ -127,10 +130,7 @@ export async function suggestIngredientMergeBatch(
       if (result.status === "fulfilled") {
         out.push({ source, ...result.value });
       } else {
-        console.error(
-          `[suggestIngredientMergeBatch] ${source.name} failed:`,
-          result.reason,
-        );
+        log.error(`${source.name} failed`, { error: result.reason });
         out.push({
           source,
           target: null,

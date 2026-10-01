@@ -12,16 +12,18 @@
 
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { QuestionIcon } from "@phosphor-icons/react/dist/csr/Question";
+import { useState } from "react";
 
-import {
-  DestinationLocationField,
-  resolveDestination,
-  useDestinationLocationForm,
-} from "~/app/_components/inventory/destination-location-picker";
+import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
+import {
+  LocationDestinationPicker,
+  refuseSourceLocations,
+} from "~/app/_components/locations/location-move-dialog";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { StatusText } from "~/components/ui/status-text";
 
 import type { MissingBin } from "./useLocationSweep";
 
@@ -38,10 +40,12 @@ function MissingRow({
   onSendToUnknown: (binId: string) => void;
   busy: boolean;
 }) {
-  // The fourth "choose a target location" surface, after the two move dialogs
-  // and bulk move. Passing the swept location as the source is what disables
-  // it in the list: a bin cannot be relocated to where it already isn't.
-  const { form, error, setError } = useDestinationLocationForm();
+  // Refusing the swept location in the list: a bin cannot be relocated to
+  // where it already isn't.
+  const [target, setTarget] = useState<ComboboxItem<LocationShortcode> | null>(
+    null,
+  );
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <Stack gap="xs" className="border border-[var(--border)] p-2">
@@ -54,29 +58,32 @@ function MissingRow({
       </Row>
       <Row align="end" gap="sm" className="min-w-0">
         <div className="min-w-0 flex-1">
-          <DestinationLocationField
-            form={form}
-            name="targetLocation"
+          <LocationDestinationPicker
             label="Move to"
-            error={error}
-            sourceLocationIds={sweptLocationId}
+            value={target}
+            setValue={(item) => {
+              setTarget(item);
+              setError(null);
+            }}
+            disabledReason={refuseSourceLocations([sweptLocationId])}
           />
+          {error && (
+            <StatusText as="div" tone="destructive" className="text-sm">
+              {error}
+            </StatusText>
+          )}
         </div>
         <Button
           type="button"
           className="min-h-10 shrink-0 px-3 text-xs" /* tight: inline with the picker */
           disabled={busy}
           onClick={() => {
-            const target = resolveDestination(
-              form.getValues("targetLocation"),
-              sweptLocationId,
-              {
-                missingTarget: "Pick where it went.",
-                sameAsSource: "That's the shelf you just swept.",
-              },
-            );
-            if (!target.ok) {
-              setError(target.error);
+            if (!target) {
+              setError("Pick where it went.");
+              return;
+            }
+            if (target.id === sweptLocationId) {
+              setError("That's the shelf you just swept.");
               return;
             }
             setError(null);

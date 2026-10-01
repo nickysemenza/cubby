@@ -49,7 +49,7 @@ import {
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
-import { entityAttachment } from "~/server/db/schema";
+import { entityAttachment, runTarget } from "~/server/db/schema";
 import { createAppError, createBlockedError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import { notDeleted, withTransactionOn } from "~/server/repo/database-helpers";
@@ -57,6 +57,7 @@ import { parseLinkEdgeKey, repointLinkEnd } from "~/server/repo/entity-links";
 import { countByTarget, impact } from "~/server/repo/impact";
 import type { RemovableEntity } from "~/server/repo/removal/core";
 import { type ChildCascade, removeEntity } from "~/server/repo/removal/entity";
+import { mergeRunTargets } from "~/server/repo/run-target-merge";
 import {
   lookupShortcodes,
   resolveAllOrThrow,
@@ -447,6 +448,8 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
     loserIds: readonly EntityId<E>[];
     /** `false` when the losers are hard-deleted: FKs bind tombstones too. */
     liveOnly: boolean;
+    /** Edges applied first, in this order, for a partial unique index. */
+    order?: readonly string[];
     overrides?: Readonly<
       Record<
         string,
@@ -455,7 +458,7 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
     >;
   },
 ): Promise<Record<string, number>> => {
-  const edges = physicalEdges(args.entity, args.policy);
+  const edges = physicalEdges(args.entity, args.policy, args.order);
   await assertNotBlocked(
     tx,
     args.entity,
@@ -471,6 +474,8 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
       continue;
     }
     if (edge.disposition.effect === "block") continue;
+    // `preserve` is a declared no-op: the row stays pointing at the loser.
+    if (edge.disposition.effect === "preserve") continue;
     const link = parseLinkEdgeKey(edge.key);
     if (
       link &&
@@ -489,6 +494,12 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
       throw new Error(
         `${edge.key}: a ${edge.disposition.effect} merge edge needs an override`,
       );
+    // A run can already target the survivor, and the unique `(runId,
+    // entityId)` index makes a bulk repoint unsafe: keep the canonical target.
+    if (edge.table === runTarget) {
+      await mergeRunTargets(tx, args.keepId, args.loserIds);
+      continue;
+    }
     const rows = await tx
       .update(edge.table)
       .set({ [edge.property]: args.keepId })

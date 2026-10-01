@@ -33,7 +33,7 @@ import {
   flattenSections,
 } from "~/lib/recipe-costing";
 import { deriveRecipeTotalsGaps } from "~/lib/recipe-totals-gaps";
-import { cn } from "~/lib/utils";
+import { cn, formatCurrency } from "~/lib/utils";
 
 import EntityImageList from "../EntityImageList";
 import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
@@ -239,7 +239,7 @@ function RecipeSummary({
             Cost:{" "}
             {formatEstimate(
               totals.estimates.cost,
-              (value) => `$${value.toFixed(2)}`,
+              (value) => `${formatCurrency(value)}`,
             )}
           </span>
           <span>Weight: {Math.round(totals.weight)} g</span>

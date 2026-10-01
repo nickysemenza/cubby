@@ -35,7 +35,7 @@ extension SpendingCategorySummaryView {
             ForEach(summary.categories, id: \.id) { category in
                 LabeledContent {
                     if !contextOnly, let amount = category.amount {
-                        Text(amount.formatted(.currency(code: "USD"))).monospacedDigit()
+                        Text(amount.formatted(.usd)).monospacedDigit()
                     }
                 } label: {
                     NavigationLink(value: Route.entityDetail(.spendingCategory, id: category.id)) {

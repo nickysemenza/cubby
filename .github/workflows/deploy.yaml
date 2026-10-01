@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pkg: [upc-lookup, usda-api]
+        pkg: [usda-api]
     concurrency:
       group: deploy-${{ matrix.pkg }}-production
       cancel-in-progress: false

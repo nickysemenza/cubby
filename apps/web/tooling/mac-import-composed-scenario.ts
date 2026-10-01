@@ -1,46 +1,29 @@
 import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { setTimeout } from "node:timers/promises";
+import { pollUntil } from "@cubby/shared/retry";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { locationCreateInput } from "@cubby/schemas/location";
-import { spendingCategoryCreateInput } from "@cubby/schemas/spending-category";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import {
-  commitPurchaseImportInput,
-  preparePurchaseImportInput,
-} from "@cubby/schemas/purchase-import";
-import {
-  IMAGE_DESCRIPTION_PROMPT_REVISION,
-  IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
-} from "@cubby/schemas/image-processing";
 import { getDb, notDeleted } from "../src/server/repo/database-helpers";
 import * as schema from "../src/server/db/schema";
-import { IMAGE_DESCRIPTION_FEATURE } from "../src/server/ai/features";
-import { providerFor } from "../src/server/ai/models";
 import { updateImageProcessingSettings } from "../src/server/repo/image-processing-maintenance";
-import {
-  claimImageProcessingJob,
-  completeImageProcessingJob,
-} from "../src/server/repo/image-processing";
-import { assignImageProcessingExecutor } from "../src/server/repo/image-processing-history";
-import { imageDescriptionInputFingerprint } from "../src/server/services/image-description.service";
 import {
   listPhotoGroupProposals,
   listPhotoRunImages,
   proposePhotoGroups,
 } from "../src/server/photo-import-run/proposals";
-import {
-  preparePurchaseImport,
-  commitPurchaseImport,
-} from "../src/server/purchase-import/import-orders";
 import { resolveOrThrow } from "../src/server/repo/shortcode-resolver";
+import {
+  completeDescribeImageJobs,
+  importBrowserOrder,
+} from "./convergence-harness";
 import { createFixtureWithContext } from "./scenarios/context";
 import type { createMacBrowserScenario } from "./mac-browser-import-scenario";
 import type { MacImportDriver } from "./mac-import-driver";
 
 import { macImportOrder, type MacImportSource } from "./mac-import-orders";
+import { buildEntity } from "./factories/build";
 const productName = "Black crew shirt · size M";
 const categoryName = "Synthetic Mac clothing";
 const fixtureGTIN = "00012345678905";
@@ -62,18 +45,8 @@ type Input = {
       | "browserCaptureVerified",
   ) => void;
 };
-async function eventually<T>(
-  read: () => Promise<T | undefined>,
-  label: string,
-): Promise<T> {
-  const deadline = Date.now() + 60000;
-  while (Date.now() < deadline) {
-    const value = await read();
-    if (value !== undefined) return value;
-    await setTimeout(250);
-  }
-  throw new Error(`Native composed journey timed out: ${label}`);
-}
+const eventually = <T>(read: () => Promise<T | undefined>, label: string) =>
+  pollUntil(read, { label: `native composed journey: ${label}` });
 
 /** Only auth/account/category/location prerequisites are fixtures. Economic writes cross production review boundaries. */
 export async function createMacComposedScenario(input: Input) {
@@ -83,7 +56,7 @@ export async function createMacComposedScenario(input: Input) {
   const category = await createFixtureWithContext(
     kernel,
     "spendingCategory",
-    spendingCategoryCreateInput.parse({
+    buildEntity("spendingCategory", {
       name: categoryName,
       evidenceExpectation: "required",
       productExpectation: "required",
@@ -92,7 +65,7 @@ export async function createMacComposedScenario(input: Input) {
   const location = await createFixtureWithContext(
     kernel,
     "location",
-    locationCreateInput.parse({
+    buildEntity("location", {
       name: "Synthetic Mac wardrobe drawer",
       type: "drawer",
     }),
@@ -274,74 +247,11 @@ export async function createMacComposedScenario(input: Input) {
         );
       return found.length === 2 ? found : undefined;
     }, "production description jobs from native finalize");
-    for (const job of jobs) {
-      const claimed = await claimImageProcessingJob(db, {
-        jobId: job.id,
-        kinds: ["describe_image"],
-        leaseMs: 60000,
-      });
-      if (!claimed)
-        throw new Error(
-          "Native photo description job refused its real processing lease",
-        );
-      const provider = providerFor(IMAGE_DESCRIPTION_FEATURE.model);
-      if (
-        !(await assignImageProcessingExecutor(db, {
-          jobId: claimed.id,
-          attemptId: claimed.attemptId,
-          executor: {
-            kind: "cloud",
-            deviceId: null,
-            name: provider,
-            platform: "cloud",
-            appVersion: null,
-            osVersion: null,
-          },
-        }))
-      )
-        throw new Error("Native photo description executor assignment failed");
-      const completion = await completeImageProcessingJob(db, {
-        result: {
-          jobId: claimed.id,
-          attemptId: claimed.attemptId,
-          completedAt: new Date().toISOString(),
-          outcome: {
-            kind: "describe_image",
-            status: "completed",
-            description: {
-              description: `Supplied external model fixture response: own ${productName}; label Synthetic Works, M, GTIN ${fixtureGTIN}.`,
-              claims: [],
-              cutoutEligibility: "ineligible",
-            },
-            runtime: {
-              platform: "cloud",
-              model: IMAGE_DESCRIPTION_FEATURE.model,
-            },
-          },
-        },
-        cloudAnalysis: {
-          provider,
-          model: IMAGE_DESCRIPTION_FEATURE.model,
-          promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
-          resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
-          inputFingerprint: imageDescriptionInputFingerprint({
-            sourceContentHash: claimed.sourceContentHash,
-            contentType: claimed.originalContentType,
-            provider,
-            model: IMAGE_DESCRIPTION_FEATURE.model,
-          }),
-        },
-        runtime: {
-          provider,
-          model: IMAGE_DESCRIPTION_FEATURE.model,
-          feature: "image-description",
-        },
-      });
-      if (!completion.adopted)
-        throw new Error(
-          "Native uploaded photo description completion was not adopted",
-        );
-    }
+    await completeDescribeImageJobs(
+      db,
+      jobs,
+      `Supplied external model fixture response: own ${productName}; label Synthetic Works, M, GTIN ${fixtureGTIN}.`,
+    );
     const existing = await productCode();
     await proposePhotoGroups(db, {
       runId: parseShortcodeFor("run", nativeRun.code),
@@ -465,83 +375,46 @@ export async function createMacComposedScenario(input: Input) {
     const checksum = createHash("sha256")
       .update(JSON.stringify(capture))
       .digest("hex");
-    const prepareOperationId = "mac:prepare:order-001";
-    const stableOrderId = "mac:order-001";
-    const stableLineId = "mac:black-crew-shirt:M";
-    const existing = await productCode();
-    await preparePurchaseImport(
-      db,
-      preparePurchaseImportInput.parse({
-        _runExecution: {
-          runId: run.id,
-          operationId: prepareOperationId,
-          itemOperationIds: ["mac:item:order-001"],
-        },
-        orders: [
+    const committed = await importBrowserOrder(db, {
+      runId: run.id,
+      actor: kernel.actorContext,
+      ids: {
+        prepare: "mac:prepare:order-001",
+        commit: "mac:commit:order-001",
+        order: "mac:order-001",
+        line: "mac:black-crew-shirt:M",
+        item: "mac:item:order-001",
+      },
+      externalKey: "order-001",
+      checksum,
+      extractionRevision: "synthetic-native-capture@1",
+      candidate: {
+        orderId: "order-001",
+        orderedAt: "2026-09-21T12:00:00.000Z",
+        merchant: "Synthetic Outfitters",
+        currency: "USD",
+        printedGrandTotal: 29.99,
+        lines: [
           {
-            targetPurchaseId: bookedPurchaseCode,
-            stableOrderId,
-            itemOperationId: "mac:item:order-001",
-            source: {
-              kind: "browser_order",
-              externalKey: "order-001",
-              checksum,
-            },
-            evidenceChecksum: checksum,
-            extractionRevision: "synthetic-native-capture@1",
-            extraction: {
-              status: "ready",
-              candidate: {
-                orderId: "order-001",
-                orderedAt: "2026-09-21T12:00:00.000Z",
-                merchant: "Synthetic Outfitters",
-                currency: "USD",
-                printedGrandTotal: 29.99,
-                lines: [
-                  {
-                    title: productName,
-                    amount: 29.99,
-                    quantity: 1,
-                    lineKind: "principal",
-                    productUrl: capture.productCapture.sourceURL,
-                  },
-                ],
-                payments: [
-                  {
-                    amount: 29.99,
-                    cardLastFour: "4242",
-                    chargedAt: "2026-09-21T12:00:00.000Z",
-                  },
-                ],
-                allShipmentsDelivered: true,
-              },
-            },
-            lineIds: [stableLineId],
-            primaryDocumentImageId: null,
-            screenshotImageId: null,
+            title: productName,
+            amount: 29.99,
+            quantity: 1,
+            lineKind: "principal",
+            productUrl: capture.productCapture.sourceURL,
           },
         ],
-      }),
-      kernel.actorContext,
-    );
-    const committed = await commitPurchaseImport(
-      db,
-      commitPurchaseImportInput.parse({
-        _runExecution: { runId: run.id, operationId: "mac:commit:order-001" },
-        prepareOperationId,
-        defaultTrade: "other",
-        resolutions: [
+        payments: [
           {
-            stableOrderId,
-            stableLineId,
-            resolution: existing
-              ? { kind: "existing", productId: existing }
-              : { kind: "new" },
+            amount: 29.99,
+            cardLastFour: "4242",
+            chargedAt: "2026-09-21T12:00:00.000Z",
           },
         ],
-      }),
-      kernel.actorContext,
-    );
+        allShipmentsDelivered: true,
+      },
+      targetPurchaseId: bookedPurchaseCode,
+      resolveProduct: productCode,
+    });
     if (
       !committed.items[0] ||
       !["created", "updated", "replayed"].includes(committed.items[0].outcome)

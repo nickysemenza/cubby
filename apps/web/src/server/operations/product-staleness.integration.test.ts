@@ -10,9 +10,9 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
 import { executeEntity } from "~/server/entity-kernel";
-import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import { createProduct } from "~/server/repo/product";
-import { createRecipe } from "~/server/repo/recipe";
+import { findOrCreateIngredient } from "~/server/repo/ingredient/crud";
+import { createProduct } from "~/server/repo/product/crud";
+import { createRecipe } from "~/server/repo/recipe/crud";
 import { getRecipeTotalsState } from "~/server/repo/recipe/totals";
 import {
   ingredientRef,

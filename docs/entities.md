@@ -12,10 +12,10 @@ parses metadata and applies defaults before typed compilation. Cross-entity
 references, capability compatibility, field rosters, and physical storage remain
 semantic compiler checks. Field-validation Zod instances pass through unchanged.
 
-For generic behavior shared across entities (including #1066 and #1067), add
-the capability to the entity declaration first, implement it in the generic
-renderer, prove declaration-to-renderer parity, then delete the per-entity twin.
-Keep any remaining entity-specific exception explicit in its declaration.
+For generic behavior shared across entities, follow
+[Generic by default](../AGENTS.md#generic-by-default): declaration first,
+generic renderer, declaration-to-renderer parity, then delete the per-entity
+twin.
 
 Declarations may import shared primitives and cycle-safe field modules. They
 must not import canonical schemas, generated artifacts, server implementations,

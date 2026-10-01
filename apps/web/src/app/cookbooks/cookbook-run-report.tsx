@@ -8,6 +8,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { StatusText } from "~/components/ui/status-text";
 import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
+import { formatCurrency } from "~/lib/utils";
 
 /** The handful of facts worth reading months after a book was extracted. */
 export type RunReportSummary = {
@@ -83,7 +84,7 @@ export function CookbookRunReportPanel({
     <Stack gap="sm">
       <Row wrap align="baseline" gap="sm">
         <span className="text-lg font-medium tabular-nums">
-          ${summary.costUsd.toFixed(2)}
+          {formatCurrency(summary.costUsd)}
           {!summary.costComplete && "+"}
         </span>
         <Description as="span" size="sm">

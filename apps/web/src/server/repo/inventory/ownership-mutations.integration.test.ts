@@ -6,30 +6,32 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { expenseCreateInput } from "@cubby/schemas/project";
 import { and, eq } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
 import { raceUniqueInsert, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { inventoryEntry } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { amountFromColumns } from "~/server/repo/database-helpers";
-import { createExpense, getExpenseByID } from "~/server/repo/expense";
+import { createExpense, getExpenseByID } from "~/server/repo/expense/crud";
+import { moveInventoryEntries } from "~/server/repo/inventory/bulk";
+import {
+  createInventoryEntry,
+  deleteInventoryEntries,
+} from "~/server/repo/inventory/crud";
+import { loadEffectiveInventoryOwnershipById } from "~/server/repo/inventory/ownership";
 import {
   confirmInventoryExpenseBeneficiary,
   confirmInventoryOwnership,
-  createInventoryEntry,
-  deleteInventoryEntries,
-  loadEffectiveInventoryOwnershipById,
-  moveInventoryEntries,
   setInventoryOwnership,
-} from "~/server/repo/inventory";
+} from "~/server/repo/inventory/ownership-mutations";
 import {
   createLedgerParty,
   updateLedgerParty,
 } from "~/server/repo/ledger-party";
-import { createLocation } from "~/server/repo/location";
-import { createProduct } from "~/server/repo/product";
+import { createLocation } from "~/server/repo/location/crud";
+import { createProduct } from "~/server/repo/product/crud";
 import { attachPurchaseProducts } from "~/server/repo/purchase-products";
 import {
   createLocationFixture,
@@ -107,7 +109,8 @@ describe("inventory ownership mutations", () => {
       expenses.push(
         await createExpense(
           ctx.db,
-          expenseCreateInput.parse(
+          buildEntity(
+            "expense",
             makeExpenseInput({
               name: line.name,
               purchaseId: parseShortcodeFor("purchase", purchase.shortcode),
@@ -513,7 +516,8 @@ describe("inventory ownership mutations", () => {
     );
     const createdExpense = await createExpense(
       ctx.db,
-      expenseCreateInput.parse(
+      buildEntity(
+        "expense",
         makeExpenseInput({
           name: "Durable beneficiary expense",
           productId: subject.product.id,

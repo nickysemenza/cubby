@@ -2,9 +2,9 @@ import {
   type ProductShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { expenseCreateInput } from "@cubby/schemas/project";
 import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -12,11 +12,10 @@ import { entityAttachment } from "~/server/db/schema";
 import { callMcpTool } from "~/server/mcp/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import { getDb } from "~/server/repo/database-helpers";
-import { createExpense } from "~/server/repo/expense";
-import { createInventoryEntry } from "~/server/repo/inventory";
+import { createInventoryEntry } from "~/server/repo/inventory/crud";
 import { createLedgerParty } from "~/server/repo/ledger-party";
-import { mergeProducts } from "~/server/repo/product";
 import { listProductMatchRows } from "~/server/repo/product-match-candidate";
+import { mergeProducts } from "~/server/repo/product/merge";
 import { attachPurchaseProducts } from "~/server/repo/purchase-products";
 import {
   createImageFixture,
@@ -155,26 +154,24 @@ describe("product match queue", () => {
         [created.entityId],
         ctx.actor,
       );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: `${name} line`,
-          cost: opts.expenseCost ?? 100,
-          date: "2026-09-01",
-          purchaseId: parseShortcodeFor("purchase", order.shortcode),
-          productId: created.id,
-          beneficiaries: opts.owner
-            ? [
-                {
-                  partyId: parseShortcodeFor("ledgerParty", opts.owner),
-                  weight: 1,
-                },
-              ]
-            : [],
-        }),
-      ),
-      ctx.actor,
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: `${name} line`,
+        cost: opts.expenseCost ?? 100,
+        date: "2026-09-01",
+        purchaseId: parseShortcodeFor("purchase", order.shortcode),
+        productId: created.id,
+        beneficiaries: opts.owner
+          ? [
+              {
+                partyId: parseShortcodeFor("ledgerParty", opts.owner),
+                weight: 1,
+              },
+            ]
+          : [],
+      }),
     );
     return created;
   };

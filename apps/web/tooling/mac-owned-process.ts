@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { pollUntil } from "@cubby/shared/retry";
 import { setTimeout } from "node:timers/promises";
 import { z } from "zod";
 
@@ -72,15 +73,11 @@ function discover(
 export async function waitForOwnedMacProcess(
   expected: MacProcessExpectation,
 ): Promise<OwnedMacProcess> {
-  const deadline = Date.now() + 3000;
-  while (Date.now() < deadline) {
-    const own = discover(expected);
-    if (own) return own;
-    await setTimeout(50);
-  }
-  throw new Error(
-    "Exact fixture launch process was not observed; ownership cannot be established",
-  );
+  return pollUntil(() => discover(expected), {
+    label: "exact fixture launch process; ownership cannot be established",
+    timeoutMs: 3000,
+    intervalMs: 50,
+  });
 }
 function inspectOwned(expected: MacProcessExpectation, owner: OwnedMacProcess) {
   const current = processes(owner.pid).find(

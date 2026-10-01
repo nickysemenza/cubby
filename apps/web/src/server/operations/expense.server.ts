@@ -22,12 +22,9 @@ import type { Database } from "~/server/db";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   expenseAnalytics,
-  expenseList,
   expenseMonthlySummary,
   expenseTradeAffinity,
-  getExpenseByID,
-  matchExpenses,
-} from "~/server/repo/expense";
+} from "~/server/repo/expense/analytics";
 import {
   buildExpenseAnalysisGrid,
   expenseAnalysisWhere,
@@ -46,14 +43,15 @@ import {
   selectedExpenseFacetValues,
   type ExpenseFacetId,
 } from "~/server/repo/expense/analyze";
+import { getExpenseByID } from "~/server/repo/expense/crud";
+import { expenseList } from "~/server/repo/expense/lookup";
 import {
   buildExpenseWhereClause,
   resolveExpenseProjectAllocationScope,
 } from "~/server/repo/expense/lookup";
-import {
-  confirmInventoryExpenseBeneficiary,
-  loadEffectiveInventoryOwnershipById,
-} from "~/server/repo/inventory";
+import { matchExpenses } from "~/server/repo/expense/match";
+import { loadEffectiveInventoryOwnershipById } from "~/server/repo/inventory/ownership";
+import { confirmInventoryExpenseBeneficiary } from "~/server/repo/inventory/ownership-mutations";
 import { listAll } from "~/server/repo/list-all";
 import {
   getPurchaseExpenses,
@@ -67,10 +65,10 @@ import {
   mutationEvents,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
-import { TraceNames, withTrace } from "~/server/tracing";
+import { TraceNames } from "~/server/tracing";
 import {
   bindWorkflow,
-  executeWorkflow,
+  tracedWorkflow,
   workflow,
 } from "~/server/workflow-runtime";
 
@@ -242,19 +240,11 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
   })
   .output(({ withinGridLimits }) => withinGridLimits);
 
-export const expenseAnalyzeWorkflow = Object.assign(
-  (db: Database, input: ExpenseAnalyzeInput) =>
-    withTrace(TraceNames.service("expense", "analyze"), async (span) => {
-      span.setAttributes(expenseAnalyzeTraceAttributes(input));
-      const result = await executeWorkflow(expenseAnalyzeDefinition, {
-        context: db,
-        input,
-      });
-      span.setAttributes(expenseAnalyzeTraceAttributes(input, result));
-      return result;
-    }),
-  { definition: expenseAnalyzeDefinition },
-);
+export const expenseAnalyzeWorkflow = tracedWorkflow({
+  name: TraceNames.service("expense", "analyze"),
+  definition: expenseAnalyzeDefinition,
+  attrs: expenseAnalyzeTraceAttributes,
+});
 
 type ExpenseFacetItemInput = {
   filters: ExpenseFilters;
@@ -352,19 +342,11 @@ const expenseFacetCountsDefinition = workflow<
     })),
   }));
 
-export const expenseFacetCountsWorkflow = Object.assign(
-  (db: Database, input: ExpenseFacetCountsInput) =>
-    withTrace(TraceNames.service("expense", "facetCounts"), async (span) => {
-      span.setAttributes(expenseFacetTraceAttributes(input));
-      const result = await executeWorkflow(expenseFacetCountsDefinition, {
-        context: db,
-        input,
-      });
-      span.setAttributes(expenseFacetTraceAttributes(input, result));
-      return result;
-    }),
-  { definition: expenseFacetCountsDefinition },
-);
+export const expenseFacetCountsWorkflow = tracedWorkflow({
+  name: TraceNames.service("expense", "facetCounts"),
+  definition: expenseFacetCountsDefinition,
+  attrs: expenseFacetTraceAttributes,
+});
 async function expenseInventoryOwnershipContext(
   db: Database,
   input: z.output<typeof expenseInventoryOwnershipContextInput>,

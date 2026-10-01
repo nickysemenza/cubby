@@ -11,6 +11,7 @@
         "scripts/check-security-audit.ts!",
         "scripts/ensure-apple-ffi.ts!",
         "scripts/ensure-wasm.ts!",
+        "scripts/migrate-upc-d1.ts!",
         "scripts/generator/main.ts!",
         // Reached from hooks, CI, or package scripts rather than an import
         // (production mode does not read those): .husky/commit-msg,
@@ -38,7 +39,7 @@
       // apple.ts quits the running Mac app before relaunching. container: the
       // Apple test-service runtime. All are system tools, never npm
       // dependencies.
-      "ignoreBinaries": ["xcode-select", "pkill", "container"]
+      "ignoreBinaries": ["xcode-select", "pkill", "container", "wrangler"]
     },
     "apps/web": {
       "entry": [
@@ -137,16 +138,6 @@
       // Consumed by `src/app.css`'s @import, which knip doesn't follow.
       "ignoreDependencies": ["@cubby/design-tokens"]
     },
-    "apps/upc-lookup": {
-      "entry": [
-        "src/index.tsx!",
-        "src/local-dev.ts!",
-        "src/**/*.test.ts!",
-        "vite.config.ts!",
-        "drizzle.config.ts!"
-      ],
-      "project": ["src/**/*.{ts,tsx}!"]
-    },
     "apps/usda-api": {
       "entry": [
         "src/worker.ts!",
@@ -167,10 +158,6 @@
       "project": ["src/**/*.ts!"]
     },
     "packages/shared": {
-      "entry": ["src/index.ts!", "src/**/*.test.ts!"],
-      "project": ["src/**/*.ts!"]
-    },
-    "packages/upc-contract": {
       "entry": ["src/index.ts!", "src/**/*.test.ts!"],
       "project": ["src/**/*.ts!"]
     },

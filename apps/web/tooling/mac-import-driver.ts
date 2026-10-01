@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { pollUntil } from "@cubby/shared/retry";
 import { setTimeout } from "node:timers/promises";
 import { z } from "zod";
 
@@ -632,33 +633,39 @@ export class MacImportDriver {
     ]);
   }
   async wait(selector: string): Promise<string> {
-    const started = Date.now(),
-      deadline = started + 30000;
+    const started = Date.now();
     let output = "";
-    while (Date.now() < deadline) {
-      output = this.observe();
-      if (this.matching(selector).length) {
-        this.record(["wait", selector], 0, output, started);
-        return output;
-      }
-      await setTimeout(250);
+    try {
+      await pollUntil(
+        () => {
+          output = this.observe();
+          return this.matching(selector).length ? true : undefined;
+        },
+        { label: `native wait ${selector}`, timeoutMs: 30000 },
+      );
+    } catch {
+      this.record(["wait", selector], 1, output, started);
+      throw new Error(`Native wait timed out: ${selector}`);
     }
-    this.record(["wait", selector], 1, output, started);
-    throw new Error(`Native wait timed out: ${selector}`);
+    this.record(["wait", selector], 0, output, started);
+    return output;
   }
   async waitAbsent(selector: string): Promise<void> {
     const started = Date.now();
     let output = "";
-    while (Date.now() - started < 30000) {
-      output = this.observe();
-      if (!this.matching(selector).length) {
-        this.record(["wait-absent", selector], 0, output, started);
-        return;
-      }
-      await setTimeout(250);
+    try {
+      await pollUntil(
+        () => {
+          output = this.observe();
+          return this.matching(selector).length ? undefined : true;
+        },
+        { label: `native absence of ${selector}`, timeoutMs: 30000 },
+      );
+    } catch {
+      this.record(["wait-absent", selector], 1, output, started);
+      throw new Error(`Native element did not dismiss: ${selector}`);
     }
-    this.record(["wait-absent", selector], 1, output, started);
-    throw new Error(`Native element did not dismiss: ${selector}`);
+    this.record(["wait-absent", selector], 0, output, started);
   }
   async scrollTo(
     selector: string,

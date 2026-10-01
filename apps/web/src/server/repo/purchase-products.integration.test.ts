@@ -6,8 +6,8 @@
  * transaction on the unique index rather than produce a wrong answer).
  */
 import type { ProductShortcode, PurchaseId } from "@cubby/schemas/identifiers";
-import { expenseCreateInput } from "@cubby/schemas/project";
 import { and, eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -16,7 +16,7 @@ import { liveLinks } from "~/server/repo/entity-links";
 
 import { getDb } from "./database-helpers";
 import { getEntityGraph } from "./entity-graph";
-import { createExpense } from "./expense";
+import { createExpense } from "./expense/crud";
 import { mergeProducts } from "./product/merge";
 import { getProductMovementTimeline } from "./product/movement-timeline";
 import {
@@ -76,16 +76,14 @@ describe("purchase ↔ product links", () => {
       orderId: string;
       future?: boolean;
     }) =>
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse(
-          makeExpenseInput({
-            date: "2026-03-01",
-            vendor: "Expense Leg Vendor",
-            ...args,
-          }),
-        ),
-        ctx.actor,
+      createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          date: "2026-03-01",
+          vendor: "Expense Leg Vendor",
+          ...args,
+        }),
       );
 
     // SQL union, source overlap, liveness, and list predicates can diverge

@@ -1,7 +1,7 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { updateProduct } from "~/server/repo/product";
+import { updateProduct } from "~/server/repo/product/crud";
 import {
   createProductFixture as createProduct,
   makeProductInput,

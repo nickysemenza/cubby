@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
-import { computeRecipeUsages } from "./recipe";
+import { computeRecipeUsages } from "./recipe/helpers";
 import {
   dbRecipeToAPI,
   dbRecipeToAPIGraph,

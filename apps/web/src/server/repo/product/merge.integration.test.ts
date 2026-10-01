@@ -17,14 +17,8 @@ import {
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { createPlanting } from "~/server/repo/garden";
 import { createUploadedImageRecord } from "~/server/repo/image";
-import { createInventoryEntry } from "~/server/repo/inventory";
-import { createLocation } from "~/server/repo/location";
-import {
-  createProduct,
-  mergeProducts,
-  previewMergeProducts,
-  previewProductMergeDecisions,
-} from "~/server/repo/product";
+import { createInventoryEntry } from "~/server/repo/inventory/crud";
+import { createLocation } from "~/server/repo/location/crud";
 import {
   attachProductComponents,
   listProductComponents,
@@ -35,6 +29,12 @@ import {
   productPairKey,
   upsertAgentProductMatch,
 } from "~/server/repo/product-match-candidate";
+import { createProduct } from "~/server/repo/product/crud";
+import {
+  mergeProducts,
+  previewMergeProducts,
+  previewProductMergeDecisions,
+} from "~/server/repo/product/merge";
 import {
   createPlantFixture,
   makeLocationInput,

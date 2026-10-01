@@ -25,7 +25,7 @@ import { projectListRows } from "~/entities/list-read-schema";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { product, task } from "~/server/db/schema";
-import { loadDataQualities } from "~/server/repo/data-quality";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   countWhere,
   eqAnyOrPresence,

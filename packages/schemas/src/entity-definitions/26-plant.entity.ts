@@ -308,7 +308,7 @@ export default defineEntity({
           "notes",
         ],
       },
-      create: ["capture", "full"],
+      create: ["full", "capture"],
       update: ["full"],
     },
     output: [

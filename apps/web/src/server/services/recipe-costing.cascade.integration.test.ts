@@ -9,9 +9,9 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
-import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import { createProduct, updateProduct } from "~/server/repo/product";
-import { createRecipe, updateRecipe } from "~/server/repo/recipe";
+import { findOrCreateIngredient } from "~/server/repo/ingredient/crud";
+import { createProduct, updateProduct } from "~/server/repo/product/crud";
+import { createRecipe, updateRecipe } from "~/server/repo/recipe/crud";
 import {
   getRecipeTotalsState,
   markRecipesStale,
@@ -278,8 +278,11 @@ describe("recipe totals cascade", () => {
       // The freshness notifier also warns when no Durable Object is bound
       // (always, under vitest), so assert the repair warning itself.
       expect(warn).toHaveBeenCalledWith(
-        "[recipe.get] repair-on-read failed",
-        expect.objectContaining({ recipes: [tree.child] }),
+        "[repair-on-read] [recipe.get] failed",
+        expect.objectContaining({
+          recipes: [tree.child],
+          error: expect.any(Error),
+        }),
       );
     } finally {
       warn.mockRestore();

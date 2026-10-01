@@ -1,5 +1,6 @@
 import type { UserId } from "@cubby/schemas/identifiers";
 import { sleep } from "@cubby/shared/retry";
+import { createLogger } from "@cubby/worker-tracing";
 
 import { enqueueBackgroundTask } from "~/server/background-tasks/publish";
 import { getCalendarFeedNamespace, getExecutionCtx } from "~/server/cf-env";
@@ -7,6 +8,8 @@ import { withTrace } from "~/server/tracing";
 
 import { calDavProtocolResponse } from "./caldav-protocol";
 import type { CalendarFeedState, CalendarCredentialState } from "./contracts";
+
+const log = createLogger("calendar-feed");
 
 type CalendarFeedStub = ReturnType<Env["CALENDAR_FEED"]["getByName"]>;
 
@@ -127,11 +130,7 @@ async function enqueueMarkDirtyFallback(
     // SILENT: the last resort — the in-request retries and the queue both
     // failed inside a committed `waitUntil`, so there is no caller left to
     // report to. The feed stays stale until the next write re-marks it.
-    console.error(
-      "[calendar-feed] failed to enqueue mark-dirty fallback",
-      { reason },
-      error,
-    );
+    log.error("failed to enqueue mark-dirty fallback", { reason, error });
   }
 }
 
@@ -160,11 +159,11 @@ export function scheduleCalendarFeedDirty(
         return;
       } catch (error) {
         if (retryDelay === undefined) {
-          console.error(
-            "[calendar-feed] failed to mark snapshot dirty",
-            { reason, attempt },
+          log.error("failed to mark snapshot dirty", {
+            reason,
+            attempt,
             error,
-          );
+          });
           await enqueueMarkDirtyFallback(origin, reason);
           return;
         }

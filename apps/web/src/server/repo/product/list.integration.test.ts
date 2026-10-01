@@ -1,12 +1,11 @@
-import { expenseCreateInput } from "@cubby/schemas/project";
 import { and, inArray, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_ACTOR, withTestDb, countTestDbQueries } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { product } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { createExpense } from "~/server/repo/expense";
-import { createIngredient } from "~/server/repo/ingredient";
+import { createIngredient } from "~/server/repo/ingredient/crud";
 import { attachProductComponents } from "~/server/repo/product-components";
 import {
   createPlantFixture,
@@ -15,7 +14,7 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 
-import { productList } from ".";
+import { productList } from "./crud";
 import { listProductsRead, productListSummary } from "./crud";
 import { loadProductPriceSum, loadProductPricing } from "./pricing";
 import { loadProductQuantityLedgers } from "./quantity-ledger";
@@ -142,17 +141,15 @@ describe("product list price footer", () => {
       ],
       ctx.actor,
     );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "Example kit acquisition",
-          productId: kit.id,
-          productQuantity: 1,
-          cost: 90,
-        }),
-      ),
-      ctx.actor,
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Example kit acquisition",
+        productId: kit.id,
+        productQuantity: 1,
+        cost: 90,
+      }),
     );
 
     const filteredSum = await loadProductPriceSum(
@@ -229,17 +226,15 @@ describe("product list price footer", () => {
       ["Unknown leaf acquisition", leaf.id, 10, null],
       ["Leaf refund", leaf.id, -5, -1],
     ] as const) {
-      await createExpense(
-        ctx.db,
-        expenseCreateInput.parse(
-          makeExpenseInput({
-            name,
-            productId,
-            cost,
-            productQuantity,
-          }),
-        ),
-        ctx.actor,
+      await createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name,
+          productId,
+          cost,
+          productQuantity,
+        }),
       );
     }
 
@@ -382,29 +377,25 @@ describe("product list staged projections", () => {
       makeProductInput({ name: "Other derived", price: 31 }),
       ctx.actor,
     );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "Staged purchase",
-          productId: included.id,
-          cost: 30,
-          productQuantity: 3,
-        }),
-      ),
-      ctx.actor,
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Staged purchase",
+        productId: included.id,
+        cost: 30,
+        productQuantity: 3,
+      }),
     );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "Staged refund",
-          productId: included.id,
-          cost: -10,
-          productQuantity: -1,
-        }),
-      ),
-      ctx.actor,
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Staged refund",
+        productId: included.id,
+        cost: -10,
+        productQuantity: -1,
+      }),
     );
     const filters = { ids: [included.id, excluded.id], nameFilter: "Staged" };
     const pagination = { pageIndex: 0, pageSize: 50 };
@@ -447,17 +438,15 @@ describe("product list staged projections", () => {
         ctx.actor,
       ),
     ]);
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "Staged credit",
-          productId: second.id,
-          cost: -5,
-          productQuantity: -1,
-        }),
-      ),
-      ctx.actor,
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Staged credit",
+        productId: second.id,
+        cost: -5,
+        productQuantity: -1,
+      }),
     );
     const filters = { ids: [first.id, second.id] };
     const full = await productList(ctx.db, filters, [], {

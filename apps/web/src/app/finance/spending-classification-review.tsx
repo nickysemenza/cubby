@@ -17,6 +17,7 @@ import { EntityReferencePicker } from "~/app/_components/combobox/entity-referen
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
+import { StaticTable } from "~/components/ui/static-table";
 import { spendingClassification } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 
@@ -154,33 +155,32 @@ function ClassificationReview({
             Amounts include recorded and planned Expenses. Expense totals stay
             the same.
           </p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="py-2 text-left">Category</th>
-                <th className="text-right">Before</th>
-                <th className="text-right">After</th>
-              </tr>
-            </thead>
-            <tbody>
-              {review.categoryDeltas.map((row) => (
-                <tr
-                  key={row.spendingCategoryId ?? "unknown"}
-                  className="border-b"
-                >
-                  <td className="py-2">
-                    {row.spendingCategoryName ?? "Unclassified"}
-                  </td>
-                  <td className="text-right tabular-nums">
-                    {formatCurrency(Number(row.beforeCents) / 100)}
-                  </td>
-                  <td className="text-right tabular-nums">
-                    {formatCurrency(Number(row.afterCents) / 100)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <StaticTable
+            rows={review.categoryDeltas}
+            rowKey={(row) => row.spendingCategoryId ?? "unknown"}
+            className="text-sm"
+            columns={[
+              {
+                id: "category",
+                header: "Category",
+                cell: (row) => row.spendingCategoryName ?? "Unclassified",
+              },
+              {
+                id: "before",
+                header: "Before",
+                headClassName: "text-right",
+                cellClassName: "text-right tabular-nums",
+                cell: (row) => formatCurrency(Number(row.beforeCents) / 100),
+              },
+              {
+                id: "after",
+                header: "After",
+                headClassName: "text-right",
+                cellClassName: "text-right tabular-nums",
+                cell: (row) => formatCurrency(Number(row.afterCents) / 100),
+              },
+            ]}
+          />
           <Button
             disabled={busy || apply.isSuccess}
             onClick={() =>

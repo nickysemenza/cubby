@@ -625,7 +625,7 @@ struct RunReviewView: View {
                 HStack {
                     Label("AI spend", systemImage: "dollarsign.circle")
                     Spacer()
-                    Text(usage.pricedSubtotal, format: .currency(code: "USD"))
+                    Text(usage.pricedSubtotal, format: .usd)
                         .monospacedDigit()
                 }
                 if usage.unpricedCount > 0 {

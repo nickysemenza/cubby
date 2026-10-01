@@ -1,0 +1,71 @@
+# Generic paths
+
+Search here before writing a helper, a per-entity branch, or a copy of an
+existing block. Extend the generic path when it almost fits. See
+[Generic by default](../../AGENTS.md#generic-by-default).
+
+## Entity spine
+
+- Declarations: `packages/schemas/src/entity-definitions/*.entity.ts`, metadata
+  schema in `definition.ts`, compiled by `scripts/generator/entities/*`.
+- List columns: field `display` (`standard`, `format`, `readPath`,
+  `renderer.list`) compiled by `createEntityDisplayColumns`
+  (`apps/web/src/entities/entity-display.tsx`); named renderers in
+  `apps/web/src/entities/list-field-renderers.tsx`. Hand overrides in
+  `entities/list-columns/` are only for mutation-bound cells.
+- Edit forms: generated intents plus the typed `editHooks` map in
+  `apps/web/src/entities/editing/`.
+- Saved views: `presentation.list.views` on the declaration.
+- Detail pages: generic detail with declared slots (`app/*/slots.tsx`).
+- Swift: generated OpenAPI client, `entity-manifest.json`, and the generic list
+  and detail views; no hand-written mapping layer.
+
+## Server
+
+- Kernel commands: `executeEntity` / `executeEntityAs`
+  (`apps/web/src/server/entity-kernel/execute.ts`).
+- Repositories: `defineRepository`, `createEntityReader`, `createEntityCrud`
+  (`server/repo/repository.ts`), `declaredFilterPredicates` /
+  `listScaffold` (`server/repo/list.ts`), `insertAndReturn`,
+  `updateAndReturn`, `withTransaction`, `formatSearchTerm`, `notDeleted`,
+  `buildSearchConditions`, the shortcode resolver, `finalizeMerge`,
+  policy-driven removal (`server/repo/removal/`).
+- Unbounded reads: `listAll` (never a literal huge `pageSize`).
+- Money: `cents`, `round2` (`server/repo/money.ts`); all money is
+  `SUM(Expense.cost)`.
+- Logging and tracing: `createLogger`, `withSpan`/span core
+  (`@cubby/worker-tracing`); no raw `console.*` in server or Worker code.
+- Retries and waiting: `sleep`, `retryWithBackoff`, `pollUntil`
+  (`@cubby/shared/retry`).
+- Cross-Worker RPC: one Zod contract per boundary, `z.infer` on both sides.
+- GTIN and barcodes: recipebridge `scan_code_gtin14` and `@cubby/shared/upc`.
+
+## Web UI
+
+- Dialogs: `WorkflowDialog`, `ResponsiveDialog` + `DialogFormActions`,
+  `DeleteEntityDialog` + `useStagedRow`, `LocationMoveDialog`.
+- Pickers: `EntityPicker` / `EntityReferencePicker`, `referenceEntitySearch`;
+  no direct `ui/combobox` use outside picker builders.
+- Tables: `RTable` and the generic relation table; raw `<table>` only for
+  matrices, cross-tabs, and debug views.
+- Formatting: `lib/utils` formatters (`formatCurrency`, `formatCount`,
+  `formatPercent`, `roundTo`, compact variants) and the WASM amount formatter.
+- Errors and clipboard: `showErrorToast`, `ErrorDisplay`, `copyTextWithToast`.
+- Data: generated query catalog operations, `useActionMutation`,
+  `useUpdateMutation`, `useDeletableConfig`, `useAllEntityRecords`.
+- Use `es-toolkit` collection helpers and exhaustive `ts-pattern` matches.
+
+## Tests and tooling
+
+- Entity data: `buildEntity` / `createEntity` and the repo writer variant
+  (`apps/web/tooling/factories/`), seeded Faker for filler, `seedBaseWorld`.
+  Never hand-parse a `*CreateInput` in a test.
+- Shared builders: `packages/schemas/src/testing`; deferreds via
+  `Promise.withResolvers()`.
+- Import convergence: `apps/web/tooling/convergence-harness.ts`.
+- Scripts: `scripts/lib/tree-digest.ts` (`walkFiles`, `digestFiles`),
+  `scripts/lib/run.ts` (child processes).
+
+## Swift
+
+- `Error.userMessage`, `CubbyClient` list-all helper, `Double.usd`.

@@ -4,13 +4,6 @@ import { getAppErrorDetails } from "~/lib/error-utils";
 
 import { ProgressiveListSession } from "./progressive-list";
 
-const deferred = <T>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-};
 const rows = [
   { id: "first", name: "First" },
   { id: "second", name: "Second" },
@@ -96,7 +89,7 @@ describe("progressive list lifecycle", () => {
     expect(
       getAppErrorDetails("cause" in failed ? failed.cause : undefined),
     ).toMatchObject(error);
-    const response = deferred<{
+    const response = Promise.withResolvers<{
       groups: {
         id: "derived";
         state: "ready";
@@ -128,7 +121,7 @@ describe("progressive list lifecycle", () => {
 
   it("aborts and ignores stale enrichment after filter change or refresh", async () => {
     const session = new ProgressiveListSession(() => {});
-    const response = deferred<{
+    const response = Promise.withResolvers<{
       groups: {
         id: "derived";
         state: "ready";

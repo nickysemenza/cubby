@@ -3,6 +3,7 @@ import {
   type ProblemsCount,
   problemsCountSchema,
 } from "@cubby/schemas/problems";
+import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/tanstackstart-react";
 import { DurableObject } from "cloudflare:workers";
 
@@ -10,6 +11,8 @@ import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
 import type { findProblemCounts } from "~/server/services/problems.service";
 
 import { databaseFreshness } from "./state";
+
+const log = createLogger("problems.counts");
 
 const REFRESH_DELAY_MS = 15 * 60_000;
 const MAX_SNAPSHOT_AGE_MS = 24 * 60 * 60_000;
@@ -106,7 +109,7 @@ export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
       await this.scheduleRefresh(Date.now() + REFRESH_DELAY_MS);
       const retryAt = this.readRefreshState().refresh_due_at;
       if (retryAt !== null) await this.ctx.storage.setAlarm(retryAt);
-      console.error("problems.counts.refresh.failed", error);
+      log.error("refresh failed", { error });
       // Not rethrown deliberately: the retry above is already scheduled at a
       // known delay, so letting the alarm also throw would invite the
       // platform's own backoff retry to race it. Sentry still gets the event.
@@ -163,12 +166,12 @@ export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
     try {
       encoded = JSON.parse(row.counts_json);
     } catch (error) {
-      console.error("problems.counts.snapshot.invalid-json", error);
+      log.error("snapshot invalid-json", { error });
       return null;
     }
     const parsed = problemsCountSchema.safeParse(encoded);
     if (!parsed.success) {
-      console.error("problems.counts.snapshot.invalid", parsed.error.message);
+      log.error("snapshot invalid", { error: parsed.error.message });
       return null;
     }
     return {
@@ -200,17 +203,17 @@ export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
       throw new Error("Problem-count PostgreSQL backend is unavailable");
     }
     setCfEnv(this.env);
-    const [{ db, withRequestDbClient }, { createUpcLookupClient }, service] =
+    const [{ db, withRequestDbClient }, { createUpcLookupService }, service] =
       await Promise.all([
         import("~/server/db"),
-        import("~/server/clients/upc-lookup"),
+        import("~/server/services/upc"),
         loadProblemCountsService(),
       ]);
     return runWithExecutionCtx(
       { waitUntil: (task) => this.ctx.waitUntil(task) },
       () =>
         withRequestDbClient(connectionString, () =>
-          service.findProblemCounts(db, createUpcLookupClient()),
+          service.findProblemCounts(db, createUpcLookupService(db)),
         ),
       this.env.APP_ORIGIN,
     );

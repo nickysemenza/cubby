@@ -1,10 +1,13 @@
 import { dashboardCountsOut } from "@cubby/schemas/dashboard";
+import { createLogger } from "@cubby/worker-tracing";
 
 import { dashboardContract } from "~/contracts/dashboard.contract";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getEntityCounts } from "~/server/repo/dashboard";
+
+const log = createLogger("dashboard.counts");
 
 type DashboardContext = {
   db: Database;
@@ -16,7 +19,7 @@ export async function getDashboardCounts({ db, usdaClient }: DashboardContext) {
     getEntityCounts(db),
     usdaClient.getCounts().catch((error) => {
       // USDA is ancillary: local counts remain useful when its worker is unavailable.
-      console.warn("[dashboard.counts] USDA count unavailable; using 0", error);
+      log.warn("USDA count unavailable; using 0", { error });
       return null;
     }),
   ]);
