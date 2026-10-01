@@ -4,15 +4,12 @@ import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
+import { useAllEntityRecords } from "~/app/_components/hooks/useAllEntityRecords";
 import type {
   ListSlotComponent,
   ListSlotProps,
 } from "~/app/_components/entity-list/list-slot-types";
 import { ScheduleGrid } from "~/app/_components/schedule/schedule-grid";
-import {
-  usePlantingRecords,
-  usePlantRecords,
-} from "~/app/garden-workbench/garden-records";
 import {
   plantingScheduleRows,
   yearWindow,
@@ -32,8 +29,8 @@ function searchYear(value: ListSlotProps["search"]["year"]): number {
 
 function PlantingsScheduleSlot({ search, navigate }: ListSlotProps) {
   const year = searchYear(search.year);
-  const plantingRead = usePlantingRecords();
-  const plantRead = usePlantRecords();
+  const plantingRead = useAllEntityRecords("planting");
+  const plantRead = useAllEntityRecords("plant");
   usePageCount(plantingRead.totalCount);
   const guideKeyByPlant = useMemo(
     () =>

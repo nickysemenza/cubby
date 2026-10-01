@@ -16,6 +16,7 @@ import {
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
 import { flattenUniquePageItems } from "~/app/_components/hooks/infinite-page-utils";
+import { useLoadAllPages } from "~/app/_components/hooks/useAllEntityRecords";
 import {
   ScheduleGrid,
   type ScheduleRow,
@@ -53,20 +54,6 @@ function seedProjectImages(
       project.displayImages[0] ?? null,
     ]),
   );
-}
-
-function useLoadRemainingPages(query: {
-  hasNextPage: boolean;
-  isFetchingNextPage: boolean;
-  isError: boolean;
-  fetchNextPage: (options: { cancelRefetch: false }) => void;
-}) {
-  const { hasNextPage, isFetchingNextPage, isError, fetchNextPage } = query;
-  useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage && !isError) {
-      fetchNextPage({ cancelRefetch: false });
-    }
-  }, [hasNextPage, isFetchingNextPage, isError, fetchNextPage]);
 }
 
 function ScheduleError({
@@ -285,7 +272,7 @@ export function ProjectScheduleListSlot({ search }: ListSlotProps) {
       },
     }),
   );
-  useLoadRemainingPages(query);
+  useLoadAllPages(query);
   const projects = useMemo(
     () => flattenUniquePageItems(query.data?.pages),
     [query.data],
@@ -348,7 +335,7 @@ export function ProjectScheduleDetail({
       projectScheduleSubtreeQueryParams(projectId),
     ),
   );
-  useLoadRemainingPages(projectsQuery);
+  useLoadAllPages(projectsQuery);
   const tasksQuery = useQuery(
     task.chartData.queryOptions(projectSubtreeTasksFilters(projectId)),
   );

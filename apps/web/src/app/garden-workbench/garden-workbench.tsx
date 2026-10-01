@@ -1,3 +1,7 @@
+import {
+  type AllEntityRecords,
+  useAllEntityRecords,
+} from "~/app/_components/hooks/useAllEntityRecords";
 import { plantingGuides } from "@cubby/schemas/garden-guides";
 import {
   type GardenCropKey,
@@ -29,7 +33,6 @@ import {
 } from "~/components/ui/table";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
 
-import { usePlantingRecords, usePlantRecords } from "./garden-records";
 import {
   cropName,
   guideScheduleRows,
@@ -241,8 +244,8 @@ function PlanView({
   year: number;
   crop?: GardenCropKey;
   location?: string;
-  plantings: ReturnType<typeof usePlantingRecords>;
-  plants: ReturnType<typeof usePlantRecords>;
+  plantings: AllEntityRecords<"planting">;
+  plants: AllEntityRecords<"plant">;
 }) {
   const rows = useMemo(() => {
     const keyByPlant = new Map(
@@ -360,8 +363,8 @@ export function GardenWorkbench({
   onLocationChange: (location?: string) => void;
 }) {
   const planActive = mode === "plan";
-  const plantings = usePlantingRecords(planActive);
-  const plants = usePlantRecords(planActive);
+  const plantings = useAllEntityRecords("planting", undefined, { enabled: planActive });
+  const plants = useAllEntityRecords("plant", undefined, { enabled: planActive });
   const locations = useMemo(() => {
     const choices = new Map<string, string>();
     for (const planting of plantings.records) {
