@@ -17,7 +17,7 @@ import {
   externalIdKind,
   type ExternalIdKind,
 } from "@cubby/schemas/external-id";
-import { BARCODE_RE } from "@cubby/shared/upc";
+import { isGtin } from "@cubby/shared/upc";
 
 import { classifyWithJev } from "~/server/ai/classify";
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/features";
@@ -51,7 +51,7 @@ function regexFastPath(
   ) {
     return "internet_number";
   }
-  if (BARCODE_RE.test(identifier)) return "gtin_14";
+  if (isGtin(identifier)) return "gtin_14";
   return null;
 }
 
