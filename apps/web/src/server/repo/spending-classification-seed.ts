@@ -39,10 +39,8 @@ import {
   expenseProjectAllocationSql,
   loadExpenseJointAllocations,
 } from "./expense-project-allocation";
-import {
-  applySpendingClassificationReview,
-  previewSpendingClassificationReview,
-} from "./spending-classification-review";
+import { applyReviewedSpendingClassificationPolicy } from "./spending-classification-review";
+import { withReviewedSpendingClassification } from "./spending-classification-review-authorization";
 
 const label = z.string().trim().min(1);
 export const spendingClassificationSeedManifest = z.object({
@@ -421,23 +419,20 @@ export async function applySpendingClassificationSeed(
         }
       }
       let updatedMappings = 0;
-      for (const mapping of preview.mappings) {
-        if (mapping.preserve) continue;
-        const target = targets.get(mapping.categoryKey);
-        if (!target) return fail("Reviewed seed mapping target is missing.");
-        const request = {
-          action: "productCategory" as const,
-          productCategoryId: mapping.source.id,
-          spendingCategoryMode: "mapped" as const,
-          spendingCategoryId: target,
-        };
-        const reviewed = await previewSpendingClassificationReview(db, request);
-        await applySpendingClassificationReview(context, {
-          request,
-          fingerprint: reviewed.fingerprint,
-        });
-        updatedMappings++;
-      }
+      await withReviewedSpendingClassification(db, async () => {
+        for (const mapping of preview.mappings) {
+          if (mapping.preserve) continue;
+          const target = targets.get(mapping.categoryKey);
+          if (!target) return fail("Reviewed seed mapping target is missing.");
+          await applyReviewedSpendingClassificationPolicy(context, {
+            action: "productCategory",
+            productCategoryId: mapping.source.id,
+            spendingCategoryMode: "mapped",
+            spendingCategoryId: target,
+          });
+          updatedMappings++;
+        }
+      });
       return {
         createdCategories,
         updatedCategories,

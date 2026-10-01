@@ -29,7 +29,10 @@ import {
   type ExpenseJointAllocationRow,
 } from "./expense-project-allocation";
 import { resolveOrThrow } from "./shortcode-resolver";
-import { withReviewedSpendingClassification } from "./spending-classification-review-authorization";
+import {
+  assertReviewedSpendingClassification,
+  withReviewedSpendingClassification,
+} from "./spending-classification-review-authorization";
 
 const fail = (message: string): never => {
   throw createAppError("CONSTRAINT_VIOLATION", message);
@@ -245,6 +248,43 @@ export async function previewSpendingClassificationReview(
   );
 }
 
+/** Only a fingerprint-validated transaction may reuse these audited policy writes. */
+export async function applyReviewedSpendingClassificationPolicy(
+  ctx: EntityKernelContext,
+  request: SpendingClassificationReviewInput,
+) {
+  assertReviewedSpendingClassification(ctx.db);
+  if (request.action === "productCategory") {
+    await executeEntity(ctx, {
+      action: "update",
+      entity: "productCategory",
+      id: request.productCategoryId,
+      data: {
+        spendingCategoryMode: request.spendingCategoryMode,
+        spendingCategoryId: request.spendingCategoryId,
+      },
+    });
+  } else if (request.action === "vendor") {
+    await executeEntity(ctx, {
+      action: "update",
+      entity: "vendor",
+      id: request.vendorId,
+      data: {
+        spendingProfile: request.spendingProfile,
+        defaultSpendingCategoryId: request.defaultSpendingCategoryId,
+      },
+    });
+  } else {
+    for (const id of request.expenseIds)
+      await executeEntity(ctx, {
+        action: "update",
+        entity: "expense",
+        id,
+        data: { spendingCategoryId: request.spendingCategoryId },
+      });
+  }
+}
+
 export async function applySpendingClassificationReview(
   ctx: EntityKernelContext,
   raw: SpendingClassificationReviewApplyInput,
@@ -260,37 +300,9 @@ export async function applySpendingClassificationReview(
         );
       const context = { ...ctx, db };
       const request = input.request;
-      await withReviewedSpendingClassification(db, async () => {
-        if (request.action === "productCategory") {
-          await executeEntity(context, {
-            action: "update",
-            entity: "productCategory",
-            id: request.productCategoryId,
-            data: {
-              spendingCategoryMode: request.spendingCategoryMode,
-              spendingCategoryId: request.spendingCategoryId,
-            },
-          });
-        } else if (request.action === "vendor") {
-          await executeEntity(context, {
-            action: "update",
-            entity: "vendor",
-            id: request.vendorId,
-            data: {
-              spendingProfile: request.spendingProfile,
-              defaultSpendingCategoryId: request.defaultSpendingCategoryId,
-            },
-          });
-        } else {
-          for (const id of request.expenseIds)
-            await executeEntity(context, {
-              action: "update",
-              entity: "expense",
-              id,
-              data: { spendingCategoryId: request.spendingCategoryId },
-            });
-        }
-      });
+      await withReviewedSpendingClassification(db, () =>
+        applyReviewedSpendingClassificationPolicy(context, request),
+      );
       return {
         applied: true as const,
         updatedRecords:

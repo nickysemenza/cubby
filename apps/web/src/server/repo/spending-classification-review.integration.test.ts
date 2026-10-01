@@ -14,6 +14,7 @@ import { effectiveExpenseSpendingCategorySql } from "./expense-category-resoluti
 import { insertWithShortcode } from "./shortcode-utils";
 import {
   applySpendingClassificationReview,
+  applyReviewedSpendingClassificationPolicy,
   previewSpendingClassificationReview,
 } from "./spending-classification-review";
 
@@ -99,6 +100,9 @@ describe("reviewed spending classification", () => {
               },
             });
       await expect(unreviewed()).rejects.toThrow(/Preview and apply/);
+      await expect(
+        applyReviewedSpendingClassificationPolicy(context(), request),
+      ).rejects.toThrow(/Preview and apply/);
       const preview = await previewSpendingClassificationReview(
         ctx.db,
         request,
@@ -116,6 +120,9 @@ describe("reviewed spending classification", () => {
       expect(resolved.rows[0]?.category).toBe(category.id);
       // A completed review cannot authorize a later unrelated request.
       await expect(unreviewed()).rejects.toThrow(/Preview and apply/);
+      await expect(
+        applyReviewedSpendingClassificationPolicy(context(), request),
+      ).rejects.toThrow(/Preview and apply/);
     },
   );
 
