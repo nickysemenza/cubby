@@ -58,9 +58,13 @@ let cfTracing: CfTracing | null | undefined;
 async function getCfTracing(): Promise<CfTracing | null> {
   if (cfTracing !== undefined) return cfTracing;
   try {
-    // Indirected via @vite-ignore so a Vite-built worker (upc-lookup) doesn't
-    // try to pre-bundle the runtime-only module; workerd resolves it at runtime.
-    const mod = await import(/* @vite-ignore */ "cloudflare:workers");
+    // A variable specifier plus @vite-ignore: Vite's import analysis (web UI
+    // tests, a Vite-built worker) must not try to resolve the runtime-only
+    // module; a string literal is still analyzed. workerd resolves it at runtime.
+    const specifier = "cloudflare:workers";
+    const mod: { tracing: CfTracing } = await import(
+      /* @vite-ignore */ specifier
+    );
     cfTracing = mod.tracing;
   } catch {
     cfTracing = null;

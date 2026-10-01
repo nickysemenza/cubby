@@ -87,7 +87,8 @@ struct ImageTransformTests {
                 "rendered \(width.rendered)")
         }
         for rewrite in file.rewrites {
-            let input = try #require(URL(string: rewrite.in.replacingOccurrences(of: "{bucket}", with: bucket)))
+            let input = try #require(
+                URL(string: rewrite.in.replacingOccurrences(of: "{bucket}", with: bucket)))
             let expected = rewrite.out.map { $0.replacingOccurrences(of: "{bucket}", with: bucket) }
             #expect(
                 ImageTransform.transformed(input, renderedWidth: CGFloat(rewrite.width)).absoluteString
