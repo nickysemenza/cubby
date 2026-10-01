@@ -13,7 +13,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { treePickerItems } from "~/app/_components/combobox/tree-items";
 import { useEntityListSource } from "~/app/_components/combobox/with-search-hook";
-import { createBooleanColumn, createExternalLinkColumn, createSingleEntityInlineLinkColumn } from "~/app/_components/data-table/columnHelpers";
+import {
+  createBooleanColumn,
+  createExternalLinkColumn,
+  createSingleEntityInlineLinkColumn,
+} from "~/app/_components/data-table/columnHelpers";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import {
   createCubbyColumnCollection,

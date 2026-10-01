@@ -270,7 +270,8 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["name"],
+        // A wish has nothing worth deferring: capture is the full form.
+        capture: ["name", "notes", "candidateProductIds", "acquired"],
         full: ["name", "notes", "candidateProductIds", "acquired"],
         identity: ["name", "notes", "candidateProductIds"],
         acquisition: ["acquired"],

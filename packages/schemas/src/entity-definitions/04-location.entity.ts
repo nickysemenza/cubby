@@ -130,7 +130,10 @@ export default defineEntity({
             emptyMessage: "Every stocked location has been recounted recently.",
           },
           layout: {
-            columnVisibility: { lastBulkInventory: true, inventoryEntries: true },
+            columnVisibility: {
+              lastBulkInventory: true,
+              inventoryEntries: true,
+            },
           },
         },
         {
@@ -251,6 +254,7 @@ export default defineEntity({
           kind: "select",
           options: selectControlOptions.locationType,
           suggest: { basis: ["name"] },
+          initial: { value: "room" },
         },
         display: {
           list: true,

@@ -418,6 +418,7 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
+          initial: { value: "purchase" },
           options: [
             { value: "purchase", label: "Purchase", color: "var(--primary)" },
             { value: "refund", label: "Refund", color: "var(--positive)" },
@@ -454,6 +455,7 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
+          initial: { value: "pending" },
           options: [
             { value: "expected", label: "Expected", color: "var(--slate)" },
             { value: "pending", label: "Pending", color: "var(--slate)" },
@@ -476,7 +478,14 @@ export default defineEntity({
       {
         key: "amount",
         kind: "number",
-        control: { kind: "number", renderer: "money" },
+        // The canonical non-zero refinement reports a blank or zero amount
+        // with its own message, so the generic required check steps aside.
+        control: {
+          kind: "number",
+          renderer: "money",
+          initial: { value: 0 },
+          required: false,
+        },
         display: {
           list: true,
           detail: true,

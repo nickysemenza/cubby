@@ -498,6 +498,7 @@ const compileFieldModel = (
                 field.description ??
                 `Derived from ${provenance.sources.map((source) => source.label ?? source.relation ?? source.entity).join(" and ")}.`,
               resolver: "field",
+              // oxlint-disable-next-line anti-slop/no-conditional-empty-object-spread -- the optional explanation key is absent, not undefined, when no path is declared.
               ...(field.display.readPath
                 ? { readPath: field.display.readPath }
                 : {}),
@@ -1432,6 +1433,7 @@ type SavedView = CompiledEntity["inspector"]["list"]["savedViews"][number];
  * expands to nothing would leave the view lit while selecting every row; the
  * layout and sort may only name columns the list actually has.
  */
+// oxlint-disable-next-line eslint/complexity -- One pass checks every filter kind's value shape plus layout and sort columns for a view.
 const validateSavedViews = (
   views: readonly SavedView[],
   fieldModel: EntityFieldModel,
@@ -1483,10 +1485,7 @@ const validateSavedViews = (
           throw new EntityDeclarationError(
             `${where} pins ${filter.id}=${value}; a presence filter holds "has" or "none".`,
           );
-        if (
-          descriptor.kind === "boolean" &&
-          !["true", "false"].includes(value)
-        )
+        if (descriptor.kind === "boolean" && !["true", "false"].includes(value))
           throw new EntityDeclarationError(
             `${where} pins ${filter.id}=${value}; a boolean filter holds "true" or "false".`,
           );

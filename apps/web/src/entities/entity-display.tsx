@@ -57,7 +57,6 @@ import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Checkbox } from "~/components/ui/checkbox";
 import { NoneValue } from "~/components/ui/none-value";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { formatCurrency } from "~/lib/utils";
 
 import { compactFieldRendererFor } from "./compact-field-renderers";
@@ -199,6 +198,7 @@ function listItems(value: ScalarDisplayValue): readonly unknown[] | null {
  * the value's runtime kind doesn't match the declared formatter (an "empty"
  * value always short-circuits, regardless of format).
  */
+// oxlint-disable-next-line eslint/complexity -- One exhaustive dispatcher over the declared display formats.
 function renderFormattedScalar(
   format: DisplayField["display"]["format"],
   value: ScalarDisplayValue,
@@ -345,8 +345,7 @@ function pathScalarValue(
   const scalar = pathScalar.parse(value);
   if (scalar.kind !== "text") return scalar;
   if (field.kind === "date") return { kind: "date", raw: scalar.raw };
-  if (field.kind === "timestamp")
-    return { kind: "timestamp", raw: scalar.raw };
+  if (field.kind === "timestamp") return { kind: "timestamp", raw: scalar.raw };
   return field.display.valueOptions
     ? enumDisplayValue(entity, field, scalar.raw)
     : scalar;

@@ -580,12 +580,17 @@ const presentationJSON = (
       description: view.description,
       filters: view.filters.map((filter) => ({
         id: filter.id,
-        values: Array.isArray(filter.value) ? [...filter.value] : [filter.value],
+        values: Array.isArray(filter.value)
+          ? [...filter.value]
+          : [filter.value],
         isList: Array.isArray(filter.value),
       })),
       sort: (view.sort ?? []).map(({ id, desc }) => ({ id, desc })),
-      flow: view.flow === null ? null : { kind: view.flow.kind, label: view.flow.label },
-      columnVisibility: { ...(view.layout?.columnVisibility ?? {}) },
+      flow:
+        view.flow === null
+          ? null
+          : { kind: view.flow.kind, label: view.flow.label },
+      columnVisibility: { ...view.layout?.columnVisibility },
       problemKey: view.problem?.key ?? null,
     })),
     readOnlyOnUpdate: [...edit.readOnlyOnUpdate],

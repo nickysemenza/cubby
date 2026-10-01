@@ -6,7 +6,10 @@ import { type ReactNode, useMemo } from "react";
 import type { z } from "zod";
 
 import type { SearchProviderProps } from "~/app/_components/combobox/with-search-hook";
-import { createEditableAmountColumn, createSingleEntityInlineLinkColumn } from "~/app/_components/data-table/columnHelpers";
+import {
+  createEditableAmountColumn,
+  createSingleEntityInlineLinkColumn,
+} from "~/app/_components/data-table/columnHelpers";
 import type {
   InventoryEntryBase,
   InventoryRelatedEntity,

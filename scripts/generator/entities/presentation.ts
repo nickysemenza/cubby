@@ -313,6 +313,7 @@ const checkEditSectionCoverage = (
     );
 };
 
+// oxlint-disable-next-line eslint/complexity -- Edit checks enumerate each declared rule family in one pass.
 const checkEdit = (
   edit: EntityPresentation["edit"],
   fieldModel: EntityFieldModel,

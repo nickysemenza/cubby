@@ -401,6 +401,9 @@ export default defineEntity({
           kind: "date",
           sectionOverride: "schedule",
           initial: "today",
+          // Optional while the cost is unknown; `validateExpenseDate` owns
+          // the cost/date pairing.
+          required: false,
         },
         display: {
           list: true,

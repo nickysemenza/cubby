@@ -44,7 +44,8 @@ export default defineEntity({
         {
           id: "never-verified",
           label: "Never verified",
-          description: "Entries whose count has never been checked against a shelf",
+          description:
+            "Entries whose count has never been checked against a shelf",
           // `inventory_verified`'s own `expected` is `placement = 'stock'`
           // (checks/inventory.ts) — the same guard the inventory list's default
           // `placementFilter` applied. Installed fixtures never get a
@@ -58,7 +59,8 @@ export default defineEntity({
             title: "Inventory never confirmed by a recount",
             description:
               "Entries whose count has never been checked against the shelf (oldest first). Recount the location they live in to clear them. `verifiedAt` only started being stamped when audit sessions landed, so most of the inventory starts here — this is a backlog to work down, not a list of mistakes.",
-            emptyMessage: "Every inventory entry has been verified at least once.",
+            emptyMessage:
+              "Every inventory entry has been verified at least once.",
           },
         },
       ],

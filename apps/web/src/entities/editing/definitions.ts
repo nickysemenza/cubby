@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import { entityFieldSchemaMaps } from "@cubby/schemas/entity-field-schema-maps";
@@ -5,14 +6,13 @@ import {
   entityFieldModels,
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
 import {
   canClearExpenseDate,
   EXPENSE_DATE_REQUIRED_MESSAGE,
 } from "@cubby/schemas/expense-fields";
 import { displayGtin, externalIdInput } from "@cubby/schemas/external-id";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import {
   collectionSlugsFromTags,
@@ -195,18 +195,6 @@ type IntentDeclaration<E extends EditableEntity> =
   | readonly string[]
   | Readonly<Record<string, IntentOptions<E>>>;
 
-/**
- * What one entity declares. Operation declarations are intentionally uniform:
- * the registry adds the semantic intent to the command at the execution seam,
- * so a definition owns only field selection and context-sensitive access.
- */
-interface EntityEditBody<E extends EditableEntity> {
-  fields: readonly EditField<E>[];
-  create?: IntentDeclaration<E>;
-  update?: IntentDeclaration<E>;
-  delete?: EntityEditAccess;
-}
-
 type FieldOverrides<E extends EditableEntity> = Readonly<
   Record<string, FieldOptions<E> | "trimmedName" | "nullableText">
 >;
@@ -249,6 +237,19 @@ const nullableTrimNormalize = (value: EntityEditValue): EntityEditValue => {
 const defaultFieldOptions = <E extends EditableEntity>(
   field: EntityFieldModel["fields"][number],
 ): FieldOptions<E> | undefined => {
+  const derived = derivedFieldOptions<E>(field);
+  // `control.required` states the editor's rule where it differs from the
+  // create schema's (a manufacturer the schema merely defaults, an amount a
+  // dedicated validator reports); null derives it.
+  const required = field.control?.required;
+  return required === null || required === undefined
+    ? derived
+    : { ...derived, required };
+};
+
+const derivedFieldOptions = <E extends EditableEntity>(
+  field: EntityFieldModel["fields"][number],
+): FieldOptions<E> | undefined => {
   if (field.kind === "text") {
     if (field.requiredOnCreate)
       return { required: true, normalize: trimNormalize };
@@ -276,8 +277,8 @@ const kindDefault = (
 
 /**
  * A create-only initial value derived from the field's own declaration, in
- * order: the manifest's `control.initial` marker (today's household date is
- * the only one so far); the generated create schema's own Zod default (Zod 4
+ * order: the manifest's `control.initial` (today's household date, or a
+ * literal `{ value }`); the generated create schema's own Zod default (Zod 4
  * exposes it as a plain `def.defaultValue` property on a `ZodDefault`
  * instance — proven in `definitions.unit.test.ts`); else a value implied by
  * the field's kind. Never consulted for update — an existing record's own
@@ -287,7 +288,9 @@ const genericCreateDefault = <E extends EditableEntity>(
   entity: E,
   field: EntityFieldModel["fields"][number],
 ): EntityEditValue => {
-  if (field.control?.initial === "today") return householdLocalDate();
+  const initial = field.control?.initial;
+  if (initial === "today") return householdLocalDate();
+  if (initial !== null && initial !== undefined) return initial.value;
   // SAFETY: `entityFieldSchemaMaps[entity].create` is keyed by every field
   // this entity's create contract accepts; `field.key` names one of this
   // same entity's own model fields, so the lookup is a schema for `field.key`
@@ -402,11 +405,6 @@ const builderFor = <E extends EditableEntity>(
         return context.parentProjectId;
       }
       if (operation !== "create") return null;
-      // `mealKind`'s storage default is a DB literal, not a Zod `.default()`
-      // (the create schema stays `.optional()` so a caller may omit it and
-      // let the column default apply) — the one create-time constant with no
-      // schema-derivable value to fall back on.
-      if (id === "mealKind" && entity === "meal") return "cooked";
       return field ? genericCreateDefault(entity, field) : null;
     },
     normalize: options?.normalize ?? ((value) => value),
@@ -489,24 +487,156 @@ const builderFor = <E extends EditableEntity>(
   };
 };
 
+/** Fields an intent's editor refuses to leave blank beyond the schema's rule. */
+const intentRequiredFields = (
+  entity: EditableEntity,
+  semanticIntent: string,
+): readonly string[] => {
+  const required: Readonly<Record<string, readonly string[] | undefined>> =
+    generatedEntityEditIntents[entity].required;
+  return required[semanticIntent] ?? [];
+};
+
+const isBlank = (value: EntityEditValue): boolean => {
+  const text = z.string().safeParse(value);
+  return value == null || (text.success && !text.data.trim());
+};
+
+/**
+ * The intent's declared checks: `intents.required` fields that are blank and
+ * `edit.dateRanges` whose end precedes its start. Both are data in the
+ * entity declaration; only `options.validate` is entity-specific.
+ */
+const declaredIntentIssues = <E extends EditableEntity>(
+  entity: E,
+  semanticIntent: string,
+  fields: readonly string[],
+  input: Parameters<NonNullable<EditIntent<E>["validate"]>>[0],
+): readonly EntityEditIssue[] => {
+  const { values } = input;
+  const issues: EntityEditIssue[] = [];
+  for (const id of intentRequiredFields(entity, semanticIntent)) {
+    if (isBlank(values[id]))
+      issues.push({
+        field: id,
+        message: "This field is required.",
+        source: "client",
+      });
+  }
+  const dateRanges: readonly { start: string; end: string }[] =
+    entitySummary[entity].edit.dateRanges;
+  for (const { start, end } of dateRanges) {
+    if (!fields.includes(start) || !fields.includes(end)) continue;
+    const from = z.string().min(1).safeParse(values[start]);
+    const to = z.string().min(1).safeParse(values[end]);
+    if (from.success && to.success && to.data < from.data)
+      issues.push({
+        field: end,
+        message: `${fieldLabel(entity, end)} must be on or after ${fieldLabel(entity, start)}.`,
+        source: "client",
+      });
+  }
+  return issues;
+};
+
+const fieldLabel = (entity: EditableEntity, key: string): string =>
+  entityFieldModels[entity].fields.find((field) => field.key === key)?.label ??
+  key;
+
+/**
+ * The canonical contract is the validator of record: run the entity's own
+ * create/update Zod schema over the built payload and report its issues
+ * beside the field they name, instead of re-stating its refinements in the
+ * editor (a non-zero amount, a posted transaction's date).
+ */
+const parseCanonical = <T>(
+  parse: () => T,
+):
+  | { ok: true; value: T }
+  | { ok: false; issues: readonly EntityEditIssue[] } => {
+  try {
+    return { ok: true, value: parse() };
+  } catch (error) {
+    if (!(error instanceof z.ZodError)) throw error;
+    return {
+      ok: false,
+      issues: error.issues.map((issue) => ({
+        field: issue.path.length > 0 ? issue.path.join(".") : undefined,
+        message: issue.message,
+        source: "client" as const,
+      })),
+    };
+  }
+};
+
 const makeIntent = <E extends EditableEntity>(
   entity: E,
   operation: EntityEditOperation,
   semanticIntent: string,
   options: IntentOptions<E>,
-): EditIntent<E> => ({
-  fields: options.fields ?? fieldsFor(entity, semanticIntent),
-  access: options.access ?? (() => editable),
-  validate: options.validate,
-  defaults: options.defaults,
-  build: ({ record, patch, context }) => {
-    const data = options.buildData ? options.buildData(patch, context) : patch;
-    // Computed from the post-`buildData` patch, not the pre-`buildData`
-    // dirty-field patch: a `buildData` that injects a fixed key (e.g.
-    // settle's unconditional `future: false`) must make an otherwise-empty
-    // edit submit. See `entities/editing/definitions.unit.test.ts`.
-    const keys = Object.keys(data);
-    if (operation === "create") {
+): EditIntent<E> => {
+  const fields = options.fields ?? fieldsFor(entity, semanticIntent);
+  return {
+    fields,
+    access: options.access ?? (() => editable),
+    validate: (input) => [
+      ...declaredIntentIssues(entity, semanticIntent, fields, input),
+      ...(options.validate?.(input) ?? []),
+    ],
+    defaults: options.defaults,
+    build: ({ record, patch, context }) => {
+      const data = options.buildData
+        ? options.buildData(patch, context)
+        : patch;
+      // Computed from the post-`buildData` patch, not the pre-`buildData`
+      // dirty-field patch: a `buildData` that injects a fixed key (e.g.
+      // settle's unconditional `future: false`) must make an otherwise-empty
+      // edit submit. See `entities/editing/definitions.unit.test.ts`.
+      const keys = Object.keys(data);
+      if (operation === "create") {
+        const parsed = parseCanonical(() =>
+          parseEntityEditCreateInput(entity, data),
+        );
+        if (!parsed.ok) return { ok: false, issues: parsed.issues };
+        return {
+          ok: true,
+          changed: true,
+          command: {
+            entity,
+            operation,
+            intent: semanticIntent,
+            data: parsed.value,
+          },
+        };
+      }
+      if (!record) {
+        return {
+          ok: false,
+          issues: [
+            {
+              message: `${entity} ${operation} requires a record.`,
+              source: "client",
+            },
+          ],
+        };
+      }
+      if (operation === "update") {
+        const parsed = parseCanonical(() =>
+          parseEntityEditUpdateInput(entity, data),
+        );
+        if (!parsed.ok) return { ok: false, issues: parsed.issues };
+        return {
+          ok: true,
+          changed: keys.length > 0,
+          command: {
+            entity,
+            operation,
+            intent: semanticIntent,
+            id: record.id,
+            data: parsed.value,
+          },
+        };
+      }
       return {
         ok: true,
         changed: true,
@@ -514,46 +644,12 @@ const makeIntent = <E extends EditableEntity>(
           entity,
           operation,
           intent: semanticIntent,
-          data: parseEntityEditCreateInput(entity, data),
+          ids: [record.id],
         },
       };
-    }
-    if (!record) {
-      return {
-        ok: false,
-        issues: [
-          {
-            message: `${entity} ${operation} requires a record.`,
-            source: "client",
-          },
-        ],
-      };
-    }
-    if (operation === "update") {
-      return {
-        ok: true,
-        changed: keys.length > 0,
-        command: {
-          entity,
-          operation,
-          intent: semanticIntent,
-          id: record.id,
-          data: parseEntityEditUpdateInput(entity, data),
-        },
-      };
-    }
-    return {
-      ok: true,
-      changed: true,
-      command: {
-        entity,
-        operation,
-        intent: semanticIntent,
-        ids: [record.id],
-      },
-    };
-  },
-});
+    },
+  };
+};
 
 const isIntentNameList = <E extends EditableEntity>(
   declared: IntentDeclaration<E>,
@@ -588,58 +684,66 @@ const operationDefinition = <E extends EditableEntity>(
   };
 };
 
-const buildDefinition = <E extends EditableEntity>(
+/**
+ * Per-entity editing logic the declaration cannot state: a form value
+ * derived from a record's projection, a cross-field validator, a payload
+ * fold. Everything else — fields, intents, defaults, required-ness, date
+ * ranges — is generated from the entity declaration and canonical Zod.
+ * Entries may only be removed (see `override-registry-shrink.unit.test.tsx`).
+ */
+export interface EntityEditHooks<E extends EditableEntity> {
+  /** Field behavior beyond what the declaration derives. */
+  fields?: FieldOverrides<E>;
+  /** Options for the named create intents. */
+  create?: Readonly<Record<string, IntentOptions<E>>>;
+  /** Options for the named update intents. */
+  update?: Readonly<Record<string, IntentOptions<E>>>;
+}
+
+/**
+ * The registry entry for one entity: the declared intents in their declared
+ * order (the first is each operation's default), their fields unioned into
+ * the field list, and the hooks' options attached by intent name.
+ */
+const buildEntityDefinition = <E extends EditableEntity>(
   entity: E,
-  build: (f: EntityEditBuilder<E>) => EntityEditBody<E>,
+  hooks: EntityEditHooks<E> | undefined,
 ): EntityEditDefinition<E, EntityEditRecord> => {
-  const body = build(builderFor(entity));
-  const operations: EntityEditDefinition<E, EntityEditRecord>["operations"] = {
-    delete: {
-      defaultIntent: "delete",
-      intents: {
-        delete: makeIntent(entity, "delete", "delete", {
-          fields: [],
-          access: () => body.delete ?? editable,
-        }),
-      },
-    },
-  };
-  // Operation intent lists default to the declaration; a registry entry only
-  // spells them out when an intent needs options (defaults, seeds, builders).
   const declared = generatedEntityEditIntents[entity];
-  operations.create = operationDefinition(
-    entity,
-    "create",
-    body.create ?? declared.create,
-  );
-  operations.update = operationDefinition(
-    entity,
-    "update",
-    body.update ?? declared.update,
-  );
+  const operationIntents = (
+    operation: "create" | "update",
+  ): IntentDeclaration<E> => {
+    const names: readonly string[] = declared[operation];
+    const options = hooks?.[operation] ?? {};
+    for (const name of Object.keys(options)) {
+      if (!names.includes(name))
+        throw new Error(
+          `${entity} edit hooks configure the undeclared ${operation} intent ${name}`,
+        );
+    }
+    return Object.fromEntries(names.map((name) => [name, options[name] ?? {}]));
+  };
   return {
     entity,
-    fields: body.fields,
-    operations,
+    fields: builderFor(entity).fieldsFrom(
+      Object.keys(declared.fields),
+      hooks?.fields,
+    ),
+    operations: {
+      delete: {
+        defaultIntent: "delete",
+        intents: {
+          delete: makeIntent(entity, "delete", "delete", {
+            fields: [],
+            access: () => editable,
+          }),
+        },
+      },
+      create: operationDefinition(entity, "create", operationIntents("create")),
+      update: operationDefinition(entity, "update", operationIntents("update")),
+    },
   };
 };
-
-const requiredDate =
-  (
-    fieldId: "date" | "dueDate",
-  ): NonNullable<
-    EntityEditIntentDefinition<EditableEntity, EntityEditRecord>["validate"]
-  > =>
-  ({ values }) =>
-    values[fieldId]
-      ? noIssues()
-      : [
-          {
-            field: fieldId,
-            message: "Date is required",
-            source: "client",
-          },
-        ];
 
 const validateExpenseDate: NonNullable<
   EntityEditIntentDefinition<EditableEntity, EntityEditRecord>["validate"]
@@ -761,8 +865,6 @@ const normalizeFinancialTransaction = (
   }
   return normalized;
 };
-
-const vendorCreateDefaults = { name: "", website: null, notes: null } as const;
 
 /**
  * `collections` is an editor-only pseudo field (no model field, no stored
@@ -959,45 +1061,23 @@ const productUnitMappingsValidate: NonNullable<
   });
 };
 
+type EditHooksMap = { [E in EditableEntity]?: EntityEditHooks<E> };
+
 /**
- * The data-only registry of Cubby's standard entity editing semantics.
- *
- * These are field fragments and commands, not form components: desktop pages,
- * dialogs, calendar sheets, and cells stay adapters at their own seams.
- *
- * Most entities need only their field roster — defaults, blank normalization,
- * and required-ness are all derived generically above from the manifest and
- * the generated create/update schemas. An entry keeps explicit `create`/
- * `update`/field overrides only for genuinely context-sensitive behaviour: a
- * validator that reads other field values, an access rule keyed by surface,
- * a value that folds several editor-only fields into one stored shape, or a
- * default that depends on runtime context (`context.disposition`) rather
- * than the declaration.
+ * The entities whose editing needs procedural logic: everything the
+ * declaration cannot say. Every other entity's editor is generated from its
+ * `model.intents`, controls and canonical schemas alone.
  */
-export const entityEditRegistry: EntityEditRegistry = {
-  spendingCategory: buildDefinition("spendingCategory", (f) => ({
-    fields: f.fieldsFrom(["full"]),
-  })),
-  productCategory: buildDefinition("productCategory", (f) => ({
-    fields: f.fieldsFrom(["full"]),
-  })),
-  device: buildDefinition("device", (f) => ({
-    fields: f.fieldsFrom(["full"]),
-  })),
-  product: buildDefinition("product", (f) => ({
-    // `quickDetails` is a strict subset of `full`'s field roster.
-    fields: f.fieldsFrom(["full"], {
-      // The create schema allows omitting a manufacturer, but the form still
-      // requires one — not derivable from `requiredOnCreate`.
-      manufacturer: { required: true },
+export const editHooks: EditHooksMap = {
+  product: {
+    fields: {
       upc: { initial: productUpcInitial },
       isbn: { initial: productIsbnInitial },
       unitMappings: { initial: productUnitMappingsInitial },
       externalIds: { initial: productExternalIdsInitial },
       labelNutrition: { validate: productLabelNutritionValidate },
-    }),
+    },
     create: {
-      capture: {},
       full: {
         buildData: productBuildData,
         validate: productUnitMappingsValidate,
@@ -1008,19 +1088,10 @@ export const entityEditRegistry: EntityEditRegistry = {
         buildData: productBuildData,
         validate: productUnitMappingsValidate,
       },
-      identity: {},
-      price: {},
-      stock: {},
     },
-  })),
-  ingredient: buildDefinition("ingredient", (f) => ({
-    fields: f.fieldsFrom(["full"]),
-  })),
-  inventory: buildDefinition("inventory", (f) => ({
-    fields: f.fieldsFrom(["full"]),
-  })),
-  location: buildDefinition("location", (f) => ({
-    fields: f.fieldsFrom(["full"], {
+  },
+  location: {
+    fields: {
       // `collections` has no model field (editor-only, folded into `tags` at
       // submit) — seed edit mode from the record's own `tags`, since the
       // generic `initial` lookup has no `collections` key to read.
@@ -1032,94 +1103,18 @@ export const entityEditRegistry: EntityEditRegistry = {
               )
             : [],
       },
-    }),
-    create: {
-      capture: { defaults: { type: "room" }, buildData: locationBuildData },
-      full: { defaults: { type: "room" }, buildData: locationBuildData },
     },
-    update: {
+    create: {
+      capture: { buildData: locationBuildData },
       full: { buildData: locationBuildData },
     },
-  })),
-  plant: buildDefinition("plant", (f) => ({
-    fields: f.fieldsFrom(["capture", "full"]),
-    create: { full: {}, capture: {} },
-  })),
-  planting: buildDefinition("planting", (f) => ({
-    fields: f.fieldsFrom(["capture", "full"]),
-    // Plantings are contextual records: the generic create preview should
-    // expose crop, source, location, task, dates, and notes in one pass.
-    // Keep the capture intent for relation-section launchers that still ask
-    // for a compact form; full remains first so generic create defaults to it.
-    create: { full: {}, capture: {} },
-  })),
-  gardenEntry: buildDefinition("gardenEntry", (f) => ({
-    fields: f.fieldsFrom(["capture", "full"]),
-    // A journal entry created from a planting is seeded by relation context,
-    // but its full typed payload remains editable before the write.
-    // Keep the capture intent for relation-section launchers that still ask
-    // for a compact form; full remains first so generic create defaults to it.
-    create: { full: {}, capture: {} },
-  })),
-  recipe: buildDefinition("recipe", (f) => ({
-    fields: f.fieldsFrom(["full"]),
-  })),
-  meal: buildDefinition("meal", (f) => ({
-    fields: f.fieldsFrom(["full"]),
-  })),
-  project: buildDefinition("project", (f) => ({
-    fields: f.fieldsFrom(["full"]),
-  })),
-  task: buildDefinition("task", (f) => ({
-    fields: f.fieldsFrom(["full"], {
-      dueEndDate: {
-        validate: ({ value, values }) => {
-          const end = z.string().safeParse(value);
-          const due = z.string().safeParse(values.dueDate);
-          return end.success && due.success && end.data < due.data
-            ? [
-                {
-                  field: "dueEndDate",
-                  message: "End date must be on or after the due date.",
-                  source: "client",
-                },
-              ]
-            : noIssues();
-        },
-      },
-      // `notes` is accepted by the canonical task inputs but is not a scalar
-      // model field (see `editorFields` in the declaration) — no field model
-      // entry to derive a default from, so this stays explicit.
-      notes: "nullableText",
-    }),
-    create: {
-      capture: {
-        buildData: (patch) => ({
-          ...patch,
-          projectId: patch.projectId
-            ? parseShortcodeFor("project", patch.projectId)
-            : null,
-          subjectProductId: patch.subjectProductId
-            ? parseShortcodeFor("product", patch.subjectProductId)
-            : null,
-          trade: patch.trade ?? null,
-          dueEndDate: null,
-        }),
-      },
-      full: {},
-    },
-    update: {
-      full: {},
-      status: {},
-      project: {},
-      subject: {},
-      schedule: { validate: requiredDate("dueDate") },
-    },
-  })),
-  expense: buildDefinition("expense", (f) => ({
-    fields: f.fieldsFrom(["full"], {
-      date: { required: false },
-    }),
+    update: { full: { buildData: locationBuildData } },
+  },
+  // `notes` is accepted by the canonical task inputs but is not a scalar
+  // model field (see `editorFields` in the declaration) — no field model
+  // entry to derive a default from, so this stays explicit.
+  task: { fields: { notes: "nullableText" } },
+  expense: {
     create: {
       capture: {
         validate: validateExpenseDate,
@@ -1135,18 +1130,8 @@ export const entityEditRegistry: EntityEditRegistry = {
         buildData: (patch) => ({
           ...patch,
           lineKind: patch.lineKind === "auto" ? undefined : patch.lineKind,
-          projectId: patch.projectId
-            ? parseShortcodeFor("project", patch.projectId)
-            : null,
-          productId: patch.productId ?? null,
           productQuantity: patch.productId
             ? (patch.productQuantity ?? null)
-            : null,
-          vendor: z.string().safeParse(patch.vendor).success
-            ? z.string().parse(patch.vendor).trim() || null
-            : null,
-          orderId: z.string().safeParse(patch.orderId).success
-            ? z.string().parse(patch.orderId).trim() || null
             : null,
           url: null,
           notes: null,
@@ -1158,8 +1143,6 @@ export const entityEditRegistry: EntityEditRegistry = {
       full: { validate: validateExpenseDate },
       cost: { validate: validateExpenseDate },
       date: { validate: validateExpenseDate },
-      project: {},
-      product: {},
       planned: {
         access: ({ surface, record }) =>
           surface === "calendar" && valueFor(record, "future") !== true
@@ -1178,31 +1161,8 @@ export const entityEditRegistry: EntityEditRegistry = {
         buildData: (patch) => ({ ...patch, future: false }),
       },
     },
-  })),
-  vendor: buildDefinition("vendor", (f) => ({
-    fields: f.fieldsFrom(["full"]),
-    create: {
-      capture: { defaults: vendorCreateDefaults },
-      full: { defaults: vendorCreateDefaults },
-    },
-  })),
-  vendorAccount: buildDefinition("vendorAccount", (f) => ({
-    fields: f.fieldsFrom(["full"]),
-  })),
-  purchase: buildDefinition("purchase", (f) => ({
-    fields: f.fieldsFrom(["full"]),
-    create: {
-      capture: {
-        buildData: (patch) => ({
-          ...patch,
-          vendorId: parseShortcodeFor("vendor", patch.vendorId),
-        }),
-      },
-      full: {},
-    },
-  })),
-  financialAccount: buildDefinition("financialAccount", (f) => ({
-    fields: f.fieldsFrom(["capture", "full"]),
+  },
+  financialAccount: {
     create: {
       // `kind`, `issuer`, `network`, `institution`, `accountType`,
       // `provider`, and `last4` are editor-only fields that flatten into the
@@ -1229,7 +1189,7 @@ export const entityEditRegistry: EntityEditRegistry = {
       },
       full: {
         // The full create still collects the whole identity discriminant.
-        fields: f.fieldsFor("capture"),
+        fields: fieldsFor("financialAccount", "capture"),
         defaults: {
           provisional: false,
           providerVendorId: null,
@@ -1249,66 +1209,16 @@ export const entityEditRegistry: EntityEditRegistry = {
           };
         },
       },
-      identity: {},
     },
-  })),
-  financialTransaction: buildDefinition("financialTransaction", (f) => ({
-    fields: f.fieldsFrom(["capture", "full"], {
-      amount: {
-        // The create schema makes this required (`requiredOnCreate` would
-        // derive `{ required: true }`), but the generic "This field is
-        // required." message would pre-empt the specific one below for a
-        // blank value — stay off the derived default and always run the
-        // more useful validator.
-        required: false,
-        validate: ({ value }) => {
-          const amount = z.number().finite().safeParse(value);
-          return amount.success && amount.data !== 0
-            ? noIssues()
-            : [
-                {
-                  field: "amount",
-                  message: "Amount must be a non-zero number.",
-                  source: "client",
-                },
-              ];
-        },
-      },
-      postedDate: {
-        validate: ({ value, values }) =>
-          values.status === "posted" && !value
-            ? [
-                {
-                  field: "postedDate",
-                  message: "Posted transactions require a posted date.",
-                  source: "client",
-                },
-              ]
-            : noIssues(),
-      },
-    }),
+  },
+  financialTransaction: {
+    // `purchaseId`, `transactionDate`, `merchant`, … are editor blanks
+    // normalized by `normalizeFinancialTransaction`'s trim-to-null branch; the
+    // canonical schema reports a zero amount and a posted transaction without
+    // a posted date.
     create: {
-      // Reference/date/enum fields here are editor blanks that would fail
-      // required-field validation either way, but several (`purchaseId`,
-      // `transactionDate`, `merchant`, …) are normalized by
-      // `normalizeFinancialTransaction`'s trim-to-null branch rather than a
-      // generic reference/kind default, so the explicit defaults stay next
-      // to the `buildData` that consumes them.
       capture: {
-        defaults: {
-          accountId: "",
-          purchaseId: "",
-          kind: "purchase",
-          status: "pending",
-          amount: 0,
-          transactionDate: "",
-          postedDate: "",
-          merchant: "",
-          rawDescription: "",
-          sourceCategory: "",
-          sourceRefs: [],
-          notes: "",
-        },
+        defaults: { sourceRefs: [] },
         buildData: normalizeFinancialTransaction,
       },
       full: {
@@ -1316,26 +1226,26 @@ export const entityEditRegistry: EntityEditRegistry = {
         buildData: normalizeFinancialTransaction,
       },
     },
-    update: {
-      full: { buildData: normalizeFinancialTransaction },
-      settlement: {},
-    },
-  })),
-  wish: buildDefinition("wish", (f) => ({
-    fields: f.fieldsFrom(["full"]),
-    create: {
-      // Capture is the full form here: a wish has nothing worth deferring.
-      capture: { fields: f.fieldsFor("full") },
-      full: {},
-    },
-    update: ["full", "identity", "acquisition"],
-  })),
-  // No editor is rendered for these yet — create/update stay on MCP — but the
-  // builders must exist for the registry to be exhaustive over EditableEntity.
-  ledgerParty: buildDefinition("ledgerParty", (f) => ({
-    fields: f.fieldsFrom(["full"]),
-  })),
-  ledgerTransfer: buildDefinition("ledgerTransfer", (f) => ({
-    fields: f.fieldsFrom(["full"]),
-  })),
+    update: { full: { buildData: normalizeFinancialTransaction } },
+  },
 };
+
+const isEditableEntity = (entity: Entity): entity is EditableEntity =>
+  Object.hasOwn(generatedEntityEditIntents, entity);
+const editableEntities = entityKeys.filter(isEditableEntity);
+
+// SAFETY: `editableEntities` is the declared-intents roster, which the
+// `EditableEntity` type is asserted to match (types.ts); each entry is built
+// for its own entity key, so the per-key correlation the loop erases holds.
+const generatedRegistry = Object.fromEntries(
+  editableEntities.map((entity) => [
+    entity,
+    buildEntityDefinition(entity, editHooks[entity]),
+  ]),
+) as EntityEditRegistry;
+
+/**
+ * One definition per standard editable entity, generated from its declared
+ * `model.intents` plus its `editHooks` entry when it has one.
+ */
+export const entityEditRegistry: EntityEditRegistry = generatedRegistry;

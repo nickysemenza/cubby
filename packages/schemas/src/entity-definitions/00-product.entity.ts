@@ -248,7 +248,8 @@ export default defineEntity({
         {
           id: "unlocated-durables",
           label: "Durables not on a shelf",
-          description: "Tools and storage the ledger says you own, stocked nowhere",
+          description:
+            "Tools and storage the ledger says you own, stocked nowhere",
           // A fast path into `unlocated`, not an authority over it: same question,
           // narrowed to the categories whose members are objects you could go find.
           //
@@ -286,7 +287,8 @@ export default defineEntity({
         {
           id: "consumed-on-projects",
           label: "Consumed on projects",
-          description: "Bought for a project, stocked nowhere — likely built in",
+          description:
+            "Bought for a project, stocked nowhere — likely built in",
           // A fast path into `unlocated`, not an authority over it — the same
           // relationship `unlocated-durables` has, aimed at the opposite half of
           // the backlog. Where that view narrows to things you could go find, this
@@ -420,7 +422,8 @@ export default defineEntity({
             title: "Products with no conversion path",
             description:
               "No price, no USDA key, and no unit mapping — nothing can cost or convert these, so any recipe using them is under-covered.",
-            emptyMessage: "Every food product has at least one conversion path.",
+            emptyMessage:
+              "Every food product has at least one conversion path.",
           },
           layout: {
             columnVisibility: {
@@ -435,7 +438,8 @@ export default defineEntity({
         {
           id: "over-exited",
           label: "Exit exceeds history",
-          description: "Recorded exits exceed the available acquisition history",
+          description:
+            "Recorded exits exceed the available acquisition history",
           // This view is the `expectedQuantityMax: -1` worklist, and the detector
           // that separately re-derived the same predicate with a grouped HAVING is
           // gone.
@@ -461,7 +465,8 @@ export default defineEntity({
             title: "Exits exceed recorded acquisitions",
             description:
               "Recorded exits exceed recorded arrivals. Older acquisitions may predate the ledger, so review the available history before correcting a quantity.",
-            emptyMessage: "No product has more recorded exits than acquisitions.",
+            emptyMessage:
+              "No product has more recorded exits than acquisitions.",
           },
           layout: {
             columnVisibility: { ledgerExpectedQuantity: true },
@@ -741,7 +746,9 @@ export default defineEntity({
       {
         key: "manufacturer",
         kind: "text",
-        control: { kind: "text", width: "half" },
+        // The create schema defaults a missing maker, but the form still
+        // asks for one.
+        control: { kind: "text", width: "half", required: true },
         display: {
           list: true,
           detail: true,
@@ -1274,7 +1281,11 @@ export default defineEntity({
           format: "presence",
           valueOptions: [
             { value: "yes", label: "Has model", color: "var(--slate)" },
-            { value: "no", label: "No model", color: "var(--muted-foreground)" },
+            {
+              value: "no",
+              label: "No model",
+              color: "var(--muted-foreground)",
+            },
           ],
         },
         provenance: { kind: "derived", sources: [{ entity: "product" }] },
@@ -1327,7 +1338,11 @@ export default defineEntity({
           format: "presence",
           valueOptions: [
             { value: "yes", label: "Has notes", color: "var(--slate)" },
-            { value: "no", label: "No notes", color: "var(--muted-foreground)" },
+            {
+              value: "no",
+              label: "No notes",
+              color: "var(--muted-foreground)",
+            },
           ],
         },
         provenance: { kind: "derived", sources: [{ entity: "product" }] },

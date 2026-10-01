@@ -35,7 +35,6 @@ import {
   type PresentationCoverage,
 } from "./presentation-coverage";
 
-
 /**
  * Entities outside the kernel list roster whose index still builds columns
  * from the manifest through a client-mode override (`list-columns/*.tsx`),

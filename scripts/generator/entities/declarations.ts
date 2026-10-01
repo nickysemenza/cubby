@@ -130,7 +130,10 @@ type EntityFieldControl = Readonly<{
   /** Pairs with the next consecutive `"half"` field on one row. */
   width: "half" | null;
   placeholder: string | null;
-  initial: "today" | Readonly<{ value: string | number | boolean | null }> | null;
+  initial:
+    | "today"
+    | Readonly<{ value: string | number | boolean | null }>
+    | null;
   /** `null` derives required-ness from the create schema. */
   required: boolean | null;
   suggest: Readonly<{

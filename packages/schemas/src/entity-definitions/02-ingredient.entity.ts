@@ -38,7 +38,8 @@ export default defineEntity({
         {
           id: "needs-a-product",
           label: "Needs a product",
-          description: "Used by one of your own recipes, with nothing to cost it",
+          description:
+            "Used by one of your own recipes, with nothing to cost it",
           // `ingredient_product`'s own `expected` is "not a sub-recipe, used by
           // one of the household's own recipes" (checks/ingredient.ts) — the
           // cookbook import supplies the overwhelming majority of ingredient

@@ -56,6 +56,7 @@ export default defineEntity({
         },
       ],
     },
+    edit: { dateRanges: [{ start: "dueDate", end: "dueEndDate" }] },
     list: {
       savedViews: [
         {
@@ -692,6 +693,9 @@ export default defineEntity({
       // `notes` is accepted by the canonical task inputs but is not a scalar
       // model field yet; the editor addresses it through the input contract.
       editorFields: ["notes"],
+      // Rescheduling is the point of the schedule editor, so a date is
+      // required there even though a task may be unscheduled.
+      required: { schedule: ["dueDate"] },
     },
     output: [
       "fieldResolutions",

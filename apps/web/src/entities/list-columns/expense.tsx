@@ -2,7 +2,10 @@ import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { createCubbyColumnCollection, createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/app/_components/data-table/table-features";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";

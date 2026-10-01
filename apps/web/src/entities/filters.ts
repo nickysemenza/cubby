@@ -1,8 +1,5 @@
 import type { FILTER_KINDS } from "@cubby/schemas/entity-definitions/definition";
-import {
-  FILTER_ANY,
-  FILTER_NONE,
-} from "@cubby/schemas/filter-sentinel-fields";
+import { FILTER_ANY, FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import { humanize, UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { partition } from "es-toolkit";
 import { match } from "ts-pattern";

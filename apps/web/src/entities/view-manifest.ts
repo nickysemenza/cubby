@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { entitySummary } from "@cubby/schemas/entity-summary";
+import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
 import type { ProblemKey } from "@cubby/schemas/problems";
 import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { z } from "zod";
@@ -92,42 +92,47 @@ const problemKey = (key: string): ProblemKey => {
   return key;
 };
 
-type DeclaredView = (typeof entitySummary)[Entity]["list"]["savedViews"][number];
+type DeclaredView =
+  (typeof entitySummary)[Entity]["list"]["savedViews"][number];
 
-const toViewDefinition = (view: DeclaredView): ViewDefinition => ({
-  id: view.id,
-  label: view.label,
-  description: view.description,
-  filters: view.filters.map(({ id, value }) => ({
-    id,
-    value: typeof value === "string" ? value : [...value],
-  })),
-  ...(view.flow ? { flow: { ...view.flow } } : {}),
-  ...(view.sort ? { sort: view.sort.map((entry) => ({ ...entry })) } : {}),
-  ...(view.layout
-    ? {
-        layout: {
-          columnOrder: [],
-          columnPinning: { start: [], end: [] },
-          columnSizing: {},
-          columnVisibility: { ...view.layout.columnVisibility },
-        },
-      }
-    : {}),
-  ...(view.problem
-    ? { problem: { ...view.problem, key: problemKey(view.problem.key) } }
-    : {}),
-});
+const toViewDefinition = (view: DeclaredView): ViewDefinition => {
+  const definition: ViewDefinition = {
+    id: view.id,
+    label: view.label,
+    description: view.description,
+    filters: view.filters.map(({ id, value }) => ({
+      id,
+      value: Array.isArray(value) ? [...value] : value,
+    })),
+  };
+  if (view.flow) definition.flow = { ...view.flow };
+  if (view.sort) definition.sort = view.sort.map((entry) => ({ ...entry }));
+  if (view.layout)
+    definition.layout = {
+      columnOrder: [],
+      columnPinning: { start: [], end: [] },
+      columnSizing: {},
+      columnVisibility: { ...view.layout.columnVisibility },
+    };
+  if (view.problem)
+    definition.problem = { ...view.problem, key: problemKey(view.problem.key) };
+  return definition;
+};
+
+const savedViewsOf = (entity: Entity): readonly DeclaredView[] =>
+  entitySummary[entity].list.savedViews;
+
+const buildViewManifest = () => {
+  const manifest: Partial<Record<Entity, ViewDefinition[]>> = {};
+  for (const entity of entityKeys) {
+    const views = savedViewsOf(entity);
+    if (views.length > 0) manifest[entity] = views.map(toViewDefinition);
+  }
+  return manifest;
+};
 
 /** Every entity's declared saved views, in declaration order. */
-export const viewManifest: Partial<Record<Entity, ViewDefinition[]>> =
-  Object.fromEntries(
-    Object.entries(entitySummary).flatMap(([entity, summary]) =>
-      summary.list.savedViews.length === 0
-        ? []
-        : [[entity, summary.list.savedViews.map(toViewDefinition)]],
-    ),
-  );
+export const viewManifest = buildViewManifest();
 
 const isEntity = (value: string): value is Entity =>
   Object.prototype.hasOwnProperty.call(viewManifest, value);

@@ -99,7 +99,12 @@ export default defineEntity({
           id: "active",
           label: "Active",
           description: "Projects that have not been completed",
-          filters: [{ id: "status", value: projectStatusValues.filter((status) => status !== "done") }],
+          filters: [
+            {
+              id: "status",
+              value: projectStatusValues.filter((status) => status !== "done"),
+            },
+          ],
         },
         {
           id: "completed",

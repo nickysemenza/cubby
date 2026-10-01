@@ -188,6 +188,9 @@ export default defineEntity({
           kind: "select",
           options: selectControlOptions.mealKind,
           suggest: { basis: ["name"] },
+          // The storage default is a DB literal, so the create schema stays
+          // optional with no Zod default to read.
+          initial: { value: "cooked" },
         },
         display: {
           list: true,
