@@ -47,6 +47,15 @@ const REPO_WRITERS = {
 };
 
 type RepoWriterEntity = keyof typeof REPO_WRITERS;
+/** The writers re-keyed so indexing by a generic entity keeps its own input type. */
+type RepoWriters = {
+  [K in RepoWriterEntity]: (
+    db: Database,
+    input: EntityInput<K>,
+    actor: ActorContext,
+  ) => ReturnType<(typeof REPO_WRITERS)[K]>;
+};
+const writers: RepoWriters = REPO_WRITERS;
 
 /** The `{ db, actor }` pair `withTestDb()` hands every integration test. */
 export interface RepoContext {
@@ -61,10 +70,5 @@ export function createRepoEntity<E extends RepoWriterEntity>(
   opts: BuildOptions = {},
 ): ReturnType<(typeof REPO_WRITERS)[E]> {
   const input = buildEntity(entity, overrides, opts);
-  const write: (
-    db: Database,
-    input: EntityInput<E>,
-    actor: ActorContext,
-  ) => ReturnType<(typeof REPO_WRITERS)[E]> = REPO_WRITERS[entity];
-  return write(context.db, input, context.actor);
+  return writers[entity](context.db, input, context.actor);
 }

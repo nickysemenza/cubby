@@ -31,7 +31,10 @@ export const mcpAppsInputFiles = (root = ROOT): string[] => {
     if (!existsSync(path)) throw new Error(`Missing MCP Apps input: ${path}`);
   }
 
-  return [...requiredFiles, ...requiredDirectories.flatMap(walkFiles)].sort();
+  return [
+    ...requiredFiles,
+    ...requiredDirectories.flatMap((directory) => walkFiles(directory)),
+  ].sort();
 };
 
 export const mcpAppsSourceFingerprint = (root = ROOT): string =>
