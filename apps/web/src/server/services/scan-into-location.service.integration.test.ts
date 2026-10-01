@@ -146,7 +146,7 @@ describe("resolveScanStrays", () => {
     const target = await makeLocation("New shelf");
     const product = await quickCreateProduct(
       ctx.db,
-      { name: "Stray book", upc: "012345678911" },
+      { name: "Stray book", upc: "012345678912" },
       TEST_ACTOR,
     );
     const productId = parseEntityId(
