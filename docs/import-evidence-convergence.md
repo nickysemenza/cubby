@@ -45,12 +45,17 @@ writes. Imported source claims alone do not establish reviewed itemization.
 
 ## Validation boundaries
 
-`import-order-convergence.spec.ts` exercises all 24 arrival orders of Gmail,
-retailer, photo, and CSV evidence. It uses real normalization, persistence,
-retailer preparation/commit, signed photo upload/finalization, photo review,
-and CSV browser intake. Only external classifier/image-description output is
-deterministic. It asserts the final Product, inventory ownership, Expense,
-Purchase allocation, and original source edges; it does not seed the economic
+`import-order-convergence.integration.test.ts` exercises all 24 arrival
+orders of Gmail, retailer, photo, and CSV evidence against PostgreSQL through
+the same writers the routes dispatch: real normalization, persistence,
+retailer preparation/commit, photo staging/finalization/review, CSV intake,
+booking, finding resolution, and order-mail linking.
+`import-order-convergence.spec.ts` runs four of those orders in the browser —
+cyclic shifts, so each source arrives in every position and every ordered
+pair occurs — adding signed photo upload, photo review approval, CSV browser
+intake, the Problems fix, and the vendor Link. Only external
+classifier/image-description output is deterministic. Both assert the final Product, inventory ownership, Expense,
+Purchase allocation, and original source edges; neither seeds the economic
 graph or repair it at the end.
 
 `pnpm test:e2e:sim -- --headless --statement-csv` drives a real Swift CLI
