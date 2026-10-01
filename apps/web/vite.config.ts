@@ -216,6 +216,29 @@ function cfZodLocalesStub(): Plugin {
   };
 }
 
+/**
+ * Each Phosphor icon module defines all six weights, but the app renders only
+ * these. Dropping the rest removes ~half of every icon's paths from both
+ * bundles. Using another weight renders an empty icon — add it here first.
+ */
+const PHOSPHOR_WEIGHTS = new Set(["regular", "bold", "fill"]);
+
+function phosphorWeights(): Plugin {
+  const iconDefinition = /@phosphor-icons\/react\/dist\/defs\/[^/]+\.es\.js$/;
+  // Entries are `[ "weight", element ]` pairs at two-space indent in the
+  // package's unminified ESM output; element bodies are indented deeper.
+  const entry = /\n {2}\[\n {4}"([a-z]+)",[\s\S]*?\n {2}\],?/g;
+  return {
+    name: "phosphor-weights",
+    transform(code, id) {
+      if (!iconDefinition.test(id.replaceAll("\\", "/"))) return null;
+      return code.replace(entry, (whole, weight: string) =>
+        PHOSPHOR_WEIGHTS.has(weight) ? whole : "",
+      );
+    },
+  };
+}
+
 function cfSentryShim(): Plugin {
   const shim = path.resolve(__dirname, "src/lib/sentry-cf-shim.ts");
   return {
@@ -357,6 +380,7 @@ export default defineConfig(async ({ command }) => {
       cfWasmPlugin(),
       cfSentryShim(),
       cfZodLocalesStub(),
+      phosphorWeights(),
       wasm(),
       devtools({
         // Keep the runtime devtools available to the production lazy chunk;
