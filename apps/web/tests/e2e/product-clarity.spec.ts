@@ -151,7 +151,11 @@ test("purchase product roles survive deduplication, Open all, and inverse naviga
   );
   await expect(products.getByText("Sale", { exact: true })).toHaveCount(0);
 
-  await products.getByLabel("Open all products", { exact: true }).click();
+  const openAll = products.getByLabel("Open all products", { exact: true });
+  await openAll.evaluate((element) =>
+    element.scrollIntoView({ block: "center" }),
+  );
+  await openAll.click();
   await expect(page).toHaveURL(/\/connections\?/);
   await expect(
     page.getByRole("columnheader", { name: "Movement", exact: true }),
@@ -213,7 +217,11 @@ test("phone relationship rows keep planned and explicit link evidence separate",
   await expect(products.getByText("Linked", { exact: true })).toBeVisible();
   await expect(products.getByText("Planned", { exact: true })).toBeVisible();
   await expect(products.getByText("Acquired", { exact: true })).toHaveCount(0);
-  await products.getByLabel("Open all products", { exact: true }).click();
+  const openAll = products.getByLabel("Open all products", { exact: true });
+  await openAll.evaluate((element) =>
+    element.scrollIntoView({ block: "center" }),
+  );
+  await openAll.click();
   await expect(page).toHaveURL(/\/connections\?/);
   await expect(
     recordRows(page)
