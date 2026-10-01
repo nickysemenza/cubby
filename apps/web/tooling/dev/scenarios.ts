@@ -19,11 +19,8 @@ import { request } from "@playwright/test";
 import type { Pool } from "pg";
 import { DEV_USER_EMAIL, DEV_USER_PASSWORD } from "./state";
 import type { LocalFixturePack } from "./fixtures";
-import {
-  type CreatableEntity,
-  createEntity,
-  type EntityOverrides,
-} from "../factories/build";
+import { type CreatableEntity, type EntityOverrides } from "../factories/build";
+import { createEntity } from "../factories/create";
 import { DEV_FAKER_SEED, fakerFromSeed } from "../factories/faker";
 import {
   buildKernelContext,

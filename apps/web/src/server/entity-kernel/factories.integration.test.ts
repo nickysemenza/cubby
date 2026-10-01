@@ -1,15 +1,17 @@
 import { testUserId } from "@cubby/schemas/testing";
 import { count, eq } from "drizzle-orm";
+import {
+  BASE_HOME_SHORTCODE,
+  seedBaseWorld,
+} from "tooling/factories/base-world";
+import { createEntity } from "tooling/factories/create";
+import { fakerFromSeed, hashSeed } from "tooling/factories/faker";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { inventoryEntry, location, productCategory } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
-
-import { buildKernelContext } from "../scenarios/context";
-import { BASE_HOME_SHORTCODE, seedBaseWorld } from "./base-world";
-import { createEntity } from "./build";
-import { fakerFromSeed, hashSeed } from "./faker";
 
 describe("factories against the entity kernel", () => {
   const ctx = withTestDb();

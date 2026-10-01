@@ -3,7 +3,7 @@ import type { Pool } from "pg";
 
 import { seedBaseWorld } from "../factories/base-world";
 import { taxonomyShortcode } from "../product-category-fixtures";
-import { createEntity } from "../factories/build";
+import { createEntity } from "../factories/create";
 import { buildKernelContext, buildScenarioDatabase } from "./context";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";

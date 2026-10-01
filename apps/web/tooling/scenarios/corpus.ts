@@ -5,11 +5,8 @@ import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { seedBaseWorld } from "../factories/base-world";
-import {
-  type CreatableEntity,
-  createEntity,
-  type EntityOverrides,
-} from "../factories/build";
+import { type CreatableEntity, type EntityOverrides } from "../factories/build";
+import { createEntity } from "../factories/create";
 import { DEV_FAKER_SEED, fakerFromSeed } from "../factories/faker";
 import { taxonomyShortcode } from "../product-category-fixtures";
 import { buildKernelContext, buildScenarioDatabase } from "./context";

@@ -3,11 +3,6 @@ import { z } from "zod";
 
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 
-import {
-  createFixtureWithContext,
-  type CreatedEntity,
-  type KernelContext,
-} from "../scenarios/context";
 import { type Filler, fillerFor } from "./filler";
 
 /**
@@ -57,7 +52,8 @@ const ENTITY_DEFAULTS = {
   product: (f) => ({ name: f.name("Product"), manufacturer: f.company() }),
   recipe: (f) => ({ name: f.name("Recipe"), meta: null, sections: [] }),
   ingredient: (f) => ({ name: f.name("Ingredient") }),
-  location: (f) => ({ name: f.name("Location") }),
+  // The kernel refuses a location with no type (only a Product instance may omit it).
+  location: (f) => ({ name: f.name("Location"), type: "room" }),
   inventory: () => ({ amount: { value: 1, unit: "each" } }),
   meal: (f) => ({ name: f.name("Meal"), date: SOME_DAY }),
   ledgerParty: (f) => ({ name: f.name("Party"), kind: "guest" }),
@@ -139,18 +135,4 @@ export function buildEntity<E extends CreatableEntity>(
   }
   // SAFETY: `schema` is this entity's own createInput, so its output is EntityInput<E>.
   return parsed.data as EntityInput<E>;
-}
-
-/** Build, then create through the same entity-kernel path the browser uses. */
-export function createEntity<E extends CreatableEntity>(
-  context: KernelContext,
-  entity: E,
-  overrides: EntityOverrides<E> = {},
-  opts: BuildOptions = {},
-): Promise<CreatedEntity> {
-  return createFixtureWithContext(
-    context,
-    entity,
-    buildEntity(entity, overrides, opts),
-  );
 }

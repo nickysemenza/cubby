@@ -14,6 +14,9 @@ import { en, Faker } from "@faker-js/faker";
  * the Worker bundle (`tooling/factories/worker-bundle-guard.unit.test.ts`).
  */
 
+/** The Playwright annotation type that records a test's Faker seed. */
+export const FAKER_SEED_ANNOTATION = "faker-seed";
+
 /** The dev corpus seed: the same synthetic household on every `dev:seed`. */
 export const DEV_FAKER_SEED = 1;
 

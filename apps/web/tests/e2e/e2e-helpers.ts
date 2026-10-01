@@ -13,6 +13,7 @@ import { scrubErrorMessage } from "~/lib/error-diagnostics";
 
 import {
   deterministicToken,
+  FAKER_SEED_ANNOTATION,
   fakerFromSeed,
   hashSeed,
 } from "../../tooling/factories/faker";
@@ -69,7 +70,10 @@ export function e2eFaker(): Faker {
   const existing = testFakers.get(info);
   if (existing) return existing;
   const seed = hashSeed(info.project.name, ...info.titlePath);
-  info.annotations.push({ type: "faker-seed", description: String(seed) });
+  info.annotations.push({
+    type: FAKER_SEED_ANNOTATION,
+    description: String(seed),
+  });
   const faker = fakerFromSeed(seed);
   testFakers.set(info, faker);
   return faker;

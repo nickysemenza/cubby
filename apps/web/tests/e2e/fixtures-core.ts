@@ -11,9 +11,9 @@ import * as schema from "~/server/db/schema";
 import type { EntityBrowserMutationCommand } from "~/server/entity-kernel/contracts";
 import {
   type CreatableEntity,
-  createEntity,
   type EntityOverrides,
 } from "../../tooling/factories/build";
+import { createEntity } from "../../tooling/factories/create";
 import {
   buildKernelContext,
   createFixtureWithContext,
