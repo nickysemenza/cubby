@@ -19,7 +19,7 @@ import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
-import { DialogFooter } from "~/components/ui/dialog";
+import { DialogFormActions } from "~/components/ui/dialog-form-actions";
 import { Input } from "~/components/ui/input";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entityDetailLink } from "~/entities/entities";
@@ -178,25 +178,15 @@ function MealPreparationOverlays({
         title="Add leftovers"
         description="Choose a recipe prepared in another recent meal, including another meal from the same day."
         footer={
-          <DialogFooter className="gap-2 sm:justify-end">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                preparation.setSourcePickerOpen(false);
-                preparation.setSourceSelectionId(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={preparation.selectedSourceChoice == null}
-              onClick={preparation.chooseSource}
-            >
-              Continue
-            </Button>
-          </DialogFooter>
+          <DialogFormActions
+            onCancel={() => {
+              preparation.setSourcePickerOpen(false);
+              preparation.setSourceSelectionId(null);
+            }}
+            submitLabel="Continue"
+            submitDisabled={preparation.selectedSourceChoice == null}
+            onSubmit={preparation.chooseSource}
+          />
         }
       >
         {preparation.isLoadingSourceChoices ? (

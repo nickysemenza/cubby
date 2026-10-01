@@ -14,10 +14,10 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { DialogFormActions } from "~/components/ui/dialog-form-actions";
 import { EnumPill } from "~/components/ui/enum-pill";
 import { Input } from "~/components/ui/input";
 import {
@@ -295,40 +295,35 @@ function MatchStatementTransaction({
               ) : null}
             </div>
           ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              disabled={
-                !selected ||
-                !parseSettlementAllocations(allocations, selected.amount) ||
-                update.isPending
-              }
-              onClick={async () => {
-                if (!selected) return;
-                const parsedAllocations = parseSettlementAllocations(
-                  allocations,
-                  selected.amount,
-                );
-                if (!parsedAllocations) return;
-                await update.mutateAsync({
-                  id: selected.id,
-                  data: { allocations: parsedAllocations },
-                });
-                // The global handler fires this ripple without awaiting it;
-                // await it so the panel is fresh before the dialog closes.
-                await invalidateOperationTags(
-                  queryClient,
-                  entityRipple("financialTransaction"),
-                );
-                setOpen(false);
-                setSelected(null);
-              }}
-            >
-              Save allocation
-            </Button>
-          </DialogFooter>
+          <DialogFormActions
+            onCancel={() => setOpen(false)}
+            submitLabel="Save allocation"
+            pending={update.isPending}
+            submitDisabled={
+              !selected ||
+              !parseSettlementAllocations(allocations, selected.amount)
+            }
+            onSubmit={async () => {
+              if (!selected) return;
+              const parsedAllocations = parseSettlementAllocations(
+                allocations,
+                selected.amount,
+              );
+              if (!parsedAllocations) return;
+              await update.mutateAsync({
+                id: selected.id,
+                data: { allocations: parsedAllocations },
+              });
+              // The global handler fires this ripple without awaiting it;
+              // await it so the panel is fresh before the dialog closes.
+              await invalidateOperationTags(
+                queryClient,
+                entityRipple("financialTransaction"),
+              );
+              setOpen(false);
+              setSelected(null);
+            }}
+          />
         </DialogContent>
       </Dialog>
     </>

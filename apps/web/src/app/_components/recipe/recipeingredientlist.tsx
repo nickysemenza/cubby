@@ -30,7 +30,7 @@ import type {
 } from "~/lib/recipe-costing";
 import type { RecipeTotalsGap } from "~/lib/recipe-totals-gaps";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { cn, formatCurrency } from "~/lib/utils";
+import { cn, formatCurrency, roundTo } from "~/lib/utils";
 
 import { useTableColumnLayout } from "../data-table/column-layout";
 import { createActionsColumnBase } from "../data-table/columnHelpers";
@@ -140,7 +140,7 @@ export const RecipeIngredientList: React.FC<{
     if (estimate.status !== "unavailable")
       return formatEstimate(
         estimate,
-        (value) => `${Number(value.toFixed(1))} ${nutrient.unit.toLowerCase()}`,
+        (value) => `${roundTo(value, 1)} ${nutrient.unit.toLowerCase()}`,
       );
     const label = `Repair ${nutrient.displayName.toLowerCase()} data for ${getIngredientName(row)}`;
     return row.type === "ingredient" ? (
@@ -467,7 +467,7 @@ export const RecipeIngredientList: React.FC<{
                   {formatEstimate(
                     displayedNutrition[key],
                     (value) =>
-                      `${Number(value.toFixed(1))} ${nutrient.unit.toLowerCase()}`,
+                      `${roundTo(value, 1)} ${nutrient.unit.toLowerCase()}`,
                   )}
                 </div>
               ) : null,
@@ -632,7 +632,7 @@ export const RecipeIngredientList: React.FC<{
                 {formatEstimate(
                   displayedNutrition[focusedNutrient],
                   (value) =>
-                    `${Number(value.toFixed(1))} ${TIER1_NUTRIENTS[focusedNutrient].unit.toLowerCase()}`,
+                    `${roundTo(value, 1)} ${TIER1_NUTRIENTS[focusedNutrient].unit.toLowerCase()}`,
                 )}
               </span>
             </div>

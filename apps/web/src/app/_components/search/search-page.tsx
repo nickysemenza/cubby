@@ -14,6 +14,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
 import {
+  type ReactNode,
   useCallback,
   useEffect,
   useId,
@@ -392,13 +393,7 @@ function SearchRow({
           </span>
         )}
       </div>
-      <button
-        type="button"
-        onClick={() => onPreview(previewRow)}
-        className="shrink-0 font-mono text-2xs text-muted-foreground uppercase hover:text-primary"
-      >
-        Preview
-      </button>
+      <PreviewButton onClick={() => onPreview(previewRow)} />
       <div className="hidden max-w-44 shrink-0 text-right sm:block">
         <span className="block truncate font-mono text-2xs text-muted-foreground uppercase">
           {entities[entityKindMap[item.entityKind]].label}
@@ -469,6 +464,135 @@ const searchProductSummary = (
   ].join(" · ");
 };
 
+function PreviewButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="shrink-0 font-mono text-2xs text-muted-foreground uppercase hover:text-primary"
+    >
+      Preview
+    </button>
+  );
+}
+
+function PlacementRow({
+  destination,
+  compact,
+  leading,
+  title,
+  detail,
+  trailing,
+}: {
+  destination: SearchDestination;
+  compact: boolean;
+  leading: ReactNode;
+  title: ReactNode;
+  detail: ReactNode;
+  trailing: ReactNode;
+}) {
+  return (
+    <Link
+      {...getSearchResultRoute(destination)}
+      className={cn(
+        "flex min-h-11 items-center gap-3 py-1.5 hover:bg-muted/60",
+        compact ? "px-3" : "px-5",
+      )}
+    >
+      {leading}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-medium">{title}</span>
+        <span className="block truncate text-2xs text-muted-foreground">
+          {detail}
+        </span>
+      </span>
+      {trailing}
+    </Link>
+  );
+}
+
+const placementCode = (id: string) => (
+  <span className="font-mono text-2xs text-muted-foreground tabular-nums">
+    {id}
+  </span>
+);
+
+/** A product row's expanded children: its placements, kit placements, and matched activity. */
+function ProductFamilyRegion({
+  id,
+  group,
+  compact = false,
+}: {
+  id: string;
+  group: Extract<SearchResultGroup, { kind: "product" }>;
+  /** The phone layout: tighter inset, command-size media, no match text. */
+  compact?: boolean;
+}) {
+  const mediaVariant = compact ? "command" : undefined;
+  return (
+    <fieldset
+      id={id}
+      aria-label={`${group.primary.title} placements and matching records`}
+      className="border-t border-border bg-muted/25 py-1"
+    >
+      {group.placements.map((placement) => (
+        <PlacementRow
+          key={placement.id}
+          destination={placementSearchDestination(group, placement)}
+          compact={compact}
+          leading={
+            <MapPinIcon className="size-4 shrink-0 text-muted-foreground" />
+          }
+          title={placement.locationPath}
+          detail={formatPlacement(placement)}
+          trailing={placementCode(placement.id)}
+        />
+      ))}
+      {group.componentPlacements.map((componentPlacement) => (
+        <PlacementRow
+          key={`${componentPlacement.component.id}:${componentPlacement.placement.id}`}
+          destination={componentPlacementSearchDestination(componentPlacement)}
+          compact={compact}
+          leading={
+            <SearchResultMedia
+              item={componentPlacement.component}
+              variant={mediaVariant}
+            />
+          }
+          title={componentPlacement.component.title}
+          detail={
+            <>
+              {componentPlacement.componentQuantity > 1
+                ? `${componentPlacement.componentQuantity}× kit content`
+                : "Kit content"}{" "}
+              · {componentPlacement.placement.locationPath} ·{" "}
+              {formatPlacement(componentPlacement.placement)}
+            </>
+          }
+          trailing={placementCode(componentPlacement.placement.id)}
+        />
+      ))}
+      {group.matchedActivity.map((item) => (
+        <PlacementRow
+          key={`${item.entityKind}:${item.id}`}
+          destination={item}
+          compact={compact}
+          leading={<SearchResultMedia item={item} variant={mediaVariant} />}
+          title={item.title}
+          detail={`${entities[entityKindMap[item.entityKind]].label} · ${item.id} · Linked to ${group.primary.title}`}
+          trailing={
+            compact ? null : (
+              <span className="max-w-36 truncate text-2xs text-muted-foreground">
+                {getSearchMatchText(item)}
+              </span>
+            )
+          }
+        />
+      ))}
+    </fieldset>
+  );
+}
+
 function ProductSearchRow({
   expanded,
   group,
@@ -532,13 +656,7 @@ function ProductSearchRow({
               .join(" · ")}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() => onPreview(previewRow)}
-          className="shrink-0 font-mono text-2xs text-muted-foreground uppercase hover:text-primary"
-        >
-          Preview
-        </button>
+        <PreviewButton onClick={() => onPreview(previewRow)} />
         <div className="hidden max-w-44 shrink-0 text-right sm:block">
           <span className="block font-mono text-2xs text-muted-foreground uppercase">
             Product
@@ -555,84 +673,7 @@ function ProductSearchRow({
         </div>
       </div>
       {expanded && hasChildren && (
-        <fieldset
-          id={regionId}
-          aria-label={`${group.primary.title} placements and matching records`}
-          className="border-t border-border bg-muted/25 py-1"
-        >
-          {group.placements.map((placement) => {
-            const destination = placementSearchDestination(group, placement);
-            return (
-              <Link
-                key={placement.id}
-                {...getSearchResultRoute(destination)}
-                className="flex min-h-11 items-center gap-3 px-5 py-1.5 hover:bg-muted/60"
-              >
-                <MapPinIcon className="size-4 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-medium">
-                    {placement.locationPath}
-                  </span>
-                  <span className="block truncate text-2xs text-muted-foreground">
-                    {formatPlacement(placement)}
-                  </span>
-                </span>
-                <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-                  {placement.id}
-                </span>
-              </Link>
-            );
-          })}
-          {group.componentPlacements.map((componentPlacement) => {
-            const destination =
-              componentPlacementSearchDestination(componentPlacement);
-            return (
-              <Link
-                key={`${componentPlacement.component.id}:${componentPlacement.placement.id}`}
-                {...getSearchResultRoute(destination)}
-                className="flex min-h-11 items-center gap-3 px-5 py-1.5 hover:bg-muted/60"
-              >
-                <SearchResultMedia item={componentPlacement.component} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-medium">
-                    {componentPlacement.component.title}
-                  </span>
-                  <span className="block truncate text-2xs text-muted-foreground">
-                    {componentPlacement.componentQuantity > 1
-                      ? `${componentPlacement.componentQuantity}× kit content`
-                      : "Kit content"}{" "}
-                    · {componentPlacement.placement.locationPath} ·{" "}
-                    {formatPlacement(componentPlacement.placement)}
-                  </span>
-                </span>
-                <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-                  {componentPlacement.placement.id}
-                </span>
-              </Link>
-            );
-          })}
-          {group.matchedActivity.map((item) => (
-            <Link
-              key={`${item.entityKind}:${item.id}`}
-              {...getSearchResultRoute(item)}
-              className="flex min-h-11 items-center gap-3 px-5 py-1.5 hover:bg-muted/60"
-            >
-              <SearchResultMedia item={item} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-medium">
-                  {item.title}
-                </span>
-                <span className="block truncate text-2xs text-muted-foreground">
-                  {entities[entityKindMap[item.entityKind]].label} · {item.id} ·
-                  Linked to {group.primary.title}
-                </span>
-              </span>
-              <span className="max-w-36 truncate text-2xs text-muted-foreground">
-                {getSearchMatchText(item)}
-              </span>
-            </Link>
-          ))}
-        </fieldset>
+        <ProductFamilyRegion id={regionId} group={group} />
       )}
     </div>
   );
@@ -735,87 +776,7 @@ function MobileSearchResults({
                 )}
               </div>
               {expanded && hasChildren && (
-                <fieldset
-                  id={regionId}
-                  aria-label={`${group.primary.title} placements and matching records`}
-                  className="border-t border-border bg-muted/25 py-1"
-                >
-                  {group.placements.map((placement) => {
-                    const destination = placementSearchDestination(
-                      group,
-                      placement,
-                    );
-                    return (
-                      <Link
-                        key={placement.id}
-                        {...getSearchResultRoute(destination)}
-                        className="flex min-h-11 items-center gap-3 px-3 py-1.5 hover:bg-muted/60"
-                      >
-                        <MapPinIcon className="size-4 shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-medium">
-                            {placement.locationPath}
-                          </span>
-                          <span className="block truncate text-2xs text-muted-foreground">
-                            {formatPlacement(placement)}
-                          </span>
-                        </span>
-                        <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-                          {placement.id}
-                        </span>
-                      </Link>
-                    );
-                  })}
-                  {group.componentPlacements.map((componentPlacement) => {
-                    const destination =
-                      componentPlacementSearchDestination(componentPlacement);
-                    return (
-                      <Link
-                        key={`${componentPlacement.component.id}:${componentPlacement.placement.id}`}
-                        {...getSearchResultRoute(destination)}
-                        className="flex min-h-11 items-center gap-3 px-3 py-1.5 hover:bg-muted/60"
-                      >
-                        <SearchResultMedia
-                          item={componentPlacement.component}
-                          variant="command"
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-medium">
-                            {componentPlacement.component.title}
-                          </span>
-                          <span className="block truncate text-2xs text-muted-foreground">
-                            {componentPlacement.componentQuantity > 1
-                              ? `${componentPlacement.componentQuantity}× kit content`
-                              : "Kit content"}{" "}
-                            · {componentPlacement.placement.locationPath} ·{" "}
-                            {formatPlacement(componentPlacement.placement)}
-                          </span>
-                        </span>
-                        <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-                          {componentPlacement.placement.id}
-                        </span>
-                      </Link>
-                    );
-                  })}
-                  {group.matchedActivity.map((item) => (
-                    <Link
-                      key={`${item.entityKind}:${item.id}`}
-                      {...getSearchResultRoute(item)}
-                      className="flex min-h-11 items-center gap-3 px-3 py-1.5 hover:bg-muted/60"
-                    >
-                      <SearchResultMedia item={item} variant="command" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-medium">
-                          {item.title}
-                        </span>
-                        <span className="block truncate text-2xs text-muted-foreground">
-                          {entities[entityKindMap[item.entityKind]].label} ·{" "}
-                          {item.id} · Linked to {group.primary.title}
-                        </span>
-                      </span>
-                    </Link>
-                  ))}
-                </fieldset>
+                <ProductFamilyRegion id={regionId} group={group} compact />
               )}
             </div>
           );

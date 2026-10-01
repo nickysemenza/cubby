@@ -2,8 +2,7 @@ import type { ImageWithEntity } from "@cubby/schemas/image";
 import { useState } from "react";
 
 import { useImageUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { Button } from "~/components/ui/button";
-import { DialogFooter } from "~/components/ui/dialog";
+import { DialogFormActions } from "~/components/ui/dialog-form-actions";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
@@ -57,14 +56,12 @@ export function ImageEditDialog({
       }}
       title="Edit image"
       footer={
-        <DialogFooter className="gap-2 sm:justify-end">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={save} disabled={update.isPending}>
-            Save changes
-          </Button>
-        </DialogFooter>
+        <DialogFormActions
+          onCancel={onClose}
+          submitLabel="Save changes"
+          pending={update.isPending}
+          onSubmit={save}
+        />
       }
     >
       <div className="space-y-3">

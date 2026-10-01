@@ -24,6 +24,7 @@ import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { DialogFormActions } from "~/components/ui/dialog-form-actions";
 import { Input } from "~/components/ui/input";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entityDetailFor } from "~/entities/entity-detail";
@@ -172,16 +173,20 @@ function FoodEntryForm({
       title={editing ? "Edit food" : "Add food"}
       description={`For ${date}`}
       footer={
-        <FoodEntryFooter
-          kind={kind}
-          editing={Boolean(editing)}
-          isPending={save.isPending}
-          selectedEater={selectedEater}
-          productItem={productItem}
-          ingredientItem={ingredientItem}
-          onCancel={() => onOpenChange(false)}
-          onSubmit={submit}
-        />
+        kind === "recipe" ? undefined : (
+          <DialogFormActions
+            onCancel={() => onOpenChange(false)}
+            submitLabel={editing ? "Save changes" : "Add food"}
+            pending={save.isPending}
+            submitDisabled={
+              !selectedEater ||
+              (kind === "product" && !productItem) ||
+              (kind === "ingredient" && !ingredientItem)
+            }
+            error={error}
+            onSubmit={submit}
+          />
+        )
       }
     >
       <Stack gap="lg">
@@ -204,59 +209,8 @@ function FoodEntryForm({
           setEaterId={setEaterId}
           onRecipe={onRecipe}
         />
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
       </Stack>
     </ResponsiveDialog>
-  );
-}
-
-function FoodEntryFooter({
-  kind,
-  editing,
-  isPending,
-  selectedEater,
-  productItem,
-  ingredientItem,
-  onCancel,
-  onSubmit,
-}: {
-  kind: FoodKind;
-  editing: boolean;
-  isPending: boolean;
-  selectedEater: LedgerPartyOptionsOut[number] | undefined;
-  productItem: ComboboxItem<ProductShortcode> | null;
-  ingredientItem: ComboboxItem<IngredientShortcode> | null;
-  onCancel: () => void;
-  onSubmit: () => void;
-}) {
-  if (kind === "recipe") return undefined;
-  return (
-    <Row justify="end" gap="sm">
-      <Button
-        variant="outline"
-        className="min-h-11"
-        disabled={isPending}
-        onClick={onCancel}
-      >
-        Cancel
-      </Button>
-      <Button
-        className="min-h-11"
-        disabled={
-          isPending ||
-          !selectedEater ||
-          (kind === "product" && !productItem) ||
-          (kind === "ingredient" && !ingredientItem)
-        }
-        onClick={onSubmit}
-      >
-        {isPending ? "Saving…" : editing ? "Save changes" : "Add food"}
-      </Button>
-    </Row>
   );
 }
 

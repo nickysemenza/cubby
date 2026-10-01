@@ -1,7 +1,5 @@
 import pRetry from "p-retry";
 
-import { formatCurrency } from "~/lib/utils";
-
 // food-cli / the WASM extractor pass the .epub filename as `source`; turn it
 // into a clean, editable book label that stays stable across re-imports.
 export const deriveBookName = (source: string): string => {
@@ -16,20 +14,12 @@ export const deriveBookName = (source: string): string => {
  */
 export const normalize = (value: string): string => value.trim().toLowerCase();
 
-/** `$1.23`, or `<$0.01` for a cost too small to render at cent precision. */
-export const formatUsd = (usd: number): string =>
-  usd > 0 && usd < 0.01 ? "<$0.01" : formatCurrency(usd);
-
 /** `~3–7 min`, the shape an estimate range reads best in. */
 export const formatMinuteRange = (lowMs: number, highMs: number): string => {
   const low = Math.max(1, Math.round(lowMs / 60_000));
   const high = Math.max(low, Math.round(highMs / 60_000));
   return low === high ? `~${low} min` : `~${low}–${high} min`;
 };
-
-/** `12.3k` for token counts, which run to six figures. */
-export const formatCount = (value: number): string =>
-  value >= 1000 ? `${(value / 1000).toFixed(1)}k` : `${value}`;
 
 /** Retry with exponential backoff; resolves with the first success. */
 export async function withRetry<R>(

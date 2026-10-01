@@ -5,6 +5,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { formatEstimate } from "~/lib/nutrition-format";
+import { roundTo } from "~/lib/utils";
 
 import {
   formatFoodAmount,
@@ -140,12 +141,12 @@ function assignedAmountText(preparation: MealPreparation): string {
   const summary = preparation.sourceSummary;
   if (!summary) return "";
   if (summary.assignedGrams != null)
-    return `${Number(summary.assignedGrams.toFixed(1)).toLocaleString()} g assigned`;
+    return `${roundTo(summary.assignedGrams, 1).toLocaleString()} g assigned`;
   if (
     summary.assignedShare.status === "complete" ||
     summary.assignedShare.status === "partial"
   )
-    return `${formatEstimate(summary.assignedShare, (value) => `${Number((value * 100).toFixed(1)).toLocaleString()}%`)} of batch assigned`;
+    return `${formatEstimate(summary.assignedShare, (value) => `${roundTo(value * 100, 1).toLocaleString()}%`)} of batch assigned`;
   return "Assigned weight unknown";
 }
 

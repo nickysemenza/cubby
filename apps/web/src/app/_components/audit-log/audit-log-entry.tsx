@@ -27,7 +27,7 @@ import { EntityIcon, entityLabel } from "~/entities/entities";
 import type { AuditLogEntry } from "~/lib/audit-log-list";
 import { countLabel } from "~/lib/pluralize";
 import { getStatusBadgeProps } from "~/lib/status-colors";
-import { cn } from "~/lib/utils";
+import { cn, formatCount } from "~/lib/utils";
 
 import { HoverableTimestamp } from "../HoverableTimestamp";
 
@@ -111,9 +111,6 @@ const LEDGER_MAX_FIELDS = 2;
 /** `mono` carries the Three Voices Rule: measures and codes get the mono face. */
 type LedgerValue = { text: string; mono: boolean };
 
-const formatLedgerNumber = (value: number): string =>
-  Number.isInteger(value) ? String(value) : value.toFixed(2);
-
 /**
  * One side of a diff, compressed to something that fits on a ledger line.
  * Returns null for values with no glanceable rendering (empty, or a nested
@@ -127,7 +124,7 @@ function formatLedgerValue(
     return { text: value ? "yes" : "no", mono: false };
   }
   if (isAuditNumber(value)) {
-    return { text: formatLedgerNumber(value), mono: true };
+    return { text: formatCount(value, 2), mono: true };
   }
   if (isAuditString(value)) {
     return {
@@ -146,7 +143,7 @@ function formatLedgerValue(
   // inventory quantity change is unreadable as raw JSON and obvious as "3 ea".
   const { value: quantity, unit } = value;
   return isAuditNumber(quantity) && isAuditString(unit)
-    ? { text: `${formatLedgerNumber(quantity)} ${unit}`, mono: true }
+    ? { text: `${formatCount(quantity, 2)} ${unit}`, mono: true }
     : null;
 }
 
