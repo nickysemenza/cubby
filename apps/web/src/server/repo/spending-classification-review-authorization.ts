@@ -7,7 +7,7 @@ import { parentTransactionDatabase, unwrapDb } from "./database-helpers";
 // No request field or actor channel is an authorization substitute.
 const reviewedDatabases = new WeakSet<object>();
 
-export function isReviewedSpendingClassification(
+function isReviewedSpendingClassification(
   db: Database | DrizzleTransaction,
 ): boolean {
   let current: Database | DrizzleTransaction | undefined = db;
