@@ -38,6 +38,7 @@ export function installDatabaseEnvironment(databaseUrl: string) {
 export function createLocalWorkerdHarness(
   databaseUrl: string,
   objectStorageUrl: string,
+  nativeImportContinuation = false,
 ) {
   const compatibilityDate = z
     .object({ compatibility_date: z.string() })
@@ -93,6 +94,29 @@ export function createLocalWorkerdHarness(
           },
         },
       },
+      ...(nativeImportContinuation
+        ? [
+            {
+              config: {
+                name: "native-import-continuation",
+                main: "tooling/mac-import-continuation-peer.ts",
+                compatibility_date: compatibilityDate,
+                services: [
+                  {
+                    binding: "CUBBY_PURCHASE_SERVICE",
+                    service: "cubby",
+                    entrypoint: "PurchaseImportService",
+                  },
+                ],
+                queues: {
+                  consumers: [
+                    { queue: "cubby-purchase-agent", max_batch_timeout: 0 },
+                  ],
+                },
+              },
+            },
+          ]
+        : []),
     ],
   });
 }

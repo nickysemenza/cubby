@@ -675,7 +675,7 @@ async function main(): Promise<void> {
       restoreScenarioEnvironment();
       restoreDatabaseEnvironment();
     };
-    harness = runtime.createLocalWorkerdHarness(databaseURL, storage.url);
+    harness = runtime.createLocalWorkerdHarness(databaseURL, storage.url, true);
     const { url } = await harness.listen();
     const context = await request.newContext({
       baseURL: url.origin,
