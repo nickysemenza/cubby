@@ -21,6 +21,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { formatMinutesSeconds } from "~/lib/format-duration";
+import { formatSmallCurrency } from "~/lib/utils";
 
 import {
   flagSummary,
@@ -29,7 +30,6 @@ import {
   reportUnresolvedRefs,
   troubledChunks,
 } from "./run-report-view";
-import { formatSmallCurrency } from "~/lib/utils";
 
 /**
  * Where a run fell short, and what to do about it.
@@ -152,7 +152,8 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
                 <li key={usage.model}>
                   <span className="font-mono">{usage.model}</span> ·{" "}
                   {usage.calls} call{usage.calls === 1 ? "" : "s"}
-                  {usage.cost_usd != null && ` · ${formatSmallCurrency(usage.cost_usd)}`}
+                  {usage.cost_usd != null &&
+                    ` · ${formatSmallCurrency(usage.cost_usd)}`}
                 </li>
               ))}
             </ul>
@@ -219,7 +220,9 @@ export function RunReportPanel({ report }: { report: CookbookRunReport }) {
                         {call.status ?? ""}
                       </TableCell>
                       <TableCell className="text-right text-2xs tabular-nums">
-                        {call.cost_usd != null ? formatSmallCurrency(call.cost_usd) : "—"}
+                        {call.cost_usd != null
+                          ? formatSmallCurrency(call.cost_usd)
+                          : "—"}
                       </TableCell>
                       <TableCell className="text-2xs">
                         {call.outcome?.outcome ?? ""}

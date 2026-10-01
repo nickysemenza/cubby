@@ -113,39 +113,39 @@ export function MoveInventoryDialog({
 
   return (
     <BulkActionDialog
-        open={open}
-        onOpenChange={handleOpenChange}
-        items={items}
-        action="Move"
-        pendingLabel="Moving..."
-        description={`Select a destination location for the selected inventory item${items.length !== 1 ? "s" : ""}.`}
-        renderItem={(item) =>
-          `${item.product.name} - ${item.amount.value} ${item.amount.unit}`
-        }
-        // No blocked/unchanged arm: `LocationDestinationPicker` disables every
-        // source location in the picker, so a row cannot be asked to move
-        // where it already is.
-        effect={
-          targetLocation
-            ? (item) => ({
-                from: item.location.name,
-                to: targetLocation.name,
-              })
-            : undefined
-        }
-        onSubmit={handleSubmit}
-        isPending={moveMutation.isPending}
-        error={error}
-      >
-        <LocationDestinationPicker
-          label="Move to Location"
-          value={targetLocation}
-          setValue={(item) => {
-            setTargetLocation(item);
-            setError(null);
-          }}
-          disabledReason={refuseSourceLocations(sourceLocationIds)}
-        />
-      </BulkActionDialog>
+      open={open}
+      onOpenChange={handleOpenChange}
+      items={items}
+      action="Move"
+      pendingLabel="Moving..."
+      description={`Select a destination location for the selected inventory item${items.length !== 1 ? "s" : ""}.`}
+      renderItem={(item) =>
+        `${item.product.name} - ${item.amount.value} ${item.amount.unit}`
+      }
+      // No blocked/unchanged arm: `LocationDestinationPicker` disables every
+      // source location in the picker, so a row cannot be asked to move
+      // where it already is.
+      effect={
+        targetLocation
+          ? (item) => ({
+              from: item.location.name,
+              to: targetLocation.name,
+            })
+          : undefined
+      }
+      onSubmit={handleSubmit}
+      isPending={moveMutation.isPending}
+      error={error}
+    >
+      <LocationDestinationPicker
+        label="Move to Location"
+        value={targetLocation}
+        setValue={(item) => {
+          setTargetLocation(item);
+          setError(null);
+        }}
+        disabledReason={refuseSourceLocations(sourceLocationIds)}
+      />
+    </BulkActionDialog>
   );
 }

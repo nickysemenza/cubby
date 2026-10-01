@@ -5,6 +5,7 @@ import {
   type NutritionEstimate,
 } from "@cubby/schemas/nutrition";
 import { TIER1_NUTRIENTS, type NutrientsPer100 } from "@cubby/usda";
+
 import { roundTo } from "~/lib/utils";
 
 /** One decimal place, dropping a trailing `.0` (`12.0` → `12`, `0.25` → `0.3`). */

@@ -17,10 +17,10 @@ import {
 } from "~/components/ui/popover";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
+import { roundTo } from "~/lib/utils";
 
 import { resolveScaleFactor, type ScaleAnchor } from "./recipe-scaling";
 import { getIngredientName } from "./recipe-utils";
-import { roundTo } from "~/lib/utils";
 
 const QUICK_FACTORS = [0.5, 1, 2, 3] as const;
 

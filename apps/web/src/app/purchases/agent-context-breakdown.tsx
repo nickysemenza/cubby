@@ -28,7 +28,6 @@ const SEGMENT_COLORS = [
   "bg-chart-7",
 ] as const;
 
-
 /**
  * What filled each coordinator model call: one stacked bar per call, scaled
  * to its reported input tokens, with an equivalent table for exact values.

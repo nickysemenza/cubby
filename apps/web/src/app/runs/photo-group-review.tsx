@@ -68,6 +68,7 @@ import {
   RUN_TARGET_STATE_LABEL,
   RUN_TARGET_STATE_VARIANT,
 } from "~/lib/run-target-state";
+import { formatCurrency } from "~/lib/utils";
 
 import {
   LIVE_RUN_STATUSES,
@@ -81,7 +82,6 @@ import {
   toGroupInput,
   type ProposalEdit,
 } from "./photo-review-model";
-import { formatCurrency } from "~/lib/utils";
 
 function postReview(runId: string, action: ReviewPhotoGroupsAction) {
   if (action.action === "save")

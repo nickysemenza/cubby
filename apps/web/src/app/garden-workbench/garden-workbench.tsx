@@ -1,7 +1,3 @@
-import {
-  type AllEntityRecords,
-  useAllEntityRecords,
-} from "~/app/_components/hooks/useAllEntityRecords";
 import { plantingGuides } from "@cubby/schemas/garden-guides";
 import {
   type GardenCropKey,
@@ -16,6 +12,10 @@ import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { PlantIcon } from "@phosphor-icons/react/dist/csr/Plant";
 import { useMemo } from "react";
 
+import {
+  type AllEntityRecords,
+  useAllEntityRecords,
+} from "~/app/_components/hooks/useAllEntityRecords";
 import {
   ScheduleGrid,
   type ScheduleRow,
@@ -363,8 +363,12 @@ export function GardenWorkbench({
   onLocationChange: (location?: string) => void;
 }) {
   const planActive = mode === "plan";
-  const plantings = useAllEntityRecords("planting", undefined, { enabled: planActive });
-  const plants = useAllEntityRecords("plant", undefined, { enabled: planActive });
+  const plantings = useAllEntityRecords("planting", undefined, {
+    enabled: planActive,
+  });
+  const plants = useAllEntityRecords("plant", undefined, {
+    enabled: planActive,
+  });
   const locations = useMemo(() => {
     const choices = new Map<string, string>();
     for (const planting of plantings.records) {

@@ -33,9 +33,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { showErrorToast } from "~/components/feedback/error-details";
-
 import type { ScanFeedbackEntry } from "~/app/_components/inventory/persistent-scanner";
+import { showErrorToast } from "~/components/feedback/error-details";
 import { entityDetailFor } from "~/entities/entity-detail";
 import {
   inventory,

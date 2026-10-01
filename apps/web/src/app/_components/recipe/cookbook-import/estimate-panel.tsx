@@ -3,10 +3,10 @@ import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { formatSmallCurrency, formatCompactCount } from "~/lib/utils";
 
 import { formatMinuteRange } from "./import-helpers";
 import type { BookEstimate } from "./types";
-import { formatSmallCurrency, formatCompactCount } from "~/lib/utils";
 
 /**
  * What one extraction will cost, shown BEFORE the first model call.
@@ -30,7 +30,8 @@ export function EstimatePanel({
       <Row align="center" justify="between" gap="sm" wrap>
         <Row as="span" wrap align="baseline" gap="sm">
           <span className="font-medium">
-            {formatSmallCurrency(estimate.costLow)}–{formatSmallCurrency(estimate.costHigh)}
+            {formatSmallCurrency(estimate.costLow)}–
+            {formatSmallCurrency(estimate.costHigh)}
           </span>
           <Description as="span" size="xs">
             {formatMinuteRange(estimate.wallMsLow, estimate.wallMsHigh)} ·{" "}

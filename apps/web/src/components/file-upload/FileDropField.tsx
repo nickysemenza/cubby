@@ -36,8 +36,8 @@ function acceptedTypes(accept: string): Accept | undefined {
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes)) return "the configured limit";
   if (bytes < 1024) return `${bytes} bytes`;
-  if (bytes < 1024 ** 2) return `${roundTo((bytes / 1024), 2)} KB`;
-  return `${roundTo((bytes / 1024 ** 2), 2)} MB`;
+  if (bytes < 1024 ** 2) return `${roundTo(bytes / 1024, 2)} KB`;
+  return `${roundTo(bytes / 1024 ** 2, 2)} MB`;
 }
 
 function rejectionMessages(

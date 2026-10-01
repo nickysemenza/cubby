@@ -10,12 +10,12 @@ import { scaleTotals } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
+import { roundTo, formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
 import { tryFormatAmount } from "../inventory/format-amount";
 import type { RecipeTreeRow } from "./recipe-tree";
 import { formatYield } from "./recipe-yield";
-import { roundTo, formatCurrency } from "~/lib/utils";
 
 /** Format a gram weight as a display amount, e.g. 184.2 → "184 g". The single
  * grams formatter for the prep sheet, matrix, and shopping list. */
@@ -155,22 +155,13 @@ export function recipeMacroSegments(
     formatEstimate(estimates.nutrition.kcal, (n) => `${Math.round(n)} kcal`),
   );
   parts.push(
-    formatEstimate(
-      estimates.nutrition.protein,
-      (n) => `${roundTo(n, 1)} g P`,
-    ),
+    formatEstimate(estimates.nutrition.protein, (n) => `${roundTo(n, 1)} g P`),
   );
   parts.push(
-    formatEstimate(
-      estimates.nutrition.fat,
-      (n) => `${roundTo(n, 1)} g F`,
-    ),
+    formatEstimate(estimates.nutrition.fat, (n) => `${roundTo(n, 1)} g F`),
   );
   parts.push(
-    formatEstimate(
-      estimates.nutrition.carbs,
-      (n) => `${roundTo(n, 1)} g C`,
-    ),
+    formatEstimate(estimates.nutrition.carbs, (n) => `${roundTo(n, 1)} g C`),
   );
 
   return { basisLabel: basis ? `per ${basis.noun}` : "total", parts };

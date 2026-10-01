@@ -5,13 +5,13 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { formatEstimate } from "~/lib/nutrition-format";
+import { roundTo } from "~/lib/utils";
 
 import {
   formatFoodAmount,
   formatFoodAmountEstimate,
 } from "../food-amount-editor";
 import { type MealPreparation, type MealPreparationsView } from "./types";
-import { roundTo } from "~/lib/utils";
 
 export function MealPortionsSection({
   view,
@@ -146,7 +146,7 @@ function assignedAmountText(preparation: MealPreparation): string {
     summary.assignedShare.status === "complete" ||
     summary.assignedShare.status === "partial"
   )
-    return `${formatEstimate(summary.assignedShare, (value) => `${roundTo((value * 100), 1).toLocaleString()}%`)} of batch assigned`;
+    return `${formatEstimate(summary.assignedShare, (value) => `${roundTo(value * 100, 1).toLocaleString()}%`)} of batch assigned`;
   return "Assigned weight unknown";
 }
 

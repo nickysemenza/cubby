@@ -426,7 +426,9 @@ export function TextareaField<TFieldValues extends FieldValues = FieldValues>({
             rows={rows}
             onChange={(event) =>
               field.onChange(
-                event.target.value === "" && nullable ? null : event.target.value,
+                event.target.value === "" && nullable
+                  ? null
+                  : event.target.value,
               )
             }
             aria-invalid={fieldState.invalid}
