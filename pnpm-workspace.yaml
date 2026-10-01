@@ -75,7 +75,7 @@ overrides:
   undici@7.28.0: 8.10.2
   vite: ^8.0.0
   webpack: ^5.104.1
-  wrangler: 4.144.0
+  wrangler: 4.145.0
 
 # The global store cannot rely on project-local hoisting. The maintained type
 # fixer handles published devDependencies; these packages omit that metadata

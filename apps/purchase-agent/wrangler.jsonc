@@ -11,6 +11,7 @@
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,
+    "redact_query_string": false,
     "logs": {
       "enabled": true,
       "head_sampling_rate": 1,
@@ -22,6 +23,9 @@
       "enabled": true,
       "head_sampling_rate": 1,
       "persist": true
+    },
+    "issues": {
+      "enabled": true
     }
   },
   "queues": {
