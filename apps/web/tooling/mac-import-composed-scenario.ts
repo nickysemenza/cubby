@@ -791,11 +791,27 @@ export async function createMacComposedScenario(input: Input) {
       const canonicalProduct = await productCode();
       if (!canonicalProduct)
         throw new Error("Canonical Product is missing for native edit review");
+      const [storedProduct] = await database
+        .select({ price: schema.product.price })
+        .from(schema.product)
+        .where(
+          eq(
+            schema.product.id,
+            await resolveOrThrow(db, "product", canonicalProduct),
+          ),
+        );
+      if (!storedProduct || storedProduct.price !== null)
+        throw new Error(
+          "Native inherited-price fixture unexpectedly has a stored price override",
+        );
       await input.driver.openEntity(canonicalProduct, input.appPath());
       await input.driver.wait("id=detail.product.edit");
       await input.driver.click("id=detail.product.edit");
       await input.driver.wait("id=editor.product");
-      const editor = await input.driver.wait('contains="Effective: $29.99"');
+      await input.driver.wait('contains="Effective: $29.99"');
+      const editor = await input.driver.wait(
+        'contains="Inherited · expense-derived unit price"',
+      );
       const save = editor
         .split("\n")
         .find((line) => line.includes("id=editor.product.save"));
