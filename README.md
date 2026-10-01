@@ -69,64 +69,70 @@ Every entity has a public **shortcode** such as `PRD-4K7M`. It appears in URLs,
 on QR labels and as the `id` over MCP. Shortcodes are case-insensitive and are
 never reused. Printed `P-` and `L-` labels still resolve.
 
+Everything hangs off **Product**. It covers groceries, clothes, tools,
+appliances, books and seed packets alike. ProductCategory says what kind of
+thing a Product is, and Inventory says where it is and how much. The other
+areas (food, garden, work, money) attach to that core.
+
 ```mermaid
-flowchart LR
-  subgraph Food
-    Recipe -- "N:M via sections/lines" --> Ingredient
-    Ingredient -- "1:N" --> Product
-    Cookbook -- "1:N" --> Recipe
-    Meal -- "N:M via MealRecipe" --> Recipe
-    Product -. "fdc_id / barcode" .-> USDA[USDA food]
+flowchart TB
+  subgraph Core["Things and places"]
     ProductCategory -- "1:N" --> Product
-  end
-  subgraph Belongings
-    Location -- "tree" --> Location
     Inventory -- "N:1" --> Product
     Inventory -- "N:1" --> Location
+    Location -- "tree" --> Location
     Wish -- "N:M candidates" --> Product
+  end
+  subgraph Food
+    Recipe -- "N:M via sections/lines" --> Ingredient
+    Cookbook -- "1:N" --> Recipe
+    Meal -- "N:M via MealRecipe" --> Recipe
   end
   subgraph Garden
     Plant -- "1:N" --> Planting
-    Planting -- "N:1" --> Location
     GardenEntry -- "N:M" --> Planting
   end
   subgraph Work
     Project -- "1:N" --> Task
-    Project -- "N:M projectTool" --> Product
   end
   subgraph Money
     Vendor -- "1:N" --> Purchase
     Purchase -- "1:N" --> Expense
-    Expense -- "N:1" --> Product
-    Expense -- "N:1" --> Project
     FinancialAccount -- "1:N" --> FinancialTransaction
     FinancialTransaction -- "N:M allocations" --> Purchase
-    SpendingCategory -- "1:N" --> Expense
   end
+  Ingredient -- "1:N" --> Product
+  Product -. "fdc_id / barcode" .-> USDA[USDA food]
+  Product -- "seed packet" --> Plant
+  Planting -- "N:1" --> Location
+  Project -- "N:M projectTool" --> Product
+  Task -- "subject" --> Product
+  Expense -- "N:1" --> Product
+  Expense -- "N:1" --> Project
   LedgerParty -- "attribution" --> Expense
   LedgerParty -- "portions" --> Meal
 ```
 
+### Things and places
+
+| Entity                     | What it is                                                                                                                                                | Relates to                                                                                                                                                                                                                                                 | Typical use                                                        |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| **Product** `PRD-`         | Any one thing we can buy or own (a SKU), or a name-only `misc:` placeholder. Two copies share a Product; a different size or color is a different Product | N:1 ProductCategory, Ingredient; 1:N unit mappings (`1 cup = 120 g`, `1 bag = $4`); 1:N Inventory, Expense; kit parts. Referenced by Wish, `projectTool`, Task subject, Plant (seed packet), Location (a bought planter), Device, Cookbook (physical copy) | The shared core: stock, spend, recipes, nutrition, tools, wardrobe |
+| **ProductCategory** `CAT-` | What kind of thing a Product is (Food › Baking, Books, Tools › Consumables), up to 3 levels deep                                                          | Tree; 1:N Product; N:1 SpendingCategory mapping                                                                                                                                                                                                            | Browsing, analytics, spending defaults                             |
+| **Location** `LOC-`        | A place in the house or garden: Home → room → shelf → bin, bed, planter                                                                                   | Self tree (one Home root, an "Unknown" holding spot); 1:N Inventory, Planting, GardenEntry                                                                                                                                                                 | QR labels, arranging, "where is it?"                               |
+| **Inventory** `INV-`       | How much of one Product is at one Location                                                                                                                | N:1 Product, N:1 Location (unique pair); optional owner LedgerParty                                                                                                                                                                                        | Stock estimate, valued on read through unit mappings               |
+| **Image** `IMG-`           | A stored photo or document                                                                                                                                | N:M to almost every entity via attachments; sightings per member device                                                                                                                                                                                    | Product photos, receipts, invoices, garden photos                  |
+| **Wish** `WSH-`            | Something we want but don't own yet                                                                                                                       | N:M Product candidates                                                                                                                                                                                                                                     | Price comparison before buying                                     |
+
 ### Food
 
-| Entity                     | What it is                                                                                | Relates to                                                                                                                | Typical use                                                   |
-| -------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| **Product** `PRD-`         | One exact thing you can buy (a SKU), or a name-only `misc:` placeholder                   | N:1 Ingredient, N:1 ProductCategory; 1:N unit mappings (`1 cup = 120 g`, `1 bag = $4`); 1:N Inventory, Expense; kit parts | Bridges recipes, stock, spend and nutrition                   |
-| **Ingredient** `ING-`      | The brand-free recipe concept ("flour"), with aliases and a "usually on hand" flag        | 1:N Product; 1:1 Recipe when it is a sub-recipe                                                                           | Recipe lines, staples, shopping                               |
-| **Recipe** `RCP-`          | Something we cook                                                                         | 1:N sections → 1:N lines (ingredient + amount); N:1 Cookbook; forked from another Recipe                                  | Scaling, cost and calorie totals, prep sheets, guided cooking |
-| **Cookbook** `CKB-`        | The book an EPUB-imported recipe set came from                                            | 1:N Recipe; N:1 Product (the physical copy, human-confirmed)                                                              | EPUB import, recipe provenance                                |
-| **Meal** `MEL-`            | One eating occasion on a day: cooked, eating out, takeout                                 | N:M Recipe via MealRecipe (with scale); portions and direct food entries per LedgerParty                                  | Planning calendar, shopping list, per-person nutrition        |
-| **USDA food**              | A FoodData Central reference food, served by the `usda-api` Worker                        | Linked loosely from Product by `fdc_id` or barcode                                                                        | Nutrition facts                                               |
-| **ProductCategory** `CAT-` | What kind of thing a product is (Food › Baking, Tools › Consumables), up to 3 levels deep | Tree; 1:N Product; N:1 SpendingCategory mapping                                                                           | Browsing, analytics, spending defaults                        |
-
-### Belongings
-
-| Entity               | What it is                                                              | Relates to                                                                                 | Typical use                                          |
-| -------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
-| **Location** `LOC-`  | A place in the house or garden: Home → room → shelf → bin, bed, planter | Self tree (one Home root, an "Unknown" holding spot); 1:N Inventory, Planting, GardenEntry | QR labels, arranging, "where is it?"                 |
-| **Inventory** `INV-` | How much of one Product is at one Location                              | N:1 Product, N:1 Location (unique pair); optional owner LedgerParty                        | Stock estimate, valued on read through unit mappings |
-| **Image** `IMG-`     | A stored photo or document                                              | N:M to almost everything via attachments; sightings per member device                      | Product photos, receipts, invoices, garden photos    |
-| **Wish** `WSH-`      | Something we want but don't own yet                                     | N:M Product candidates                                                                     | Price comparison before buying                       |
+| Entity                | What it is                                                                         | Relates to                                                                               | Typical use                                                   |
+| --------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| **Ingredient** `ING-` | The brand-free recipe concept ("flour"), with aliases and a "usually on hand" flag | 1:N Product; 1:1 Recipe when it is a sub-recipe                                          | Recipe lines, staples, shopping                               |
+| **Recipe** `RCP-`     | Something we cook                                                                  | 1:N sections → 1:N lines (ingredient + amount); N:1 Cookbook; forked from another Recipe | Scaling, cost and calorie totals, prep sheets, guided cooking |
+| **Cookbook** `CKB-`   | The book an EPUB-imported recipe set came from                                     | 1:N Recipe; N:1 Product (the physical copy, human-confirmed)                             | EPUB import, recipe provenance                                |
+| **Meal** `MEL-`       | One eating occasion on a day: cooked, eating out, takeout                          | N:M Recipe via MealRecipe (with scale); portions and direct food entries per LedgerParty | Planning calendar, shopping list, per-person nutrition        |
+| **USDA food**         | A FoodData Central reference food, served by the `usda-api` Worker                 | Linked loosely from Product by `fdc_id` or barcode                                       | Nutrition facts                                               |
 
 ### Garden
 
@@ -155,7 +161,7 @@ flowchart LR
 | **FinancialAccount** `FAC-`     | A card or bank account                                              | 1:N FinancialTransaction; owner LedgerParty                                       | Statement import                                                                                 |
 | **FinancialTransaction** `FTX-` | A charge, refund or payment from a statement, as evidence only      | N:1 FinancialAccount; N:M Purchase via allocations that sum exactly to its amount | Reconciliation: match / mismatch / pending                                                       |
 
-### Ledger and system
+### People and system
 
 | Entity                    | What it is                                                                       | Relates to                                                                   | Typical use                                           |
 | ------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------- |
