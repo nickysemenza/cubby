@@ -16,6 +16,7 @@ import {
   commitPurchaseImportInput,
   preparePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
+import { orderMailDecisionOut } from "@cubby/schemas/order-mail-review";
 import { photoRunReviewResponse } from "@cubby/schemas/photo-import-run";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { vendorAccountCreateInput } from "@cubby/schemas/vendor-account";
@@ -56,6 +57,7 @@ import { attachFileToEntity } from "~/server/services/image-storage.service";
 import { createEvidenceHarnessContext, createFixture } from "./e2e-fixtures";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect } from "./e2e-test";
+import { dispatchesOperation, operationResult } from "./dispatch-wire";
 
 export const EVIDENCE_SOURCES = ["gmail", "retailer", "photo", "csv"] as const;
 export type EvidenceSource = (typeof EVIDENCE_SOURCES)[number];
@@ -684,22 +686,45 @@ export async function createConvergenceHarness(
     if (!purchase || !transaction)
       throw new Error("Imported settlement evidence missing");
     await gotoAuthenticatedPage(page, `/vendors/${vendor.id}`);
-    await page
-      .getByRole("button", { name: "Link", exact: true })
-      .click()
-      .catch(async (error: Error) => {
-        const { rows } = await database.execute(sql`
+    const mail = page
+      .locator("#order-mail")
+      .getByRole("article")
+      .filter({ hasText: orderId });
+    const [decisionResponse] = await Promise.all([
+      page.waitForResponse((response) =>
+        dispatchesOperation(response.request(), "vendor.decideOrderMail"),
+      ),
+      mail
+        .getByRole("button", { name: "Link", exact: true })
+        .click()
+        .catch(async (error: Error) => {
+          const { rows } = await database.execute(sql`
           SELECT e.event, e."orderId", d.decision, p.shortcode AS "purchaseCode"
           FROM "OrderMailEvent" e JOIN "OrderMail" m ON m.id = e."orderMailId"
           LEFT JOIN "OrderMailCandidateDecision" d ON d."eventId" = e.id
           LEFT JOIN "Purchase" p ON p.id = d."purchaseId"
           WHERE m."messageId" = ${`synthetic-message-${token}`}
         `);
-        throw new Error(
-          `${error.message}\n${JSON.stringify({ path: new URL(page.url()).pathname, headings: await page.getByRole("heading").allTextContents(), candidates: rows })}`,
-        );
-      });
-    await expect(page.getByText("linked", { exact: true })).toBeVisible();
+          throw new Error(
+            `${error.message}\n${JSON.stringify({ path: new URL(page.url()).pathname, headings: await page.getByRole("heading").allTextContents(), candidates: rows })}`,
+          );
+        }),
+    ]);
+    expect(
+      await operationResult(
+        decisionResponse,
+        "vendor.decideOrderMail",
+        orderMailDecisionOut,
+      ),
+    ).toMatchObject({
+      purchaseId: purchase.shortcode,
+      decision: "linked",
+    });
+    // The mutation's vendor invalidation also refreshes connected records;
+    // its reviewed response precedes the worklist's streamed refetch.
+    await expect(mail.getByText("linked", { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
     expect(purchase.shortcode).toBe(bookedPurchaseCode);
     return { purchaseCode: purchase.shortcode, productCode, photoRunId };
   }
