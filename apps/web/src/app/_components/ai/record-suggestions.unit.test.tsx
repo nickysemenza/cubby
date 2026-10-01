@@ -13,6 +13,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -92,6 +93,40 @@ function Surface({
 }
 
 describe("record suggestions", () => {
+  // Regression: deriving a basis and a query observer per row during SSR cost
+  // list pages hundreds of ms of Worker CPU; suggestions only resolve in the
+  // browser, so the server render must not create any.
+  it("creates no suggestion queries while rendering on the server", () => {
+    const suggestFields = vi.fn();
+    const operations: EntitySuggestionsOperations = {
+      suggestFields: ai.suggestFields.withTransport(async ({ input }) => {
+        suggestFields(input);
+        return { suggestions: {}, outcomes: {} };
+      }),
+    };
+    const records = Array.from({ length: 20 }, (_, index) => ({
+      id: testShortcode("product", `row${index}`),
+      name: `Synthetic row ${index}`,
+      manufacturer: null,
+      categoryId: null,
+    }));
+    const Wrapper = harness.wrapper;
+    renderToString(
+      <Wrapper>
+        <RecordSuggestionsProvider
+          entity="product"
+          records={records}
+          fieldKeys={["categoryId"]}
+          operations={operations}
+        >
+          <span>rows</span>
+        </RecordSuggestionsProvider>
+      </Wrapper>,
+    );
+    expect(harness.queryClient.getQueryCache().getAll()).toHaveLength(0);
+    expect(suggestFields).not.toHaveBeenCalled();
+  });
+
   it("does not display an old result for changed inputs, reuses the cell result, and dismisses within a visit", async () => {
     const calls: FieldSuggestionsInput[] = [];
     let finish!: (result: FieldSuggestionsOut) => void;
