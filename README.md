@@ -83,6 +83,7 @@ flowchart TB
     Inventory -- "kept at" --> Location
     Location -- "nested inside" --> Location
     Wish -- "options we might buy" --> Product
+    Image -- "photos of (and of most other entities)" --> Product
   end
   subgraph Food
     Recipe -- "calls for" --> Ingredient
@@ -98,20 +99,33 @@ flowchart TB
   end
   subgraph Money
     Vendor -- "sold us" --> Purchase
+    VendorAccount -- "our login at" --> Vendor
     Purchase -- "itemized into" --> Expense
+    SpendingCategory -- "what it was for" --> Expense
     FinancialAccount -- "statement rows" --> FinancialTransaction
     FinancialTransaction -- "paid for" --> Purchase
+  end
+  subgraph People["People and system"]
+    LedgerTransfer -- "reimburses between" --> LedgerParty
+    Device -- "app install of" --> LedgerParty
+    Run
   end
   Ingredient -- "bought as" --> Product
   Product -. "nutrition from" .-> USDA[USDA food]
   Product -- "seed packet grows" --> Plant
+  Cookbook -- "physical copy" --> Product
+  ProductCategory -- "default spending bucket" --> SpendingCategory
   Planting -- "planted in" --> Location
+  Planting -- "scheduled by" --> Task
   Project -- "used as a tool" --> Product
   Task -- "maintains" --> Product
   Expense -- "bought or returned" --> Product
   Expense -- "spent on" --> Project
   LedgerParty -- "paid for or shares" --> Expense
   LedgerParty -- "ate" --> Meal
+  LedgerParty -- "owns" --> Inventory
+  FinancialAccount -- "belongs to" --> LedgerParty
+  Run -- "imported" --> Purchase
 ```
 
 ### Things and places
