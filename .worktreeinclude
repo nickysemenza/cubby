@@ -6,10 +6,6 @@
 
 # Development uses synthetic defaults; production/integration credentials stay on their owning host.
 
-# Incremental TypeScript caches. Contains only relative paths, so a copy stays
-# valid at the new worktree path; tsc validates file hashes and rechecks
-# whatever actually differs, so a stale one costs a miss and never correctness.
-# Worth ~6s on a new worktree's first typecheck (7.1s cold -> ~0.8s warm on
-# TS 7's native tsc). Copied, never shared — see apps/web/tsconfig.json on why
-# a shared buildinfo path would have worktrees clobbering each other.
-*.tsbuildinfo
+# Not `*.tsbuildinfo`: the main checkout's copy is usually commits behind, and
+# TS 7 checks from a stale buildinfo at ~2x the cost of a fresh one (see
+# docs/local-check-performance.md). scripts/typecheck-web.ts drops stale state.

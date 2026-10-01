@@ -5,7 +5,6 @@
  * RPC contract (`@cubby/schemas/purchase-agent-rpc`), also what the
  * entrypoint in `apps/web/src/cf-server.ts` takes its types from.
  */
-import type { CloudflareContext } from "@flue/runtime/cloudflare";
 import type {
   AgentProgressEvent,
   AgentUsageEvent,
@@ -91,8 +90,9 @@ const serviceBindingSchema = z.object({
   CUBBY_PURCHASE_SERVICE: z.custom<PurchaseImportService>(),
 });
 
-export function purchaseImportService(
-  env: CloudflareContext["env"],
-): PurchaseImportService {
+// `env` is validated here, so it stays `unknown`: typing it as Flue's
+// `CloudflareContext["env"]` drags the whole agent runtime (pi-ai, openai,
+// typebox) into the web typecheck through `mac-import-continuation-peer.ts`.
+export function purchaseImportService(env: unknown): PurchaseImportService {
   return serviceBindingSchema.parse(env).CUBBY_PURCHASE_SERVICE;
 }

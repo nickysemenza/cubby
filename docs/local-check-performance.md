@@ -1,42 +1,83 @@
 # Local check and calendar performance
 
-Measured September 7, 2026 on ARM macOS with TypeScript 7.0.2. These are local
-diagnostics, not a comparison with hosted x86 CI.
+Each section records its own date. These are local diagnostics on ARM macOS,
+not a comparison with hosted x86 CI.
 
 ## Typechecking
 
-The web typecheck now uses `--checkers 1`. The native compiler otherwise checks
-the program with multiple independent type graphs. A single checker reduces
-duplicate generic instantiations without excluding files or changing diagnostics.
-Incremental checking remains enabled; the service-worker check is unchanged.
+Measured October 1, 2026 on the 8-core, 24 GiB ARM Mac with TypeScript 7.0.2,
+`/usr/bin/time -l`, load average 5–20. Wall time moves with load; CPU and peak
+RSS are the comparable figures.
 
-Representative cold runs (`--noEmit --incremental false --extendedDiagnostics`,
-wrapped with `/usr/bin/time -l`):
+`pnpm --dir apps/web typecheck` runs `scripts/typecheck-web.ts`, which runs
+`tsc --noEmit --checkers 1`. One checker avoids duplicating the large generic
+type graph: in September it halved CPU (50.4 → 21.5 s) and RSS (5.9 → 3.1 GB)
+without excluding files or changing diagnostics.
 
-| Setting          | Files | Instantiations | Wall time | CPU user time | Peak RSS |
-| ---------------- | ----: | -------------: | --------: | ------------: | -------: |
-| Default checkers | 7,403 |     21,307,057 |   12.29 s |       50.44 s |  5.93 GB |
-| One checker      | 7,403 |     10,148,693 |   12.37 s |       21.52 s |  3.07 GB |
+| Run                                         |    Wall |     CPU | Peak RSS |
+| ------------------------------------------- | ------: | ------: | -------: |
+| Cold, no buildinfo                          | 20–22 s | 32–34 s |   6.2 GB |
+| Buildinfo copied from a days-old checkout   |    46 s |    71 s |   7.6 GB |
+| Warm, nothing changed                       |   1–2 s |   3–4 s |   1.5 GB |
+| Warm, body edit to a file already re-signed | 1.5–3 s |   4–7 s |   2.0 GB |
+| Warm, shape change: 3 of 10 sampled files   |     2 s |   4–5 s |   2.0 GB |
+| Warm, shape change: 3 of 10 sampled files   |    20 s | 28–32 s |   6.2 GB |
+| Warm, shape change: 4 of 10 sampled files   |    37 s | 50–54 s |   7.0 GB |
 
-This is primarily a memory and CPU improvement, not a demonstrated latency win.
-Earlier measurements overlapped trace generation or dependency installation and
-are excluded. Two checkers used about 4.03 GB in an exploratory run. A compiler
-trace identified a costly literal-union expression in the entity inspector, but
-a local annotation did not show a reliable overall improvement and was removed.
+The program is about 9,100 files, 3.3M types and 19.3M instantiations (10.1M
+in September). Zod accounts for a quarter of all types. The cost is spread
+thin: the slowest file (`entity-list-read-bindings.gen.ts`) is about 1.3 s of
+a 24 s check, and annotating it saved only 0.2 s, so it was not kept.
 
-The complete warm `pnpm check` baseline took 7.17–7.51 seconds over three runs
-(median 7.21 seconds). Revised warm runs took 7.27–10.20 seconds (median
-8.11 seconds), about 12% slower at the median in this small sample. Reducing
-compiler memory does not eliminate time spent in lint, Knip, and other repository
-guards. The first check after changing compiler settings rebuilds its
-incremental state and is not a warm measurement.
+**The resident set is live data.** `GOGC=25` cut peak RSS 7% for 73% more
+CPU; `GOMEMLIMIT=2GiB` took 13× the CPU. Concurrent checks therefore cannot
+shrink, only queue: the wrapper holds one of two machine-wide slots under
+`~/.cache/cubby/typecheck-slots` (`CUBBY_TYPECHECK_SLOTS`; skipped in CI),
+reclaiming slots whose holder died.
 
-A single September 14, 2026 run of `pnpm --dir apps/web exec tsc --noEmit
---incremental false --extendedDiagnostics 2>&1 | head -40` (14.345 s total,
-5,785,965K peak) printed no line naming a checker count, so the "Default
-checkers" row above stays unlabeled with an actual number rather than a guess.
+**Why a small edit can cost more than a cold check.** Under `--noEmit`, tsc
+never emits declarations, so a fresh build records each file's version as its
+"signature". The first change to a file after that, even inside a function
+body, looks like a declaration-shape change. A shape change drops cached
+diagnostics for every file that transitively imports the changed file's
+direct importers (Strada and TS 7 alike; `isolatedModules` changes only emit)
+and for _every_ file once a global-scope file falls in that set. Later body
+edits to the same file compare real signatures and stay cheap. Two structures
+make the invalidated set large:
+
+- `routeTree.gen.ts` augments `@tanstack/react-router` and
+  `@tanstack/react-start`, so each of the ~330 files importing them references
+  it, and it imports every route. About 1,930 of 3,450 source files
+  transitively import `router.tsx` (the 20 s row).
+- `worker-configuration.d.ts` is a global script that imports
+  `./src/cf-server` for its Durable Object types (`wrangler types` has no
+  option to avoid this), and `cf-server.ts` reaches the route tree through the
+  `@tanstack/react-start` server entry. A closure that reaches it re-checks
+  all 3,457 files (the 37 s row). Typing those bindings through leaf RPC
+  interfaces would remove that escalation. Moving the `declare global` blocks
+  out of three `.ts` files alone measured no change, because the same
+  closures already reach this file.
+
+Emitting declarations to a cache directory would record real signatures from
+the start, but it reports 482 new declaration errors (mostly TS4023 and
+TS2883), and the fresh build took 68 s of CPU and 9.6 GB.
+
+A buildinfo many commits old pays a declaration-signature emit per changed
+file and then re-checks nearly everything, which is why the copied buildinfo
+above costs twice a cold run. The wrapper records content hashes of the
+buildinfo's files after each completed run and deletes the buildinfo when more
+than 100 changed (a rebase or pull) or no record exists; `.worktreeinclude` no
+longer copies it into new worktrees.
+
+`apps/purchase-agent/src/service.ts` typed one parameter with Flue's
+`CloudflareContext`, pulling pi-ai, a second OpenAI and Anthropic SDK, and
+typebox (about 1,000 declaration files) into the web program through one
+tooling import. Unused declarations cost parse and bind only: dropping them
+saved about 110 MB and no check time.
 
 ## Calendar tests and generation
+
+Measured September 7, 2026.
 
 ICS line folding previously allocated a UTF-8 byte array for every character.
 An oversized-document test exercised millions of these allocations and timed
