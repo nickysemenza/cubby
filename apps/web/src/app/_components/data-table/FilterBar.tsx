@@ -285,6 +285,55 @@ function FilterChip({
   );
 }
 
+/** The declared broad-search input: compact on the desktop bar, full-height in the mobile tier. */
+function FilterSearchField({
+  dense = false,
+  label,
+  value,
+  onChange,
+  onClear,
+}: {
+  dense?: boolean;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  /** Desktop only: renders a clear button while the input has text. */
+  onClear?: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "relative flex items-center",
+        dense ? "h-7 w-[220px] shrink-0" : "h-9 flex-1",
+      )}
+    >
+      <MagnifyingGlassIcon
+        className={cn(
+          "pointer-events-none absolute text-muted-foreground",
+          dense ? "left-2 size-3.5" : "left-2.5 size-4",
+        )}
+      />
+      <Input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={label}
+        aria-label={label}
+        className={dense ? "h-7 pr-6 pl-7 text-xs" : "h-9 pr-3 pl-8"}
+      />
+      {value && onClear && (
+        <button
+          type="button"
+          aria-label="Clear search"
+          className="absolute right-1.5 text-muted-foreground hover:text-foreground"
+          onClick={onClear}
+        >
+          <XIcon className="size-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 /**
  * Compact, manifest-backed expression of the table's active query: a search
  * input for the entity's declared primary search, one chip per every other declared
@@ -366,30 +415,15 @@ export function FilterBar({
       )}
     >
       {searchField && (
-        <div className="relative flex h-7 w-[220px] shrink-0 items-center">
-          <MagnifyingGlassIcon className="pointer-events-none absolute left-2 size-3.5 text-muted-foreground" />
-          <Input
-            value={searchValue}
-            onChange={(event) => setValues(searchField, [event.target.value])}
-            placeholder={
-              searchPlaceholder ?? `Search ${searchField.label ?? "records"}`
-            }
-            aria-label={
-              searchPlaceholder ?? `Search ${searchField.label ?? "records"}`
-            }
-            className="h-7 pr-6 pl-7 text-xs"
-          />
-          {searchValue && (
-            <button
-              type="button"
-              aria-label="Clear search"
-              className="absolute right-1.5 text-muted-foreground hover:text-foreground"
-              onClick={() => clear(searchField)}
-            >
-              <XIcon className="size-3.5" />
-            </button>
-          )}
-        </div>
+        <FilterSearchField
+          dense
+          label={
+            searchPlaceholder ?? `Search ${searchField.label ?? "records"}`
+          }
+          value={searchValue}
+          onChange={(value) => setValues(searchField, [value])}
+          onClear={() => clear(searchField)}
+        />
       )}
 
       {visibleChipFields.map((field) => (
@@ -611,20 +645,13 @@ export function MobileFilterTier<TData extends RowData>({
     <div className="flex w-full flex-col gap-1.5">
       <div className="flex w-full items-center gap-2">
         {searchField && (
-          <div className="relative flex h-9 flex-1 items-center">
-            <MagnifyingGlassIcon className="pointer-events-none absolute left-2.5 size-4 text-muted-foreground" />
-            <Input
-              value={searchValue}
-              onChange={(event) => setValues(searchField, [event.target.value])}
-              placeholder={
-                searchPlaceholder ?? `Search ${searchField.label ?? "records"}`
-              }
-              aria-label={
-                searchPlaceholder ?? `Search ${searchField.label ?? "records"}`
-              }
-              className="h-9 pr-3 pl-8"
-            />
-          </div>
+          <FilterSearchField
+            label={
+              searchPlaceholder ?? `Search ${searchField.label ?? "records"}`
+            }
+            value={searchValue}
+            onChange={(value) => setValues(searchField, [value])}
+          />
         )}
         {showFilterTrigger && (
           <Button
