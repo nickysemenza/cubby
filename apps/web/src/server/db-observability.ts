@@ -188,6 +188,13 @@ export const noteRequestOperation = (
     ?.operations.push(entity ? `${operation}:${entity}` : operation);
 };
 
+/**
+ * The live list of operations this request has run. A streamed batch keeps
+ * appending after the handler returns, so read it when the body completes.
+ */
+export const requestOperations = (): readonly string[] =>
+  operationMetricsStore.getStore()?.[0]?.operations ?? [];
+
 /** Request order stays shared across binding pools and nested collectors. */
 export const nextDatabaseAcquireOrdinal = (): number | undefined => {
   const request = operationMetricsStore.getStore()?.[0];
