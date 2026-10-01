@@ -77,8 +77,27 @@ public enum ControlRendererID: String, CaseIterable, Codable, Sendable {
 
 public enum ListRendererID: String, CaseIterable, Codable, Sendable {
     case dataQuality = "data-quality"
+    case estimateCost = "estimate-cost"
+    case estimateKcal = "estimate-kcal"
+    case expectedQuantity = "expected-quantity"
+    case expenseCount = "expense-count"
+    case financialSettlement = "financial-settlement"
+    case mealCost = "meal-cost"
+    case orderLink = "order-link"
+    case possibleVendor = "possible-vendor"
+    case productLink = "product-link"
+    case quantityVariance = "quantity-variance"
+    case recipeLinks = "recipe-links"
     case recipeSource = "recipe-source"
+    case reconciliationStatus = "reconciliation-status"
     case spendingCategorySummary = "spending-category-summary"
+    case tagLinks = "tag-links"
+    case totalTime = "total-time"
+    case unitPrice = "unit-price"
+    case uploadedImage = "uploaded-image"
+    case usdaFoodLink = "usda-food-link"
+    case valuationSummary = "valuation-summary"
+    case vendorCell = "vendor-cell"
 }
 
 public enum DetailRendererID: String, CaseIterable, Codable, Sendable {

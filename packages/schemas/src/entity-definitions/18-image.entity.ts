@@ -147,7 +147,13 @@ export default defineEntity({
       {
         key: "size",
         kind: "number",
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "xs",
+          format: "bytes",
+          mobile: { slot: "trailing", priority: 5 },
+        },
         validation: {
           read: z.number().int().positive(),
           create: null,
@@ -506,6 +512,20 @@ export default defineEntity({
           create: null,
           update: null,
         },
+      },
+      {
+        key: "images",
+        kind: "json",
+        labelOverride: "Image",
+        // A row IS an image: the thumbnail renders once its file is uploaded.
+        display: {
+          list: true,
+          standard: "image",
+          listOrderOverride: 0,
+          renderer: { list: "uploaded-image" },
+        },
+        provenance: { kind: "derived", sources: [{ label: "Image storage" }] },
+        validation: { read: z.array(z.unknown()), create: null, update: null },
       },
       { key: "shortcode", kind: "text" },
       {

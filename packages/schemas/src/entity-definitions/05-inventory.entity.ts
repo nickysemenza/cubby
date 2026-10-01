@@ -14,6 +14,7 @@ import {
   inventoryOwnershipMode,
 } from "@cubby/schemas/inventory-ownership";
 import { ledgerPartyShortcode } from "../identifier-fields.js";
+import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 export default defineEntity({
   key: "inventory",
@@ -239,7 +240,14 @@ export default defineEntity({
         key: "valuation",
         kind: "json",
         nullable: true,
-        display: { list: true },
+        // The list row carries the valuation as a plain amount of money.
+        display: {
+          list: true,
+          width: "md",
+          readPath: "valuation",
+          format: "currency",
+          mobile: { slot: "trailing", priority: 30 },
+        },
         provenance: {
           kind: "derived",
           sources: [
@@ -313,6 +321,16 @@ export default defineEntity({
           create: null,
           update: null,
         },
+      },
+      {
+        key: "images",
+        kind: "json",
+        display: { list: true, standard: "image" },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "product", relation: "product" }],
+        },
+        validation: { read: z.array(imageOut), create: null, update: null },
       },
       { key: "shortcode", kind: "text" },
       {

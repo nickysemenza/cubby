@@ -28,6 +28,7 @@ import {
 import { wholeCentAmount } from "@cubby/schemas/money";
 import { tradeSchema } from "@cubby/schemas/task-fields";
 import { FILTER_NONE } from "../filter-sentinel-fields.js";
+import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 import {
   optionalFieldResolutionsSchema,
@@ -912,6 +913,19 @@ export default defineEntity({
           create: null,
           update: null,
         },
+      },
+      {
+        key: "images",
+        kind: "json",
+        display: { list: true, standard: "image" },
+        provenance: {
+          kind: "derived",
+          sources: [
+            { entity: "product", relation: "product" },
+            { entity: "purchase", relation: "purchase" },
+          ],
+        },
+        validation: { read: z.array(imageOut), create: null, update: null },
       },
       { key: "shortcode", kind: "text" },
       {

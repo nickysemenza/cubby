@@ -146,7 +146,7 @@ export const listPresentationLabel = (id: string): string | null =>
  * - `presence`: whether a value (a boolean, or anything non-empty) is there,
  *   as a labelled pill (`display.valueOptions` `yes`/`no` rosters the labels).
  * - `bytes`: a byte count as a human size.
- * - `join`: a string array, comma-joined with `_` read as a space.
+ * - `join`: a string array, comma-joined (an empty list reads as none).
  * - `count`: a known non-negative count; `0` renders as `0`, never a dash.
  * - `arrayCount`: the length of an array value, rendered as a `count`.
  */

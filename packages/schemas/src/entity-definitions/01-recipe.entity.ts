@@ -217,9 +217,8 @@ export default defineEntity({
         kind: "number",
         nullable: true,
         // Computed from `totals.cost` at read time — no column of its own
-        // in the list row, so column building requires the override
-        // recipelist.tsx supplies.
-        display: { list: true },
+        // in the list row, so a named renderer builds the cell.
+        display: { list: true, renderer: { list: "estimate-cost" } },
         provenance: { kind: "derived", sources: [{ entity: "recipe" }] },
         explanation: {
           ruleId: "recipe.cost-total",
@@ -240,7 +239,7 @@ export default defineEntity({
         kind: "number",
         nullable: true,
         // Computed from `totals.nutrition.kcal` at read time; see costTotal.
-        display: { list: true },
+        display: { list: true, renderer: { list: "estimate-kcal" } },
         provenance: { kind: "derived", sources: [{ entity: "recipe" }] },
         explanation: {
           ruleId: "recipe.calories-total",
@@ -261,7 +260,12 @@ export default defineEntity({
         kind: "number",
         // A live MealRecipe count in the list response, not a stored column.
         reference: { entity: "meal", multiple: true },
-        display: { list: true },
+        display: {
+          list: true,
+          width: "xs",
+          format: "count",
+          mobile: { slot: "meta", priority: 40 },
+        },
         validation: {
           read: z.number().int(),
           create: null,
@@ -603,9 +607,8 @@ export default defineEntity({
         nullable: true,
         // No row scalar of its own — the list column prints the source's
         // own time prose (recipe.meta.times.total) when there is one, which
-        // doesn't always imply a present totalMinutes count. Requires the
-        // override recipelist.tsx supplies.
-        display: { list: true },
+        // doesn't always imply a present totalMinutes count.
+        display: { list: true, renderer: { list: "total-time" } },
         explanation: {
           ruleId: "recipe.total-time",
           description:

@@ -8,11 +8,7 @@ import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
-import {
-  createEntityInlineLinkColumn,
-  createImageColumn,
-  createSingleEntityInlineLinkColumn,
-} from "~/app/_components/data-table/columnHelpers";
+import { createEntityInlineLinkColumn } from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -22,7 +18,6 @@ import type { GroupConfig } from "~/app/_components/data-table/useGroupedList";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { InventoryValuationSummary } from "~/app/_components/locations/inventory-valuation-summary";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
 import { relationshipFieldProvenance } from "~/entities/field-provenance";
@@ -89,52 +84,6 @@ export const locationListOverride = defineListOverride<
       mutationFn: entityMutationOptionsFactory("location", "update"),
       entity: "location",
     });
-    const overrides = useMemo(
-      () =>
-        createCubbyColumnCollection<LocationListItemOut>((add) => {
-          add(
-            createImageColumn(columnHelper, {
-              entity: "location",
-              id: "images",
-              provenance: relationshipFieldProvenance("location", "images"),
-            }),
-          );
-          add(
-            createSingleEntityInlineLinkColumn(
-              columnHelper,
-              "product",
-              "product",
-              {
-                header: "Is a",
-                className: "w-56",
-                mobile: { slot: "meta", priority: 40 },
-              },
-            ),
-          );
-          add(
-            columnHelper.accessor(
-              (row) => row.valuation?.directValuation ?? null,
-              {
-                id: "valuation",
-                header: "Valuation",
-                cell: (info) => (
-                  <InventoryValuationSummary
-                    valuation={info.row.original.valuation}
-                    variant="compact"
-                  />
-                ),
-                meta: {
-                  className: "w-[180px]",
-                  numeric: true,
-                  mobile: { slot: "trailing", priority: 10 },
-                },
-              },
-            ),
-          );
-        }),
-      [],
-    );
-
     const compose = useMemo(
       () => (declared: CubbyColumnCollection<LocationListItemOut>) =>
         createCubbyColumnCollection<LocationListItemOut>((add) => {
@@ -207,6 +156,6 @@ export const locationListOverride = defineListOverride<
       }),
       [filterOptions],
     );
-    return { overrides, compose, list };
+    return { compose, list };
   },
 });

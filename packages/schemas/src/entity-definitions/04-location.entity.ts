@@ -364,7 +364,11 @@ export default defineEntity({
         key: "product",
         kind: "json",
         nullable: true,
-        display: { list: true },
+        labelOverride: "Is a",
+        display: {
+          list: true,
+          renderer: { list: "product-link" },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "product", relation: "product" }],
@@ -425,7 +429,7 @@ export default defineEntity({
       {
         key: "images",
         kind: "json",
-        display: { list: true, detail: false },
+        display: { list: true, detail: false, standard: "image" },
         provenance: {
           kind: "derived",
           sources: [{ entity: "image", relation: "images" }],
@@ -453,7 +457,11 @@ export default defineEntity({
         key: "valuation",
         kind: "json",
         nullable: true,
-        display: { list: true, detail: false },
+        display: {
+          list: true,
+          detail: false,
+          renderer: { list: "valuation-summary" },
+        },
         provenance: { kind: "derived", sources: [{ entity: "location" }] },
         explanation: {
           ruleId: "location.direct-valuation",

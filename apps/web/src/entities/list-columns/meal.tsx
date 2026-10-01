@@ -1,22 +1,12 @@
 import type { MealFilters, MealOut } from "@cubby/schemas/meal";
 import { useMemo } from "react";
 
-import {
-  createCubbyColumnCollection,
-  createCubbyColumnHelper,
-  type CubbyColumnCollection,
-} from "~/app/_components/data-table/table-features";
-import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { formatMealCost, mealDateLabel } from "~/app/meals/meal-format";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
+import { mealDateLabel } from "~/app/meals/meal-format";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { relationshipFieldProvenance } from "~/entities/field-provenance";
 
 import { defineListOverride } from "./types";
-
-const columnHelper = createCubbyColumnHelper<MealOut>();
 
 export function mealNameUpdate(newName: string) {
   return { name: newName.trim() || null };
@@ -56,83 +46,6 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
       entity: "meal",
     });
 
-    const compose = useMemo(
-      () => (declared: CubbyColumnCollection<MealOut>) =>
-        createCubbyColumnCollection<MealOut>((add) => {
-          declared.visit(add);
-          add(
-            columnHelper.accessor(
-              (row) =>
-                row.recipes.map((r) => ({
-                  id: r.recipeId,
-                  name: r.recipe.name,
-                })),
-              {
-                id: "recipes",
-                header: "Recipes",
-                enableSorting: false,
-                meta: attachCubbyColumnMeta<MealOut>({
-                  provenance: relationshipFieldProvenance("meal", "recipes"),
-                  explanation: {
-                    entity: "meal",
-                    field: "recipes",
-                    label: "Recipes",
-                  },
-                  className: "min-w-0 w-56 overflow-hidden",
-                  mobile: { slot: "meta", priority: 20 },
-                  entityRefs: (row) =>
-                    row.recipes.map((recipe) => ({
-                      entityKind: "recipe",
-                      entityId: recipe.recipeId,
-                    })),
-                }),
-                cell: (info) => (
-                  <EntityRefLink
-                    variant="list"
-                    entity="recipe"
-                    items={info.getValue()}
-                    compact
-                    maxItems={3}
-                    resolveImages={false}
-                  />
-                ),
-              },
-            ),
-          );
-          add(
-            columnHelper.accessor(
-              (row) =>
-                row.totals.cost.status === "complete" ||
-                row.totals.cost.status === "partial"
-                  ? row.totals.cost.lower
-                  : null,
-              {
-                id: "cost",
-                header: "Cost",
-                enableSorting: false,
-                meta: {
-                  provenance: relationshipFieldProvenance("meal", "recipes"),
-                  explanation: {
-                    entity: "meal",
-                    field: "costTotal",
-                    label: "Cost",
-                  },
-                  numeric: true,
-                  className: "w-20",
-                  mobile: { slot: "trailing", priority: 10 },
-                },
-                cell: (info) => (
-                  <span className="tabular-nums">
-                    {formatMealCost(info.row.original.totals)}
-                  </span>
-                ),
-              },
-            ),
-          );
-        }),
-      [],
-    );
-
     const list = useMemo(
       () => ({
         deletable,
@@ -144,6 +57,6 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
       }),
       [deletable, nameEditable],
     );
-    return { compose, list };
+    return { list };
   },
 });

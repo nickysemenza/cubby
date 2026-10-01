@@ -666,7 +666,7 @@ export default defineEntity({
           list: true,
           detail: true,
           listHidden: true,
-          renderer: { detail: "product-tags" },
+          renderer: { list: "tag-links", detail: "product-tags" },
         },
         validation: {
           read: z.array(z.string()),
@@ -846,6 +846,22 @@ export default defineEntity({
           read: productCategorySummary.nullable(),
           create: null,
           update: null,
+        },
+      },
+      {
+        key: "categoryFeature",
+        kind: "text",
+        nullable: true,
+        labelOverride: "Category family",
+        // The first node of the category path: the family a product rolls up to.
+        display: {
+          list: true,
+          listHidden: true,
+          readPath: "category.path[0].name",
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "productCategory", relation: "category" }],
         },
       },
       {
@@ -1200,6 +1216,9 @@ export default defineEntity({
         key: "unitPrice",
         kind: "json",
         nullable: true,
+        labelOverride: "Unit price",
+        // Display-only: the list query exposes no server sort for this value.
+        display: { list: true, renderer: { list: "unit-price" } },
         provenance: {
           kind: "derived",
           sources: [{ label: "Product price and unit mappings" }],
@@ -1226,6 +1245,8 @@ export default defineEntity({
         key: "food",
         kind: "json",
         nullable: true,
+        labelOverride: "USDA Food",
+        display: { list: true, renderer: { list: "usda-food-link" } },
         provenance: {
           kind: "derived",
           sources: [{ entity: "usda-food" }],
@@ -1244,6 +1265,18 @@ export default defineEntity({
       {
         key: "modelPresence",
         kind: "boolean",
+        labelOverride: "Model present",
+        display: {
+          list: true,
+          listHidden: true,
+          width: "xs",
+          readPath: "modelPresence",
+          format: "presence",
+          valueOptions: [
+            { value: "yes", label: "Has model", color: "var(--slate)" },
+            { value: "no", label: "No model", color: "var(--muted-foreground)" },
+          ],
+        },
         provenance: { kind: "derived", sources: [{ entity: "product" }] },
         explanation: {
           ruleId: "product.model-presence",
@@ -1256,6 +1289,18 @@ export default defineEntity({
       {
         key: "upcPresence",
         kind: "boolean",
+        labelOverride: "UPC present",
+        display: {
+          list: true,
+          listHidden: true,
+          width: "xs",
+          readPath: "upcPresence",
+          format: "presence",
+          valueOptions: [
+            { value: "yes", label: "Has UPC", color: "var(--slate)" },
+            { value: "no", label: "No UPC", color: "var(--muted-foreground)" },
+          ],
+        },
         provenance: {
           kind: "derived",
           sources: [{ label: "Product identifiers" }],
@@ -1273,6 +1318,18 @@ export default defineEntity({
       {
         key: "notesPresence",
         kind: "boolean",
+        labelOverride: "Notes present",
+        display: {
+          list: true,
+          listHidden: true,
+          width: "xs",
+          readPath: "notesPresence",
+          format: "presence",
+          valueOptions: [
+            { value: "yes", label: "Has notes", color: "var(--slate)" },
+            { value: "no", label: "No notes", color: "var(--muted-foreground)" },
+          ],
+        },
         provenance: { kind: "derived", sources: [{ entity: "product" }] },
         explanation: {
           ruleId: "product.notes-presence",
@@ -1343,9 +1400,14 @@ export default defineEntity({
         key: "servingAsLocations",
         kind: "number",
         // Nested under `quantityLedger.locationCount` on the list row — no
-        // flat readKey can reach it, so this needs the override
-        // `productlist.tsx` supplies.
-        display: { list: true },
+        // flat readKey reaches it, so it reads by path.
+        display: {
+          list: true,
+          width: "sm",
+          readPath: "quantityLedger.locationCount",
+          format: "count",
+          mobile: { slot: "meta", priority: 43 },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "location", relation: "locations" }],
@@ -1370,10 +1432,12 @@ export default defineEntity({
       {
         key: "ledgerExpectedQuantity",
         kind: "number",
-        // Nested under `quantityLedger.expectedQuantity` on the list row.
+        // Nested under `quantityLedger.expectedQuantity` on the list row; the
+        // cell discloses the ledger's unquantified lines beside the number.
         display: {
           list: true,
           listHidden: true,
+          renderer: { list: "expected-quantity" },
         },
         provenance: {
           kind: "derived",
@@ -1397,7 +1461,11 @@ export default defineEntity({
         key: "quantityVariance",
         kind: "number",
         nullable: true,
-        display: { list: true, listHidden: true },
+        display: {
+          list: true,
+          listHidden: true,
+          renderer: { list: "quantity-variance" },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
@@ -1458,6 +1526,8 @@ export default defineEntity({
         kind: "number",
         display: {
           list: true,
+          width: "sm",
+          mobile: { slot: "meta", priority: 50, interactive: true },
         },
         provenance: {
           kind: "derived",

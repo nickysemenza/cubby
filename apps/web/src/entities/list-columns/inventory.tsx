@@ -6,12 +6,7 @@ import { type ReactNode, useMemo } from "react";
 import type { z } from "zod";
 
 import type { SearchProviderProps } from "~/app/_components/combobox/with-search-hook";
-import {
-  createCurrencyColumn,
-  createEditableAmountColumn,
-  createImageColumn,
-  createSingleEntityInlineLinkColumn,
-} from "~/app/_components/data-table/columnHelpers";
+import { createEditableAmountColumn, createSingleEntityInlineLinkColumn } from "~/app/_components/data-table/columnHelpers";
 import type {
   InventoryEntryBase,
   InventoryRelatedEntity,
@@ -148,12 +143,6 @@ export const inventoryListOverride = defineListOverride<
               ),
             }),
           );
-          add(
-            createCurrencyColumn(columnHelper, "valuation", {
-              header: "Valuation",
-              mobile: { slot: "trailing", priority: 30 },
-            }),
-          );
         }),
       // oxlint-disable-next-line react/exhaustive-deps -- updateMutation changes every render but is functionally stable
       [],
@@ -163,13 +152,6 @@ export const inventoryListOverride = defineListOverride<
       () => (declared: CubbyColumnCollection<InventoryListItem>) =>
         createCubbyColumnCollection<InventoryListItem>((add) => {
           const { place, rest } = interleaveDeclared(declared, add);
-          add(
-            createImageColumn(columnHelper, {
-              entity: "inventory",
-              className: "w-10",
-              provenance: relationshipFieldProvenance("inventory", "product"),
-            }),
-          );
           place("amount");
           place("valuation");
           add(

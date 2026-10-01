@@ -5,7 +5,6 @@ import type {
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { createImageColumn } from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -155,12 +154,6 @@ export const ingredientListOverride = defineListOverride<
     const compose = useMemo(
       () => (declared: CubbyColumnCollection<IngredientListItem>) =>
         createCubbyColumnCollection<IngredientListItem>((add) => {
-          add(
-            createImageColumn(columnHelper, {
-              entity: "ingredient",
-              provenance: relationshipFieldProvenance("ingredient", "products"),
-            }),
-          );
           declared.visit(add);
           add(
             columnHelper.accessor("appearsInRecipes", {

@@ -213,6 +213,7 @@ export default defineEntity({
         key: "recipes",
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
+        display: { list: true, renderer: { list: "recipe-links" } },
         provenance: {
           kind: "relation",
           sources: [{ entity: "recipe", relation: "recipes" }],
@@ -355,6 +356,12 @@ export default defineEntity({
         key: "costTotal",
         kind: "json",
         nullable: true,
+        labelOverride: "Cost",
+        display: {
+          list: true,
+          columnIdOverride: "cost",
+          renderer: { list: "meal-cost" },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "recipe", relation: "recipes" }],

@@ -1,6 +1,4 @@
-import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import type { RecipeListItem } from "@cubby/schemas/recipe";
-import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
@@ -15,36 +13,20 @@ import {
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { useDeletableConfig } from "~/app/_components/hooks/useDeletableConfig";
 import { useTagOptions } from "~/app/_components/hooks/useEntityOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { EditableTagsCell } from "~/app/_components/recipe/editable-tags-cell";
 import { RecipeTag } from "~/app/_components/recipe/recipe-tag";
-import {
-  formatRecipeTime,
-  formatYield,
-  getServingBasis,
-  perUnitSuffix,
-} from "~/app/_components/recipe/recipe-utils";
+import { formatYield } from "~/app/_components/recipe/recipe-utils";
 import { TruncatedList } from "~/app/_components/TruncatedList";
-import { totalsLookStuck } from "~/app/recipes/recipe-totals-staleness";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityListHiddenColumns } from "~/entities/entity-display";
 import type { EntityListParamsByEntity } from "~/entities/generated/entity-lists.gen";
-import {
-  recipe as recipeOperations,
-  relatedData,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
-import { scaleEstimate } from "~/lib/nutrition-estimates";
-import { formatEstimate } from "~/lib/nutrition-format";
+import { relatedData } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { countLabel } from "~/lib/pluralize";
-import { formatCurrency } from "~/lib/utils";
 
 import { defineListOverride } from "./types";
 
@@ -52,49 +34,6 @@ type RecipeFilters = EntityListParamsByEntity["recipe"]["filters"];
 
 const columnHelper = createCubbyColumnHelper<RecipeListItem>();
 const NO_INGREDIENT_OPTIONS: FilterableComboboxItem[] = [];
-const RECIPE_INITIAL_COLUMN_VISIBILITY = entityListHiddenColumns("recipe");
-
-/**
- * The cell shown when a recipe's totals are null but it's plausibly stuck: a
- * "Pending" marker plus, on the cost column, a one-click recompute.
- */
-function StuckTotalsCell({
-  recipe,
-  withAction,
-}: {
-  recipe: RecipeListItem;
-  withAction: boolean;
-}) {
-  const recompute = useActionMutation({
-    mutationFn: recipeOperations.recomputeOne.mutationOptions,
-    success: "Recomputed recipe totals.",
-  });
-  const notCosted = (
-    <span className="text-2xs text-muted-foreground">Pending</span>
-  );
-  if (!withAction) return notCosted;
-  return (
-    <Row align="center" gap="xs">
-      {notCosted}
-      <Button
-        type="button"
-        variant="outline"
-        size="xs"
-        disabled={recompute.isPending}
-        title="Recompute this recipe's cost and nutrition"
-        onClick={(e) => {
-          e.stopPropagation();
-          recompute.mutate({ id: recipe.id });
-        }}
-      >
-        <ArrowCounterClockwiseIcon
-          className={recompute.isPending ? "animate-spin" : ""}
-        />
-        Recompute
-      </Button>
-    </Row>
-  );
-}
 
 export const recipeListOverride = defineListOverride<
   RecipeListItem,
@@ -237,118 +176,6 @@ export const recipeListOverride = defineListOverride<
             },
           }),
         );
-        for (const metric of ["cost", "kcal"] as const) {
-          const getEstimate = (row: RecipeListItem) =>
-            metric === "cost" ? row.totals?.cost : row.totals?.nutrition.kcal;
-          const format =
-            metric === "cost"
-              ? formatCurrency
-              : (value: number) => `${Math.round(value)} kcal`;
-          add(
-            columnHelper.accessor(
-              (row) => {
-                const estimate = getEstimate(row);
-                return estimate && hasKnownEstimate(estimate)
-                  ? estimate.lower
-                  : undefined;
-              },
-              {
-                id: metric === "cost" ? "costTotal" : "caloriesTotal",
-                header: metric === "cost" ? "Cost" : "Calories",
-                meta: {
-                  numeric: true,
-                  className: "w-32",
-                  mobile: {
-                    slot: "trailing",
-                    priority: metric === "cost" ? 5 : 10,
-                  },
-                },
-                sortUndefined: "last",
-                cell: (info) => {
-                  const recipe = info.row.original;
-                  const estimate = getEstimate(recipe);
-                  if (!estimate || estimate.status === "pending")
-                    return totalsLookStuck(recipe) ? (
-                      <StuckTotalsCell
-                        recipe={recipe}
-                        withAction={metric === "cost"}
-                      />
-                    ) : (
-                      <span className="text-muted-foreground">Pending</span>
-                    );
-                  const perItem = getServingBasis(recipe);
-                  return (
-                    <Stack gap="xs">
-                      <span
-                        title={
-                          hasKnownEstimate(estimate)
-                            ? `${estimate.coverage.covered}/${estimate.coverage.total} ingredient rows covered`
-                            : undefined
-                        }
-                      >
-                        {formatEstimate(estimate, format)}
-                      </span>
-                      {perItem && hasKnownEstimate(estimate) && (
-                        <div className="text-2xs text-muted-foreground">
-                          {formatEstimate(
-                            scaleEstimate(estimate, 1 / perItem.divisor),
-                            format,
-                          )}{" "}
-                          {perUnitSuffix(perItem.noun, { short: true })}
-                        </div>
-                      )}
-                    </Stack>
-                  );
-                },
-              },
-            ),
-          );
-        }
-        // Accessor on `totalMinutes` so sorting and the range filter are the
-        // server's column, while the cell prints the source's own prose.
-        add(
-          columnHelper.accessor(
-            (row) => row.meta?.times?.totalMinutes ?? undefined,
-            {
-              id: "totalMinutes",
-              header: "Time",
-              meta: {
-                numeric: true,
-                className: "w-24",
-                mobile: { slot: "meta", priority: 25 },
-              },
-              sortUndefined: "last",
-              cell: (info) => {
-                const times = info.row.original.meta?.times;
-                const label = formatRecipeTime(
-                  times?.total,
-                  times?.totalMinutes,
-                );
-                return label ?? <NoneValue />;
-              },
-            },
-          ),
-        );
-        // A live MealRecipe under a soft-deleted Meal doesn't count.
-        add(
-          columnHelper.accessor("meals", {
-            id: "meals",
-            header: "Meals",
-            meta: {
-              numeric: true,
-              className: "w-20",
-              mobile: { slot: "meta", priority: 40 },
-            },
-            cell: (info) => {
-              const count = info.getValue();
-              return count ? (
-                <span className="tabular-nums">{count}</span>
-              ) : (
-                <NoneValue />
-              );
-            },
-          }),
-        );
       });
       // oxlint-disable-next-line react/exhaustive-deps -- updateRecipeMutation changes every render but is functionally stable
     }, []);
@@ -357,7 +184,6 @@ export const recipeListOverride = defineListOverride<
       () => ({
         deletable,
         filterOptions,
-        initialColumnVisibility: RECIPE_INITIAL_COLUMN_VISIBILITY,
       }),
       [deletable, filterOptions],
     );

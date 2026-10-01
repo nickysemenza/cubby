@@ -2,15 +2,7 @@ import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import {
-  createImageColumn,
-  hasDisplayImages,
-} from "~/app/_components/data-table/columnHelpers";
-import {
-  createCubbyColumnCollection,
-  createCubbyColumnHelper,
-  type CubbyColumnCollection,
-} from "~/app/_components/data-table/table-features";
+import { createCubbyColumnCollection, createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
@@ -20,8 +12,6 @@ import {
   expenseVendorColumn,
 } from "~/app/projects/shared";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityListHiddenColumns } from "~/entities/entity-display";
-import { relationshipFieldProvenance } from "~/entities/field-provenance";
 import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { defineListOverride } from "./types";
@@ -46,10 +36,6 @@ const FACET_COLUMN_IDS = {
   vendor: "purchaseId",
   orderIdPresence: "orderId",
 } as const;
-
-// Purchase is visible by default; its Order # detail remains opt-in, and
-// `lineBasis` reads "Line item" on all but a handful of rows.
-const EXPENSE_INITIAL_COLUMN_VISIBILITY = entityListHiddenColumns("expense");
 
 const rowClassName = (row: { original: ExpenseOut }) =>
   row.original.lineKind === "principal"
@@ -175,44 +161,16 @@ export const expenseListOverride = defineListOverride<
       [],
     );
 
-    const compose = useMemo(
-      () => (declared: CubbyColumnCollection<ExpenseOut>) =>
-        createCubbyColumnCollection<ExpenseOut>((add) => {
-          add(
-            createImageColumn(columnHelper, {
-              entity: "expense",
-              provenance: {
-                kind: "derived",
-                sources: [
-                  ...relationshipFieldProvenance("expense", "product").sources,
-                  ...relationshipFieldProvenance("expense", "purchase").sources,
-                ],
-              },
-              // The helper stays typed to `ExpenseOut` so it interoperates
-              // with the column factories shared with the project page's
-              // embedded ledger, whose rows never carry images; this list's
-              // rows do.
-              getImages: (row) =>
-                hasDisplayImages(row) ? row.displayImages : [],
-            }),
-          );
-          declared.visit(add);
-        }),
-      [],
-    );
-
     const list = useMemo(
       () => ({
         deletable: true as const,
         filterOptions,
-        initialColumnVisibility: EXPENSE_INITIAL_COLUMN_VISIBILITY,
       }),
       [filterOptions],
     );
 
     return {
       overrides,
-      compose,
       list,
       above: ({ currentFilters }) => (
         <ExpenseLedgerSummary filters={currentFilters} />

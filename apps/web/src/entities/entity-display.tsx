@@ -11,6 +11,7 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import prettyBytes from "pretty-bytes";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -56,6 +57,7 @@ import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Checkbox } from "~/components/ui/checkbox";
 import { NoneValue } from "~/components/ui/none-value";
+import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { formatCurrency } from "~/lib/utils";
 
 import { compactFieldRendererFor } from "./compact-field-renderers";
@@ -70,6 +72,7 @@ import {
 import { FieldExplanation } from "./field-explanation";
 import { FieldResolutionBadge, fieldResolutionFor } from "./field-resolution";
 import { listRendererColumns } from "./list-field-renderers";
+import { readPathValue } from "./read-path";
 
 type DisplayField = EntityFieldModel["fields"][number];
 type DisplaySurface = "list" | "detail";
@@ -157,6 +160,39 @@ function widthClassName(
   }
 }
 
+/** The labels `presence` falls back to when the field declares no roster. */
+const PRESENCE_OPTIONS: FilterableComboboxItem[] = [
+  { value: "yes", label: "Yes", color: "var(--slate)" },
+  { value: "no", label: "No", color: "var(--muted-foreground)" },
+];
+
+/** Whether a value is "there": true, a non-empty string or a non-empty list. */
+function isPresent(value: ScalarDisplayValue): boolean {
+  switch (value.kind) {
+    case "empty":
+      return false;
+    case "boolean":
+      return value.raw;
+    case "list":
+      return value.raw.length > 0;
+    case "json":
+      return Array.isArray(value.raw)
+        ? value.raw.length > 0
+        : value.raw !== null && value.raw !== undefined;
+    case "text":
+      return value.raw !== "";
+    default:
+      return true;
+  }
+}
+
+/** The array behind a list or a JSON array value, else null. */
+function listItems(value: ScalarDisplayValue): readonly unknown[] | null {
+  if (value.kind === "list") return value.raw;
+  if (value.kind === "json" && Array.isArray(value.raw)) return value.raw;
+  return null;
+}
+
 /**
  * Renders a declared scalar per its `display.format`, falling back to the
  * kind-derived default ({@link renderScalarValue}) when no format is set or
@@ -167,9 +203,50 @@ function renderFormattedScalar(
   format: DisplayField["display"]["format"],
   value: ScalarDisplayValue,
   surface: "list" | "detail" = "list",
+  context?: { entity: Entity; field: DisplayField },
 ): ReactNode {
+  // Presence answers "is there one" — an empty value is a clear "no", not a dash.
+  if (format === "presence") {
+    const options = context?.field.display.valueOptions
+      ? enumFieldOptions(context.entity, context.field)
+      : PRESENCE_OPTIONS;
+    return renderOptionCell(isPresent(value) ? "yes" : "no", options);
+  }
   if (value.kind === "empty") return renderScalarValue(value, surface);
   switch (format) {
+    case "presence":
+      return null;
+    // Known counts read literally: `0` is a fact, never a dash.
+    case "count":
+      return value.kind === "number" ? (
+        <span className="tabular-nums">{value.raw}</span>
+      ) : (
+        renderScalarValue(value, surface)
+      );
+    case "arrayCount": {
+      const items = listItems(value);
+      return items ? (
+        <span className="tabular-nums">{items.length}</span>
+      ) : (
+        renderScalarValue(value, surface)
+      );
+    }
+    case "bytes":
+      return value.kind === "number" ? (
+        <span className="tabular-nums">{prettyBytes(value.raw)}</span>
+      ) : (
+        renderScalarValue(value, surface)
+      );
+    case "join": {
+      const items = listItems(value);
+      if (!items) return renderScalarValue(value, surface);
+      const joined = items.map(String).join(", ");
+      return joined ? (
+        <span className="text-xs text-muted-foreground">{joined}</span>
+      ) : (
+        <NoneValue />
+      );
+    }
     case "currency":
       return value.kind === "number" ? (
         <span className="text-positive">{formatCurrency(value.raw)}</span>
@@ -252,22 +329,53 @@ const listOrJson = z.union([
 const readListValue = (value: unknown): ScalarDisplayValue =>
   listOrJson.parse(value);
 
+const pathScalar = z.union([
+  z.boolean().transform((raw) => ({ kind: "boolean" as const, raw })),
+  z.number().transform((raw) => ({ kind: "number" as const, raw })),
+  z.string().transform((raw) => ({ kind: "text" as const, raw, label: raw })),
+  z.array(z.string()).transform((raw) => ({ kind: "list" as const, raw })),
+  z.unknown().transform((raw) => ({ kind: "json" as const, raw })),
+]);
+/** A scalar read off a `display.readPath`, typed by what the row holds. */
+function pathScalarValue(
+  entity: Entity,
+  field: DisplayField,
+  value: unknown,
+): ScalarDisplayValue {
+  const scalar = pathScalar.parse(value);
+  if (scalar.kind !== "text") return scalar;
+  if (field.kind === "date") return { kind: "date", raw: scalar.raw };
+  if (field.kind === "timestamp")
+    return { kind: "timestamp", raw: scalar.raw };
+  return field.display.valueOptions
+    ? enumDisplayValue(entity, field, scalar.raw)
+    : scalar;
+}
+
 function readScalarField<TRecord extends object>(
   entity: Entity,
   record: TRecord,
   field: DisplayField,
 ): ScalarDisplayValue {
-  if (!field.readKey)
+  const readPath = field.display.readPath;
+  if (!field.readKey && readPath === null)
     throw new Error(`Display field ${field.key} needs a renderer`);
   // SAFETY: The generated model owns the read key; its scalar schema checks the value
   // before rendering, including absent fields in partial detail responses.
-  const stored = record[field.readKey as keyof TRecord];
+  const stored =
+    readPath !== null
+      ? readPathValue(record, readPath)
+      : record[field.readKey as keyof TRecord];
   // Read surfaces display the canonical value, including system rules that
   // supersede a stored override. Editors retain the stored assignment intent.
   const resolution = fieldResolutionFor(record, field.key);
   const value = resolution ? resolution.value : stored;
   if (value === undefined || value === null)
     return { kind: "empty", raw: value === undefined ? undefined : null };
+  // A path-backed value is projected off a nested row, so its runtime shape is
+  // the authority; the declared kind only disambiguates dates and timestamps,
+  // and a declared roster tints a string like any enum.
+  if (readPath !== null) return pathScalarValue(entity, field, value);
   switch (field.kind) {
     case "text": {
       const raw = z.string().parse(value);
@@ -381,6 +489,7 @@ export function renderDetailFieldValue<TRecord extends object>(
     field.display.format,
     readScalarField(entity, record, field),
     "detail",
+    { entity, field },
   );
 }
 
@@ -409,7 +518,10 @@ export function renderCompactFieldValue<TRecord extends object>(
   const value = readScalarField(entity, record, field);
   if (isProseField(field.key, field.control) && field.display.format === null)
     return renderProseValue(value, "list");
-  return renderFormattedScalar(field.display.format, value, "list");
+  return renderFormattedScalar(field.display.format, value, "list", {
+    entity,
+    field,
+  });
 }
 
 /** A ledger row's filter icon keeps its 40px phone target as a pseudo-element
@@ -1041,6 +1153,11 @@ function cellDataForField<TRecord extends object>(
         return value.kind === "timestamp" ? value.raw : null;
       });
     case "external-link":
+    case "presence":
+    case "bytes":
+    case "join":
+    case "arrayCount":
+    case "count":
     case null:
       return field.kind === "number"
         ? numberCellData<TRecord>("number", (record) => {
@@ -1136,9 +1253,12 @@ export function createEntityDisplayColumns<TRecord extends object>(
         });
         continue;
       }
-      if (field.display.standard) continue;
-      const defaultEnableSorting = sortableColumnIds.includes(columnId);
+      // A standard column belongs to the shared table's pipeline, unless the
+      // field names a renderer (the image entity's thumbnail has no row
+      // `displayImages` for the pipeline to read).
       const namedRenderer = field.display.renderer?.list ?? null;
+      if (field.display.standard && namedRenderer === null) continue;
+      const defaultEnableSorting = sortableColumnIds.includes(columnId);
       if (namedRenderer !== null) {
         overrides?.visit((column) => {
           const id =
@@ -1167,7 +1287,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             id: columnId,
             meta: attachCubbyColumnMeta({
               ...column.meta,
-              entityColumnRole: "fact",
+              entityColumnRole: column.meta?.entityColumnRole ?? "fact",
               provenance: field.provenance ?? undefined,
               explanation: field.explanation
                 ? { entity, field: field.key, label: field.label }
@@ -1290,11 +1410,15 @@ export function createEntityDisplayColumns<TRecord extends object>(
         );
         continue;
       }
+      // A path-backed field reads its value off the row (`display.readPath`)
+      // and renders through its format like any scalar.
+      const pathBacked = field.display.readPath !== null;
       if (
-        field.readKey === null ||
-        field.reference ||
-        field.kind === "json" ||
-        field.kind === "identifier"
+        !pathBacked &&
+        (field.readKey === null ||
+          field.reference ||
+          field.kind === "json" ||
+          field.kind === "identifier")
       ) {
         // A computed column (`readKey: null`, no reference) has nothing
         // generic to read: a full list page needs an override for it, while a
@@ -1401,6 +1525,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
               numeric:
                 format === "currency" ||
                 format === "signedCurrency" ||
+                format === "count" ||
+                format === "arrayCount" ||
+                format === "bytes" ||
                 countFilter !== null
                   ? true
                   : undefined,
@@ -1416,7 +1543,10 @@ export function createEntityDisplayColumns<TRecord extends object>(
               const rendered = domainValue ??
                 (isProseField(field.key, field.control) && format === null
                   ? renderProseValue(value, "list")
-                  : renderFormattedScalar(format, value)) ?? <NoneValue />;
+                  : renderFormattedScalar(format, value, "list", {
+                      entity,
+                      field,
+                    })) ?? <NoneValue />;
               const recordId = explainedRecordSchema.safeParse(row.original);
               if (
                 countFilter === null ||

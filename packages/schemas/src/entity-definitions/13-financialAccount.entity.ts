@@ -75,6 +75,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          readPath: "identity.kind",
           renderer: { detail: "financial-account-identity" },
           // Labels for `identity.kind`; a bare `replaceAll("_", " ")` would
           // read `stored_value` as "stored value".
@@ -122,6 +123,9 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          width: "xs",
+          readPath: "sourceAliases",
+          format: "arrayCount",
           renderer: { detail: "financial-account-source-aliases" },
         },
         validation: {

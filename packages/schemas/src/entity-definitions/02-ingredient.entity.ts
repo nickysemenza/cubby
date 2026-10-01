@@ -1,6 +1,7 @@
 import { defineEntity } from "./definition.js";
 import { ingredientShortcode } from "../identifier-fields.js";
 import { baseKind } from "../codec.js";
+import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 
 export default defineEntity({
@@ -213,6 +214,16 @@ export default defineEntity({
           create: null,
           update: null,
         },
+      },
+      {
+        key: "images",
+        kind: "json",
+        display: { list: true, standard: "image" },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "product", relation: "products" }],
+        },
+        validation: { read: z.array(imageOut), create: null, update: null },
       },
       { key: "shortcode", kind: "text" },
       {

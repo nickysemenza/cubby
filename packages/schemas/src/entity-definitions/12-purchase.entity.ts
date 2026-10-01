@@ -455,6 +455,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          renderer: { list: "vendor-cell" },
         },
         validation: {
           read: vendorShortcode,
@@ -471,7 +472,11 @@ export default defineEntity({
           sectionOverride: "identity",
           placeholder: "Vendor order / receipt #",
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          renderer: { list: "order-link" },
+        },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -659,7 +664,7 @@ export default defineEntity({
       {
         key: "expenseCount",
         kind: "number",
-        display: { list: true },
+        display: { list: true, renderer: { list: "expense-count" } },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
@@ -692,7 +697,14 @@ export default defineEntity({
         // legitimately disagree — see the reconciliation note on `statedTotal`.
         key: "expenseTotal",
         kind: "number",
-        display: { list: true, format: "currency" },
+        // `SUM(Expense.cost)`: a negative total (a net credit) reads as money
+        // in, a positive one (spend) stays neutral.
+        display: {
+          list: true,
+          width: "sm",
+          format: "signedCurrency",
+          mobile: { slot: "trailing", priority: 5 },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
@@ -718,6 +730,7 @@ export default defineEntity({
         kind: "json",
         display: {
           list: true,
+          renderer: { list: "reconciliation-status" },
           valueOptions: [
             { value: "match", label: "Reconciles", color: "var(--positive)" },
             {
@@ -764,6 +777,7 @@ export default defineEntity({
         kind: "json",
         display: {
           list: true,
+          renderer: { list: "financial-settlement" },
           // Roster for `financialReconciliation.status`.
           valueOptions: [
             { value: "unknown", label: "No evidence", color: "var(--slate)" },
@@ -857,6 +871,14 @@ export default defineEntity({
       {
         key: "transactionCount",
         kind: "number",
+        labelOverride: "Transactions",
+        display: {
+          list: true,
+          listHidden: true,
+          width: "xs",
+          readPath: "financialReconciliation.transactionCount",
+          format: "count",
+        },
         provenance: {
           kind: "derived",
           sources: [

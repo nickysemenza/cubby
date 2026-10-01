@@ -388,6 +388,32 @@ export default defineEntity({
         },
       },
       {
+        // Hosts the purchase-presence header filter: whether the charge is
+        // linked to a purchase, read from the mirror column above.
+        key: "purchasePresence",
+        kind: "boolean",
+        labelOverride: "Linked",
+        display: {
+          list: true,
+          listHidden: true,
+          width: "xs",
+          readPath: "purchaseId",
+          format: "presence",
+          valueOptions: [
+            { value: "yes", label: "Has purchase", color: "var(--slate)" },
+            {
+              value: "no",
+              label: "No purchase",
+              color: "var(--muted-foreground)",
+            },
+          ],
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "purchase", relation: "purchase" }],
+        },
+      },
+      {
         key: "kind",
         kind: "enum",
         control: {
@@ -560,6 +586,8 @@ export default defineEntity({
           detail: true,
           renderer: { detail: "financial-transaction-source-refs" },
           listHidden: true,
+          readPath: "sourceRefs[].source",
+          format: "join",
         },
         validation: {
           read: financialTransactionSourceRefs,
@@ -698,7 +726,10 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          renderer: { detail: "financial-transaction-vendor-inference" },
+          renderer: {
+            list: "possible-vendor",
+            detail: "financial-transaction-vendor-inference",
+          },
           listHidden: true,
         },
         provenance: {

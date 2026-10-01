@@ -498,6 +498,9 @@ const compileFieldModel = (
                 field.description ??
                 `Derived from ${provenance.sources.map((source) => source.label ?? source.relation ?? source.entity).join(" and ")}.`,
               resolver: "field",
+              ...(field.display.readPath
+                ? { readPath: field.display.readPath }
+                : {}),
             }
           : null),
       resolution: field.resolution,
@@ -543,10 +546,6 @@ const compileFieldModel = (
       if (!DISPLAY_READ_PATH.test(readPath))
         throw new EntityDeclarationError(
           `${context}.${field.key}.display.readPath "${readPath}" must be dotted keys with optional [n] or [] segments.`,
-        );
-      if (field.readKey !== null)
-        throw new EntityDeclarationError(
-          `${context}.${field.key}.display.readPath is for a field with no flat read key (readKeyOverride: null or no read schema).`,
         );
       if (!field.display.list && !field.display.detail)
         throw new EntityDeclarationError(
