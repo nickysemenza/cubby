@@ -27,6 +27,7 @@ struct FinancialTransactionEvidenceView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             Text("Spending review").font(.subheadline.weight(.semibold))
+                .accessibilityIdentifier("financial.evidence.review")
             coverageRow("Expense booking", key: "booking")
             coverageRow("Receipt or order", key: "document")
             coverageRow("Itemization", key: "itemization")
@@ -48,7 +49,6 @@ struct FinancialTransactionEvidenceView: View {
         }
         .font(.caption)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityIdentifier("financial.evidence.review")
         .task(id: row.id) { resetSelections() }
         .onChange(of: category) { _, _ in preview = nil }
         .onChange(of: purchase) { _, _ in preview = nil }

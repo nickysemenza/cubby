@@ -136,6 +136,8 @@ export async function createMacBrowserScenario(input: Input) {
       },
       evidence: browserDriver.evidence,
       async run(appDriver: MacImportDriver) {
+        await appDriver.openSettings();
+        await appDriver.click("id=settings.purchaseImport.reconnect");
         const deadline = Date.now() + 30_000;
         while (!(await broker.connected())) {
           if (Date.now() >= deadline)

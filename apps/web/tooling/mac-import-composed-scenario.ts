@@ -788,6 +788,23 @@ export async function createMacComposedScenario(input: Input) {
           );
       }
       const canonicalEdges = await assertCanonicalEdges();
+      const canonicalProduct = await productCode();
+      if (!canonicalProduct)
+        throw new Error("Canonical Product is missing for native edit review");
+      await input.driver.openEntity(canonicalProduct, input.appPath());
+      await input.driver.wait("id=detail.product.edit");
+      await input.driver.click("id=detail.product.edit");
+      await input.driver.wait("id=editor.product");
+      const editor = await input.driver.wait('contains="Effective: $29.99"');
+      const save = editor
+        .split("\n")
+        .find((line) => line.includes("id=editor.product.save"));
+      if (!save?.includes("[disabled]"))
+        throw new Error(
+          "Opening the native Product editor pinned an inherited field into the draft",
+        );
+      await input.driver.screenshot("native-inherited-price-editor");
+      await input.driver.click('label="Cancel" role=Button');
       const file = path.join(input.artifacts, "native-composed-results.json");
       writeFileSync(
         file,
@@ -799,6 +816,10 @@ export async function createMacComposedScenario(input: Input) {
             canonicalEdges,
             photoProposalGuard,
             photoRun: photoRunCode,
+            inheritedPriceEdit: {
+              effectivePrice: 29.99,
+              unchangedDraftSaveDisabled: true,
+            },
             boundaries: {
               csv: "native NSOpenPanel + review + shared writer + native Expense booking/link review",
               photo:

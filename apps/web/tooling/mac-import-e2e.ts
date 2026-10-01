@@ -884,7 +884,7 @@ async function main(): Promise<void> {
         );
       await driver.click(toggle[1]);
       await driver.click("id=statement.csv.confirm");
-      await driver.wait('text="2 source rows · 1 transactions"');
+      await driver.wait('text="Statement saved"');
       milestones.savedObserved = true;
       await driver.screenshot("csv-saved");
       phase = "database-readback";

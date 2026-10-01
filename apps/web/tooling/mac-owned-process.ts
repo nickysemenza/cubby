@@ -68,11 +68,11 @@ function inspectOwned(expected: MacProcessExpectation, owner: OwnedMacProcess) {
   const current = processes().find((process) => process.pid === owner.pid);
   if (
     current &&
-    !current.state.includes("Z") &&
+    !/[ZE]/u.test(current.state) &&
     (current.command !== owner.command || !matches(current.command, expected))
   )
     throw new Error(
-      `Fixture PID ${owner.pid} changed ownership; refusing process signal and lease release`,
+      `Fixture PID ${owner.pid} changed ownership (state ${current.state}); refusing process signal and lease release`,
     );
   return current;
 }
@@ -82,10 +82,26 @@ async function awaitExit(
   timeoutMs: number,
 ) {
   const deadline = Date.now() + timeoutMs;
+  let changedCommand = false;
   do {
-    if (!inspectOwned(expected, owner)) return true;
+    const current = processes().find((process) => process.pid === owner.pid);
+    if (!current) return true;
+    // A signalled browser can rewrite argv during graceful shutdown. Observe its exit,
+    // but never escalate a signal once exact command ownership has been lost.
+    if (
+      !/[ZE]/u.test(current.state) &&
+      (current.command !== owner.command || !matches(current.command, expected))
+    )
+      changedCommand = true;
     await setTimeout(50);
   } while (Date.now() < deadline);
+  if (
+    changedCommand &&
+    processes().some((process) => process.pid === owner.pid)
+  )
+    throw new Error(
+      `Fixture PID ${owner.pid} changed ownership while exiting; refusing further signals and lease release`,
+    );
   return !inspectOwned(expected, owner);
 }
 function signalOwned(
@@ -94,7 +110,7 @@ function signalOwned(
   signal: "SIGTERM" | "SIGKILL",
 ) {
   const current = inspectOwned(expected, owner);
-  if (!current || current.state.includes("Z")) return false;
+  if (!current || /[ZE]/u.test(current.state)) return false;
   try {
     process.kill(owner.pid, signal);
   } catch (error) {
