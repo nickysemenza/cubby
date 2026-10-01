@@ -105,8 +105,8 @@ USDAFood  ←(loose link, fdc_id/barcode)──  Product  ──(optional FK, in
 - **USDAFood** (`usda_food`) — nutrition reference data from USDA FoodData
   Central, served by the sibling `usda-api` worker (not a row in the main DB).
   Linked to a Product for nutrition/cost intelligence; the link is _loose_
-  (resolved at query time, `fdc_id`-first then barcode) — see the USDA notes in
-  README.
+  (resolved at query time, `fdc_id`-first then barcode) — see the USDA bullet in
+  [development](development.md#architecture).
 
 **Rule of thumb:** Recipes reference **Ingredients**; the pantry holds
 **InventoryEntries of Products**; **USDA** supplies nutrition. The Product is

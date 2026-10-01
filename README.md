@@ -57,7 +57,7 @@ not deferred.
    Derived data that is cheap to compute is computed at the source.
 4. **One trusted household.** There is no multi-user coordination,
    restore/undo, reservations or locking. Any member may see household-wide
-   data. Speed and recoverability win over ceremony.
+   data, including MCP analytics attribution. Speed and recoverability win over ceremony.
 5. **All money lives on `Expense`.** Spend is always `SUM(Expense.cost)`.
    `Purchase.statedTotal` is a soft reconciliation cue, never summed and never
    a reason to reject a write. Card transactions are settlement evidence, not
@@ -95,14 +95,14 @@ flowchart TB
   VendorAccount -- "our login at" --> Vendor
   Purchase -- "itemized into" --> Expense
   SpendingCategory -- "what it was for" --> Expense
-  FinancialAccount -- "statement rows" --> FinancialTransaction
+  FinancialAccount -- "has statement rows" --> FinancialTransaction
   FinancialTransaction -- "paid for" --> Purchase
   LedgerTransfer -- "reimburses between" --> LedgerParty
-  Device -- "app install of" --> LedgerParty
+  Device -- "owned by" --> LedgerParty
   Ingredient -- "bought as" --> Product
   Product -. "nutrition from" .-> USDA[USDA food]
   Product -- "seed packet grows" --> Plant
-  Cookbook -- "physical copy" --> Product
+  Cookbook -- "is a physical copy of" --> Product
   ProductCategory -- "default spending bucket" --> SpendingCategory
   Planting -- "planted in" --> Location
   Task -- "schedules" --> Planting
@@ -153,11 +153,11 @@ flowchart TB
 
 ### Garden
 
-| Entity                 | What it is                                                        | Relates to                                                              | Typical use                                       |
-| ---------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------- |
-| **Plant** `PLANT-`     | A cultivar or species, with our yes/maybe/no verdict              | 1:N Planting; 1:N seed-packet Product; N:1 Ingredient                   | What we grow and whether it's worth growing again |
-| **Planting** `PLT-`    | One instance of a plant being grown: planned → growing → finished | N:1 Plant, Location, Task, seed Product                                 | Bed plans, sow and transplant dates               |
-| **GardenEntry** `GDE-` | A dated note or harvest at a garden area                          | N:1 Location; N:M Planting; 1:N Image (the only home for garden photos) | Season log                                        |
+| Entity                 | What it is                                                        | Relates to                                                                | Typical use                                       |
+| ---------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------- |
+| **Plant** `PLANT-`     | A cultivar or species, with our yes/maybe/no verdict              | 1:N Planting; 1:N seed-packet Product; N:1 Ingredient                     | What we grow and whether it's worth growing again |
+| **Planting** `PLT-`    | One instance of a plant being grown: planned → growing → finished | N:1 Plant, Location, Task, seed Product                                   | Bed plans, sow and transplant dates               |
+| **GardenEntry** `GDE-` | A dated note or harvest at a garden area                          | N:1 Location; N:M Planting; 1:N Image (the only home for planting photos) | Season log                                        |
 
 ### Work
 
@@ -245,7 +245,8 @@ pnpm test       # fast tests
 ```
 
 **MCP.** On claude.ai, add a custom connector at
-`https://cubby.nickysemenza.com/api/mcp`. In Claude Code or Codex, run
+`https://cubby.nickysemenza.com/api/mcp`. In Claude Code or Codex, copy
+`.mcp.json.example` to `.mcp.json`, then run
 `claude mcp login cubby-localhost` or `codex mcp login cubby-localhost`. It uses
 OAuth, so never add a static `Authorization` header.
 

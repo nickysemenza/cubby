@@ -85,7 +85,8 @@ them, and stage incompatible changes as expand → migrate → deploy → cleanu
   `container` PostgreSQL/IntegreSQL pair, cleaned up on exit.
   - `CUBBY_TEST_SERVICES=warm` reuses fixed-name containers.
   - `CUBBY_TEST_SERVICES=external` uses `docker compose -p cubby up -d`; Linux
-    and CI use this mode.
+    and CI use this mode. For another service, override `INTEGRESQL_URL`,
+    `INTEGRESQL_DATABASE_HOST` and `INTEGRESQL_DATABASE_PORT` together.
   - After a SIGKILL, find leftovers with `container list --all`.
 - Parallelism overrides: `VITEST_MAX_WORKERS` and `CUBBY_E2E_WORKERS`.
 - In dev, `await __jsProfile(5000)` in the browser console summarizes the
@@ -144,6 +145,14 @@ Better-Auth (`better-auth/tanstack-start`), with config in
   itself; errors are `ApiError`.
 - **Docs.** `/api/v1/docs` (Scalar) and `/api/v1/openapi.json` (OpenAPI 3.1).
   The Apple app generates its client from the committed document.
+- **Opting out.** `http: false` on a contract member excludes it from HTTP
+  (streams and the generic entity union operations).
+- **Filter encoding.** Lists repeat the key (`tag=a&tag=b`), object-valued
+  filters flatten to prefixed scalars, and nothing is JSON-encoded. Component
+  names come from `@cubby/schemas` exports or an explicit `.meta({ id })`.
+- **Test client.** `createCubbyClient({ baseUrl, apiKey? })` in
+  `apps/web/tests/e2e/http-api-client.ts` wraps the generated ts-rest router
+  `apps/web/src/lib/generated/http-contract.gen.ts`.
 - **After changes.** When contracts, declarations or schemas change, run
   `pnpm generate`. Wire schemas come from `toWire`
   (`apps/web/src/lib/http-api/wire.ts`).
