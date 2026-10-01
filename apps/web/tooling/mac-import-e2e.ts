@@ -602,7 +602,7 @@ async function runNativeScenario(
       "field.explanation.popover",
     );
     await driver.scrollTo(
-      'text="Override on this product"',
+      'text="Overrides inherited"',
       "field.explanation.popover",
     );
     await driver.scrollTo(

@@ -30,13 +30,13 @@ appId: com.nickysemenza.cubby
       id: "field.explanation.popover"
     timeout: 30000
 - extendedWaitUntil:
-    visible: "In effect"
+    visible:
+      id: "field.explanation.state"
     timeout: 30000
 - assertVisible:
     id: "field.explanation.effective-value"
 - assertVisible: "\\$40\\.00"
-- assertVisible: "Override on this product"
-- assertVisible: "Without the override"
+- assertVisible: "Overrides inherited"
 - scrollUntilVisible:
     element:
       id: "field.explanation.fallback-value"

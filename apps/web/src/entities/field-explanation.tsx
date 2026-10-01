@@ -31,8 +31,14 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 
-import { FieldResolutionStatus } from "./field-resolution";
-import { ResolutionExplanation } from "./field-resolution-explanation";
+import {
+  FieldResolutionEntityActions,
+  FieldResolutionStatus,
+} from "./field-resolution";
+import {
+  ResolutionExplanation,
+  sectionLabelClassName,
+} from "./field-resolution-explanation";
 
 type ExplanationSource = z.infer<typeof fieldExplanationSource>;
 export type ExplanationValue = ExplanationSource["value"];
@@ -232,14 +238,6 @@ function FieldExplanationContents({
   label,
   surface = "detail",
 }: FieldExplanationProps) {
-  const inheritOwner = useActionMutation({
-    mutationFn: inventory.setOwnership.mutationOptions,
-    success: "Using inherited owner",
-  });
-  const confirmOwner = useActionMutation({
-    mutationFn: inventory.confirmOwnership.mutationOptions,
-    success: "Owner confirmed",
-  });
   const result = useQuery({
     ...fieldExplanation.explain.queryOptions({
       entityKind: entity,
@@ -248,11 +246,26 @@ function FieldExplanationContents({
       surface,
     }),
   });
+  const subjectAction = (target: { entityKind: Entity; entityId: string }) =>
+    target.entityKind === entity && target.entityId === id;
+  // minmax(0,1fr): grid tracks otherwise size to their widest nowrap child
+  // (the truncated rule footer), pushing content past the popover edge.
   return (
-    <Stack gap="sm">
-      <PopoverTitle>How {label.toLowerCase()} is determined</PopoverTitle>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
+      <header className="flex items-baseline justify-between gap-3">
+        <PopoverTitle className={sectionLabelClassName}>
+          <span className="sr-only">How </span>
+          {label}
+          <span className="sr-only"> is determined</span>
+        </PopoverTitle>
+        {result.data ? (
+          <span className="truncate font-mono text-[10px] text-muted-foreground">
+            {result.data.rule.id} · r{result.data.rule.revision}
+          </span>
+        ) : null}
+      </header>
       {result.isPending ? (
-        <p>Loading explanation…</p>
+        <p className="text-muted-foreground">Loading…</p>
       ) : result.isError ? (
         <Stack gap="sm">
           <ErrorDisplay error={result.error} title="this explanation" />
@@ -267,10 +280,10 @@ function FieldExplanationContents({
         </Stack>
       ) : (
         <>
-          <p className="text-sm">{result.data.rule.description}</p>
           {result.data.resolution ? (
             <ResolutionExplanation
               entity={entity}
+              id={id}
               field={field}
               resolution={result.data.resolution}
               evidence={result.data.resolutionEvidence}
@@ -281,99 +294,165 @@ function FieldExplanationContents({
                 source.label === "Project share" ||
                 source.label === "Unassigned share",
             ) ? (
-            <div className="text-sm">
-              <span className="text-muted-foreground">Current value</span>
-              <div className="mt-1">
-                <ReadableExplanationValue value={result.data.value} />
-              </div>
+            <div className="text-base font-semibold break-words">
+              <ReadableExplanationValue value={result.data.value} />
             </div>
           ) : null}
-          {visibleSources(result.data).map((source) => (
-            <div
-              key={explanationSourceKey(source)}
-              className="grid gap-1 text-sm"
-            >
-              <span className="text-muted-foreground">{source.label}</span>
-              {source.entity ? (
-                <ExplanationEntityLink
-                  entity={source.entity.entityKind}
-                  id={source.entity.entityId}
-                />
+          {visibleSources(result.data).length > 0 ? (
+            <section className="grid gap-1.5">
+              <h3 className={sectionLabelClassName}>Evidence</h3>
+              <dl className="grid gap-2">
+                {visibleSources(result.data).map((source) => (
+                  <div
+                    key={explanationSourceKey(source)}
+                    className="grid gap-0.5"
+                  >
+                    <dt className="text-muted-foreground">{source.label}</dt>
+                    <dd className="min-w-0">
+                      {source.entity ? (
+                        <ExplanationEntityLink
+                          entity={source.entity.entityKind}
+                          id={source.entity.entityId}
+                        />
+                      ) : null}
+                      {source.value !== null || source.entity === null ? (
+                        <ReadableExplanationValue value={source.value} />
+                      ) : null}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              {result.data.truncated ? (
+                <p className="text-muted-foreground">
+                  Showing the first sources.
+                </p>
               ) : null}
-              {source.value !== null || source.entity === null ? (
-                <div className="mt-1">
-                  <ReadableExplanationValue value={source.value} />
-                </div>
-              ) : null}
-            </div>
-          ))}
-          {result.data.truncated ? (
-            <p className="text-xs text-muted-foreground">
-              Showing the first sources.
-            </p>
+            </section>
           ) : null}
-          {result.data.actions.map((action) => {
-            const inventoryAction = action.target.entityKind === "inventory";
-            if (action.kind === "inheritOwner" && inventoryAction) {
-              return (
-                <Button
-                  key={action.kind}
-                  size="sm"
-                  variant="outline"
-                  disabled={inheritOwner.isPending}
-                  onClick={() =>
-                    inheritOwner.mutate({
-                      inventoryEntryId: inventoryShortcode.parse(
-                        action.target.entityId,
-                      ),
-                      ownership: { mode: "inherit" },
-                    })
-                  }
-                >
-                  {action.label}
-                </Button>
-              );
-            }
-            if (
-              action.kind === "confirmOwner" &&
-              inventoryAction &&
-              result.data.evidenceFingerprint
-            ) {
-              const evidenceFingerprint = result.data.evidenceFingerprint;
-              return (
-                <Button
-                  key={action.kind}
-                  size="sm"
-                  variant="outline"
-                  disabled={confirmOwner.isPending}
-                  onClick={() =>
-                    confirmOwner.mutate({
-                      inventoryEntryId: inventoryShortcode.parse(
-                        action.target.entityId,
-                      ),
-                      evidenceFingerprint,
-                    })
-                  }
-                >
-                  {action.label}
-                </Button>
-              );
-            }
-            return (
-              <div
-                key={action.kind}
-                className="flex items-center gap-2 text-sm"
-              >
-                <span>{action.label}</span>
-                <ExplanationEntityLink
-                  entity={action.target.entityKind}
-                  id={action.target.entityId}
-                />
-              </div>
-            );
-          })}
+          <ExplanationFooter
+            entity={entity}
+            id={id}
+            field={field}
+            surface={surface}
+            data={result.data}
+            isSubject={subjectAction}
+          />
         </>
       )}
-    </Stack>
+    </div>
+  );
+}
+
+/** Actions first, the rule's prose last and folded: the facts above already
+ * say what happened, the rule is there for when they don't. */
+function ExplanationFooter({
+  entity,
+  id,
+  field,
+  surface,
+  data,
+  isSubject,
+}: {
+  entity: Entity;
+  id: string;
+  field: string;
+  surface: FieldExplanationProps["surface"];
+  data: FieldExplanationOutput;
+  isSubject: (target: { entityKind: Entity; entityId: string }) => boolean;
+}) {
+  const inheritOwner = useActionMutation({
+    mutationFn: inventory.setOwnership.mutationOptions,
+    success: "Using inherited owner",
+  });
+  const confirmOwner = useActionMutation({
+    mutationFn: inventory.confirmOwnership.mutationOptions,
+    success: "Owner confirmed",
+  });
+  const resolution = data.resolution;
+  const actions = data.actions.flatMap((action) => {
+    const inventoryAction = action.target.entityKind === "inventory";
+    if (action.kind === "inheritOwner" && inventoryAction) {
+      return [
+        <Button
+          key={action.kind}
+          size="xs"
+          variant="outline"
+          disabled={inheritOwner.isPending}
+          onClick={() =>
+            inheritOwner.mutate({
+              inventoryEntryId: inventoryShortcode.parse(
+                action.target.entityId,
+              ),
+              ownership: { mode: "inherit" },
+            })
+          }
+        >
+          {action.label}
+        </Button>,
+      ];
+    }
+    if (
+      action.kind === "confirmOwner" &&
+      inventoryAction &&
+      data.evidenceFingerprint
+    ) {
+      const evidenceFingerprint = data.evidenceFingerprint;
+      return [
+        <Button
+          key={action.kind}
+          size="xs"
+          variant="outline"
+          disabled={confirmOwner.isPending}
+          onClick={() =>
+            confirmOwner.mutate({
+              inventoryEntryId: inventoryShortcode.parse(
+                action.target.entityId,
+              ),
+              evidenceFingerprint,
+            })
+          }
+        >
+          {action.label}
+        </Button>,
+      ];
+    }
+    // On its own detail page a link back to the subject goes nowhere.
+    const self = isSubject(action.target);
+    if (self && surface === "detail") return [];
+    return [
+      <span key={action.kind} className="flex min-w-0 items-center gap-1.5">
+        <span className="text-muted-foreground">
+          {self ? "Open" : action.label}
+        </span>
+        <ExplanationEntityLink
+          entity={action.target.entityKind}
+          id={action.target.entityId}
+        />
+      </span>,
+    ];
+  });
+  const resets = resolution ? (
+    <FieldResolutionEntityActions
+      entity={entity}
+      id={id}
+      field={field}
+      resolution={resolution}
+    />
+  ) : null;
+  return (
+    <footer className="grid grid-cols-[minmax(0,1fr)] gap-2 border-t border-border pt-2">
+      {actions.length > 0 || resolution?.canReset ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          {resets}
+          {actions}
+        </div>
+      ) : null}
+      <details className="group text-muted-foreground">
+        <summary className="cursor-pointer list-none truncate group-open:whitespace-normal [&::-webkit-details-marker]:hidden">
+          <span className="font-medium text-foreground">Rule · </span>
+          {data.rule.description}
+        </summary>
+      </details>
+    </footer>
   );
 }

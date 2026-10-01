@@ -47,7 +47,7 @@ describe("field resolution indicators", () => {
         { wrapper: harness.wrapper },
       );
       expect(
-        screen.getByRole("button", { name: "Clear override" }),
+        screen.getByRole("button", { name: "Clear value" }),
       ).toBeInTheDocument();
       expect(
         screen.queryByRole("button", {
