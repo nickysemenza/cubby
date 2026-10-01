@@ -16,7 +16,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**
  * The reusable core of scenario/fixture creation, shared by the Playwright
- * fixtures (`tests/e2e/e2e-fixtures.ts`, which resolve the actor from a
+ * fixtures (`tests/e2e/fixtures-core.ts`, which resolve the actor from a
  * `Page`'s session) and the dev-database corpus (`dev/fixtures.ts`, which
  * already knows its one local user's id). Keep this module free of anything
  * Playwright- or corpus-specific — it is the shared middle layer, not either

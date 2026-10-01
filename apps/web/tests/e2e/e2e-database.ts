@@ -3,35 +3,19 @@ import {
   hashSchemaTemplateInputs,
   schemaTemplateInputs,
 } from "../../tooling/schema-template-inputs";
-import { taxonomyRootFixtures } from "../../tooling/product-category-fixtures";
+import { seedBaseWorld } from "../../tooling/factories/base-world";
 import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
 } from "@devoxa/integresql-client";
-import { type SQL, sql } from "drizzle-orm";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { productCategory } from "../../src/server/db/schema";
 import { migrateDatabase } from "../../tooling/db-migrate";
 
 export interface E2EDatabase {
   databaseUrl: string;
   name: string;
   close(): Promise<void>;
-}
-
-interface SchemaDatabase {
-  execute(query: SQL): Promise<object>;
-}
-
-async function seedHome(db: SchemaDatabase): Promise<void> {
-  // The application requires exactly one real hierarchy root. Keep this in the
-  // checked-out database rather than the IntegreSQL template so a cached older
-  // template is repaired before a worker starts.
-  await db.execute(sql`
-    INSERT INTO "Location" (shortcode, name, aliases, tags, type, "parentId")
-    VALUES ('LOC-HM3E', 'Home', ARRAY[]::text[], ARRAY[]::text[], 'house', NULL)
-  `);
 }
 
 function remapIntegreSQLConfig(
@@ -86,9 +70,9 @@ export async function createE2EDatabase(): Promise<E2EDatabase> {
   );
   const seedPool = new Pool({ connectionString: databaseUrl });
   try {
-    const seedDb = drizzleNodePostgres(seedPool);
-    await seedHome(seedDb);
-    await seedDb.insert(productCategory).values(taxonomyRootFixtures);
+    // Seeded in the checked-out database rather than the IntegreSQL template so
+    // a cached older template is repaired before a worker starts.
+    await seedBaseWorld(drizzleNodePostgres(seedPool));
     // Every worker must start without corpus products, regardless of shard.
     const { rows } = await seedPool.query<{ count: string }>(
       'SELECT count(*)::text AS count FROM "Product"',

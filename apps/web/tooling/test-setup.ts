@@ -1,17 +1,17 @@
 import { testServiceConfig } from "./test-service-config";
 import { hashSchemaTemplateInputs } from "./schema-template-inputs";
-import { taxonomyRootFixtures } from "./product-category-fixtures";
+import {
+  BASE_HOME_ID,
+  BASE_HOME_SHORTCODE,
+  seedBaseWorld,
+} from "./factories/base-world";
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
   type ActorContext,
   type AuditChannel,
   buildActorContext,
 } from "@cubby/schemas/context";
-import {
-  testEntityId,
-  testShortcode,
-  testUserId,
-} from "@cubby/schemas/testing";
+import { testUserId } from "@cubby/schemas/testing";
 import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
@@ -122,11 +122,8 @@ export async function countTestDbQueries<T>(
 }
 
 export const TEST_USER_ID = "test-user-id";
-export const TEST_HOME_ID = testEntityId(
-  "location",
-  "00000000-0000-4000-8000-000000000001",
-);
-export const TEST_HOME_SHORTCODE = testShortcode("location", "LOC-HM3E");
+export const TEST_HOME_ID = BASE_HOME_ID;
+export const TEST_HOME_SHORTCODE = BASE_HOME_SHORTCODE;
 
 /**
  * The authenticated actor every integration test runs as. Mirrors what
@@ -178,23 +175,6 @@ async function seedTestUser(rawDb: ReturnType<typeof drizzle>) {
     createdAt: new Date(),
     updatedAt: new Date(),
   });
-}
-
-/** Every integration database starts with Cubby's one real hierarchy root. */
-async function seedTestHome(rawDb: ReturnType<typeof drizzle>) {
-  await rawDb.insert(schema.location).values({
-    id: TEST_HOME_ID,
-    shortcode: TEST_HOME_SHORTCODE,
-    name: "Home",
-    aliases: [],
-    type: "house",
-    parentId: null,
-  });
-}
-
-/** Stable taxonomy roots give test Product writes the same behavior bindings. */
-async function seedTestProductCategories(rawDb: ReturnType<typeof drizzle>) {
-  await rawDb.insert(schema.productCategory).values(taxonomyRootFixtures);
 }
 
 /**
@@ -360,8 +340,7 @@ async function resetTestDb() {
   );
   await pool.query(`TRUNCATE ${truncateTargets} RESTART IDENTITY CASCADE`);
   await seedTestUser(rawDb);
-  await seedTestHome(rawDb);
-  await seedTestProductCategories(rawDb);
+  await seedBaseWorld(rawDb);
   return (await getFileDb()).db;
 }
 
