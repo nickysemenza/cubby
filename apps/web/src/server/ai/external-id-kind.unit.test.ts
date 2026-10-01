@@ -98,7 +98,7 @@ describe("suggestExternalIdKind", () => {
     it("still treats a 9-digit Home Depot barcode as gtin_14 outside that one length exception", async () => {
       const jev: JevPort = vi.fn();
       const result = await suggestExternalIdKind(
-        inputFor({ source: "home-depot", identifier: "12345678" }),
+        inputFor({ source: "home-depot", identifier: "12345670" }),
         usage,
         { jev },
       );

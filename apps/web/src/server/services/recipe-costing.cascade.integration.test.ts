@@ -278,8 +278,11 @@ describe("recipe totals cascade", () => {
       // The freshness notifier also warns when no Durable Object is bound
       // (always, under vitest), so assert the repair warning itself.
       expect(warn).toHaveBeenCalledWith(
-        "[recipe.get] repair-on-read failed",
-        expect.objectContaining({ recipes: [tree.child] }),
+        "[repair-on-read] [recipe.get] failed",
+        expect.objectContaining({
+          recipes: [tree.child],
+          error: expect.any(Error),
+        }),
       );
     } finally {
       warn.mockRestore();

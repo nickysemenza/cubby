@@ -84,8 +84,11 @@ describe("scheduleCalendarFeedDirty", () => {
     expect(consoleError).toHaveBeenCalledTimes(1);
     expect(consoleError).toHaveBeenCalledWith(
       "[calendar-feed] failed to mark snapshot dirty",
-      expect.objectContaining({ reason: "test.write", attempt: 2 }),
-      expect.any(Error),
+      expect.objectContaining({
+        reason: "test.write",
+        attempt: 2,
+        error: expect.any(Error),
+      }),
     );
     consoleError.mockRestore();
   });
@@ -188,8 +191,10 @@ describe("scheduleCalendarFeedDirty", () => {
     await expect(tasks[0]).resolves.toBeUndefined();
     expect(consoleError).toHaveBeenCalledWith(
       "[calendar-feed] failed to enqueue mark-dirty fallback",
-      expect.objectContaining({ reason: "test.write" }),
-      expect.any(Error),
+      expect.objectContaining({
+        reason: "test.write",
+        error: expect.any(Error),
+      }),
     );
     consoleError.mockRestore();
   });
