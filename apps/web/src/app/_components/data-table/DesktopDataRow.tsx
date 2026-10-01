@@ -8,7 +8,6 @@ import {
   memo,
   type PointerEvent,
   type ReactNode,
-  useState,
 } from "react";
 import { z } from "zod";
 
@@ -28,7 +27,11 @@ import { NON_SELECTABLE_COLUMN_IDS } from "./cell-selection-context";
 import { columnWidthValue } from "./column-layout";
 import { DebugDialog } from "./DebugDialog";
 import { RelationFieldWorkbench } from "./relation-field-workbench";
-import { RowActiveProvider, useCoarsePointer } from "./row-activity";
+import {
+  RowActiveProvider,
+  useCoarsePointer,
+  useRowActivity,
+} from "./row-activity";
 import type { CubbyRow as Row } from "./table-features";
 import { type CubbyColumnMeta, resolveColumnExplanation } from "./table-meta";
 
@@ -255,11 +258,9 @@ function DesktopDataRowInner<TItem extends RowData>({
   height,
   suppressCellRowClick,
 }: DesktopDataRowProps<TItem>) {
-  const [hovered, setHovered] = useState(false);
-  const [focusWithin, setFocusWithin] = useState(false);
+  const activity = useRowActivity(row.id);
   const coarsePointer = useCoarsePointer();
-  const active =
-    hovered || focusWithin || isCurrent || isFocused || coarsePointer;
+  const active = activity.active || isCurrent || isFocused || coarsePointer;
   const handleRowClick = onRowClick
     ? (e: MouseEvent<HTMLTableRowElement>) => {
         if (isInteractiveEventTarget(e.target)) return;
@@ -296,13 +297,12 @@ function DesktopDataRowInner<TItem extends RowData>({
       onClick={handleRowClick}
       onPointerEnter={(event: PointerEvent<HTMLTableRowElement>) => {
         if (event.pointerType === "touch") return;
-        setHovered(true);
+        activity.activate();
         if (onRowHover && !isInteractiveEventTarget(event.target))
           onRowHover(row);
       }}
       onPointerLeave={(event: PointerEvent<HTMLTableRowElement>) => {
         if (event.pointerType === "touch") return;
-        setHovered(false);
         onRowHoverEnd?.(row);
       }}
       onFocus={(event) => {
@@ -311,12 +311,11 @@ function DesktopDataRowInner<TItem extends RowData>({
         // path). Flipping activity while a control inside the row held focus
         // remounted the selection checkbox between mousedown and mouseup, so
         // the click never toggled; pointer users activate on hover first.
-        setFocusWithin(true);
+        activity.activate();
         onRowHover?.(row);
       }}
       onBlur={(event: FocusEvent<HTMLTableRowElement>) => {
         if (event.currentTarget.contains(event.relatedTarget)) return;
-        setFocusWithin(false);
         onRowHoverEnd?.(row);
       }}
       style={height ? { height } : undefined}

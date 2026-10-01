@@ -5,7 +5,7 @@ import { ListDashesIcon } from "@phosphor-icons/react/dist/csr/ListDashes";
 import type { CellSelectionState, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import type { ReactNode } from "react";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { RecordSuggestionsProvider } from "~/app/_components/ai/record-suggestions";
 import { ErrorDisplay } from "~/components/feedback/error-display";
@@ -53,6 +53,10 @@ import {
   isNarrowed,
 } from "./entity-empty-states";
 import { MobileListScreen } from "./MobileListScreen";
+import {
+  createRowActivityStore,
+  RowActivityStoreContext,
+} from "./row-activity";
 import { SectionHeader } from "./SectionHeader";
 import { collectTableEntityMediaRefs } from "./table-entity-media";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
@@ -1060,6 +1064,8 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     />
   ) : null;
 
+  // One active row per table; see row-activity.
+  const [rowActivity] = useState(createRowActivityStore);
   const renderTableBody = () => {
     // Keep loaded rows usable after a failed refresh; status lives below the table.
     if (!hydrated || (isLoading && rows.length === 0)) return null;
@@ -1078,7 +1084,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       : ghostRowsStyle(dConfig.rowHeight);
 
     return (
-      <>
+      <RowActivityStoreContext value={rowActivity}>
         {/* Top padding row for scroll position. Offsets are relative to the
             table's own scroll pane, so `start` is already the gap. */}
         {topSpacerHeight > 0 && (
@@ -1172,7 +1178,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
             />
           </tr>
         )}
-      </>
+      </RowActivityStoreContext>
     );
   };
 
