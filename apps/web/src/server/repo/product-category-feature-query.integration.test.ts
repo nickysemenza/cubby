@@ -35,7 +35,9 @@ describe("batched category feature lookup", () => {
       }
       for (const child of node.Plans ?? []) visit(child);
     }
-    visit(result.rows[0]["QUERY PLAN"][0].Plan);
+    const plan = result.rows[0]?.["QUERY PLAN"][0]?.Plan;
+    if (!plan) throw new Error("PostgreSQL returned no execution plan");
+    visit(plan);
     expect(recursiveLoops.length).toBeGreaterThan(0);
     expect(Math.max(...recursiveLoops)).toBe(1);
   });
