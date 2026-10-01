@@ -27,6 +27,8 @@ export interface DialogFormActionsProps {
    */
   onSubmit?: () => void;
   cancelLabel?: string;
+  /** Replaces the default "Saving…" while `pending`. */
+  pendingLabel?: string;
 }
 
 /**
@@ -53,11 +55,12 @@ export function DialogFormActions({
   form,
   onSubmit,
   cancelLabel = "Cancel",
+  pendingLabel = "Saving…",
 }: DialogFormActionsProps) {
   const isMobile = useIsMobile();
   const registerHeaderActions = useDialogHeaderActionsRegistration();
   const useHeaderActions = isMobile && registerHeaderActions != null;
-  const submitText = pending ? "Saving…" : submitLabel;
+  const submitText = pending ? pendingLabel : submitLabel;
   const hasOnSubmit = onSubmit != null;
 
   // Callbacks read through a ref rather than sitting in the effect's

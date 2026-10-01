@@ -11,7 +11,7 @@ import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
-import { DialogFooter } from "~/components/ui/dialog";
+import { DialogFormActions } from "~/components/ui/dialog-form-actions";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
@@ -213,19 +213,13 @@ export function PortionSheet({
       title={`Portions · ${source.recipe.name}`}
       description={`Prepared ${sourceDate} · ${source.preparedHere ? "cooked here" : "from another meal"}`}
       footer={
-        <DialogFooter className="gap-2 sm:justify-between">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
-          >
-            Cancel
-          </Button>
-          <Button type="button" disabled={!canSave} onClick={submit}>
-            <CheckIcon className="size-4" />
-            {isSaving ? "Saving…" : "Save portions"}
-          </Button>
-        </DialogFooter>
+        <DialogFormActions
+          onCancel={() => onOpenChange(false)}
+          submitLabel="Save portions"
+          pending={isSaving}
+          submitDisabled={!canSave}
+          onSubmit={submit}
+        />
       }
     >
       <Stack gap="lg">

@@ -18,10 +18,10 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { DialogFormActions } from "~/components/ui/dialog-form-actions";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { entities } from "~/entities/entities";
 import type { MergeDisplayRow, MergeableConfig } from "~/entities/types";
@@ -47,31 +47,6 @@ const resolveCopyText = (
   value: ReactNode | ((keeperLabel: ReactNode) => ReactNode) | undefined,
   keeperLabel: ReactNode,
 ): ReactNode => (isCopyFactory(value) ? value(keeperLabel) : value);
-
-function MergeDialogFooter({
-  disabled,
-  isPending,
-  label,
-  onCancel,
-  onConfirm,
-}: {
-  disabled: boolean;
-  isPending: boolean;
-  label: string;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <DialogFooter>
-      <Button variant="outline" onClick={onCancel}>
-        Cancel
-      </Button>
-      <Button disabled={disabled} onClick={onConfirm}>
-        {isPending ? "Merging…" : label}
-      </Button>
-    </DialogFooter>
-  );
-}
 
 /**
  * Shared merge-confirm dialog. The caller supplies a proposed group, and the
@@ -390,9 +365,8 @@ function RankedMergeDialog<T extends MergeRow>({
             .map((row) => ({ id: row.id, label: config.rowLabel(row) }))}
           operations={impactPreviewOperations}
         />
-        <MergeDialogFooter
-          disabled={
-            isPending ||
+        <DialogFormActions
+          submitDisabled={
             !effectiveKeepId ||
             aliasIds.length === 0 ||
             (productPreviewEnabled &&
@@ -400,10 +374,11 @@ function RankedMergeDialog<T extends MergeRow>({
                 productPreview.isError ||
                 !!productPreview.data?.blockers.length))
           }
-          isPending={isPending}
-          label="Merge"
+          pending={isPending}
+          pendingLabel="Merging…"
+          submitLabel="Merge"
           onCancel={() => onOpenChange(false)}
-          onConfirm={() => {
+          onSubmit={() => {
             if (effectiveKeepId) onConfirm(effectiveKeepId, aliasIds);
           }}
         />
@@ -523,12 +498,13 @@ function FixedMergeDialog<T extends MergeRow>({
             }))}
           operations={impactPreviewOperations}
         />
-        <MergeDialogFooter
-          disabled={selected.length === 0 || isPending}
-          isPending={isPending}
-          label={`Merge ${selected.length || ""}`.trim()}
+        <DialogFormActions
+          submitDisabled={selected.length === 0}
+          pending={isPending}
+          pendingLabel="Merging…"
+          submitLabel={`Merge ${selected.length || ""}`.trim()}
           onCancel={() => onOpenChange(false)}
-          onConfirm={() => onConfirm(keeper.id, selected)}
+          onSubmit={() => onConfirm(keeper.id, selected)}
         />
       </DialogContent>
     </Dialog>

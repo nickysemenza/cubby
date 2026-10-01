@@ -4,8 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { Button } from "~/components/ui/button";
-import { DialogFooter } from "~/components/ui/dialog";
+import { DialogFormActions } from "~/components/ui/dialog-form-actions";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
@@ -16,6 +15,7 @@ import {
   search,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { getErrorMessage } from "~/lib/error-utils";
 
 export function AttachExistingImageDialog({
   image,
@@ -59,24 +59,20 @@ export function AttachExistingImageDialog({
       title="Attach to record"
       description="Enter any live gallery record shortcode. Garden entries use GDE- codes."
       footer={
-        <DialogFooter className="gap-2 sm:justify-end">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={() =>
-              void attach.mutateAsync({
-                imageId: image.id,
-                targetId: normalized,
-                purpose: normalized.startsWith("PRD-") ? purpose : undefined,
-              })
-            }
-            disabled={!normalized || duplicate || attach.isPending}
-          >
-            Attach
-          </Button>
-        </DialogFooter>
+        <DialogFormActions
+          onCancel={onClose}
+          submitLabel="Attach"
+          pending={attach.isPending}
+          submitDisabled={!normalized || duplicate}
+          error={attach.error ? getErrorMessage(attach.error) : null}
+          onSubmit={() =>
+            void attach.mutateAsync({
+              imageId: image.id,
+              targetId: normalized,
+              purpose: normalized.startsWith("PRD-") ? purpose : undefined,
+            })
+          }
+        />
       }
     >
       <div className="space-y-2">
@@ -127,13 +123,6 @@ export function AttachExistingImageDialog({
         {duplicate && (
           <p className="text-xs text-destructive">
             This image is already attached to that record.
-          </p>
-        )}
-        {attach.error && (
-          <p className="text-xs text-destructive">
-            {attach.error instanceof Error
-              ? attach.error.message
-              : "The image could not be attached."}
           </p>
         )}
       </div>
