@@ -1,12 +1,14 @@
 import {
-  createFixture,
-  seedPurchaseHeicAttachment,
-  seedRecordListDisplayPrerequisite,
-  seedRunHistoryDefaults,
   seedVendorDisplayPrerequisite,
   seedLocationPrerequisite,
   seedProductPrerequisite,
-} from "./e2e-fixtures";
+} from "./fixtures-catalog";
+import { createFixture } from "./fixtures-core";
+import {
+  seedPurchaseHeicAttachment,
+  seedRecordListDisplayPrerequisite,
+} from "./fixtures-finance";
+import { seedRunHistoryDefaults } from "./fixtures-photos";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

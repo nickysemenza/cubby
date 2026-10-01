@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { gotoAuthenticatedPage, reloadAuthenticatedPage } from "./e2e-helpers";
-import { seedStaplePlanningPrerequisite } from "./e2e-fixtures";
+import { seedStaplePlanningPrerequisite } from "./fixtures-recipes";
 import { expect, test } from "./e2e-test";
 
 async function openIngredientEditor(page: Page) {

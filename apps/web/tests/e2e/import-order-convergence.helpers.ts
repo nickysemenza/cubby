@@ -1,25 +1,22 @@
-import { productCategoryCreateInput } from "@cubby/schemas/product-category";
 import { effectiveExpenseSpendingCategorySql } from "~/server/repo/expense-category-resolution";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
+
 import {
   financialBookingPreview,
   financialBookingResult,
 } from "@cubby/schemas/financial-booking";
-import { spendingCategoryCreateInput } from "@cubby/schemas/spending-category";
+
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
-import { locationCreateInput } from "@cubby/schemas/location";
+
 import {
   commitPurchaseImportInput,
   preparePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
 import { orderMailDecisionOut } from "@cubby/schemas/order-mail-review";
 import { photoRunReviewResponse } from "@cubby/schemas/photo-import-run";
-import { vendorCreateInput } from "@cubby/schemas/vendor";
-import { vendorAccountCreateInput } from "@cubby/schemas/vendor-account";
+
 import type { Page } from "@playwright/test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -54,7 +51,10 @@ import { normalizeMessage } from "~/server/purchase-import/gmail/normalize";
 import { processOrderMails } from "~/server/purchase-import/gmail/process";
 import { productionOrderMailAttachmentStorage } from "~/server/purchase-import/gmail/attachment-storage";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
-import { createEvidenceHarnessContext, createFixture } from "./e2e-fixtures";
+import {
+  createEvidenceHarnessContext,
+  createEntityFixture,
+} from "./fixtures-core";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect } from "./e2e-test";
 import { dispatchesOperation, operationResult } from "./dispatch-wire";
@@ -83,14 +83,10 @@ export async function createConvergenceHarness(
   const database = getDb(db);
   let member = await currentMemberLedgerParty(db, actor);
   if (!member) {
-    const party = await createFixture(
-      page,
-      "ledgerParty",
-      ledgerPartyCreateInput.parse({
-        name: `Synthetic reviewer ${token}`,
-        kind: "member",
-      }),
-    );
+    const party = await createEntityFixture(page, "ledgerParty", {
+      name: `Synthetic reviewer ${token}`,
+      kind: "member",
+    });
     await setMemberLoginParty(
       db,
       actor.userId,
@@ -105,61 +101,40 @@ export async function createConvergenceHarness(
   const orderId = `SYN-ORDER-${token}`;
   const host = `shop-${token.toLowerCase()}.example.test`;
   const sender = `orders@${host}`;
-  const vendor = await createFixture(
-    page,
-    "vendor",
-    vendorCreateInput.parse({
-      name,
-      website: `https://${host}`,
-      browserDomains: [host],
-      orderEmailSenders: [sender],
-      orderEvidence: "online_account",
-    }),
-  );
-  const account = await createFixture(
-    page,
-    "vendorAccount",
-    vendorAccountCreateInput.parse({
-      label: `${name} retailer`,
-      vendorId: vendor.id,
-      ledgerPartyId: member.shortcode,
-    }),
-  );
-  const card = await createFixture(
-    page,
-    "financialAccount",
-    financialAccountCreateInput.parse({
-      name: `${name} card`,
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
-      ledgerPartyId: member.shortcode,
-      sourceAliases: [
-        { source: "monarch", alias: `${name} Visa`, externalAccountId: null },
-      ],
-    }),
-  );
-  const location = await createFixture(
-    page,
-    "location",
-    locationCreateInput.parse({ name: `${name} drawer`, type: "drawer" }),
-  );
-  const category = await createFixture(
-    page,
-    "spendingCategory",
-    spendingCategoryCreateInput.parse({
-      name: `${name} clothing`,
-      evidenceExpectation: "required",
-      productExpectation: "required",
-    }),
-  );
-  const productCategory = await createFixture(
-    page,
-    "productCategory",
-    productCategoryCreateInput.parse({
-      name: `${name} apparel`,
-      spendingCategoryMode: "mapped",
-      spendingCategoryId: category.id,
-    }),
-  );
+  const vendor = await createEntityFixture(page, "vendor", {
+    name,
+    website: `https://${host}`,
+    browserDomains: [host],
+    orderEmailSenders: [sender],
+    orderEvidence: "online_account",
+  });
+  const account = await createEntityFixture(page, "vendorAccount", {
+    label: `${name} retailer`,
+    vendorId: vendor.id,
+    ledgerPartyId: member.shortcode,
+  });
+  const card = await createEntityFixture(page, "financialAccount", {
+    name: `${name} card`,
+    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    ledgerPartyId: member.shortcode,
+    sourceAliases: [
+      { source: "monarch", alias: `${name} Visa`, externalAccountId: null },
+    ],
+  });
+  const location = await createEntityFixture(page, "location", {
+    name: `${name} drawer`,
+    type: "drawer",
+  });
+  const category = await createEntityFixture(page, "spendingCategory", {
+    name: `${name} clothing`,
+    evidenceExpectation: "required",
+    productExpectation: "required",
+  });
+  const productCategory = await createEntityFixture(page, "productCategory", {
+    name: `${name} apparel`,
+    spendingCategoryMode: "mapped",
+    spendingCategoryId: category.id,
+  });
   const vendorId = await resolveOrThrow(db, "vendor", vendor.id);
   const accountId = await resolveOrThrow(db, "vendorAccount", account.id);
   const cardId = await resolveOrThrow(db, "financialAccount", card.id);

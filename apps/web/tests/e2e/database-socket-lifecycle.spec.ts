@@ -6,7 +6,7 @@ import { z } from "zod";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { getDb } from "~/server/repo/database-helpers";
 
-import { createEvidenceHarnessContext } from "./e2e-fixtures";
+import { createEvidenceHarnessContext } from "./fixtures-core";
 import { uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

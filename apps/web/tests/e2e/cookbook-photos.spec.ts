@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { seedCookbookSourcePrerequisite } from "./e2e-fixtures";
+import { seedCookbookSourcePrerequisite } from "./fixtures-recipes";
 import { expect, test } from "./e2e-test";
 
 const epubPath = fileURLToPath(

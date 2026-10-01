@@ -1,4 +1,4 @@
-import { seedToolFlowPrerequisite } from "./e2e-fixtures";
+import { seedToolFlowPrerequisite } from "./fixtures-catalog";
 import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 

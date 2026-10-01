@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { seedRelationshipReviewPrerequisite } from "./e2e-fixtures";
+import { seedRelationshipReviewPrerequisite } from "./fixtures-finance";
 import {
   escapeRegExp,
   expectViewportBounded,

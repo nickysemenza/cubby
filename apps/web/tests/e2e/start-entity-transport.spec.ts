@@ -15,7 +15,7 @@ import superjson from "superjson";
 import { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
-import { seedProductPrerequisite } from "./e2e-fixtures";
+import { seedProductPrerequisite } from "./fixtures-catalog";
 import { createProduct } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 import { dispatchOperations, unbatchFor } from "./dispatch-wire";

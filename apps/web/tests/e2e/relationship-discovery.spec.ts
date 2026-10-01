@@ -8,9 +8,9 @@ import {
   seedPlantPrerequisite,
   seedPlacementReviewPrerequisite,
   seedPlantingPrerequisite,
-  seedRelationshipReviewPrerequisite,
   seedTaskPrerequisite,
-} from "./e2e-fixtures";
+} from "./fixtures-catalog";
+import { seedRelationshipReviewPrerequisite } from "./fixtures-finance";
 import {
   escapeRegExp,
   gotoAuthenticatedPage,
