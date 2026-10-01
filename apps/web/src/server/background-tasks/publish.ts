@@ -1,4 +1,3 @@
-import { createLogger } from "@cubby/worker-tracing";
 import {
   type BackgroundTaskInput,
   type BackgroundTaskReceipt,
@@ -8,6 +7,7 @@ import {
   BACKGROUND_TASK_MESSAGE_VERSION,
   type BackgroundTaskMessageInput,
 } from "@cubby/schemas/queue-messages";
+import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/tanstackstart-react";
 
 import type { UnparsedError } from "~/lib/error-utils";

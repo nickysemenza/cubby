@@ -4,7 +4,6 @@
  * Handles multi-step orchestration: fetching images, calling the AI client, persisting results.
  */
 
-import { createLogger } from "@cubby/worker-tracing";
 import type {
   ApproveDetectedInventoryItemInput,
   ApproveDetectedInventoryItemOut,
@@ -29,6 +28,7 @@ import {
   type ProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
+import { createLogger } from "@cubby/worker-tracing";
 
 import { getErrorMessage } from "~/lib/error-utils";
 import {

@@ -1,4 +1,3 @@
-import { createLogger } from "@cubby/worker-tracing";
 import type {
   FieldSuggestionsInput,
   enrichmentProposalPrecomputeInput,
@@ -9,6 +8,7 @@ import {
   type RunId,
   type LocationId,
 } from "@cubby/schemas/identifiers";
+import { createLogger } from "@cubby/worker-tracing";
 import type { z } from "zod";
 
 import { aiContract, aiStreamsContract } from "~/contracts/ai.contract";

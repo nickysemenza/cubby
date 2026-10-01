@@ -525,11 +525,7 @@ export async function updateLedgerTransfer(
               parseShortcodeFor("ledgerParty", before.toPartyShortcode),
           });
     const amount = data.amount ?? before.amount;
-    const {
-      sourceClaims,
-      evidenceTransactionIds,
-      ...columnData
-    } = data;
+    const { sourceClaims, evidenceTransactionIds, ...columnData } = data;
     const evidence =
       evidenceTransactionIds === undefined
         ? await tx

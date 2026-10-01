@@ -1,8 +1,8 @@
-import { createLogger } from "@cubby/worker-tracing";
 import type { BackgroundTask } from "@cubby/schemas/background-tasks";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
+import { createLogger } from "@cubby/worker-tracing";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import { isAiGatewayRateLimit } from "~/server/clients/ai-gateway-error";

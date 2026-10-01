@@ -193,7 +193,9 @@ export function createEdgeUsdaDataSource(
             }
           }
         } catch (err) {
-          log.warn("[counts-cache] read failed; falling back to R2", { error: err });
+          log.warn("[counts-cache] read failed; falling back to R2", {
+            error: err,
+          });
         }
       }
 

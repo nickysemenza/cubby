@@ -541,9 +541,7 @@ async function main() {
   for (const { name, fn } of importFunctions) {
     try {
       const stats = await fn(batchSize);
-      log.info(
-        `${name}: ${stats.inserted} inserted, ${stats.skipped} skipped`,
-      );
+      log.info(`${name}: ${stats.inserted} inserted, ${stats.skipped} skipped`);
       totalStats.processed += stats.processed;
       totalStats.inserted += stats.inserted;
       totalStats.skipped += stats.skipped;

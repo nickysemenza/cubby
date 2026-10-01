@@ -1,4 +1,3 @@
-import { createLogger } from "@cubby/worker-tracing";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   BrandedFoodInfo,
@@ -7,6 +6,7 @@ import type {
   FoodSummary,
 } from "@cubby/usda";
 import { usdaContract } from "@cubby/usda/contract";
+import { createLogger } from "@cubby/worker-tracing";
 import { initClient } from "@ts-rest/core";
 
 import { TraceNames, withTrace } from "~/server/tracing";

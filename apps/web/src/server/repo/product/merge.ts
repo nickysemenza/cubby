@@ -55,7 +55,6 @@ import {
   task,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { mergeRunTargets } from "~/server/repo/run-target-merge";
 import { type AuditEntryInput, logAuditEntries } from "~/server/repo/audit-log";
 import {
   amountToColumns,
@@ -82,6 +81,7 @@ import {
 import { repointProductMatchCandidatesTx } from "~/server/repo/product-match-candidate";
 import { unitMappingSides } from "~/server/repo/product/unit-mappings";
 import { cascadeRemoval } from "~/server/repo/removal";
+import { mergeRunTargets } from "~/server/repo/run-target-merge";
 
 import { validateLiveEffectiveTrades } from "../inheritance-validation";
 import { markProductConversionCoverageInputStale } from "./conversion-coverage";

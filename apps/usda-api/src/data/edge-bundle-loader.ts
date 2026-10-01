@@ -168,8 +168,8 @@ export function createFoodBundleLoader(
         return loadFreshAfterCacheFailure();
       }
       log.warn(`[hydrate] skipping unparseable food ${row.fdc_id}`, {
-          error: err,
-        });
+        error: err,
+      });
       return null;
     }
     if (parsed.fdc_id !== row.fdc_id) {

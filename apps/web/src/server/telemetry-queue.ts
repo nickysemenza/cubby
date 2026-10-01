@@ -1,5 +1,5 @@
-import { createLogger } from "@cubby/worker-tracing";
 import { telemetryMessageV1Schema } from "@cubby/schemas/telemetry";
+import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
 import { persistTelemetryMessages } from "~/server/repo/telemetry";

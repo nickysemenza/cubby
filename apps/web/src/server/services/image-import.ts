@@ -1,5 +1,5 @@
-import { createLogger } from "@cubby/worker-tracing";
 import type { ProductId, RecipeId } from "@cubby/schemas/identifiers";
+import { createLogger } from "@cubby/worker-tracing";
 
 import { env } from "~/env";
 import type { UpcLookupPort } from "~/server/clients/upc-lookup";

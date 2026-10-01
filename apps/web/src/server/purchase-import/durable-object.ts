@@ -1,4 +1,3 @@
-import { createLogger } from "@cubby/worker-tracing";
 import type {
   DurableObjectState,
   WebSocket as CfWebSocket,
@@ -7,6 +6,7 @@ import {
   purchaseAgentEvent,
   type BrowserBridgeRequest,
 } from "@cubby/schemas/purchase-import";
+import { createLogger } from "@cubby/worker-tracing";
 import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
 

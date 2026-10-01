@@ -1,4 +1,3 @@
-import { createLogger } from "@cubby/worker-tracing";
 import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import {
   type CookbookId,
@@ -18,6 +17,7 @@ import type {
   setCookbookProductInput,
   upsertCookbookInput,
 } from "@cubby/schemas/import-recipe";
+import { createLogger } from "@cubby/worker-tracing";
 import { uniq } from "es-toolkit";
 import type { z } from "zod";
 

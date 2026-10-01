@@ -10,7 +10,6 @@
  * recipe page, or "Settle now" recomputes it. Queue messages are wakeups only.
  */
 
-import { createLogger } from "@cubby/worker-tracing";
 import { RECIPE_RECOMPUTE_CHUNK_SIZE } from "@cubby/schemas/background-tasks";
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
@@ -34,6 +33,7 @@ import type {
   StoredRecipeTotals,
 } from "@cubby/schemas/recipe-shared";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
+import { createLogger } from "@cubby/worker-tracing";
 import { keyBy, uniq } from "es-toolkit";
 import { z } from "zod";
 

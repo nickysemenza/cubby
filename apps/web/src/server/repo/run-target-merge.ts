@@ -1,6 +1,7 @@
+import { and, eq, inArray } from "drizzle-orm";
+
 import type { DrizzleTransaction } from "~/server/db";
 import { runEvidence, runTarget } from "~/server/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
 
 /**
  * Re-point every `RunTarget` of the merged-away entities at the survivor.

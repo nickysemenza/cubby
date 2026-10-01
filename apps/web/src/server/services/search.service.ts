@@ -1,4 +1,3 @@
-import { createLogger } from "@cubby/worker-tracing";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
@@ -9,6 +8,7 @@ import {
   searchHitSchema,
   searchableEntities,
 } from "@cubby/schemas/search";
+import { createLogger } from "@cubby/worker-tracing";
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 

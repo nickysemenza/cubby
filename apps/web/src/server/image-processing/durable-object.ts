@@ -1,4 +1,3 @@
-import { createLogger } from "@cubby/worker-tracing";
 import type { WebSocket as CfWebSocket } from "@cloudflare/workers-types";
 import {
   imageProcessingClientMessage,
@@ -7,6 +6,7 @@ import {
   imageProcessingCapabilities,
 } from "@cubby/schemas/image-processing";
 import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
+import { createLogger } from "@cubby/worker-tracing";
 import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
 

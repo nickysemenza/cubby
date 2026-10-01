@@ -1,5 +1,5 @@
-import { createLogger } from "@cubby/worker-tracing";
 import type { ProductId } from "@cubby/schemas/identifiers";
+import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
 import type { AttachableImageRef } from "~/server/repo/image";

@@ -1,4 +1,3 @@
-import { createLogger } from "@cubby/worker-tracing";
 import { amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import { displayGtin } from "@cubby/schemas/external-id";
@@ -42,6 +41,7 @@ import {
 } from "@cubby/schemas/project";
 import { purchaseOut } from "@cubby/schemas/purchase";
 import { isMiscProduct, isNonFoodCategory } from "@cubby/shared";
+import { createLogger } from "@cubby/worker-tracing";
 import { sum, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
 

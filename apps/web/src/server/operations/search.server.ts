@@ -1,5 +1,5 @@
-import { createLogger } from "@cubby/worker-tracing";
 import type { requestEmbeddingRefreshInputSchema } from "@cubby/schemas/search";
+import { createLogger } from "@cubby/worker-tracing";
 import type { z } from "zod";
 
 import {

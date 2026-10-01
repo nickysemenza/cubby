@@ -64,7 +64,6 @@ import {
   purchasePaymentEvidence,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { mergeRunTargets } from "~/server/repo/run-target-merge";
 import {
   type AuditEntryInput,
   computeChanges,
@@ -134,6 +133,7 @@ import {
 /** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
 import { deleteByPolicy } from "~/server/repo/removal";
 import { cascadeRemoval } from "~/server/repo/removal";
+import { mergeRunTargets } from "~/server/repo/run-target-merge";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,

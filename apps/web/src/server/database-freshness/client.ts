@@ -1,6 +1,6 @@
-import { createLogger } from "@cubby/worker-tracing";
 import type { ProblemsCount } from "@cubby/schemas/problems";
 import { problemsCountSchema } from "@cubby/schemas/problems";
+import { createLogger } from "@cubby/worker-tracing";
 
 import {
   getDatabaseFreshnessNamespace,

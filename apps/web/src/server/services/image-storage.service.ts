@@ -1,4 +1,3 @@
-import { createLogger } from "@cubby/worker-tracing";
 import type { ImageId, ImageShortcode } from "@cubby/schemas/identifiers";
 import {
   parseEntityId,
@@ -26,6 +25,7 @@ import {
   sanitizeExternalUrl,
   validateExternalHttpUrl,
 } from "@cubby/shared/external-fetch";
+import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
 import {

@@ -6,7 +6,6 @@
  * - Batch UPC image backfill
  */
 
-import { createLogger } from "@cubby/worker-tracing";
 import type { ActorContext } from "@cubby/schemas/context";
 import { displayGtin } from "@cubby/schemas/external-id";
 import {
@@ -30,6 +29,7 @@ import type {
 } from "@cubby/schemas/product";
 import type { ScanAtLocationCode } from "@cubby/schemas/scan";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { createLogger } from "@cubby/worker-tracing";
 import { uniq } from "es-toolkit";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";

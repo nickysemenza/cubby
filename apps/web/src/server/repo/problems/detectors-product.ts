@@ -1,4 +1,3 @@
-import { createLogger } from "@cubby/worker-tracing";
 import { displayGtin, GTIN_SOURCE } from "@cubby/schemas/external-id";
 /**
  * Product-centric Problems detectors.
@@ -17,6 +16,7 @@ import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ProblemItem } from "@cubby/schemas/problems";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { isMiscProduct } from "@cubby/shared";
+import { createLogger } from "@cubby/worker-tracing";
 import {
   and,
   eq,

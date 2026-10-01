@@ -1,3 +1,5 @@
+import type { UpcEnrichmentFreshness } from "@cubby/schemas/problems";
+import type { UPCLookupResponse } from "@cubby/upc-contract";
 /**
  * Durable cache for advisory UPC enrichment.
  *
@@ -6,8 +8,6 @@
  * call never replaces a last-known answer with an empty successful result.
  */
 import { createLogger } from "@cubby/worker-tracing";
-import type { UpcEnrichmentFreshness } from "@cubby/schemas/problems";
-import type { UPCLookupResponse } from "@cubby/upc-contract";
 import { inArray, sql } from "drizzle-orm";
 
 import { PartialUpcBatchLookupError } from "~/server/clients/upc-lookup";

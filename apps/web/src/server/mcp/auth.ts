@@ -1,5 +1,5 @@
-import { createLogger } from "@cubby/worker-tracing";
 import { userId } from "@cubby/schemas/identifiers";
+import { createLogger } from "@cubby/worker-tracing";
 import { verifyJwsAccessToken } from "better-auth/oauth2";
 
 import { env } from "~/env";

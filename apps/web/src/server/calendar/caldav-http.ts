@@ -1,6 +1,6 @@
-import { createLogger } from "@cubby/worker-tracing";
 import { userId, type UserId } from "@cubby/schemas/identifiers";
 import { concatBytes } from "@cubby/shared/external-fetch";
+import { createLogger } from "@cubby/worker-tracing";
 import {
   DOMImplementation,
   DOMParser,

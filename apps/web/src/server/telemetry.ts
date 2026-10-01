@@ -1,8 +1,8 @@
-import { createLogger } from "@cubby/worker-tracing";
 import {
   type TelemetryMessageV1,
   telemetryMessageV1Schema,
 } from "@cubby/schemas/telemetry";
+import { createLogger } from "@cubby/worker-tracing";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import { getExecutionCtx, getTelemetryQueue } from "~/server/cf-env";

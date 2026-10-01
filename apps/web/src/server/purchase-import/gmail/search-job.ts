@@ -1,4 +1,3 @@
-import { createLogger } from "@cubby/worker-tracing";
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import { runEntityId, runShortcode } from "@cubby/schemas/identifiers";
 import {
@@ -6,6 +5,7 @@ import {
   mailSearchRunInput,
   mailSearchRunProgress,
 } from "@cubby/schemas/run-fields";
+import { createLogger } from "@cubby/worker-tracing";
 import { and, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 
 import {

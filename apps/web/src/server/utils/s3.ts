@@ -1,4 +1,3 @@
-import { createLogger } from "@cubby/worker-tracing";
 import { ALLOWED_IMAGE_TYPES } from "@cubby/schemas/image";
 import {
   assertResponseContentType,
@@ -8,6 +7,7 @@ import {
   readResponseWithLimit,
   sanitizeExternalUrl,
 } from "@cubby/shared/external-fetch";
+import { createLogger } from "@cubby/worker-tracing";
 import { AwsClient } from "aws4fetch";
 
 import { env } from "~/env";

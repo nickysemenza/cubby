@@ -7,7 +7,6 @@
 // `runAiSelection` (no agentic search loop). Suggestions only — merge is
 // destructive, so the user confirms.
 
-import { createLogger } from "@cubby/worker-tracing";
 import type { Confidence } from "@cubby/schemas/ai";
 import {
   type RunId,
@@ -15,6 +14,7 @@ import {
   type IngredientShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import { createLogger } from "@cubby/worker-tracing";
 
 import { runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";

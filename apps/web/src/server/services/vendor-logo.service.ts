@@ -1,4 +1,3 @@
-import { createLogger } from "@cubby/worker-tracing";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { VendorId, VendorShortcode } from "@cubby/schemas/identifiers";
 import {
@@ -12,6 +11,7 @@ import {
   readResponseWithLimit,
   validateExternalHttpUrl,
 } from "@cubby/shared/external-fetch";
+import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";

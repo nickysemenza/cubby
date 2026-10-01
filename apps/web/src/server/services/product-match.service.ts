@@ -1,4 +1,3 @@
-import { createLogger } from "@cubby/worker-tracing";
 import {
   parseEntityId,
   parseShortcodeFor,
@@ -13,6 +12,7 @@ import type {
   proposeProductMatchInput,
   proposeProductMatchOut,
 } from "@cubby/schemas/recommendations";
+import { createLogger } from "@cubby/worker-tracing";
 import { chunk } from "es-toolkit";
 import type { z } from "zod";
 

@@ -1,6 +1,6 @@
-import { createLogger } from "@cubby/worker-tracing";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
+import { createLogger } from "@cubby/worker-tracing";
 
 import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";

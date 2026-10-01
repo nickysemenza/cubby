@@ -1,6 +1,6 @@
-import { createLogger } from "@cubby/worker-tracing";
 import { RECIPE_RECOMPUTE_CHUNK_SIZE } from "@cubby/schemas/background-tasks";
 import type { RecipeId } from "@cubby/schemas/identifiers";
+import { createLogger } from "@cubby/worker-tracing";
 
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { selectStaleRecipeIds } from "~/server/repo/recipe/totals";
