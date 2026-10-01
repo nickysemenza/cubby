@@ -66,6 +66,14 @@ const resolveR2PublicUrl = (localOrigin: string | undefined) =>
   localOrigin ?? wranglerR2PublicUrl;
 
 const clientCodeSplittingGroups = [
+  // Icons are leaf modules (React only), so grouping them cannot form an
+  // initialization cycle; one page used to fetch ~36 separate icon chunks.
+  {
+    name: "phosphor-icons",
+    test: /[\\/]@phosphor-icons[\\/]/,
+    entriesAware: true,
+    entriesAwareMergeThreshold: 65536,
+  },
   {
     name: "es-toolkit",
     test: /[\\/]es-toolkit[\\/]/,
