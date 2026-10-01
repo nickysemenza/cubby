@@ -54,6 +54,8 @@ export function DeleteEntityDialog({
   failures = [],
   isPending,
   previewImpact = true,
+  description,
+  renderItem = (item) => item.name,
   impactPreviewOperations,
   onOpenChange,
   onSubmit,
@@ -63,6 +65,9 @@ export function DeleteEntityDialog({
   failures?: readonly string[];
   isPending: boolean;
   previewImpact?: boolean;
+  /** Overrides the generic confirmation sentence (cascading deletes). */
+  description?: string;
+  renderItem?: (item: { id: string; name: string }) => string;
   /** Test-injectable seam for the impact preview's `connections` query. */
   impactPreviewOperations?: ImpactPreviewOperations;
   onOpenChange: (open: boolean) => void;
@@ -77,8 +82,8 @@ export function DeleteEntityDialog({
       action="Delete"
       variant="destructive"
       pendingLabel="Deleting..."
-      description={deleteDescription(label, items.length)}
-      renderItem={(item) => item.name}
+      description={description ?? deleteDescription(label, items.length)}
+      renderItem={renderItem}
       error={
         failures.length > 0 ? (
           <ul className="space-y-1">

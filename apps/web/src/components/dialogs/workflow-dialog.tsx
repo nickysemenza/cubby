@@ -11,7 +11,7 @@ import {
 } from "~/components/ui/dialog";
 import { StatusText } from "~/components/ui/status-text";
 
-export interface WorkflowDialogAction {
+interface WorkflowDialogAction {
   label: string;
   /** Replaces `label` while `pending`. */
   pendingLabel?: string;

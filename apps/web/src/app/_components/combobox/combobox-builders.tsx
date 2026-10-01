@@ -260,7 +260,7 @@ function withProductInventoryPresentation(
   const facts = [
     knownOnHand === null
       ? "Mixed units on hand"
-      : `${formatCount(knownOnHand)} on hand / ${formatCount(expected)} expected`,
+      : `${formatCount(knownOnHand, 3)} on hand / ${formatCount(expected, 3)} expected`,
   ];
   if (unknownLines > 0) {
     facts.push(
@@ -284,7 +284,7 @@ function withProductInventoryPresentation(
     return productPickerInventoryGroup(
       base,
       { id: "needs-stock", label: "Needs stocking", order: 0 },
-      { label: `Need ${formatCount(need)}`, tone: "positive" },
+      { label: `Need ${formatCount(need, 3)}`, tone: "positive" },
       facts,
     );
 
