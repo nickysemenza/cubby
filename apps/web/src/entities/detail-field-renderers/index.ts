@@ -168,6 +168,8 @@ const detailCoverageFor = (
       return detailRendererCoverage.run;
     case "financialAccount":
       return detailRendererCoverage.financialAccount;
+    case "purchase":
+      return detailRendererCoverage.purchase;
     case "financialTransaction":
       return detailRendererCoverage.financialTransaction;
     case "ledgerTransfer":

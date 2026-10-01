@@ -99,7 +99,7 @@ test("reviews historical item classification and preserves explicit purpose", as
   await patch(expense, { cost: 61 });
   await page.getByRole("button", { name: "Apply reviewed change" }).click();
   await expect(
-    page.getByText(/changed after preview; review a fresh preview/),
+    page.getByText(/changed after preview; review a fresh preview/).first(),
   ).toBeVisible();
   expect((await read()).spendingCategoryId).toBeNull();
   await page.getByRole("button", { name: "Preview historical impact" }).click();
