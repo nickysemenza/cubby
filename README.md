@@ -77,14 +77,60 @@ say why each link exists. Rounded boxes are entities from another section. The
 tables give cardinality.
 
 ```mermaid
-flowchart LR
-  Product(("Product"))
-  Things["Things and places<br/>Inventory · Location · ProductCategory · Wish · Image"] -- "how much, where, what kind" --> Product
-  Food["Food<br/>Ingredient · Recipe · Cookbook · Meal · USDA food"] -- "ingredients are bought as" --> Product
-  Garden["Garden<br/>Plant · Planting · GardenEntry"] -- "grown from seed packets" --> Product
-  Work["Work<br/>Project · Task"] -- "maintains, uses as tools" --> Product
-  Money["Money<br/>Vendor · Purchase · Expense · accounts"] -- "bought or returned" --> Product
-  People["People and system<br/>LedgerParty · LedgerTransfer · Device · Run"] -- "paid for, ate, owns" --> Money
+---
+config:
+  layout: elk
+---
+flowchart TB
+  subgraph Core["Things and places"]
+    ProductCategory -- "says what kind of thing" --> Product
+    Inventory -- "how much we have of" --> Product
+    Inventory -- "kept at" --> Location
+    Location -- "nested inside" --> Location
+    Wish -- "options we might buy" --> Product
+    Image -- "photos of (and of most other entities)" --> Product
+  end
+  subgraph Food
+    Recipe -- "calls for" --> Ingredient
+    Cookbook -- "where it came from" --> Recipe
+    Meal -- "what we cooked, scaled" --> Recipe
+  end
+  subgraph Garden
+    Plant -- "grown as" --> Planting
+    GardenEntry -- "notes or harvest from" --> Planting
+  end
+  subgraph Work
+    Project -- "broken into" --> Task
+  end
+  subgraph Money
+    Vendor -- "sold us" --> Purchase
+    VendorAccount -- "our login at" --> Vendor
+    Purchase -- "itemized into" --> Expense
+    SpendingCategory -- "what it was for" --> Expense
+    FinancialAccount -- "statement rows" --> FinancialTransaction
+    FinancialTransaction -- "paid for" --> Purchase
+  end
+  subgraph People["People and system"]
+    LedgerTransfer -- "reimburses between" --> LedgerParty
+    Device -- "app install of" --> LedgerParty
+    Run
+  end
+  Ingredient -- "bought as" --> Product
+  Product -. "nutrition from" .-> USDA[USDA food]
+  Product -- "seed packet grows" --> Plant
+  Cookbook -- "physical copy" --> Product
+  ProductCategory -- "default spending bucket" --> SpendingCategory
+  Planting -- "planted in" --> Location
+  Planting -- "scheduled by" --> Task
+  Project -- "used as a tool" --> Product
+  Task -- "maintains" --> Product
+  Expense -- "bought or returned" --> Product
+  Expense -- "spent on" --> Project
+  LedgerParty -- "paid for or shares" --> Expense
+  LedgerParty -- "ate" --> Meal
+  LedgerParty -- "owns" --> Inventory
+  FinancialAccount -- "belongs to" --> LedgerParty
+  Run -- "imported" --> Purchase
 ```
 
 ### Things and places
