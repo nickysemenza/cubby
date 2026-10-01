@@ -81,17 +81,26 @@
             // Refresh the roster and browser preference first so a newly added or paused account is
             // reflected in this manual run, then enqueue one server-owned run per eligible account.
             try await replaceConnections(browser: browser, enhancedEvidence: enhancedEvidence)
-            var firstFailure: (any Error)?
+            var failures: [String] = []
             var submitted: [BrowserBridgeSyncResponse] = []
             for account in accounts.values.sorted(by: { $0.id < $1.id }) {
                 do {
                     submitted.append(try await syncClient.requestSync(vendorAccountID: account.id))
                 } catch {
-                    firstFailure = firstFailure ?? error
+                    failures.append("\(account.id): \(error.localizedDescription)")
                 }
             }
-            if submitted.isEmpty, let firstFailure { throw firstFailure }
+            if !failures.isEmpty {
+                throw SyncFailure(
+                    message: "Browser Sync submitted \(submitted.count) requests; failed accounts: "
+                        + failures.joined(separator: "; "))
+            }
             return submitted
+        }
+
+        private struct SyncFailure: LocalizedError {
+            let message: String
+            var errorDescription: String? { message }
         }
 
         public func disconnect() async {
