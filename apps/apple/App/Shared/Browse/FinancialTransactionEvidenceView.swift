@@ -12,10 +12,11 @@ struct FinancialTransactionEvidenceView: View {
     @State private var choosingPurchase = false
     @State private var choosingVendor = false
     @State private var economicRole = "vendor"
-    @State private var preview: FinancialBookingPreview?
-    @State private var result: FinancialBookingResult?
+    @State private var review = FinancialBookingReviewSession()
+    private var preview: FinancialBookingPreview? { review.preview }
+    private var result: FinancialBookingResult? { review.result }
     @State private var error: String?
-    @State private var busy = false
+    private var busy: Bool { review.isBusy }
 
     private var coverage: JSONValue? { row.raw["coverage"] }
     private var canBook: Bool {
@@ -50,10 +51,10 @@ struct FinancialTransactionEvidenceView: View {
         .font(.caption)
         .frame(maxWidth: .infinity, alignment: .leading)
         .task(id: row.id) { resetSelections() }
-        .onChange(of: category) { _, _ in preview = nil }
-        .onChange(of: purchase) { _, _ in preview = nil }
-        .onChange(of: vendor) { _, _ in preview = nil }
-        .onChange(of: economicRole) { _, _ in preview = nil }
+        .onChange(of: category) { _, _ in review.invalidateReview() }
+        .onChange(of: purchase) { _, _ in review.invalidateReview() }
+        .onChange(of: vendor) { _, _ in review.invalidateReview() }
+        .onChange(of: economicRole) { _, _ in review.invalidateReview() }
         .sheet(isPresented: $choosingCategory) {
             EntityPickerSheet(target: .spendingCategory, selected: [category?.id].compactMap { $0 }) {
                 category = $0.first
@@ -165,7 +166,7 @@ struct FinancialTransactionEvidenceView: View {
             )
             .foregroundStyle(.secondary)
             Button(preview.action == .linkExisting ? "Link reviewed settlement" : "Book reviewed Expense") {
-                Task { await commitBooking(preview) }
+                Task { await commitBooking() }
             }
             .disabled(busy)
             .accessibilityIdentifier("financial.booking.commit")
@@ -178,36 +179,29 @@ struct FinancialTransactionEvidenceView: View {
         purchase = row.raw["purchaseId"]?.stringValue.map { EntityPick(id: $0, title: $0) }
         vendor = nil
         economicRole = "vendor"
-        preview = nil
-        result = nil
+        review.invalidateReview(clearResult: true)
         error = nil
     }
 
     private func prepareBooking() async {
-        busy = true
-        defer { busy = false }
         error = nil
         do {
-            preview = try await appModel.client.previewFinancialBooking(
+            try await review.prepare(
                 .init(
                     transactionId: row.id, purchaseId: purchase?.id, vendorId: vendor?.id,
                     spendingCategoryId: category?.id, trade: .other,
-                    economicRole: economicRole == "reimbursement" ? .reimbursement : .vendor))
+                    economicRole: economicRole == "reimbursement" ? .reimbursement : .vendor),
+                client: appModel.client)
         } catch {
             Diagnostics.report(error, context: "Preview Expense booking")
             self.error = error.localizedDescription
         }
     }
 
-    private func commitBooking(_ reviewed: FinancialBookingPreview) async {
-        busy = true
-        defer { busy = false }
+    private func commitBooking() async {
         error = nil
         do {
-            let input = try JSONDecoder.cubby().decode(
-                FinancialBookingPreviewInput.self, from: JSONEncoder.cubby().encode(reviewed))
-            result = try await appModel.client.commitFinancialBooking(input)
-            preview = nil
+            _ = try await review.commit(client: appModel.client)
             appModel.recordEntityMutation(keys: [.financialTransaction, .purchase, .expense])
             onChanged()
         } catch {
