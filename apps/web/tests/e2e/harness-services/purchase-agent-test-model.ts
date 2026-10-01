@@ -109,18 +109,12 @@ function finishNudgeViolation(body: unknown): string | undefined {
     | undefined;
   if (before?.type === "function_call_output" && before.call_id === "browser-1")
     return "Finish nudge after a pending browser command";
-  const previousNudge = input.findLastIndex(
-    (item, index) => index < input.length - 1 && isFinishNudge(item),
-  );
-  if (
-    previousNudge !== -1 &&
-    !input
-      .slice(previousNudge + 1)
-      .some(
-        (item) => (item as { type?: string }).type === "function_call_output",
-      )
-  )
-    return "Repeated finish nudge without a new tool call";
+  for (const item of input.slice(0, -1).reverse()) {
+    if ((item as { type?: string }).type === "function_call_output")
+      return undefined;
+    if (isFinishNudge(item))
+      return "Repeated finish nudge without a new tool call";
+  }
   return undefined;
 }
 
