@@ -1,12 +1,11 @@
 import { customAlphabet } from "nanoid";
 import { z } from "zod";
-import { mapRecord, recordKeys } from "./record";
-import { capitalize } from "./text-case";
 import {
   SHORTCODE_BODY_LENGTH,
   SHORTCODE_BODY_PATTERN,
   SHORTCODE_CHARS,
 } from "./shortcode-alphabet";
+import { SHORTCODE_SCHEMA, type ShortcodeFor } from "./shortcode-schema";
 
 export {
   LEGACY_SHORTCODE_BODY_LENGTH,
@@ -57,9 +56,6 @@ for (const [type, prefix] of Object.entries(SHORTCODE_PREFIX)) {
   }
 }
 
-const shortcodeRegex = (type: ShortcodeType) =>
-  new RegExp(`^${SHORTCODE_PREFIX[type]}${SHORTCODE_BODY_PATTERN}$`);
-
 /**
  * A schema for a code whose entity isn't known until runtime — an MCP tool
  * whose target type is chosen by another field (`search.similar`'s
@@ -85,66 +81,6 @@ export const anyShortcodeSchema = <T extends ShortcodeType>(
     );
 
 /**
- * The one schema per entity: it normalizes, validates, brands, AND publishes a
- * useful JSON Schema. There is deliberately no second "normalized" variant.
- *
- * `.trim()`/`.toUpperCase()` are ZodString-level checks, so this stays a
- * `ZodString` rather than becoming a `ZodPipe`. That matters: `z.toJSONSchema`
- * renders a pipe's input side as a bare `{"type":"string"}`, which would strip
- * the `pattern` and `description` that MCP advertises to agents — the prefix
- * hint is most of what makes a shortcode self-explanatory over the wire. The
- * regex is case-SENSITIVE on purpose so the advertised pattern describes the
- * canonical form exactly; the leniency comes from `.toUpperCase()` running
- * first. Guarded by shortcode.unit.test.ts.
- */
-const makeShortcodeSchema = <T extends ShortcodeType, B extends string>(
-  type: T,
-  brand: B,
-) =>
-  z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(shortcodeRegex(type), {
-      // Name the offending value: a shortcode is something a human read off a
-      // label or an agent copied from an earlier response, so "which code was
-      // wrong" is the whole useful content of the failure.
-      error: (issue) =>
-        `Invalid ${type} shortcode: ${String(issue.input)} (expected ${SHORTCODE_PREFIX[type]}XXXX or ${SHORTCODE_PREFIX[type]}XXXXX)`,
-    })
-    .describe(`${type} shortcode, e.g. ${SHORTCODE_PREFIX[type]}4K7MN`)
-    .brand<B>(brand);
-
-/** Every shortcode entity, in generated-registry order. */
-export const SHORTCODE_TYPES: readonly ShortcodeType[] =
-  recordKeys(SHORTCODE_PREFIX);
-
-/** The Zod brand an entity's shortcode schema carries: `product` → `ProductShortcode`. */
-type ShortcodeBrand<T extends ShortcodeType> = `${Capitalize<T>}Shortcode`;
-
-const shortcodeBrand = <T extends ShortcodeType>(type: T): ShortcodeBrand<T> =>
-  `${capitalize(type)}Shortcode`;
-
-type ShortcodeSchemaFor<T extends ShortcodeType> = ReturnType<
-  typeof makeShortcodeSchema<T, ShortcodeBrand<T>>
->;
-
-/**
- * Every shortcode schema, keyed by entity — the lookup behind `shortcodeSchema`
- * and the per-entity exports below. Built from the generated prefix registry,
- * so a new entity gets its schema (and brand) without a line here.
- */
-type ShortcodeSchemaMap = { [T in ShortcodeType]: ShortcodeSchemaFor<T> };
-// SAFETY: each entry is `makeShortcodeSchema(type, brand(type))` for its own
-// key, i.e. exactly `ShortcodeSchemaFor<type>`; the builder's `.brand<B>()` is
-// a deferred conditional inside a generic closure, so the compiler cannot
-// prove the per-key correlation this construction guarantees.
-// shortcode.unit.test.ts asserts it per entity at the type level.
-const SHORTCODE_SCHEMA = mapRecord(SHORTCODE_TYPES, (type) =>
-  makeShortcodeSchema(type, shortcodeBrand(type)),
-) as ShortcodeSchemaMap;
-
-/**
  * The shortcode schema for an entity, preserving its exact branded type through
  * the generic lookup. Lets a generic surface (the MCP CRUD toolset, a route
  * param) ask for "this entity's public id schema" without a switch.
@@ -152,11 +88,6 @@ const SHORTCODE_SCHEMA = mapRecord(SHORTCODE_TYPES, (type) =>
 export const shortcodeSchema = <T extends ShortcodeType>(
   type: T,
 ): (typeof SHORTCODE_SCHEMA)[T] => SHORTCODE_SCHEMA[type];
-
-/** The branded public identifier for one exact entity. */
-export type ShortcodeFor<T extends ShortcodeType> = z.infer<
-  (typeof SHORTCODE_SCHEMA)[T]
->;
 
 /** Validate and normalize one entity's public identifier. */
 export function parseShortcodeFor<T extends ShortcodeType, TInput>(
@@ -170,63 +101,10 @@ export function parseShortcodeFor<TInput>(
   return SHORTCODE_SCHEMA[type].parse(value);
 }
 
-// Named per-entity exports over the same map. These are the stable import
-// surface (>150 sites name `productShortcode` / `ProductShortcode`); each is
-// the map entry, never a second `makeShortcodeSchema` call.
-export const cookbookShortcode = SHORTCODE_SCHEMA.cookbook;
-export const expenseShortcode = SHORTCODE_SCHEMA.expense;
-export const financialAccountShortcode = SHORTCODE_SCHEMA.financialAccount;
-export const financialTransactionShortcode =
-  SHORTCODE_SCHEMA.financialTransaction;
-export const imageShortcode = SHORTCODE_SCHEMA.image;
-export const ingredientShortcode = SHORTCODE_SCHEMA.ingredient;
-export const inventoryShortcode = SHORTCODE_SCHEMA.inventory;
-export const ledgerPartyShortcode = SHORTCODE_SCHEMA.ledgerParty;
-export const ledgerTransferShortcode = SHORTCODE_SCHEMA.ledgerTransfer;
-export const locationShortcode = SHORTCODE_SCHEMA.location;
-export const mealShortcode = SHORTCODE_SCHEMA.meal;
-export const plantingShortcode = SHORTCODE_SCHEMA.planting;
-export const gardenEntryShortcode = SHORTCODE_SCHEMA.gardenEntry;
-export const productCategoryShortcode = SHORTCODE_SCHEMA.productCategory;
-export const spendingCategoryShortcode = SHORTCODE_SCHEMA.spendingCategory;
-export const productShortcode = SHORTCODE_SCHEMA.product;
-export const projectShortcode = SHORTCODE_SCHEMA.project;
-export const purchaseShortcode = SHORTCODE_SCHEMA.purchase;
-export const recipeShortcode = SHORTCODE_SCHEMA.recipe;
-export const taskShortcode = SHORTCODE_SCHEMA.task;
-export const vendorShortcode = SHORTCODE_SCHEMA.vendor;
-export const vendorAccountShortcode = SHORTCODE_SCHEMA.vendorAccount;
-export const runShortcode = SHORTCODE_SCHEMA.run;
-export const wishShortcode = SHORTCODE_SCHEMA.wish;
-export const deviceShortcode = SHORTCODE_SCHEMA.device;
-export const plantShortcode = SHORTCODE_SCHEMA.plant;
-
-export type CookbookShortcode = ShortcodeFor<"cookbook">;
-export type ExpenseShortcode = ShortcodeFor<"expense">;
-export type FinancialAccountShortcode = ShortcodeFor<"financialAccount">;
-export type FinancialTransactionShortcode =
-  ShortcodeFor<"financialTransaction">;
-export type ImageShortcode = ShortcodeFor<"image">;
-export type IngredientShortcode = ShortcodeFor<"ingredient">;
-export type InventoryShortcode = ShortcodeFor<"inventory">;
-export type LedgerPartyShortcode = ShortcodeFor<"ledgerParty">;
-export type LedgerTransferShortcode = ShortcodeFor<"ledgerTransfer">;
-export type LocationShortcode = ShortcodeFor<"location">;
-export type MealShortcode = ShortcodeFor<"meal">;
-export type PlantingShortcode = ShortcodeFor<"planting">;
-export type GardenEntryShortcode = ShortcodeFor<"gardenEntry">;
-export type ProductCategoryShortcode = ShortcodeFor<"productCategory">;
-export type ProductShortcode = ShortcodeFor<"product">;
-export type ProjectShortcode = ShortcodeFor<"project">;
-export type PurchaseShortcode = ShortcodeFor<"purchase">;
-export type RecipeShortcode = ShortcodeFor<"recipe">;
-export type TaskShortcode = ShortcodeFor<"task">;
-export type VendorShortcode = ShortcodeFor<"vendor">;
-export type VendorAccountShortcode = ShortcodeFor<"vendorAccount">;
-export type RunShortcode = ShortcodeFor<"run">;
-export type WishShortcode = ShortcodeFor<"wish">;
-export type DeviceShortcode = ShortcodeFor<"device">;
-export type PlantShortcode = ShortcodeFor<"plant">;
+// Per-entity named exports (`productShortcode`, `ProductShortcode`, ...) are
+// generated from the entity registry; ~150 sites import them by name.
+export * from "./generated/shortcode-named.gen";
+export { SHORTCODE_TYPES, type ShortcodeFor } from "./shortcode-schema";
 
 /** Any entity's shortcode, for surfaces that hold a code before resolving it. */
 export type AnyShortcode = z.infer<(typeof SHORTCODE_SCHEMA)[ShortcodeType]>;
@@ -379,5 +257,3 @@ export function extractShortcodeFromScan(
 export function getShortcodeUrl(shortcode: string): string {
   return `https://cubby.nickysemenza.com/${shortcode}`;
 }
-
-export type SpendingCategoryShortcode = ShortcodeFor<"spendingCategory">;
