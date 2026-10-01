@@ -134,6 +134,7 @@
     "./financial-transaction": "./src/financial-transaction.ts",
     "./financial-transaction-fields": "./src/financial-transaction-fields.ts",
     "./filter-options": "./src/filter-options.ts",
+    "./filter-sentinel-fields": "./src/filter-sentinel-fields.ts",
     "./statement-row": "./src/statement-row.ts",
     "./wish": "./src/wish.ts",
     "./wish-fields": "./src/wish-fields.ts",

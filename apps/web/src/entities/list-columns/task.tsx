@@ -5,11 +5,8 @@ import { useMemo } from "react";
 import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
 import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
 import { Badge } from "~/components/ui/badge";
-import { entityListHiddenColumns } from "~/entities/entity-display";
 
 import { defineListOverride } from "./types";
-
-const TASK_INITIAL_COLUMN_VISIBILITY = entityListHiddenColumns("task");
 
 /** `N/M` checklist chip after a parent task's name. */
 const subtaskCountSuffix = (row: TaskOut): ReactNode =>
@@ -35,7 +32,6 @@ export const taskListOverride = defineListOverride<TaskOut, TaskFilters>({
         filterOptions,
         nameSuffix: subtaskCountSuffix,
         additionalReadFields: ["subtaskCount", "doneSubtaskCount"],
-        initialColumnVisibility: TASK_INITIAL_COLUMN_VISIBILITY,
       }),
       [filterOptions],
     );

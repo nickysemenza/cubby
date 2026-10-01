@@ -5,7 +5,10 @@ import type { ImageWithEntity } from "@cubby/schemas/image";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
 
-import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
+import {
+  createImageColumn,
+  renderOptionCell,
+} from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   type CubbyColumnCollection,
@@ -16,24 +19,21 @@ import {
   sourceLabel,
 } from "~/app/_components/recipe/recipe-source";
 import { NoneValue } from "~/components/ui/none-value";
-import type {
-  EntityListResultByEntity,
-  ListEntity,
-} from "~/entities/generated/entity-lists.gen";
+import type { ListEntity } from "~/entities/generated/entity-lists.gen";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 
 import { SpendingCategorySummaryValue } from "./detail-field-renderers/spending-category-summary";
+import type { ListRenderer, ListRowOf } from "./list-renderer-types";
+import { financialTransactionListRenderers } from "./list-renderers/finance";
+import { locationListRenderers } from "./list-renderers/location";
+import { mealListRenderers } from "./list-renderers/meal";
+import { productListRenderers } from "./list-renderers/product";
+import { purchaseListRenderers } from "./list-renderers/purchase";
+import { recipeListRenderers } from "./list-renderers/recipe";
 import {
   implemented,
   type PresentationCoverage,
 } from "./presentation-coverage";
-
-type ListRowOf<E extends ListEntity> =
-  EntityListResultByEntity[E]["items"][number];
-
-type ListRenderer<E extends ListEntity> = (
-  helper: CubbyColumnHelper<ListRowOf<E>>,
-) => CubbyColumnCollection<ListRowOf<E>>;
 
 /**
  * Entities outside the kernel list roster whose index still builds columns
@@ -141,6 +141,24 @@ const scoredCoverage = <E extends ScoredListEntity>() => ({
   ),
 });
 
+/**
+ * The image entity's own thumbnail: a row IS an image, shown only once its
+ * file has finished uploading (an upload in flight has nothing to render).
+ */
+const uploadedImageRenderer = (
+  helper: CubbyColumnHelper<ClientListRows["image"]>,
+): CubbyColumnCollection<ClientListRows["image"]> =>
+  createCubbyColumnCollection<ClientListRows["image"]>((add) => {
+    add(
+      createImageColumn(helper, {
+        id: "images",
+        entity: "image",
+        provenance: null,
+        getImages: (row) => (row.status === "UPLOADED" ? [row] : []),
+      }),
+    );
+  });
+
 const categorySummaryRenderer = <
   TRow extends { spendingCategorySummary?: SpendingCategorySummary },
 >(
@@ -169,12 +187,31 @@ export const listRendererCoverage = {
   recipe: {
     "recipe-source": implemented(recipeSourceRenderer),
     ...scoredCoverage<"recipe">(),
+    "estimate-cost": implemented(recipeListRenderers["estimate-cost"]),
+    "estimate-kcal": implemented(recipeListRenderers["estimate-kcal"]),
+    "total-time": implemented(recipeListRenderers["total-time"]),
   },
-  product: scoredCoverage<"product">(),
+  product: {
+    ...scoredCoverage<"product">(),
+    "expected-quantity": implemented(productListRenderers["expected-quantity"]),
+    "quantity-variance": implemented(productListRenderers["quantity-variance"]),
+    "tag-links": implemented(productListRenderers["tag-links"]),
+    "unit-price": implemented(productListRenderers["unit-price"]),
+    "usda-food-link": implemented(productListRenderers["usda-food-link"]),
+  },
   purchase: {
     ...scoredCoverage<"purchase">(),
     "spending-category-summary": implemented<ListRenderer<"purchase">>(
       (helper) => categorySummaryRenderer(helper),
+    ),
+    "vendor-cell": implemented(purchaseListRenderers["vendor-cell"]),
+    "order-link": implemented(purchaseListRenderers["order-link"]),
+    "expense-count": implemented(purchaseListRenderers["expense-count"]),
+    "financial-settlement": implemented(
+      purchaseListRenderers["financial-settlement"],
+    ),
+    "reconciliation-status": implemented(
+      purchaseListRenderers["reconciliation-status"],
     ),
   },
   // pantry and garden entities
@@ -188,10 +225,23 @@ export const listRendererCoverage = {
     "data-quality": implemented<ClientListRenderer<ClientListRows["image"]>>(
       (helper) => dataQualityRenderer(helper),
     ),
+    "uploaded-image": implemented<ClientListRenderer<ClientListRows["image"]>>(
+      (helper) => uploadedImageRenderer(helper),
+    ),
   },
-  location: scoredCoverage<"location">(),
+  location: {
+    ...scoredCoverage<"location">(),
+    "product-link": implemented(locationListRenderers["product-link"]),
+    "valuation-summary": implemented(
+      locationListRenderers["valuation-summary"],
+    ),
+  },
   inventory: scoredCoverage<"inventory">(),
-  meal: scoredCoverage<"meal">(),
+  meal: {
+    ...scoredCoverage<"meal">(),
+    "recipe-links": implemented(mealListRenderers["recipe-links"]),
+    "meal-cost": implemented(mealListRenderers["meal-cost"]),
+  },
   productCategory: scoredCoverage<"productCategory">(),
   // finance and project entities
   project: scoredCoverage<"project">(),
@@ -200,6 +250,9 @@ export const listRendererCoverage = {
   financialAccount: scoredCoverage<"financialAccount">(),
   financialTransaction: {
     ...scoredCoverage<"financialTransaction">(),
+    "possible-vendor": implemented(
+      financialTransactionListRenderers["possible-vendor"],
+    ),
     "spending-category-summary": implemented<
       ListRenderer<"financialTransaction">
     >((helper) => categorySummaryRenderer(helper)),

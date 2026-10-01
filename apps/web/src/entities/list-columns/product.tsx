@@ -8,7 +8,6 @@ import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import { formatCategoryLabel } from "@cubby/shared";
 import { PushPinIcon } from "@phosphor-icons/react/dist/csr/PushPin";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -18,7 +17,6 @@ import {
   createBooleanColumn,
   createExternalLinkColumn,
   createSingleEntityInlineLinkColumn,
-  renderOptionCell,
 } from "~/app/_components/data-table/columnHelpers";
 import { EditableCell } from "~/app/_components/data-table/editable-cell";
 import {
@@ -36,8 +34,6 @@ import { useProductCategories } from "~/app/_components/hooks/useProductCategori
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { useCreateInventoryMutation } from "~/app/_components/inventory/hooks";
 import { InventoryEntriesQuickEditDialog } from "~/app/_components/inventory/inventory-entries-quick-edit-dialog";
-import { TruncatedList } from "~/app/_components/TruncatedList";
-import { UnitPriceLine } from "~/app/_components/units/unit-price-line";
 import { UnitMappingDisplay } from "~/app/_components/units/UnitMappingDisplay";
 import {
   buildProductTreeRows,
@@ -47,12 +43,9 @@ import {
   productTreeRowKey,
   productTreeSubRows,
 } from "~/app/products/product-kit-rows";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ProductGtin } from "~/components/entity/product-gtin";
-import { Badge } from "~/components/ui/badge";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
-import { OptionalStatusText, StatusText } from "~/components/ui/status-text";
 import {
   Tooltip,
   TooltipContent,
@@ -60,17 +53,13 @@ import {
 } from "~/components/ui/tooltip";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListHiddenColumns } from "~/entities/entity-display";
-import {
-  entityFieldProvenance,
-  labeledFieldProvenance,
-  relationshipFieldProvenance,
-} from "~/entities/field-provenance";
+import { relationshipFieldProvenance } from "~/entities/field-provenance";
 import {
   product as productOperations,
   relatedData,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { type BaseKind, gradedKinds } from "~/lib/conversion-coverage";
-import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
+import { booleanCellOptions } from "~/lib/select-options";
 import { formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
@@ -89,84 +78,15 @@ const STOCK_TRACKED_OPTIONS = booleanCellOptions({
   true: "Tracked",
   false: "Not tracked",
 });
-const MODEL_PRESENCE_OPTIONS = presenceCellOptions("model");
-const UPC_PRESENCE_OPTIONS = presenceCellOptions("UPC");
-const NOTES_PRESENCE_OPTIONS = presenceCellOptions("notes");
-
 // Stateless, so one per module; the collections below capture its row type.
 const columnHelper = createCubbyColumnHelper<ProductTreeRow>();
 
-// `dataGaps`/`modelPresence`/`upcPresence`/`notesPresence` are filter-hosting
-// synthetic columns and `components` is a relation column — none has a
-// matching `model.fields` entry, so they stay hand-declared here.
+// `components` is the one relation column outside the field model; every
+// declared column hides itself through `display.listHidden`.
 const PRODUCT_INITIAL_COLUMN_VISIBILITY = {
-  categoryFeature: false,
-  dataGaps: false,
-  modelPresence: false,
-  upcPresence: false,
-  notesPresence: false,
   components: false,
   ...entityListHiddenColumns("product"),
 };
-
-/**
- * Units bought minus units gone, with its own uncertainty attached.
- *
- * The `+N?` / `−N?` suffixes are load-bearing: an expense line with no
- * recorded quantity contributes nothing to the number, so a product with six
- * unquantified receipts would otherwise read as a confident 0. Both directions
- * are disclosed — an unknown acquisition means the real count could be
- * higher, an unknown exit that it could be lower.
- */
-function ExpectedQuantityCell({
-  ledger,
-}: {
-  ledger: ProductListItem["quantityLedger"];
-}) {
-  const detail = [
-    `${ledger.acquiredUnits} acquired − ${ledger.exitedUnits} gone`,
-    ledger.unknownAcquisitionLines > 0
-      ? `${ledger.unknownAcquisitionLines} acquisition line(s) carry no quantity`
-      : null,
-    ledger.unknownExitLines > 0
-      ? `${ledger.unknownExitLines} exit line(s) carry no quantity`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="tabular-nums" />}>
-        <OptionalStatusText
-          tone={ledger.expectedQuantity < 0 ? "destructive" : undefined}
-        >
-          {ledger.expectedQuantity}
-        </OptionalStatusText>
-        {ledger.unknownAcquisitionLines > 0 ? (
-          <StatusText tone="warning">
-            {` +${ledger.unknownAcquisitionLines}?`}
-          </StatusText>
-        ) : null}
-        {ledger.unknownExitLines > 0 ? (
-          <StatusText tone="warning">
-            {` −${ledger.unknownExitLines}?`}
-          </StatusText>
-        ) : null}
-      </TooltipTrigger>
-      <TooltipContent side="top">{detail}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-function ProductFoodCell({ product }: { product: ProductListItem }) {
-  const food = product.food;
-  return food ? (
-    <EntityRefLink displayImage={null} entity="usda-food" data={food} compact />
-  ) : (
-    <NoneValue />
-  );
-}
 
 function useProductFilterOptions() {
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
@@ -429,149 +349,6 @@ export const productListOverride = defineListOverride<
               },
             }),
           );
-          // Counts render a literal `0`, not a dash: `locationCount` and
-          // `componentCount` are never null, so "none" is a known fact and a
-          // dash would claim "unknown".
-          add(
-            columnHelper.accessor((row) => row.quantityLedger.locationCount, {
-              id: "servingAsLocations",
-              header: "In service",
-              meta: {
-                numeric: true,
-                className: "w-24",
-                mobile: { slot: "meta", priority: 43 },
-              },
-              cell: (info) => info.getValue(),
-            }),
-          );
-          add(
-            columnHelper.accessor(
-              (row) => row.quantityLedger.expectedQuantity,
-              {
-                id: "ledgerExpectedQuantity",
-                header: "Expected",
-                meta: {
-                  numeric: true,
-                  className: "w-24",
-                  mobile: { slot: "meta", priority: 45 },
-                },
-                cell: (info) => (
-                  <ExpectedQuantityCell
-                    ledger={info.row.original.quantityLedger}
-                  />
-                ),
-              },
-            ),
-          );
-          // Shelf minus ledger. Dashes when the product isn't stocked, and
-          // when its entries carry more than one unit (see `deriveOnHandUnits`).
-          add(
-            columnHelper.accessor((row) => row.quantityVariance, {
-              id: "quantityVariance",
-              header: "Variance",
-              meta: {
-                numeric: true,
-                className: "w-24",
-                mobile: { slot: "meta", priority: 44 },
-              },
-              cell: (info) => {
-                const { quantityVariance, onHandUnits, quantityLedger } =
-                  info.row.original;
-                if (quantityVariance === null || onHandUnits === null) {
-                  return <NoneValue />;
-                }
-                return (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        quantityVariance === 0 ? (
-                          <span className="tabular-nums" />
-                        ) : (
-                          <StatusText
-                            as="span"
-                            tone="warning"
-                            className="tabular-nums"
-                          />
-                        )
-                      }
-                    >
-                      {quantityVariance > 0
-                        ? `+${quantityVariance}`
-                        : quantityVariance}
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {`${onHandUnits} on hand vs. ${quantityLedger.expectedQuantity} expected`}
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              },
-            }),
-          );
-          // Read-only: the Tags filter spec declares `columnId: "tags"`, and
-          // the header-filter machinery needs a real column to hang on.
-          add(
-            columnHelper.accessor("tags", {
-              id: "tags",
-              header: "Tags",
-              meta: {
-                className: "w-40",
-                mobile: { slot: "meta", priority: 60 },
-              },
-              cell: (info) => {
-                const tags = info.getValue();
-                if (!tags.length) return <NoneValue />;
-                return (
-                  <TruncatedList
-                    items={tags}
-                    maxItems={2}
-                    // `stopPropagation`: rows carry the preview onRowClick and
-                    // TanStack's Link preventDefaults without stopping
-                    // propagation, so the chip would also open the sheet.
-                    renderItem={(tag) => (
-                      <Link
-                        key={tag}
-                        to="/products"
-                        search={{ tags: tag }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Badge variant="outline">{tag}</Badge>
-                      </Link>
-                    )}
-                  />
-                );
-              },
-            }),
-          );
-          add(
-            columnHelper.accessor("expenseCount", {
-              id: "expenseCount",
-              header: "Expenses",
-              // The column id is `expenses` while the row field is
-              // `expenseCount`: the id is persisted per-user in the
-              // `table-columns:product` localStorage key and matched by
-              // `productSortableFields` and repo/product/crud.ts's orderBy.
-              enableSorting: true,
-              meta: {
-                numeric: true,
-                className: "w-24",
-                mobile: { slot: "meta", priority: 50, interactive: true },
-              },
-              cell: (info) => {
-                const count = info.getValue();
-                if (!count) return <NoneValue />;
-                return (
-                  <Link
-                    to="/expenses"
-                    search={{ productId: info.row.original.id }}
-                    className="text-primary tabular-nums transition-colors hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {count}
-                  </Link>
-                );
-              },
-            }),
-          );
         }),
       [updateProduct],
     );
@@ -580,11 +357,9 @@ export const productListOverride = defineListOverride<
       (declared: CubbyColumnCollection<ProductTreeRow>) =>
         createCubbyColumnCollection<ProductTreeRow>((add) => {
           const { place, rest } = interleaveDeclared(declared, add);
-          // Interleaved with the declared columns to keep the column order:
-          // these aren't ordinary stored scalars (a relation, computed
-          // presence flags, a derived food projection, a second projection
-          // hosting a filter control), so they stay explicit `add()`s per
-          // docs/entities.md's third bucket.
+          // Only the relation and inventory-entry columns sit outside the
+          // field model; they interleave among the declared columns, whose
+          // order this keeps.
           place("categoryId");
           add(
             createSingleEntityInlineLinkColumn(
@@ -613,169 +388,28 @@ export const productListOverride = defineListOverride<
               },
             ),
           );
-          add(
-            columnHelper.accessor(
-              (row) => row.category?.path[0]?.name ?? null,
-              {
-                id: "categoryFeature",
-                header: "Category family",
-                meta: {
-                  provenance: relationshipFieldProvenance(
-                    "product",
-                    "category",
-                    "reference",
-                  ),
-                },
-                enableSorting: false,
-                cell: (info) => info.getValue() ?? <NoneValue />,
-              },
-            ),
-          );
+          place("categoryFeature");
           place("manufacturer");
           place("primaryGtin");
           place("fdc_id");
           place("model");
           place("notes");
-          add(
-            columnHelper.accessor((row) => row.modelPresence, {
-              id: "modelPresence",
-              header: "Model present",
-              enableSorting: false,
-              meta: {
-                provenance: labeledFieldProvenance("Product record"),
-                explanation: {
-                  entity: "product",
-                  field: "modelPresence",
-                  label: "Model present",
-                },
-                className: "w-24",
-              },
-              cell: (info) =>
-                renderOptionCell(
-                  info.getValue() ? "yes" : "no",
-                  MODEL_PRESENCE_OPTIONS,
-                ),
-            }),
-          );
-          add(
-            columnHelper.accessor((row) => row.upcPresence, {
-              id: "upcPresence",
-              header: "UPC present",
-              enableSorting: false,
-              meta: {
-                provenance: labeledFieldProvenance("Product record"),
-                explanation: {
-                  entity: "product",
-                  field: "upcPresence",
-                  label: "UPC present",
-                },
-                className: "w-24",
-              },
-              cell: (info) =>
-                renderOptionCell(
-                  info.getValue() ? "yes" : "no",
-                  UPC_PRESENCE_OPTIONS,
-                ),
-            }),
-          );
-          add(
-            columnHelper.accessor((row) => row.notesPresence, {
-              id: "notesPresence",
-              header: "Notes present",
-              enableSorting: false,
-              meta: {
-                provenance: labeledFieldProvenance("Product record"),
-                explanation: {
-                  entity: "product",
-                  field: "notesPresence",
-                  label: "Notes present",
-                },
-                className: "w-24",
-              },
-              cell: (info) =>
-                renderOptionCell(
-                  info.getValue() ? "yes" : "no",
-                  NOTES_PRESENCE_OPTIONS,
-                ),
-            }),
-          );
+          place("modelPresence");
+          place("upcPresence");
+          place("notesPresence");
           place("stockTracked");
           place("dataQuality");
-          add(
-            columnHelper.accessor((row) => row.dataGaps, {
-              id: "dataGaps",
-              header: "Data gaps",
-              enableSorting: false,
-              meta: {
-                provenance: labeledFieldProvenance("Product data quality"),
-                explanation: {
-                  entity: "product",
-                  field: "dataGaps",
-                  label: "Data gaps",
-                },
-                className: "w-36",
-                mobile: { slot: "meta", priority: 80 },
-              },
-              cell: (info) => {
-                const gaps = info.getValue();
-                if (!gaps.length) return <NoneValue />;
-                return (
-                  <span className="text-xs text-muted-foreground">
-                    {gaps.map((gap) => gap.replaceAll("_", " ")).join(", ")}
-                  </span>
-                );
-              },
-            }),
-          );
+          place("dataGaps");
           place("externalIds");
           place("price");
-          // Comparable unit price is projected by the server from the same
-          // effective price and complete conversion graph the explanation
-          // reads. It remains display-only because the list query does not
-          // expose server sorting for this derived value.
-          add(
-            columnHelper.display({
-              id: "unitPrice",
-              header: "Unit price",
-              meta: {
-                provenance: labeledFieldProvenance("Product price and units"),
-                explanation: {
-                  entity: "product",
-                  field: "unitPrice",
-                  label: "Unit price",
-                },
-                numeric: true,
-                className: "w-24",
-              },
-              cell: (info) => (
-                <UnitPriceLine prices={info.row.original.unitPrice} compact />
-              ),
-            }),
-          );
+          place("unitPrice");
           place("expenseTotal");
           place("servingAsLocations");
           place("componentCount");
           place("ledgerExpectedQuantity");
           place("quantityVariance");
           place("purchaseDate");
-          add(
-            columnHelper.display({
-              id: "food",
-              header: "USDA Food",
-              // No mobile slot: a display column escapes the model's
-              // empty-value check, and most products have no USDA link.
-              meta: {
-                provenance: entityFieldProvenance("usda-food"),
-                explanation: {
-                  entity: "product",
-                  field: "food",
-                  label: "USDA Food",
-                },
-                className: "w-32",
-              },
-              cell: ({ row }) => <ProductFoodCell product={row.original} />,
-            }),
-          );
+          place("food");
           add(
             createInventoryEntriesColumn(
               columnHelper,

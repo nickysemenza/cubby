@@ -520,7 +520,7 @@ export default defineEntity({
           "finishedOn",
         ],
       },
-      create: ["capture", "full"],
+      create: ["full", "capture"],
       update: ["full"],
     },
     output: [

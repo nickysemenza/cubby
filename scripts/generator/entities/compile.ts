@@ -3,6 +3,10 @@ import {
   parseEntityDeclarationMetadata,
 } from "../../../packages/schemas/src/entity-definitions/definition.ts";
 import { z } from "zod";
+import {
+  FILTER_ANY,
+  FILTER_NONE,
+} from "../../../packages/schemas/src/filter-sentinel-fields.ts";
 import { photoCategories } from "../../../packages/schemas/src/photo-categories.ts";
 import type {
   EntityDeclarationMetadata,
@@ -40,6 +44,12 @@ import {
   compilePresentation,
   validateRelationSections,
 } from "./presentation.ts";
+
+const SENTINELS = new Set([FILTER_ANY, FILTER_NONE]);
+
+/** Dotted keys, each with optional `[n]` index / `[]` projection segments. */
+const DISPLAY_READ_PATH =
+  /^[A-Za-z_]\w*(?:\[\d*\])*(?:\.[A-Za-z_]\w*(?:\[\d*\])*)*$/u;
 
 const entityPorts = (
   ports: EntityDeclarationMetadata["extensions"]["ports"],
@@ -168,11 +178,25 @@ const compileEditIntents = (
         );
     }
   }
+  for (const [intent, keys] of Object.entries(value.required)) {
+    const intentFields = value.fields[intent];
+    if (intentFields === undefined)
+      throw new EntityDeclarationError(
+        `${context}.required names undeclared intent ${intent}.`,
+      );
+    for (const key of keys) {
+      if (!intentFields.includes(key))
+        throw new EntityDeclarationError(
+          `${context}.required.${intent} names ${key}, which the intent does not edit.`,
+        );
+    }
+  }
   return {
     fields: value.fields,
     create: value.create,
     update: value.update,
     editorFields,
+    required: value.required,
   };
 };
 
@@ -474,6 +498,10 @@ const compileFieldModel = (
                 field.description ??
                 `Derived from ${provenance.sources.map((source) => source.label ?? source.relation ?? source.entity).join(" and ")}.`,
               resolver: "field",
+              // oxlint-disable-next-line anti-slop/no-conditional-empty-object-spread -- the optional explanation key is absent, not undefined, when no path is declared.
+              ...(field.display.readPath
+                ? { readPath: field.display.readPath }
+                : {}),
             }
           : null),
       resolution: field.resolution,
@@ -482,6 +510,7 @@ const compileFieldModel = (
         columnId: field.display.columnId,
         standard: field.display.standard,
         width: field.display.width ?? null,
+        readPath: field.display.readPath ?? null,
         format: field.display.format ?? null,
         renderer: field.display.renderer ?? null,
         mobile: field.display.mobile ?? null,
@@ -512,6 +541,17 @@ const compileFieldModel = (
       throw new EntityDeclarationError(
         `${context}.${field.key}.display.renderer.detail requires display.detail.`,
       );
+    }
+    const readPath = field.display.readPath;
+    if (readPath !== null) {
+      if (!DISPLAY_READ_PATH.test(readPath))
+        throw new EntityDeclarationError(
+          `${context}.${field.key}.display.readPath "${readPath}" must be dotted keys with optional [n] or [] segments.`,
+        );
+      if (!field.display.list && !field.display.detail)
+        throw new EntityDeclarationError(
+          `${context}.${field.key}.display.readPath requires display.list or display.detail.`,
+        );
     }
     const standard = field.display.standard;
     if (
@@ -1384,6 +1424,114 @@ const validateRouteCreate = (
   }
 };
 
+type SavedView = CompiledEntity["inspector"]["list"]["savedViews"][number];
+
+/**
+ * A saved view is applied by writing real column-filter state, so each pinned
+ * filter must be a column-hosted descriptor of this entity with a value the
+ * control can hold. A typo'd id, a urlOnly descriptor or a range preset that
+ * expands to nothing would leave the view lit while selecting every row; the
+ * layout and sort may only name columns the list actually has.
+ */
+// oxlint-disable-next-line eslint/complexity -- One pass checks every filter kind's value shape plus layout and sort columns for a view.
+const validateSavedViews = (
+  views: readonly SavedView[],
+  fieldModel: EntityFieldModel,
+  descriptors: readonly FilterDescriptor[],
+  context: string,
+): void => {
+  const byColumn = new Map(
+    descriptors.map((descriptor) => [descriptor.columnId, descriptor]),
+  );
+  const listColumns = new Set(
+    fieldModel.fields
+      .filter((field) => field.display.list)
+      .map((field) => field.display.columnId ?? field.key),
+  );
+  const sortable = new Set([
+    ...(fieldModel.sort?.fields ?? []),
+    ...listColumns,
+  ]);
+  const ids = new Set<string>();
+  for (const view of views) {
+    const where = `${context}[${view.id}]`;
+    if (ids.has(view.id))
+      throw new EntityDeclarationError(`${context} repeats the id ${view.id}.`);
+    ids.add(view.id);
+    const filterIds = new Set<string>();
+    for (const filter of view.filters) {
+      const descriptor = byColumn.get(filter.id);
+      if (descriptor === undefined)
+        throw new EntityDeclarationError(
+          `${where} pins unknown filter ${filter.id}.`,
+        );
+      if (filterIds.has(filter.id))
+        throw new EntityDeclarationError(
+          `${where} pins filter ${filter.id} twice.`,
+        );
+      filterIds.add(filter.id);
+      if (descriptor.urlOnly)
+        throw new EntityDeclarationError(
+          `${where} pins urlOnly filter ${filter.id}, which no column hosts.`,
+        );
+      const values = Array.isArray(filter.value)
+        ? filter.value
+        : [filter.value];
+      const optionValues = new Set(
+        (descriptor.options ?? []).map((option) => option.value),
+      );
+      for (const value of values) {
+        if (descriptor.kind === "presence" && !["has", "none"].includes(value))
+          throw new EntityDeclarationError(
+            `${where} pins ${filter.id}=${value}; a presence filter holds "has" or "none".`,
+          );
+        if (descriptor.kind === "boolean" && !["true", "false"].includes(value))
+          throw new EntityDeclarationError(
+            `${where} pins ${filter.id}=${value}; a boolean filter holds "true" or "false".`,
+          );
+        if (
+          descriptor.kind === "range" &&
+          descriptor.expandRef === null &&
+          descriptor.options !== null &&
+          !(
+            descriptor.wire.kind === "range" &&
+            descriptor.wire.presence !== undefined &&
+            ["has", "none"].includes(value)
+          ) &&
+          descriptor.options.find((option) => option.value === value)
+            ?.expand === undefined
+        )
+          throw new EntityDeclarationError(
+            `${where} pins range ${filter.id}=${value}, a preset that expands to nothing.`,
+          );
+        if (
+          (descriptor.kind === "select" || descriptor.kind === "multiselect") &&
+          descriptor.options !== null &&
+          !optionValues.has(value) &&
+          !(descriptor.nullable !== null && SENTINELS.has(value))
+        )
+          throw new EntityDeclarationError(
+            `${where} pins ${filter.id}=${value}, which is not one of its options.`,
+          );
+      }
+    }
+    for (const column of Object.keys(view.layout?.columnVisibility ?? {})) {
+      // A relation column outside the field model still hosts its header
+      // filter, so its descriptor id is as good as a declared field's.
+      if (!listColumns.has(column) && !byColumn.has(column))
+        throw new EntityDeclarationError(
+          `${where}.layout names ${column}, which is neither a declared list column nor a filter-hosting column.`,
+        );
+    }
+    for (const sort of view.sort ?? []) {
+      if (!sortable.has(sort.id))
+        throw new EntityDeclarationError(
+          `${where}.sort names ${sort.id}, which is not a sortable column.`,
+        );
+    }
+  }
+};
+
 /** Names plus the declaration's `presentation` block with its defaults resolved. */
 const compiledInspector = (
   declaration: EntityDeclarationMetadata,
@@ -1599,6 +1747,12 @@ export const compileEntity = (
   validateRouteCreate(route, fieldModel, context);
   const ports = entityPorts(declaration.extensions.ports);
   const inspector = compiledInspector(declaration, fieldModel, ports, context);
+  validateSavedViews(
+    inspector.list.savedViews,
+    fieldModel,
+    filterDescriptorsWithAudit,
+    `${context}.presentation.list.savedViews`,
+  );
   const shortcode = compiledShortcode(descriptor, context);
   booleanValue(
     required(descriptor, "auditable", `${context}.descriptor`),

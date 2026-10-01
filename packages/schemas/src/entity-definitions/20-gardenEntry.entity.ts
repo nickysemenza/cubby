@@ -299,7 +299,7 @@ export default defineEntity({
           "imageOrder",
         ],
       },
-      create: ["capture", "full"],
+      create: ["full", "capture"],
       update: ["full"],
     },
     output: [

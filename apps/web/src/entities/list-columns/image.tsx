@@ -3,10 +3,8 @@ import {
   type ImageListFilters,
   type ImageWithEntity,
 } from "@cubby/schemas/image";
-import prettyBytes from "pretty-bytes";
 import { useMemo } from "react";
 
-import { createImageColumn } from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -52,35 +50,10 @@ export const imageListOverride = defineListOverride<
     const nameEditable = useFilenameEditable<ImageListRow>(
       updateImageMutation.mutateAsync,
     );
-    const overrides = useMemo(
-      () =>
-        createCubbyColumnCollection<ImageListRow>((add) => {
-          add(
-            columnHelper.accessor("size", {
-              header: "Size",
-              meta: {
-                numeric: true,
-                className: "w-24",
-                mobile: { slot: "trailing", priority: 5 },
-              },
-              cell: ({ getValue }) => <span>{prettyBytes(getValue())}</span>,
-            }),
-          );
-        }),
-      [],
-    );
     const compose = useMemo(
       () => (declared: CubbyColumnCollection<ImageListRow>) =>
         createCubbyColumnCollection<ImageListRow>((add) => {
-          declared.filter((column) => column.id === "filename").visit(add);
-          add(
-            createImageColumn(columnHelper, {
-              getImages: (row) => (row.status === "UPLOADED" ? [row] : []),
-              entity: "image",
-              provenance: null,
-            }),
-          );
-          declared.filter((column) => column.id !== "filename").visit(add);
+          declared.visit(add);
           add(
             columnHelper.accessor("associations", {
               id: "entity",
@@ -99,7 +72,6 @@ export const imageListOverride = defineListOverride<
       [],
     );
     return {
-      overrides,
       compose,
       source: imageListSource,
       list: { ...IMAGE_LIST_OPTIONS, nameEditable },

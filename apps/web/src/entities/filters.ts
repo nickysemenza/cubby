@@ -1,4 +1,5 @@
 import type { FILTER_KINDS } from "@cubby/schemas/entity-definitions/definition";
+import { FILTER_ANY, FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import { humanize, UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { partition } from "es-toolkit";
 import { match } from "ts-pattern";
@@ -81,8 +82,7 @@ export interface FilterSpecCore {
  * `buildFiltersFromManifest` partitions them out and emits a `presenceFilter`
  * instead, so the runtime input schemas never see them.
  */
-export const FILTER_ANY = "__any__";
-export const FILTER_NONE = "__none__";
+export { FILTER_ANY, FILTER_NONE };
 
 const isSentinel = (value: string): boolean =>
   value === FILTER_ANY || value === FILTER_NONE;

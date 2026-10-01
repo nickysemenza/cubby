@@ -112,6 +112,33 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "imports",
+          label: "Imports",
+          description:
+            "Account syncs, validations, enrichments, photo batches and Gmail searches",
+          filters: [
+            {
+              id: "purpose",
+              value: [
+                "account_sync",
+                "purchase_validation",
+                "product_enrichment",
+                "photo_inventory",
+                "mail_search",
+              ],
+            },
+          ],
+        },
+        {
+          id: "ai-work",
+          label: "AI work",
+          description:
+            "Jev suggestion passes, hourly AI groups and background AI work",
+          filters: [{ id: "purpose", value: ["ai_suggest", "background"] }],
+        },
+      ],
       // Ephemeral runs only group AI usage (thousands a day); a person opens
       // the list for the work somebody started. Clearing the filter shows them.
       initialFilter: [

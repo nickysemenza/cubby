@@ -2,10 +2,7 @@ import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import {
-  createImageColumn,
-  createNameColumn,
-} from "~/app/_components/data-table/columnHelpers";
+import { createNameColumn } from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -19,7 +16,6 @@ import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { NoneValue } from "~/components/ui/none-value";
-import { relationshipFieldProvenance } from "~/entities/field-provenance";
 import { cookbook } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 import { defineListOverride } from "./types";
@@ -103,13 +99,6 @@ const overrides = createCubbyColumnCollection<CookbookSummary>((add) => {
       },
     }),
   );
-  add({
-    ...createImageColumn(columnHelper, {
-      entity: "cookbook",
-      provenance: relationshipFieldProvenance("cookbook", "cover"),
-    }),
-    id: "coverUrl",
-  });
   add(
     columnHelper.accessor((row) => row.product?.name ?? null, {
       id: "product",
@@ -164,29 +153,24 @@ const composeWithSubjectFilter =
   (options: ReturnType<typeof subjectOptions>) =>
   (declared: CubbyColumnCollection<CookbookSummary>) =>
     createCubbyColumnCollection<CookbookSummary>((add) => {
-      // Cover first, as the other image-led rosters read.
-      declared.filter((column) => column.id === "coverUrl").visit(add);
-      declared
-        .filter((column) => column.id === "subjects")
-        .visit((column) =>
-          add({
-            ...column,
-            filterFn: subjectsFilterFn,
-            meta: {
-              ...column.meta,
-              filterConfig: {
-                placeholder: "Filter by subject...",
-                filterType: "multiselect",
-                options,
-              },
-            },
-          }),
-        );
-      declared
-        .filter(
-          (column) => column.id !== "coverUrl" && column.id !== "subjects",
-        )
-        .visit(add);
+      declared.visit((column) =>
+        add(
+          column.id === "subjects"
+            ? {
+                ...column,
+                filterFn: subjectsFilterFn,
+                meta: {
+                  ...column.meta,
+                  filterConfig: {
+                    placeholder: "Filter by subject...",
+                    filterType: "multiselect",
+                    options,
+                  },
+                },
+              }
+            : column,
+        ),
+      );
     });
 
 /**

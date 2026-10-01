@@ -3,8 +3,6 @@ import { expenseListOverride } from "./expense";
 import {
   financialAccountListOverride,
   financialTransactionListOverride,
-  ledgerPartyListOverride,
-  ledgerTransferListOverride,
 } from "./finance";
 import { imageListOverride } from "./image";
 import { ingredientListOverride } from "./ingredient";
@@ -33,8 +31,6 @@ export const listOverrides: ListOverrideRegistry = {
   run: runListOverride,
   ingredient: ingredientListOverride,
   inventory: inventoryListOverride,
-  ledgerParty: ledgerPartyListOverride,
-  ledgerTransfer: ledgerTransferListOverride,
   location: locationListOverride,
   meal: mealListOverride,
   product: productListOverride,
