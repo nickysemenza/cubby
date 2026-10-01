@@ -1,8 +1,8 @@
-import { expenseCreateInput } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import type { FoodSummary } from "@cubby/usda";
 import { fromPartial } from "@total-typescript/shoehorn";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -12,7 +12,6 @@ import type {
 } from "~/server/clients/upc-lookup";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import { executeEntity } from "~/server/entity-kernel";
-import { createExpense } from "~/server/repo/expense";
 import { findProductByGtin, quickCreateProduct } from "~/server/repo/product";
 import { resolveProductCategory } from "~/server/repo/product-category";
 import {
@@ -418,17 +417,15 @@ describe("applyUpcDataWithSideEffects", () => {
       makeProductInput({ name: "Ledger-priced widget", upc }),
       ctx.actor,
     );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "Ledger-priced widget purchase",
-          cost: 12,
-          productId: product.id,
-          productQuantity: 2,
-        }),
-      ),
-      ctx.actor,
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Ledger-priced widget purchase",
+        cost: 12,
+        productId: product.id,
+        productQuantity: 2,
+      }),
     );
     const lookup = upcLookupClient(async () =>
       upcResponse({ upc, priceDollars: 9.99 }),

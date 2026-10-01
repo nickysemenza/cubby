@@ -6,17 +6,10 @@ import type {
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import {
-  type ExpenseOut,
-  expenseCreateInput,
-  projectCreateInput,
-} from "@cubby/schemas/project";
-import {
-  purchaseCreateInput,
-  reconcilePurchase,
-  splitExpenseInput,
-} from "@cubby/schemas/purchase";
+import { type ExpenseOut } from "@cubby/schemas/project";
+import { reconcilePurchase, splitExpenseInput } from "@cubby/schemas/purchase";
 import { and, eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -39,11 +32,9 @@ import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { getDb, insertAndReturn } from "./database-helpers";
-import { createExpense, getExpenseByShortcode } from "./expense";
+import { getExpenseByShortcode } from "./expense";
 import { createProduct } from "./product";
-import { createProject } from "./project";
 import {
-  createPurchase,
   deletePurchases,
   findOrCreatePurchase,
   getPurchaseByID,
@@ -68,26 +59,20 @@ describe("purchase list totals", () => {
       "Totals fixture vendor",
     );
     for (const [index, cost] of [80, -20].entries()) {
-      const { output: row } = await createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({
-          vendorId,
-          date: "2026-01-15",
-          orderId: `TOTALS-${index}`,
-          statedTotal: 999,
+      const { output: row } = await createRepoEntity(ctx, "purchase", {
+        vendorId,
+        date: "2026-01-15",
+        orderId: `TOTALS-${index}`,
+        statedTotal: 999,
+      });
+      await createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: `Totals expense ${index}`,
+          purchaseId: row.id,
+          cost,
         }),
-        ctx.actor,
-      );
-      await createExpense(
-        ctx.db,
-        expenseCreateInput.parse(
-          makeExpenseInput({
-            name: `Totals expense ${index}`,
-            purchaseId: row.id,
-            cost,
-          }),
-        ),
-        ctx.actor,
       );
     }
     const page = await purchaseList(ctx.db, { vendorId }, [], {
@@ -121,35 +106,23 @@ describe("purchase application workflows", () => {
       }),
     );
     const vendorId = await vendorShortcodeByName(ctx.db, "Workflow supplies");
-    const { output: keep } = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        vendorId,
-        date: "2026-08-01",
-        orderId: "WORKFLOW-KEEP",
-      }),
-      ctx.actor,
-    );
-    const { output: source } = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        vendorId,
-        date: "2026-08-01",
-        orderId: null,
-      }),
-      ctx.actor,
-    );
-    const { output: original } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        name: "Combined supplies",
-        cost: 12,
-        costType: "materials",
-        trade: "other",
-        date: "2026-08-01",
-      }),
-      ctx.actor,
-    );
+    const { output: keep } = await createRepoEntity(ctx, "purchase", {
+      vendorId,
+      date: "2026-08-01",
+      orderId: "WORKFLOW-KEEP",
+    });
+    const { output: source } = await createRepoEntity(ctx, "purchase", {
+      vendorId,
+      date: "2026-08-01",
+      orderId: null,
+    });
+    const { output: original } = await createRepoEntity(ctx, "expense", {
+      name: "Combined supplies",
+      cost: 12,
+      costType: "materials",
+      trade: "other",
+      date: "2026-08-01",
+    });
     await linkExpensesToPurchaseWorkflow(context, {
       purchaseId: source.id,
       expenseIds: [original.id],
@@ -317,29 +290,25 @@ describe("purchase repository — splitExpense", () => {
   const ctx = withTestDb();
 
   it("files the parts against the same charge without inventing a vendor stated total", async () => {
-    const { output: project } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "split project" }),
-      ctx.actor,
-    );
+    const { output: project } = await createRepoEntity(ctx, "project", {
+      name: "split project",
+    });
     const product = await createProduct(
       ctx.db,
       makeProductInput({ name: "Combo Saw", manufacturer: "test" }),
       ctx.actor,
     );
 
-    const { output: combo } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "combo kit",
-          cost: 100,
-          date: "2024-06-01",
-          vendor: "Direct Tools Outlet",
-          orderId: "DTO-SPLIT",
-        }),
-      ),
-      ctx.actor,
+    const { output: combo } = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "combo kit",
+        cost: 100,
+        date: "2024-06-01",
+        vendor: "Direct Tools Outlet",
+        orderId: "DTO-SPLIT",
+      }),
     );
     const chargeId = combo.purchaseId!;
     const chargeUuid = await purchaseUuid(ctx.db, chargeId);
@@ -409,17 +378,15 @@ describe("purchase repository — splitExpense", () => {
   });
 
   it("refuses a split that would change the source amount", async () => {
-    const { output: combo } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "mismatch source",
-          cost: 100,
-          vendor: "Mismatch Depot",
-          orderId: "MM-1",
-        }),
-      ),
-      ctx.actor,
+    const { output: combo } = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "mismatch source",
+        cost: 100,
+        vendor: "Mismatch Depot",
+        orderId: "MM-1",
+      }),
     );
     const chargeId = combo.purchaseId!;
     const chargeUuid = await purchaseUuid(ctx.db, chargeId);
@@ -489,38 +456,32 @@ describe("purchase repository — mergePurchases", () => {
 
   it("re-points expenses, moves documents, and soft-deletes the loser", async () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Merge Vendor");
-    const { output: keeper } = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({ vendorId, date: "2024-01-01" }),
-      ctx.actor,
-    );
-    const { output: loser } = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({ vendorId, date: "2024-01-02" }),
-      ctx.actor,
-    );
+    const { output: keeper } = await createRepoEntity(ctx, "purchase", {
+      vendorId,
+      date: "2024-01-01",
+    });
+    const { output: loser } = await createRepoEntity(ctx, "purchase", {
+      vendorId,
+      date: "2024-01-02",
+    });
 
-    const { output: keeperLine } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "keeper line",
-          cost: 10,
-          purchaseId: keeper.id,
-        }),
-      ),
-      ctx.actor,
+    const { output: keeperLine } = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "keeper line",
+        cost: 10,
+        purchaseId: keeper.id,
+      }),
     );
-    const { output: loserLine } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "loser line",
-          cost: 20,
-          purchaseId: loser.id,
-        }),
-      ),
-      ctx.actor,
+    const { output: loserLine } = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "loser line",
+        cost: 20,
+        purchaseId: loser.id,
+      }),
     );
     const loserDoc = await attachDocumentRow(loser.id, "loser-invoice");
 
@@ -567,11 +528,7 @@ describe("purchase repository — mergePurchases", () => {
   it("previews settlement movement and audits each absorbed purchase once", async () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Settlement Merge");
     const createCharge = (date: string) =>
-      createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({ vendorId, date }),
-        ctx.actor,
-      );
+      createRepoEntity(ctx, "purchase", { vendorId, date });
     const { output: keeper } = await createCharge("2024-02-01");
     const { output: loserA } = await createCharge("2024-02-02");
     const { output: loserB } = await createCharge("2024-02-03");
@@ -650,24 +607,16 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
     const homeDepot = await vendorShortcodeByName(ctx.db, "Home Depot");
     // Order ids are only unique PER VENDOR, so "#11325" legitimately exists at
     // both retailers — which is exactly how a vendor move can collide.
-    const { output: held } = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        date: "2024-01-15",
-        vendorId: homeDepot,
-        orderId: "#11325",
-      }),
-      ctx.actor,
-    );
-    const { output: moving } = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        date: "2024-01-15",
-        vendorId: toolNirvana,
-        orderId: "#11325",
-      }),
-      ctx.actor,
-    );
+    const { output: held } = await createRepoEntity(ctx, "purchase", {
+      date: "2024-01-15",
+      vendorId: homeDepot,
+      orderId: "#11325",
+    });
+    const { output: moving } = await createRepoEntity(ctx, "purchase", {
+      date: "2024-01-15",
+      vendorId: toolNirvana,
+      orderId: "#11325",
+    });
 
     await expect(
       updatePurchase(ctx.db, moving.id, { vendorId: homeDepot }, ctx.actor),
@@ -679,15 +628,11 @@ describe("purchase repository — updatePurchase collision + liveness guards", (
         .vendorId,
     ).toBe(toolNirvana);
 
-    const { output: sibling } = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        date: "2024-01-15",
-        vendorId: homeDepot,
-        orderId: "WN-1",
-      }),
-      ctx.actor,
-    );
+    const { output: sibling } = await createRepoEntity(ctx, "purchase", {
+      date: "2024-01-15",
+      vendorId: homeDepot,
+      orderId: "WN-1",
+    });
     await expect(
       updatePurchase(ctx.db, sibling.id, { orderId: "#11325" }, ctx.actor),
     ).rejects.toMatchObject({
@@ -713,15 +658,11 @@ describe("purchase repository — deletion cascades", () => {
 
   it("deletes an empty Purchase and its documents without detaching money", async () => {
     const vendorId = await vendorShortcodeByName(ctx.db, "Empty Delete Vendor");
-    const { output: emptyPurchase } = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        vendorId,
-        date: "2024-01-15",
-        orderId: "EMPTY-DELETE-1",
-      }),
-      ctx.actor,
-    );
+    const { output: emptyPurchase } = await createRepoEntity(ctx, "purchase", {
+      vendorId,
+      date: "2024-01-15",
+      orderId: "EMPTY-DELETE-1",
+    });
     const purchaseId = await purchaseUuid(ctx.db, emptyPurchase.id);
     const document = await insertWithShortcode(ctx.db, "image", {
       key: "test-documents/empty-delete.pdf",
@@ -776,17 +717,15 @@ describe("purchase repository — deletion cascades", () => {
   });
 
   it("NULLS expense.purchaseId (never deletes spend) and soft-deletes its documents", async () => {
-    const { output: line } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "surviving spend",
-          cost: 250,
-          vendor: "Delete Me Vendor",
-          orderId: "DEL-1",
-        }),
-      ),
-      ctx.actor,
+    const { output: line } = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "surviving spend",
+        cost: 250,
+        vendor: "Delete Me Vendor",
+        orderId: "DEL-1",
+      }),
     );
     const chargeId = line.purchaseId!;
     const chargeUuid = await purchaseUuid(ctx.db, chargeId);

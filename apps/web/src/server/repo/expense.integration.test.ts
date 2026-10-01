@@ -9,9 +9,10 @@ import {
   type ExpenseOut,
   expenseCreateInput,
   expenseUpdateData,
-  projectCreateInput,
 } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
+import { buildEntity } from "tooling/factories/build";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -39,7 +40,6 @@ import {
 } from "~/server/repo/expense";
 import { updateExpensesInBulk } from "~/server/repo/expense/crud";
 import { createProduct } from "~/server/repo/product";
-import { createProject } from "~/server/repo/project";
 import { getPurchaseExpenses, purchaseList } from "~/server/repo/purchase";
 import {
   makeExpenseInput,
@@ -98,34 +98,24 @@ describe("expense workflows — analyzer orchestration", () => {
   const ctx = withTestDb();
 
   it("returns analysis periods and mixed facet kinds through declared workflows", async () => {
-    const { output: project } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "Workflow analysis project" }),
-      ctx.actor,
-    );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2026-05-10",
-        name: "Workflow analysis material",
-        trade: "plumbing",
-        costType: "materials",
-        cost: 40,
-        projectId: project.id,
-      }),
-      ctx.actor,
-    );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2026-05-11",
-        name: "Workflow analysis service",
-        trade: "plumbing",
-        costType: "services",
-        cost: 60,
-      }),
-      ctx.actor,
-    );
+    const { output: project } = await createRepoEntity(ctx, "project", {
+      name: "Workflow analysis project",
+    });
+    await createRepoEntity(ctx, "expense", {
+      date: "2026-05-10",
+      name: "Workflow analysis material",
+      trade: "plumbing",
+      costType: "materials",
+      cost: 40,
+      projectId: project.id,
+    });
+    await createRepoEntity(ctx, "expense", {
+      date: "2026-05-11",
+      name: "Workflow analysis service",
+      trade: "plumbing",
+      costType: "services",
+      cost: 60,
+    });
 
     const filters = { dateFrom: "2026-05-01", dateTo: "2026-05-31" };
     const analysis = await expenseAnalyzeWorkflow(ctx.db, {
@@ -211,27 +201,21 @@ describe("expense repository — CRUD", () => {
   });
 
   it("creates, reads (with projectName join), updates (incl. clearing date/projectId), and deletes", async () => {
-    const { output: project } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "expense crud project" }),
-      ctx.actor,
-    );
+    const { output: project } = await createRepoEntity(ctx, "project", {
+      name: "expense crud project",
+    });
 
-    const { output: created } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        trade: "plumbing",
-        costType: "materials",
-        name: "test faucet",
-        projectId: project.id,
-        cost: 42.5,
-        date: "2026-01-15",
-        url: "https://example.com/faucet",
-        notes: "brushed nickel",
-        future: false,
-      }),
-      ctx.actor,
-    );
+    const { output: created } = await createRepoEntity(ctx, "expense", {
+      trade: "plumbing",
+      costType: "materials",
+      name: "test faucet",
+      projectId: project.id,
+      cost: 42.5,
+      date: "2026-01-15",
+      url: "https://example.com/faucet",
+      notes: "brushed nickel",
+      future: false,
+    });
 
     const read = await getExpenseByShortcode(ctx.db, created.id);
     expect(read).toMatchObject({
@@ -272,27 +256,23 @@ describe("expense repository — CRUD", () => {
 
   it("infers line roles once, honors explicit roles, audits changes, and protects product links", async () => {
     const { output: inferredTax, entityId: inferredTaxId } =
-      await createExpense(
-        ctx.db,
-        expenseCreateInput.parse(
-          makeExpenseInput({
-            name: "Sales tax",
-            cost: 26.81,
-            vendor: "Line role fixture vendor",
-            orderId: "LINE-ROLE-1",
-          }),
-        ),
-        ctx.actor,
+      await createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Sales tax",
+          cost: 26.81,
+          vendor: "Line role fixture vendor",
+          orderId: "LINE-ROLE-1",
+        }),
       );
     expect(inferredTax.lineKind).toBe("tax");
 
     const explicitPrincipal = await unwrap(
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse(
-          makeExpenseInput({ name: "Sales tax", lineKind: "principal" }),
-        ),
-        ctx.actor,
+      createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({ name: "Sales tax", lineKind: "principal" }),
       ),
     );
     expect(explicitPrincipal.lineKind).toBe("principal");
@@ -313,12 +293,10 @@ describe("expense repository — CRUD", () => {
       ctx.actor,
     );
     const productExpense = await unwrap(
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse(
-          makeExpenseInput({ name: "Tax", productId: productRow.id }),
-        ),
-        ctx.actor,
+      createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({ name: "Tax", productId: productRow.id }),
       ),
     );
     expect(productExpense.lineKind).toBe("principal");
@@ -367,32 +345,28 @@ describe("expense repository — CRUD", () => {
     ).toBe(true);
 
     const discount = await unwrap(
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse(
-          makeExpenseInput({
-            name: "Order discount",
-            cost: -60,
-            vendor: "Line role fixture vendor",
-            orderId: "LINE-ROLE-1",
-          }),
-        ),
-        ctx.actor,
+      createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Order discount",
+          cost: -60,
+          vendor: "Line role fixture vendor",
+          orderId: "LINE-ROLE-1",
+        }),
       ),
     );
     const taxRefund = await unwrap(
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse(
-          makeExpenseInput({
-            name: "Tax refund",
-            cost: -8.5,
-            lineKind: "tax",
-            vendor: "Line role fixture vendor",
-            orderId: "LINE-ROLE-1",
-          }),
-        ),
-        ctx.actor,
+      createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Tax refund",
+          cost: -8.5,
+          lineKind: "tax",
+          vendor: "Line role fixture vendor",
+          orderId: "LINE-ROLE-1",
+        }),
       ),
     );
     expect(discount.lineKind).toBe("discount");
@@ -404,25 +378,21 @@ describe("expense repository — CRUD", () => {
   // the expense list only); the server owns the rule now so an embedded
   // relation table's inline edit reaches the same outcome.
   it("drops the project when a principal line becomes an adjustment", async () => {
-    const { output: project } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "line role reclassify project" }),
-      ctx.actor,
-    );
+    const { output: project } = await createRepoEntity(ctx, "project", {
+      name: "line role reclassify project",
+    });
     const principal = await unwrap(
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse(
-          makeExpenseInput({
-            name: "Order handling",
-            cost: 12,
-            lineKind: "principal",
-            projectId: project.id,
-            vendor: "Line role fixture vendor",
-            orderId: "LINE-ROLE-2",
-          }),
-        ),
-        ctx.actor,
+      createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Order handling",
+          cost: 12,
+          lineKind: "principal",
+          projectId: project.id,
+          vendor: "Line role fixture vendor",
+          orderId: "LINE-ROLE-2",
+        }),
       ),
     );
     expect(principal.projectId).toBe(project.id);
@@ -440,16 +410,8 @@ describe("expense workflow", () => {
   describe("projectPresenceFilter", () => {
     const seedProjectMix = async () => {
       const [{ output: projA }, { output: projB }] = await Promise.all([
-        createProject(
-          ctx.db,
-          projectCreateInput.parse({ name: "assigned home" }),
-          ctx.actor,
-        ),
-        createProject(
-          ctx.db,
-          projectCreateInput.parse({ name: "other home" }),
-          ctx.actor,
-        ),
+        createRepoEntity(ctx, "project", { name: "assigned home" }),
+        createRepoEntity(ctx, "project", { name: "other home" }),
       ]);
       for (const [name, projectId, cost] of [
         ["has a project", projA.id, 10],
@@ -464,7 +426,7 @@ describe("expense workflow", () => {
           cost,
         };
         if (projectId !== undefined) input.projectId = projectId;
-        await createExpense(ctx.db, expenseCreateInput.parse(input), ctx.actor);
+        await createRepoEntity(ctx, "expense", input);
       }
       return { projA, projB };
     };
@@ -544,16 +506,12 @@ describe("expense kernel — bulkUpdate", () => {
   };
 
   it("applies trade and cost type in one patch", async () => {
-    const { output: e } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "kernel two fields",
-      }),
-      ctx.actor,
-    );
+    const { output: e } = await createRepoEntity(ctx, "expense", {
+      date: "2024-01-15",
+      trade: "other",
+      costType: "materials",
+      name: "kernel two fields",
+    });
 
     expect(
       (await bulkUpdate([e.id], { trade: "drywall", costType: "services" }))
@@ -565,16 +523,12 @@ describe("expense kernel — bulkUpdate", () => {
   });
 
   it("rejects a partially missing selection before changing any expense", async () => {
-    const { output: expense } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "atomic expense patch",
-      }),
-      ctx.actor,
-    );
+    const { output: expense } = await createRepoEntity(ctx, "expense", {
+      date: "2024-01-15",
+      trade: "other",
+      costType: "materials",
+      name: "atomic expense patch",
+    });
 
     await expect(
       bulkUpdate([expense.id, testShortcode("expense", "EXP-ZZZZ")], {
@@ -591,11 +545,7 @@ describe("expense repository — bulk trade / cost-type writes", () => {
   const ctx = withTestDb();
 
   const line = (name: string, overrides: Partial<ExpenseCreateInput> = {}) =>
-    createExpense(
-      ctx.db,
-      expenseCreateInput.parse(makeExpenseInput({ name, ...overrides })),
-      ctx.actor,
-    );
+    createRepoEntity(ctx, "expense", makeExpenseInput({ name, ...overrides }));
 
   const updateEntries = async (id: ExpenseId) =>
     (
@@ -680,59 +630,43 @@ describe("expense repository — expenseAnalytics", () => {
   const ctx = withTestDb();
 
   it("uses attributed adjustment shares throughout project-filtered analytics", async () => {
-    const { output: projectA } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "scoped analytics project a" }),
-      ctx.actor,
-    );
-    const { output: projectB } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "scoped analytics project b" }),
-      ctx.actor,
-    );
+    const { output: projectA } = await createRepoEntity(ctx, "project", {
+      name: "scoped analytics project a",
+    });
+    const { output: projectB } = await createRepoEntity(ctx, "project", {
+      name: "scoped analytics project b",
+    });
     const purchaseIdentity = {
       vendor: "Scoped analytics vendor",
       orderId: "SCOPED-ANALYTICS-1",
     };
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        ...purchaseIdentity,
-        date: "2026-06-10",
-        name: "scoped analytics principal a",
-        trade: "plumbing",
-        costType: "materials",
-        cost: 60,
-        projectId: projectA.id,
-      }),
-      ctx.actor,
-    );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        ...purchaseIdentity,
-        date: "2026-06-10",
-        name: "scoped analytics principal b",
-        trade: "plumbing",
-        costType: "materials",
-        cost: 40,
-        projectId: projectB.id,
-      }),
-      ctx.actor,
-    );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        ...purchaseIdentity,
-        date: "2026-06-10",
-        lineKind: "tax",
-        name: "scoped analytics tax",
-        trade: null,
-        costType: "services",
-        cost: 10,
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "expense", {
+      ...purchaseIdentity,
+      date: "2026-06-10",
+      name: "scoped analytics principal a",
+      trade: "plumbing",
+      costType: "materials",
+      cost: 60,
+      projectId: projectA.id,
+    });
+    await createRepoEntity(ctx, "expense", {
+      ...purchaseIdentity,
+      date: "2026-06-10",
+      name: "scoped analytics principal b",
+      trade: "plumbing",
+      costType: "materials",
+      cost: 40,
+      projectId: projectB.id,
+    });
+    await createRepoEntity(ctx, "expense", {
+      ...purchaseIdentity,
+      date: "2026-06-10",
+      lineKind: "tax",
+      name: "scoped analytics tax",
+      trade: null,
+      costType: "services",
+      cost: 10,
+    });
 
     const filters = {
       search: "scoped analytics",
@@ -767,102 +701,74 @@ describe("expense repository — expenseAnalytics", () => {
   });
 
   it("aggregates match manual arithmetic, omits empty categories, and stays consistent with expenseList under the same filter", async () => {
-    const { output: projectA } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "analytics project a" }),
-      ctx.actor,
-    );
-    const { output: projectB } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "analytics project b" }),
-      ctx.actor,
-    );
+    const { output: projectA } = await createRepoEntity(ctx, "project", {
+      name: "analytics project a",
+    });
+    const { output: projectB } = await createRepoEntity(ctx, "project", {
+      name: "analytics project b",
+    });
 
-    const { output: p1 } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        trade: "plumbing",
-        costType: "materials",
-        name: "analytics p1 actual",
-        projectId: projectA.id,
-        vendor: "Analytics allocation vendor",
-        orderId: "ANALYTICS-1",
-        cost: 100,
-        date: "2026-01-10",
-        future: false,
-      }),
-      ctx.actor,
-    );
-    const { output: p2 } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2026-01-20",
-        trade: "plumbing",
-        costType: "materials",
-        name: "analytics p2 committed",
-        projectId: projectA.id,
-        vendor: "Analytics allocation vendor",
-        orderId: "ANALYTICS-1",
-        cost: 50,
-        future: true,
-      }),
-      ctx.actor,
-    );
-    const { output: p3 } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        trade: "electrical",
-        costType: "materials",
-        name: "analytics p3 credit",
-        cost: -20,
-        date: "2026-01-15",
-        future: false,
-      }),
-      ctx.actor,
-    );
-    const { output: p4 } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        trade: "electrical",
-        costType: "services",
-        name: "analytics p4 actual",
-        projectId: projectB.id,
-        cost: 30,
-        date: "2026-02-01",
-        future: false,
-      }),
-      ctx.actor,
-    );
-    const { output: p5 } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        trade: "other",
-        costType: "services",
-        lineKind: "tax",
-        name: "analytics p5 tax",
-        vendor: "Analytics allocation vendor",
-        orderId: "ANALYTICS-1",
-        cost: 23,
-        date: "2026-01-10",
-        future: false,
-      }),
-      ctx.actor,
-    );
-    const { output: p6 } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        trade: "other",
-        costType: "tools",
-        lineKind: "discount",
-        name: "analytics p6 discount",
-        vendor: "Analytics allocation vendor",
-        orderId: "ANALYTICS-1",
-        cost: -5,
-        date: "2026-01-10",
-        future: false,
-      }),
-      ctx.actor,
-    );
+    const { output: p1 } = await createRepoEntity(ctx, "expense", {
+      trade: "plumbing",
+      costType: "materials",
+      name: "analytics p1 actual",
+      projectId: projectA.id,
+      vendor: "Analytics allocation vendor",
+      orderId: "ANALYTICS-1",
+      cost: 100,
+      date: "2026-01-10",
+      future: false,
+    });
+    const { output: p2 } = await createRepoEntity(ctx, "expense", {
+      date: "2026-01-20",
+      trade: "plumbing",
+      costType: "materials",
+      name: "analytics p2 committed",
+      projectId: projectA.id,
+      vendor: "Analytics allocation vendor",
+      orderId: "ANALYTICS-1",
+      cost: 50,
+      future: true,
+    });
+    const { output: p3 } = await createRepoEntity(ctx, "expense", {
+      trade: "electrical",
+      costType: "materials",
+      name: "analytics p3 credit",
+      cost: -20,
+      date: "2026-01-15",
+      future: false,
+    });
+    const { output: p4 } = await createRepoEntity(ctx, "expense", {
+      trade: "electrical",
+      costType: "services",
+      name: "analytics p4 actual",
+      projectId: projectB.id,
+      cost: 30,
+      date: "2026-02-01",
+      future: false,
+    });
+    const { output: p5 } = await createRepoEntity(ctx, "expense", {
+      trade: "other",
+      costType: "services",
+      lineKind: "tax",
+      name: "analytics p5 tax",
+      vendor: "Analytics allocation vendor",
+      orderId: "ANALYTICS-1",
+      cost: 23,
+      date: "2026-01-10",
+      future: false,
+    });
+    const { output: p6 } = await createRepoEntity(ctx, "expense", {
+      trade: "other",
+      costType: "tools",
+      lineKind: "discount",
+      name: "analytics p6 discount",
+      vendor: "Analytics allocation vendor",
+      orderId: "ANALYTICS-1",
+      cost: -5,
+      date: "2026-01-10",
+      future: false,
+    });
 
     const filters = { search: "analytics p" };
     const result = await expenseAnalytics(ctx.db, filters);
@@ -1038,7 +944,7 @@ describe("expense repository — charge grouping", () => {
     vendor: string | null,
     orderId: string | null = null,
   ) =>
-    expenseCreateInput.parse({
+    buildEntity("expense", {
       date: "2024-01-15",
       trade: "other",
       costType: "materials",

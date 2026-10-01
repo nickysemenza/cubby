@@ -1,6 +1,4 @@
 import { Pool } from "pg";
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
-import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
 import { testUserId } from "@cubby/schemas/testing";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -12,6 +10,7 @@ import {
   buildScenarioDatabase,
   createFixtureWithContext,
 } from "./scenarios/context";
+import { buildEntity } from "./factories/build";
 
 /** Every Mac lane needs the statement's account; reconciliation never invents one. */
 export async function seedMacStatementAccount(
@@ -27,7 +26,7 @@ export async function seedMacStatementAccount(
       const created = await createFixtureWithContext(
         kernel,
         "ledgerParty",
-        ledgerPartyCreateInput.parse({
+        buildEntity("ledgerParty", {
           name: "Synthetic Mac reviewer",
           kind: "member",
         }),
@@ -44,7 +43,7 @@ export async function seedMacStatementAccount(
     const card = await createFixtureWithContext(
       kernel,
       "financialAccount",
-      financialAccountCreateInput.parse({
+      buildEntity("financialAccount", {
         name: "Synthetic Mac Visa 4242",
         identity: { kind: "credit_card", issuer: null, network: "visa" },
         ledgerPartyId: member.shortcode,

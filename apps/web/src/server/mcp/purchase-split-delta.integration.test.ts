@@ -12,19 +12,19 @@
  */
 
 import type { UserId } from "@cubby/schemas/identifiers";
-import { expenseCreateInput } from "@cubby/schemas/project";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import {
   type CallToolResult,
   CallToolResultSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { splitExpenseWithDeltaOut } from "~/contracts/purchase.contract";
 import type { EntityKernelContext } from "~/server/entity-kernel";
-import { createExpense, getExpenseByShortcode } from "~/server/repo/expense";
+import { getExpenseByShortcode } from "~/server/repo/expense";
 import { makeExpenseInput } from "~/server/repo/repo.fixtures";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -92,17 +92,15 @@ describe("expenses.split MCP action — originalCost/partsSum/delta", () => {
   const caller = () => workflowContext(ctx.db, ctx.actor.userId);
 
   it("reports a zero delta when the parts sum exactly to the original", async () => {
-    const { output: original } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "combo kit",
-          cost: 100,
-          vendor: "Split Delta Vendor",
-          orderId: "SPLIT-DELTA-1",
-        }),
-      ),
-      ctx.actor,
+    const { output: original } = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "combo kit",
+        cost: 100,
+        vendor: "Split Delta Vendor",
+        orderId: "SPLIT-DELTA-1",
+      }),
     );
 
     const result = await callTool(
@@ -128,17 +126,15 @@ describe("expenses.split MCP action — originalCost/partsSum/delta", () => {
   });
 
   it("rejects a nonconserving split and preserves the original expense", async () => {
-    const { output: original } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "partially refunded combo",
-          cost: 100,
-          vendor: "Split Delta Vendor",
-          orderId: "SPLIT-DELTA-2",
-        }),
-      ),
-      ctx.actor,
+    const { output: original } = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "partially refunded combo",
+        cost: 100,
+        vendor: "Split Delta Vendor",
+        orderId: "SPLIT-DELTA-2",
+      }),
     );
 
     const result = await callTool(
@@ -169,17 +165,15 @@ describe("expenses.split MCP action — originalCost/partsSum/delta", () => {
   });
 
   it("returns null originalCost/delta when the original has no recorded cost", async () => {
-    const { output: original } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "uncosted combo",
-          cost: null,
-          vendor: "Split Delta Vendor",
-          orderId: "SPLIT-DELTA-3",
-        }),
-      ),
-      ctx.actor,
+    const { output: original } = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "uncosted combo",
+        cost: null,
+        vendor: "Split Delta Vendor",
+        orderId: "SPLIT-DELTA-3",
+      }),
     );
 
     const result = await callTool(

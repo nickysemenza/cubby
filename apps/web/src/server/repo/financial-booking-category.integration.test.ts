@@ -1,7 +1,6 @@
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
-import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import { eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -12,7 +11,6 @@ import {
 } from "~/server/db/schema";
 
 import { getDb } from "./database-helpers";
-import { createFinancialAccount } from "./financial-account";
 import {
   commitFinancialBooking,
   previewFinancialBooking,
@@ -21,7 +19,6 @@ import {
   previewFinancialBookingCorrection,
   commitFinancialBookingCorrection,
 } from "./financial-booking-correction";
-import { createFinancialTransaction } from "./financial-transaction";
 import { getPurchaseByID } from "./purchase";
 import { insertWithShortcode } from "./shortcode-utils";
 
@@ -43,28 +40,20 @@ describe("reviewed booking category and refund capacity", () => {
       date: "2026-09-01",
       defaultTrade: "other",
     });
-    const account = await createFinancialAccount(
-      ctx.db,
-      financialAccountCreateInput.parse({
-        name: "Booking fixture cash",
-        identity: { kind: "cash" },
-      }),
-      ctx.actor,
-    );
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Booking fixture cash",
+      identity: { kind: "cash" },
+    });
     const transaction = async (amount: number) => {
-      const saved = await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: account.output.id,
-          kind: amount < 0 ? "refund" : "purchase",
-          status: "posted",
-          amount,
-          postedDate: "2026-09-01",
-          merchant: "Booking fixture vendor",
-          sourceCategory: "Synthetic source dining",
-        }),
-        ctx.actor,
-      );
+      const saved = await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.output.id,
+        kind: amount < 0 ? "refund" : "purchase",
+        status: "posted",
+        amount,
+        postedDate: "2026-09-01",
+        merchant: "Booking fixture vendor",
+        sourceCategory: "Synthetic source dining",
+      });
       // Legacy stored category evidence must not become a new ledger override.
       await getDb(ctx.db)
         .update(financialTransaction)

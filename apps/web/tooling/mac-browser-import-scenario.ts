@@ -1,8 +1,5 @@
-import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
-import { vendorCreateInput } from "@cubby/schemas/vendor";
-import { vendorAccountCreateInput } from "@cubby/schemas/vendor-account";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import { setTimeout } from "node:timers/promises";
@@ -28,6 +25,7 @@ import {
 import { MacImportDriver } from "./mac-import-driver";
 import type { createLocalWorkerdHarness } from "./local-workerd-harness";
 import type { createMacRetailerFixture } from "./mac-retailer-fixture";
+import { buildEntity } from "./factories/build";
 
 type Input = {
   databaseURL: string;
@@ -55,7 +53,7 @@ export async function createMacBrowserScenario(input: Input) {
       const created = await createFixtureWithContext(
         kernel,
         "ledgerParty",
-        ledgerPartyCreateInput.parse({
+        buildEntity("ledgerParty", {
           name: "Synthetic Mac reviewer",
           kind: "member",
         }),
@@ -72,7 +70,7 @@ export async function createMacBrowserScenario(input: Input) {
     const vendor = await createFixtureWithContext(
       kernel,
       "vendor",
-      vendorCreateInput.parse({
+      buildEntity("vendor", {
         name: "Synthetic Outfitters",
         website: input.retailer.origin,
         browserDomains: ["shop.example.test"],
@@ -82,7 +80,7 @@ export async function createMacBrowserScenario(input: Input) {
     const account = await createFixtureWithContext(
       kernel,
       "vendorAccount",
-      vendorAccountCreateInput.parse({
+      buildEntity("vendorAccount", {
         label: "Synthetic Mac retailer",
         vendorId: vendor.id,
         ledgerPartyId: member.shortcode,

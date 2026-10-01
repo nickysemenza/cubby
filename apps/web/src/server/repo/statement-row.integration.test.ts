@@ -1,11 +1,10 @@
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
-import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import {
   recordStatementRowsInput,
   type StatementImportInput,
   type StatementRowInput,
 } from "@cubby/schemas/statement-row";
 import { sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -16,8 +15,6 @@ import {
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
 import { getDb } from "./database-helpers";
-import { createFinancialAccount } from "./financial-account";
-import { createFinancialTransaction } from "./financial-transaction";
 import {
   deleteStatementRows,
   listStatementImports,
@@ -76,22 +73,18 @@ describe("statement row ledger", () => {
   // This exercises the real PostgreSQL identity/ref constraints and shared
   // web/native CSV writer; a browser cannot expose duplicate ref ownership.
   it("retains identical and zero CSV occurrences, then reviews date/provider drift without another charge", async () => {
-    await createFinancialAccount(
-      ctx.db,
-      financialAccountCreateInput.parse({
-        name: "Occurrence card",
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
-        sourceAliases: [
-          {
-            source: "monarch",
-            alias: "Occurrence Visa",
-            externalAccountId: null,
-          },
-          { source: "mint", alias: "Occurrence Visa", externalAccountId: null },
-        ],
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "financialAccount", {
+      name: "Occurrence card",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      sourceAliases: [
+        {
+          source: "monarch",
+          alias: "Occurrence Visa",
+          externalAccountId: null,
+        },
+        { source: "mint", alias: "Occurrence Visa", externalAccountId: null },
+      ],
+    });
     const header =
       "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Id";
     const file = {
@@ -185,9 +178,10 @@ describe("statement row ledger", () => {
   });
 
   it("reviews no-ID pending-to-posted amount drift and preserves the canonical charge", async () => {
-    const { output: account } = await createFinancialAccount(
-      ctx.db,
-      financialAccountCreateInput.parse({
+    const { output: account } = await createRepoEntity(
+      ctx,
+      "financialAccount",
+      {
         name: "Synthetic tip card",
         identity: { kind: "credit_card", issuer: null, network: "visa" },
         sourceAliases: [
@@ -197,8 +191,7 @@ describe("statement row ledger", () => {
             externalAccountId: null,
           },
         ],
-      }),
-      ctx.actor,
+      },
     );
     const header =
       "date,name,amount,status,category,type,account,account mask,note";
@@ -212,23 +205,17 @@ describe("statement row ledger", () => {
     const observation = (await listStatementRows(ctx.db, {})).data[0];
     if (!observation) throw new Error("Pending source observation missing");
     const original = (
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: account.id,
-          kind: "purchase",
-          status: "pending",
-          amount: 20,
-          transactionDate: "2026-08-16",
-          postedDate: null,
-          merchant: "Synthetic Tip Cafe",
-          rawDescription: "Synthetic Tip Cafe",
-          sourceRefs: [
-            { source: "copilot", externalId: observation.externalId },
-          ],
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.id,
+        kind: "purchase",
+        status: "pending",
+        amount: 20,
+        transactionDate: "2026-08-16",
+        postedDate: null,
+        merchant: "Synthetic Tip Cafe",
+        rawDescription: "Synthetic Tip Cafe",
+        sourceRefs: [{ source: "copilot", externalId: observation.externalId }],
+      })
     ).output;
     const posted = {
       fileName: "posted-tip.csv",
@@ -254,19 +241,15 @@ describe("statement row ledger", () => {
       }),
     ).rejects.toThrow("needs review");
     const second = (
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: account.id,
-          kind: "purchase",
-          status: "posted",
-          amount: 22,
-          postedDate: "2026-08-17",
-          merchant: "Synthetic Tip Cafe",
-          rawDescription: "Synthetic Tip Cafe",
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 22,
+        postedDate: "2026-08-17",
+        merchant: "Synthetic Tip Cafe",
+        rawDescription: "Synthetic Tip Cafe",
+      })
     ).output;
     expect(
       (await previewStatementCsv(ctx.db, ctx.actor, posted)).preview?.rows[0]
@@ -309,30 +292,26 @@ describe("statement row ledger", () => {
   });
 
   it("previews, confirms and safely replays a synthetic CSV through the native intake contract", async () => {
-    await createFinancialAccount(
-      ctx.db,
-      financialAccountCreateInput.parse({
-        name: "Test Card",
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
-        cardNumbers: [
-          {
-            last4: "4242",
-            kind: "primary",
-            validFrom: null,
-            validTo: null,
-            note: null,
-          },
-        ],
-        sourceAliases: [
-          {
-            source: "monarch",
-            alias: "Test Card (...4242)",
-            externalAccountId: null,
-          },
-        ],
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "financialAccount", {
+      name: "Test Card",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      cardNumbers: [
+        {
+          last4: "4242",
+          kind: "primary",
+          validFrom: null,
+          validTo: null,
+          note: null,
+        },
+      ],
+      sourceAliases: [
+        {
+          source: "monarch",
+          alias: "Test Card (...4242)",
+          externalAccountId: null,
+        },
+      ],
+    });
     const file = {
       fileName: "synthetic-statement.csv",
       text: "Date,Merchant,Category,Account,Original Statement,Notes,Amount,Id\n2026-08-16,ForgeWear,Clothing,Test Card (...4242),FORGEWEAR ORDER,, -42.50,row-1\n",
@@ -488,39 +467,31 @@ describe("statement row ledger", () => {
     expect(row?.matchState).toBe("unmatched");
 
     const account = (
-      await createFinancialAccount(
-        ctx.db,
-        financialAccountCreateInput.parse({
-          name: "Test Card",
-          identity: { kind: "credit_card", issuer: null, network: "amex" },
-          cardNumbers: [
-            {
-              last4: "4242",
-              kind: "primary",
-              validFrom: null,
-              validTo: null,
-              note: null,
-            },
-          ],
-          sourceAliases: [],
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialAccount", {
+        name: "Test Card",
+        identity: { kind: "credit_card", issuer: null, network: "amex" },
+        cardNumbers: [
+          {
+            last4: "4242",
+            kind: "primary",
+            validFrom: null,
+            validTo: null,
+            note: null,
+          },
+        ],
+        sourceAliases: [],
+      })
     ).output;
 
     const transaction = (
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: account.id,
-          kind: "purchase",
-          status: "posted",
-          amount: 128.5,
-          postedDate: "2026-05-04",
-          sourceRefs: [{ source: row!.source, externalId: row!.externalId }],
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 128.5,
+        postedDate: "2026-05-04",
+        sourceRefs: [{ source: row!.source, externalId: row!.externalId }],
+      })
     ).output;
 
     // No write to StatementRow: appending the ref on the transaction side is
@@ -561,40 +532,32 @@ describe("statement row ledger", () => {
     expect(a!.externalId).not.toBe(b!.externalId);
 
     const account = (
-      await createFinancialAccount(
-        ctx.db,
-        financialAccountCreateInput.parse({
-          name: "Shared Card",
-          identity: { kind: "credit_card", issuer: null, network: "amex" },
-          cardNumbers: [
-            {
-              last4: "4242",
-              kind: "primary",
-              validFrom: null,
-              validTo: null,
-              note: null,
-            },
-          ],
-          sourceAliases: [],
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialAccount", {
+        name: "Shared Card",
+        identity: { kind: "credit_card", issuer: null, network: "amex" },
+        cardNumbers: [
+          {
+            last4: "4242",
+            kind: "primary",
+            validFrom: null,
+            validTo: null,
+            note: null,
+          },
+        ],
+        sourceAliases: [],
+      })
     ).output;
-    await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
-        accountId: account.id,
-        kind: "purchase",
-        status: "posted",
-        amount: 128.5,
-        postedDate: "2026-05-04",
-        sourceRefs: rows.map((row) => ({
-          source: row.source,
-          externalId: row.externalId,
-        })),
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 128.5,
+      postedDate: "2026-05-04",
+      sourceRefs: rows.map((row) => ({
+        source: row.source,
+        externalId: row.externalId,
+      })),
+    });
 
     // One transaction, two matching refs: each row must appear once. Without
     // the global (source, externalId) uniqueness this join relies on, the

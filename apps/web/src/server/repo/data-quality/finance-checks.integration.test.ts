@@ -1,26 +1,13 @@
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
-import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import {
-  expenseCreateInput,
-  projectCreateInput,
-  taskCreateInput,
-} from "@cubby/schemas/project";
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
-import { vendorCreateInput } from "@cubby/schemas/vendor";
+import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { createExpense } from "~/server/repo/expense";
-import { createFinancialAccount } from "~/server/repo/financial-account";
-import { createFinancialTransaction } from "~/server/repo/financial-transaction";
 import { createGardenEntry, createPlanting } from "~/server/repo/garden";
 import { createLedgerParty } from "~/server/repo/ledger-party";
 import { createLedgerTransfer } from "~/server/repo/ledger-transfer";
 import { createLocation } from "~/server/repo/location";
-import { createProject } from "~/server/repo/project";
-import { createPurchase } from "~/server/repo/purchase";
 import {
   createImageFixture,
   createPlantFixture,
@@ -29,9 +16,7 @@ import {
   makeProductInput,
   insertEntityAttachments,
 } from "~/server/repo/repo.fixtures";
-import { createTask } from "~/server/repo/task";
 import {
-  createVendor,
   findOrCreateVendor,
   getVendorByID,
   updateVendor,
@@ -55,24 +40,16 @@ describe("data quality: finance and project entities", () => {
   const ctx = withTestDb();
 
   it("project: kind and start date", async () => {
-    const gap = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "DQ project gap",
-        status: "not_started",
-      }),
-      ctx.actor,
-    );
-    const complete = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "DQ project complete",
-        kind: "furniture",
-        status: "not_started",
-        startDate: "2026-01-01",
-      }),
-      ctx.actor,
-    );
+    const gap = await createRepoEntity(ctx, "project", {
+      name: "DQ project gap",
+      status: "not_started",
+    });
+    const complete = await createRepoEntity(ctx, "project", {
+      name: "DQ project complete",
+      kind: "furniture",
+      status: "not_started",
+      startDate: "2026-01-01",
+    });
 
     const hydrated = await loadDataQualities(ctx.db, "project", [
       gap.entityId,
@@ -91,31 +68,19 @@ describe("data quality: finance and project entities", () => {
     // A task needs a trade or an inherited source (`assertEffectiveTaskTrade`)
     // — give it a project default so create succeeds while the task's OWN
     // `trade` column, which this check reads, stays unset.
-    const project = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "DQ task trade project",
-        defaultTrade: "electrical",
-      }),
-      ctx.actor,
-    );
-    const gap = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        name: "DQ task gap",
-        projectId: project.output.id,
-      }),
-      ctx.actor,
-    );
-    const complete = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        name: "DQ task complete",
-        trade: "electrical",
-        dueDate: "2026-09-01",
-      }),
-      ctx.actor,
-    );
+    const project = await createRepoEntity(ctx, "project", {
+      name: "DQ task trade project",
+      defaultTrade: "electrical",
+    });
+    const gap = await createRepoEntity(ctx, "task", {
+      name: "DQ task gap",
+      projectId: project.output.id,
+    });
+    const complete = await createRepoEntity(ctx, "task", {
+      name: "DQ task complete",
+      trade: "electrical",
+      dueDate: "2026-09-01",
+    });
 
     const hydrated = await loadDataQualities(ctx.db, "task", [
       gap.entityId,
@@ -131,41 +96,25 @@ describe("data quality: finance and project entities", () => {
   });
 
   it("vendor: order evidence, logo and website (only once transacted with)", async () => {
-    const untransacted = await createVendor(
-      ctx.db,
-      vendorCreateInput.parse({ name: "DQ vendor untransacted" }),
-      ctx.actor,
-    );
-    const gap = await createVendor(
-      ctx.db,
-      vendorCreateInput.parse({ name: "DQ vendor gap" }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        date: "2026-08-01",
-        vendorId: gap.output.id,
-      }),
-      ctx.actor,
-    );
-    const complete = await createVendor(
-      ctx.db,
-      vendorCreateInput.parse({
-        name: "DQ vendor complete",
-        website: "https://example.test",
-        orderEvidence: "online_account",
-      }),
-      ctx.actor,
-    );
-    await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        date: "2026-08-01",
-        vendorId: complete.output.id,
-      }),
-      ctx.actor,
-    );
+    const untransacted = await createRepoEntity(ctx, "vendor", {
+      name: "DQ vendor untransacted",
+    });
+    const gap = await createRepoEntity(ctx, "vendor", {
+      name: "DQ vendor gap",
+    });
+    await createRepoEntity(ctx, "purchase", {
+      date: "2026-08-01",
+      vendorId: gap.output.id,
+    });
+    const complete = await createRepoEntity(ctx, "vendor", {
+      name: "DQ vendor complete",
+      website: "https://example.test",
+      orderEvidence: "online_account",
+    });
+    await createRepoEntity(ctx, "purchase", {
+      date: "2026-08-01",
+      vendorId: complete.output.id,
+    });
     const logo = await createImageFixture(ctx.db, "dq-vendor-logo");
     await insertEntityAttachments(ctx.db, {
       entityId: complete.entityId,
@@ -229,25 +178,17 @@ describe("data quality: finance and project entities", () => {
       { name: "DQ member", kind: "member", notes: null },
       ctx.actor,
     );
-    const gap = await createFinancialAccount(
-      ctx.db,
-      financialAccountCreateInput.parse({
-        name: "DQ account gap",
-        identity: { kind: "cash" },
-        provisional: true,
-      }),
-      ctx.actor,
-    );
-    const complete = await createFinancialAccount(
-      ctx.db,
-      financialAccountCreateInput.parse({
-        name: "DQ account complete",
-        identity: { kind: "cash" },
-        provisional: false,
-        ledgerPartyId: member.output.id,
-      }),
-      ctx.actor,
-    );
+    const gap = await createRepoEntity(ctx, "financialAccount", {
+      name: "DQ account gap",
+      identity: { kind: "cash" },
+      provisional: true,
+    });
+    const complete = await createRepoEntity(ctx, "financialAccount", {
+      name: "DQ account complete",
+      identity: { kind: "cash" },
+      provisional: false,
+      ledgerPartyId: member.output.id,
+    });
 
     const hydrated = await loadDataQualities(ctx.db, "financialAccount", [
       gap.entityId,
@@ -263,49 +204,33 @@ describe("data quality: finance and project entities", () => {
   });
 
   it("financialTransaction: purchase allocation (posted settlement kinds) and merchant", async () => {
-    const account = await createFinancialAccount(
-      ctx.db,
-      financialAccountCreateInput.parse({
-        name: "DQ transaction account",
-        identity: { kind: "cash" },
-        provisional: false,
-      }),
-      ctx.actor,
-    );
-    const gap = await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
-        accountId: account.output.id,
-        kind: "purchase",
-        status: "posted",
-        postedDate: "2026-08-01",
-        amount: 25,
-      }),
-      ctx.actor,
-    );
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "DQ transaction account",
+      identity: { kind: "cash" },
+      provisional: false,
+    });
+    const gap = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-08-01",
+      amount: 25,
+    });
     const vendorId = await findOrCreateVendor(ctx.db, "DQ settlement vendor");
     const settlementVendor = await getVendorByID(ctx.db, vendorId);
-    const purchase = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        date: "2026-08-01",
-        vendorId: settlementVendor.id,
-      }),
-      ctx.actor,
-    );
-    const complete = await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
-        accountId: account.output.id,
-        purchaseId: purchase.output.id,
-        kind: "purchase",
-        status: "posted",
-        postedDate: "2026-08-01",
-        amount: 25,
-        merchant: "DQ settlement vendor",
-      }),
-      ctx.actor,
-    );
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      date: "2026-08-01",
+      vendorId: settlementVendor.id,
+    });
+    const complete = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      purchaseId: purchase.output.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-08-01",
+      amount: 25,
+      merchant: "DQ settlement vendor",
+    });
 
     const hydrated = await loadDataQualities(ctx.db, "financialTransaction", [
       gap.entityId,
@@ -322,29 +247,21 @@ describe("data quality: finance and project entities", () => {
   });
 
   it("expense: cost (only when not future)", async () => {
-    const gap = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        name: "DQ expense gap",
-        date: "2026-08-01",
-        trade: "other",
-        costType: "materials",
-        future: false,
-      }),
-      ctx.actor,
-    );
-    const complete = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        name: "DQ expense complete",
-        date: "2026-08-01",
-        trade: "other",
-        cost: 42,
-        costType: "materials",
-        future: false,
-      }),
-      ctx.actor,
-    );
+    const gap = await createRepoEntity(ctx, "expense", {
+      name: "DQ expense gap",
+      date: "2026-08-01",
+      trade: "other",
+      costType: "materials",
+      future: false,
+    });
+    const complete = await createRepoEntity(ctx, "expense", {
+      name: "DQ expense complete",
+      date: "2026-08-01",
+      trade: "other",
+      cost: 42,
+      costType: "materials",
+      future: false,
+    });
 
     const hydrated = await loadDataQualities(ctx.db, "expense", [
       gap.entityId,
@@ -504,16 +421,12 @@ describe("data quality: finance and project entities", () => {
       { name: "DQ member complete", kind: "member", notes: null },
       ctx.actor,
     );
-    await createFinancialAccount(
-      ctx.db,
-      financialAccountCreateInput.parse({
-        name: "DQ member account",
-        identity: { kind: "cash" },
-        provisional: false,
-        ledgerPartyId: complete.output.id,
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "financialAccount", {
+      name: "DQ member account",
+      identity: { kind: "cash" },
+      provisional: false,
+      ledgerPartyId: complete.output.id,
+    });
 
     const hydrated = await loadDataQualities(ctx.db, "ledgerParty", [
       guest.entityId,

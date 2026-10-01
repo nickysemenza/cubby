@@ -1,9 +1,5 @@
-import {
-  createProjectFromTasksInput,
-  expenseCreateInput,
-  projectCreateInput,
-  taskCreateInput,
-} from "@cubby/schemas/project";
+import { createProjectFromTasksInput } from "@cubby/schemas/project";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -12,26 +8,23 @@ import { projectCreateFromTasksWorkflow } from "~/server/operations/project.serv
 import { linkValues } from "~/server/repo/entity-links";
 
 import { insertAndReturn } from "./database-helpers";
-import { createExpense } from "./expense";
 import {
-  createProject,
   deleteProjects,
   getProjectByID,
   getProjectDependencyGraph,
   projectTreePage,
   updateProject,
 } from "./project";
-import { createTask, getTaskByShortcode, updateTask } from "./task";
+import { getTaskByShortcode, updateTask } from "./task";
 
 describe("project repository", () => {
   const ctx = withTestDb();
 
   it("promotes tasks through the registered workflow and returns committed project membership", async () => {
-    const task = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ name: "Prepare test room", trade: "other" }),
-      ctx.actor,
-    );
+    const task = await createRepoEntity(ctx, "task", {
+      name: "Prepare test room",
+      trade: "other",
+    });
     const result = await projectCreateFromTasksWorkflow(
       ctx.db,
       createProjectFromTasksInput.parse({
@@ -47,68 +40,45 @@ describe("project repository", () => {
   });
 
   it("rolls up spend (including future expenses) and task counts", async () => {
-    const { output: project, entityId: projectEntityId } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "test project rollup" }),
-      ctx.actor,
-    );
+    const { output: project, entityId: projectEntityId } =
+      await createRepoEntity(ctx, "project", { name: "test project rollup" });
 
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "test expense made",
-        projectId: project.id,
-        cost: 100,
-        future: false,
-      }),
-      ctx.actor,
-    );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "test expense future",
-        projectId: project.id,
-        cost: 50,
-        future: true,
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "expense", {
+      date: "2024-01-15",
+      trade: "other",
+      costType: "materials",
+      name: "test expense made",
+      projectId: project.id,
+      cost: 100,
+      future: false,
+    });
+    await createRepoEntity(ctx, "expense", {
+      date: "2024-01-15",
+      trade: "other",
+      costType: "materials",
+      name: "test expense future",
+      projectId: project.id,
+      cost: 50,
+      future: true,
+    });
 
-    const { output: doneTask } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "test task done",
-        projectId: project.id,
-        status: "not_started",
-      }),
-      ctx.actor,
-    );
+    const { output: doneTask } = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "test task done",
+      projectId: project.id,
+      status: "not_started",
+    });
     await updateTask(ctx.db, doneTask.id, { status: "done" }, ctx.actor);
-    await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "test task two",
-        projectId: project.id,
-      }),
-      ctx.actor,
-    );
-    await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "test task three",
-        projectId: project.id,
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "test task two",
+      projectId: project.id,
+    });
+    await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "test task three",
+      projectId: project.id,
+    });
 
     const result = await getProjectByID(ctx.db, projectEntityId);
     expect(result.rollup).toEqual({
@@ -134,25 +104,19 @@ describe("project repository", () => {
   });
 
   it("returns a scoped subtree with direct dependency and hierarchy context", async () => {
-    const { output: root, entityId: rootId } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "graph root" }),
-      ctx.actor,
+    const { output: root, entityId: rootId } = await createRepoEntity(
+      ctx,
+      "project",
+      { name: "graph root" },
     );
-    const { output: child } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "graph child",
-        locations: ["Workshop", "Garden"],
-        parentProjectId: root.id,
-      }),
-      ctx.actor,
-    );
-    const { output: outside } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "graph outside" }),
-      ctx.actor,
-    );
+    const { output: child } = await createRepoEntity(ctx, "project", {
+      name: "graph child",
+      locations: ["Workshop", "Garden"],
+      parentProjectId: root.id,
+    });
+    const { output: outside } = await createRepoEntity(ctx, "project", {
+      name: "graph outside",
+    });
     await updateProject(
       ctx.db,
       root.id,
@@ -160,33 +124,21 @@ describe("project repository", () => {
       ctx.actor,
     );
 
-    const { output: parentTask } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        name: "graph parent task",
-        projectId: child.id,
-        trade: "other",
-      }),
-      ctx.actor,
-    );
-    const { output: childTask } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        name: "graph child task",
-        parentTaskId: parentTask.id,
-        trade: "other",
-      }),
-      ctx.actor,
-    );
-    const { output: blocker } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        name: "graph external blocker",
-        projectId: outside.id,
-        trade: "other",
-      }),
-      ctx.actor,
-    );
+    const { output: parentTask } = await createRepoEntity(ctx, "task", {
+      name: "graph parent task",
+      projectId: child.id,
+      trade: "other",
+    });
+    const { output: childTask } = await createRepoEntity(ctx, "task", {
+      name: "graph child task",
+      parentTaskId: parentTask.id,
+      trade: "other",
+    });
+    const { output: blocker } = await createRepoEntity(ctx, "task", {
+      name: "graph external blocker",
+      projectId: outside.id,
+      trade: "other",
+    });
     await updateTask(
       ctx.db,
       childTask.id,
@@ -227,11 +179,10 @@ describe("project repository", () => {
   });
 
   it("includes inbox tasks when no project scope is selected", async () => {
-    const { output: inbox } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({ name: "graph inbox task", trade: "other" }),
-      ctx.actor,
-    );
+    const { output: inbox } = await createRepoEntity(ctx, "task", {
+      name: "graph inbox task",
+      trade: "other",
+    });
 
     expect((await getProjectDependencyGraph(ctx.db)).nodes).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: inbox.id })]),
@@ -239,21 +190,17 @@ describe("project repository", () => {
   });
 
   it("rejects a dependency cycle against the whole projected graph", async () => {
-    const { output: a, entityId: aId } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "dependency cycle project a" }),
-      ctx.actor,
+    const { output: a, entityId: aId } = await createRepoEntity(
+      ctx,
+      "project",
+      { name: "dependency cycle project a" },
     );
-    const { output: b } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "dependency cycle project b" }),
-      ctx.actor,
-    );
-    const { output: c } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "dependency cycle project c" }),
-      ctx.actor,
-    );
+    const { output: b } = await createRepoEntity(ctx, "project", {
+      name: "dependency cycle project b",
+    });
+    const { output: c } = await createRepoEntity(ctx, "project", {
+      name: "dependency cycle project c",
+    });
     await updateProject(ctx.db, a.id, { blockedByIds: [b.id] }, ctx.actor);
     await updateProject(ctx.db, b.id, { blockedByIds: [c.id] }, ctx.actor);
 
@@ -266,11 +213,9 @@ describe("project repository", () => {
   });
 
   it("backstops self dependency with a database CHECK", async () => {
-    const { entityId } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "raw self dependency project" }),
-      ctx.actor,
-    );
+    const { entityId } = await createRepoEntity(ctx, "project", {
+      name: "raw self dependency project",
+    });
 
     await expect(
       insertAndReturn(
@@ -282,20 +227,14 @@ describe("project repository", () => {
   });
 
   it("blocks deletion while live tasks or expenses still reference the project", async () => {
-    const { output: projectWithTask } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "test project with task" }),
-      ctx.actor,
-    );
-    await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "test task blocking delete",
-        projectId: projectWithTask.id,
-      }),
-      ctx.actor,
-    );
+    const { output: projectWithTask } = await createRepoEntity(ctx, "project", {
+      name: "test project with task",
+    });
+    await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "test task blocking delete",
+      projectId: projectWithTask.id,
+    });
     await expect(
       deleteProjects(ctx.db, [projectWithTask.id], ctx.actor),
     ).rejects.toMatchObject({
@@ -303,22 +242,18 @@ describe("project repository", () => {
       reason: "PROJECT_HAS_TASKS",
     });
 
-    const { output: projectWithExpense } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "test project with expense" }),
-      ctx.actor,
+    const { output: projectWithExpense } = await createRepoEntity(
+      ctx,
+      "project",
+      { name: "test project with expense" },
     );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2024-01-15",
-        trade: "other",
-        costType: "materials",
-        name: "test expense blocking delete",
-        projectId: projectWithExpense.id,
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "expense", {
+      date: "2024-01-15",
+      trade: "other",
+      costType: "materials",
+      name: "test expense blocking delete",
+      projectId: projectWithExpense.id,
+    });
     await expect(
       deleteProjects(ctx.db, [projectWithExpense.id], ctx.actor),
     ).rejects.toMatchObject({
@@ -328,19 +263,13 @@ describe("project repository", () => {
   });
 
   it("blocks deletion while a live sub-project still references it, succeeds once the child is gone", async () => {
-    const { output: parent } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "Sub-Project-Blocked Parent" }),
-      ctx.actor,
-    );
-    const { output: child } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "Blocking Child",
-        parentProjectId: parent.id,
-      }),
-      ctx.actor,
-    );
+    const { output: parent } = await createRepoEntity(ctx, "project", {
+      name: "Sub-Project-Blocked Parent",
+    });
+    const { output: child } = await createRepoEntity(ctx, "project", {
+      name: "Blocking Child",
+      parentProjectId: parent.id,
+    });
 
     await expect(
       deleteProjects(ctx.db, [parent.id], ctx.actor),
@@ -361,21 +290,19 @@ describe("project repository — sub-projects (parentProjectId)", () => {
   const ctx = withTestDb();
 
   it("rejects a cycle (A -> B -> C; making A a child of C) with PROJECT_CYCLE", async () => {
-    const { output: a, entityId: aEntityId } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "cycle a" }),
-      ctx.actor,
+    const { output: a, entityId: aEntityId } = await createRepoEntity(
+      ctx,
+      "project",
+      { name: "cycle a" },
     );
-    const { output: b } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "cycle b", parentProjectId: a.id }),
-      ctx.actor,
-    );
-    const { output: c } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "cycle c", parentProjectId: b.id }),
-      ctx.actor,
-    );
+    const { output: b } = await createRepoEntity(ctx, "project", {
+      name: "cycle b",
+      parentProjectId: a.id,
+    });
+    const { output: c } = await createRepoEntity(ctx, "project", {
+      name: "cycle c",
+      parentProjectId: b.id,
+    });
 
     await expect(
       updateProject(ctx.db, a.id, { parentProjectId: c.id }, ctx.actor),
@@ -401,28 +328,18 @@ describe("project repository — WBS tree page", () => {
   const ctx = withTestDb();
 
   const makeChain = async (prefix: string) => {
-    const { output: parent } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: `${prefix} parent` }),
-      ctx.actor,
-    );
-    const { output: child } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: `${prefix} child`,
-        parentProjectId: parent.id,
-        status: "done",
-      }),
-      ctx.actor,
-    );
-    const { output: grandchild } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: `${prefix} grandchild`,
-        parentProjectId: child.id,
-      }),
-      ctx.actor,
-    );
+    const { output: parent } = await createRepoEntity(ctx, "project", {
+      name: `${prefix} parent`,
+    });
+    const { output: child } = await createRepoEntity(ctx, "project", {
+      name: `${prefix} child`,
+      parentProjectId: parent.id,
+      status: "done",
+    });
+    const { output: grandchild } = await createRepoEntity(ctx, "project", {
+      name: `${prefix} grandchild`,
+      parentProjectId: child.id,
+    });
     return { parent, child, grandchild };
   };
 
@@ -433,11 +350,9 @@ describe("project repository — WBS tree page", () => {
 
   it("paginates by root, carrying descendants along with their root", async () => {
     const { parent, child, grandchild } = await makeChain("paged");
-    const { output: standalone } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "paged standalone" }),
-      ctx.actor,
-    );
+    const { output: standalone } = await createRepoEntity(ctx, "project", {
+      name: "paged standalone",
+    });
 
     const sortByName = [
       { orderBy: "name" as const, direction: "asc" as const },
@@ -459,34 +374,23 @@ describe("project repository — date windows (derivation)", () => {
   const ctx = withTestDb();
 
   it("derives dates purely from own content when no override is set", async () => {
-    const { output: project, entityId: projectEntityId } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "dates content only" }),
-      ctx.actor,
-    );
-    await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "dates content task",
-        projectId: project.id,
-        dueDate: "2024-02-01",
-        dueEndDate: "2024-02-03",
-      }),
-      ctx.actor,
-    );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        trade: "other",
-        costType: "materials",
-        name: "dates content expense",
-        projectId: project.id,
-        cost: 10,
-        date: "2024-01-15",
-      }),
-      ctx.actor,
-    );
+    const { output: project, entityId: projectEntityId } =
+      await createRepoEntity(ctx, "project", { name: "dates content only" });
+    await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "dates content task",
+      projectId: project.id,
+      dueDate: "2024-02-01",
+      dueEndDate: "2024-02-03",
+    });
+    await createRepoEntity(ctx, "expense", {
+      trade: "other",
+      costType: "materials",
+      name: "dates content expense",
+      projectId: project.id,
+      cost: 10,
+      date: "2024-01-15",
+    });
 
     const after = await getProjectByID(ctx.db, projectEntityId);
     expect(after.dates).toEqual({

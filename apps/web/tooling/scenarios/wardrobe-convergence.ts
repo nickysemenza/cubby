@@ -1,6 +1,5 @@
 import { buildActorContext } from "@cubby/schemas/context";
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
-import { locationCreateInput } from "@cubby/schemas/location";
 import {
   commitProductEnrichmentOut,
   commitPurchaseImportOut,
@@ -48,6 +47,7 @@ import {
   buildScenarioDatabase,
   createFixtureWithContext,
 } from "./context";
+import { buildEntity } from "../factories/build";
 
 const photoName = "Synthetic Gray Crew Shirt";
 const purchaseName = "Synthetic Heather Crew Tee";
@@ -1474,7 +1474,7 @@ export async function runWardrobeConvergenceScenario({
     const wardrobe = await createFixtureWithContext(
       kernel,
       "location",
-      locationCreateInput.parse({
+      buildEntity("location", {
         name: "Synthetic Wardrobe Room",
         aliases: [],
         tags: [],

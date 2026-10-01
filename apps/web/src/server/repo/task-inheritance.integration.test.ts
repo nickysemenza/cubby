@@ -1,51 +1,36 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
+import { buildEntity } from "tooling/factories/build";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { createProject, updateProject, getProjectByID } from "./project";
+import { updateProject, getProjectByID } from "./project";
 import { loadRelatedPreviews } from "./related-view";
 import { insertWithShortcode } from "./shortcode-utils";
-import { createTask, getTaskByShortcode, updateTask } from "./task";
+import { getTaskByShortcode, updateTask } from "./task";
 import { resolveDraftTaskFields } from "./task-project-inheritance";
 
 describe("task inheritance", () => {
   const ctx = withTestDb();
 
   it("resolves parent fields live, protects None, and snapshots a detach", async () => {
-    const first = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "inherit first",
-        defaultTrade: "building",
-      }),
-      ctx.actor,
-    );
-    const second = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "inherit second",
-        defaultTrade: "plumbing",
-      }),
-      ctx.actor,
-    );
-    const parent = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        name: "inherit parent",
-        projectId: first.output.id,
-        trade: "electrical",
-      }),
-      ctx.actor,
-    );
-    const child = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        name: "inherit child",
-        parentTaskId: parent.output.id,
-      }),
-      ctx.actor,
-    );
+    const first = await createRepoEntity(ctx, "project", {
+      name: "inherit first",
+      defaultTrade: "building",
+    });
+    const second = await createRepoEntity(ctx, "project", {
+      name: "inherit second",
+      defaultTrade: "plumbing",
+    });
+    const parent = await createRepoEntity(ctx, "task", {
+      name: "inherit parent",
+      projectId: first.output.id,
+      trade: "electrical",
+    });
+    const child = await createRepoEntity(ctx, "task", {
+      name: "inherit child",
+      parentTaskId: parent.output.id,
+    });
     expect(child.output).toMatchObject({
       projectId: first.output.id,
       trade: "electrical",
@@ -102,45 +87,29 @@ describe("task inheritance", () => {
     });
   });
   it("distinguishes matching overrides, parent trades, and an explicit empty source", async () => {
-    const first = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "Parent project",
-        defaultTrade: "building",
-      }),
-      ctx.actor,
-    );
-    const second = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "Independent project",
-        defaultTrade: "plumbing",
-      }),
-      ctx.actor,
-    );
+    const first = await createRepoEntity(ctx, "project", {
+      name: "Parent project",
+      defaultTrade: "building",
+    });
+    const second = await createRepoEntity(ctx, "project", {
+      name: "Independent project",
+      defaultTrade: "plumbing",
+    });
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Task fixture product",
       manufacturer: "Fixture manufacturer",
     });
-    const parent = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        name: "Parent",
-        projectId: first.output.id,
-        subjectProductId: product.shortcode,
-        trade: "electrical",
-      }),
-      ctx.actor,
-    );
-    const child = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        name: "Child",
-        parentTaskId: parent.output.id,
-        projectId: second.output.id,
-      }),
-      ctx.actor,
-    );
+    const parent = await createRepoEntity(ctx, "task", {
+      name: "Parent",
+      projectId: first.output.id,
+      subjectProductId: product.shortcode,
+      trade: "electrical",
+    });
+    const child = await createRepoEntity(ctx, "task", {
+      name: "Child",
+      parentTaskId: parent.output.id,
+      projectId: second.output.id,
+    });
     expect(child.output).toMatchObject({
       projectId: second.output.id,
       subjectProductId: product.shortcode,
@@ -173,7 +142,7 @@ describe("task inheritance", () => {
     });
     const none = await resolveDraftTaskFields(
       ctx.db,
-      taskCreateInput.parse({
+      buildEntity("task", {
         name: "Preview",
         parentTaskId: parent.output.id,
         projectId: null,
@@ -202,15 +171,11 @@ describe("task inheritance", () => {
       { subjectProductMode: "inherit" },
       ctx.actor,
     );
-    const secondParent = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        name: "New parent",
-        projectId: second.output.id,
-        trade: "landscaping",
-      }),
-      ctx.actor,
-    );
+    const secondParent = await createRepoEntity(ctx, "task", {
+      name: "New parent",
+      projectId: second.output.id,
+      trade: "landscaping",
+    });
     await updateTask(
       ctx.db,
       child.output.id,
@@ -225,36 +190,24 @@ describe("task inheritance", () => {
   });
 
   it("preserves project settings on detach and refuses removing a required default", async () => {
-    const parent = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "Site parent",
-        locations: ["Test site"],
-        defaultTrade: "building",
-      }),
-      ctx.actor,
-    );
-    const child = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "Site child",
-        parentProjectId: parent.output.id,
-      }),
-      ctx.actor,
-    );
+    const parent = await createRepoEntity(ctx, "project", {
+      name: "Site parent",
+      locations: ["Test site"],
+      defaultTrade: "building",
+    });
+    const child = await createRepoEntity(ctx, "project", {
+      name: "Site child",
+      parentProjectId: parent.output.id,
+    });
     expect(child.output).toMatchObject({
       locations: ["Test site"],
       defaultTrade: "building",
       fieldResolutions: { locations: { mode: "inherit" } },
     });
-    const task = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        name: "Dependent task",
-        projectId: child.output.id,
-      }),
-      ctx.actor,
-    );
+    const task = await createRepoEntity(ctx, "task", {
+      name: "Dependent task",
+      projectId: child.output.id,
+    });
     await expect(
       updateProject(
         ctx.db,

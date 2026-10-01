@@ -1,14 +1,11 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
-import {
-  type ExpenseCreateInput,
-  expenseCreateInput,
-} from "@cubby/schemas/project";
+import { type ExpenseCreateInput } from "@cubby/schemas/project";
 import { sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "../database-helpers";
-import { createExpense } from "../expense";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -34,11 +31,7 @@ describe("loadProductQuantityLedgers", () => {
   const ctx = withTestDb();
 
   const seed = (overrides: Partial<ExpenseCreateInput>) =>
-    createExpense(
-      ctx.db,
-      expenseCreateInput.parse(makeExpenseInput(overrides)),
-      ctx.actor,
-    );
+    createRepoEntity(ctx, "expense", makeExpenseInput(overrides));
 
   const ledgerFor = async (productId: ProductId) =>
     (await loadProductQuantityLedgers(ctx.db, [productId])).get(productId);

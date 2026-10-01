@@ -3,8 +3,8 @@ import {
   type SmartCollectionDefinition,
 } from "@cubby/schemas/collection";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { expenseCreateInput } from "@cubby/schemas/project";
 import { eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -18,7 +18,6 @@ import {
 
 import { getSmartCollectionDetail, listSmartCollections } from "./collection";
 import { getDb } from "./database-helpers";
-import { createExpense } from "./expense";
 import { updateLocation } from "./location";
 import { attachPurchaseProducts } from "./purchase-products";
 import {
@@ -210,38 +209,32 @@ describe("smart Collection live relationships", () => {
       date: "2026-01-01",
     });
     const purchaseId = parseShortcodeFor("purchase", order.shortcode);
-    const line = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          productId: first.id,
-          purchaseId,
-          trade: "finishes",
-        }),
-      ),
-      ctx.actor,
+    const line = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        productId: first.id,
+        purchaseId,
+        trade: "finishes",
+      }),
     );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          productId: second.id,
-          purchaseId,
-          trade: "electrical",
-        }),
-      ),
-      ctx.actor,
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        productId: second.id,
+        purchaseId,
+        trade: "electrical",
+      }),
     );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          productId: second.id,
-          trade: "finishes",
-          future: true,
-        }),
-      ),
-      ctx.actor,
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        productId: second.id,
+        trade: "finishes",
+        future: true,
+      }),
     );
     await attachPurchaseProducts(
       ctx.db,

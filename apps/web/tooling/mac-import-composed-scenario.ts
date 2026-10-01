@@ -4,8 +4,6 @@ import path from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { locationCreateInput } from "@cubby/schemas/location";
-import { spendingCategoryCreateInput } from "@cubby/schemas/spending-category";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   commitPurchaseImportInput,
@@ -41,6 +39,7 @@ import type { createMacBrowserScenario } from "./mac-browser-import-scenario";
 import type { MacImportDriver } from "./mac-import-driver";
 
 import { macImportOrder, type MacImportSource } from "./mac-import-orders";
+import { buildEntity } from "./factories/build";
 const productName = "Black crew shirt · size M";
 const categoryName = "Synthetic Mac clothing";
 const fixtureGTIN = "00012345678905";
@@ -83,7 +82,7 @@ export async function createMacComposedScenario(input: Input) {
   const category = await createFixtureWithContext(
     kernel,
     "spendingCategory",
-    spendingCategoryCreateInput.parse({
+    buildEntity("spendingCategory", {
       name: categoryName,
       evidenceExpectation: "required",
       productExpectation: "required",
@@ -92,7 +91,7 @@ export async function createMacComposedScenario(input: Input) {
   const location = await createFixtureWithContext(
     kernel,
     "location",
-    locationCreateInput.parse({
+    buildEntity("location", {
       name: "Synthetic Mac wardrobe drawer",
       type: "drawer",
     }),

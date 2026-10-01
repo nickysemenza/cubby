@@ -37,6 +37,7 @@ import type {
 } from "../src/server/entity-kernel/adapter";
 import type { EntityKernelEntity } from "../src/server/entity-kernel/contracts";
 import { migrateDatabase } from "./db-migrate";
+import type { CreatableEntity, EntityOverrides } from "./factories/build";
 import { z } from "zod";
 
 let client: IntegreSQLClient | undefined;
@@ -542,7 +543,7 @@ export async function seedEntity<E extends EntityKernelEntity>(
   overrides?: SeedOverrides<E>,
 ): Promise<EntityPublicOutput<E>> {
   const [
-    { mock },
+    { buildEntity },
     { parseEntityPublicOutput },
     { createTestRequestContext },
     { requireActor },
@@ -550,7 +551,7 @@ export async function seedEntity<E extends EntityKernelEntity>(
     { ENTITY_KERNEL_BINDINGS, ENTITY_KERNEL_OPERATIONS },
     { ENTITY_KERNEL_ENTITIES },
   ] = await Promise.all([
-    import("../src/lib/test/mock-schema"),
+    import("./factories/build"),
     // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
     import("../src/server/entity-kernel/adapter"),
     // oxlint-disable-next-line no-restricted-imports -- lazy by design, see note above
@@ -572,7 +573,13 @@ export async function seedEntity<E extends EntityKernelEntity>(
     throw new Error(`seedEntity: "${entity}" is not kernel-creatable`);
   }
 
-  const input = mock(binding.schemas.createInput, { overrides });
+  // SAFETY: the guard above proved this entity has a create input, which is
+  // exactly what makes it a factory-creatable entity; `overrides` is a sparse
+  // patch over that same create input.
+  const input = buildEntity(
+    entity as CreatableEntity,
+    overrides as EntityOverrides<CreatableEntity>,
+  );
   const baseContext = createTestRequestContext(db, {
     auth: { userId: testUserId("test-user-id") },
   });

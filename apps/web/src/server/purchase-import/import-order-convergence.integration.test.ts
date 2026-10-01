@@ -3,24 +3,18 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import type { ActorContext } from "@cubby/schemas/context";
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-processing";
-import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
-import { locationCreateInput } from "@cubby/schemas/location";
-import { productCategoryCreateInput } from "@cubby/schemas/product-category";
 import {
   commitPurchaseImportInput,
   preparePurchaseImportInput,
 } from "@cubby/schemas/purchase-import";
-import { spendingCategoryCreateInput } from "@cubby/schemas/spending-category";
-import { vendorCreateInput } from "@cubby/schemas/vendor";
-import { vendorAccountCreateInput } from "@cubby/schemas/vendor-account";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
 import {
   buildKernelContext,
   createFixtureWithContext,
@@ -114,7 +108,7 @@ async function ensureMember(db: Database, actor: ActorContext) {
   const party = await createFixtureWithContext(
     buildKernelContext(db, actor.userId),
     "ledgerParty",
-    ledgerPartyCreateInput.parse({
+    buildEntity("ledgerParty", {
       name: "Synthetic reviewer",
       kind: "member",
     }),
@@ -149,7 +143,7 @@ async function createConvergenceHarness(
   const vendor = await createFixtureWithContext(
     kernel,
     "vendor",
-    vendorCreateInput.parse({
+    buildEntity("vendor", {
       name,
       website: `https://${host}`,
       browserDomains: [host],
@@ -160,7 +154,7 @@ async function createConvergenceHarness(
   const account = await createFixtureWithContext(
     kernel,
     "vendorAccount",
-    vendorAccountCreateInput.parse({
+    buildEntity("vendorAccount", {
       label: `${name} retailer`,
       vendorId: vendor.id,
       ledgerPartyId: member.shortcode,
@@ -169,7 +163,7 @@ async function createConvergenceHarness(
   const card = await createFixtureWithContext(
     kernel,
     "financialAccount",
-    financialAccountCreateInput.parse({
+    buildEntity("financialAccount", {
       name: `${name} card`,
       identity: { kind: "credit_card", issuer: null, network: "visa" },
       ledgerPartyId: member.shortcode,
@@ -181,12 +175,12 @@ async function createConvergenceHarness(
   const location = await createFixtureWithContext(
     kernel,
     "location",
-    locationCreateInput.parse({ name: `${name} drawer`, type: "drawer" }),
+    buildEntity("location", { name: `${name} drawer`, type: "drawer" }),
   );
   const category = await createFixtureWithContext(
     kernel,
     "spendingCategory",
-    spendingCategoryCreateInput.parse({
+    buildEntity("spendingCategory", {
       name: `${name} clothing`,
       evidenceExpectation: "required",
       productExpectation: "required",
@@ -195,7 +189,7 @@ async function createConvergenceHarness(
   const productCategory = await createFixtureWithContext(
     kernel,
     "productCategory",
-    productCategoryCreateInput.parse({
+    buildEntity("productCategory", {
       name: `${name} apparel`,
       spendingCategoryMode: "mapped",
       spendingCategoryId: category.id,

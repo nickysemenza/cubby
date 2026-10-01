@@ -1,6 +1,5 @@
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
-import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import { sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -9,8 +8,6 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { setDataException } from "./data-quality/exceptions";
 import { loadDataQualities } from "./data-quality/hydrate";
-import { createFinancialAccount } from "./financial-account";
-import { createFinancialTransaction } from "./financial-transaction";
 import { mergePurchases, getPurchaseByID } from "./purchase";
 import {
   financialTransactionCoverageSql,
@@ -145,26 +142,18 @@ describe("purchase evidence policy", () => {
     });
   });
   it("uses transaction receipt policy before a Purchase allocation exists", async () => {
-    const account = await createFinancialAccount(
-      ctx.db,
-      financialAccountCreateInput.parse({
-        name: "Policy fixture cash",
-        identity: { kind: "cash" },
-      }),
-      ctx.actor,
-    );
-    const transaction = await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
-        accountId: account.output.id,
-        amount: 25,
-        kind: "purchase",
-        status: "posted",
-        postedDate: "2026-09-01",
-        evidenceExpectation: "not_expected",
-      }),
-      ctx.actor,
-    );
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Policy fixture cash",
+      identity: { kind: "cash" },
+    });
+    const transaction = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      amount: 25,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-09-01",
+      evidenceExpectation: "not_expected",
+    });
     const read = async () =>
       (
         await unwrapDb(ctx.db).execute(
@@ -201,27 +190,19 @@ describe("purchase evidence policy", () => {
       lineKind: "principal",
       lineBasis: "item_line",
     });
-    const account = await createFinancialAccount(
-      ctx.db,
-      financialAccountCreateInput.parse({
-        name: "Quality fixture cash",
-        identity: { kind: "cash" },
-      }),
-      ctx.actor,
-    );
-    const transaction = await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
-        accountId: account.output.id,
-        amount: 25,
-        kind: "purchase",
-        status: "posted",
-        postedDate: "2026-09-01",
-        merchant: "Quality fixture goods",
-        purchaseId: purchase.shortcode,
-      }),
-      ctx.actor,
-    );
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Quality fixture cash",
+      identity: { kind: "cash" },
+    });
+    const transaction = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      amount: 25,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-09-01",
+      merchant: "Quality fixture goods",
+      purchaseId: purchase.shortcode,
+    });
     const quality = async () =>
       (
         await loadDataQualities(ctx.db, "financialTransaction", [
@@ -267,27 +248,19 @@ describe("purchase evidence policy", () => {
         lineKind: "principal",
         lineBasis: "item_line",
       });
-      const account = await createFinancialAccount(
-        ctx.db,
-        financialAccountCreateInput.parse({
-          name: "Credit policy cash",
-          identity: { kind: "cash" },
-        }),
-        ctx.actor,
-      );
-      const transaction = await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: account.output.id,
-          amount: -10,
-          kind: role === "vendor" ? "refund" : "income",
-          status: "posted",
-          postedDate: "2026-09-01",
-          merchant: "Reviewed credit",
-          purchaseId: purchase.shortcode,
-        }),
-        ctx.actor,
-      );
+      const account = await createRepoEntity(ctx, "financialAccount", {
+        name: "Credit policy cash",
+        identity: { kind: "cash" },
+      });
+      const transaction = await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.output.id,
+        amount: -10,
+        kind: role === "vendor" ? "refund" : "income",
+        status: "posted",
+        postedDate: "2026-09-01",
+        merchant: "Reviewed credit",
+        purchaseId: purchase.shortcode,
+      });
       await insertWithShortcode(ctx.db, "expense", {
         purchaseId: purchase.id,
         name: "Reviewed credit booking",

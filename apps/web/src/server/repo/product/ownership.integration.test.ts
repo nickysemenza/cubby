@@ -1,9 +1,8 @@
-import { expenseCreateInput } from "@cubby/schemas/project";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "../database-helpers";
-import { createExpense } from "../expense";
 import {
   createProductFixture as createProduct,
   makeExpenseInput,
@@ -38,19 +37,17 @@ describe("loadProductOwnershipTimelines", () => {
       cost: number,
       productQuantity?: number,
     ) =>
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse(
-          makeExpenseInput({
-            name: `movement ${date}`,
-            productId,
-            date,
-            cost,
-            productQuantity,
-            lineKind: "principal",
-          }),
-        ),
-        ctx.actor,
+      createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: `movement ${date}`,
+          productId,
+          date,
+          cost,
+          productQuantity,
+          lineKind: "principal",
+        }),
       );
 
     await movement(partial.id, "2021-01-01", 200, 2);
