@@ -72,45 +72,46 @@ never reused. Printed `P-` and `L-` labels still resolve.
 Everything hangs off **Product**. It covers groceries, clothes, tools,
 appliances, books and seed packets alike. ProductCategory says what kind of
 thing a Product is, and Inventory says where it is and how much. The other
-areas (food, garden, work, money) attach to that core.
+areas (food, garden, work, money) attach to that core. Arrows in the diagram
+say why each link exists; the tables below give cardinality.
 
 ```mermaid
 flowchart TB
   subgraph Core["Things and places"]
-    ProductCategory -- "1:N" --> Product
-    Inventory -- "N:1" --> Product
-    Inventory -- "N:1" --> Location
-    Location -- "tree" --> Location
-    Wish -- "N:M candidates" --> Product
+    ProductCategory -- "says what kind of thing" --> Product
+    Inventory -- "how much we have of" --> Product
+    Inventory -- "kept at" --> Location
+    Location -- "nested inside" --> Location
+    Wish -- "options we might buy" --> Product
   end
   subgraph Food
-    Recipe -- "N:M via sections/lines" --> Ingredient
-    Cookbook -- "1:N" --> Recipe
-    Meal -- "N:M via MealRecipe" --> Recipe
+    Recipe -- "calls for" --> Ingredient
+    Cookbook -- "where it came from" --> Recipe
+    Meal -- "what we cooked, scaled" --> Recipe
   end
   subgraph Garden
-    Plant -- "1:N" --> Planting
-    GardenEntry -- "N:M" --> Planting
+    Plant -- "grown as" --> Planting
+    GardenEntry -- "notes or harvest from" --> Planting
   end
   subgraph Work
-    Project -- "1:N" --> Task
+    Project -- "broken into" --> Task
   end
   subgraph Money
-    Vendor -- "1:N" --> Purchase
-    Purchase -- "1:N" --> Expense
-    FinancialAccount -- "1:N" --> FinancialTransaction
-    FinancialTransaction -- "N:M allocations" --> Purchase
+    Vendor -- "sold us" --> Purchase
+    Purchase -- "itemized into" --> Expense
+    FinancialAccount -- "statement rows" --> FinancialTransaction
+    FinancialTransaction -- "paid for" --> Purchase
   end
-  Ingredient -- "1:N" --> Product
-  Product -. "fdc_id / barcode" .-> USDA[USDA food]
-  Product -- "seed packet" --> Plant
-  Planting -- "N:1" --> Location
-  Project -- "N:M projectTool" --> Product
-  Task -- "subject" --> Product
-  Expense -- "N:1" --> Product
-  Expense -- "N:1" --> Project
-  LedgerParty -- "attribution" --> Expense
-  LedgerParty -- "portions" --> Meal
+  Ingredient -- "bought as" --> Product
+  Product -. "nutrition from" .-> USDA[USDA food]
+  Product -- "seed packet grows" --> Plant
+  Planting -- "planted in" --> Location
+  Project -- "used as a tool" --> Product
+  Task -- "maintains" --> Product
+  Expense -- "bought or returned" --> Product
+  Expense -- "spent on" --> Project
+  LedgerParty -- "paid for or shares" --> Expense
+  LedgerParty -- "ate" --> Meal
 ```
 
 ### Things and places
