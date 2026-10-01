@@ -1,3 +1,5 @@
+import { dateOnly } from "~/server/utils/date-only";
+
 import {
   mergeAttachmentPayload,
   normalizeHistoryPage,
@@ -47,8 +49,6 @@ export const advanceGmailCursor = (
 ): GmailCursor => ({
   historyId: maxHistoryId(cursor.historyId, observedHistoryId),
 });
-
-const dateOnly = (value: Date): string => value.toISOString().slice(0, 10);
 
 const subtractDays = (value: Date, days: number): Date =>
   new Date(value.getTime() - days * DAY_MS);

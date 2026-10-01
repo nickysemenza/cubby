@@ -15,7 +15,7 @@ import { resolveProduct } from "../services/products";
 import { lookupExternalProduct } from "../api";
 import { getStats } from "../routes/stats";
 import { storeImage, getImageUrl } from "../storage/images";
-import { UPC_REGEX } from "../util/upc";
+import { BARCODE_RE } from "@cubby/shared/upc";
 
 type JsonResponse = {
   content: [{ type: "text"; text: string }];
@@ -76,7 +76,7 @@ export function createMcpServer(env: Env, baseUrl: string): McpServer {
     "Look up a product by UPC barcode. Returns the cached product, or fetches it from external sources and caches it. Returns found:false if no source has data.",
     { upc: z.string().describe("UPC barcode (8, 12, 13, or 14 digits)") },
     withErrorHandling(async ({ upc }) => {
-      if (!UPC_REGEX.test(upc)) {
+      if (!BARCODE_RE.test(upc)) {
         throw new Error("Invalid UPC. Must be 8, 12, 13, or 14 digits.");
       }
       const result = await resolveProduct(db, env, upc);
@@ -150,7 +150,7 @@ export function createMcpServer(env: Env, baseUrl: string): McpServer {
         .describe("Image URL to fetch into storage"),
     },
     withErrorHandling(async (args) => {
-      if (!UPC_REGEX.test(args.upc)) {
+      if (!BARCODE_RE.test(args.upc)) {
         throw new Error("Invalid UPC. Must be 8, 12, 13, or 14 digits.");
       }
       const existing = await getProduct(db, args.upc);

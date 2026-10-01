@@ -4,6 +4,7 @@ import type {
   EntityGraphPathsOutput,
 } from "@cubby/schemas/entity-graph";
 import { sql } from "drizzle-orm";
+import { chunk } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -17,14 +18,6 @@ const uniqueRefs = (refs: readonly EntityRef[]): EntityRef[] => [
     refs.map((ref) => [entityRefKey(ref.entityKind, ref.entityId), ref]),
   ).values(),
 ];
-
-const chunks = <T>(items: readonly T[], size: number): T[][] => {
-  const result: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    result.push(items.slice(index, index + size));
-  }
-  return result;
-};
 
 const databaseErrorNodeSchema = z.object({
   code: z.string().optional(),
@@ -114,7 +107,7 @@ export async function getEntityGraphPaths(
       if (refs.length === 0) return { nodes: [], ...result };
 
       const hydratedPages = [];
-      for (const roots of chunks(refs, 25)) {
+      for (const roots of chunk(refs, 25)) {
         hydratedPages.push(
           await readEntityGraph(
             tx,

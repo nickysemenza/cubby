@@ -15,6 +15,7 @@ import {
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { cents } from "~/server/repo/money";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
+import { dateOnly } from "~/server/utils/date-only";
 
 export type PairingRow = {
   id: string;
@@ -215,7 +216,6 @@ export async function suggestFinancialTransferPairs(
   dateStart.setUTCDate(dateStart.getUTCDate() - input.maxDateDistanceDays);
   const dateEnd = new Date(`${dates.at(-1)}T00:00:00Z`);
   dateEnd.setUTCDate(dateEnd.getUTCDate() + input.maxDateDistanceDays);
-  const isoDate = (value: Date) => value.toISOString().slice(0, 10);
   const requestedAmounts = [
     ...new Set(dated.map((row) => Math.abs(cents(row.amount)))),
   ];
@@ -239,8 +239,8 @@ export async function suggestFinancialTransferPairs(
         notDeleted(financialTransaction),
         eq(financialTransaction.status, "posted"),
         isNull(financialTransaction.ledgerTransferId),
-        gte(effectiveDate, isoDate(dateStart)),
-        lte(effectiveDate, isoDate(dateEnd)),
+        gte(effectiveDate, dateOnly(dateStart)),
+        lte(effectiveDate, dateOnly(dateEnd)),
         noLiveAllocations,
         or(
           ...requestedAmounts.map(

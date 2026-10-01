@@ -35,6 +35,7 @@ import {
   user,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { cents } from "~/server/repo/money";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   findOrCreateWithShortcode,
@@ -54,8 +55,6 @@ import {
   matchesConfiguredVendorSender,
   matchesVendorSender,
 } from "./vendor-identity";
-
-const cents = (value: number) => Math.round(value * 100);
 
 type AttachOrderMailFile = typeof attachFileToEntity;
 

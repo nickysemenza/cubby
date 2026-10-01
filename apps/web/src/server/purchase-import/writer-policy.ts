@@ -3,6 +3,8 @@ import type {
   ExtractedPurchaseLine,
 } from "@cubby/schemas/purchase-import";
 
+import { cents } from "~/server/repo/money";
+
 export type ExistingExpenseSnapshot = {
   id: string;
   title: string;
@@ -24,8 +26,6 @@ export type LineWriteDecision =
     }
   | { kind: "no_op" }
   | { kind: "conflict"; reason: "duplicate_lines" };
-
-const cents = (amount: number): number => Math.round(amount * 100);
 
 const linesTotal = (lines: ExtractedPurchaseLine[]): number =>
   lines.reduce((total, line) => total + cents(line.amount), 0);

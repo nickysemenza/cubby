@@ -19,6 +19,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { entityIdentity } from "~/server/db/schema";
+import { dateOnly } from "~/server/utils/date-only";
 
 import { unwrapDb } from "./database-helpers";
 
@@ -164,8 +165,6 @@ export async function identityShortcodes(
   );
 }
 
-const formatDate = (date: Date) => date.toISOString().slice(0, 10);
-
 /**
  * Why a code does not name a live entity of `entity`, for a not-found error.
  * Returns null when `Entity` knows nothing more than "missing".
@@ -182,9 +181,9 @@ export async function describeUnresolvableCode(
     case "redirected":
       return resolved.canonicalDeletedAt === null
         ? `${notFound} — it was merged into ${resolved.canonicalShortcode}; use ${resolved.canonicalShortcode}.`
-        : `${notFound} — it was merged into ${resolved.canonicalShortcode}, which was deleted on ${formatDate(resolved.canonicalDeletedAt)}.`;
+        : `${notFound} — it was merged into ${resolved.canonicalShortcode}, which was deleted on ${dateOnly(resolved.canonicalDeletedAt)}.`;
     case "deleted":
-      return `${notFound} — it was deleted on ${formatDate(resolved.deletedAt)}.`;
+      return `${notFound} — it was deleted on ${dateOnly(resolved.deletedAt)}.`;
     case "live":
       return null;
   }

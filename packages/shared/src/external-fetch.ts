@@ -308,6 +308,13 @@ export async function readResponseWithLimit(
     reader.releaseLock();
   }
 
+  return concatBytes(chunks);
+}
+
+/** Join byte chunks into one contiguous buffer. */
+export function concatBytes(chunks: readonly Uint8Array[]): Uint8Array {
+  let total = 0;
+  for (const chunk of chunks) total += chunk.byteLength;
   const result = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) {
