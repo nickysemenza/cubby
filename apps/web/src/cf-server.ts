@@ -1,5 +1,20 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import type {
+  AgentProgressEvent,
+  AgentUsageEvent,
+  auditBatchInput,
+  importOrderEvidenceInput,
+  issueBrowserCommandInput,
+  markHistoryExpiredInput,
+  markRunFailedInput,
+  purchaseAgentEventRef,
+  purchaseAgentOperationRef,
+  purchaseAgentRunRef,
+  reconcileSettledRunInput,
+  saveNavigationHintsInput,
+  stopForReviewInput,
+} from "@cubby/schemas/purchase-agent-rpc";
 import { createLogger } from "@cubby/worker-tracing";
 import { SENTRY_DATA_COLLECTION } from "@cubby/worker-tracing/sentry-data-collection";
 import { CUBBY_SENTRY_DSN } from "@cubby/worker-tracing/sentry-dsn";
@@ -13,6 +28,7 @@ import * as Sentry from "@sentry/cloudflare";
 // 3. Intercepts console.error to capture real error details for `wrangler tail`.
 import type * as ServerEntry from "@tanstack/react-start/server-entry";
 import { WorkerEntrypoint } from "cloudflare:workers";
+import type { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "./lib/browser-operation-path";
 import {
@@ -52,10 +68,7 @@ import {
 } from "./server/errors/report-error";
 import { withUnhandledErrorBody } from "./server/errors/unhandled-error-body";
 import { isMaintenanceMode, maintenanceResponse } from "./server/maintenance";
-import {
-  resolvePurchaseAgentBrowserOperation,
-  type PurchaseAgentCommand,
-} from "./server/purchase-import/agent-browser-command";
+import { resolvePurchaseAgentBrowserOperation } from "./server/purchase-import/agent-browser-command";
 import type { SearchDocumentCursor } from "./server/repo/search-document";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
 import { getRequestId, withManualTrace, withTrace } from "./server/tracing";
@@ -822,25 +835,25 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     );
   }
 
-  loadRunScope(input: { runId: string }) {
+  loadRunScope(input: z.infer<typeof purchaseAgentRunRef>) {
     return this.withDatabase((db, service) =>
       service.loadRunScope(db, input.runId),
     );
   }
 
-  canDispatchCoordinator(input: { runId: string; eventId: string }) {
+  canDispatchCoordinator(input: z.infer<typeof purchaseAgentEventRef>) {
     return this.withDatabase((db, service) =>
       service.canDispatchRunCoordinator(db, input),
     );
   }
 
-  acknowledgeCoordinator(input: { runId: string; eventId: string }) {
+  acknowledgeCoordinator(input: z.infer<typeof purchaseAgentEventRef>) {
     return this.withDatabase((db, service) =>
       service.acknowledgeRunCoordinator(db, input),
     );
   }
 
-  acquireMcpAccess(input: { runId: string }) {
+  acquireMcpAccess(input: z.infer<typeof purchaseAgentRunRef>) {
     return this.withDatabase(async (db, service) => {
       const scope = await service.loadRunScope(db, input.runId);
       const { findActivePurchaseAgentGrant, issuePurchaseAgentDelegation } =
@@ -872,7 +885,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     });
   }
 
-  claimNextWork(input: { runId: string; operationId: string }) {
+  claimNextWork(input: z.infer<typeof purchaseAgentOperationRef>) {
     return this.withDatabase((db, service) =>
       service.runImportOperation(
         db,
@@ -887,7 +900,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     );
   }
 
-  extractReceiptEvidence(input: { runId: string; operationId: string }) {
+  extractReceiptEvidence(input: z.infer<typeof purchaseAgentOperationRef>) {
     return this.withDatabase((db, service) =>
       service.runImportOperation(
         db,
@@ -924,7 +937,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     );
   }
 
-  extractRunEvidence(input: { runId: string; operationId: string }) {
+  extractRunEvidence(input: z.infer<typeof purchaseAgentOperationRef>) {
     return this.withDatabase((db, service) =>
       service.runImportOperation(
         db,
@@ -968,11 +981,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     );
   }
 
-  issueBrowserCommand(input: {
-    runId: string;
-    operationId: string;
-    command: PurchaseAgentCommand;
-  }) {
+  issueBrowserCommand(input: z.infer<typeof issueBrowserCommandInput>) {
     return this.withDatabase(async (db, service) => {
       const scope = await service.loadRunScope(db, input.runId);
       if (!scope.public.vendorAccountId)
@@ -996,29 +1005,13 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     });
   }
 
-  readBrowserCommandResult(input: { runId: string; operationId: string }) {
+  readBrowserCommandResult(input: z.infer<typeof purchaseAgentOperationRef>) {
     return this.withDatabase((db, service) =>
       service.readBrowserCommandResult(db, this.env.PURCHASE_IMPORT, input),
     );
   }
 
-  recordAgentUsage(input: {
-    runId: string;
-    eventId: string;
-    provider: string;
-    model: string;
-    feature: "purchase_import_agent";
-    operation: string;
-    attempt: number;
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadTokens: number;
-    cacheWriteTokens: number;
-    durationMs: number;
-    status: "succeeded" | "failed";
-    gatewayLogId?: string;
-    estimatedCost?: number;
-  }) {
+  recordAgentUsage(input: AgentUsageEvent) {
     return this.withDatabase(async (db) => {
       const { recordAiUsage } = await import("./server/ai-usage");
       const digest = new Uint8Array(
@@ -1049,24 +1042,13 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     });
   }
 
-  updateAgentProgress(input: {
-    runId: string;
-    eventId: string;
-    phase: string;
-    currentItem?: string;
-    awaitingApproval?: boolean;
-    detail?: string;
-  }) {
+  updateAgentProgress(input: AgentProgressEvent) {
     return this.withDatabase((db, service) =>
       service.updateAgentProgress(db, input),
     );
   }
 
-  importOrderEvidence(input: {
-    runId: string;
-    operationId: string;
-    commandId: string;
-  }) {
+  importOrderEvidence(input: z.infer<typeof importOrderEvidenceInput>) {
     return this.withDatabase((db, service) =>
       service.runImportOperation(
         db,
@@ -1081,11 +1063,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     );
   }
 
-  saveNavigationHints(input: {
-    runId: string;
-    operationId: string;
-    hints: Array<{ url: string; label?: string }>;
-  }) {
+  saveNavigationHints(input: z.infer<typeof saveNavigationHintsInput>) {
     return this.withDatabase((db, service) =>
       service.runImportOperation(
         db,
@@ -1105,11 +1083,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     );
   }
 
-  markHistoryExpired(input: {
-    runId: string;
-    operationId: string;
-    earliestAvailableOrderAt: string;
-  }) {
+  markHistoryExpired(input: z.infer<typeof markHistoryExpiredInput>) {
     return this.withDatabase((db, service) =>
       service.runImportOperation(
         db,
@@ -1119,7 +1093,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     );
   }
 
-  auditBatch(input: { runId: string; operationId: string; offset: number }) {
+  auditBatch(input: z.infer<typeof auditBatchInput>) {
     return this.withDatabase((db, service) =>
       service.runImportOperation(
         db,
@@ -1129,7 +1103,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     );
   }
 
-  finishRun(input: { runId: string; operationId: string }) {
+  finishRun(input: z.infer<typeof purchaseAgentOperationRef>) {
     return this.withDatabase((db, service) =>
       service.runImportOperation(
         db,
@@ -1139,16 +1113,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     );
   }
 
-  stopForReview(input: {
-    runId: string;
-    operationId: string;
-    reason:
-      | "navigation_ambiguity"
-      | "unreadable_evidence"
-      | "provider_failure"
-      | "other";
-    detail?: string;
-  }) {
+  stopForReview(input: z.infer<typeof stopForReviewInput>) {
     const kind =
       input.reason === "navigation_ambiguity"
         ? "expected_order_not_found"
@@ -1168,13 +1133,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     );
   }
 
-  markRunFailed(input: {
-    runId: string;
-    operationId: string;
-    failureCode: "flue_failed" | "flue_aborted";
-    detail?: string;
-    dispatchEventId?: string;
-  }) {
+  markRunFailed(input: z.infer<typeof markRunFailedInput>) {
     return this.withDatabase((db, service) =>
       service.runImportOperation(
         db,
@@ -1184,11 +1143,7 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
     );
   }
 
-  reconcileSettledRun(input: {
-    runId: string;
-    operationId: string;
-    detail?: string;
-  }) {
+  reconcileSettledRun(input: z.infer<typeof reconcileSettledRunInput>) {
     return this.withDatabase((db, service) =>
       service.reconcileSettledRun(db, this.env.PURCHASE_IMPORT, input),
     );

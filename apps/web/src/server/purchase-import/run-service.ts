@@ -20,6 +20,10 @@ import {
   importRunAgentIdentity,
   importRunAgentManifest,
 } from "@cubby/schemas/import-run-agent";
+import {
+  type AgentProgressEvent,
+  agentProgressEvent,
+} from "@cubby/schemas/purchase-agent-rpc";
 import { proposedImportFix } from "@cubby/schemas/purchase-import";
 import {
   browserBridgeOperation,
@@ -991,21 +995,12 @@ export async function finalizePhotoRun(
   };
 }
 
-const agentProgressInput = z.object({
-  runId: z.uuid(),
-  eventId: z.string().trim().min(1).max(256),
-  phase: z.string().trim().min(1).max(200),
-  currentItem: z.string().trim().min(1).max(500).optional(),
-  awaitingApproval: z.boolean().optional(),
-  detail: z.string().trim().min(1).max(2_000).optional(),
-});
-
 /** @lintignore Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function updateAgentProgress(
   db: Database,
-  rawInput: z.input<typeof agentProgressInput>,
+  rawInput: AgentProgressEvent,
 ) {
-  const input = agentProgressInput.parse(rawInput);
+  const input = agentProgressEvent.parse(rawInput);
   const [inserted] = await getDb(db)
     .insert(runProgress)
     .values({
