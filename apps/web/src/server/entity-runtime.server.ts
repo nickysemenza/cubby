@@ -13,6 +13,7 @@ import {
   entityDetailInputSchema,
   getEntityDetailOutputSchema,
 } from "~/entities/generated/entity-details.gen";
+import { generatedEntityRelationListCommandSchema } from "~/entities/generated/entity-relation-lists.gen";
 import {
   entityTimelineInputSchema,
   getEntityTimelineOutputSchema,
@@ -99,7 +100,16 @@ export const entityGraphHandlers = implementOperationDomain(
     graphPaths: (context, input) => getEntityGraphPaths(context.db, input),
     connections: (context, input) => getEntityConnections(context.db, input),
     relation: async (context, input) => {
-      const result = await executeEntityAs(context, "listRelation", input);
+      // The parse brands the ids; the input's entity is a union, so the
+      // parsed command (not the raw input) is what executeEntityAs accepts.
+      const result = await executeEntityAs(
+        context,
+        "listRelation",
+        generatedEntityRelationListCommandSchema.parse({
+          action: "listRelation",
+          ...input,
+        }),
+      );
       const { action: _, ...list } = result;
       return list;
     },
@@ -113,8 +123,9 @@ export const entityMutationHandlers = implementOperationDomain(
       input: entityBrowserMutationCommandSchema,
       output: entityBrowserMutationResultSchema,
       run: async (context, input) => {
+        const command = entityBrowserMutationCommandSchema.parse(input);
         return entityBrowserMutationResultSchema.parse(
-          await executeEntity(context, input),
+          await executeEntity(context, command),
         );
       },
     },

@@ -6,10 +6,17 @@ import {
   type EntityListParams,
   entityListFor,
 } from "~/entities/entity-list";
-import type { ListEntity } from "~/entities/generated/entity-lists.gen";
+import type {
+  EntityListResultByEntity,
+  ListEntity,
+} from "~/entities/generated/entity-lists.gen";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 
 import { flattenUniquePageItems } from "./infinite-page-utils";
+
+/** One list row of entity E. */
+export type EntityListRecord<E extends ListEntity> =
+  EntityListResultByEntity[E]["items"][number];
 
 /** Keeps fetching until an infinite query has loaded every page. */
 export function useLoadAllPages(
@@ -48,7 +55,14 @@ export function useAllEntityRecords<E extends ListEntity>(
   });
   useLoadAllPages(query, enabled);
   const records = useMemo(
-    () => flattenUniquePageItems(query.data?.pages),
+    () =>
+      flattenUniquePageItems<EntityListRecord<E>>(
+        // SAFETY: entityListFor(entity) parses every page with entity E's list
+        // output schema; TS cannot resolve the indexed type through generic E.
+        query.data?.pages as
+          | readonly { items: readonly EntityListRecord<E>[] }[]
+          | undefined,
+      ),
     [query.data],
   );
   return {

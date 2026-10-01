@@ -8,7 +8,10 @@ import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
-import { createEntityInlineLinkColumn } from "~/app/_components/data-table/columnHelpers";
+import {
+  createEntityInlineLinkColumn,
+  createSingleEntityInlineLinkColumn,
+} from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,

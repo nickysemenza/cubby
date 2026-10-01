@@ -95,9 +95,7 @@ const ROW_UPDATED_AT = new Date("2024-01-02T00:00:00.000Z");
  * A live Product row as the repository mappers receive it, with every column
  * set to a neutral value. Mapper tests override the columns they assert on.
  */
-export const productRowFixture = <TOverrides extends object>(
-  overrides: TOverrides,
-) => ({
+const productRowDefaults = {
   shortcode: "PRD-TEST",
   name: "Flour",
   manufacturer: "Generic",
@@ -120,5 +118,12 @@ export const productRowFixture = <TOverrides extends object>(
   acquisitionOrigin: "unknown" as const,
   stockTracked: null,
   labelNutrition: null,
+};
+
+/** A Product DB row; overrides replace (not intersect with) the defaults. */
+export const productRowFixture = <TOverrides extends object>(
+  overrides: TOverrides,
+): Omit<typeof productRowDefaults, keyof TOverrides> & TOverrides => ({
+  ...productRowDefaults,
   ...overrides,
 });

@@ -315,7 +315,10 @@ export const sha256Hex = (value: string | Uint8Array) =>
   createHash("sha256").update(value).digest("hex");
 
 /** The `describe_image` jobs finalize queued for these images. */
-export function listDescribeImageJobs(db: Database, imageIds: string[]) {
+export function listDescribeImageJobs(
+  db: Database,
+  imageIds: readonly (typeof schema.imageProcessingJob.$inferSelect)["imageId"][],
+) {
   return getDb(db)
     .select()
     .from(schema.imageProcessingJob)

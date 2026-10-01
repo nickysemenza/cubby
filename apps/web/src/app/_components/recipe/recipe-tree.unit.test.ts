@@ -143,7 +143,7 @@ const sub = (
     id: testEntityId("recipe", `usage-${id}`),
     recipeId: recipeKey(recipeId),
     name: name,
-    amounts: amounts,
+    amounts: [...amounts],
   });
 
 const recipe = (

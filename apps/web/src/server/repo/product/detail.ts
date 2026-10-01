@@ -27,7 +27,6 @@ import {
   EMPTY_QUANTITY_LEDGER,
   loadProductDetailQuantityLedgers,
 } from "~/server/repo/product/quantity-ledger";
-import type { ProductDeepDB } from "~/server/repo/product/types";
 
 import { loadProductOwnershipEvidence } from "./ownership-evidence";
 

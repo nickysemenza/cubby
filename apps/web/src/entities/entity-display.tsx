@@ -214,8 +214,6 @@ function renderFormattedScalar(
   }
   if (value.kind === "empty") return renderScalarValue(value, surface);
   switch (format) {
-    case "presence":
-      return null;
     // Known counts read literally: `0` is a fact, never a dash.
     case "count":
       return value.kind === "number" ? (

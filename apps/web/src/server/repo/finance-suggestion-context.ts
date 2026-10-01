@@ -14,6 +14,7 @@ import {
   type EntityKernelContext,
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
+import { generatedEntityUpdateCommandSchema } from "~/server/generated/entity-bindings.gen";
 
 import { unwrapDb, withTransactionDatabase } from "./database-helpers";
 import {
@@ -259,11 +260,16 @@ export async function applyFinanceCategorySuggestion(
           "The saved finance record or linked evidence changed; review again before applying the category.",
         );
       await resolveOrThrow(db, "spendingCategory", input.spendingCategoryId);
-      const result = await executeEntityAs({ ...context, db }, "update", {
-        entity: review.entity,
-        id: parseShortcodeFor(review.entity, review.entityId),
-        data: { spendingCategoryId: input.spendingCategoryId },
-      });
+      const result = await executeEntityAs(
+        { ...context, db },
+        "update",
+        generatedEntityUpdateCommandSchema.parse({
+          action: "update",
+          entity: review.entity,
+          id: parseShortcodeFor(review.entity, review.entityId),
+          data: { spendingCategoryId: input.spendingCategoryId },
+        }),
+      );
       return {
         entity: review.entity,
         entityId: review.entityId,

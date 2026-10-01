@@ -4,6 +4,8 @@ import type { ProblemKey } from "@cubby/schemas/problems";
 import { PROBLEM_CLASS } from "@cubby/schemas/problems";
 import { z } from "zod";
 
+import { FILTER_NONE } from "~/entities/filters";
+
 import {
   defineProblem,
   type EntityProblemSource,

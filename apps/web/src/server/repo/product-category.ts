@@ -29,6 +29,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { product, productCategory } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
+import { buildPartialUpdateValues } from "~/server/repo/database-helpers";
 import {
   notDeleted,
   unwrapDb,
