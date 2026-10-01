@@ -1,4 +1,4 @@
-import { type ComponentProps, Suspense, useMemo } from "react";
+import { type ComponentProps, useMemo } from "react";
 
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -135,32 +135,30 @@ export function DependencyGraphViewer({
       {graph.nodes.length === 0 ? (
         <p>No records match these graph filters.</p>
       ) : (
-        <Suspense fallback={<LayoutLoading />}>
-          <DependencyGraphCanvas
-            dot={layout.dot}
-            componentDots={layout.componentDots}
-            images={images}
-            edges={graph.edges}
-            selectedEdgeId={selectedEdgeId}
-            onSelectEdge={(id) =>
-              onSelectEdge?.(
-                graph.edges.find((edge) => graphEdgeIdentity(edge) === id),
-              )
-            }
-            hierarchyEdges={layout.hierarchyEdges}
-            focus={neighborhoodRoot ?? filters.focus}
-            onSelectNode={
-              onSelectNode == null
-                ? undefined
-                : (id) => {
-                    const node = graph.nodes.find(
-                      (candidate) => candidate.id === id,
-                    );
-                    if (node) onSelectNode(node);
-                  }
-            }
-          />
-        </Suspense>
+        <DependencyGraphCanvas
+          dot={layout.dot}
+          componentDots={layout.componentDots}
+          images={images}
+          edges={graph.edges}
+          selectedEdgeId={selectedEdgeId}
+          onSelectEdge={(id) =>
+            onSelectEdge?.(
+              graph.edges.find((edge) => graphEdgeIdentity(edge) === id),
+            )
+          }
+          hierarchyEdges={layout.hierarchyEdges}
+          focus={neighborhoodRoot ?? filters.focus}
+          onSelectNode={
+            onSelectNode == null
+              ? undefined
+              : (id) => {
+                  const node = graph.nodes.find(
+                    (candidate) => candidate.id === id,
+                  );
+                  if (node) onSelectNode(node);
+                }
+          }
+        />
       )}
       <details>
         <summary className="cursor-pointer text-sm font-medium">

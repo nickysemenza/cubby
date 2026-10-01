@@ -8,7 +8,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
 import {
   type ComponentProps,
-  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -328,24 +327,22 @@ export function GraphExplorer({
             }}
             inert={listing}
           >
-            <Suspense fallback={<GraphLoading />}>
-              <GraphMapCanvas
-                key={canvasGeneration}
-                camera={camera}
-                nodes={displayed.nodes}
-                edges={displayed.edges}
-                anchors={model.map.anchors}
-                selected={model.selected}
-                selectedEdge={selectedEdge}
-                onSelect={select}
-                onSelectEdge={(key) => {
-                  setSelectedEdge(key);
-                  setInspecting(true);
-                }}
-                reveal={reveal}
-                highlightedEdges={highlightedEdges}
-              />
-            </Suspense>
+            <GraphMapCanvas
+              key={canvasGeneration}
+              camera={camera}
+              nodes={displayed.nodes}
+              edges={displayed.edges}
+              anchors={model.map.anchors}
+              selected={model.selected}
+              selectedEdge={selectedEdge}
+              onSelect={select}
+              onSelectEdge={(key) => {
+                setSelectedEdge(key);
+                setInspecting(true);
+              }}
+              reveal={reveal}
+              highlightedEdges={highlightedEdges}
+            />
           </div>
           {listing && (
             <div

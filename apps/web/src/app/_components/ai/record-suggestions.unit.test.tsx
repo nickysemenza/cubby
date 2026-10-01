@@ -111,7 +111,7 @@ describe("record suggestions", () => {
       categoryId: null,
     }));
     const Wrapper = harness.wrapper;
-    renderToString(
+    const html = renderToString(
       <Wrapper>
         <RecordSuggestionsProvider
           entity="product"
@@ -125,6 +125,9 @@ describe("record suggestions", () => {
     );
     expect(harness.queryClient.getQueryCache().getAll()).toHaveLength(0);
     expect(suggestFields).not.toHaveBeenCalled();
+    // The status line is already in place, so hydration does not shift the
+    // table below it.
+    expect(html).toContain("Checking suggestions…");
   });
 
   it("does not display an old result for changed inputs, reuses the cell result, and dismisses within a visit", async () => {

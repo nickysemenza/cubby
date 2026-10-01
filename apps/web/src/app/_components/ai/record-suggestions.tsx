@@ -671,7 +671,11 @@ function BoundRecordSuggestions({
     },
   };
   const count = actionableRowSuggestionCount(entity, rows, visit?.dismissed);
-  const checking = queries.some((query) => query.isFetching || query.isPending);
+  // Before hydration no query exists yet, but checking is about to start;
+  // saying so keeps the status line (and the table below it) where it lands.
+  const checking =
+    (!hydrated && allRecords.length > 0 && targets.targets.length > 0) ||
+    queries.some((query) => query.isFetching || query.isPending);
   const failures = queries.filter((query) => query.isError).length;
   // The client never asked at all — every requestable target's basis fell
   // short of `isBasisSufficient`, not that Jev declined once asked. Name the

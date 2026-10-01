@@ -1,7 +1,9 @@
-import { type ComponentType, lazy } from "react";
+import { type ComponentType, lazy, Suspense } from "react";
+
+import { useHydrated } from "~/hooks/useHydrated";
 
 /**
- * `React.lazy` for a component that only works in the browser (canvas, WebGL,
+ * A lazily loaded component that only works in the browser (canvas, WebGL,
  * Web Worker layout). Call it as
  *
  *   browserOnlyLazy<ComponentProps<typeof Canvas>>(  // `import type { Canvas }`
@@ -15,14 +17,22 @@ import { type ComponentType, lazy } from "react";
  * bundle. Unused uploaded JavaScript still costs isolate startup, which users
  * pay as multi-second first requests.
  *
- * The server renders `Placeholder`; make it the same markup as the
- * surrounding Suspense fallback so server HTML and the client's suspended
- * first render agree.
+ * The returned component renders `Placeholder` on the server and on the first
+ * client render, then the real component (behind its own Suspense) once
+ * hydrated, so server HTML and hydration always agree.
  */
 export function browserOnlyLazy<Props extends object>(
   load: (() => Promise<{ default: ComponentType<Props> }>) | null,
   Placeholder: ComponentType,
 ) {
-  const ServerPlaceholder = (_props: Props) => <Placeholder />;
-  return lazy(load ?? (() => Promise.resolve({ default: ServerPlaceholder })));
+  const Lazy = load ? lazy(load) : null;
+  return function BrowserOnly(props: Props) {
+    const hydrated = useHydrated();
+    if (!hydrated || !Lazy) return <Placeholder />;
+    return (
+      <Suspense fallback={<Placeholder />}>
+        <Lazy {...props} />
+      </Suspense>
+    );
+  };
 }
