@@ -1,9 +1,12 @@
+import { createLogger } from "@cubby/worker-tracing";
 import { foodSummary, type FoodSummary } from "@cubby/usda";
 import { withSpan } from "@cubby/worker-tracing";
 import pMap from "p-map";
 import { z } from "zod";
 import { normalizeDataType } from "./artifact-layout.js";
 import type { EdgeBindings, EdgeCachePort } from "./cloudflare-types.js";
+
+const log = createLogger("usda-edge");
 
 export interface HydrateStats {
   cacheHits: number;
@@ -79,16 +82,16 @@ export function createFoodBundleLoader(
             if (stats) stats.cacheHits += 1;
             return { text, fromCache: true };
           } catch (err) {
-            console.warn(
+            log.warn(
               `[bundle-cache] read body failed for ${row.fdc_id}; falling back to R2`,
-              err,
+              { error: err },
             );
           }
         }
       } catch (err) {
-        console.warn(
+        log.warn(
           `[bundle-cache] read failed for ${row.fdc_id}; falling back to R2`,
-          err,
+          { error: err },
         );
       }
     }
@@ -114,9 +117,9 @@ export function createFoodBundleLoader(
         }),
       );
     } catch (err) {
-      console.warn(
+      log.warn(
         `[bundle-cache] write failed for ${row.fdc_id}; continuing without cache`,
-        err,
+        { error: err },
       );
     }
     return { text, fromCache: false };
@@ -137,7 +140,9 @@ export function createFoodBundleLoader(
       try {
         freshParsed = parseFoodSummaryText(fresh.text);
       } catch (err) {
-        console.warn(`[hydrate] skipping unparseable food ${row.fdc_id}`, err);
+        log.warn(`[hydrate] skipping unparseable food ${row.fdc_id}`, {
+          error: err,
+        });
         return null;
       }
       if (freshParsed.fdc_id !== row.fdc_id) {
@@ -157,18 +162,19 @@ export function createFoodBundleLoader(
       parsed = parseFoodSummaryText(bundle.text);
     } catch (err) {
       if (bundle.fromCache) {
-        console.warn(
-          `[hydrate] ignoring unparseable cached food ${row.fdc_id}`,
-          err,
-        );
+        log.warn(`[hydrate] ignoring unparseable cached food ${row.fdc_id}`, {
+          error: err,
+        });
         return loadFreshAfterCacheFailure();
       }
-      console.warn(`[hydrate] skipping unparseable food ${row.fdc_id}`, err);
+      log.warn(`[hydrate] skipping unparseable food ${row.fdc_id}`, {
+          error: err,
+        });
       return null;
     }
     if (parsed.fdc_id !== row.fdc_id) {
       if (bundle.fromCache) {
-        console.warn(
+        log.warn(
           `[hydrate] ignoring cached pointer mismatch for ${row.fdc_id}: read ${parsed.fdc_id}`,
         );
         return loadFreshAfterCacheFailure();

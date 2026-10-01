@@ -30,7 +30,7 @@ import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
 import {
   type EntityKernelContext,
-  executeEntity,
+  executeEntityAs,
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
@@ -491,13 +491,12 @@ async function recipeNutrition(
   context: AuthenticatedStartOperationContext,
   input: { recipeId: string; servings: number },
 ) {
-  const detail = await executeEntity(context, {
-    action: "get",
+  const detail = await executeEntityAs(context, "get", {
     entity: "recipe",
     id: input.recipeId,
     missing: "error",
   });
-  if (detail.action !== "get" || !detail.item)
+  if (!detail.item)
     throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
   const recipe = recipeServingBasis.parse(detail.item);
   const recipeServings = effectiveRecipeServings(recipe);

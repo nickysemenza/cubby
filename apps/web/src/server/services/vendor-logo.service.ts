@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { VendorId, VendorShortcode } from "@cubby/schemas/identifiers";
 import {
@@ -27,6 +28,8 @@ import {
   generateImageKey,
   uploadToS3,
 } from "~/server/utils/s3";
+
+const log = createLogger("vendor-logo");
 
 type LogoCandidate = {
   bytes: Buffer;
@@ -223,7 +226,9 @@ async function fetchAndAttachVendorLogoWithPorts<
     // rethrown below (`error`); losing the rollback itself only strands
     // the uploaded R2 object, and must not replace the original failure.
     await ports.deleteUploadedObject(key).catch((cleanupError) => {
-      console.error("Failed to roll back vendor logo object:", cleanupError);
+      log.error("Failed to roll back vendor logo object", {
+        error: cleanupError,
+      });
     });
     throw error;
   }

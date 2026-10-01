@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import { runEntityId, runShortcode } from "@cubby/schemas/identifiers";
 import {
@@ -20,6 +21,8 @@ import { ensureRun } from "~/server/runs/ensure-run";
 
 import { resolveVendorMailSearchTarget } from "./targets";
 import { vendorSearchTerms } from "./vendor-identity";
+
+const log = createLogger("vendor-mail.search");
 
 /*
  * A Gmail search is one `mail_search` Run. `Run.input` is what was asked
@@ -547,7 +550,7 @@ export async function runVendorMailSearchJob(
     });
     // The Gmail client has already made its bounded retry attempts. Ack this
     // delivery so a manual retry cannot race a delayed queue replay.
-    console.error("[vendor-mail.search] search failed", error);
+    log.error("search failed", { error });
     return "succeeded" as const;
   }
 }

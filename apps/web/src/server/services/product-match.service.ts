@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import {
   parseEntityId,
   parseShortcodeFor,
@@ -20,6 +21,7 @@ import type { Database } from "~/server/db";
 import {
   type EntityKernelContext,
   executeEntity,
+  executeEntityAs,
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 import { findSimilarEntities } from "~/server/repo/entity-embedding";
@@ -50,6 +52,8 @@ import {
   pairByNameTokens,
   rankMatches,
 } from "./product-match-ranking";
+
+const log = createLogger("product-match");
 
 /** Bounds that keep one queue read to a fixed number of vector lookups. */
 const TOKEN_CANDIDATES_PER_PHOTO = 10;
@@ -125,7 +129,7 @@ async function semanticSignals(
     return { used: true, pairs };
   } catch (error) {
     // The queue must still work from names alone when the index is down.
-    console.warn("product-match.semantic.failed", {
+    log.warn("semantic failed", {
       message: getErrorMessage(error),
     });
     return { used: false, pairs: new Map() };
@@ -411,13 +415,10 @@ export async function mergeProductMatch(
   context: EntityKernelContext,
   input: z.output<typeof mergeProductMatchInput>,
 ) {
-  const merged = await executeEntity(context, {
-    action: "merge",
+  await executeEntityAs(context, "merge", {
     entity: "product",
     data: { keepId: input.keepId, mergeIds: [input.mergeId] },
   });
-  if (merged.action !== "merge")
-    throw new Error("Entity kernel returned the wrong action");
   const keepId = await resolveOrThrow(context.db, "product", input.keepId);
   const images = await loadProductImageOrderFacts(context.db, keepId);
   const ordered = matchSurvivorImageOrder(images);

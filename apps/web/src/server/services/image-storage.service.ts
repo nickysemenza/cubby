@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import type { ImageId, ImageShortcode } from "@cubby/schemas/identifiers";
 import {
   parseEntityId,
@@ -63,6 +64,8 @@ import {
   getS3Object,
   uploadToS3,
 } from "~/server/utils/s3";
+
+const log = createLogger("image-storage");
 
 type WithoutDatabase<TFunction> = TFunction extends (
   database: Database,
@@ -230,7 +233,7 @@ const initiatePendingUpload = async <TDatabase>(
   } catch (error) {
     // SILENT: see the comment above — a failed opportunistic cull must not
     // block the upload it precedes; the next presign call retries it.
-    console.error("image.cull-on-presign.failed", error);
+    log.error("cull-on-presign failed", { error });
   }
   const url = ports.objectStorage.getPublicUrl(key);
   const createdImage = await ports.repository.createPendingImageRecord(db, {
@@ -396,7 +399,9 @@ const importImageFromUrlWithPorts = async <TDatabase>(
     // below (`error`); losing the rollback itself only strands the R2
     // object, and must not replace the original failure.
     await ports.objectStorage.deleteObject(stored.key).catch((cleanupError) => {
-      console.error("Failed to roll back imported image object:", cleanupError);
+      log.error("Failed to roll back imported image object", {
+        error: cleanupError,
+      });
     });
     throw error;
   }
@@ -876,7 +881,7 @@ const attachFileToEntityWithPorts = async <TDatabase>(
       // cleanup of the now-redundant upload only strands that one object, and
       // must not fail a request that already succeeded. `cleanupWarning`
       // (surfaced in the response below) already tells the caller.
-      console.error("Failed to clean up redundant upload:", cleanupError);
+      log.error("Failed to clean up redundant upload", { error: cleanupError });
       cleanupWarning =
         "The attachment was reused, but its redundant upload could not be cleaned up.";
     }
@@ -900,7 +905,7 @@ const attachFileToEntityWithPorts = async <TDatabase>(
       // SILENT: see the comment above — best-effort; `findCullablePendingImages`
       // sweeps an unassociated PENDING row anyway, and `cleanupWarning`
       // (surfaced in the response below) already tells the caller.
-      console.error("Failed to clean up staged upload:", cleanupError);
+      log.error("Failed to clean up staged upload", { error: cleanupError });
       cleanupWarning =
         "The attachment succeeded, but its staged upload could not be cleaned up.";
     }
@@ -933,7 +938,7 @@ const deleteStoredObjectsWithPorts = async <TDatabase>(
     } catch (error) {
       // SILENT: see the function doc above — best-effort R2 cleanup for a row
       // already removed from the DB; a failed delete only strands bytes.
-      console.error("Error deleting image from R2:", error);
+      log.error("Error deleting image from R2", { error });
     }
   }
 };

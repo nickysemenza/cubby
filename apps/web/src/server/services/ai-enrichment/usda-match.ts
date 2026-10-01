@@ -6,6 +6,7 @@
 // query variants; this asks the decision tier to pick exactly one candidate
 // in a single call via `runAiSelection` (no agentic search loop).
 
+import { createLogger } from "@cubby/worker-tracing";
 import type { Confidence } from "@cubby/schemas/ai";
 import type { RunId, IngredientId } from "@cubby/schemas/identifiers";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
@@ -19,6 +20,8 @@ import {
   type UsdaLookupPort,
   type UsdaShortlistEntry,
 } from "./usda-shortlist";
+
+const log = createLogger("suggestUsdaFoodBatch");
 
 export type { UsdaLookupPort } from "./usda-shortlist";
 
@@ -135,10 +138,7 @@ async function suggestUsdaFoodBatchWithPorts<TDatabase>(
       if (result.status === "fulfilled") {
         out.push({ name: item.name, ...result.value });
       } else {
-        console.error(
-          `[suggestUsdaFoodBatch] ${item.name} failed:`,
-          result.reason,
-        );
+        log.error(`${item.name} failed`, { error: result.reason });
         out.push({
           name: item.name,
           food: null,

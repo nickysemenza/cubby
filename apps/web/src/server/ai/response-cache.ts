@@ -1,7 +1,10 @@
+import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
 import type { AiChatRequest } from "~/server/ai/run-feature";
 import { getAiResponseCacheNamespace } from "~/server/cf-env";
+
+const log = createLogger("ai-response-cache");
 
 const CACHE_TTL_MS = 30 * 24 * 60 * 60_000;
 const LEASE_MS = 90_000;
@@ -178,7 +181,7 @@ export async function withAiResponseCache<T>(args: {
     try {
       claim = await store.readOrClaim(key, force);
     } catch (error) {
-      console.error("AI response cache lookup failed", error);
+      log.error("lookup failed", { error });
       return args.compute("none");
     }
     if (claim.kind === "hit") {
@@ -187,11 +190,11 @@ export async function withAiResponseCache<T>(args: {
         result = args.validate(jsonSchema.parse(JSON.parse(claim.value)));
       } catch (error) {
         // SILENT: An invalid cached value is discarded so the model can answer.
-        console.warn("AI response cache entry rejected", error);
+        log.warn("entry rejected", { error });
         try {
           await store.invalidate(key, claim.value);
         } catch (error) {
-          console.error("AI response cache invalidation failed", error);
+          log.error("invalidation failed", { error });
           return args.compute("none");
         }
         continue;
@@ -208,7 +211,7 @@ export async function withAiResponseCache<T>(args: {
     const heartbeat = setInterval(() => {
       void Promise.resolve(store.renew(key, token)).catch((error) => {
         // SILENT: A failed renewal leaves the lease reclaimable after expiry.
-        console.error("AI response cache lease renewal failed", error);
+        log.error("lease renewal failed", { error });
       });
     }, 15_000);
     try {
@@ -221,7 +224,7 @@ export async function withAiResponseCache<T>(args: {
           await store.publish(key, token, value, CACHE_TTL_MS);
         } catch (error) {
           // SILENT: Cache persistence is best effort after a valid model result.
-          console.error("AI response cache publish failed", error);
+          log.error("publish failed", { error });
         }
       } else {
         await store.release(key, token);
@@ -230,7 +233,7 @@ export async function withAiResponseCache<T>(args: {
     } catch (error) {
       await Promise.resolve(store.release(key, token)).catch((releaseError) => {
         // SILENT: Preserve the original model failure; the lease still expires.
-        console.error("AI response cache claim release failed", releaseError);
+        log.error("claim release failed", { error: releaseError });
       });
       throw error;
     } finally {

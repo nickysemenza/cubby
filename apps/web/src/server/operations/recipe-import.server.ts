@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import {
   type CookbookId,
@@ -100,6 +101,8 @@ import {
   type BulkWorkflowSummary,
   workflow,
 } from "~/server/workflow-runtime";
+
+const log = createLogger("cookbook.upsert");
 
 const cookbookShortcodes = bindShortcodeResolver("cookbook");
 const productShortcodes = bindShortcodeResolver("product");
@@ -215,9 +218,9 @@ export const upsertCookbookWorkflow = bindWorkflow(
           await productShortcodes.one(context.db, product.id),
         );
       } catch (error) {
-        console.error(
-          `[cookbook.upsert] ISBN ${input.isbn} did not resolve to a product; link it by hand:`,
-          error,
+        log.error(
+          `ISBN ${input.isbn} did not resolve to a product; link it by hand`,
+          { error },
         );
         return undefined;
       }

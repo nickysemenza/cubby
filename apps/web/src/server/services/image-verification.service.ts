@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import type { ProductId } from "@cubby/schemas/identifiers";
 
 import type { Database } from "~/server/db";
@@ -8,6 +9,8 @@ import {
 } from "~/server/repo/image";
 import { inspectImageFile } from "~/server/services/image-integrity";
 import { getS3Object } from "~/server/utils/s3";
+
+const log = createLogger("image-verification");
 
 export type ImageVerificationResult = {
   imageId: string;
@@ -99,7 +102,7 @@ export const verifyImageRows = async (
       // already surfaced to the caller as this row's `metadata_mismatch`
       // result below; there's no richer caller-visible channel at this
       // per-row granularity.
-      console.error("image-verification.inspect-failed", { id: row.id, error });
+      log.error("inspect-failed", { id: row.id, error });
       await ports.updateImageIntegrity(db, row.id, {
         renderStatus: "failed",
         storageStatus: "metadata_mismatch",

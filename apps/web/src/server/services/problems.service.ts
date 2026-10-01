@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import { amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import { displayGtin } from "@cubby/schemas/external-id";
@@ -114,6 +115,8 @@ import {
 import type { UsdaFoodBatchPort } from "~/server/services/usda-helpers";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
 import { traceAll, traceAllBounded } from "~/server/tracing";
+
+const log = createLogger("findCoverageProblems");
 
 // The embedding-coverage detector is gated HERE rather than in the repo, so the
 // repo stays pure data access and the env read stays in the service layer.
@@ -1309,8 +1312,8 @@ export const findCoverageProblems = async (
       // turn into a failed Problems page (or, worse, an empty healthy card):
       // leave the prior stale/unavailable rows intact, let the exact filters
       // fail closed, and return their existing freshness state to the UI.
-      console.warn(
-        `[findCoverageProblems] conversion projection rebuild failed; serving ${freshness.state} persisted projection: ${getErrorMessage(error)}`,
+      log.warn(
+        `conversion projection rebuild failed; serving ${freshness.state} persisted projection: ${getErrorMessage(error)}`,
       );
     }
   }

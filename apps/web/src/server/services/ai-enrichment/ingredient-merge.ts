@@ -7,6 +7,7 @@
 // `runAiSelection` (no agentic search loop). Suggestions only — merge is
 // destructive, so the user confirms.
 
+import { createLogger } from "@cubby/worker-tracing";
 import type { Confidence } from "@cubby/schemas/ai";
 import {
   type RunId,
@@ -24,6 +25,8 @@ import {
   type MergeShortlistEntry,
   type MergeShortlistPort,
 } from "./merge-shortlist";
+
+const log = createLogger("suggestIngredientMergeBatch");
 
 export interface IngredientMergeAiPort {
   select: typeof runAiSelection<MergeShortlistEntry>;
@@ -127,10 +130,7 @@ export async function suggestIngredientMergeBatch(
       if (result.status === "fulfilled") {
         out.push({ source, ...result.value });
       } else {
-        console.error(
-          `[suggestIngredientMergeBatch] ${source.name} failed:`,
-          result.reason,
-        );
+        log.error(`${source.name} failed`, { error: result.reason });
         out.push({
           source,
           target: null,

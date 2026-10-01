@@ -1,8 +1,11 @@
+import { createLogger } from "@cubby/worker-tracing";
 import type { RunId } from "@cubby/schemas/identifiers";
 
 import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { emitTelemetry } from "~/server/telemetry";
+
+const log = createLogger("ai-usage");
 
 export interface AiUsagePort {
   emit: typeof emitTelemetry;
@@ -74,7 +77,7 @@ export async function recordAiUsage(
       estimatedCost: input.estimatedCost ?? null,
     });
   } catch (error) {
-    console.error("[ai-usage] failed to record usage", {
+    log.error("failed to record usage", {
       error: getErrorMessage(error),
     });
   }

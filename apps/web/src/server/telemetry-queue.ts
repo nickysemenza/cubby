@@ -1,9 +1,12 @@
+import { createLogger } from "@cubby/worker-tracing";
 import { telemetryMessageV1Schema } from "@cubby/schemas/telemetry";
 
 import type { Database } from "~/server/db";
 import { persistTelemetryMessages } from "~/server/repo/telemetry";
 
 import type { TelemetryQueueBatch } from "./telemetry-queue-types";
+
+const log = createLogger("telemetry");
 
 export interface TelemetryQueuePorts {
   readonly persistTelemetryMessages: typeof persistTelemetryMessages;
@@ -26,7 +29,7 @@ export async function processTelemetryQueueBatch(
   for (const message of batch.messages) {
     const parsed = telemetryMessageV1Schema.safeParse(message.body);
     if (!parsed.success) {
-      console.warn("[telemetry] dropped invalid queue message", {
+      log.warn("dropped invalid queue message", {
         issues: parsed.error.issues,
       });
       message.ack();

@@ -5,6 +5,7 @@
  * while this module owns the persistent freshness contract. A failed provider
  * call never replaces a last-known answer with an empty successful result.
  */
+import { createLogger } from "@cubby/worker-tracing";
 import type { UpcEnrichmentFreshness } from "@cubby/schemas/problems";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import { inArray, sql } from "drizzle-orm";
@@ -13,6 +14,8 @@ import { PartialUpcBatchLookupError } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import { upcLookupCache } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+
+const log = createLogger("readCachedUpcLookups");
 
 /** Provider data is advisory; refresh at most once per UPC per week. */
 const UPC_LOOKUP_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -135,7 +138,7 @@ const refreshUpcCache = async (
     applyReadyCacheRows(cached, refresh, hits, checkedAt);
     return false;
   } catch (error) {
-    console.error("[readCachedUpcLookups] UPC provider refresh failed:", error);
+    log.error("UPC provider refresh failed", { error });
     const partial = error instanceof PartialUpcBatchLookupError ? error : null;
     const failed = new Set(partial?.failedUpcs ?? refresh);
     const completed = refresh.filter((upc) => !failed.has(upc));

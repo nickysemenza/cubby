@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import type { UnparsedError } from "~/lib/error-utils";
 import { withTrace } from "~/server/tracing";
 
@@ -7,6 +8,8 @@ import type {
   WorkflowState,
   WorkflowStep,
 } from "./definition";
+
+const log = createLogger("workflow");
 
 // Workers bind AbortController to the active request; never cache one at module scope.
 const uncancelledSignal = () => new AbortController().signal;
@@ -79,7 +82,7 @@ const notify = <Context, Input>(
   } catch (error) {
     // SILENT: diagnostic subscribers cannot roll back a write or prevent
     // required effects after a successful commit.
-    console.error("Workflow observer failed", error);
+    log.error("observer failed", { error });
   }
 };
 

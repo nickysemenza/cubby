@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import type { ProblemsCount } from "@cubby/schemas/problems";
 import { problemsCountSchema } from "@cubby/schemas/problems";
 
@@ -7,6 +8,8 @@ import {
 } from "~/server/cf-env";
 
 import type { DatabaseFreshness } from "./state";
+
+const log = createLogger("database-freshness");
 
 const DATABASE_FRESHNESS_RPC_TIMEOUT_MS = 1000;
 // Only the authenticated workflow reads this internal cache. Keep the TTL short:
@@ -75,7 +78,7 @@ export async function readDatabaseFreshness(
     if (!target) return null;
     return await boundedRpc(() => target.readFreshness());
   } catch (error) {
-    console.warn("Database freshness lookup failed; using strong reads", error);
+    log.warn("lookup failed; using strong reads", { error });
     return null;
   }
 }
@@ -87,12 +90,12 @@ export async function recordDatabaseWrite(
   try {
     const target = port ?? getPort();
     if (!target) {
-      console.warn("Database freshness notification unavailable", { source });
+      log.warn("notification unavailable", { source });
       return;
     }
     await boundedRpc(() => target.recordWrite());
   } catch (error) {
-    console.warn("Database freshness notification failed", { source, error });
+    log.warn("notification failed", { source, error });
   }
 }
 
@@ -109,7 +112,7 @@ export async function readProblemCountsFromDurableObject(
       }
     } catch (error) {
       // SILENT: a cache lookup failure falls back to the durable snapshot.
-      console.warn("Problem-count edge cache lookup failed", error);
+      log.warn("problem-count edge cache lookup failed", { error });
     }
   }
   const target = port ?? getPort();
@@ -131,7 +134,7 @@ export async function readProblemCountsFromDurableObject(
         )
         .catch((error) => {
           // SILENT: a cache write cannot fail an otherwise successful read.
-          console.warn("Problem-count edge cache write failed", error);
+          log.warn("problem-count edge cache write failed", { error });
         });
       const execution = getExecutionCtx();
       if (execution) execution.waitUntil(write);
@@ -139,7 +142,7 @@ export async function readProblemCountsFromDurableObject(
     }
     return counts;
   } catch (error) {
-    console.error("Problem-count snapshot RPC failed", error);
+    log.error("problem-count snapshot RPC failed", { error });
     throw error;
   }
 }

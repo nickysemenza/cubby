@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import type { BackgroundTask } from "@cubby/schemas/background-tasks";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { runEntityId, type ImageId } from "@cubby/schemas/identifiers";
@@ -9,6 +10,8 @@ import {
   productionEmbeddingRefreshPort,
   refreshEntityEmbeddings,
 } from "./embedding";
+
+const log = createLogger("background-tasks");
 
 export type BackgroundTaskOutcome = "succeeded" | "skipped";
 
@@ -93,8 +96,8 @@ export async function handleBackgroundTask(
       if ("error" in result) throw result.error;
       const { outcome } = result;
       if (outcome === "obsolete" || outcome === "unconfigured") {
-        console.warn(
-          `[background-tasks] embedding ${outcome} ${task.entityKind}:${task.entityId}`,
+        log.warn(
+          `embedding ${outcome} ${task.entityKind}:${task.entityId}`,
         );
       }
       return outcome === "written" ? "succeeded" : "skipped";

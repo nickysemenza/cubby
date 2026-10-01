@@ -31,14 +31,8 @@ export const entityListHandlers = implementOperationDomain(entityListContract, {
     input: entityListInputSchema,
     output: (input) => getEntityListOutputSchema(input.entity),
     run: async (context, input) => {
-      const { executeEntity } = await import("~/server/entity-kernel");
-      const result = await executeEntity(context, {
-        action: "list",
-        ...input,
-      });
-      if (result.action !== "list") {
-        throw new Error("Entity kernel returned the wrong action");
-      }
+      const { executeEntityAs } = await import("~/server/entity-kernel");
+      const result = await executeEntityAs(context, "list", input);
       return getEntityListOutputSchema(input.entity).parse({
         items: result.items,
         meta: result.meta,

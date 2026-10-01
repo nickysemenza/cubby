@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
@@ -33,6 +34,8 @@ import {
   type VectorStorePort,
 } from "~/server/semantic/vector-store";
 import { TraceNames, withTrace } from "~/server/tracing";
+
+const log = createLogger("search");
 
 const candidateSchema = searchHitSchema
   .omit({ imageUrl: true, locationPath: true })
@@ -279,7 +282,7 @@ export async function findRelatedSearchCandidates(
     });
     return { status: "ready", results };
   } catch (error) {
-    console.warn("search.related.failed", { message: getErrorMessage(error) });
+    log.warn("related failed", { message: getErrorMessage(error) });
     return { status: "unavailable", results: [] };
   }
 }

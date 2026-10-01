@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import type { BackgroundTask } from "@cubby/schemas/background-tasks";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
@@ -22,6 +23,8 @@ import {
   handleBackgroundTask,
   productionBackgroundTaskPorts,
 } from "./handle";
+
+const log = createLogger("background-tasks");
 
 /**
  * `captureException` has no default on purpose: a default no-op would make a
@@ -100,15 +103,15 @@ async function runBackgroundTask(
         "cubby.job.requested_at": task.requestedAt,
       },
     );
-    console.log(
-      `[background-tasks] handled kind=${task.kind} outcome=${outcome} duration_ms=${Math.round(performance.now() - t0)}`,
+    log.info(
+      `handled kind=${task.kind} outcome=${outcome} duration_ms=${Math.round(performance.now() - t0)}`,
     );
     message.ack();
     return outcome;
   } catch (error) {
-    console.error(
-      `[background-tasks] failed kind=${task.kind} duration_ms=${Math.round(performance.now() - t0)}`,
-      error,
+    log.error(
+      `failed kind=${task.kind} duration_ms=${Math.round(performance.now() - t0)}`,
+      { error },
     );
     ports.captureException(error);
     message.retry(
@@ -166,9 +169,9 @@ async function runEmbeddingRefreshGroup(
           (ports.tasks ?? productionBackgroundTaskPorts).embedding,
         );
       } catch (error) {
-        console.error(
-          `[background-tasks] failed kind=${kind} batch_size=${indices.length} duration_ms=${Math.round(performance.now() - t0)}`,
-          error,
+        log.error(
+          `failed kind=${kind} batch_size=${indices.length} duration_ms=${Math.round(performance.now() - t0)}`,
+          { error },
         );
         ports.captureException(error);
         for (const index of indices) {
@@ -178,8 +181,8 @@ async function runEmbeddingRefreshGroup(
         return;
       }
 
-      console.log(
-        `[background-tasks] handled kind=${kind} batch_size=${indices.length} duration_ms=${Math.round(performance.now() - t0)}`,
+      log.info(
+        `handled kind=${kind} batch_size=${indices.length} duration_ms=${Math.round(performance.now() - t0)}`,
       );
 
       const capturedErrors = new Set<unknown>();
@@ -195,17 +198,16 @@ async function runEmbeddingRefreshGroup(
           const error = new Error(
             `[background-tasks] missing embedding refresh result for ${key}`,
           );
-          console.error(error);
+          log.error("embedding refresh threw", { error });
           ports.captureException(error);
           message.retry();
           outcomes[index] = "failed";
           continue;
         }
         if ("error" in result) {
-          console.error(
-            `[background-tasks] failed kind=${kind} entity=${key}`,
-            result.error,
-          );
+          log.error(`failed kind=${kind} entity=${key}`, {
+            error: result.error,
+          });
           if (!capturedErrors.has(result.error)) {
             capturedErrors.add(result.error);
             ports.captureException(result.error);
@@ -226,7 +228,7 @@ async function runEmbeddingRefreshGroup(
         }
         const { outcome } = result;
         if (outcome === "obsolete" || outcome === "unconfigured") {
-          console.warn(`[background-tasks] embedding ${outcome} ${key}`);
+          log.warn(`embedding ${outcome} ${key}`);
         }
         message.ack();
         outcomes[index] = outcome === "written" ? "succeeded" : "skipped";
@@ -266,7 +268,7 @@ export async function handleBackgroundQueueBatch(
   for (const [index, message] of batch.messages.entries()) {
     const parsed = parseBackgroundQueueMessage(message.body);
     if ("error" in parsed) {
-      console.error("[background-tasks] unreadable message", parsed.error);
+      log.error("unreadable message", { error: parsed.error });
       ports.captureException(parsed.error);
       message.retry();
       outcomes[index] = "unreadable";

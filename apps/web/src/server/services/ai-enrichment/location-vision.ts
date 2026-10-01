@@ -4,6 +4,7 @@
  * Handles multi-step orchestration: fetching images, calling the AI client, persisting results.
  */
 
+import { createLogger } from "@cubby/worker-tracing";
 import type {
   ApproveDetectedInventoryItemInput,
   ApproveDetectedInventoryItemOut,
@@ -64,6 +65,8 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import { semanticProductCandidates } from "~/server/services/semantic-search.service";
+
+const log = createLogger("ai.analysis");
 
 const MAX_ANALYSIS_IMAGES = 5;
 const DETECTED_ITEM_MATCH_BATCH_SIZE = 3;
@@ -262,7 +265,7 @@ export async function describeLocation(
       LOCATION_DESCRIPTION_FEATURE,
       inputFingerprint,
     );
-    console.info("ai.analysis", {
+    log.info("analysis", {
       ...hitMetadata,
       entityKind: "location",
       entityId: locationId,
@@ -299,7 +302,7 @@ export async function describeLocation(
     LOCATION_DESCRIPTION_FEATURE,
     inputFingerprint,
   );
-  console.info("ai.analysis", {
+  log.info("analysis", {
     ...missMetadata,
     entityKind: "location",
     entityId: locationId,
@@ -440,7 +443,7 @@ async function semanticProductCandidatesBestEffort(
     return await semanticProductCandidates(db, query, 3, runId);
   } catch (error) {
     const parsedError = error instanceof Error ? error : null;
-    console.warn("ai.inventory.semantic-product-match.failed", {
+    log.warn("inventory semantic-product-match failed", {
       query,
       errorName: parsedError?.name ?? "UnparsedError",
       message: getErrorMessage(error),
@@ -518,7 +521,7 @@ export async function detectInventoryItems(
   }
 
   const cache = detectionCacheMetadata(cacheStatus, inputFingerprint);
-  console.info("ai.analysis", {
+  log.info("analysis", {
     ...cache,
     entityKind: "location",
     entityId: locationId,

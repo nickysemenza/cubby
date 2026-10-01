@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import type { AiAnalysisEntityKind } from "@cubby/schemas/ai";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import type { z } from "zod";
@@ -11,6 +12,8 @@ import {
   notDeleted,
   updateAndReturn,
 } from "~/server/repo/database-helpers";
+
+const log = createLogger("ai.analysis");
 
 interface AiAnalysisKey<T> {
   entityKind: AiAnalysisEntityKind;
@@ -62,7 +65,7 @@ export async function listAiAnalysesForEntityFeature<T>(
   return rows.flatMap((row) => {
     const parsed = input.schema.safeParse(row.result);
     if (!parsed.success) {
-      console.warn("ai.analysis.invalid-stored-result", {
+      log.warn("invalid-stored-result", {
         entityKind: input.entityKind,
         entityId: input.entityId,
         feature: input.feature,

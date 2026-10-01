@@ -6,6 +6,7 @@
  * - Batch UPC image backfill
  */
 
+import { createLogger } from "@cubby/worker-tracing";
 import type { ActorContext } from "@cubby/schemas/context";
 import { displayGtin } from "@cubby/schemas/external-id";
 import {
@@ -60,6 +61,8 @@ import { runMutationSideEffects } from "./mutation-side-effects";
 import type { ProductWriteActions } from "./product.service";
 import type { RecipeCostingService } from "./recipe-costing.service";
 
+const log = createLogger("product-orchestration");
+
 interface ProductWriteServices {
   db: Database;
   product: ProductWriteActions;
@@ -97,7 +100,7 @@ async function importCoverPhoto(
     await importImageFromUPC(db, upcLookupClient, code, productId);
     return [];
   } catch (error) {
-    console.error(`[${source}] Image import failed:`, error);
+    log.error(`[${source}] Image import failed`, { error });
     return [
       scrubErrorMessage(
         `Cover photo import for ${code} failed: ${getErrorMessage(error)}`,

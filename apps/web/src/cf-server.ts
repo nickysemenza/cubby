@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { createLogger } from "@cubby/worker-tracing";
 import { SENTRY_DATA_COLLECTION } from "@cubby/worker-tracing/sentry-data-collection";
 import { CUBBY_SENTRY_DSN } from "@cubby/worker-tracing/sentry-dsn";
 import * as Sentry from "@sentry/cloudflare";
@@ -143,14 +144,23 @@ const _origError = console.error;
 console.error = (...args: unknown[]) => {
   const holder = interceptedErrorStore.getStore();
   if (holder) {
+    // `createLogger` passes errors inside its fields bag, so look one level in.
     for (const arg of args) {
       if (arg instanceof Error) {
         holder.error = arg;
+      } else if (typeof arg === "object" && arg !== null) {
+        for (const value of Object.values(arg)) {
+          if (value instanceof Error) holder.error = value;
+        }
       }
     }
   }
   _origError(...args);
 };
+
+const log = createLogger("cf-server");
+const cronLog = createLogger("cron");
+const scheduledLog = createLogger("scheduled");
 
 let fetchInvocationOrdinal = 0;
 
@@ -390,10 +400,9 @@ const handler = {
                               interceptedErrorStore.getStore()?.error;
                             let fallbackEventId: string | undefined;
                             if (response.status >= 500 && interceptedError) {
-                              console.error(
-                                "[cf-server] Unhandled error:",
-                                interceptedError,
-                              );
+                              log.error("Unhandled error:", {
+                                error: interceptedError,
+                              });
                               fallbackEventId = reportServerError(
                                 interceptedError,
                                 {
@@ -508,7 +517,7 @@ const handler = {
               error instanceof Error
                 ? `${error.constructor.name}: ${error.message}\n${error.stack}`
                 : String(error);
-            console.error("[cf-server]", detail);
+            log.error(detail);
             const headers = new Headers({ "cache-control": "no-store" });
             const requestId = getRequestId(request.headers);
             if (requestId) headers.set("x-request-id", requestId);
@@ -591,7 +600,7 @@ const handler = {
   ) {
     setCfEnv(env);
     if (isMaintenanceMode(env)) {
-      console.warn("[cron] skipped: maintenance mode");
+      cronLog.warn("skipped: maintenance mode");
       return;
     }
     if (controller.cron !== "0 12 * * *")
@@ -683,7 +692,7 @@ const handler = {
                           "cubby.awaiting.pending_uploads":
                             awaiting.pendingUploads,
                         });
-                        console.log("[scheduled] awaiting work", awaiting);
+                        scheduledLog.info("awaiting work", awaiting);
                         if (
                           awaiting.staleRecipeTotals > 0 ||
                           awaiting.unembeddedEntities > 0 ||

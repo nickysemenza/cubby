@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import { userId } from "@cubby/schemas/identifiers";
 import { verifyJwsAccessToken } from "better-auth/oauth2";
 
@@ -14,6 +15,8 @@ import {
   createUnauthorizedResponse,
   type VerifyMcpAccessToken,
 } from "./auth-verifier";
+
+const log = createLogger("mcp-auth");
 
 /**
  * OAuth 2.1 bearer-token auth for the MCP endpoint.
@@ -66,7 +69,7 @@ const verifyStandardMcpToken = createMcpTokenVerifier({
     jwksCacheKey: JWKS_CACHE_KEY,
     verifyOptions: { issuer: OAUTH_ISSUER, audience: MCP_RESOURCE },
   },
-  reportRejection: (message, detail) => console.error(message, detail),
+  reportRejection: (message, detail) => log.error(message, { detail }),
 });
 
 /** Verify either a normal OAuth access token or a private, run-bound delegation. */

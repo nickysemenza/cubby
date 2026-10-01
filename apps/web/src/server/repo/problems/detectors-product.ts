@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import { displayGtin, GTIN_SOURCE } from "@cubby/schemas/external-id";
 /**
  * Product-centric Problems detectors.
@@ -86,6 +87,8 @@ import { unitMappingSides } from "~/server/repo/product/unit-mappings";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
 import { buildTimelineGates } from "~/server/repo/project/tools";
 import { effectiveTaskSubjectProductSql } from "~/server/repo/task-project-inheritance";
+
+const log = createLogger("problems");
 
 type ProductWithUpcGapCandidate = {
   id: ProductId;
@@ -641,10 +644,9 @@ export const synthesizeEffectiveMappings = (
   try {
     return getAllUnitMappingsFromProduct(p);
   } catch (error) {
-    console.error(
-      `Failed to synthesize mappings for product ${p.id} (${p.name}):`,
+    log.error(`Failed to synthesize mappings for product ${p.id} (${p.name})`, {
       error,
-    );
+    });
     return null;
   }
 };

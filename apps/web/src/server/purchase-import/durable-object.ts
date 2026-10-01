@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import type {
   DurableObjectState,
   WebSocket as CfWebSocket,
@@ -16,6 +17,8 @@ import {
   type PurchaseImportDurableObjectRpc,
 } from "./contracts";
 import { PurchaseImportSqlStore, type RunCompletionSummary } from "./sql-store";
+
+const log = createLogger("purchase-import.bridge");
 
 declare const WebSocketPair: {
   new (): { 0: WebSocket; 1: CfWebSocket };
@@ -121,7 +124,7 @@ export class PurchaseImportDurableObject
   ): Promise<void> {
     const parsed = decodeBrowserBridgeMessage(message);
     if (!parsed.success) {
-      console.error("purchase-import.bridge.invalid-message", {
+      log.error("invalid-message", {
         issues: parsed.error.issues.map((issue) => ({
           code: issue.code,
           path: issue.path.join("."),
@@ -190,7 +193,7 @@ export class PurchaseImportDurableObject
   }
 
   webSocketError(_socket: CfWebSocket, error: Error): void {
-    console.error("purchase-import.bridge.websocket", error);
+    log.error("websocket", { error });
   }
 
   webSocketClose(
@@ -215,7 +218,7 @@ export class PurchaseImportDurableObject
       // A completed side effect must never be dispatched again, even if a
       // runtime/storage regression briefly exposes a stale replay row. The
       // Mac has already persisted the result and will replay it on reconnect.
-      console.error("purchase-import.bridge.completed-command-replay", {
+      log.error("completed-command-replay", {
         commandId: next.id,
       });
       return;

@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -15,6 +16,8 @@ import {
 } from "./import-usda-contract";
 import * as schema from "./schema";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
+
+const log = createLogger("import-usda");
 
 const USDA_DATA_PATH = path.resolve(
   process.env.USDA_DATA_PATH ||
@@ -174,7 +177,7 @@ function createImporter<TSchema extends SQLiteTable>(
   config: TableConfig<TSchema>,
 ) {
   return async (batchSize?: number): Promise<ImportStats> => {
-    console.log(`\n=== Importing ${config.tableName} ===`);
+    log.info(`=== Importing ${config.tableName} ===`);
     const filePath = path.join(USDA_DATA_PATH, config.csvFile);
 
     try {
@@ -206,7 +209,7 @@ function createImporter<TSchema extends SQLiteTable>(
         shouldInclude,
       );
     } catch (error) {
-      console.error(`Error importing ${config.tableName}:`, error);
+      log.error(`Error importing ${config.tableName}`, { error });
       throw error;
     }
   };
@@ -221,8 +224,8 @@ async function streamCsvFile(
 ): Promise<ImportStats> {
   const totalRows = await countCsvRows(filePath);
   return new Promise((resolve, reject) => {
-    console.log(`Streaming ${filePath}...`);
-    console.log(`  Total rows: ${totalRows}`);
+    log.info(`Streaming ${filePath}...`);
+    log.info(`  Total rows: ${totalRows}`);
     const stats: ImportStats = { processed: 0, inserted: 0, skipped: 0 };
     let batch: DatabaseRecord[] = [];
     const startTime = Date.now();
@@ -248,7 +251,7 @@ async function streamCsvFile(
             stats.processed += 1;
           } catch (err) {
             // Always print the offending record for easier diagnostics
-            console.warn(
+            log.warn(
               `Skipping record due to error: ${
                 err instanceof Error ? err.message : String(err)
               }\n  record: ${JSON.stringify(record)}`,
@@ -274,7 +277,7 @@ async function streamCsvFile(
           totalRows > 0
             ? ((stats.processed / totalRows) * 100).toFixed(1)
             : "—";
-        console.log(
+        log.info(
           `  Progress: ${stats.processed}/${totalRows} (${pct}%) | speed: ${speed.toFixed(1)} rec/s | ETA: ${formatDuration(etaSec)}`,
         );
       }
@@ -295,7 +298,7 @@ async function streamCsvFile(
         },
         skip: (error) => {
           if (error) {
-            console.warn(`Skipping record due to transformation error:`, error);
+            log.warn("Skipping record due to transformation error", { error });
           }
           stats.skipped++;
           stats.processed++;
@@ -314,7 +317,7 @@ async function streamCsvFile(
         Math.floor((Date.now() - startTime) / 1000),
       );
       const speed = stats.processed / elapsedSec;
-      console.log(
+      log.info(
         `Completed: ${stats.inserted} inserted, ${stats.skipped} skipped | elapsed: ${formatDuration(elapsedSec)} | avg speed: ${speed.toFixed(1)} rec/s`,
       );
       resolve(stats);
@@ -388,7 +391,7 @@ const importFoodNutrients = createImporter(foodNutrientConfig);
 const importFoodPortions = createImporter(foodPortionConfig);
 
 function clearTables() {
-  console.log("\n=== Clearing existing data ===");
+  log.info("=== Clearing existing data ===");
   const tables = [
     "usda_food_portion",
     "usda_food_nutrient",
@@ -402,9 +405,9 @@ function clearTables() {
   for (const table of tables) {
     try {
       sqlite.exec(`DELETE FROM ${table}`);
-      console.log(`Cleared ${table}`);
+      log.info(`Cleared ${table}`);
     } catch {
-      console.log(`Table ${table} doesn't exist or is empty`);
+      log.info(`Table ${table} doesn't exist or is empty`);
     }
   }
 }
@@ -427,7 +430,7 @@ const readNumericPragma = (name: string): number =>
   z.number().parse(sqlite.pragma(name, { simple: true }));
 
 function applySafePragmas(): PragmasSnapshot {
-  console.log("\n=== Applying safe performance PRAGMAs ===");
+  log.info("=== Applying safe performance PRAGMAs ===");
   const prev: PragmasSnapshot = {
     journal_mode: readPragmaValue("journal_mode"),
     synchronous: readPragmaValue("synchronous"),
@@ -464,7 +467,7 @@ function applySafePragmas(): PragmasSnapshot {
 }
 
 function restorePragmas(prev: PragmasSnapshot) {
-  console.log("\n=== Restoring PRAGMAs ===");
+  log.info("=== Restoring PRAGMAs ===");
   const toUpper = (value: PragmaValue): PragmaValue => {
     const textValue = z.string().safeParse(value);
     return textValue.success ? textValue.data.toUpperCase() : value;
@@ -508,13 +511,13 @@ async function main() {
       )
     : DEFAULT_BATCH_SIZE;
 
-  console.log("Starting USDA data import...");
-  console.log(`Data path: ${USDA_DATA_PATH}`);
+  log.info("Starting USDA data import...");
+  log.info(`Data path: ${USDA_DATA_PATH}`);
   if (enableSafePragmas)
-    console.log(
+    log.info(
       "Fast mode: applying safe SQLite PRAGMAs (WAL, NORMAL, MEMORY, cache, mmap)",
     );
-  console.log(`Batch size: ${batchSize} | Drizzle prepared statements`);
+  log.info(`Batch size: ${batchSize} | Drizzle prepared statements`);
 
   if (shouldClear) {
     clearTables();
@@ -538,14 +541,14 @@ async function main() {
   for (const { name, fn } of importFunctions) {
     try {
       const stats = await fn(batchSize);
-      console.log(
+      log.info(
         `${name}: ${stats.inserted} inserted, ${stats.skipped} skipped`,
       );
       totalStats.processed += stats.processed;
       totalStats.inserted += stats.inserted;
       totalStats.skipped += stats.skipped;
     } catch (error) {
-      console.error(`Error importing ${name}:`, error);
+      log.error(`Error importing ${name}`, { error });
       process.exit(1);
     }
   }
@@ -553,18 +556,18 @@ async function main() {
   const endTime = Date.now();
   const duration = Math.round((endTime - startTime) / 1000);
 
-  console.log("\n=== Import Complete ===");
-  console.log(`Total processed: ${totalStats.processed}`);
-  console.log(`Total inserted: ${totalStats.inserted}`);
-  console.log(`Total skipped: ${totalStats.skipped}`);
-  console.log(`Duration: ${duration} seconds`);
+  log.info("=== Import Complete ===");
+  log.info(`Total processed: ${totalStats.processed}`);
+  log.info(`Total inserted: ${totalStats.inserted}`);
+  log.info(`Total skipped: ${totalStats.skipped}`);
+  log.info(`Duration: ${duration} seconds`);
 
-  console.log("\n=== Building search index (FTS5) ===");
+  log.info("=== Building search index (FTS5) ===");
   try {
     rebuildFoodSearchFts();
-    console.log("FTS index built");
+    log.info("FTS index built");
   } catch (e) {
-    console.warn("Warning: Failed to build FTS index:", e);
+    log.warn("Failed to build FTS index", { error: e });
   }
 
   if (enableSafePragmas && previousPragmas) {
@@ -575,5 +578,5 @@ async function main() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(console.error);
+  main().catch((error) => log.error("import failed", { error }));
 }

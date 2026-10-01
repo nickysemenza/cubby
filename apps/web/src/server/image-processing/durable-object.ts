@@ -1,3 +1,4 @@
+import { createLogger } from "@cubby/worker-tracing";
 import type { WebSocket as CfWebSocket } from "@cloudflare/workers-types";
 import {
   imageProcessingClientMessage,
@@ -13,6 +14,8 @@ import { db, withRequestDbClient } from "~/server/db";
 
 import type { ImageProcessingCompanionRpc } from "./contracts";
 import { safeImageProcessingError } from "./safe-error";
+
+const log = createLogger("image-processing");
 
 declare const WebSocketPair: { new (): { 0: WebSocket; 1: CfWebSocket } };
 
@@ -260,6 +263,6 @@ export class ImageProcessingDurableObject
   }
 
   webSocketError(_socket: CfWebSocket, error: Error): void {
-    console.error("image-processing.websocket", error);
+    log.error("websocket error", { error });
   }
 }
