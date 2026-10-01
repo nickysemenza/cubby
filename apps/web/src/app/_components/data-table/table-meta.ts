@@ -1,6 +1,9 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { parseShortcode } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
+import { z } from "zod";
 
 import type { ColumnCellData } from "./cell-data";
 import type { CubbyDefaultTableLayout } from "./column-layout";
@@ -59,10 +62,21 @@ export type RowColumnExplanation<TData> = {
 export const resolveColumnExplanation = <TData>(
   explanation: ColumnExplanation | RowColumnExplanation<TData> | undefined,
   row: TData,
-): ColumnExplanation | undefined =>
-  explanation && "resolve" in explanation
-    ? explanation.resolve(row)
-    : explanation;
+  columnId?: string,
+): ColumnExplanation | undefined => {
+  if (explanation)
+    return "resolve" in explanation ? explanation.resolve(row) : explanation;
+  const identity = z.object({ id: z.string() }).safeParse(row);
+  const parsed = identity.success ? parseShortcode(identity.data.id) : null;
+  if (!parsed || !columnId) return undefined;
+  const field = entityFieldModels[parsed.type].fields.find(
+    (candidate) =>
+      candidate.key === columnId || candidate.key === `${columnId}Id`,
+  );
+  return field?.explanation
+    ? { entity: parsed.type, field: field.key, label: field.label }
+    : undefined;
+};
 
 /** Per-column Cubby rendering and editing conventions, bound through v9's meta slot. */
 export interface CubbyColumnMeta<TData = CellData> {

@@ -117,7 +117,7 @@ public actor CubbyClient {
     }
 
     public func fieldExplanation(
-        subject: EntityRef, field: String
+        subject: EntityRef, field: String, surface: String = "detail"
     ) async throws -> FieldExplanationOutput {
         let entityKind: Operations.FieldExplanation_explain.Input.Query.EntityKindPayload =
             switch subject.entity {
@@ -152,7 +152,8 @@ public actor CubbyClient {
         return try await perform {
             try await api.fieldExplanation_explain(
                 query: .init(
-                    entityKind: entityKind, entityId: subject.id, field: field)
+                    entityKind: entityKind, entityId: subject.id, field: field,
+                    surface: .init(rawValue: surface))
             ).ok.body.json
         }
     }

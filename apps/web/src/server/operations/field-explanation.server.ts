@@ -28,6 +28,7 @@ import {
   loadFieldCountEvidence,
   withFieldExplanationSnapshot,
 } from "~/server/repo/field-explanation-evidence";
+import { loadFieldResolutionEvidence } from "~/server/repo/field-resolution-evidence";
 import { RecipeCostingService } from "~/server/services/recipe-costing.service";
 
 const jsonValue = z.json();
@@ -545,6 +546,8 @@ async function loadExplanationSnapshot(
         input.surface,
       ),
       countEvidence: null,
+      resolutionEvidence: null,
+      resolutionEvidenceTruncated: false,
     };
   }
   return withFieldExplanationSnapshot(context.db, async (snapshotDb) => {
@@ -556,13 +559,26 @@ async function loadExplanationSnapshot(
         recipeCosting: new RecipeCostingService(snapshotDb, context.usdaClient),
       },
     };
+    const projection = await loadProjection(
+      snapshotContext,
+      entity,
+      input.entityId,
+      input.surface,
+    );
+    const resolution = fieldResolutionSchema.safeParse(
+      readExplanationPath(projection, `fieldResolutions.${fieldKey}`).value,
+    );
+    const evidence = await loadFieldResolutionEvidence(
+      snapshotDb,
+      entity,
+      input.entityId,
+      fieldKey,
+      resolution.success ? resolution.data : null,
+    );
     return {
-      projection: await loadProjection(
-        snapshotContext,
-        entity,
-        input.entityId,
-        input.surface,
-      ),
+      projection,
+      resolutionEvidence: evidence.evidence,
+      resolutionEvidenceTruncated: evidence.truncated,
       countEvidence: needsCountEvidence
         ? await loadFieldCountEvidence(
             snapshotDb,
@@ -690,7 +706,11 @@ export async function explainField(
     },
     sources: boundedSources.sources,
     resolution,
-    truncated: boundedSources.truncated || (countEvidence?.truncated ?? false),
+    resolutionEvidence: snapshot.resolutionEvidence,
+    truncated:
+      boundedSources.truncated ||
+      (countEvidence?.truncated ?? false) ||
+      snapshot.resolutionEvidenceTruncated,
     evidenceFingerprint: ownershipEvidence?.evidenceFingerprint ?? null,
     actions,
   });

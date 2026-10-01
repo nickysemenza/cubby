@@ -70,7 +70,7 @@ const timeline: ProductMovementTimeline = {
           expenseId: null,
           productId: product,
           name: "Unitemized purchase product",
-          kind: "acquired",
+          kind: "linked",
           cost: null,
           quantity: null,
           signedQuantity: null,
@@ -103,7 +103,7 @@ describe("toEntityTimeline", () => {
     expect(events.map((event) => [event.kind, event.amount])).toEqual([
       ["acquired", 120],
       ["exited", -80],
-      ["acquired", null],
+      ["linked", null],
     ]);
     expect(events[0]?.link).toEqual({ entity: "expense", id: acquired });
     // Provenance-only rows have no expense to open; they fall back to the product.
@@ -126,7 +126,7 @@ describe("toEntityTimeline", () => {
     expect(out.rows?.[0]?.markers.map((marker) => marker.kind)).toEqual([
       "acquired",
       "exited",
-      "acquired",
+      "linked",
     ]);
   });
 

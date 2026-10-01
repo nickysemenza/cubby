@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { hasFoodIndicators } from "@cubby/schemas/product";
 import {
   spendingClassificationReviewApplyInput,
   spendingClassificationReviewInput,
@@ -8,10 +9,11 @@ import {
   type SpendingClassificationReviewApplyInput,
   type SpendingClassificationReviewInput,
 } from "@cubby/schemas/spending-classification-review";
-import { sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { product, entityExternalId } from "~/server/db/schema";
 import {
   executeEntity,
   type EntityKernelContext,
@@ -28,6 +30,8 @@ import {
   loadExpenseJointAllocations,
   type ExpenseJointAllocationRow,
 } from "./expense-project-allocation";
+import { getCategoryFeature, resolveProductCategory } from "./product-category";
+import { externalIdsContainIsbn } from "./product/update-helpers";
 import { resolveOrThrow } from "./shortcode-resolver";
 import {
   assertReviewedSpendingClassification,
@@ -50,6 +54,54 @@ async function draftFor(
   db: Database,
   request: SpendingClassificationReviewInput,
 ): Promise<ExpenseSpendingCategoryResolutionDraft> {
+  if (request.action === "products") {
+    const categoryId = await resolveOrThrow(
+      db,
+      "productCategory",
+      request.productCategoryId,
+    );
+    const targetFeature = await getCategoryFeature(db, categoryId);
+    const products = [];
+    for (const code of request.productIds) {
+      const id = await resolveOrThrow(db, "product", code);
+      const [current] = await unwrapDb(db)
+        .select()
+        .from(product)
+        .where(and(eq(product.id, id), isNull(product.deletedAt)));
+      if (!current) return fail("Product is no longer live.");
+      if (
+        ((await getCategoryFeature(db, current.categoryId)) === "food") !==
+        (targetFeature === "food")
+      )
+        fail(
+          "A reviewed spending reassignment cannot change the Food feature; Project and Trade impact require a separate review.",
+        );
+      const externalIds = await unwrapDb(db)
+        .select()
+        .from(entityExternalId)
+        .where(
+          and(
+            eq(entityExternalId.entityId, id),
+            eq(entityExternalId.entityKind, "product"),
+            isNull(entityExternalId.deletedAt),
+          ),
+        );
+      const requiredFeature = hasFoodIndicators(current)
+        ? "food"
+        : externalIdsContainIsbn(externalIds)
+          ? "books"
+          : null;
+      if (
+        (await resolveProductCategory(db, categoryId, requiredFeature)) !==
+        categoryId
+      )
+        fail(
+          "The reviewed category conflicts with the Product identity feature.",
+        );
+      products.push({ id, categoryId });
+    }
+    return { products };
+  }
   if (request.action === "productCategory") {
     const id = await resolveOrThrow(
       db,
@@ -155,6 +207,17 @@ async function buildPreview(
 ) {
   const draft = await draftFor(db, request);
   const policyRevision = await spendingClassificationRevision(db);
+  // Selected Products without Expenses still need stale-review protection.
+  const productFacts = draft.products?.length
+    ? (
+        await unwrapDb(db).execute(
+          sql`SELECT to_jsonb(p) AS facts FROM "Product" p WHERE p.id IN (${sql.join(
+            draft.products.map((row) => sql`${row.id}::uuid`),
+            sql`, `,
+          )}) ORDER BY p.id`,
+        )
+      ).rows
+    : [];
   const facts = z.array(snapshotRow).parse(
     (
       await unwrapDb(db).execute(sql`
@@ -222,6 +285,7 @@ async function buildPreview(
         version: 1,
         request,
         policyRevision,
+        productFacts,
         facts,
         before: allocationSnapshot(before),
         after: allocationSnapshot(after),
@@ -254,7 +318,24 @@ export async function applyReviewedSpendingClassificationPolicy(
   request: SpendingClassificationReviewInput,
 ) {
   assertReviewedSpendingClassification(ctx.db);
-  if (request.action === "productCategory") {
+  if (request.action === "products") {
+    for (const id of request.productIds)
+      await executeEntity(ctx, {
+        action: "update",
+        entity: "product",
+        id,
+        data: { categoryId: request.productCategoryId },
+      });
+    const admitted = await draftFor(ctx.db, request);
+    for (const selected of admitted.products ?? []) {
+      const [persisted] = await unwrapDb(ctx.db)
+        .select({ categoryId: product.categoryId })
+        .from(product)
+        .where(eq(product.id, selected.id));
+      if (persisted?.categoryId !== selected.categoryId)
+        fail("The applied Product category differs from the reviewed target.");
+    }
+  } else if (request.action === "productCategory") {
     await executeEntity(ctx, {
       action: "update",
       entity: "productCategory",
@@ -306,7 +387,11 @@ export async function applySpendingClassificationReview(
       return {
         applied: true as const,
         updatedRecords:
-          request.action === "expenses" ? request.expenseIds.length : 1,
+          request.action === "expenses"
+            ? request.expenseIds.length
+            : request.action === "products"
+              ? request.productIds.length
+              : 1,
         impact,
       };
     },

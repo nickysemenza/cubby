@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import {
   expenseShortcode,
+  productShortcode,
   productCategoryShortcode,
   spendingCategoryShortcode,
   vendorShortcode,
@@ -13,6 +14,13 @@ import {
 
 export const spendingClassificationReviewInput = z
   .discriminatedUnion("action", [
+    z
+      .object({
+        action: z.literal("products"),
+        productIds: z.array(productShortcode).min(1).max(500),
+        productCategoryId: productCategoryShortcode,
+      })
+      .strict(),
     z
       .object({
         action: z.literal("productCategory"),
@@ -50,6 +58,16 @@ export const spendingClassificationReviewInput = z
         path: ["spendingCategoryId"],
         message:
           "Mapped requires a category; inherit and blocked require no category.",
+      });
+    }
+    if (
+      input.action === "products" &&
+      new Set(input.productIds).size !== input.productIds.length
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["productIds"],
+        message: "Select each Product only once.",
       });
     }
     if (

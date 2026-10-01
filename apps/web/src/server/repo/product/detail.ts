@@ -31,6 +31,8 @@ import {
 } from "~/server/repo/product/quantity-ledger";
 import type { ProductDeepDB } from "~/server/repo/product/types";
 
+import { loadProductOwnershipEvidence } from "./ownership-evidence";
+
 interface ProductDetailReadContext {
   db: Database;
   usdaClient: USDAClient;
@@ -132,6 +134,7 @@ export async function readProductDetail(
         : Promise.resolve(null);
     },
   );
+  const ownershipPromise = loadProductOwnershipEvidence(context.db, row.id);
   const pricingPromise = observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
     "pricing",
@@ -209,6 +212,7 @@ export async function readProductDetail(
     analysisSummaries,
     recipe,
     food,
+    ownership,
   ] = await Promise.all([
     pricingPromise,
     quantityPromise,
@@ -218,6 +222,7 @@ export async function readProductDetail(
     analysisPromise,
     recipePromise,
     foodPromise,
+    ownershipPromise,
   ]);
   const coverImageUrl = covers.get(row.id) ?? null;
 
@@ -233,6 +238,7 @@ export async function readProductDetail(
   );
   return {
     ...mapped,
+    ownershipEvidence: ownership,
     food,
     recipeUsages: recipe.recipeUsages,
   };

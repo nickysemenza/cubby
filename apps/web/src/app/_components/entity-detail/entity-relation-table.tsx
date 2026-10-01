@@ -60,6 +60,12 @@ import { type BaseListRow, useEntityList } from "../hooks/useEntityList";
 import type { ListQueryOptionsFn } from "../hooks/usePaginatedTableCore";
 import { useEntityFieldSave } from "../hooks/useUpdateMutation";
 import { HopRange, RecordPaths } from "./connected-records-table";
+import {
+  relationshipMovementSource,
+  RelationshipMovementBadges,
+  RelationshipMovementProvider,
+  type RelationshipMovementOperations,
+} from "./relationship-movement";
 
 type RelationSection = Extract<
   CompiledEntityPresentation["detail"]["sections"][number],
@@ -207,7 +213,7 @@ export function planRelationSection(
 
 const DEFAULT_RELATION_PAGE_SIZE = 50;
 
-export interface EntityRelationTableOperations {
+export interface EntityRelationTableOperations extends RelationshipMovementOperations {
   list: typeof entityList.list;
   /** Test seam: a local operation adapter for the rows' inline field edits. */
   mutationPort?: EntityMutationPort;
@@ -524,6 +530,11 @@ function LiveEntityRelationTable({
   operations = productionOperations,
 }: EntityRelationTableProps) {
   const { target } = plan;
+  const movementSource = relationshipMovementSource(
+    plan.source,
+    plan.target,
+    plan.relation,
+  );
   const listQueryOptions: ListQueryOptionsFn<RelationFilters, RelationRow> =
     useCallback(
       (params) =>
@@ -551,6 +562,19 @@ function LiveEntityRelationTable({
           skipSpecialized: true,
           onSaveField,
         }).visit(add);
+        if (movementSource !== null)
+          add(
+            helper.display({
+              id: "movementEvidence",
+              header: "Movement",
+              size: 300,
+              minSize: 240,
+              maxSize: 420,
+              cell: ({ row }) => (
+                <RelationshipMovementBadges id={row.original.id} compact />
+              ),
+            }),
+          );
         add(
           helper.display({
             id: "connection",
@@ -562,7 +586,7 @@ function LiveEntityRelationTable({
           }),
         );
       }),
-    [helper, onSaveField, plan.columns, target],
+    [helper, onSaveField, plan.columns, target, movementSource],
   );
   const tableStateOptions = useMemo(
     () => ({
@@ -650,49 +674,62 @@ function LiveEntityRelationTable({
     list.totalCount > plan.limit;
 
   return (
-    <div className="space-y-2">
-      {evidenceQuery.data ? (
-        <HopRange range={evidenceQuery.data.routeHopRange} />
-      ) : null}
-      <EvidenceContext.Provider value={evidence}>
-        <ListWorkbench
-          model={list.workbench}
-          mode="embedded"
-          toolbarMode="none"
-          ariaLabel={title}
-          renderMobileRowFooter={(row) => {
-            const item = evidence.get(row.id);
-            return item ? (
-              <div className="border-t border-border/60 pt-2">
-                <span className="text-xs text-muted-foreground">
-                  Connected through
-                </span>
-                <RecordPaths paths={item.paths} />
-              </div>
-            ) : null;
-          }}
-        />
-      </EvidenceContext.Provider>
-      {evidenceQuery.isError ? (
-        <p role="alert" className="text-xs text-destructive">
-          Could not load connection paths: {String(evidenceQuery.error)}
-        </p>
-      ) : null}
-      {truncated ? (
-        <p className="text-xs text-muted-foreground">
-          Showing {plan.limit} of {list.totalCount} ·{" "}
-          <Link
-            to="/connections"
-            search={{
-              source: plan.source,
-              id: recordId,
-              view: `relation:${plan.relation}`,
+    <RelationshipMovementProvider
+      source={movementSource}
+      recordId={recordId}
+      operations={operations}
+    >
+      <div className="space-y-2">
+        {evidenceQuery.data ? (
+          <HopRange range={evidenceQuery.data.routeHopRange} />
+        ) : null}
+        <EvidenceContext.Provider value={evidence}>
+          <ListWorkbench
+            model={list.workbench}
+            mode="embedded"
+            toolbarMode="none"
+            ariaLabel={title}
+            renderMobileRowFooter={(row) => {
+              const item = evidence.get(row.id);
+              return item || movementSource !== null ? (
+                <div className="border-t border-border/60 pt-2">
+                  {movementSource !== null ? (
+                    <RelationshipMovementBadges id={row.id} />
+                  ) : null}
+                  {item ? (
+                    <>
+                      <span className="text-xs text-muted-foreground">
+                        Connected through
+                      </span>
+                      <RecordPaths paths={item.paths} />
+                    </>
+                  ) : null}
+                </div>
+              ) : null;
             }}
-          >
-            Open all
-          </Link>
-        </p>
-      ) : null}
-    </div>
+          />
+        </EvidenceContext.Provider>
+        {evidenceQuery.isError ? (
+          <p role="alert" className="text-xs text-destructive">
+            Could not load connection paths: {String(evidenceQuery.error)}
+          </p>
+        ) : null}
+        {truncated ? (
+          <p className="text-xs text-muted-foreground">
+            Showing {plan.limit} of {list.totalCount} ·{" "}
+            <Link
+              to="/connections"
+              search={{
+                source: plan.source,
+                id: recordId,
+                view: `relation:${plan.relation}`,
+              }}
+            >
+              Open all
+            </Link>
+          </p>
+        ) : null}
+      </div>
+    </RelationshipMovementProvider>
   );
 }

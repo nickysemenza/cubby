@@ -1,4 +1,8 @@
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import {
+  purchaseProductOut,
+  productPurchaseOut,
+} from "@cubby/schemas/purchase";
 import { testShortcode } from "@cubby/schemas/testing";
 import { formatCategoryLabel } from "@cubby/shared";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -9,9 +13,14 @@ import { createEntityMutationPort } from "~/entities/editing/use-entity-commands
 import {
   type EntityListInputByEntity,
   productListItem,
+  purchaseListItem,
   taskListItem,
 } from "~/entities/generated/entity-lists.gen";
-import { entityList } from "~/integrations/tanstack-query/generated/catalog.gen";
+import {
+  entityList,
+  purchase as purchaseOperations,
+  product as productOperations,
+} from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
@@ -164,6 +173,107 @@ describe("EntityRelationTable", () => {
     );
     expect(harness.queryClient.getQueryCache().getAll()).toHaveLength(0);
     expect(html).toContain('aria-busy="true"');
+  });
+
+  // Late metadata must update cells without replacing target list rows, and
+  // planned money cannot become an acquisition through client classification.
+  it("shows server movement and planning evidence on purchase product rows", async () => {
+    const rows = [1, 2, 3].map((seed) =>
+      mock(productListItem, {
+        seed,
+        overrides: {
+          name: `Role item ${seed}`,
+          id: testShortcode("product", `PRD-RL${seed}A`),
+        },
+      }),
+    );
+    const list = entityList.list.withTransport(async () => ({
+      items: rows,
+      meta: { pageIndex: 0, pageSize: 50, totalCount: 3, sums: {} },
+    }));
+    let reads = 0;
+    const purchaseProducts = purchaseOperations.products.withTransport(
+      async () => {
+        reads += 1;
+        return rows.map((row, index) =>
+          mock(purchaseProductOut, {
+            seed: index,
+            overrides: {
+              productId: row.id,
+              source: index === 1 ? "link" : "expense",
+              movementKinds:
+                index === 0 ? ["acquired", "adjusted", "exited"] : [],
+              hasPlanned: index !== 1,
+            },
+          }),
+        );
+      },
+    );
+    render(
+      <EntityRelationTable
+        plan={planFor("purchase", "products")}
+        recordId={testShortcode("purchase", "PUR-ROLE")}
+        title="Products"
+        operations={{ list, purchaseProducts }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    const first = (
+      await screen.findByRole("link", { name: "Role item 1" })
+    ).closest("tr");
+    await waitFor(() => expect(first).toHaveTextContent("Acquired"));
+    expect(first).toHaveTextContent("Price adjusted");
+    expect(first).toHaveTextContent("Exited");
+    expect(first).toHaveTextContent("Planned");
+    const linked = screen
+      .getByRole("link", { name: "Role item 2" })
+      .closest("tr");
+    expect(linked).toHaveTextContent("Linked");
+    expect(linked).not.toHaveTextContent("Acquired");
+    const planned = screen
+      .getByRole("link", { name: "Role item 3" })
+      .closest("tr");
+    expect(planned).toHaveTextContent("Planned");
+    expect(planned).not.toHaveTextContent("Acquired");
+    expect(reads).toBe(1);
+  });
+
+  it("shows the same movement evidence on inverse product purchase rows", async () => {
+    const row = mock(purchaseListItem, {
+      seed: 11,
+      overrides: {
+        id: testShortcode("purchase", "PUR-RLAA"),
+        displayLabel: "Role order",
+      },
+    });
+    const list = entityList.list.withTransport(async () => ({
+      items: [row],
+      meta: { pageIndex: 0, pageSize: 50, totalCount: 1, sums: {} },
+    }));
+    const productPurchases = productOperations.purchases.withTransport(
+      async () => [
+        mock(productPurchaseOut, {
+          seed: 11,
+          overrides: {
+            purchaseId: row.id,
+            source: "expense",
+            movementKinds: ["discarded", "unknown"],
+            hasPlanned: false,
+          },
+        }),
+      ],
+    );
+    render(
+      <EntityRelationTable
+        plan={planFor("product", "purchases")}
+        recordId={testShortcode("product", "PRD-ROLE")}
+        title="Related orders"
+        operations={{ list, productPurchases }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(await screen.findByText("Discarded")).toBeVisible();
+    expect(screen.getByText("Unknown movement")).toBeVisible();
   });
 
   it("issues the scoped list read, sorted and filtered per the plan", async () => {

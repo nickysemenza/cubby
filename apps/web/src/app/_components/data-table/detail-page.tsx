@@ -44,7 +44,7 @@ import { relationshipsSectionIcon } from "../relationships/relationship-tree";
 const ACTIVITY_SECTION_ID = "history";
 const RELATIONS_SECTION_ID = "relationships";
 
-type DetailMode = "overview" | "relations" | "activity";
+type DetailMode = string;
 type DetailHashResolution = { mode: DetailMode; valid: boolean };
 
 const detailRecordSchema = z
@@ -76,9 +76,11 @@ function modeForHash({
   overviewIds,
   hasRelations,
   hasActivity,
+  dedicatedIds,
 }: {
   hash: string;
   overviewIds: ReadonlySet<string>;
+  dedicatedIds: ReadonlySet<string>;
   hasRelations: boolean;
   hasActivity: boolean;
 }): DetailHashResolution {
@@ -94,13 +96,9 @@ function modeForHash({
     return { mode: hasActivity ? "activity" : "overview", valid: hasActivity };
   }
   return {
-    mode: "overview",
-    valid: overviewIds.has(sectionId),
+    mode: dedicatedIds.has(sectionId) ? sectionId : "overview",
+    valid: overviewIds.has(sectionId) || dedicatedIds.has(sectionId),
   };
-}
-
-function isDetailMode(value: string): value is DetailMode {
-  return value === "overview" || value === "relations" || value === "activity";
 }
 
 type DetailPlacement = "primary" | "supporting" | "full";
@@ -113,6 +111,8 @@ export interface DetailSection {
   icon: React.ElementType;
   /** Explicit narrative role; there is deliberately no automatic default. */
   placement: DetailPlacement;
+  /** Independently excludes this section from Overview; its id remains reachable. */
+  overview?: boolean;
   /** Exclude low-value/debug regions from the jump index. */
   includeInIndex?: boolean;
   /** Right-aligned header slot: a toolbar, action cluster, or rolled-up stat. */
@@ -528,6 +528,8 @@ function DetailCommandStrip({
   hasActivity,
   hasOverviewTools,
   overviewSections,
+  dedicatedSections,
+  onSelectDedicatedSection,
   onSelectOverviewSection,
 }: {
   activeMode: DetailMode;
@@ -535,6 +537,8 @@ function DetailCommandStrip({
   hasActivity: boolean;
   hasOverviewTools: boolean;
   overviewSections: DetailSection[];
+  dedicatedSections: DetailSection[];
+  onSelectDedicatedSection: (sectionId: string) => void;
   onSelectOverviewSection: (sectionId: string) => void;
 }) {
   const showOverviewTools = activeMode === "overview" && hasOverviewTools;
@@ -554,6 +558,32 @@ function DetailCommandStrip({
             <TabsTrigger value="activity">Activity</TabsTrigger>
           ) : null}
         </TabsList>
+        {dedicatedSections.length > 0 ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  className="min-h-11 shrink-0 md:min-h-9"
+                />
+              }
+            >
+              {dedicatedSections.find((section) => section.id === activeMode)
+                ?.title ?? "More details"}
+              <CaretDownIcon className="size-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {dedicatedSections.map((section) => (
+                <DropdownMenuItem
+                  key={section.id}
+                  onClick={() => onSelectDedicatedSection(section.id)}
+                >
+                  {section.title}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
         {/* Verbs live on the plate now — this strip's right side carries only
             the overview section index. */}
         {showOverviewTools ? (
@@ -810,9 +840,21 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       visibleSections.filter(
         (section) =>
           section.id !== RELATIONS_SECTION_ID &&
-          section.id !== ACTIVITY_SECTION_ID,
+          section.id !== ACTIVITY_SECTION_ID &&
+          section.overview !== false,
       ),
     [visibleSections],
+  );
+
+  const dedicatedSections = visibleSections.filter(
+    (section) => section.overview === false,
+  );
+  const dedicatedIdKey = dedicatedSections
+    .map((section) => section.id)
+    .join("\u001f");
+  const dedicatedIds = useMemo(
+    () => new Set(dedicatedIdKey ? dedicatedIdKey.split("\u001f") : []),
+    [dedicatedIdKey],
   );
 
   // Validate the authored ledger and shared extensions together before
@@ -831,8 +873,14 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   const hasActivity = Boolean(resolvedActivitySection);
   const resolveHash = useCallback(
     (hash: string) =>
-      modeForHash({ hash, overviewIds, hasRelations, hasActivity }),
-    [hasActivity, hasRelations, overviewIds],
+      modeForHash({
+        hash,
+        overviewIds,
+        dedicatedIds,
+        hasRelations,
+        hasActivity,
+      }),
+    [hasActivity, hasRelations, overviewIds, dedicatedIds],
   );
   const [activeMode, setActiveMode] = useState<DetailMode>(
     () => resolveHash(locationHash).mode,
@@ -870,7 +918,11 @@ export const DetailSections: FC<DetailSectionsProps> = ({
   }, [activeMode, locationHash, overviewIds]);
 
   const selectMode = (nextMode: string) => {
-    if (!isDetailMode(nextMode)) return;
+    if (
+      !["overview", "relations", "activity"].includes(nextMode) &&
+      !dedicatedIds.has(nextMode)
+    )
+      return;
     const mode = nextMode;
     if (
       (mode === "relations" && !hasRelations) ||
@@ -879,7 +931,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
       return;
     }
     setActiveMode(mode);
-    setHash(hashForDetailMode(mode), false);
+    setHash(dedicatedIds.has(mode) ? mode : hashForDetailMode(mode), false);
   };
 
   const selectOverviewSection = (sectionId: string) => {
@@ -920,6 +972,8 @@ export const DetailSections: FC<DetailSectionsProps> = ({
             hasActivity={hasActivity}
             hasOverviewTools={hasOverviewTools}
             overviewSections={indexEligibleSections}
+            dedicatedSections={dedicatedSections}
+            onSelectDedicatedSection={selectMode}
             onSelectOverviewSection={selectOverviewSection}
           />
 
@@ -946,6 +1000,20 @@ export const DetailSections: FC<DetailSectionsProps> = ({
               </div>
             </TabsContent>
           ) : null}
+
+          {dedicatedSections
+            .filter((section) => section.id === activeMode)
+            .map((section) => (
+              <TabsContent
+                key={section.id}
+                value={section.id}
+                className="text-sm/5"
+              >
+                {renderResponsiveLayout({
+                  sections: [{ ...section, placement: "full" }],
+                })}
+              </TabsContent>
+            ))}
 
           {activeMode === "relations" && relationshipSection ? (
             <TabsContent value="relations" className="text-sm/5">

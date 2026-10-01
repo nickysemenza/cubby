@@ -165,6 +165,7 @@ export default defineEntity({
           list: true,
           detail: true,
           renderer: { detail: "expense-spending-category" },
+          mobile: { slot: "meta", priority: 19 },
         },
         resolution: {
           reset: { spendingCategoryId: null },

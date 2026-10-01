@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import { parseShortcode } from "@cubby/shared";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
@@ -97,6 +98,7 @@ function InEffectRow({
           <ExplanationEntityLink
             entity={resolution.sourceEntity.entityKind}
             id={resolution.sourceEntity.entityId}
+            name={resolution.sourceEntity.name}
           />
         ) : null}
       </span>
@@ -112,6 +114,7 @@ function InEffectRow({
         <ExplanationEntityLink
           entity={resolution.sourceEntity.entityKind}
           id={resolution.sourceEntity.entityId}
+          name={resolution.sourceEntity.name}
         />
       ) : null}
     </span>
@@ -126,10 +129,12 @@ export function ResolutionExplanation({
   entity,
   field,
   resolution,
+  evidence,
 }: {
   entity: Entity;
   field: string;
   resolution: FieldResolution;
+  evidence?: FieldExplanationOutput["resolutionEvidence"];
 }) {
   const noun = nounFor(entity);
   const rows: Array<{ label: string; content: ReactNode }> = [
@@ -146,7 +151,7 @@ export function ResolutionExplanation({
     },
   ];
 
-  if (resolution.mode === "explicit") {
+  if (resolution.mode === "explicit" || resolution.mode === "none") {
     rows.push({
       label: "Without the override",
       content:
@@ -159,6 +164,16 @@ export function ResolutionExplanation({
               field={field}
               value={resolution.fallbackValue}
             />
+            {evidence?.fallbackSource ? (
+              <span className="text-xs text-muted-foreground">
+                From{" "}
+                <ExplanationEntityLink
+                  entity={evidence.fallbackSource.entityKind}
+                  id={evidence.fallbackSource.entityId}
+                  name={evidence.fallbackSource.name}
+                />
+              </span>
+            ) : null}
             {resolution.matchesFallback ? (
               <span className="text-xs text-muted-foreground">
                 Same value — the override is redundant.
@@ -199,6 +214,34 @@ export function ResolutionExplanation({
       ),
     });
   }
+
+  if (evidence?.hierarchy.length)
+    rows.push({
+      label: "Hierarchy",
+      content: (
+        <ol className="grid gap-2">
+          {evidence.hierarchy.map((source) => (
+            <li
+              key={`${source.entity?.entityId ?? source.label}:${source.label}`}
+              className="grid gap-1 text-xs"
+            >
+              <span className="text-muted-foreground">{source.label}</span>
+              {source.entity ? (
+                <ExplanationEntityLink
+                  entity={source.entity.entityKind}
+                  id={source.entity.entityId}
+                  name={
+                    z.object({ name: z.string() }).safeParse(source.value).data
+                      ?.name
+                  }
+                />
+              ) : null}
+              <ReadableExplanationValue value={source.value} />
+            </li>
+          ))}
+        </ol>
+      ),
+    });
 
   return (
     <dl className="grid gap-3">

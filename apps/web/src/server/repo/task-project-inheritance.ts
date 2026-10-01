@@ -111,25 +111,15 @@ export const effectiveTaskSubjectProductSql = (
  * Task trade can come from its own explicit choice, a parent task only when
  * both effective projects match, then the effective project's default trade.
  */
-export const effectiveTaskTradeSql = (alias = "Task"): SQL<Trade | null> => {
-  const ownTrade = taskColumn(alias, "trade");
-  const parentId = taskColumn(alias, "parentTaskId");
-  const projectId = effectiveTaskProjectSql(alias);
-  return sql`
-    coalesce(
-      ${ownTrade},
-      (
-        SELECT parent."trade"
-        FROM "Task" parent
-        WHERE parent."id" = ${parentId}
-          AND parent."deletedAt" IS NULL
-          AND parent."trade" IS NOT NULL
-          AND ${effectiveTaskProjectSql("parent")} IS NOT DISTINCT FROM ${projectId}
-      ),
-      ${effectiveProjectTradeSql(projectId)}
-    )
-  `;
-};
+export const eligibleParentTaskTradeSql = (alias = "Task"): SQL<Trade | null> =>
+  sql`(SELECT parent."trade" FROM "Task" parent
+    WHERE parent."id" = ${taskColumn(alias, "parentTaskId")}
+      AND parent."deletedAt" IS NULL AND parent."trade" IS NOT NULL
+      AND ${effectiveTaskProjectSql("parent")} IS NOT DISTINCT FROM ${effectiveTaskProjectSql(alias)})`;
+
+export const effectiveTaskTradeSql = (alias = "Task"): SQL<Trade | null> =>
+  sql`coalesce(${taskColumn(alias, "trade")}, ${eligibleParentTaskTradeSql(alias)},
+    ${effectiveProjectTradeSql(effectiveTaskProjectSql(alias))})`;
 
 /**
  * Select-list additions for readers that hydrate Task rows outside the normal
@@ -159,9 +149,7 @@ const taskResolutionExtras = (alias: string) => {
     FROM "Task" parent WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL)`;
   const parentProduct = sql<ProductId | null>`(SELECT ${effectiveTaskSubjectProductSql("parent")}
     FROM "Task" parent WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL)`;
-  const parentTrade = sql<Trade | null>`(SELECT parent."trade" FROM "Task" parent
-    WHERE parent."id" = ${parentId} AND parent."deletedAt" IS NULL
-      AND ${effectiveTaskProjectSql("parent")} IS NOT DISTINCT FROM ${effectiveTaskProjectSql(alias)})`;
+  const parentTrade = eligibleParentTaskTradeSql(alias);
   return {
     ...taskInheritanceReadExtras(alias),
     fallbackProjectId: parentProject,

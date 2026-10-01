@@ -534,6 +534,108 @@ export class MacImportDriver {
     this.record(["wait", selector], 1, output, started);
     throw new Error(`Native wait timed out: ${selector}`);
   }
+  async waitAbsent(selector: string): Promise<void> {
+    const started = Date.now();
+    let output = "";
+    while (Date.now() - started < 30000) {
+      output = this.observe();
+      if (!this.matching(selector).length) {
+        this.record(["wait-absent", selector], 0, output, started);
+        return;
+      }
+      await setTimeout(250);
+    }
+    this.record(["wait-absent", selector], 1, output, started);
+    throw new Error(`Native element did not dismiss: ${selector}`);
+  }
+  async scrollTo(
+    selector: string,
+    containerID: string,
+    direction: "up" | "down" = "down",
+  ): Promise<void> {
+    const started = Date.now();
+    let output = "";
+    while (Date.now() - started < 30000) {
+      output = this.observe();
+      const container = this.matching(`id=${containerID}`)[0]?.rect;
+      const windows = this.nodes
+        .filter((node) => role(node) === "window")
+        .flatMap((node) => (node.rect ? [node.rect] : []));
+      if (
+        container &&
+        this.matching(selector).some((node) => {
+          const rect = node.rect;
+          return windows.some(
+            (window) =>
+              rect &&
+              rect.width > 0 &&
+              rect.height > 0 &&
+              rect.x >= Math.max(container.x, window.x) &&
+              rect.y >= Math.max(container.y, window.y) &&
+              rect.x + rect.width <=
+                Math.min(
+                  container.x + container.width,
+                  window.x + window.width,
+                ) &&
+              rect.y + rect.height <=
+                Math.min(
+                  container.y + container.height,
+                  window.y + window.height,
+                ),
+          );
+        })
+      ) {
+        this.record(["visible", selector, containerID], 0, output, started);
+        return;
+      }
+      if (container) {
+        this.guardForeground();
+        // Scope AX scrolling to the declared view inside the verified fixture PID.
+        execFileSync(
+          "osascript",
+          [
+            "-e",
+            `on run argv
+ tell application "System Events"
+  set ownedProcess to first application process whose unix id is (item 1 of argv as integer)
+  set ownedView to missing value
+  repeat with candidate in entire contents of ownedProcess
+   try
+    if value of attribute "AXIdentifier" of candidate is item 2 of argv then
+     set ownedView to contents of candidate
+     exit repeat
+    end if
+   end try
+  end repeat
+  if ownedView is missing value then error "Owned scroll container is absent"
+  repeat with bar in entire contents of ownedView
+   try
+    if role of bar is "AXScrollBar" and value of attribute "AXOrientation" of bar is "AXVerticalOrientation" then
+     set nextValue to (value of bar as real) + (item 3 of argv as real)
+     if nextValue > 1 then set nextValue to 1
+     if nextValue < 0 then set nextValue to 0
+     set value of bar to nextValue
+     return
+    end if
+   end try
+  end repeat
+  error "Owned view has no writable vertical scroll bar"
+ end tell
+end run`,
+            String(this.pid),
+            containerID,
+            direction === "down" ? "0.15" : "-0.15",
+          ],
+          { timeout: 10000 },
+        );
+      }
+      await setTimeout(250);
+    }
+    this.record(["visible", selector, containerID], 1, output, started);
+    throw new Error(
+      `Native element did not become visible: ${selector} in ${containerID}`,
+    );
+  }
   async screenshot(name: string): Promise<void> {
     this.guardForeground();
     const script =

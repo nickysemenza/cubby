@@ -115,6 +115,29 @@ export async function createEvidenceHarnessContext(page: Page) {
   return { db: getFixtureDb(), actor: buildActorContext(userId, "web") };
 }
 
+/** Run history uses the authenticated household member's ledger identity. */
+export async function seedAuthenticatedMemberPrerequisite(
+  page: Page,
+  name: string,
+) {
+  const { db, actor } = await createEvidenceHarnessContext(page);
+  const existing = await getDb(db).query.ledgerParty.findFirst({
+    where: and(
+      eq(schema.ledgerParty.userId, actor.userId),
+      eq(schema.ledgerParty.kind, "member"),
+      isNull(schema.ledgerParty.deletedAt),
+    ),
+  });
+  return (
+    existing ??
+    insertWithShortcode(db, "ledgerParty", {
+      name,
+      kind: "member",
+      userId: actor.userId,
+    })
+  );
+}
+
 /** Parallel fixture writes; bounded so a large seed does not queue on the pool. */
 const FIXTURE_CONCURRENCY = 4;
 
@@ -250,6 +273,7 @@ export const seedProductPrerequisite = (
     categoryId?: string;
     growsPlantId?: string;
     externalIds?: ProductCreateInput["externalIds"];
+    tags?: string[];
   },
 ) =>
   createFixture(
@@ -263,6 +287,7 @@ export const seedProductPrerequisite = (
       ),
       growsPlantId: opts.growsPlantId,
       externalIds: opts.externalIds,
+      tags: opts.tags ?? [],
     }),
   );
 

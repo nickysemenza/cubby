@@ -119,15 +119,12 @@ enum NativePresentationCoverage {
         return switch id {
         case .ledgerPartyWardrobe, .mealNutrition, .runImportControls, .runPhotoBatch,
             .purchaseOrderMail, .vendorOrderMail, .vendorAccountOrderMail, .vendorSpendingClassification,
-            .productCategorySpendingClassification:
+            .productCategorySpendingClassification, .productOwnership, .productNutrition,
+            .productUnitMappings, .productFitsWith, .productRuns:
             .implemented
         case .productLabels,
-            .productNutrition,
-            .productUnitMappings,
-            .productFitsWith,
             .productCookbooks,
             .productRecipeAppearances,
-            .productRuns,
             .recipeWorkflow,
             .ingredientNutritionProduct,
             .ingredientRecipeUsages,

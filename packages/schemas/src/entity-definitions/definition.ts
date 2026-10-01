@@ -89,7 +89,11 @@ export type CompiledEntityPresentation = Omit<
   "detail" | "list"
 > & {
   detail: Omit<EntityPresentation["detail"], "hero" | "sections"> & {
-    sections: NonNullable<EntityPresentation["detail"]["sections"]>;
+    sections: Array<
+      NonNullable<EntityPresentation["detail"]["sections"]>[number] & {
+        overview: boolean;
+      }
+    >;
     /** Field keys declaring `display.preview`, in model order. */
     preview: readonly string[];
     hero: Omit<EntityPresentation["detail"]["hero"], "images" | "actions"> & {
@@ -921,6 +925,13 @@ const buildMetadataSchemas = () => {
                 actions: actionOverrides,
               }),
             ),
+          /** Null includes every declared section in Overview. A whitelist keeps
+           * supporting detail reachable through its existing section id. */
+          overviewSections: z
+            .array(sectionId)
+            .nullable()
+            .optional()
+            .default(null),
           /** Omitted: one Overview section for all detail fields; [] opts out. */
           sectionOverrides: z.array(detailSectionSchema).optional(),
           /** Extra field groups, slots and timelines appended to inferred sections. */
@@ -972,6 +983,7 @@ const buildMetadataSchemas = () => {
         .transform(
           ({
             sectionOverrides,
+            overviewSections,
             additionalSectionOverrides,
             relationFilterOverrides,
             variantOverride,
@@ -982,6 +994,7 @@ const buildMetadataSchemas = () => {
             variant: variantOverride,
             hero,
             sections: sectionOverrides,
+            overviewSections,
             additionalSections: additionalSectionOverrides,
             relationFilterOverrides,
             omitRelations,

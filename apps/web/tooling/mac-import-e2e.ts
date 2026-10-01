@@ -49,20 +49,28 @@ const order =
     : undefined;
 const browserMode =
   Boolean(order) || (flags.length === 1 && flags[0] === "--browser");
-if ((flags.length && !browserMode) || process.platform !== "darwin")
+const productClarity = flags.length === 1 && flags[0] === "--product-clarity";
+if (
+  (flags.length && !browserMode && !productClarity) ||
+  process.platform !== "darwin"
+)
   throw new Error(
-    "Usage on macOS: pnpm --dir apps/web exec tsx tooling/mac-import-e2e.ts [--browser | --order csv,photo,receipt]",
+    "Usage on macOS: pnpm --dir apps/web exec tsx tooling/mac-import-e2e.ts [--browser | --order csv,photo,receipt | --product-clarity]",
   );
 const replayFlags = order
   ? ["--order", order.join(",")]
   : browserMode
     ? ["--browser"]
-    : [];
+    : productClarity
+      ? ["--product-clarity"]
+      : [];
 const scenarioTitle = order
   ? `Actual Mac composed evidence arrival: ${order.join(" → ")}`
   : browserMode
     ? "Actual Mac CSV import and isolated HTTPS retailer browser capture/resume"
-    : "Actual sandboxed macOS app statement CSV file import";
+    : productClarity
+      ? "Actual sandboxed macOS Product explanation and financial relation evidence"
+      : "Actual sandboxed macOS app statement CSV file import";
 const fixtureVersion = order ? 2 : 1;
 const nonce = randomBytes(8).toString("hex");
 const databaseName = `cubby_sim_${nonce}`;
@@ -103,6 +111,9 @@ const milestones = {
   nativePhotoApproved: false,
   retailerCommitted: false,
   composedGraphVerified: false,
+  valuationExplanationObserved: false,
+  productPurchaseEvidenceObserved: false,
+  purchaseProductEvidenceObserved: false,
 };
 let verifiedLaunchedPID: number | undefined;
 let nativeProcessExpectation: MacProcessExpectation | undefined;
@@ -345,12 +356,20 @@ function saveArtifact(): void {
       ...replayFlags,
     ],
     scenario: scenarioTitle,
-    fixture: "synthetic-monarch-wardrobe",
+    fixture: productClarity
+      ? "synthetic-product-evidence"
+      : "synthetic-monarch-wardrobe",
     fixtureVersion,
     cases: [
       {
-        name: "Mac file selection, review, commit and database readback",
-        status: milestones.databaseVerified
+        name: productClarity
+          ? "Mac valuation explanation and both financial relation directions"
+          : "Mac file selection, review, commit and database readback",
+        status: (
+          productClarity
+            ? milestones.purchaseProductEvidenceObserved
+            : milestones.databaseVerified
+        )
           ? "passed"
           : milestones.fixtureUIObserved
             ? "failed"
@@ -555,6 +574,81 @@ function retainCleanupFailure(
   return message;
 }
 
+async function runNativeScenario(
+  csv: () => Promise<void>,
+  composed: Awaited<ReturnType<typeof createMacComposedScenario>> | undefined,
+  browserScenario:
+    | Awaited<ReturnType<typeof createMacBrowserScenario>>
+    | undefined,
+  productFixture: { productId: string; purchaseId: string } | undefined,
+): Promise<void> {
+  if (productClarity && productFixture) {
+    phase = "product-clarity-presentation";
+    const { productId, purchaseId } = productFixture;
+    await driver.openEntity(productId, appPath);
+    await driver.wait("id=detail.product.edit");
+    await driver.scrollTo(
+      `id=field.explanation.product.${productId}.price`,
+      "detail.product",
+    );
+    await driver.click(`id=field.explanation.product.${productId}.price`);
+    await driver.wait("id=field.explanation.popover");
+    await driver.scrollTo(
+      'id=field.explanation.effective-value text="$40.00"',
+      "field.explanation.popover",
+    );
+    await driver.scrollTo(
+      'text="Override on this product"',
+      "field.explanation.popover",
+    );
+    await driver.scrollTo(
+      'id=field.explanation.fallback-value text="$25.00"',
+      "field.explanation.popover",
+    );
+    milestones.valuationExplanationObserved = true;
+    await driver.screenshot("valuation-explanation");
+    await driver.scrollTo(
+      "id=field.explanation.close",
+      "field.explanation.popover",
+      "up",
+    );
+    await driver.click("id=field.explanation.close");
+    await driver.waitAbsent("id=field.explanation.popover");
+    async function relationEvidence(
+      target: "product" | "purchase",
+      id: string,
+    ) {
+      for (const suffix of [
+        "movement.acquired",
+        "movement.adjusted",
+        "planned",
+        "linked",
+      ]) {
+        await driver.scrollTo(
+          `id=relation.evidence.${target}.${id}.${suffix}`,
+          `detail.${target === "purchase" ? "product" : "purchase"}`,
+        );
+      }
+    }
+    await relationEvidence("purchase", purchaseId);
+    milestones.productPurchaseEvidenceObserved = true;
+    await driver.screenshot("product-purchase-evidence");
+    await driver.click(`id=relation.row.purchase.${purchaseId}`);
+    await driver.wait("id=detail.purchase.edit");
+    await relationEvidence("product", productId);
+    milestones.purchaseProductEvidenceObserved = true;
+    await driver.screenshot("purchase-product-evidence");
+  } else if (order && composed) {
+    await composed.run(order, csv);
+    milestones.composedGraphVerified = true;
+  } else await csv();
+  if (browserScenario && !composed) {
+    phase = "native-browser-capture-resume";
+    await browserScenario.run(driver);
+    milestones.browserCaptureVerified = true;
+  }
+}
+
 async function main(): Promise<void> {
   const bootstrapEnvironment = { ...process.env };
   process.env.DATABASE_URL = databaseURL;
@@ -564,6 +658,7 @@ async function main(): Promise<void> {
   let opened = false;
   let fixtureUIReady = false;
   let fixtureUserId = "";
+  let productFixture: { productId: string; purchaseId: string } | undefined;
   let retailer:
     | Awaited<ReturnType<typeof createMacRetailerFixture>>
     | undefined;
@@ -705,6 +800,17 @@ async function main(): Promise<void> {
       databaseURL,
       fixtureUserId,
     );
+    if (productClarity) {
+      const { seedSimulatorPhotoActor, seedSimulatorProductClarity } =
+        await import("./scenarios/simulator");
+      const pool = new Pool({ connectionString: databaseURL });
+      try {
+        await seedSimulatorPhotoActor(pool, fixtureUserId);
+        productFixture = await seedSimulatorProductClarity(pool, fixtureUserId);
+      } finally {
+        await pool.end();
+      }
+    }
     if (browserMode) {
       phase = "browser-fixture";
       retailer = await createMacRetailerFixture(artifacts, nonce, {
@@ -942,15 +1048,7 @@ async function main(): Promise<void> {
         await checkPool.end();
       }
     }
-    if (order && composed) {
-      await composed.run(order, csv);
-      milestones.composedGraphVerified = true;
-    } else await csv();
-    if (browserScenario && !composed) {
-      phase = "native-browser-capture-resume";
-      await browserScenario.run(driver);
-      milestones.browserCaptureVerified = true;
-    }
+    await runNativeScenario(csv, composed, browserScenario, productFixture);
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
     if (fixtureUIReady) await driver.screenshot("failure").catch(() => {});

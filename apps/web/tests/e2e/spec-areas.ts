@@ -477,6 +477,22 @@ export const SPEC_AREAS: readonly SpecAreaEntry[] = [
     ],
   },
   {
+    file: "product-clarity.spec.ts",
+    globs: [
+      `${WEB}/src/routes/_authenticated/products.$shortcode.tsx`,
+      `${WEB}/src/routes/_authenticated/purchases.$shortcode.tsx`,
+      `${WEB}/src/routes/_authenticated/connections.tsx`,
+      `${WEB}/src/app/products/**`,
+      `${WEB}/src/app/purchases/**`,
+      `${WEB}/src/app/_components/entity-detail/**`,
+      `${WEB}/src/server/repo/product/**`,
+      `${WEB}/src/server/repo/purchase-products.ts`,
+      `${WEB}/src/server/repo/related-view.ts`,
+      "packages/schemas/src/entity-definitions/00-product.entity.ts",
+      "packages/schemas/src/entity-definitions/12-purchase.entity.ts",
+    ],
+  },
+  {
     file: "product-ssr.spec.ts",
     globs: [
       `${WEB}/src/routes/_authenticated/products.$shortcode.tsx`,

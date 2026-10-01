@@ -659,6 +659,22 @@ struct EntityRowView: View {
         #endif
     }
 
+    private var explanationFacts: [EntityRowPresentation.Fact] {
+        presentation.facts.filter { EntityCatalog[key].field($0.id)?.explanation != nil }
+    }
+
+    private var explanationControls: some View {
+        ForEach(explanationFacts, id: \.id) { fact in
+            if let field = EntityCatalog[key].field(fact.id) {
+                FieldExplanationLabel(
+                    field: field, subject: EntityRef(entity: key, id: row.id),
+                    labelOverride: fact.label, surface: "list"
+                )
+                .font(.caption)
+            }
+        }
+    }
+
     var body: some View {
         HStack(spacing: FieldGuideTokens.Space.md) {
             if let previewImage {
@@ -684,6 +700,17 @@ struct EntityRowView: View {
                         .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         .lineLimit(2)
                 }
+                if !explanationFacts.isEmpty {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: FieldGuideTokens.Space.sm) {
+                            explanationControls
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
+                        VStack(alignment: .leading, spacing: 0) {
+                            explanationControls
+                        }
+                    }
+                }
                 if !row.pendingFields.isEmpty {
                     Text("Loading details…")
                         .font(.caption)
@@ -705,7 +732,7 @@ struct EntityRowView: View {
         .padding(.vertical, FieldGuideTokens.Space.xs)
         .frame(minHeight: 56, alignment: .center)
         .contentShape(Rectangle())
-        .accessibilityElement(children: .ignore)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(
             (photoMode
                 ? "\(presentation.accessibilityText), \(presentation.shortcode)"

@@ -89,6 +89,35 @@ function renderRail(
 }
 
 describe("RelatednessRail", () => {
+  it("shows twelve neighbours before explicit expansion and explains their evidence", async () => {
+    harness = createBrowserTestHarness();
+    const proposals = Array.from({ length: 14 }, (_, index) => ({
+      kind: "product-related" as const,
+      target: {
+        id: testShortcode("product", `PRD-RELATED${index}`),
+        name: `Related product ${index}`,
+      },
+      score: 0.9,
+      evidence: [{ signal: "Shared tag", detail: "standard-mount", weight: 1 }],
+    }));
+    renderRail(
+      createTestOperations([result("ready", proposals)]),
+      harness.wrapper,
+    );
+    expect(
+      await screen.findByRole("link", { name: "Related product 11" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: "Related product 12" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("Shared tag: standard-mount")).toHaveLength(12);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show 2 more products" }),
+    );
+    expect(
+      screen.getByRole("link", { name: "Related product 13" }),
+    ).toBeVisible();
+  });
   it("polls readiness after Index now and stops on ready", async () => {
     harness = createBrowserTestHarness({ clock: { now: 0 } });
     const adapter = createTestOperations([result("stale"), result("ready")]);
@@ -231,7 +260,7 @@ describe("RelatednessRail", () => {
     expect(
       await screen.findByRole("link", { name: "Same fitting" }),
     ).toBeVisible();
-    expect(screen.getByText("Shared tag")).toBeVisible();
+    expect(screen.getByText("Shared tag: m18")).toBeVisible();
     expect(
       screen.getByText(
         "Similarity is unavailable until embeddings are configured.",

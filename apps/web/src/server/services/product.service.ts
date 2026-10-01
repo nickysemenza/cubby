@@ -30,6 +30,7 @@ import {
   getProductUnitMappingsByProductIds,
   updateProduct as updateProductRepo,
 } from "../repo/product";
+import { loadProductOwnershipEvidence } from "../repo/product/ownership-evidence";
 import {
   resolveAllOrThrow,
   resolveCreatedOrInvariant,
@@ -66,7 +67,7 @@ export const getProductWithFood = async (
 
   const lookupParam = foodLookupParamFromProduct(product);
   const operation = startOperationDefinition("entity.detail");
-  const [food, { recipeUsages }] = await Promise.all([
+  const [food, { recipeUsages }, ownership] = await Promise.all([
     observeOperationPhase(operation, "food", () =>
       lookupParam ? usdaClient.findFood(lookupParam) : Promise.resolve(null),
     ),
@@ -81,10 +82,12 @@ export const getProductWithFood = async (
           )
         : { recipeUsages: [], appearsInRecipes: [] };
     }),
+    loadProductOwnershipEvidence(db, id),
   ]);
 
   return {
     ...product,
+    ownershipEvidence: ownership,
     food,
     recipeUsages,
   };

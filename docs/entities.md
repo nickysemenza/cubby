@@ -213,6 +213,11 @@ signal, e.g. a Location only reads as a growing area once it has Plantings.
 `collapseWhenEmpty: true` instead keeps the header, `0` count and create
 button and folds only the body away.
 
+`detail.overviewSections` optionally selects which section IDs appear in the
+Overview. Other sections remain available through their existing section links;
+the compiler emits independent `overview` metadata for web and Swift. Omission
+preserves the default of including every section.
+
 Relation tables are opt-out. Every `many` relation on a generic detail page
 renders a table: a declared `relation` section, or one the compiler derives
 (`scripts/generator/entities/derive.ts`) with `derived: true`,
@@ -773,8 +778,13 @@ exception goes with its entity when the entity is removed or merged away.
 Every logical relation declares its target, cardinality, primary named source,
 provenance path, and inverse path. A relationship may add more named sources;
 for example, `Purchase.products` combines detachable `explicit` evidence from
-`purchaseProduct` links with non-detachable `expense` evidence from acquisition
-Expenses. Mutable sources additionally name a typed item schema, adapter, and
+`purchaseProduct` links with non-detachable `expense` evidence from every live
+product-linked Expense, including exits, adjustments, unknown quantities, and
+planned lines. Counts, filters, inverse navigation, and graph traversal use the
+same deduplicated union. Movement roles and planned status are backend evidence;
+an explicit-only link is Linked and does not establish acquisition or ownership.
+Acquisition dates and pricing retain their narrower acquisition rules.
+Mutable sources additionally name a typed item schema, adapter, and
 transport exposure. The compiler rejects duplicate relation/source keys,
 unresolvable mutation sources, invalid inverses, and stale generated bindings.
 
@@ -862,6 +872,17 @@ and retained original-image evidence. Confirmed description corrections take
 precedence over model text. Taxonomy contents participate in the proposal
 basis, so changing vocabulary invalidates old proposals without rerunning
 vision or introducing an inference cache.
+
+Product Category describes identity and can supply a Spending category mapping
+through its ancestry. Cost type describes the Expense's accounting role; Trade
+describes the work context. Product Category does not infer Trade. Reviewed
+Product category reassignment previews historical spending, fingerprints selected
+Products even without Expenses, and revalidates before audited transactional
+writes. Explicit Expense categories and Purchase defaults keep their precedence.
+Food feature transitions require a broader Project/Trade review and are refused
+by the spending-only workflow; identity normalization cannot substitute a target
+different from the reviewed one. Lazy field explanations return bounded hierarchy
+and fallback-source evidence so clients do not reconstruct these rules.
 
 An Image has provenance (`own`, `catalog`, `unknown`, or `screenshot`, plus
 optional supplying source name/page/asset URLs). Its Product attachment has

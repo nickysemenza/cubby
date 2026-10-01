@@ -13,6 +13,7 @@ import {
 } from "@cubby/schemas/purchase-import";
 import {
   runBrowserListInput,
+  runHistoryOut,
   runListResponse,
   runOut,
   targetedImportPurpose,
@@ -27,23 +28,7 @@ import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
-const runSummary = z.object({
-  publicId: runShortcode,
-  purpose: runPurpose,
-  vendorAccountLabel: z.string().nullable(),
-  vendorName: z.string().nullable(),
-  trigger: z.string(),
-  status: z.string(),
-  startedAt: z.iso.datetime(),
-  endedAt: z.iso.datetime().nullable(),
-  ordersSeen: z.number().int(),
-  imported: z.number().int(),
-  updated: z.number().int(),
-  skipped: z.number().int(),
-  failureCode: z.string().nullable(),
-  estimatedCost: z.number(),
-});
-export type RunSummary = z.infer<typeof runSummary>;
+export type { RunSummary } from "@cubby/schemas/run";
 
 const runProgress = z.object({
   eventId: z.string().min(1),
@@ -392,6 +377,7 @@ export const runContract = defineContract("run", {
     cache: { tags: [] },
   }),
   history: query({
+    native: "Native Product enrichment history",
     input: z
       .object({
         purchaseId: purchaseShortcode.optional(),
@@ -400,7 +386,7 @@ export const runContract = defineContract("run", {
       .refine((input) => !(input.purchaseId && input.productId), {
         message: "Choose either a Purchase or a Product",
       }),
-    output: z.object({ runs: z.array(runSummary) }),
+    output: runHistoryOut,
     cache: { tags: [["run"]] },
   }),
   work: query({
