@@ -281,23 +281,7 @@ export const createPlantFixture = async (
   (
     await (
       await import("./plant")
-    ).createPlant(
-      db,
-      {
-        gardenGuideKey: null,
-        verdict: null,
-        ingredientId: null,
-        latinName: null,
-        breeding: null,
-        daysFromSowMin: null,
-        daysFromSowMax: null,
-        daysFromTransplantMin: null,
-        daysFromTransplantMax: null,
-        notes: null,
-        ...data,
-      },
-      actor,
-    )
+    ).createPlant(db, buildEntity("plant", data), actor)
   ).output;
 
 /** Resolves canonical public product/location ids before `createInventoryEntry`. */
@@ -385,11 +369,11 @@ export const makeRecipeInput = (
     tags?: RecipeCreateInput["tags"];
   } = {},
 ): RecipeCreateInput => {
-  const input: RecipeCreateInput = {
-    name: opts.name ?? "Test Recipe",
+  const input = buildEntity("recipe", {
+    name: opts.name,
     meta: { url: opts.url ?? null },
-    sections: opts.sections ?? [],
-  };
+    sections: opts.sections,
+  });
   // Passed through only when the caller opts in, so the default stays a
   // tags-absent input rather than an explicit null.
   if ("tags" in opts) input.tags = opts.tags;

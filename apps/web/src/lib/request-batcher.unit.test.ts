@@ -1,4 +1,5 @@
 import type { BatchOut } from "@cubby/schemas/batch";
+import { sleep } from "@cubby/shared/retry";
 import { describe, expect, it, vi } from "vitest";
 
 import { createRequestBatcher } from "./request-batcher";
@@ -162,7 +163,7 @@ describe("request batcher", () => {
       batcher.load(input("a"), live()),
       batcher.load(input("b"), live()),
     ]);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await sleep(0);
     await expect(batcher.load(input("search"), live())).resolves.toBe(
       "alone:search",
     );
@@ -177,7 +178,7 @@ describe("request batcher", () => {
       async (items: Item[]) => {
         active += 1;
         peak = Math.max(peak, active);
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        await sleep(5);
         active -= 1;
         return echo(items);
       },

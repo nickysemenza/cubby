@@ -1,24 +1,13 @@
-import { createHash } from "node:crypto";
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { digestFiles, walkFiles } from "./lib/tree-digest.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const MCP_APPS_DIST = join(ROOT, "apps/mcp-apps/dist");
 export const MCP_APPS_BUNDLE = "app.html";
 export const MCP_APPS_FINGERPRINT = ".input-fingerprint";
-
-const walkFiles = (directory: string): string[] =>
-  readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name);
-    return entry.isDirectory() ? walkFiles(path) : [path];
-  });
 
 export const mcpAppsInputFiles = (root = ROOT): string[] => {
   const appRoot = join(root, "apps/mcp-apps");
@@ -45,21 +34,8 @@ export const mcpAppsInputFiles = (root = ROOT): string[] => {
   return [...requiredFiles, ...requiredDirectories.flatMap(walkFiles)].sort();
 };
 
-const contentFingerprint = (files: readonly string[], root = ROOT): string => {
-  const hash = createHash("sha256");
-  for (const file of [...files].sort()) {
-    const path = isAbsolute(file) ? file : join(root, file);
-    const label = relative(root, path);
-    hash.update(label);
-    hash.update("\0");
-    hash.update(readFileSync(path));
-    hash.update("\0");
-  }
-  return hash.digest("hex");
-};
-
 export const mcpAppsSourceFingerprint = (root = ROOT): string =>
-  contentFingerprint(mcpAppsInputFiles(root), root);
+  digestFiles(root, mcpAppsInputFiles(root));
 
 export const mcpAppsBundleIsCurrent = (
   fingerprint: string,

@@ -1,19 +1,25 @@
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import type { ActorContext } from "@cubby/schemas/context";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { and, eq } from "drizzle-orm";
 import {
-  IMAGE_DESCRIPTION_PROMPT_REVISION,
-  IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
-} from "@cubby/schemas/image-processing";
-import {
-  commitPurchaseImportInput,
-  preparePurchaseImportInput,
-} from "@cubby/schemas/purchase-import";
-import { and, eq, inArray, sql } from "drizzle-orm";
+  completeDescribeImageJobs,
+  convergenceNames,
+  convergenceProjection,
+  createConvergenceFixtures,
+  importBrowserOrder,
+  ingestGmailEvidence,
+  listDescribeImageJobs,
+  openFindingCount,
+  productPhotos,
+  shirtGroup,
+  sha256Hex,
+  syntheticOrderIds,
+  wardrobePhotos,
+} from "tooling/convergence-harness";
 import { buildEntity } from "tooling/factories/build";
 import {
   buildKernelContext,
@@ -22,8 +28,6 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
-import { providerFor } from "~/server/ai/models";
 import type { Database } from "~/server/db";
 import * as schema from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
@@ -32,40 +36,24 @@ import {
   listPhotoGroupProposals,
   proposePhotoGroups,
 } from "~/server/photo-import-run/proposals";
-import { productionOrderMailAttachmentStorage } from "~/server/purchase-import/gmail/attachment-storage";
-import { normalizeMessage } from "~/server/purchase-import/gmail/normalize";
-import { persistGmailSyncResult } from "~/server/purchase-import/gmail/persistence";
-import { processOrderMails } from "~/server/purchase-import/gmail/process";
-import {
-  decideOrderMailCandidate,
-  listVendorOrderMail,
-} from "~/server/purchase-import/gmail/review";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { effectiveExpenseSpendingCategorySql } from "~/server/repo/expense-category-resolution";
 import {
   commitFinancialBooking,
   previewFinancialBooking,
 } from "~/server/repo/financial-booking";
-import {
-  claimImageProcessingJob,
-  completeImageProcessingJob,
-} from "~/server/repo/image-processing";
-import { assignImageProcessingExecutor } from "~/server/repo/image-processing-history";
 import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
 import {
   currentMemberLedgerParty,
   setMemberLoginParty,
 } from "~/server/repo/member-login";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
-import { attachFileToEntity } from "~/server/services/image-storage.service";
 import { productionPhotoImportCommitPorts } from "~/server/services/photo-import-commit.service";
 import { stagePhotoImport } from "~/server/services/photo-import-stage.service";
 import { commitStatementCsv } from "~/server/statement-csv-import";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 import { resolveRunFinding } from "./findings";
-import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
+import { decideOrderMailCandidate, listVendorOrderMail } from "./gmail/review";
 import {
   finalizePhotoRun,
   loadRunDetail,
@@ -124,8 +112,6 @@ async function ensureMember(db: Database, actor: ActorContext) {
   return member;
 }
 
-/** Only account, vendor, location and category prerequisites are fixtures.
- * Every economic record and observation enters through an import writer. */
 async function createConvergenceHarness(
   db: Database,
   actor: ActorContext,
@@ -134,91 +120,25 @@ async function createConvergenceHarness(
   const database = getDb(db);
   const kernel = buildKernelContext(db, actor.userId);
   const member = await ensureMember(db, actor);
-  const name = `Synthetic evidence ${token}`;
-  const productName = `${name} crew shirt`;
-  const orderId = `SYN-ORDER-${token}`;
-  const host = `shop-${token}.example.test`;
-  const sender = `orders@${host}`;
-  const messageId = `synthetic-message-${token}`;
-  const vendor = await createFixtureWithContext(
-    kernel,
-    "vendor",
-    buildEntity("vendor", {
-      name,
-      website: `https://${host}`,
-      browserDomains: [host],
-      orderEmailSenders: [sender],
-      orderEvidence: "online_account",
-    }),
-  );
-  const account = await createFixtureWithContext(
-    kernel,
-    "vendorAccount",
-    buildEntity("vendorAccount", {
-      label: `${name} retailer`,
-      vendorId: vendor.id,
-      ledgerPartyId: member.shortcode,
-    }),
-  );
-  const card = await createFixtureWithContext(
-    kernel,
-    "financialAccount",
-    buildEntity("financialAccount", {
-      name: `${name} card`,
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
-      ledgerPartyId: member.shortcode,
-      sourceAliases: [
-        { source: "monarch", alias: `${name} Visa`, externalAccountId: null },
-      ],
-    }),
-  );
-  const location = await createFixtureWithContext(
-    kernel,
-    "location",
-    buildEntity("location", { name: `${name} drawer`, type: "drawer" }),
-  );
-  const category = await createFixtureWithContext(
-    kernel,
-    "spendingCategory",
-    buildEntity("spendingCategory", {
-      name: `${name} clothing`,
-      evidenceExpectation: "required",
-      productExpectation: "required",
-    }),
-  );
-  const productCategory = await createFixtureWithContext(
-    kernel,
-    "productCategory",
-    buildEntity("productCategory", {
-      name: `${name} apparel`,
-      spendingCategoryMode: "mapped",
-      spendingCategoryId: category.id,
-    }),
-  );
+  const names = convergenceNames(token);
+  const { productName, orderId } = names;
+  const { vendor, account, card, location, category, productCategory } =
+    await createConvergenceFixtures(
+      (entity, overrides) =>
+        createFixtureWithContext(
+          kernel,
+          entity,
+          buildEntity(entity, overrides),
+        ),
+      member.shortcode,
+      names,
+    );
   const vendorId = await resolveOrThrow(db, "vendor", vendor.id);
   const accountId = await resolveOrThrow(db, "vendorAccount", account.id);
   const cardId = await resolveOrThrow(db, "financialAccount", card.id);
   let bookedPurchaseCode: string | undefined;
   let retailerDone = false;
   let productCode: string | undefined;
-  const retailerInput = {
-    orderId,
-    orderedAt: "2026-09-10T12:00:00.000Z",
-    merchant: name,
-    currency: "USD",
-    printedGrandTotal: 42.5,
-    lines: [
-      {
-        title: productName,
-        amount: 42.5,
-        lineKind: "principal",
-        identifiers: { sku: `SYN-SKU-${token}` },
-      },
-    ],
-    payments: [],
-    allShipmentsDelivered: true,
-  };
-  const csv = `Date,Merchant,Category,Account,Original Statement,Notes,Amount,Id\n2026-09-12,${name},Clothing,${name} Visa,SYNTHETIC ORDER ${token},,-42.50,${token}-posted`;
 
   /** Mirrors the product page's category PATCH, which goes through the kernel. */
   const readProduct = async () => {
@@ -245,115 +165,25 @@ async function createConvergenceHarness(
     return productCode;
   };
 
-  async function gmail() {
-    // Synthetic provider payload passes the real MIME normalization and cursor
-    // persistence boundary. Only the classifier's model response is supplied.
-    const normalized = normalizeMessage(`synthetic-mailbox-${token}`, {
-      id: messageId,
-      threadId: `synthetic-thread-${token}`,
-      historyId: "1",
-      internalDate: String(Date.parse("2026-09-10T12:30:00Z")),
-      payload: {
-        mimeType: "text/plain",
-        headers: [
-          { name: "From", value: sender },
-          { name: "Subject", value: `Order ${orderId}` },
-        ],
-        body: {
-          data: Buffer.from(
-            `Order ${orderId} placed. Total USD 42.50.`,
-          ).toString("base64url"),
-        },
-      },
-    });
-    await persistGmailSyncResult(db, {
-      ledgerPartyId: member.id,
-      advanceCursor: false,
-      result: {
-        mode: "bootstrap",
-        reason: "first_sync",
-        cursor: { historyId: "1" },
-        messages: [normalized.mail],
-        attachments: normalized.attachments,
-        events: [],
-      },
-    });
-    await processOrderMails(db, [normalized.mail.messageId], [], {
-      classify: async () => ({
-        events: [
-          {
-            event: "placed",
-            orderId,
-            amount: 42.5,
-            currency: "USD",
-            occurredAt: "2026-09-10T12:00:00.000Z",
-          },
-        ],
-      }),
-      attachFile: attachFileToEntity,
-      attachmentStorage: productionOrderMailAttachmentStorage,
-    });
-  }
+  const gmail = () => ingestGmailEvidence(db, member.id, names);
 
   async function retailer() {
-    const html = `<main><h1>${orderId}</h1><p data-total="42.50">USD 42.50</p><p data-item="${productName}" data-sku="SYN-SKU-${token}">${productName}</p></main>`;
     const run = await startOrResumeRun(db, {
       ledgerPartyId: member.id,
       vendorAccountId: accountId,
       trigger: "manual",
     });
-    const checksum = createHash("sha256").update(html).digest("hex");
-    const prepareOperationId = `prepare:${token}`;
-    const stableOrderId = `order:${token}`;
-    const stableLineId = `line:${token}`;
-    await preparePurchaseImport(
-      db,
-      preparePurchaseImportInput.parse({
-        _runExecution: {
-          runId: run.id,
-          operationId: prepareOperationId,
-          itemOperationIds: [`item:${token}`],
-        },
-        orders: [
-          {
-            targetPurchaseId: bookedPurchaseCode,
-            stableOrderId,
-            itemOperationId: `item:${token}`,
-            source: {
-              kind: "browser_order",
-              externalKey: `history:${orderId}`,
-              checksum,
-            },
-            evidenceChecksum: checksum,
-            extractionRevision: "synthetic-browser@1",
-            extraction: { status: "ready", candidate: retailerInput },
-            lineIds: [stableLineId],
-            primaryDocumentImageId: null,
-            screenshotImageId: null,
-          },
-        ],
-      }),
+    const committed = await importBrowserOrder(db, {
+      runId: run.id,
       actor,
-    );
-    await readProduct();
-    const committed = await commitPurchaseImport(
-      db,
-      commitPurchaseImportInput.parse({
-        _runExecution: { runId: run.id, operationId: `commit:${token}` },
-        prepareOperationId,
-        defaultTrade: "other",
-        resolutions: [
-          {
-            stableOrderId,
-            stableLineId,
-            resolution: productCode
-              ? { kind: "existing", productId: productCode }
-              : { kind: "new" },
-          },
-        ],
-      }),
-      actor,
-    );
+      ids: syntheticOrderIds(token),
+      externalKey: `history:${orderId}`,
+      checksum: sha256Hex(names.retailerHtml),
+      extractionRevision: "synthetic-browser@1",
+      candidate: names.retailerCandidate,
+      targetPurchaseId: bookedPurchaseCode,
+      resolveProduct: readProduct,
+    });
     expect(committed.items[0]?.outcome).toMatch(/created|updated|replayed/);
     if (bookedPurchaseCode) {
       // The Run page's "Apply fix": the reviewed replacement of the booked
@@ -396,20 +226,7 @@ async function createConvergenceHarness(
       notes: `Synthetic occurrence ${token}`,
     });
     const runId = run.publicId;
-    const photos = (["shirt", "label"] as const).map((kind, index) => {
-      const bytes = photoFixture(kind);
-      return {
-        bytes,
-        clientId: `${token}-${kind}`,
-        filename: `${token}-${kind}.png`,
-        contentType: "image/png" as const,
-        size: bytes.length,
-        width: 640,
-        height: 640,
-        sha256: createHash("sha256").update(bytes).digest("hex"),
-        position: index,
-      };
-    });
+    const photos = wardrobePhotos(token, photoFixture);
     const staged = await stagePhotoImport(db, {
       runId,
       items: photos.map(({ bytes: _bytes, position: _position, ...item }) => ({
@@ -457,109 +274,23 @@ async function createConvergenceHarness(
     const imageIds = await Promise.all(
       finalized.map((entry) => resolveOrThrow(db, "image", entry.imageId)),
     );
-    const jobs = await database
-      .select()
-      .from(schema.imageProcessingJob)
-      .where(
-        and(
-          inArray(schema.imageProcessingJob.imageId, imageIds),
-          eq(schema.imageProcessingJob.kind, "describe_image"),
-        ),
-      );
+    const jobs = await listDescribeImageJobs(db, imageIds);
     expect(jobs).toHaveLength(2);
-    for (const job of jobs) {
-      // Only the external model response is synthetic. The uploaded-byte hash,
-      // lease, executor and completion fences use the real processing writers.
-      const claimed = await claimImageProcessingJob(db, {
-        jobId: job.id,
-        kinds: ["describe_image"],
-        leaseMs: 60_000,
-      });
-      if (!claimed) throw new Error("Synthetic description lease refused");
-      const provider = providerFor(IMAGE_DESCRIPTION_FEATURE.model);
-      expect(
-        await assignImageProcessingExecutor(db, {
-          jobId: claimed.id,
-          attemptId: claimed.attemptId,
-          executor: {
-            kind: "cloud",
-            deviceId: null,
-            name: provider,
-            platform: "cloud",
-            appVersion: null,
-            osVersion: null,
-          },
-        }),
-      ).toBeTruthy();
-      const completion = await completeImageProcessingJob(db, {
-        result: {
-          jobId: claimed.id,
-          attemptId: claimed.attemptId,
-          completedAt: new Date().toISOString(),
-          outcome: {
-            kind: "describe_image",
-            status: "completed",
-            description: {
-              description: `Synthetic own-item evidence for ${productName}`,
-              claims: [],
-              cutoutEligibility: "ineligible",
-            },
-            runtime: {
-              platform: "cloud",
-              model: IMAGE_DESCRIPTION_FEATURE.model,
-            },
-          },
-        },
-        cloudAnalysis: {
-          provider,
-          model: IMAGE_DESCRIPTION_FEATURE.model,
-          promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
-          resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
-          inputFingerprint: imageDescriptionInputFingerprint({
-            sourceContentHash: claimed.sourceContentHash,
-            contentType: claimed.originalContentType,
-            provider,
-            model: IMAGE_DESCRIPTION_FEATURE.model,
-          }),
-        },
-        runtime: {
-          provider,
-          model: IMAGE_DESCRIPTION_FEATURE.model,
-          feature: "image-description",
-        },
-      });
-      expect(completion.adopted).toBe(true);
-    }
+    await completeDescribeImageJobs(
+      db,
+      jobs,
+      `Synthetic own-item evidence for ${productName}`,
+    );
 
     await readProduct();
     await proposePhotoGroups(db, {
       runId,
       groups: [
-        {
-          groupKey: "shirt",
-          images: finalized.map((entry, index) => ({
-            id: entry.imageId,
-            purpose: index ? "label" : "item",
-          })),
-          product: productCode
-            ? { kind: "existing", existingId: productCode }
-            : {
-                kind: "create",
-                create: {
-                  name: productName,
-                  manufacturer: name,
-                  categoryId: productCategory.id,
-                },
-              },
-          inventory: {
-            locationId: location.id,
-            quantity: 1,
-            ownershipMode: "person",
-            ownerPartyId: member.shortcode,
-          },
-          evidence:
-            "Synthetic own-item and label photos; identity explicitly reviewed.",
-        },
+        shirtGroup(names, finalized, productCode, {
+          locationId: location.id,
+          categoryId: productCategory.id,
+          ownerPartyId: member.shortcode,
+        }),
       ],
     });
     // "Approve 1 selected item" sends the revision the review page loaded.
@@ -594,7 +325,7 @@ async function createConvergenceHarness(
     // transactions" dispatches statementRow.commitCsv with the chosen kind.
     const committed = await commitStatementCsv(db, actor, {
       fileName: `${token}.csv`,
-      text: csv,
+      text: names.statementCsv,
       selected: [{ key: "1", kind: "purchase" }],
     });
     expect(committed.transactions).toBe(1);
@@ -672,56 +403,21 @@ async function createConvergenceHarness(
     return { purchase, productCode };
   }
 
-  async function projection() {
-    const { rows } = await database.execute(sql`
-      SELECT
-        (SELECT count(*)::int FROM "Purchase" WHERE "vendorId" = ${vendorId} AND "orderId" = ${orderId} AND "deletedAt" IS NULL) AS purchases,
-        (SELECT count(*)::int FROM "Product" WHERE name = ${productName} AND "deletedAt" IS NULL) AS products,
-        (SELECT count(*)::int FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" WHERE p."vendorId" = ${vendorId} AND e."deletedAt" IS NULL AND p."deletedAt" IS NULL) AS expenses,
-        (SELECT count(*)::int FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" JOIN "Product" product ON product.id = e."productId" WHERE p."vendorId" = ${vendorId} AND e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND product.name = ${productName} AND product."deletedAt" IS NULL) AS "productLines",
-        (SELECT count(*)::int FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" t ON t.id = a."transactionId" JOIN "Purchase" p ON p.id = a."purchaseId" WHERE t."accountId" = ${cardId} AND a."deletedAt" IS NULL AND t."deletedAt" IS NULL AND p."vendorId" = ${vendorId} AND p."orderId" = ${orderId} AND p."deletedAt" IS NULL) AS "settledPurchases",
-        (SELECT count(*)::int FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" JOIN "SpendingCategory" c ON c.id = ${effectiveExpenseSpendingCategorySql("e")} WHERE p."vendorId" = ${vendorId} AND e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND c.shortcode = ${category.id} AND c."deletedAt" IS NULL) AS "categorizedExpenses",
-        (SELECT round(sum(e.cost) * 100)::int FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" WHERE p."vendorId" = ${vendorId} AND e."deletedAt" IS NULL AND p."deletedAt" IS NULL) AS spend,
-        (SELECT count(*)::int FROM "FinancialTransaction" WHERE "accountId" = ${cardId} AND "deletedAt" IS NULL) AS transactions,
-        (SELECT round(sum(a.amount) * 100)::int FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" t ON t.id = a."transactionId" WHERE t."accountId" = ${cardId} AND a."deletedAt" IS NULL AND t."deletedAt" IS NULL) AS settlement,
-        (SELECT count(*)::int FROM "InventoryEntry" i JOIN "Product" p ON p.id = i."productId" WHERE p.name = ${productName} AND i."deletedAt" IS NULL AND p."deletedAt" IS NULL) AS inventory,
-        (SELECT sum(i."amountValue")::int FROM "InventoryEntry" i JOIN "Product" p ON p.id = i."productId" WHERE p.name = ${productName} AND i."deletedAt" IS NULL AND p."deletedAt" IS NULL AND i."ownershipMode" = 'person' AND i."ownerLedgerPartyId" = ${member.id}) AS "ownedQuantity",
-        (SELECT count(*)::int FROM "StatementRow" WHERE "accountDescriptor" = ${`${name} Visa`} AND "deletedAt" IS NULL) AS observations,
-        (SELECT count(*)::int FROM "StatementRow" s JOIN "EntityExternalId" x ON x.source = s.source AND x."externalId" = s."externalId" AND x.kind = 'settlement_ref' AND x."deletedAt" IS NULL JOIN "FinancialTransaction" t ON t.id = x."entityId" AND t."deletedAt" IS NULL WHERE s."accountDescriptor" = ${`${name} Visa`} AND s."deletedAt" IS NULL) AS "matchedObservations",
-        (SELECT count(*)::int FROM "OrderMail" WHERE "messageId" = ${messageId}) AS mail,
-        (SELECT count(*)::int FROM "OrderMailCandidateDecision" d JOIN "OrderMailEvent" e ON e.id = d."eventId" JOIN "OrderMail" m ON m.id = e."orderMailId" WHERE m."messageId" = ${messageId} AND d.decision = 'linked') AS "linkedMail"
-    `);
-    return rows[0];
-  }
-
-  /** What the product page's #images and #labels sections render. */
-  async function productPhotos(productShortcode: string) {
-    const { rows } = await database.execute(sql`
-      SELECT i.filename, a.purpose
-      FROM "EntityAttachment" a
-      JOIN "Image" i ON i.id = a."imageId" AND i."deletedAt" IS NULL
-      JOIN "Product" p ON p.id = a."entityId"
-      WHERE p.shortcode = ${productShortcode} AND a."deletedAt" IS NULL
-      ORDER BY i.filename
-    `);
-    return rows;
-  }
-
   return {
     sources: { gmail, retailer, photo, csv: statement },
     settle,
-    projection,
-    productPhotos,
+    projection: () =>
+      convergenceProjection(db, names, {
+        vendorId,
+        cardId,
+        memberId: member.id,
+        categoryShortcode: category.id,
+      }),
+    productPhotos: (productShortcode: string) =>
+      productPhotos(db, productShortcode),
     productName,
     orderId,
-    async openFindingCount() {
-      const { rows } = await database.execute(sql`
-        SELECT count(*)::int AS count FROM "RunFinding" f
-        JOIN "Purchase" p ON p.id = f."entityId"
-        WHERE p."vendorId" = ${vendorId} AND f.status = 'open'
-      `);
-      return Number(rows[0]?.count);
-    },
+    openFindingCount: () => openFindingCount(db, vendorId),
   };
 }
 

@@ -1,16 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import {
-  existsSync,
-  readFileSync,
-  readdirSync,
-  lstatSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+
+import { digestFiles, walkFiles } from "../../../scripts/lib/tree-digest.ts";
 
 const buildStampSchema = z.object({
   schemaVersion: z.literal(2),
@@ -53,16 +47,9 @@ function git(repoRoot: string, args: string[]): string {
   }).trim();
 }
 
-function filesUnder(target: string): string[] {
-  if (!existsSync(target)) return [];
-  if (statSync(target).isFile()) return [target];
-  return readdirSync(target, { withFileTypes: true }).flatMap((entry) => {
-    // upload-artifact omits hidden files from the bundle consumed by E2E.
-    if (entry.isSymbolicLink() || entry.name.startsWith(".")) return [];
-    const child = path.join(target, entry.name);
-    return entry.isDirectory() ? filesUnder(child) : [child];
-  });
-}
+// upload-artifact omits hidden files from the bundle consumed by E2E.
+const filesUnder = (target: string): string[] =>
+  walkFiles(target, { skip: (name) => name.startsWith(".") });
 
 function buildFingerprint(repoRoot: string): BuildFingerprint {
   const webRoot = path.join(repoRoot, "apps/web");
@@ -86,14 +73,10 @@ function buildFingerprint(repoRoot: string): BuildFingerprint {
     ...filesUnder(path.join(repoRoot, "packages/wasm/recipebridge_bg.js")),
     ...filesUnder(path.join(repoRoot, "packages/wasm/package.json")),
   ].sort();
-  const hash = createHash("sha256");
-  for (const file of files) {
-    hash.update(path.relative(repoRoot, file));
-    hash.update("\0");
-    hash.update(readFileSync(file));
-    hash.update("\0");
-  }
-  return { fingerprint: hash.digest("hex"), fileCount: files.length };
+  return {
+    fingerprint: digestFiles(repoRoot, files),
+    fileCount: files.length,
+  };
 }
 
 function stampPath(repoRoot: string): string {
@@ -144,14 +127,11 @@ function excludedSource(file: string): boolean {
 }
 
 function sourceFilesUnder(repoRoot: string, relative: string): string[] {
+  if (excludedSource(relative)) return [];
   const absolute = path.join(repoRoot, relative);
-  if (excludedSource(relative) || !existsSync(absolute)) return [];
-  const stat = lstatSync(absolute);
-  if (stat.isSymbolicLink()) return [];
-  if (stat.isFile()) return [relative];
-  return readdirSync(absolute).flatMap((entry) =>
-    sourceFilesUnder(repoRoot, `${relative}/${entry}`),
-  );
+  return walkFiles(absolute, {
+    skip: (name) => excludedSource(name),
+  }).map((file) => path.relative(repoRoot, file));
 }
 
 export function webBuildSourceFingerprint(repoRoot: string): string {
@@ -178,21 +158,11 @@ export function webBuildSourceFingerprint(repoRoot: string): string {
     .filter(
       (file) => !/\.(?:test|spec)\.[^.]+$/u.test(file) && !file.endsWith(".md"),
     );
-  const hash = createHash("sha256");
-  hash.update(
-    `preview-build:${process.env.CUBBY_DEV_PREVIEW_BUILD === "true"}\0`,
+  return digestFiles(
+    repoRoot,
+    [...new Set(files)].sort().map((file) => path.join(repoRoot, file)),
+    { seed: `preview-build:${process.env.CUBBY_DEV_PREVIEW_BUILD === "true"}` },
   );
-  for (const file of [...new Set(files)].sort()) {
-    const absolute = path.join(repoRoot, file);
-    // Deleted tracked inputs change the digest; symlinks never read secrets
-    // outside the source inventory.
-    if (!existsSync(absolute) || !lstatSync(absolute).isFile()) continue;
-    hash.update(file);
-    hash.update("\0");
-    hash.update(readFileSync(absolute));
-    hash.update("\0");
-  }
-  return hash.digest("hex");
 }
 
 export function writeWebBuildProvenance(

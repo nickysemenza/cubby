@@ -1,3 +1,4 @@
+import { sleep } from "@cubby/shared/retry";
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
@@ -33,7 +34,7 @@ describe("AI response cache Durable Object", () => {
         validate: z.object({ choice: z.string() }).parse,
         compute: async () => {
           calls += 1;
-          await new Promise((resolve) => setTimeout(resolve, 20));
+          await sleep(20);
           return { choice: "one" };
         },
       };
@@ -87,7 +88,7 @@ describe("AI response cache Durable Object", () => {
     const claim = await stub.readOrClaim("key", false);
     if (claim.kind !== "claimed") throw new Error("claim missing");
     await stub.publish("key", claim.token, "old", 1);
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await sleep(5);
     expect((await stub.readOrClaim("key", false)).kind).toBe("claimed");
   });
 

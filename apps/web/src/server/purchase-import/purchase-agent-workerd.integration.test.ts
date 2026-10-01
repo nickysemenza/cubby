@@ -1,5 +1,6 @@
-/* eslint-disable anti-slop/no-unsafe-dictionary-type -- The harness adapts generated Wrangler JSON whose binding dictionaries have no source-level owner type. */
 import { runEntityId, parseEntityId } from "@cubby/schemas/identifiers";
+/* eslint-disable anti-slop/no-unsafe-dictionary-type -- The harness adapts generated Wrangler JSON whose binding dictionaries have no source-level owner type. */
+import { sleep } from "@cubby/shared/retry";
 import { and, eq } from "drizzle-orm";
 import { createWorkerdHarness } from "tooling/purchase-agent-workerd-harness";
 import { type TestDbContext, withTestDb } from "tooling/test-setup";
@@ -53,7 +54,7 @@ async function waitFor(predicate: () => Promise<boolean>, message: string) {
   const deadline = Date.now() + 10_000;
   while (Date.now() < deadline) {
     if (await predicate()) return;
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await sleep(25);
   }
   throw new Error(message);
 }

@@ -2,7 +2,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
 import { writeFileSync } from "node:fs";
 import path from "node:path";
-import { setTimeout } from "node:timers/promises";
+import { pollUntil } from "../../../scripts/lib/poll.ts";
 import { Pool } from "pg";
 import { z } from "zod";
 import {
@@ -99,16 +99,19 @@ export async function createMacBrowserScenario(input: Input) {
     const broker = namespace.getByName(accountId);
     const results: Array<{ stage: string; state: string }> = [];
     async function result(operationId: string) {
-      const deadline = Date.now() + 30_000;
-      while (Date.now() < deadline) {
-        const response = await readBrowserCommandResult(db, namespace, {
-          runId: run.id,
-          operationId,
-        });
-        if (response.state !== "pending") return response;
-        await setTimeout(250);
-      }
-      throw new Error(`Actual Mac broker result timed out: ${operationId}`);
+      return pollUntil(
+        async () => {
+          const response = await readBrowserCommandResult(db, namespace, {
+            runId: run.id,
+            operationId,
+          });
+          return response.state === "pending" ? undefined : response;
+        },
+        {
+          label: `Actual Mac broker result ${operationId}`,
+          timeoutMs: 30_000,
+        },
+      );
     }
     async function capture(operationId: string, url: string) {
       await issueBrowserCommand(db, namespace, {
@@ -124,7 +127,6 @@ export async function createMacBrowserScenario(input: Input) {
       return result(operationId);
     }
     async function awaitNativeRetry(appDriver: MacImportDriver) {
-      const resumeDeadline = Date.now() + 30_000;
       const continuation = input.harness.getWorker(
         "native-import-continuation",
       );
@@ -133,25 +135,28 @@ export async function createMacBrowserScenario(input: Input) {
           z.object({ runId: z.string(), eventId: z.string() }),
         ),
       });
-      let resumedEvents: z.infer<typeof deliveries>["resumedEvents"] = [];
-      while (true) {
-        resumedEvents = deliveries.parse(
-          await (await continuation.fetch("https://continuation.test/")).json(),
-        ).resumedEvents;
-        if (
-          resumedEvents.some((event) => event.runId === run.id) &&
-          (await loadRunScope(db, run.id)).public.status === "running"
-        )
-          break;
-        if (Date.now() >= resumeDeadline) {
-          await appDriver.snapshot();
-          throw new Error(
-            `Native Sync now did not resume the original fixture run (status ${(await loadRunScope(db, run.id)).public.status})`,
-          );
-        }
-        await setTimeout(250);
+      try {
+        return await pollUntil(
+          async () => {
+            const { resumedEvents } = deliveries.parse(
+              await (
+                await continuation.fetch("https://continuation.test/")
+              ).json(),
+            );
+            return resumedEvents.some((event) => event.runId === run.id) &&
+              (await loadRunScope(db, run.id)).public.status === "running"
+              ? resumedEvents
+              : undefined;
+          },
+          { label: "Native Sync resume", timeoutMs: 30_000 },
+        );
+      } catch (error) {
+        await appDriver.snapshot();
+        throw new Error(
+          `Native Sync now did not resume the original fixture run (status ${(await loadRunScope(db, run.id)).public.status})`,
+          { cause: error },
+        );
       }
-      return resumedEvents;
     }
     return {
       context: {
@@ -167,26 +172,30 @@ export async function createMacBrowserScenario(input: Input) {
       async run(appDriver: MacImportDriver) {
         await appDriver.openSettings();
         await appDriver.click("id=settings.purchaseImport.reconnect");
-        const deadline = Date.now() + 30_000;
-        while (!(await broker.connected())) {
-          if (Date.now() >= deadline) {
-            const file = path.join(
-              input.artifacts,
-              "browser-connect-failure.txt",
-            );
-            writeFileSync(
-              file,
-              (await appDriver.snapshot()).replace(
-                /Session token \([^)]*\)/gu,
-                "Session token (fixture credential)",
-              ),
-            );
-            appDriver.evidence.push(file);
-            throw new Error(
-              "Actual Mac app did not connect to the fixture broker",
-            );
-          }
-          await setTimeout(250);
+        try {
+          await pollUntil(
+            async () => ((await broker.connected()) ? true : undefined),
+            { label: "Mac app broker connection", timeoutMs: 30_000 },
+          );
+        } catch (error) {
+          const file = path.join(
+            input.artifacts,
+            "browser-connect-failure.txt",
+          );
+          writeFileSync(
+            file,
+            (await appDriver.snapshot()).replace(
+              /Session token \([^)]*\)/gu,
+              "Session token (fixture credential)",
+            ),
+          );
+          appDriver.evidence.push(file);
+          throw new Error(
+            "Actual Mac app did not connect to the fixture broker",
+            {
+              cause: error,
+            },
+          );
         }
         const before = await capture(
           "mac:authentication",

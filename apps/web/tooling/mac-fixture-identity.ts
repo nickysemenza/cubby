@@ -4,14 +4,14 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  readdirSync,
-  readlinkSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { z } from "zod";
+
+import { digestTree } from "../../../scripts/lib/tree-digest.ts";
 
 export const macFixtureBundleID = "com.nickysemenza.cubby.e2e";
 export const macFixtureBrowserBundleID = "com.cubby.fixture.browser";
@@ -123,27 +123,11 @@ export function assertMacFixturesIdle(): void {
   );
 }
 
-export function nativeBundleFingerprint(directory: string): string {
-  const hash = createHash("sha256");
-  for (const entry of readdirSync(directory, { withFileTypes: true }).sort(
-    (a, b) => a.name.localeCompare(b.name),
-  )) {
-    if (entry.name === ".DS_Store") continue;
-    const file = path.join(directory, entry.name);
-    const kind = entry.isSymbolicLink()
-      ? "link"
-      : entry.isDirectory()
-        ? "directory"
-        : "file";
-    const content = entry.isSymbolicLink()
-      ? readlinkSync(file)
-      : entry.isDirectory()
-        ? nativeBundleFingerprint(file)
-        : createHash("sha256").update(readFileSync(file)).digest("hex");
-    hash.update(JSON.stringify([entry.name, kind, content]));
-  }
-  return hash.digest("hex");
-}
+export const nativeBundleFingerprint = (directory: string): string =>
+  digestTree(directory, {
+    skip: (name) => name === ".DS_Store",
+    includeSymlinks: true,
+  });
 
 const signatureSchema = z.object({
   bundleID: z.string(),

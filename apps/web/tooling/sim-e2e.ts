@@ -1,4 +1,7 @@
 import { execFileSync, spawn } from "node:child_process";
+import { pollUntil } from "../../../scripts/lib/poll.ts";
+import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
+import { spawnToExit } from "../../../scripts/lib/run.ts";
 import { createHash, randomBytes } from "node:crypto";
 import {
   appendFileSync,
@@ -127,9 +130,9 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 
 function swiftSourceVersion(): string {
   const sourceRoot = path.join(kitRoot, "Sources");
-  const files = readdirSync(sourceRoot, { recursive: true, encoding: "utf8" })
-    .filter((entry) => entry.endsWith(".swift"))
-    .map((entry) => path.join(sourceRoot, entry));
+  const files = walkFiles(sourceRoot).filter((entry) =>
+    entry.endsWith(".swift"),
+  );
   files.push(path.join(kitRoot, "Package.swift"));
   return files
     .sort()
@@ -142,9 +145,7 @@ function swiftSourceVersion(): string {
 
 function appleSourceVersion(): string {
   const appRoot = path.join(appleRoot, "App");
-  const files = readdirSync(appRoot, { recursive: true, encoding: "utf8" })
-    .filter((entry) => entry.endsWith(".swift"))
-    .map((entry) => path.join(appRoot, entry));
+  const files = walkFiles(appRoot).filter((entry) => entry.endsWith(".swift"));
   files.push(path.join(appleRoot, "project.yml"));
   return [
     swiftSourceVersion(),
@@ -188,20 +189,22 @@ async function assertNativeEdit(
   try {
     const { SIM_PRODUCT_UPDATED_NAME } = await import("./scenarios/simulator");
     const targetName = expectedName ?? SIM_PRODUCT_UPDATED_NAME;
-    const deadline = performance.now() + 15_000;
-    let actualName: string | undefined;
-    do {
+    const readName = async () => {
       const result = await checkPool.query<{ name: string }>(
         'SELECT name FROM "Product" WHERE shortcode = $1',
         [productId],
       );
-      actualName = result.rows[0]?.name;
-      if (actualName === targetName) break;
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    } while (performance.now() < deadline);
-    if (actualName !== targetName) {
+      return result.rows[0]?.name;
+    };
+    try {
+      await pollUntil(
+        async () => ((await readName()) === targetName ? true : undefined),
+        { label: `native edit of ${productId}`, timeoutMs: 15_000 },
+      );
+    } catch (error) {
       throw new Error(
-        `Native edit did not reach ${simName}: ${actualName ?? "missing"}`,
+        `Native edit did not reach ${simName}: ${(await readName()) ?? "missing"}`,
+        { cause: error },
       );
     }
     console.log(`[${lane}] Native edit verified in ${simName}`);
@@ -399,39 +402,35 @@ async function run(
     path.join(artifacts, "commands.log"),
     `${command} ${args.join(" ")}\n`,
   );
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd,
-      env: environment,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    activeChild = child;
-    const log = path.join(artifacts, "runner.log");
-    for (const stream of [child.stdout, child.stderr]) {
-      stream.on("data", (chunk: Buffer) => {
-        appendFileSync(log, chunk);
-        if (stdoutFile && stream === child.stdout)
-          appendFileSync(stdoutFile, chunk);
-        if (stderrFile && stream === child.stderr)
-          appendFileSync(stderrFile, chunk);
-        if (!stdoutFile || stream === child.stderr)
-          (stream === child.stdout ? process.stdout : process.stderr).write(
-            chunk,
-          );
-      });
-    }
-    child.once("error", reject);
-    child.once("close", (code) => {
+  const log = path.join(artifacts, "runner.log");
+  const status = await spawnToExit(command, args, {
+    cwd,
+    env: environment,
+    stdio: ["ignore", "pipe", "pipe"],
+    onSpawn: (child) => {
+      activeChild = child;
+      for (const stream of [child.stdout, child.stderr]) {
+        stream?.on("data", (chunk: Buffer) => {
+          appendFileSync(log, chunk);
+          if (stdoutFile && stream === child.stdout)
+            appendFileSync(stdoutFile, chunk);
+          if (stderrFile && stream === child.stderr)
+            appendFileSync(stderrFile, chunk);
+          if (!stdoutFile || stream === child.stderr)
+            (stream === child.stdout ? process.stdout : process.stderr).write(
+              chunk,
+            );
+        });
+      }
+    },
+    onClose: () => {
       activeChild = undefined;
-      if (code === 0 && (!interrupted || allowInterrupted)) resolve();
-      else
-        reject(
-          new Error(
-            `${command} exited ${code}${interrupted ? ` after ${interrupted}` : ""}`,
-          ),
-        );
-    });
+    },
   });
+  if (status !== 0 || (interrupted && !allowInterrupted))
+    throw new Error(
+      `${command} exited ${status}${interrupted ? ` after ${interrupted}` : ""}`,
+    );
 }
 
 async function simulator(): Promise<{

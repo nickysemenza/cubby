@@ -10,7 +10,6 @@ import { proposeProductMatchOut } from "@cubby/schemas/recommendations";
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { testUserId } from "@cubby/schemas/testing";
 import { chromium, expect, request } from "@playwright/test";
-import type { CubbyMcpToolAction } from "@cubby/schemas/mcp-tools";
 import { and, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -25,7 +24,7 @@ import { runContract } from "~/contracts/run.contract";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
 import { unparsedStartOperationResultSchema } from "~/server/start-operation.contract";
-import { callMcpTool, kernelRequestContext } from "~/server/mcp/mcp-test-utils";
+import { callMcpTool } from "~/server/mcp/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import { financialAccount } from "~/server/db/schema";
 import {
@@ -44,6 +43,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import {
   buildKernelContext,
   type KernelContext,
+  makeMcpCaller,
   buildScenarioDatabase,
   createFixtureWithContext,
 } from "./context";
@@ -707,22 +707,7 @@ async function importSyntheticPurchase(
     vendorAccountId: account.id,
     trigger: "manual",
   });
-  const callPurchase = async (
-    name: CubbyMcpToolAction,
-    args: Parameters<typeof callMcpTool>[2],
-  ) => {
-    const [tool, action] = name.split(".");
-    const result = await callMcpTool(
-      createMcpServer(),
-      tool!,
-      { action, ...args },
-      kernelRequestContext(kernel),
-      { entityKernel: kernel },
-    );
-    if (result.isError)
-      throw new Error(`${name} failed: ${JSON.stringify(result.content)}`);
-    return result.structuredContent;
-  };
+  const callPurchase = makeMcpCaller(kernel);
   const prepareOperationId = "prepare:synthetic-wardrobe-order";
   const prepared = preparePurchaseImportOut.parse(
     await callPurchase("purchase_import.prepare", {
@@ -880,22 +865,7 @@ async function reimportInNewRunAndAssertNoOp(
     vendorAccountId: parseEntityId("vendorAccount", vendorAccountId),
     trigger: "manual",
   });
-  const callPurchase = async (
-    name: CubbyMcpToolAction,
-    args: Parameters<typeof callMcpTool>[2],
-  ) => {
-    const [tool, action] = name.split(".");
-    const result = await callMcpTool(
-      createMcpServer(),
-      tool!,
-      { action, ...args },
-      kernelRequestContext(kernel),
-      { entityKernel: kernel },
-    );
-    if (result.isError)
-      throw new Error(`${name} failed: ${JSON.stringify(result.content)}`);
-    return result.structuredContent;
-  };
+  const callPurchase = makeMcpCaller(kernel);
   const prepareOperationId = "prepare:synthetic-wardrobe-order-reimport";
   const prepared = preparePurchaseImportOut.parse(
     await callPurchase("purchase_import.prepare", {
@@ -1114,22 +1084,7 @@ async function commitDuplicateOrderHistoryCapture(
     vendorAccountId: parseEntityId("vendorAccount", vendorAccountId),
     trigger: "manual",
   });
-  const callPurchase = async (
-    name: CubbyMcpToolAction,
-    args: Parameters<typeof callMcpTool>[2],
-  ) => {
-    const [tool, action] = name.split(".");
-    const result = await callMcpTool(
-      createMcpServer(),
-      tool!,
-      { action, ...args },
-      kernelRequestContext(kernel),
-      { entityKernel: kernel },
-    );
-    if (result.isError)
-      throw new Error(`${name} failed: ${JSON.stringify(result.content)}`);
-    return result.structuredContent;
-  };
+  const callPurchase = makeMcpCaller(kernel);
   const duplicateExternalKey = `${evidence.orderUrl}#duplicate-order-history-capture`;
   const duplicateChecksum = createHash("sha256")
     .update(duplicateExternalKey)
@@ -1309,22 +1264,7 @@ async function runProductEnrichmentCommitAndOverwrite(
     pool,
     userId,
   );
-  const callPurchase = async (
-    name: CubbyMcpToolAction,
-    args: Parameters<typeof callMcpTool>[2],
-  ) => {
-    const [tool, action] = name.split(".");
-    const result = await callMcpTool(
-      createMcpServer(),
-      tool!,
-      { action, ...args },
-      kernelRequestContext(kernel),
-      { entityKernel: kernel },
-    );
-    if (result.isError)
-      throw new Error(`${name} failed: ${JSON.stringify(result.content)}`);
-    return result.structuredContent;
-  };
+  const callPurchase = makeMcpCaller(kernel);
 
   const commitFingerprint = await productEnrichmentFingerprint(
     db,

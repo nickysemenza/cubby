@@ -1,3 +1,4 @@
+import { pollUntil } from "../../../scripts/lib/poll.ts";
 import { testServiceConfig } from "./test-service-config";
 import { hashSchemaTemplateInputs } from "./schema-template-inputs";
 import {
@@ -436,22 +437,20 @@ async function waitForLockWaiter(db: Database): Promise<void> {
   // `env.ts`, whose validation would fail there.
   // oxlint-disable-next-line no-restricted-imports -- lazy by design, see above
   const { getDb } = await import("../src/server/repo/database-helpers/core");
-  const deadline = Date.now() + LOCK_POLL_TIMEOUT_MS;
-  for (;;) {
-    const result = await getDb(db).execute(sql`
-      SELECT count(*) AS "count" FROM pg_stat_activity
-      WHERE datname = current_database() AND wait_event_type = 'Lock'
-    `);
-    const waiting = Number(result.rows[0]?.count ?? 0);
-    if (waiting > 0) return;
-    if (Date.now() >= deadline) {
-      throw new Error(
-        "raceUniqueInsert: no session started waiting on a lock within " +
-          `${LOCK_POLL_TIMEOUT_MS}ms`,
-      );
-    }
-    await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_INTERVAL_MS));
-  }
+  await pollUntil(
+    async () => {
+      const result = await getDb(db).execute(sql`
+        SELECT count(*) AS "count" FROM pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock'
+      `);
+      return Number(result.rows[0]?.count ?? 0) > 0 ? true : undefined;
+    },
+    {
+      label: "raceUniqueInsert: a session waiting on a lock",
+      timeoutMs: LOCK_POLL_TIMEOUT_MS,
+      intervalMs: LOCK_POLL_INTERVAL_MS,
+    },
+  );
 }
 
 /**

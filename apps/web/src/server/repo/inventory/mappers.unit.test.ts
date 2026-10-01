@@ -6,7 +6,7 @@ import {
 } from "@cubby/schemas/testing";
 import {
   categorySummaryFixture,
-  taxonomyId,
+  productRowFixture,
 } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
@@ -36,28 +36,12 @@ const UPDATED_AT = new Date("2024-01-02T00:00:00.000Z");
 const DELETED_AT = new Date("2024-01-03T00:00:00.000Z");
 
 const baseProduct = {
-  id: PRODUCT_ID,
-  shortcode: "PRD-TEST",
-  name: "Flour",
-  manufacturer: "Generic",
-  tags: [],
-  upc: null,
-  fdc_id: null,
-  growsPlantId: null,
-  model: "5lb",
-  expectedQuantity: null,
-  notes: "Keep dry",
-  createdAt: CREATED_AT,
-  updatedAt: UPDATED_AT,
-  deletedAt: DELETED_AT,
-  ingredientId: null,
-  categoryId: taxonomyId("food"),
-  category: categorySummaryFixture("food"),
-  price: 4.5,
-  usdaUnavailable: null,
-  acquisitionOrigin: "unknown" as const,
-  stockTracked: null,
-  labelNutrition: null,
+  ...productRowFixture({
+    id: PRODUCT_ID,
+    model: "5lb",
+    notes: "Keep dry",
+    deletedAt: DELETED_AT,
+  }),
 };
 
 const baseLocation = {

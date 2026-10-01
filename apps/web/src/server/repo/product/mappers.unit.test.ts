@@ -12,10 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
-import {
-  categorySummaryFixture,
-  taxonomyId,
-} from "../../../../tooling/product-category-fixtures";
+import { productRowFixture } from "../../../../tooling/product-category-fixtures";
 import { makeCookbookExtraction } from "../repo.fixtures";
 import {
   dbProductToAPI,
@@ -101,29 +98,14 @@ const incompleteProductDataQuality = {
 };
 
 const baseProduct = {
-  id: PRODUCT_ID,
-  shortcode: "PRD-TEST",
-  name: "Flour",
-  manufacturer: "Generic",
-  tags: [],
-  upc: "012345678905",
-  fdc_id: null,
-  growsPlantId: null,
-  model: "5lb",
-  notes: "Keep dry",
-  expectedQuantity: null,
-  createdAt: CREATED_AT,
-  updatedAt: UPDATED_AT,
-  deletedAt: DELETED_AT,
-  ingredientId: INGREDIENT_ID,
-  categoryId: taxonomyId("food"),
-  category: categorySummaryFixture("food"),
-  classificationEvidence: "",
-  price: 4.5,
-  usdaUnavailable: null,
-  acquisitionOrigin: "unknown" as const,
-  stockTracked: null,
-  labelNutrition: null,
+  ...productRowFixture({
+    id: PRODUCT_ID,
+    upc: "012345678905",
+    model: "5lb",
+    notes: "Keep dry",
+    deletedAt: DELETED_AT,
+    ingredientId: INGREDIENT_ID,
+  }),
   expenseCount: 0,
   componentCount: 0,
   expenseTotal: 42.5,
