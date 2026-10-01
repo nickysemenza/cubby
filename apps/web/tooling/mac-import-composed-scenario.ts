@@ -4,7 +4,6 @@ import path from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { locationCreateInput } from "@cubby/schemas/location";
 import { spendingCategoryCreateInput } from "@cubby/schemas/spending-category";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -49,6 +48,7 @@ const fixtureGTIN = "00012345678905";
 type BrowserScenario = Awaited<ReturnType<typeof createMacBrowserScenario>>;
 type Input = {
   browser: BrowserScenario;
+  statementAccountId: string;
   driver: MacImportDriver;
   artifacts: string;
   webRoot: string;
@@ -80,22 +80,6 @@ export async function createMacComposedScenario(input: Input) {
   const { db, kernel, member, vendor, run } = input.browser.context;
   const database = getDb(db);
   const vendorId = await resolveOrThrow(db, "vendor", vendor.id);
-  const card = await createFixtureWithContext(
-    kernel,
-    "financialAccount",
-    financialAccountCreateInput.parse({
-      name: "Synthetic Mac Visa 4242",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
-      ledgerPartyId: member.shortcode,
-      sourceAliases: [
-        {
-          source: "monarch",
-          alias: "Fixture Visa (...4242)",
-          externalAccountId: null,
-        },
-      ],
-    }),
-  );
   const category = await createFixtureWithContext(
     kernel,
     "spendingCategory",
@@ -113,7 +97,11 @@ export async function createMacComposedScenario(input: Input) {
       type: "drawer",
     }),
   );
-  const cardId = await resolveOrThrow(db, "financialAccount", card.id);
+  const cardId = await resolveOrThrow(
+    db,
+    "financialAccount",
+    input.statementAccountId,
+  );
   const photos = path.join(input.artifacts, "photo-inputs");
   mkdirSync(photos, { recursive: true });
   copyFileSync(

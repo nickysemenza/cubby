@@ -699,6 +699,12 @@ async function main(): Promise<void> {
     } finally {
       await context.dispose();
     }
+    const { seedMacStatementAccount } =
+      await import("./mac-import-prerequisites");
+    const statementAccountId = await seedMacStatementAccount(
+      databaseURL,
+      fixtureUserId,
+    );
     if (browserMode) {
       phase = "browser-fixture";
       retailer = await createMacRetailerFixture(artifacts, nonce, {
@@ -721,6 +727,7 @@ async function main(): Promise<void> {
           await import("./mac-import-composed-scenario");
         composed = await createMacComposedScenario({
           browser: browserScenario,
+          statementAccountId,
           driver,
           artifacts,
           webRoot,
