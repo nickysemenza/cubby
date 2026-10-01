@@ -141,6 +141,35 @@ describe("request batcher", () => {
     });
   });
 
+  // Failure: a lone item queued behind full batches (slow suggestion batches,
+  // say) waits for a slot it never needed — a typed search stalls behind them.
+  it("sends a lone item through sendOne without waiting for a slot", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const batcher = createRequestBatcher<Item, string>(
+      async (items) => {
+        await held;
+        return echo(items);
+      },
+      {
+        concurrency: 1,
+        sendOne: async (item) => `alone:${item.id}`,
+      },
+    );
+    const blocked = Promise.all([
+      batcher.load(input("a"), live()),
+      batcher.load(input("b"), live()),
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await expect(batcher.load(input("search"), live())).resolves.toBe(
+      "alone:search",
+    );
+    release();
+    await blocked;
+  });
+
   it("never runs more requests at once than its limit", async () => {
     let active = 0;
     let peak = 0;

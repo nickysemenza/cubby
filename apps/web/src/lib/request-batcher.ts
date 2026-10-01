@@ -35,13 +35,30 @@ const abortError = () => new DOMException("Request cancelled", "AbortError");
  */
 export function createRequestBatcher<TInput, TOutput>(
   send: SendBatch<TInput, TOutput>,
-  { max = 25, concurrency = 2 }: { max?: number; concurrency?: number } = {},
+  {
+    max = 25,
+    concurrency = 2,
+    sendOne,
+  }: {
+    max?: number;
+    concurrency?: number;
+    /**
+     * Send an item that flushed alone. It skips the limiter: batching buys a
+     * lone item nothing, and queueing it behind slow full batches stalls it.
+     */
+    sendOne?: (input: TInput, signal: AbortSignal) => Promise<TOutput>;
+  } = {},
 ) {
   const limiter = createConcurrencyLimiter(concurrency);
   let queued: Pending<TInput, TOutput>[] = [];
   let scheduled = false;
 
   const dispatch = (batch: Pending<TInput, TOutput>[]) => {
+    const [lone] = batch;
+    if (sendOne && lone && batch.length === 1) {
+      sendOne(lone.input, lone.signal).then(lone.resolve, lone.reject);
+      return;
+    }
     const controller = new AbortController();
     const onItemAbort = () => {
       if (batch.every((entry) => entry.signal.aborted)) controller.abort();

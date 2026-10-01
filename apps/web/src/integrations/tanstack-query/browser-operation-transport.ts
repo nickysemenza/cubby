@@ -147,7 +147,6 @@ function queryBatcherFor(headers: HeadersInit) {
   if (!batcher) {
     batcher = createRequestBatcher(
       async (batch: DispatchItem[], signal, deliver) => {
-        if (batch.length === 1) throw new BatchFallback();
         await streamDispatch(batch, entries, signal, deliver).catch(
           (error: Error) => {
             if (signal.aborted) throw error;
@@ -155,7 +154,12 @@ function queryBatcherFor(headers: HeadersInit) {
           },
         );
       },
-      { max: 20, concurrency: 4 },
+      {
+        max: 20,
+        concurrency: 4,
+        // The caller resends it with its own trace headers.
+        sendOne: () => Promise.reject(new BatchFallback()),
+      },
     );
     queryBatchers.set(key, batcher);
   }
