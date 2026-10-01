@@ -814,40 +814,18 @@ async function runHeadlessPhotoScenario(
     ];
     const proposalPool = new Pool({ connectionString: databaseURL });
     try {
-      const [
-        { callMcpTool, kernelRequestContext },
-        { createMcpServer },
-        scenario,
-        testing,
-      ] = await Promise.all([
-        import("~/server/mcp/mcp-test-utils"),
-        import("~/server/mcp/server"),
-        import("./scenarios/context"),
-        import("@cubby/schemas/testing"),
-      ]);
-      const db = scenario.buildScenarioDatabase(proposalPool);
-      const kernel = scenario.buildKernelContext(
-        db,
-        testing.testUserId(userId),
-      );
-      const proposed = await callMcpTool(
-        createMcpServer(),
-        "photo_run",
-        { action: "propose_groups", runId: runID, groups },
-        kernelRequestContext(kernel),
-        { entityKernel: kernel },
-      );
-      if (proposed.isError)
-        throw new Error(
-          `MCP photo proposal failed: ${JSON.stringify(proposed.content)}`,
-        );
+      const proposed = await context.post("/api/v1/photoImport/saveGroups", {
+        data: { runId: runID, groups },
+      });
+      if (!proposed.ok())
+        throw new Error(`Photo proposal failed: ${await proposed.text()}`);
       const beforeApproval = await proposalPool.query<{ count: string }>(
         `SELECT count(*)::text AS count FROM "Product"
          WHERE name IN ('Synthetic Gray Crew Shirt', 'Synthetic Brown Boots')
            AND "deletedAt" IS NULL`,
       );
       if (beforeApproval.rows[0]?.count !== "0")
-        throw new Error("MCP proposals created Products before review");
+        throw new Error("Photo proposals created Products before review");
     } finally {
       await proposalPool.end();
     }
@@ -934,7 +912,7 @@ async function runHeadlessPhotoScenario(
       await pool.end();
     }
     console.log(
-      `[${lane}] Photo stages: native upload ${(nativeReady - scenarioStarted).toFixed(0)}ms; MCP proposal ${(proposedAt - nativeReady).toFixed(0)}ms; processing and CLI review ${(reviewedAt - proposedAt).toFixed(0)}ms; final checks ${(performance.now() - reviewedAt).toFixed(0)}ms`,
+      `[${lane}] Photo stages: native upload ${(nativeReady - scenarioStarted).toFixed(0)}ms; backend proposal ${(proposedAt - nativeReady).toFixed(0)}ms; processing and CLI review ${(reviewedAt - proposedAt).toFixed(0)}ms; final checks ${(performance.now() - reviewedAt).toFixed(0)}ms`,
     );
     console.log(`[${lane}] Proposal submission and reviewer approval verified`);
   } finally {
