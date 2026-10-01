@@ -11,6 +11,11 @@ import {
 } from "../../tooling/local-workerd-harness";
 import { createE2EDatabase } from "./e2e-database";
 import { createE2EObjectStorage } from "../../tooling/local-object-storage";
+import {
+  harnessExplorerUrl,
+  sanitizeWorkerdLogs,
+  type WorkerdLog,
+} from "../../tooling/e2e-workerd-logs";
 
 type E2EStorageState = Awaited<ReturnType<APIRequestContext["storageState"]>>;
 
@@ -19,7 +24,11 @@ export interface E2EWorkerRuntime {
   databaseUrl: string;
   objectStorageUrl: string;
   storageState: E2EStorageState;
-  debug(): void;
+  /** Bindings, Durable Object, queue and R2 explorer of this live harness. */
+  explorerUrl: string;
+  /** Sanitized workerd logs since the last `clearLogs()`. */
+  getLogs(): WorkerdLog[];
+  clearLogs(): void;
   close(): Promise<void>;
 }
 
@@ -103,7 +112,10 @@ export async function createE2EWorkerRuntime({
       : { cookies: [], origins: [] };
     logPhase("auth");
 
-    console.log(`[E2E Worker ${parallelIndex}] ${database.name} at ${baseURL}`);
+    const explorerUrl = harnessExplorerUrl(baseURL);
+    console.log(
+      `[E2E Worker ${parallelIndex}] ${database.name} at ${baseURL} (explorer ${explorerUrl})`,
+    );
 
     let closed = false;
     return {
@@ -111,7 +123,9 @@ export async function createE2EWorkerRuntime({
       databaseUrl: database.databaseUrl,
       objectStorageUrl: objectStorage.url,
       storageState,
-      debug: () => harness?.debug(),
+      explorerUrl,
+      getLogs: () => sanitizeWorkerdLogs(harness?.getLogs() ?? []),
+      clearLogs: () => harness?.clearLogs(),
       async close() {
         if (closed) return;
         closed = true;

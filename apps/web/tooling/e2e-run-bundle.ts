@@ -28,7 +28,13 @@ export interface E2ERunBundleInput {
   kind: "browser" | "native";
   status: string;
   command: string[];
-  cases?: Array<{ name: string; status: string; durationMs?: number }>;
+  cases?: Array<{
+    name: string;
+    status: string;
+    durationMs?: number;
+    /** Live explorer of the failed test's harness; only valid during the run. */
+    explorerUrl?: string;
+  }>;
   runtime?: Record<string, string>;
   profile?: string;
   scenario?: string;
