@@ -1,9 +1,8 @@
+import { defineContract, query } from "~/contracts/define";
 import {
   productLookupResponseSchema,
   upcLookupInput,
-} from "@cubby/upc-contract";
-
-import { defineContract, query } from "~/contracts/define";
+} from "~/contracts/upc.schemas";
 
 export const upcContract = defineContract("upc", {
   lookup: query({

@@ -132,7 +132,6 @@ jobs:
       - name: Run auxiliary package tests
         run: pnpm -r --no-sort --workspace-concurrency=2 --no-bail --filter '!@cubby/web' --if-present run test --maxWorkers=1
       - run: pnpm --filter @cubby/usda-api run build
-      - run: pnpm --filter @cubby/upc-lookup run build
 
   test-rust:
     name: Rust - recipebridge and cubby-ffi
@@ -417,7 +416,9 @@ jobs:
       # saves once per Swift change; PRs restore main's newest by prefix.
       - name: Compute Swift toolchain hash
         id: swift-version
-        run: echo "hash=$(swift --version 2>&1 | shasum -a 256 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+        uses: ./.github/actions/toolchain-hash
+        with:
+          command: swift --version
       - name: Restore cached SwiftPM build
         id: spm-build
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -438,20 +439,15 @@ jobs:
       - name: Check OpenAPI generator warnings
         run: apps/apple/scripts/check-openapi-warnings.sh
       # Saved here rather than by actions/cache's post step so a red test run
-      # still keeps the build for the next attempt. Only main saves once a
-      # prefix exists: a PR's cache is private to its ref and a ~1 GB copy
-      # per PR evicts everyone else's caches (the repo sat at 13.4 GB of
-      # 10 GB on 2026-09-22). A concurrent job may have saved the same key
-      # first; that 409 is harmless and must never fail the check.
+      # still keeps the build for the next attempt (policy: the action).
       - name: Save SwiftPM build cache
-        if: >-
-          always() && steps.spm-build.outputs.cache-hit != 'true' &&
-          (github.event_name == 'push' || steps.spm-build.outputs.cache-matched-key == '')
-        continue-on-error: true
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        if: always()
+        uses: ./.github/actions/save-cache-main-only
         with:
           path: apps/apple/CubbyKit/.build
           key: ${{ steps.spm-build.outputs.cache-primary-key }}
+          cache-hit: ${{ steps.spm-build.outputs.cache-hit }}
+          matched-key: ${{ steps.spm-build.outputs.cache-matched-key }}
 
   test-apple:
     name: Apple checks
@@ -473,9 +469,11 @@ jobs:
       # restore introduces, so only changed sources recompile.
       - name: Compute Xcode version hash
         id: xcode-version
-        run: |
-          echo "hash=$(xcodebuild -version | shasum -a 256 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
-          defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
+        uses: ./.github/actions/toolchain-hash
+        with:
+          command: xcodebuild -version
+      - name: Ignore file-system inode changes in XCBuild
+        run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
       - name: Restore cached DerivedData
         id: derived-data
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -490,34 +488,26 @@ jobs:
             xcode-dd-v1-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-
       - name: Run iOS app checks
         run: sh scripts/apple-check.sh ci
-      # Same policy as the SwiftPM build cache: PRs save only when no prefix
-      # exists, otherwise only main saves.
+      # Saved here rather than by actions/cache's post step so a red build
+      # still keeps the caches for the next attempt (policy: the action).
       - name: Save DerivedData cache
-        if: >-
-          always() && steps.derived-data.outputs.cache-hit != 'true' &&
-          (github.event_name == 'push' || steps.derived-data.outputs.cache-matched-key == '')
-        continue-on-error: true
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        if: always()
+        uses: ./.github/actions/save-cache-main-only
         with:
           path: |
             apps/apple/DerivedData
             !apps/apple/DerivedData/Logs
           key: ${{ steps.derived-data.outputs.cache-primary-key }}
-      # Saved here rather than by actions/cache's post step so a red build
-      # still keeps the SPM clones for the next attempt. A concurrent job may
-      # have saved the same key first; that 409 is harmless and must never
-      # fail the check.
-      # ~1.1 GB per entry, and a PR's copy is private to its ref: seven of
-      # them were 8.3 GB of the repo's 10 GB cache on 2026-09-22.
+          cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
+          matched-key: ${{ steps.derived-data.outputs.cache-matched-key }}
       - name: Save SPM clone cache
-        if: >-
-          always() && steps.apple-tools.outputs.spm-clones-cache-hit != 'true' &&
-          (github.event_name == 'push' || steps.apple-tools.outputs.spm-clones-cache-matched-key == '')
-        continue-on-error: true
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        if: always()
+        uses: ./.github/actions/save-cache-main-only
         with:
           path: apps/apple/SourcePackages
           key: ${{ steps.apple-tools.outputs.spm-clones-cache-key }}
+          cache-hit: ${{ steps.apple-tools.outputs.spm-clones-cache-hit }}
+          matched-key: ${{ steps.apple-tools.outputs.spm-clones-cache-matched-key }}
 
   # Populates apple-testflight.yaml's release FFI caches (setup-apple-ffi's
   # targets=device/mac, profile=dist) on every main push, so a release hits

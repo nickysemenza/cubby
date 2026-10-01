@@ -11,7 +11,6 @@ import { env } from "~/env";
 import { auth as betterAuth } from "~/lib/auth";
 import { getBindingFetcher } from "~/server/cf-env";
 import type { NotionClient } from "~/server/clients/notion";
-import { createUpcLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import { readDatabaseFreshness } from "~/server/database-freshness/client";
 import type { Database } from "~/server/db";
@@ -28,6 +27,7 @@ import { getDb } from "~/server/repo/database-helpers/core";
 import { notDeleted } from "~/server/repo/database-helpers/query";
 import type { AvailabilityService } from "~/server/services/availability.service";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
+import { createUpcLookupService } from "~/server/services/upc";
 import type { USDAService } from "~/server/services/usda.service";
 import type { RequestOrigin } from "~/server/workload";
 
@@ -98,7 +98,7 @@ export const buildCrudServices = (
       ),
     () => ({}),
   );
-  const upcLookupClient = createUpcLookupClient();
+  const upcLookupClient = createUpcLookupService(database);
 
   return {
     db: database,

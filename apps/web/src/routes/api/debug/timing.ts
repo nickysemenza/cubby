@@ -71,11 +71,9 @@ export const Route = createFileRoute("/api/debug/timing")({
 
         // Service binding fetch in prod, global fetch (public URL) in dev
         const usdaFetch = getBindingFetcher("USDA_API");
-        const upcFetch = getBindingFetcher("UPC_LOOKUP");
         const usdaVia = usdaFetch ? "binding" : "url";
-        const upcVia = upcFetch ? "binding" : "url";
 
-        const [usdaCounts, usdaBatch, upcPing] = await Promise.all([
+        const [usdaCounts, usdaBatch] = await Promise.all([
           // 3. USDA API: health/counts endpoint
           measure(
             `usda (${usdaVia}): GET ${env.USDA_API_URL}counts`,
@@ -104,16 +102,6 @@ export const Route = createFileRoute("/api/debug/timing")({
               await res.text();
             },
           ),
-
-          // 5. UPC lookup worker ping
-          measure(
-            `upc-lookup (${upcVia}): GET ${env.UPC_LOOKUP_API_URL}`,
-            async () => {
-              const res = await (upcFetch ?? fetch)(env.UPC_LOOKUP_API_URL);
-              // Don't check status — just measuring reachability
-              await res.text();
-            },
-          ),
         ]);
 
         const results: TimingResult[] = [
@@ -122,7 +110,6 @@ export const Route = createFileRoute("/api/debug/timing")({
           dbParallelResult,
           usdaCounts,
           usdaBatch,
-          upcPing,
         ];
 
         const totalMs = Math.round(performance.now() - overallStart);

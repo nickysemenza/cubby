@@ -36,7 +36,6 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { type ResolvedProductCode, resolveProductScan } from "~/lib/scan-code";
 import { wasm } from "~/lib/wasm";
-import type { UpcLookupPort } from "~/server/clients/upc-lookup";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
@@ -54,6 +53,7 @@ import {
   resolveLiveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { readCachedUpcLookups } from "~/server/repo/upc-lookup-cache";
+import type { UpcLookupPort } from "~/server/services/upc";
 
 import { importImageFromUPC } from "./image-import";
 import { runMutationSideEffects } from "./mutation-side-effects";

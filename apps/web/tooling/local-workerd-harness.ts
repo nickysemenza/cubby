@@ -68,6 +68,7 @@ export function createLocalWorkerdHarness(
           R2_ACCESS_KEY_ID: "dummy",
           R2_SECRET_ACCESS_KEY: "dummy",
           USDA_API_URL: "http://127.0.0.1:9/",
+          UPC_UPSTREAM_DISABLED: "true",
           // Keep local runs keyless and deterministic like CI.
           AI_GATEWAY_API_KEY: "",
         },
@@ -77,7 +78,6 @@ export function createLocalWorkerdHarness(
         },
         bindingOverrides: {
           USDA_API: "local-offline-peers",
-          UPC_LOOKUP: "local-offline-peers",
           PURCHASE_AGENT: "local-offline-peers",
         },
       },

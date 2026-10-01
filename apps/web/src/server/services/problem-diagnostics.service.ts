@@ -13,10 +13,8 @@ import { UpcEnrichmentFreshness, ProblemItem } from "@cubby/schemas/problems";
 import type { ProjectAttentionItem } from "@cubby/schemas/project";
 
 import type { DiagnosticKey } from "~/entities/problem-query";
-import { env } from "~/env";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { proposeSizeFromTitle } from "~/lib/title-unit-size";
-import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import { findOrphanEntities } from "~/server/repo/entity-edge-source";
 import {
@@ -48,6 +46,7 @@ import { computeAttentionItems } from "~/server/repo/project";
 import { readCachedUpcLookups } from "~/server/repo/upc-lookup-cache";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
+import type { UpcLookupService } from "~/server/services/upc";
 
 type DiagnosticStatus =
   | { state: "healthy" }
@@ -68,7 +67,7 @@ export type DiagnosticSampleResult = DiagnosticMetadata & {
 export type DiagnosticCountResult = DiagnosticMetadata & { count: number };
 export type DiagnosticResult = DiagnosticSampleResult | DiagnosticCountResult;
 
-export type UpcLookupBatchPort = Pick<UPCLookupClient, "lookupBatch">;
+export type UpcLookupBatchPort = Pick<UpcLookupService, "lookupBatch">;
 
 export type DiagnosticRunOptions = {
   upcLookupClient?: UpcLookupBatchPort;
@@ -176,10 +175,7 @@ async function runUpcProposals(
         candidate.effectivePrice == null && lookup.priceDollars != null
           ? lookup.priceDollars
           : null,
-      imageUrl:
-        !candidate.hasImage && lookup.imageUrl
-          ? new URL(lookup.imageUrl, env.UPC_LOOKUP_API_URL).toString()
-          : null,
+      imageUrl: !candidate.hasImage && lookup.imageUrl ? lookup.imageUrl : null,
     };
     if (
       proposed.manufacturer == null &&

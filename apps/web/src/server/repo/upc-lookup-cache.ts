@@ -1,52 +1,105 @@
 /**
- * Durable cache for advisory UPC enrichment.
+ * Durable store for UPC identity answers (`UpcLookupCache`).
  *
  * This is intentionally a repo seam: callers provide the provider operation,
  * while this module owns the persistent freshness contract. A failed provider
  * call never replaces a last-known answer with an empty successful result.
+ * `manual` rows (hand-entered, imported from the retired lookup Worker) are
+ * authoritative and are never overwritten or aged out by a provider refresh.
  */
 import type { UpcEnrichmentFreshness } from "@cubby/schemas/problems";
-import type { UPCLookupResponse } from "@cubby/upc-contract";
-import { inArray, sql } from "drizzle-orm";
+import { createLogger } from "@cubby/worker-tracing";
+import { count, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
 
-import { PartialUpcBatchLookupError } from "~/server/clients/upc-lookup";
+import {
+  productSourceSchema,
+  type UPCLookupResponse,
+} from "~/contracts/upc.schemas";
 import type { Database } from "~/server/db";
 import { upcLookupCache } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
+const log = createLogger("UPC cache");
+
+/** A multi-UPC provider refresh failed partially; completed UPCs remain usable. */
+export class PartialUpcBatchLookupError extends Error {
+  constructor(
+    cause: Error,
+    readonly results: ReadonlyMap<string, UPCLookupResponse>,
+    readonly failedUpcs: readonly string[],
+  ) {
+    super(cause.message, { cause });
+    this.name = "PartialUpcBatchLookupError";
+  }
+}
+
 /** Provider data is advisory; refresh at most once per UPC per week. */
 const UPC_LOOKUP_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-type CachedUpcLookup = {
+export type CachedUpcLookup = {
   upc: string;
+  name: string | null;
   manufacturer: string | null;
   brand: string | null;
+  category: string | null;
+  description: string | null;
   priceDollars: number | null;
   imageUrl: string | null;
+  source: string;
   status: string;
   fetchedAt: Date;
 };
 
 const isFresh = (row: CachedUpcLookup, now: Date) =>
   row.status === "ready" &&
-  now.getTime() - row.fetchedAt.getTime() < UPC_LOOKUP_CACHE_MAX_AGE_MS;
+  (row.source === "manual" ||
+    now.getTime() - row.fetchedAt.getTime() < UPC_LOOKUP_CACHE_MAX_AGE_MS);
 
-const toLookup = (row: CachedUpcLookup): UPCLookupResponse => ({
+/** A ready row with a name is a product answer; without one it is a checked miss. */
+export const isUpcHit = (row: CachedUpcLookup) =>
+  row.status === "ready" && row.name != null;
+
+export const toUpcLookup = (row: CachedUpcLookup): UPCLookupResponse => ({
   upc: row.upc,
-  name: "",
+  name: row.name ?? "",
   manufacturer: row.manufacturer,
   brand: row.brand,
-  category: null,
-  description: null,
+  category: row.category,
+  description: row.description,
   priceDollars: row.priceDollars,
   imageUrl: row.imageUrl,
-  // Cache is materialized here, regardless of whether the upstream provider
-  // had its own cache bit. The caller only needs proposal fields.
-  source: "upcitemdb",
+  source: productSourceSchema.catch("upcitemdb").parse(row.source),
   cached: true,
 });
 
-const writeLookups = async (
+const providerFields = (hit: UPCLookupResponse | undefined) => ({
+  name: hit?.name ?? null,
+  manufacturer: hit?.manufacturer ?? null,
+  brand: hit?.brand ?? null,
+  category: hit?.category ?? null,
+  description: hit?.description ?? null,
+  priceDollars: hit?.priceDollars ?? null,
+  imageUrl: hit?.imageUrl ?? null,
+  source: hit?.source ?? "upcitemdb",
+});
+
+/** Cached rows (hits, checked misses and unavailable markers) for these UPCs. */
+export const getCachedUpcRows = async (
+  db: Database,
+  upcs: readonly string[],
+): Promise<CachedUpcLookup[]> =>
+  upcs.length === 0
+    ? []
+    : getDb(db)
+        .select()
+        .from(upcLookupCache)
+        .where(inArray(upcLookupCache.upc, [...upcs]));
+
+/**
+ * Record provider answers for every requested UPC: a hit stores its fields, an
+ * absent entry stores a checked miss. Never overwrites a `manual` row.
+ */
+export const recordUpcLookups = async (
   db: Database,
   requestedUpcs: readonly string[],
   hits: ReadonlyMap<string, UPCLookupResponse>,
@@ -56,31 +109,31 @@ const writeLookups = async (
   await getDb(db)
     .insert(upcLookupCache)
     .values(
-      requestedUpcs.map((upc) => {
-        const hit = hits.get(upc);
-        return {
-          upc,
-          manufacturer: hit?.manufacturer ?? null,
-          brand: hit?.brand ?? null,
-          priceDollars: hit?.priceDollars ?? null,
-          imageUrl: hit?.imageUrl ?? null,
-          // A missing map entry is a checked negative answer, not a provider
-          // error: this function only runs after lookupBatch resolved.
-          status: "ready",
-          fetchedAt,
-        };
-      }),
+      requestedUpcs.map((upc) => ({
+        upc,
+        ...providerFields(hits.get(upc)),
+        // A missing map entry is a checked negative answer, not a provider
+        // error: this function only runs after the provider call resolved.
+        status: "ready",
+        fetchedAt,
+      })),
     )
     .onConflictDoUpdate({
       target: upcLookupCache.upc,
       set: {
+        name: sql`excluded."name"`,
         manufacturer: sql`excluded."manufacturer"`,
         brand: sql`excluded."brand"`,
+        category: sql`excluded."category"`,
+        description: sql`excluded."description"`,
         priceDollars: sql`excluded."priceDollars"`,
         imageUrl: sql`excluded."imageUrl"`,
+        source: sql`excluded."source"`,
         status: "ready",
         fetchedAt,
       },
+      // Hand-entered rows win over every provider answer.
+      setWhere: sql`${upcLookupCache.source} <> 'manual'`,
     });
 };
 
@@ -97,16 +150,32 @@ const writeUnavailable = async (
     .onConflictDoNothing({ target: upcLookupCache.upc });
 };
 
+/** Case-insensitive substring search over cached product identity. */
+export const searchCachedUpcs = async (
+  db: Database,
+  query: string,
+  limit: number,
+): Promise<{ rows: CachedUpcLookup[]; total: number }> => {
+  const pattern = `%${query.replace(/[\\%_]/g, "\\$&")}%`;
+  const where = sql`${isNotNull(upcLookupCache.name)} AND (${or(
+    ilike(upcLookupCache.name, pattern),
+    ilike(upcLookupCache.brand, pattern),
+    ilike(upcLookupCache.manufacturer, pattern),
+  )})`;
+  const [rows, [total]] = await Promise.all([
+    getDb(db).select().from(upcLookupCache).where(where).limit(limit),
+    getDb(db).select({ n: count() }).from(upcLookupCache).where(where),
+  ]);
+  return { rows, total: total?.n ?? 0 };
+};
+
 const readyCacheRow = (
   upc: string,
   hit: UPCLookupResponse | undefined,
   fetchedAt: Date,
 ): CachedUpcLookup => ({
   upc,
-  manufacturer: hit?.manufacturer ?? null,
-  brand: hit?.brand ?? null,
-  priceDollars: hit?.priceDollars ?? null,
-  imageUrl: hit?.imageUrl ?? null,
+  ...providerFields(hit),
   status: "ready",
   fetchedAt,
 });
@@ -117,8 +186,11 @@ const applyReadyCacheRows = (
   hits: ReadonlyMap<string, UPCLookupResponse>,
   fetchedAt: Date,
 ) => {
-  for (const upc of upcs)
+  for (const upc of upcs) {
+    // A manual row is never replaced, so keep serving it from memory too.
+    if (cached.get(upc)?.source === "manual") continue;
     cached.set(upc, readyCacheRow(upc, hits.get(upc), fetchedAt));
+  }
 };
 
 const refreshUpcCache = async (
@@ -131,16 +203,16 @@ const refreshUpcCache = async (
   if (refresh.length === 0) return false;
   try {
     const hits = await lookupBatch(refresh);
-    await writeLookups(db, refresh, hits, checkedAt);
+    await recordUpcLookups(db, refresh, hits, checkedAt);
     applyReadyCacheRows(cached, refresh, hits, checkedAt);
     return false;
   } catch (error) {
-    console.error("[readCachedUpcLookups] UPC provider refresh failed:", error);
+    log.error("UPC provider refresh failed", { error });
     const partial = error instanceof PartialUpcBatchLookupError ? error : null;
     const failed = new Set(partial?.failedUpcs ?? refresh);
     const completed = refresh.filter((upc) => !failed.has(upc));
     if (partial) {
-      await writeLookups(db, completed, partial.results, checkedAt);
+      await recordUpcLookups(db, completed, partial.results, checkedAt);
       applyReadyCacheRows(cached, completed, partial.results, checkedAt);
     }
     const firstFailures = [...failed].filter((upc) => !cached.has(upc));
@@ -148,10 +220,7 @@ const refreshUpcCache = async (
     for (const upc of firstFailures) {
       cached.set(upc, {
         upc,
-        manufacturer: null,
-        brand: null,
-        priceDollars: null,
-        imageUrl: null,
+        ...providerFields(undefined),
         status: "unavailable",
         fetchedAt: checkedAt,
       });
@@ -186,10 +255,7 @@ export const readCachedUpcLookups = async (
     };
   }
 
-  const rows = await getDb(db)
-    .select()
-    .from(upcLookupCache)
-    .where(inArray(upcLookupCache.upc, requested));
+  const rows = await getCachedUpcRows(db, requested);
   const cached = new Map(rows.map((row) => [row.upc, row]));
   const refresh = requested.filter((upc) => {
     const row = cached.get(upc);
@@ -210,7 +276,9 @@ export const readCachedUpcLookups = async (
     .filter(
       (row): row is CachedUpcLookup => row != null && row.status === "ready",
     );
-  for (const row of usedRows) lookups.set(row.upc, toLookup(row));
+  for (const row of usedRows) {
+    if (isUpcHit(row)) lookups.set(row.upc, toUpcLookup(row));
+  }
 
   const unavailableCount = requested.filter(
     (upc) => cached.get(upc)?.status !== "ready",

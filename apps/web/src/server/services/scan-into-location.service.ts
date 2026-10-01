@@ -23,7 +23,6 @@ import type {
   ScanAtLocationOut,
 } from "@cubby/schemas/scan";
 
-import type { UpcLookupPort } from "~/server/clients/upc-lookup";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
@@ -39,6 +38,7 @@ import {
   resolveCreatedOrInvariant,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
+import type { UpcLookupPort } from "~/server/services/upc";
 
 import { runMutationSideEffects } from "./mutation-side-effects";
 import { findOrCreateByCode } from "./product-orchestration.service";

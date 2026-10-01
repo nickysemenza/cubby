@@ -21,7 +21,6 @@ type LocalDevEnv = Env &
     CUBBY_DEV_PROFILE: "offline" | "integrations";
     CUBBY_DEV_MIGRATION_COUNT: string;
     CUBBY_DEV_MIGRATION_HASH: string;
-    UPC_LOOKUP_API_KEY: string;
   };
 
 const loopback = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -86,16 +85,11 @@ async function readiness(env: LocalDevEnv, fixturesRequired: boolean) {
         [LOCAL_FIXTURE_VERSION],
       );
       fixturesReady = fixturesRow.parse(fixtures.rows[0]).fixtures_ready;
-      const peers = await Promise.all([
-        env.USDA_API.fetch("http://local/counts"),
-        env.UPC_LOOKUP.fetch("http://local/stats", {
-          headers: { "X-API-Key": env.UPC_LOOKUP_API_KEY },
-        }),
-      ]);
-      peersReady = peers.every((response: Response) => response.ok);
+      const usda = await env.USDA_API.fetch("http://local/counts");
+      peersReady = usda.ok;
       if (!peersReady)
         throw new Error(
-          "Local USDA/UPC data is unavailable; restart pnpm dev to prepare peers",
+          "Local USDA data is unavailable; restart pnpm dev to prepare peers",
         );
     }
     const ready = !fixturesRequired || fixturesReady;

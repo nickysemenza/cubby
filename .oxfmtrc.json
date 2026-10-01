@@ -42,7 +42,6 @@
     "**/drizzle/**",
     "pnpm-lock.yaml",
     "**/node_modules/**",
-    "apps/upc-lookup/public/**",
     "apps/usda-api/data/**",
     "apps/web/src/components/reui/**",
     "apps/web/src/components/ui/**",

@@ -3,7 +3,7 @@ import { z } from "zod";
 export const DEV_USER_EMAIL = "dev@cubby.localhost";
 export const DEV_USER_PASSWORD = "cubby-dev-local-only";
 export const DEV_USER_NAME = "Cubby Dev";
-export const LOCAL_FIXTURE_VERSION = 1;
+export const LOCAL_FIXTURE_VERSION = 2;
 
 // This guard also runs in workerd; keep it free of Node-only profile tooling.
 const ALLOWED_HOSTS = new Set(["localhost", "127.0.0.1"]);

@@ -1,7 +1,5 @@
 import type { ProductId, RecipeId } from "@cubby/schemas/identifiers";
 
-import { env } from "~/env";
-import type { UpcLookupPort } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import {
   associateImagesWithProduct,
@@ -9,6 +7,7 @@ import {
   recipeHasImages,
 } from "~/server/repo/image";
 import { importImageFromUrl } from "~/server/services/image-storage.service";
+import type { UpcLookupPort } from "~/server/services/upc";
 
 export type ImageUrlImportPort = typeof importImageFromUrl;
 
@@ -40,10 +39,7 @@ export const importImageFromUPC = async (
   const upcData = await upcLookupClient.lookup(upc);
   if (!upcData?.imageUrl) return null;
 
-  const fullImageUrl = new URL(
-    upcData.imageUrl,
-    env.UPC_LOOKUP_API_URL,
-  ).toString();
+  const fullImageUrl = upcData.imageUrl;
   const imported = await importImageFromUrl(db, {
     sourceUrl: fullImageUrl,
     filenamePrefix: `upc-${upc}`,

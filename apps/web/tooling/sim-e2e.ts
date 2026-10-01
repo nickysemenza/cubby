@@ -87,7 +87,7 @@ for (const [key, value] of Object.entries({
   R2_ENDPOINT: "http://127.0.0.1:9",
   R2_BUCKET_NAME: "cubby-sim",
   R2_PUBLIC_URL: "http://127.0.0.1:9",
-  UPC_LOOKUP_API_URL: "http://127.0.0.1:9/",
+  UPC_UPSTREAM_DISABLED: "true",
   BETTER_AUTH_SECRET: "cubby-sim-local-secret",
 }))
   process.env[key] ??= value;

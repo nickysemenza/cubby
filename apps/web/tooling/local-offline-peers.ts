@@ -21,16 +21,6 @@ export default {
     if (pathname.startsWith("/api/foods/"))
       return Response.json({ error: "Food not found" }, { status: 404 });
 
-    if (pathname === "/lookup/batch")
-      return Response.json({ products: [], pending: 0 });
-    if (pathname === "/search")
-      return Response.json({ products: [], total: 0 });
-    if (pathname.startsWith("/lookup/"))
-      return Response.json(
-        { found: false, upc: pathname.slice("/lookup/".length) },
-        { status: 404 },
-      );
-
     return Response.json(
       { error: "External service is unavailable in this local run" },
       { status: 503 },
