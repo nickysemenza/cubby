@@ -34,6 +34,7 @@ import { entityDetailFor } from "~/entities/entity-detail";
 import { readReferenceField } from "~/entities/entity-references";
 import { enumFieldLabel } from "~/entities/enum-field-display";
 import { generatedBrowserCrudEntities } from "~/entities/generated/entity-routes.gen";
+import { useHydrated } from "~/hooks/useHydrated";
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 
 import {
@@ -518,9 +519,11 @@ function statusFieldsForRows(
   return fields;
 }
 
+const NO_RECORDS: readonly unknown[] = [];
+
 function BoundRecordSuggestions({
   entity,
-  records,
+  records: allRecords,
   fieldKeys,
   children,
   operations = productionEntitySuggestionsOperations,
@@ -556,6 +559,12 @@ function BoundRecordSuggestions({
   // One id per page mount, groups every suggestFields call this provider
   // makes into one `ai_suggest` run instead of a run per row/field.
   const [runKey] = useState(() => crypto.randomUUID());
+  // Suggestions only ever resolve in the browser. Deriving a request basis and
+  // a query observer per row during SSR cost list pages hundreds of ms of
+  // Worker CPU for nothing; skipping it until hydration keeps the server render
+  // and the first client render identical.
+  const hydrated = useHydrated();
+  const records = hydrated ? allRecords : NO_RECORDS;
   const targets = visibleSuggestTargets(entity, fieldKeys);
   const requests = requestsForRecords(entity, records, targets, runKey);
   // Identical records can share one query, while each row retains its own review state.
@@ -662,7 +671,11 @@ function BoundRecordSuggestions({
     },
   };
   const count = actionableRowSuggestionCount(entity, rows, visit?.dismissed);
-  const checking = queries.some((query) => query.isFetching || query.isPending);
+  // Before hydration no query exists yet, but checking is about to start;
+  // saying so keeps the status line (and the table below it) where it lands.
+  const checking =
+    (!hydrated && allRecords.length > 0 && targets.targets.length > 0) ||
+    queries.some((query) => query.isFetching || query.isPending);
   const failures = queries.filter((query) => query.isError).length;
   // The client never asked at all — every requestable target's basis fell
   // short of `isBasisSufficient`, not that Jev declined once asked. Name the

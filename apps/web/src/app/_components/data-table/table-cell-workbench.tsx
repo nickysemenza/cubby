@@ -81,6 +81,7 @@ export function TableCellWorkbench({
   summary,
   children,
   trigger = "summary",
+  inactive = false,
   open: controlledOpen,
   onOpenChange,
 }: {
@@ -89,6 +90,12 @@ export function TableCellWorkbench({
   summary: ReactNode;
   children: ReactNode;
   trigger?: "summary" | "icon";
+  /**
+   * Icon trigger only: render the rail slot without its control. The summary
+   * keeps the same parent either way, so toggling this never remounts it (or
+   * drops focus inside it) — see row-activity.
+   */
+  inactive?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -100,12 +107,15 @@ export function TableCellWorkbench({
     onOpenChange?.(next);
   };
 
-  if (isMobile) {
+  if (trigger === "icon") {
+    const body = open ? children : null;
     return (
-      <>
-        {trigger === "icon" ? (
-          <CellFrame
-            trailing={
+      <CellFrame
+        trailing={
+          inactive ? (
+            <span aria-hidden className="size-5 shrink-0" />
+          ) : isMobile ? (
+            <>
               <Button
                 {...iconTriggerProps(title)}
                 onClick={(event) => {
@@ -115,17 +125,41 @@ export function TableCellWorkbench({
               >
                 {iconTriggerGlyph}
               </Button>
-            }
-          >
-            {summary}
-          </CellFrame>
-        ) : (
-          <SummaryTrigger
-            title={title}
-            summary={summary}
-            onClick={() => setOpen(true)}
-          />
-        )}
+              <ResponsiveSheet
+                open={open}
+                onOpenChange={setOpen}
+                title={title}
+                description={description}
+                className="md:max-w-2xl"
+              >
+                {body}
+              </ResponsiveSheet>
+            </>
+          ) : (
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger render={<Button {...iconTriggerProps(title)} />}>
+                {iconTriggerGlyph}
+              </PopoverTrigger>
+              <WorkbenchPopoverContent title={title} description={description}>
+                {body}
+              </WorkbenchPopoverContent>
+            </Popover>
+          )
+        }
+      >
+        {summary}
+      </CellFrame>
+    );
+  }
+
+  if (isMobile) {
+    return (
+      <>
+        <SummaryTrigger
+          title={title}
+          summary={summary}
+          onClick={() => setOpen(true)}
+        />
         <ResponsiveSheet
           open={open}
           onOpenChange={setOpen}
@@ -139,18 +173,8 @@ export function TableCellWorkbench({
     );
   }
 
-  const popoverTrigger =
-    trigger === "icon" ? (
-      <CellFrame
-        trailing={
-          <PopoverTrigger render={<Button {...iconTriggerProps(title)} />}>
-            {iconTriggerGlyph}
-          </PopoverTrigger>
-        }
-      >
-        {summary}
-      </CellFrame>
-    ) : (
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         render={
           <button
@@ -163,25 +187,36 @@ export function TableCellWorkbench({
       >
         {summary}
       </PopoverTrigger>
-    );
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      {popoverTrigger}
-      <PopoverContent
-        align="start"
-        className="w-[min(42rem,calc(100vw-2rem))] p-0"
-      >
-        <PopoverHeader className="border-b border-border px-4 py-3">
-          <PopoverTitle>{title}</PopoverTitle>
-          {description ? (
-            <p className="text-xs text-muted-foreground">{description}</p>
-          ) : null}
-        </PopoverHeader>
-        <div className="max-h-[min(36rem,70vh)] overflow-y-auto p-4">
-          {open ? children : null}
-        </div>
-      </PopoverContent>
+      <WorkbenchPopoverContent title={title} description={description}>
+        {open ? children : null}
+      </WorkbenchPopoverContent>
     </Popover>
+  );
+}
+
+function WorkbenchPopoverContent({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <PopoverContent
+      align="start"
+      className="w-[min(42rem,calc(100vw-2rem))] p-0"
+    >
+      <PopoverHeader className="border-b border-border px-4 py-3">
+        <PopoverTitle>{title}</PopoverTitle>
+        {description ? (
+          <p className="text-xs text-muted-foreground">{description}</p>
+        ) : null}
+      </PopoverHeader>
+      <div className="max-h-[min(36rem,70vh)] overflow-y-auto p-4">
+        {children}
+      </div>
+    </PopoverContent>
   );
 }

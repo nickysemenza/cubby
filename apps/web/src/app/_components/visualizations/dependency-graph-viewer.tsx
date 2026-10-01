@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { type ComponentProps, useMemo } from "react";
 
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 
-import { DependencyGraphCanvas } from "./dependency-graph-canvas";
+import type { DependencyGraphCanvas as DependencyGraphCanvasComponent } from "./dependency-graph-canvas";
 import {
   layoutGraph,
   graphEdgeIdentity,
@@ -16,6 +17,21 @@ import {
 } from "./dependency-graph-model";
 
 import "./dependency-graph.css";
+
+const LayoutLoading = () => <output>Loading graph layout…</output>;
+
+// Graphviz layout runs in a browser Web Worker; keep it out of Worker uploads.
+const DependencyGraphCanvas = browserOnlyLazy<
+  ComponentProps<typeof DependencyGraphCanvasComponent>
+>(
+  import.meta.env.SSR
+    ? null
+    : () =>
+        import("./dependency-graph-canvas").then((module) => ({
+          default: module.DependencyGraphCanvas,
+        })),
+  LayoutLoading,
+);
 
 export function DependencyGraphViewer({
   data,

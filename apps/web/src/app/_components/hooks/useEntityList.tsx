@@ -8,7 +8,7 @@ import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useSearch } from "@tanstack/react-router";
 import { flexRender } from "@tanstack/react-table";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -535,6 +535,26 @@ export function useEntityList<
   const shouldUseMappings = hasUnitMappings && getMappings;
   const effectiveMappingsMap = shouldUseMappings ? mappingsMap : null;
 
+  // Columns key on `subject`; an inline resolver was a new function every
+  // render, so each list render rebuilt every column and remounted every cell.
+  // Cells call it while rendering, so it reads the latest resolver from a ref.
+  const resolveSubject = useRef<
+    ((row: TData) => EntityActionSubject | null) | null
+  >(null);
+  resolveSubject.current = subject
+    ? (row: TData) =>
+        (subject.readFields ?? []).every((field) => {
+          const state = enrichmentState(row.id, field);
+          return !state || state.state === "ready";
+        })
+          ? subject.resolve(row)
+          : null
+    : null;
+  const stableSubject = useCallback(
+    (row: TData) => resolveSubject.current?.(row) ?? null,
+    [],
+  );
+
   const rowActionsGuard = tree?.rowIsEntity;
   const worklistColumns = worklistColumnPresentation(worklist);
   const presentation = useEntityListPresentation<TData>({
@@ -556,15 +576,7 @@ export function useEntityList<
     hiddenFilterColumns,
     expandable: tree?.expandable,
     rowLink: tree?.rowLink,
-    subject: subject
-      ? (row) =>
-          (subject.readFields ?? []).every((field) => {
-            const state = enrichmentState(row.id, field);
-            return !state || state.state === "ready";
-          })
-            ? subject.resolve(row)
-            : null
-      : undefined,
+    subject: subject ? stableSubject : undefined,
     rowActionGuard: rowActionsGuard,
   });
   const {

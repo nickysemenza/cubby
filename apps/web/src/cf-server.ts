@@ -36,6 +36,7 @@ import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
 import { recordDatabaseWrite } from "./server/database-freshness/client";
 import { withRequestDb, withRequestDbClient } from "./server/db";
 import {
+  requestOperations,
   serverTimingHeader,
   withDatabaseRequestMetrics,
 } from "./server/db-observability";
@@ -444,9 +445,17 @@ const handler = {
                               endSpan();
                               return correlatedResponse;
                             }
+                            // Captured by reference: a batch names its
+                            // operations as they run, after this returns.
+                            const operations = requestOperations();
                             return observeResponseBody(
                               correlatedResponse,
                               (observation) => {
+                                if (operations.length > 0)
+                                  span.setAttribute(
+                                    "cubby.operations",
+                                    operations.join(" "),
+                                  );
                                 span.setAttributes({
                                   "cubby.response.body.outcome":
                                     observation.outcome,

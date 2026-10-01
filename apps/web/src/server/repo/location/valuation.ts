@@ -20,7 +20,7 @@ import type {
   LocationValuation,
   LocationValuationSummaryOut,
 } from "@cubby/schemas/location";
-import { eq, type SQL, sql } from "drizzle-orm";
+import { and, eq, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -28,6 +28,7 @@ import { inventoryEntry, location, product } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import {
   type InventoryValuations,
+  loadInventoryValuations,
   loadLiveInventoryValuations,
 } from "~/server/repo/inventory/valuation";
 import { loadEffectiveProductPricesById } from "~/server/repo/product/pricing";
@@ -98,16 +99,43 @@ export const loadDirectValuationSql = async (
 export const getLocationValuationSummary = async (
   db: Database,
 ): Promise<LocationValuationSummaryOut> => {
-  const { entries } = await loadLocationValuationInputs(db);
-  const direct = directValuationsByLocation(entries);
-  const rows = await unwrapDb(db)
-    .select({
-      id: location.id,
-      shortcode: location.shortcode,
-      name: location.name,
-    })
-    .from(location)
-    .where(notDeleted(location));
+  const client = unwrapDb(db);
+  // Home asks for direct stock value only, so it reads inventory once and
+  // skips the whole-tree inputs (every location's own product price, a second
+  // inventory join) that `loadLocationValuationInputs` exists for. Those extra
+  // serial round trips were most of this read's time on every Home load.
+  // An entry whose product is missing or deleted values at null either way.
+  const [stock, rows] = await Promise.all([
+    client
+      .select({
+        id: inventoryEntry.id,
+        productId: inventoryEntry.productId,
+        amountValue: inventoryEntry.amountValue,
+        amountUnit: inventoryEntry.amountUnit,
+        locationId: inventoryEntry.locationId,
+      })
+      .from(inventoryEntry)
+      .where(
+        and(notDeleted(inventoryEntry), eq(inventoryEntry.placement, "stock")),
+      ),
+    client
+      .select({
+        id: location.id,
+        shortcode: location.shortcode,
+        name: location.name,
+      })
+      .from(location)
+      .where(notDeleted(location)),
+  ]);
+  const valuations = await loadInventoryValuations(db, stock);
+  const direct = directValuationsByLocation(
+    stock.map((entry) => ({
+      ...entry,
+      placement: "stock" as const,
+      productName: "",
+      valuation: valuations.get(entry.id) ?? null,
+    })),
+  );
   const valued = rows
     .map((row) => ({ ...row, value: direct.get(row.id) ?? 0 }))
     .filter((row) => row.value > 0)
