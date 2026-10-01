@@ -1,0 +1,35 @@
+{
+  "_doc": "Canonical scan-code -> GTIN-14 vectors. Rust (recipebridge scan_code_gtin14), the web wasm wrapper, the pure-TS normalizer in @cubby/schemas/external-id, and Swift ScanCodes.gtin14 all read this file. `gtin14` is the canonical result (null = rejected). `schemaGtin14` appears only where the pure-TS normalizer (no wasm, no ISBN check digits, no separator stripping) is expected to differ. General GTIN check digits are intentionally NOT enforced; only ISBN check digits are.",
+  "vectors": [
+    { "input": "12345670", "gtin14": "00000012345670" },
+    { "input": "012345678905", "gtin14": "00012345678905" },
+    { "input": "0012345678905", "gtin14": "00012345678905" },
+    { "input": "00012345678905", "gtin14": "00012345678905" },
+    { "input": "9780306406157", "gtin14": "09780306406157" },
+    { "input": "0306406152", "gtin14": "09780306406157", "schemaGtin14": null },
+    {
+      "input": "0-306-40615-2",
+      "gtin14": "09780306406157",
+      "schemaGtin14": null
+    },
+    { "input": "080442957X", "gtin14": "09780804429573", "schemaGtin14": null },
+    { "input": "080442957x", "gtin14": "09780804429573", "schemaGtin14": null },
+    {
+      "input": " 012345678905 ",
+      "gtin14": "00012345678905",
+      "schemaGtin14": null
+    },
+    { "input": "1234567", "gtin14": null },
+    { "input": "123456789", "gtin14": null },
+    { "input": "1234567890", "gtin14": null },
+    { "input": "12345678901", "gtin14": null },
+    { "input": "012345678901234", "gtin14": null },
+    {
+      "input": "9780306406158",
+      "gtin14": "09780306406158",
+      "schemaGtin14": "09780306406158"
+    },
+    { "input": "ABC123456789", "gtin14": null },
+    { "input": "", "gtin14": null }
+  ]
+}

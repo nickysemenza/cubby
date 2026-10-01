@@ -1,0 +1,64 @@
+{
+  "_doc": "Scanned-bin verdict vectors. Read by sweep-bin-plan.ts tests and Swift BinPlan tests. Verdict `reason` uses the Swift vocabulary (`root` = TS `home`). `{verb}` in a message is 'sweeping' on web and 'counting' on Apple.",
+  "nodes": [
+    { "code": "LOC-2345", "name": "Home", "parent": null },
+    { "code": "LOC-3456", "name": "Garage", "parent": "LOC-2345" },
+    { "code": "LOC-4567", "name": "Shelf A", "parent": "LOC-3456" },
+    { "code": "LOC-5678", "name": "Bin 1", "parent": "LOC-4567" },
+    { "code": "LOC-6789", "name": "Bin 2", "parent": "LOC-5678" },
+    { "code": "LOC-789A", "name": "Kitchen", "parent": "LOC-2345" },
+    { "code": "LOC-89AB", "name": "Bin 9", "parent": "LOC-789A" }
+  ],
+  "cases": [
+    { "anchor": "LOC-4567", "scanned": "LOC-5678", "verdict": "confirm" },
+    {
+      "anchor": "LOC-4567",
+      "scanned": "LOC-6789",
+      "verdict": "adopt",
+      "adoptName": "Bin 2",
+      "currentParentName": "Bin 1"
+    },
+    {
+      "anchor": "LOC-4567",
+      "scanned": "LOC-89AB",
+      "verdict": "adopt",
+      "adoptName": "Bin 9",
+      "currentParentName": "Kitchen"
+    },
+    {
+      "anchor": "LOC-4567",
+      "scanned": "LOC-4567",
+      "verdict": "refuse",
+      "reason": "self",
+      "message": "That's Shelf A — the one you're {verb}."
+    },
+    {
+      "anchor": "LOC-4567",
+      "scanned": "LOC-3456",
+      "verdict": "refuse",
+      "reason": "ancestor",
+      "message": "Garage contains Shelf A — it can't move inside it."
+    },
+    {
+      "anchor": "LOC-6789",
+      "scanned": "LOC-3456",
+      "verdict": "refuse",
+      "reason": "ancestor",
+      "message": "Garage contains Bin 2 — it can't move inside it."
+    },
+    {
+      "anchor": "LOC-4567",
+      "scanned": "LOC-2345",
+      "verdict": "refuse",
+      "reason": "root",
+      "message": "Home holds the whole house — it can't sit on a shelf."
+    },
+    {
+      "anchor": "LOC-2345",
+      "scanned": "LOC-5678",
+      "verdict": "adopt",
+      "adoptName": "Bin 1",
+      "currentParentName": "Shelf A"
+    }
+  ]
+}

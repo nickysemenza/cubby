@@ -1,9 +1,5 @@
 import { type ActorContext, actorInRun } from "@cubby/schemas/context";
-import {
-  GTIN_KIND,
-  GTIN_SOURCE,
-  normalizeGtin,
-} from "@cubby/schemas/external-id";
+import { GTIN_KIND, GTIN_SOURCE } from "@cubby/schemas/external-id";
 import {
   type LedgerPartyId,
   parseEntityId,
@@ -37,6 +33,7 @@ import * as Sentry from "@sentry/tanstackstart-react";
 import { and, asc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
 import {
   entityAttachment,
@@ -151,7 +148,9 @@ async function productCandidates(
   // photo-first Product never becomes an exact match for its later order line.
   const gtins = [
     ...new Set(
-      exactIds.map(normalizeGtin).filter((id): id is string => Boolean(id)),
+      exactIds
+        .map((id) => wasm.scan_code_gtin14(id))
+        .filter((id): id is string => Boolean(id)),
     ),
   ];
   const exact = exactIds.length

@@ -26,4 +26,17 @@ struct ScanCodeTests {
     func scanKey(raw: String, key: String) {
         #expect(ScanCodes.key(forScanned: raw) == key)
     }
+
+    /// The canonical rule lives in recipebridge; the web wasm wrapper and the pure-TS normalizer
+    /// read the same vectors (`packages/shared/golden-vectors/gtin.json`).
+    @Test func gtin14MatchesTheSharedGoldenVectors() throws {
+        struct Vector: Decodable {
+            let input: String
+            let gtin14: String?
+        }
+        struct File: Decodable { let vectors: [Vector] }
+        for vector in try GoldenVectors.decode(File.self, named: "gtin").vectors {
+            #expect(ScanCodes.gtin14(vector.input) == vector.gtin14, "input \(vector.input)")
+        }
+    }
 }
