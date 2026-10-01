@@ -766,6 +766,23 @@ export default defineEntity({
   },
   relations: [
     {
+      key: "defaultSpendingCategory",
+      label: "Default spending category",
+      target: "spendingCategory",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Vendor.defaultSpendingCategoryId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "Vendor.defaultSpendingCategoryId", direction: "incoming" },
+        ],
+      },
+    },
+    {
       key: "logo",
       label: "Logo image",
       target: "image",
