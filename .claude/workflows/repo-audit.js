@@ -55,7 +55,7 @@ You are auditing the cubby monorepo at ${ROOT}. It is a personal (single-user) p
 
 HARD RULES:
 - NEVER look inside .claude/, node_modules/, target/, dist/, or generated files (routeTree.gen.ts, *.gen.*). Findings there are invalid.
-- ${ROOT}/AGENTS.md and ${ROOT}/README.md document intentional conventions and explicit carve-outs. READ AGENTS.md FIRST. A finding that re-flags a documented carve-out or intentional decision is INVALID (e.g. raw useMutation at the 5 documented carve-out sites, restore-not-implemented for soft delete, raw <table> for matrices/debug surfaces, unsafe*Id at genuine string boundaries, dev-DB-is-prod-Neon).
+- ${ROOT}/AGENTS.md, ${ROOT}/README.md, and ${ROOT}/docs/development.md document intentional conventions and explicit carve-outs. READ AGENTS.md FIRST. A finding that re-flags a documented carve-out or intentional decision is INVALID (e.g. raw useMutation at the 5 documented carve-out sites, restore-not-implemented for soft delete, raw <table> for matrices/debug surfaces, unsafe*Id at genuine string boundaries, dev-DB-is-prod-Neon).
 - This is a single-user personal tool: skip multi-tenant, GDPR, rate-limit-per-user, and accessibility-for-others findings.
 - Only report findings you VERIFIED by reading the actual code (not just grep hits). Include exact file path (relative to repo root) and line number.
 - Severity honestly: critical = data loss / security hole / prod crash; high = real bug users hit; medium = latent bug or meaningful debt; low = polish. Do NOT inflate.
@@ -229,7 +229,7 @@ Look for: high-risk modules with zero test coverage (server/repo transactional m
     codexEffort: "low",
     prompt: `${COMMON}
 LANE: Docs & CI accuracy.
-Scope: README.md, AGENTS.md, docs/, .github/workflows/, scripts/, docker-compose.yml, .env.example.
+Scope: README.md, AGENTS.md, docs/ (including docs/development.md), .github/workflows/, scripts/, docker-compose.yml, .env.example.
 Look for: README claims that contradict the actual code (commands that no longer exist in package.json, described routes/features that were removed — check docs mention any removed routes); CI workflow steps referencing deleted scripts or wrong paths; workflow jobs with continue-on-error that would mask failures (there was a past incident); stale docs/ files describing superseded designs without a superseded marker; broken relative links in markdown. Verify each claim against the actual file it references.`,
   },
   {

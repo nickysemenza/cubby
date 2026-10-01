@@ -66,8 +66,9 @@ trusted household is the only audience, error surfaces (toasts, Technical
 details, HTTP/MCP error bodies) show raw diagnostics — SQL text and
 parameters, Postgres SQLSTATE codes, upstream response bodies — and are never
 masked or softened into generic messages; the only redaction is
-credential-shaped values (`scrubErrorMessage`). Read only the relevant README
-heading for architecture, commands, entities, deployment, or roadmap context.
+credential-shaped values (`scrubErrorMessage`). The README holds the entity map
+and example household scenarios; [development](docs/development.md) holds
+architecture, commands, testing, and deployment. Read only the relevant heading.
 
 ## Skill routing
 

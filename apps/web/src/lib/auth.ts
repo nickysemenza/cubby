@@ -231,7 +231,7 @@ export const auth = betterAuth({
   ],
   advanced: advancedOptions,
   // In dev, trust any localhost/127.0.0.1 origin regardless of port so worktree
-  // dev servers (which run on auto-assigned ports — see README "Worktrees") can
+  // dev servers (which run on auto-assigned ports — see docs/local-development.md) can
   // perform auth POSTs. The session cookie itself isn't port-scoped (RFC 6265) and
   // lives in the shared DB, so an existing login already carries across ports; this
   // only unblocks origin validation.

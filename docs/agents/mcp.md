@@ -1,5 +1,8 @@
 # MCP operating patterns
 
+The [README entity map](../../README.md#entities) says which entity holds what
+and how they relate; check it before choosing a tool.
+
 Read summaries and counts first. Narrow list reads with filters, page only as
 needed, and use `ids` filters for known records. Read tool input schemas first;
 consult the catalog only when they do not answer a required field or action.

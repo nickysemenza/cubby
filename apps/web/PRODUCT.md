@@ -58,7 +58,7 @@ Cubby joins recipes to specific stocked products, locations, prices, unit mappin
 
 ## Evidence on Hand
 
-- `../../README.md` is the canonical source for Cubby’s purpose, tenets, capabilities, architecture, entities, operating constraints, and roadmap.
+- `../../README.md` is the canonical source for Cubby’s purpose, tenets, household use cases, entities, and example scenarios; `../../docs/development.md` covers architecture and operations.
 - `../../docs/inventory-audit.md` records the deliberate recount model and its known workflow constraints.
 - `../../docs/terminology.md` is the canonical glossary for distinctions such as Vendor, Purchase, Expense, and settlement evidence.
 - `../../docs/todos.md` contains the authoritative product backlog and preserved design decisions.

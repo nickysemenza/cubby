@@ -2,7 +2,7 @@
 
 A glossary disambiguating Cubby's domain concepts and how each one is named in
 the **UI**, in **code/schema**, and in the **database** (Postgres table). The
-canonical entity overview lives in [README.md](../README.md#-entities); this doc
+canonical entity overview lives in [README.md](../README.md#entities); this doc
 exists to resolve the naming drift that the audit flagged — the same concept
 sometimes wears three different names across layers.
 
