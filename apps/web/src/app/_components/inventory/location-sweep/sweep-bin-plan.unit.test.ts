@@ -179,10 +179,7 @@ describe("golden vectors", () => {
       ).toEqual({
         verdict: vector.verdict,
         reason: "reason" in vector ? vector.reason : undefined,
-        message:
-          "message" in vector
-            ? vector.message.replace("{verb}", "sweeping")
-            : undefined,
+        message: vector.message?.replace("{verb}", "sweeping"),
         adoptName: "adoptName" in vector ? vector.adoptName : undefined,
         currentParentName:
           "currentParentName" in vector ? vector.currentParentName : undefined,

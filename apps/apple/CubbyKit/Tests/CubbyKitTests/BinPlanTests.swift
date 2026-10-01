@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import CubbyKit
@@ -102,6 +103,10 @@ struct BinPlanTests {
                 "valuation": NSNull(), "createdAt": "2026-01-01T00:00:00.000Z",
                 "updatedAt": "2026-01-01T00:00:00.000Z", "childCount": 0, "directItemCount": 0,
                 "totalItemCount": 0,
+                "dataQuality": [
+                    "status": "complete", "score": 100, "facets": [String](), "gaps": [String](),
+                    "exceptions": [String](), "relatedGaps": [String](), "relatedExceptions": [String](),
+                ] as [String: Any],
                 "children": file.nodes.filter { $0.parent == node.code }.map(json),
             ]
         }
