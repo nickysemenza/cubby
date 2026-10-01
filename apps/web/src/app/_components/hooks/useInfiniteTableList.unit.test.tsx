@@ -34,14 +34,6 @@ const page = (
   meta: { pageIndex, pageSize: 1, totalCount },
 });
 
-const deferred = <T,>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-};
-
 const clients: QueryClient[] = [];
 const createWrapper = () => {
   const client = new QueryClient({
@@ -102,7 +94,7 @@ describe("useInfiniteTableList", () => {
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     );
-    const old = deferred<{
+    const old = Promise.withResolvers<{
       groups: {
         id: "derived";
         state: "ready";
@@ -177,7 +169,7 @@ describe("useInfiniteTableList", () => {
   });
 
   it("ignores a late group after a filter transition and retains the new group's error", async () => {
-    const old = deferred<{
+    const old = Promise.withResolvers<{
       groups: {
         id: "derived";
         state: "ready";
@@ -251,7 +243,7 @@ describe("useInfiniteTableList", () => {
   });
 
   it("renders base rows before deferred fields and totals, and cancels them on refresh", async () => {
-    const enrichment = deferred<{
+    const enrichment = Promise.withResolvers<{
       groups: {
         id: "derived";
         state: "ready";
@@ -259,7 +251,7 @@ describe("useInfiniteTableList", () => {
       }[];
       missingIds: string[];
     }>();
-    const summary = deferred<{ cost: number }>();
+    const summary = Promise.withResolvers<{ cost: number }>();
     let enrichmentSignal: AbortSignal | undefined;
     const queryOptions = () => ({
       queryKey: ["progressive-boundary"],
@@ -400,7 +392,7 @@ describe("useInfiniteTableList", () => {
   });
 
   it("keeps stale rows visible but blocks pagination until the new first page swaps in", async () => {
-    const nextFirstPage = deferred<ListQueryResponse<TestRow>>();
+    const nextFirstPage = Promise.withResolvers<ListQueryResponse<TestRow>>();
     const requested: string[] = [];
     const queryOptions = ({
       filters,

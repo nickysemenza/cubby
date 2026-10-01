@@ -1,3 +1,4 @@
+import { sleep } from "@cubby/shared/retry";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -13,7 +14,7 @@ import { selectCellData, specFromCellData, tagsCellData } from "./cell-data";
 
 /** Flush the microtask queue (onPasteValue's `.then()` chain) without fake
  * timers — a 0ms macrotask runs strictly after all pending microtasks. */
-const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
+const flushMicrotasks = () => sleep(0);
 
 function registerFocusedButton(spec: CellClipboardSpec) {
   const el = document.createElement("button");

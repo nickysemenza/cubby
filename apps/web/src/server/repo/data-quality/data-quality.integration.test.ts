@@ -1,5 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { expenseCreateInput } from "@cubby/schemas/project";
+import { buildEntity } from "tooling/factories/build";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -196,7 +196,8 @@ describe("data quality: list filters, sort and hydration agree", () => {
     const { weak } = await seedProducts();
     const line = await createExpense(
       ctx.db,
-      expenseCreateInput.parse(
+      buildEntity(
+        "expense",
         makeExpenseInput({
           name: "DQ line",
           productId: weak.id,

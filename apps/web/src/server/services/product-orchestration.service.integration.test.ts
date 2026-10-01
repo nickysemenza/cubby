@@ -1,14 +1,13 @@
-import { expenseCreateInput } from "@cubby/schemas/project";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { FoodSummary } from "@cubby/usda";
 import { fromPartial } from "@total-typescript/shoehorn";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { UPCLookupResponse } from "~/contracts/upc.schemas";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import { executeEntity } from "~/server/entity-kernel";
-import { createExpense } from "~/server/repo/expense";
 import { findProductByGtin, quickCreateProduct } from "~/server/repo/product";
 import { resolveProductCategory } from "~/server/repo/product-category";
 import {
@@ -90,7 +89,7 @@ const usdaFood = (overrides: Partial<FoodSummary> = {}): FoodSummary => ({
     brand_owner: "Acme",
     brand_name: null,
     branded_food_category: null,
-    gtin_upc: "022222222222",
+    gtin_upc: "022222222220",
     ingredients: null,
     serving: {
       serving_size: null,
@@ -108,7 +107,7 @@ describe("findOrCreateByUPC", () => {
   const ctx = withTestDb();
 
   it("branch 1: returns the existing product without calling USDA or the UPC worker", async () => {
-    const upc = "011111111111";
+    const upc = "011111111110";
     const existing = await quickCreateProduct(
       ctx.db,
       { name: "Existing Widget", upc },
@@ -131,7 +130,7 @@ describe("findOrCreateByUPC", () => {
   });
 
   it("branch 2: creates from a USDA match when no local product exists", async () => {
-    const upc = "022222222222";
+    const upc = "022222222220";
     const food = usdaFood({ fdc_id: 222222 });
     const result = await findOrCreateByUPC(
       ctx.db,
@@ -149,7 +148,7 @@ describe("findOrCreateByUPC", () => {
   });
 
   it("branch 3: falls back to the UPC worker when USDA has no match", async () => {
-    const upc = "033333333333";
+    const upc = "033333333330";
     const result = await findOrCreateByUPC(
       ctx.db,
       usdaClient(),
@@ -173,7 +172,7 @@ describe("findOrCreateByUPC", () => {
   });
 
   it("reports a failed cover-photo import as a warning without failing the create", async () => {
-    const upc = "035555555555";
+    const upc = "035555555552";
     const result = await findOrCreateByUPC(
       ctx.db,
       usdaClient(),
@@ -193,7 +192,7 @@ describe("findOrCreateByUPC", () => {
   });
 
   it("branch 4: creates a default product when nothing is found anywhere", async () => {
-    const upc = "044444444444";
+    const upc = "044444444440";
     const result = await findOrCreateByUPC(
       ctx.db,
       usdaClient(),
@@ -210,7 +209,7 @@ describe("findOrCreateByUPC", () => {
   });
 
   it("resolves a concurrent create race to one winner without throwing", async () => {
-    const upc = "066666666666";
+    const upc = "066666666660";
     // Two truly-concurrent callers for a brand-new UPC: both pass the initial
     // findProductByUPC check, then race on the create — runWithConflictRecovery
     // must convert the loser's unique-violation into a re-SELECT of the
@@ -323,7 +322,7 @@ describe("findOrCreateByCode", () => {
   });
 
   it("classifies a raw scan: a printed product label resolves by lookup", async () => {
-    const upc = "044444444444";
+    const upc = "044444444440";
     const existing = await quickCreateProduct(
       ctx.db,
       { name: "Labelled Widget", upc },
@@ -342,7 +341,7 @@ describe("findOrCreateByCode", () => {
   });
 
   it("classifies a raw scan: a barcode takes the UPC path", async () => {
-    const upc = "055555555555";
+    const upc = "055555555550";
     const existing = await quickCreateProduct(
       ctx.db,
       { name: "Scanned Widget", upc },
@@ -382,7 +381,7 @@ describe("applyUpcDataWithSideEffects", () => {
   const ctx = withTestDb();
 
   it("uses the UPC price only when the Product has no purchase history", async () => {
-    const upc = "076666666666";
+    const upc = "076666666669";
     const product = await createProductFixture(
       ctx.db,
       makeProductInput({ name: "Unpriced widget", upc }),
@@ -409,23 +408,21 @@ describe("applyUpcDataWithSideEffects", () => {
   });
 
   it("keeps an Expense-derived price and omits the corresponding UPC proposal", async () => {
-    const upc = "077777777777";
+    const upc = "077777777770";
     const product = await createProductFixture(
       ctx.db,
       makeProductInput({ name: "Ledger-priced widget", upc }),
       ctx.actor,
     );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "Ledger-priced widget purchase",
-          cost: 12,
-          productId: product.id,
-          productQuantity: 2,
-        }),
-      ),
-      ctx.actor,
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Ledger-priced widget purchase",
+        cost: 12,
+        productId: product.id,
+        productQuantity: 2,
+      }),
     );
     const lookup = upcLookupClient(async () =>
       upcResponse({ upc, priceDollars: 9.99 }),
@@ -463,7 +460,7 @@ describe("product create cover-photo warnings", () => {
   const ctx = withTestDb();
 
   it("carries a failed cover import on the entity create result", async () => {
-    const upc = "088888888888";
+    const upc = "088888888880";
     const context = {
       ...requireActor(
         createTestRequestContext(ctx.db, {

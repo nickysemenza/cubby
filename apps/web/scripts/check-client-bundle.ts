@@ -6,25 +6,15 @@
  * must strip them from every client-bound chunk.
  */
 
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+
+import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
 
 const CLIENT_DIR = path.resolve("dist/client");
 const WORKER_DIR = path.resolve("dist/server");
 const SERVER_ONLY_MARKERS = ["drizzle-orm", "HYPERDRIVE"];
-
-async function walk(directory: string): Promise<string[]> {
-  const files: string[] = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      files.push(...(await walk(path.join(directory, entry.name))));
-    } else {
-      files.push(path.join(directory, entry.name));
-    }
-  }
-  return files;
-}
 
 async function serverCodeLeaks(files: readonly string[]): Promise<string[]> {
   const leaks: string[] = [];
@@ -42,7 +32,9 @@ async function serverCodeLeaks(files: readonly string[]): Promise<string[]> {
 export async function assertNoServerCodeInClient(
   clientDirectory: string,
 ): Promise<void> {
-  const leaks = await serverCodeLeaks(await walk(clientDirectory));
+  const leaks = await serverCodeLeaks(
+    walkFiles(clientDirectory, { includeSymlinks: true }),
+  );
   if (leaks.length === 0) return;
   throw new Error(
     `Server-only code leaked into the client bundle:\n  ${leaks.join("\n  ")}\n` +
@@ -53,7 +45,7 @@ export async function assertNoServerCodeInClient(
 export async function assertNoDevLoginInWorker(
   workerDirectory: string,
 ): Promise<void> {
-  for (const file of await walk(workerDirectory)) {
+  for (const file of walkFiles(workerDirectory, { includeSymlinks: true })) {
     if (path.extname(file) !== ".js") continue;
     const code = await readFile(file, "utf8");
     if (

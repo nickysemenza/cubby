@@ -1,4 +1,4 @@
-import { expenseCreateInput, expenseOut } from "@cubby/schemas/project";
+import { expenseOut } from "@cubby/schemas/project";
 import type { Page } from "@playwright/test";
 import { z } from "zod";
 
@@ -9,6 +9,7 @@ import {
   uniqueName,
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+import { buildEntity } from "tooling/factories/build";
 
 const createdExpense = z.object({ item: expenseOut.pick({ id: true }) });
 const clearedExpense = z.object({ cost: z.number(), date: z.null() });
@@ -22,7 +23,7 @@ export async function clearExpenseDatesInBrowser(page: Page, baseURL: string) {
   const name = uniqueName(test.info(), "Undated supplies");
   const response = await page.request.post("/api/v1/expenses", {
     headers: { Origin: baseURL },
-    data: expenseCreateInput.parse({
+    data: buildEntity("expense", {
       name,
       cost: 0,
       date: "2026-01-02",

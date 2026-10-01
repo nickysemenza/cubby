@@ -1,5 +1,4 @@
-import { expenseCreateInput, projectCreateInput } from "@cubby/schemas/project";
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
+import { buildEntity } from "tooling/factories/build";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -64,7 +63,7 @@ describe("entity reference filter options", () => {
     for (const orderId of ["ORDER-A", "ORDER-B"])
       await createPurchase(
         ctx.db,
-        purchaseCreateInput.parse({
+        buildEntity("purchase", {
           vendorId: busy,
           date: "2026-08-01",
           orderId,
@@ -135,7 +134,7 @@ describe("entity reference filter options", () => {
   it("projects a project's icon, refusing it for an entity with no such column", async () => {
     const hammer = await createProject(
       ctx.db,
-      projectCreateInput.parse({ name: "Deck rebuild", icon: "hammer" }),
+      buildEntity("project", { name: "Deck rebuild", icon: "hammer" }),
       TEST_ACTOR,
     );
 
@@ -169,12 +168,12 @@ describe("entity reference filter options", () => {
   it("projects a project's effective content window, excluding one expense's own allocation", async () => {
     const tracked = await createProject(
       ctx.db,
-      projectCreateInput.parse({ name: "Kitchen refresh" }),
+      buildEntity("project", { name: "Kitchen refresh" }),
       TEST_ACTOR,
     );
     const charge = await createExpense(
       ctx.db,
-      expenseCreateInput.parse({
+      buildEntity("expense", {
         name: "Cabinet hardware",
         projectId: tracked.output.id,
         date: "2026-03-10",

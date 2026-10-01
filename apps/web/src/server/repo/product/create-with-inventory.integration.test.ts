@@ -1,6 +1,6 @@
-import { productCreateInput } from "@cubby/schemas/product";
 import { productCreateWithInventoryInput } from "@cubby/schemas/product-capture";
 import { and, eq, sql } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
@@ -63,7 +63,8 @@ describe("atomic staged-photo Product and Inventory capture", () => {
     );
     const name = "Synthetic photographed capture item";
     const request: CaptureInput = {
-      product: productCreateInput.parse(
+      product: buildEntity(
+        "product",
         makeProductInput({
           name,
           pendingImageIds: [staged.shortcode],

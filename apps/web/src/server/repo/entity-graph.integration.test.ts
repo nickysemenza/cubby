@@ -1,7 +1,6 @@
-import { taskCreateInput } from "@cubby/schemas/project";
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { testShortcode } from "@cubby/schemas/testing";
 import { and, eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -21,7 +20,6 @@ import { getEntityGraph, readEntityGraph } from "./entity-graph";
 import { getEntityGraphExplore } from "./entity-graph-explore";
 import { createExpense } from "./expense";
 import { createGardenEntry, createPlanting } from "./garden";
-import { createPurchase } from "./purchase";
 import { attachPurchaseProducts } from "./purchase-products";
 import {
   createImageFixture,
@@ -34,7 +32,6 @@ import {
   makeProductInput,
   insertEntityAttachments,
 } from "./repo.fixtures";
-import { createTask } from "./task/crud";
 import { createVendor, findOrCreateVendor } from "./vendor";
 
 describe("entity graph repository", () => {
@@ -248,18 +245,14 @@ describe("entity graph repository", () => {
       },
       ctx.actor,
     );
-    const purchase = await createPurchase(
-      ctx.db,
-      purchaseCreateInput.parse({
-        vendorId: vendor.output.id,
-        orderId: "EVIDENCE-GRAPH-ORDER",
-        displayLabel: "Evidence graph purchase",
-        date: "2026-09-08",
-        statedTotal: 10,
-        notes: null,
-      }),
-      ctx.actor,
-    );
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      orderId: "EVIDENCE-GRAPH-ORDER",
+      displayLabel: "Evidence graph purchase",
+      date: "2026-09-08",
+      statedTotal: 10,
+      notes: null,
+    });
     await createExpense(
       ctx.db,
       makeExpenseInput({
@@ -383,14 +376,10 @@ describe("entity graph repository", () => {
       { name: "Task graph crop" },
       ctx.actor,
     );
-    const task = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "Task graph source",
-      }),
-      ctx.actor,
-    );
+    const task = await createRepoEntity(ctx, "task", {
+      trade: "other",
+      name: "Task graph source",
+    });
     const plantings = await Promise.all(
       ["A", "B", "C"].map(() =>
         createPlanting(

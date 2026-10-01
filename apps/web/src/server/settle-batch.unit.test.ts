@@ -1,3 +1,4 @@
+import { sleep } from "@cubby/shared/retry";
 import { describe, expect, it } from "vitest";
 
 import { settleBatch } from "./settle-batch";
@@ -6,7 +7,7 @@ describe("settleBatch", () => {
   it("keeps results positional when items finish out of order", async () => {
     const delays = [15, 1, 8, 3];
     const out = await settleBatch(delays, async (delay, index) => {
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await sleep(delay);
       return index;
     });
     expect(out.results).toEqual(
@@ -30,7 +31,7 @@ describe("settleBatch", () => {
     await settleBatch(
       [10, 1],
       async (delay) => {
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await sleep(delay);
       },
       { onSettled: (index) => order.push(index) },
     );
@@ -45,7 +46,7 @@ describe("settleBatch", () => {
       async () => {
         active += 1;
         peak = Math.max(peak, active);
-        await new Promise((resolve) => setTimeout(resolve, 2));
+        await sleep(2);
         active -= 1;
       },
       { concurrency: 3 },

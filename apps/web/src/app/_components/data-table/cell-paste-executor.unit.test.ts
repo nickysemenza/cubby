@@ -1,3 +1,4 @@
+import { sleep } from "@cubby/shared/retry";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -245,7 +246,7 @@ describe("runPastePlan", () => {
     const slowSave = async () => {
       inFlight++;
       peak = Math.max(peak, inFlight);
-      await new Promise((r) => setTimeout(r, 1));
+      await sleep(1);
       inFlight--;
     };
     const bigRows: Row[] = Array.from({ length: 20 }, (_, i) => ({

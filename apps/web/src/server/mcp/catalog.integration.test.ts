@@ -1,9 +1,9 @@
 import { imageId as parseImageId } from "@cubby/schemas/identifiers";
 import { mealCreateInput } from "@cubby/schemas/meal";
-import { expenseCreateInput } from "@cubby/schemas/project";
 import { runPurpose } from "@cubby/schemas/purchase-import";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { fromPartial } from "@total-typescript/shoehorn";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { type JSONType, z } from "zod";
@@ -14,7 +14,6 @@ import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
 import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
 import { getDb } from "~/server/repo/database-helpers";
-import { createExpense } from "~/server/repo/expense";
 import {
   createImageFixture,
   makeExpenseInput,
@@ -282,17 +281,15 @@ describe("MCP catalog", () => {
       }),
     ).toMatchObject({ vendorId });
 
-    const { output: expense } = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse(
-        makeExpenseInput({
-          name: "Catalog combo",
-          cost: 40,
-          vendor: "Catalog vendor",
-          orderId: "CATALOG-1",
-        }),
-      ),
-      ctx.actor,
+    const { output: expense } = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Catalog combo",
+        cost: 40,
+        vendor: "Catalog vendor",
+        orderId: "CATALOG-1",
+      }),
     );
     expect(
       await call("expenses", {

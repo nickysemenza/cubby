@@ -1,13 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { release } from "node:os";
 import path from "node:path";
 import {
@@ -15,6 +8,7 @@ import {
   webBuildSourceFingerprint,
   type WebBuildProvenance,
 } from "./web-build-provenance";
+import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
 
 export interface E2ERunIdentity {
   source: { commit: string; dirty: boolean; fingerprint: string };
@@ -74,16 +68,6 @@ export function captureE2ERunIdentity(repoRoot: string): E2ERunIdentity {
   };
 }
 
-function filesUnder(target: string): string[] {
-  if (!existsSync(target)) return [];
-  if (statSync(target).isFile()) return [target];
-  return readdirSync(target, { withFileTypes: true }).flatMap((entry) => {
-    if (entry.isSymbolicLink()) return [];
-    const child = path.join(target, entry.name);
-    return entry.isDirectory() ? filesUnder(child) : [child];
-  });
-}
-
 function runProvenance(input: E2ERunBundleInput) {
   const commit = git(input.repoRoot, ["rev-parse", "HEAD"]);
   const dirty = git(input.repoRoot, ["status", "--porcelain"]).length > 0;
@@ -117,7 +101,9 @@ function runProvenance(input: E2ERunBundleInput) {
 export function writeE2ERunBundle(input: E2ERunBundleInput): string {
   mkdirSync(input.outputDir, { recursive: true });
   const { source, build, changedDuringRun, ended } = runProvenance(input);
-  const files = [...new Set(input.evidence.flatMap(filesUnder))]
+  const files = [
+    ...new Set(input.evidence.flatMap((target) => walkFiles(target))),
+  ]
     .filter(
       (file) =>
         !["run-manifest.json", "SHA256SUMS"].includes(path.basename(file)),

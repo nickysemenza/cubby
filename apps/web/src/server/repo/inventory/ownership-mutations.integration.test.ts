@@ -6,8 +6,8 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { expenseCreateInput } from "@cubby/schemas/project";
 import { and, eq } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
 import { raceUniqueInsert, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -107,7 +107,8 @@ describe("inventory ownership mutations", () => {
       expenses.push(
         await createExpense(
           ctx.db,
-          expenseCreateInput.parse(
+          buildEntity(
+            "expense",
             makeExpenseInput({
               name: line.name,
               purchaseId: parseShortcodeFor("purchase", purchase.shortcode),
@@ -513,7 +514,8 @@ describe("inventory ownership mutations", () => {
     );
     const createdExpense = await createExpense(
       ctx.db,
-      expenseCreateInput.parse(
+      buildEntity(
+        "expense",
         makeExpenseInput({
           name: "Durable beneficiary expense",
           productId: subject.product.id,

@@ -1,5 +1,5 @@
-import { mealCreateInput } from "@cubby/schemas/meal";
 import { eq } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -44,7 +44,7 @@ describe("meal duplicate and copy range", () => {
     const cook = (
       await createMealWithEntityId(
         ctx.db,
-        mealCreateInput.parse({
+        buildEntity("meal", {
           date: "2026-03-02",
           name: "Cook night",
           mealType: "dinner",
@@ -59,7 +59,7 @@ describe("meal duplicate and copy range", () => {
     const leftovers = (
       await createMealWithEntityId(
         ctx.db,
-        mealCreateInput.parse({ date: "2026-03-03", name: "Leftovers" }),
+        buildEntity("meal", { date: "2026-03-03", name: "Leftovers" }),
         ctx.actor,
       )
     ).output;

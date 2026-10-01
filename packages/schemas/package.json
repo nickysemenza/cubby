@@ -40,6 +40,7 @@
     "./money": "./src/money.ts",
     "./nutrition": "./src/nutrition.ts",
     "./testing": "./src/test-support/identifiers.ts",
+    "./testing/recipe": "./src/test-support/recipe.ts",
     "./common": "./src/common.ts",
     "./base-entity": "./src/base-entity.ts",
     "./pagination": "./src/pagination.ts",

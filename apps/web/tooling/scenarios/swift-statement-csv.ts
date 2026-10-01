@@ -1,22 +1,13 @@
-import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import {
   financialBookingInput,
   financialBookingPreview,
   financialBookingResult,
 } from "@cubby/schemas/financial-booking";
-import { productCreateInput } from "@cubby/schemas/product";
-import { productCategoryCreateInput } from "@cubby/schemas/product-category";
-import { expenseCreateInput } from "@cubby/schemas/project";
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import {
   spendingClassificationReviewInput,
   spendingClassificationReviewPreview,
 } from "@cubby/schemas/spending-classification-review";
 import { sql } from "drizzle-orm";
-import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
-import { vendorCreateInput } from "@cubby/schemas/vendor";
-import { spendingCategoryCreateInput } from "@cubby/schemas/spending-category";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   statementCsvCommitInput,
@@ -44,6 +35,7 @@ import {
   buildScenarioDatabase,
   createFixtureWithContext,
 } from "./context";
+import { buildEntity } from "../factories/build";
 
 // Generated Swift Encodable omits nil properties when printing the decoded
 // response. Retain the shared validators and restore only their nullable fields.
@@ -115,7 +107,7 @@ export async function runSwiftStatementCsvScenario(input: ScenarioInput) {
   const account = await createFixtureWithContext(
     context,
     "financialAccount",
-    financialAccountCreateInput.parse({
+    buildEntity("financialAccount", {
       name: "Synthetic CLI CSV card",
       identity: { kind: "credit_card", issuer: null, network: "visa" },
       sourceAliases: [
@@ -521,7 +513,7 @@ export async function runSwiftStatementCsvScenario(input: ScenarioInput) {
       const seeded = await createFixtureWithContext(
         context,
         "financialTransaction",
-        financialTransactionCreateInput.parse({
+        buildEntity("financialTransaction", {
           accountId: account.id,
           purchaseId: null,
           kind: "purchase",
@@ -689,7 +681,7 @@ async function verifySharedBooking(
     const created = await createFixtureWithContext(
       context,
       "ledgerParty",
-      ledgerPartyCreateInput.parse({
+      buildEntity("ledgerParty", {
         name: "Synthetic CLI reviewer",
         kind: "member",
       }),
@@ -709,12 +701,12 @@ async function verifySharedBooking(
   const vendor = await createFixtureWithContext(
     context,
     "vendor",
-    vendorCreateInput.parse({ name: "Synthetic CLI supplier" }),
+    buildEntity("vendor", { name: "Synthetic CLI supplier" }),
   );
   const category = await createFixtureWithContext(
     context,
     "spendingCategory",
-    spendingCategoryCreateInput.parse({ name: "Synthetic CLI household" }),
+    buildEntity("spendingCategory", { name: "Synthetic CLI household" }),
   );
   const argsPath = path.join(
     input.artifacts,
@@ -810,12 +802,12 @@ async function verifySpendingClassification(
   const category = await createFixtureWithContext(
     context,
     "productCategory",
-    productCategoryCreateInput.parse({ name: "Synthetic CLI apparel" }),
+    buildEntity("productCategory", { name: "Synthetic CLI apparel" }),
   );
   const product = await createFixtureWithContext(
     context,
     "product",
-    productCreateInput.parse({
+    buildEntity("product", {
       name: "Synthetic CLI crew shirt",
       manufacturer: "Synthetic CLI textiles",
       categoryId: category.id,
@@ -824,17 +816,17 @@ async function verifySpendingClassification(
   const vendor = await createFixtureWithContext(
     context,
     "vendor",
-    vendorCreateInput.parse({ name: "Synthetic CLI apparel vendor" }),
+    buildEntity("vendor", { name: "Synthetic CLI apparel vendor" }),
   );
   const purchase = await createFixtureWithContext(
     context,
     "purchase",
-    purchaseCreateInput.parse({ vendorId: vendor.id, date: "2026-08-18" }),
+    buildEntity("purchase", { vendorId: vendor.id, date: "2026-08-18" }),
   );
   const line = await createFixtureWithContext(
     context,
     "expense",
-    expenseCreateInput.parse({
+    buildEntity("expense", {
       name: "Synthetic CLI itemized shirt",
       trade: "other",
       productId: product.id,
@@ -849,7 +841,7 @@ async function verifySpendingClassification(
   const alternate = await createFixtureWithContext(
     context,
     "spendingCategory",
-    spendingCategoryCreateInput.parse({
+    buildEntity("spendingCategory", {
       name: "Synthetic CLI alternative purpose",
     }),
   );
@@ -1011,17 +1003,17 @@ async function verifySpendingClassification(
   const toolSpend = await createFixtureWithContext(
     context,
     "spendingCategory",
-    spendingCategoryCreateInput.parse({ name: "Synthetic CLI tools" }),
+    buildEntity("spendingCategory", { name: "Synthetic CLI tools" }),
   );
   const toolParent = await createFixtureWithContext(
     context,
     "productCategory",
-    productCategoryCreateInput.parse({ name: "Synthetic CLI tools root" }),
+    buildEntity("productCategory", { name: "Synthetic CLI tools root" }),
   );
   const toolStorage = await createFixtureWithContext(
     context,
     "productCategory",
-    productCategoryCreateInput.parse({
+    buildEntity("productCategory", {
       name: "Synthetic CLI tool storage",
       parentId: toolParent.id,
     }),

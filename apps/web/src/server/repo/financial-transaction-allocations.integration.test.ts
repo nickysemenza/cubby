@@ -1,23 +1,20 @@
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import {
   financialTransactionCreateInput,
   financialTransactionUpdateData,
 } from "@cubby/schemas/financial-transaction";
 import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { createFinancialAccount } from "./financial-account";
 import {
-  createFinancialTransaction,
   listFinancialTransactions,
   updateFinancialTransaction,
 } from "./financial-transaction";
 import { findFinancialTransactionAllocationDefects } from "./problems/detectors-financial";
-import { createPurchase, deletePurchases, mergePurchases } from "./purchase";
+import { deletePurchases, mergePurchases } from "./purchase";
 import { findOrCreateVendor, getVendorByID } from "./vendor";
 
 /**
@@ -38,42 +35,34 @@ describe("settlement allocations — write path", () => {
 
   const mkAccount = async (name = "Visa") =>
     (
-      await createFinancialAccount(
-        ctx.db,
-        financialAccountCreateInput.parse({
-          name,
-          identity: {
-            kind: "credit_card",
-            issuer: null,
-            network: "visa",
+      await createRepoEntity(ctx, "financialAccount", {
+        name,
+        identity: {
+          kind: "credit_card",
+          issuer: null,
+          network: "visa",
+        },
+        cardNumbers: [
+          {
+            last4: "2125",
+            kind: "primary",
+            validFrom: null,
+            validTo: null,
+            note: null,
           },
-          cardNumbers: [
-            {
-              last4: "2125",
-              kind: "primary",
-              validFrom: null,
-              validTo: null,
-              note: null,
-            },
-          ],
-        }),
-        ctx.actor,
-      )
+        ],
+      })
     ).output;
 
   const mkPurchase = async (orderId: string | null = null) => {
     const vendorId = await findOrCreateVendor(ctx.db, "Home Depot");
     const vendor = await getVendorByID(ctx.db, vendorId);
     return (
-      await createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({
-          vendorId: vendor.id,
-          date: "2026-08-10",
-          orderId,
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "purchase", {
+        vendorId: vendor.id,
+        date: "2026-08-10",
+        orderId,
+      })
     ).output;
   };
 
@@ -82,18 +71,14 @@ describe("settlement allocations — write path", () => {
     overrides: TransactionOverrides = {},
   ) =>
     (
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId,
-          kind: "refund",
-          status: "posted",
-          postedDate: "2026-08-10",
-          amount: -16.76,
-          ...overrides,
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId,
+        kind: "refund",
+        status: "posted",
+        postedDate: "2026-08-10",
+        amount: -16.76,
+        ...overrides,
+      })
     ).output;
 
   const update = (

@@ -5,19 +5,6 @@ import { recordWasmExec, reset, snapshot } from "~/lib/perf/perf-store";
 const { executeWasm } = await import("./wasm-execution");
 const { wasm } = await import("./wasm");
 
-const deferred = <T>() => {
-  let resolvePromise: ((value: T) => void) | undefined;
-  let rejectPromise: ((error: Error) => void) | undefined;
-  const promise = new Promise<T>((resolve, reject) => {
-    resolvePromise = resolve;
-    rejectPromise = reject;
-  });
-  if (!resolvePromise || !rejectPromise) {
-    throw new Error("Promise executor did not initialize synchronously");
-  }
-  return { promise, reject: rejectPromise, resolve: resolvePromise };
-};
-
 describe("WASM execution", () => {
   beforeEach(() => {
     reset();
@@ -36,7 +23,7 @@ describe("WASM execution", () => {
   });
 
   it("preserves asynchronous resolution", async () => {
-    const pending = deferred<string>();
+    const pending = Promise.withResolvers<string>();
     const result = executeWasm("async resolve", () => pending.promise, []);
 
     pending.resolve("done");
@@ -45,7 +32,7 @@ describe("WASM execution", () => {
   });
 
   it("preserves asynchronous rejection", async () => {
-    const pending = deferred<string>();
+    const pending = Promise.withResolvers<string>();
     const error = new Error("extraction failed");
     const result = executeWasm("async reject", () => pending.promise, []);
 

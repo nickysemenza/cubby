@@ -1,14 +1,11 @@
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
-import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
 import { unwrapDb } from "./database-helpers";
-import { createFinancialAccount } from "./financial-account";
-import { createFinancialTransaction } from "./financial-transaction";
 import { getPurchaseByID } from "./purchase";
 import { resolveDraftEvidenceFields } from "./purchase-evidence-policy";
 import { resolveLiveShortcode } from "./shortcode-resolver";
@@ -34,25 +31,17 @@ it("preserves a saved multi-purchase policy until draft link intent explicitly c
     date: "2026-09-01",
     evidenceExpectation: "not_expected",
   });
-  const account = await createFinancialAccount(
-    ctx.db,
-    financialAccountCreateInput.parse({
-      name: "Synthetic draft allocations",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
-    }),
-    ctx.actor,
-  );
-  const transaction = await createFinancialTransaction(
-    ctx.db,
-    financialTransactionCreateInput.parse({
-      accountId: account.output.id,
-      amount: 12,
-      kind: "purchase",
-      status: "posted",
-      postedDate: "2026-09-01",
-    }),
-    ctx.actor,
-  );
+  const account = await createRepoEntity(ctx, "financialAccount", {
+    name: "Synthetic draft allocations",
+    identity: { kind: "credit_card", issuer: null, network: "visa" },
+  });
+  const transaction = await createRepoEntity(ctx, "financialTransaction", {
+    accountId: account.output.id,
+    amount: 12,
+    kind: "purchase",
+    status: "posted",
+    postedDate: "2026-09-01",
+  });
   const id = await resolveLiveShortcode(
     ctx.db,
     transaction.output.id,

@@ -1,17 +1,10 @@
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
-import {
-  financialTransactionCreateInput,
-  financialTransactionFiltersSchema,
-} from "@cubby/schemas/financial-transaction";
+import { financialTransactionFiltersSchema } from "@cubby/schemas/financial-transaction";
 import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { createFinancialAccount } from "./financial-account";
-import {
-  createFinancialTransaction,
-  listFinancialTransactions,
-} from "./financial-transaction";
+import { listFinancialTransactions } from "./financial-transaction";
 import { getPurchaseByID } from "./purchase";
 import { insertWithShortcode } from "./shortcode-utils";
 
@@ -74,26 +67,18 @@ describe("live Expense category summaries", () => {
         { id: food.shortcode, name: food.name, amount: 22 },
       ]),
     );
-    const account = await createFinancialAccount(
-      ctx.db,
-      financialAccountCreateInput.parse({
-        name: "Synthetic summary cash",
-        identity: { kind: "cash" },
-      }),
-      ctx.actor,
-    );
-    const source = await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
-        accountId: account.output.id,
-        kind: "purchase",
-        status: "posted",
-        amount: 25,
-        postedDate: "2026-09-20",
-        allocations: [{ purchaseId: purchase.shortcode, amount: 25 }],
-      }),
-      ctx.actor,
-    );
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic summary cash",
+      identity: { kind: "cash" },
+    });
+    const source = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 25,
+      postedDate: "2026-09-20",
+      allocations: [{ purchaseId: purchase.shortcode, amount: 25 }],
+    });
     const transactionSummary = spendingCategorySummarySchema.parse(
       source.output.spendingCategorySummary,
     );

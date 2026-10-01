@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
 import {
@@ -10,6 +10,7 @@ import {
   tcpReady,
   waitFor,
 } from "./lib/apple-container.ts";
+import { spawnToExit } from "./lib/run.ts";
 
 const postgresImage = "docker.io/pgvector/pgvector:pg17";
 // Keep this aligned with the Linux CI service image.
@@ -315,18 +316,13 @@ export async function runWithTestServices(
     checkInterrupted();
     const [executable, ...args] = command;
     if (!executable) throw new Error("Missing test command");
-    return new Promise<number>((resolve, reject) => {
-      child = spawn(executable, args, {
-        env: childEnv,
-        stdio: "inherit",
-        detached: detachedCommand,
-      });
-      child.once("error", reject);
-      child.once("close", (code, signal) =>
-        resolve(
-          code ?? (signal === "SIGINT" ? 130 : signal === "SIGTERM" ? 143 : 1),
-        ),
-      );
+    return spawnToExit(executable, args, {
+      env: childEnv,
+      stdio: "inherit",
+      detached: detachedCommand,
+      onSpawn: (spawned) => {
+        child = spawned;
+      },
     });
   }
 

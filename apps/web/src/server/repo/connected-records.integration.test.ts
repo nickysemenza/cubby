@@ -1,9 +1,8 @@
 import { connectedViews } from "@cubby/schemas/connected-views";
 import { allEntities } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { projectCreateInput, taskCreateInput } from "@cubby/schemas/project";
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -16,8 +15,6 @@ import {
 import { getDb } from "./database-helpers";
 import { createExpense } from "./expense";
 import { createPlanting } from "./garden";
-import { createProject } from "./project";
-import { createPurchase } from "./purchase";
 import { attachPurchaseProducts } from "./purchase-products";
 import {
   createPlantFixture,
@@ -25,7 +22,6 @@ import {
   makeExpenseInput,
   makeProductInput,
 } from "./repo.fixtures";
-import { createTask } from "./task/crud";
 import { createVendor } from "./vendor";
 
 describe("complete connected record tables", () => {
@@ -62,29 +58,19 @@ describe("complete connected record tables", () => {
       { name: "Inherited crop" },
       ctx.actor,
     );
-    const project = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "Inherited project" }),
-      ctx.actor,
-    );
-    const parent = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        name: "Parent work",
-        trade: "other",
-        projectId: project.output.id,
-      }),
-      ctx.actor,
-    );
-    const child = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        name: "Child work",
-        trade: "other",
-        parentTaskId: parent.output.id,
-      }),
-      ctx.actor,
-    );
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Inherited project",
+    });
+    const parent = await createRepoEntity(ctx, "task", {
+      name: "Parent work",
+      trade: "other",
+      projectId: project.output.id,
+    });
+    const child = await createRepoEntity(ctx, "task", {
+      name: "Child work",
+      trade: "other",
+      parentTaskId: parent.output.id,
+    });
     await createPlanting(
       ctx.db,
       { plantId: plant.id, taskId: child.output.id, status: "planned" },
@@ -151,18 +137,14 @@ describe("complete connected record tables", () => {
       ctx.actor,
     );
     const purchase = async (orderId: string) =>
-      createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({
-          vendorId: vendor.output.id,
-          orderId,
-          displayLabel: orderId,
-          date: "2026-09-08",
-          statedTotal: 10,
-          notes: null,
-        }),
-        ctx.actor,
-      );
+      createRepoEntity(ctx, "purchase", {
+        vendorId: vendor.output.id,
+        orderId,
+        displayLabel: orderId,
+        date: "2026-09-08",
+        statedTotal: 10,
+        notes: null,
+      });
     const first = await purchase("example-order-one");
     const second = await purchase("example-order-two");
     await attachPurchaseProducts(

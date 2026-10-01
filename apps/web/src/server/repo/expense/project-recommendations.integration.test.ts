@@ -1,62 +1,41 @@
 import { entityRecommendationsOut } from "@cubby/schemas/entity-recommendations";
-import {
-  expenseCreateInput,
-  projectCreateInput,
-  taskCreateInput,
-} from "@cubby/schemas/project";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
-  createExpense,
   deleteExpenses,
   getExpenseByShortcode,
   updateExpense,
 } from "~/server/repo/expense";
 import { createProduct } from "~/server/repo/product";
-import { createProject } from "~/server/repo/project";
 import { makeProductInput } from "~/server/repo/repo.fixtures";
-import { createTask } from "~/server/repo/task";
 import { getEntityRecommendations } from "~/server/services/entity-recommendations.service";
 
 describe("expense project recommendation evidence", () => {
   const ctx = withTestDb();
 
   it("removes the reviewed expense from derived ancestor windows and keeps manual overrides", async () => {
-    const parent = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "Derived parent" }),
-      ctx.actor,
-    );
-    const child = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "Assigned child",
-        parentProjectId: parent.output.id,
-      }),
-      ctx.actor,
-    );
-    const override = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "Explicit window",
-        startDate: "2024-06-01",
-        endDate: "2024-06-30",
-      }),
-      ctx.actor,
-    );
-    const source = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        name: "Review this charge",
-        projectId: child.output.id,
-        date: "2024-06-15",
-        trade: "electrical",
-        costType: "materials",
-        cost: 20,
-      }),
-      ctx.actor,
-    );
+    const parent = await createRepoEntity(ctx, "project", {
+      name: "Derived parent",
+    });
+    const child = await createRepoEntity(ctx, "project", {
+      name: "Assigned child",
+      parentProjectId: parent.output.id,
+    });
+    const override = await createRepoEntity(ctx, "project", {
+      name: "Explicit window",
+      startDate: "2024-06-01",
+      endDate: "2024-06-30",
+    });
+    const source = await createRepoEntity(ctx, "expense", {
+      name: "Review this charge",
+      projectId: child.output.id,
+      date: "2024-06-15",
+      trade: "electrical",
+      costType: "materials",
+      cost: 20,
+    });
     const result = entityRecommendationsOut.parse(
       await getEntityRecommendations(ctx.db, {
         entityKind: "expense",
@@ -83,81 +62,53 @@ describe("expense project recommendation evidence", () => {
       makeProductInput({ name: "Fixture switch" }),
       ctx.actor,
     );
-    const current = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "Current" }),
-      ctx.actor,
-    );
-    const preferred = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "Zulu exact product",
-        startDate: "2024-01-01",
-        endDate: "2024-12-31",
-      }),
-      ctx.actor,
-    );
-    const other = await createProject(
-      ctx.db,
-      projectCreateInput.parse({
-        name: "Alpha trade",
-        startDate: "2024-06-01",
-        endDate: "2024-06-30",
-      }),
-      ctx.actor,
-    );
-    const first = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        name: "Same product history",
-        projectId: preferred.output.id,
-        productId: product.id,
-        date: "2024-06-01",
-        trade: "electrical",
-        costType: "materials",
-        cost: 10,
-      }),
-      ctx.actor,
-    );
-    await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        name: "Same trade history",
-        projectId: other.output.id,
-        date: "2024-06-02",
-        trade: "electrical",
-        costType: "materials",
-        cost: 30,
-      }),
-      ctx.actor,
-    );
-    const deleted = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        name: "Deleted evidence",
-        projectId: other.output.id,
-        productId: product.id,
-        date: "2024-06-02",
-        trade: "electrical",
-        costType: "materials",
-        cost: 40,
-      }),
-      ctx.actor,
-    );
+    const current = await createRepoEntity(ctx, "project", { name: "Current" });
+    const preferred = await createRepoEntity(ctx, "project", {
+      name: "Zulu exact product",
+      startDate: "2024-01-01",
+      endDate: "2024-12-31",
+    });
+    const other = await createRepoEntity(ctx, "project", {
+      name: "Alpha trade",
+      startDate: "2024-06-01",
+      endDate: "2024-06-30",
+    });
+    const first = await createRepoEntity(ctx, "expense", {
+      name: "Same product history",
+      projectId: preferred.output.id,
+      productId: product.id,
+      date: "2024-06-01",
+      trade: "electrical",
+      costType: "materials",
+      cost: 10,
+    });
+    await createRepoEntity(ctx, "expense", {
+      name: "Same trade history",
+      projectId: other.output.id,
+      date: "2024-06-02",
+      trade: "electrical",
+      costType: "materials",
+      cost: 30,
+    });
+    const deleted = await createRepoEntity(ctx, "expense", {
+      name: "Deleted evidence",
+      projectId: other.output.id,
+      productId: product.id,
+      date: "2024-06-02",
+      trade: "electrical",
+      costType: "materials",
+      cost: 40,
+    });
     await deleteExpenses(ctx.db, [deleted.output.id], ctx.actor);
-    const source = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        name: "Review switch",
-        projectId: current.output.id,
-        productId: product.id,
-        date: "2024-06-15",
-        trade: "electrical",
-        costType: "materials",
-        cost: 20,
-      }),
-      ctx.actor,
-    );
+    const source = await createRepoEntity(ctx, "expense", {
+      name: "Review switch",
+      projectId: current.output.id,
+      productId: product.id,
+      date: "2024-06-15",
+      trade: "electrical",
+      costType: "materials",
+      cost: 20,
+    });
     const result = await getEntityRecommendations(ctx.db, {
       entityKind: "expense",
       entityId: source.output.id,
@@ -192,33 +143,23 @@ describe("expense project recommendation evidence", () => {
   });
 
   it("offers derived task windows to unassigned expenses", async () => {
-    const project = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "Task window" }),
-      ctx.actor,
-    );
-    await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        name: "Dated work",
-        projectId: project.output.id,
-        dueDate: "2024-06-01",
-        dueEndDate: "2024-06-30",
-        trade: "electrical",
-      }),
-      ctx.actor,
-    );
-    const dated = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        name: "Unassigned",
-        date: "2024-06-15",
-        trade: "electrical",
-        costType: "materials",
-        cost: 20,
-      }),
-      ctx.actor,
-    );
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Task window",
+    });
+    await createRepoEntity(ctx, "task", {
+      name: "Dated work",
+      projectId: project.output.id,
+      dueDate: "2024-06-01",
+      dueEndDate: "2024-06-30",
+      trade: "electrical",
+    });
+    const dated = await createRepoEntity(ctx, "expense", {
+      name: "Unassigned",
+      date: "2024-06-15",
+      trade: "electrical",
+      costType: "materials",
+      cost: 20,
+    });
     const result = await getEntityRecommendations(ctx.db, {
       entityKind: "expense",
       entityId: dated.output.id,

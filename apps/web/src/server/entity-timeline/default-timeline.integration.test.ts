@@ -1,6 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { taskCreateInput } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
+import { buildEntity } from "tooling/factories/build";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -23,7 +23,7 @@ const createdTask = async (
   const result = await executeEntity(context, {
     action: "create",
     entity: "task",
-    data: taskCreateInput.parse({ trade: "other", ...data }),
+    data: buildEntity("task", { trade: "other", ...data }),
   });
   if (result.action !== "create") throw new Error("expected a create result");
   return parseShortcodeFor("task", result.item.id);

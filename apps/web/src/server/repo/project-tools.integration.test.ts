@@ -1,6 +1,6 @@
 import type { ProductId, ProductShortcode } from "@cubby/schemas/identifiers";
-import { projectCreateInput } from "@cubby/schemas/project";
 import { and, eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -18,7 +18,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 import { taxonomyShortcode } from "../../../tooling/product-category-fixtures";
 import { getDb } from "./database-helpers";
 import { deleteProducts } from "./product";
-import { createProject, deleteProjects } from "./project";
+import { deleteProjects } from "./project";
 import { attachProjectResources, repointProjectUses } from "./project/tools";
 import {
   createProductFixture as createProduct,
@@ -29,11 +29,9 @@ describe("project reusable resources", () => {
   const ctx = withTestDb();
 
   it("resolves workflow shortcodes and preserves usage idempotence through repoint and detach", async () => {
-    const project = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "Workflow resource project" }),
-      ctx.actor,
-    );
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Workflow resource project",
+    });
     const source = await createProduct(
       ctx.db,
       makeProductInput({
@@ -120,10 +118,10 @@ describe("project reusable resources", () => {
   });
 
   it("preserves use history on product delete and cascades it on project delete", async () => {
-    const { output: project, entityId: projectId } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "Tool lifecycle project" }),
-      ctx.actor,
+    const { output: project, entityId: projectId } = await createRepoEntity(
+      ctx,
+      "project",
+      { name: "Tool lifecycle project" },
     );
     const tool = await createProduct(
       ctx.db,
@@ -150,11 +148,9 @@ describe("project reusable resources", () => {
   // Tool accessories (e.g. jigs and guides) nest under Tools but keep their
   // own feature; the project-resource capability grants it too.
   it("accepts a Tool accessories Product as a project resource", async () => {
-    const project = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "Tool accessories capability project" }),
-      ctx.actor,
-    );
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Tool accessories capability project",
+    });
     const candidate = await createProduct(
       ctx.db,
       makeProductInput({
@@ -176,11 +172,9 @@ describe("project reusable resources", () => {
   // Tool consumables nest under Tools the same way, but the capability does
   // not grant it — a consumable is used up, not a reusable project resource.
   it("refuses a Tool consumables Product as a project resource", async () => {
-    const project = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "Tool consumables capability project" }),
-      ctx.actor,
-    );
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Tool consumables capability project",
+    });
     const candidate = await createProduct(
       ctx.db,
       makeProductInput({
@@ -209,21 +203,9 @@ describe("repointProjectUses", () => {
 
   const seed = async (name: string) => {
     const [kitchen, yard, shed] = await Promise.all([
-      createProject(
-        ctx.db,
-        projectCreateInput.parse({ name: `${name} kitchen` }),
-        ctx.actor,
-      ),
-      createProject(
-        ctx.db,
-        projectCreateInput.parse({ name: `${name} yard` }),
-        ctx.actor,
-      ),
-      createProject(
-        ctx.db,
-        projectCreateInput.parse({ name: `${name} shed` }),
-        ctx.actor,
-      ),
+      createRepoEntity(ctx, "project", { name: `${name} kitchen` }),
+      createRepoEntity(ctx, "project", { name: `${name} yard` }),
+      createRepoEntity(ctx, "project", { name: `${name} shed` }),
     ]);
     const [kit, component] = await Promise.all([
       createProduct(

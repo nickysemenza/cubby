@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { spawnToExit } from "../../../scripts/lib/run.ts";
 import { createHash, randomBytes } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -141,47 +142,46 @@ function retainChild(manifestPath: string, order: string): boolean {
 async function runOrder(
   order: string,
 ): Promise<{ code: number | null; manifest?: string }> {
-  return await new Promise((resolve, reject) => {
-    const environment = { ...process.env };
-    if (reuseManifest)
-      environment.CUBBY_E2E_REUSE_NATIVE_MANIFEST = reuseManifest;
-    const child = spawn(
-      "pnpm",
-      [
-        "--dir",
-        webRoot,
-        "exec",
-        "tsx",
-        "tooling/mac-import-e2e.ts",
-        "--order",
-        order,
-      ],
-      {
-        cwd: repoRoot,
-        detached: true,
-        env: environment,
-        stdio: ["ignore", "pipe", "inherit"],
+  const environment = { ...process.env };
+  if (reuseManifest)
+    environment.CUBBY_E2E_REUSE_NATIVE_MANIFEST = reuseManifest;
+  let pending = "";
+  let manifest: string | undefined;
+  const code = await spawnToExit(
+    "pnpm",
+    [
+      "--dir",
+      webRoot,
+      "exec",
+      "tsx",
+      "tooling/mac-import-e2e.ts",
+      "--order",
+      order,
+    ],
+    {
+      cwd: repoRoot,
+      detached: true,
+      env: environment,
+      stdio: ["ignore", "pipe", "inherit"],
+      onSpawn: (child) => {
+        activeChild = child;
+        child.stdout?.on("data", (chunk: Buffer) => {
+          process.stdout.write(chunk);
+          pending += chunk.toString("utf8");
+          const lines = pending.split("\n");
+          pending = lines.pop() ?? "";
+          for (const line of lines) {
+            const match = line.match(/^\[mac-import-e2e\] Artifact: (.+)$/u);
+            if (match?.[1]) manifest = match[1].trim();
+          }
+        });
       },
-    );
-    activeChild = child;
-    let pending = "";
-    let manifest: string | undefined;
-    child.stdout.on("data", (chunk: Buffer) => {
-      process.stdout.write(chunk);
-      pending += chunk.toString("utf8");
-      const lines = pending.split("\n");
-      pending = lines.pop() ?? "";
-      for (const line of lines) {
-        const match = line.match(/^\[mac-import-e2e\] Artifact: (.+)$/u);
-        if (match?.[1]) manifest = match[1].trim();
-      }
-    });
-    child.once("error", reject);
-    child.once("close", (code) => {
-      activeChild = undefined;
-      resolve({ code, manifest });
-    });
-  });
+      onClose: () => {
+        activeChild = undefined;
+      },
+    },
+  );
+  return { code, manifest };
 }
 
 let failure: string | undefined;

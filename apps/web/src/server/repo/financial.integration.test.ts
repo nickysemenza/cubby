@@ -1,21 +1,16 @@
-import {
-  type FinancialAccountSourceAlias,
-  financialAccountCreateInput,
-} from "@cubby/schemas/financial-account";
-import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
+import { type FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { expenseCreateInput } from "@cubby/schemas/project";
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { testShortcode } from "@cubby/schemas/testing";
 import { sql } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
 import { getDb } from "./database-helpers";
-import { createExpense } from "./expense";
 import { getFilterOptions } from "./filter-options";
 import {
   createFinancialAccount,
@@ -32,7 +27,6 @@ import {
 import { createLedgerParty } from "./ledger-party";
 import { findFinancialTransactionAllocationDefects } from "./problems/detectors-financial";
 import {
-  createPurchase,
   deletePurchases,
   getPurchaseByID,
   linkExpensesToPurchase,
@@ -54,7 +48,7 @@ function requireTestValue<T>(value: T | null | undefined, message: string): T {
 }
 
 const account = (name: string, aliases: FinancialAccountSourceAlias[] = []) =>
-  financialAccountCreateInput.parse({
+  buildEntity("financialAccount", {
     name,
     identity: { kind: "credit_card", issuer: null, network: "visa" },
     cardNumbers: [
@@ -118,7 +112,7 @@ describe("financial repositories — critical invariants", () => {
       )
     ).output;
     const input = (amount: number) =>
-      financialTransactionCreateInput.parse({
+      buildEntity("financialTransaction", {
         accountId: createdAccount.id,
         kind: "purchase",
         status: "pending",
@@ -193,20 +187,16 @@ describe("financial repositories — critical invariants", () => {
     ]);
 
     const txn = (accountId: string, sources: string[], amount: number) =>
-      createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId,
-          kind: "purchase",
-          status: "pending",
-          amount,
-          sourceRefs: sources.map((source, index) => ({
-            source,
-            externalId: `${source}-${accountId}-${amount}-${index}`,
-          })),
-        }),
-        ctx.actor,
-      );
+      createRepoEntity(ctx, "financialTransaction", {
+        accountId,
+        kind: "purchase",
+        status: "pending",
+        amount,
+        sourceRefs: sources.map((source, index) => ({
+          source,
+          externalId: `${source}-${accountId}-${amount}-${index}`,
+        })),
+      });
 
     await txn(busy.id, ["monarch"], 10);
     // Two refs on ONE row — the count is per reference, not per transaction, so
@@ -313,9 +303,10 @@ describe("financial repositories — critical invariants", () => {
       first.rows[0],
       "Expected the first Monarch preview row.",
     ).proposed;
-    const createdEvidence = await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
+    const createdEvidence = await createRepoEntity(
+      ctx,
+      "financialTransaction",
+      {
         accountId: createdAccount.id,
         purchaseId: null,
         kind: proposed.kind,
@@ -328,8 +319,7 @@ describe("financial repositories — critical invariants", () => {
         sourceCategory: proposed.sourceCategory,
         sourceRefs: [proposed.sourceRef],
         notes: proposed.notes,
-      }),
-      ctx.actor,
+      },
     );
     const laterExport = await previewFinancialStatementImport(ctx.db, {
       rows: [{ ...row, merchant: "Amazon.com", category: "Other" }],
@@ -361,18 +351,14 @@ describe("financial repositories — critical invariants", () => {
     expect(correctedDateExport.rows[0]?.status).toBe("already_recorded");
 
     const manualEvidence = (
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: createdAccount.id,
-          kind: "purchase",
-          status: "posted",
-          amount: 12.34,
-          postedDate: "2026-07-30",
-          rawDescription: "MANUAL STATEMENT LINE",
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: createdAccount.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 12.34,
+        postedDate: "2026-07-30",
+        rawDescription: "MANUAL STATEMENT LINE",
+      })
     ).output;
     const possibleExisting = await previewFinancialStatementImport(ctx.db, {
       rows: [
@@ -396,32 +382,28 @@ describe("financial repositories — critical invariants", () => {
     ).toEqual([manualEvidence.id, createdEvidence.output.id].sort());
 
     const identityAccount = (
-      await createFinancialAccount(
-        ctx.db,
-        financialAccountCreateInput.parse({
-          name: "Identity-only Visa",
-          identity: { kind: "credit_card", issuer: null, network: "visa" },
-          // A reissued card: the provider may still label the account with
-          // the retired digits, so both must resolve here.
-          cardNumbers: [
-            {
-              last4: "9999",
-              kind: "primary",
-              validFrom: null,
-              validTo: "2024-06-30",
-              note: null,
-            },
-            {
-              last4: "9997",
-              kind: "primary",
-              validFrom: "2024-07-01",
-              validTo: null,
-              note: null,
-            },
-          ],
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialAccount", {
+        name: "Identity-only Visa",
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        // A reissued card: the provider may still label the account with
+        // the retired digits, so both must resolve here.
+        cardNumbers: [
+          {
+            last4: "9999",
+            kind: "primary",
+            validFrom: null,
+            validTo: "2024-06-30",
+            note: null,
+          },
+          {
+            last4: "9997",
+            kind: "primary",
+            validFrom: "2024-07-01",
+            validTo: null,
+            note: null,
+          },
+        ],
+      })
     ).output;
     for (const digits of ["9999", "9997"]) {
       const identityResolved = await previewFinancialStatementImport(ctx.db, {
@@ -442,23 +424,19 @@ describe("financial repositories — critical invariants", () => {
 
     // Two live accounts carrying the same digits: last four alone is not
     // unique, so the row stays unresolved rather than guessing.
-    await createFinancialAccount(
-      ctx.db,
-      financialAccountCreateInput.parse({
-        name: "Sibling Visa",
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
-        cardNumbers: [
-          {
-            last4: "9997",
-            kind: "supplementary",
-            validFrom: null,
-            validTo: null,
-            note: null,
-          },
-        ],
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "financialAccount", {
+      name: "Sibling Visa",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      cardNumbers: [
+        {
+          last4: "9997",
+          kind: "supplementary",
+          validFrom: null,
+          validTo: null,
+          note: null,
+        },
+      ],
+    });
     const ambiguous = await previewFinancialStatementImport(ctx.db, {
       rows: [
         {
@@ -561,63 +539,47 @@ describe("financial repositories — critical invariants", () => {
     const vendorId = await findOrCreateVendor(ctx.db, "Preview Vendor");
     const previewVendor = await getVendorByID(ctx.db, vendorId);
     const previewPurchase = (
-      await createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({
-          date: "2024-01-15",
-          vendorId: previewVendor.id,
-          orderId: "PREVIEW-1",
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "purchase", {
+        date: "2024-01-15",
+        vendorId: previewVendor.id,
+        orderId: "PREVIEW-1",
+      })
     ).output;
     const expenses = [];
     for (let index = 0; index < 4; index += 1) {
       expenses.push(
         (
-          await createExpense(
-            ctx.db,
-            expenseCreateInput.parse({
-              date: "2024-01-15",
-              name: `preview line ${index}`,
-              trade: "other",
-              costType: "materials",
-              cost: index + 1,
-              purchaseId: previewPurchase.id,
-              future: false,
-            }),
-            ctx.actor,
-          )
+          await createRepoEntity(ctx, "expense", {
+            date: "2024-01-15",
+            name: `preview line ${index}`,
+            trade: "other",
+            costType: "materials",
+            cost: index + 1,
+            purchaseId: previewPurchase.id,
+            future: false,
+          })
         ).output,
       );
     }
     const activeTransaction = (
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: createdAccount.id,
-          purchaseId: previewPurchase.id,
-          kind: "purchase",
-          status: "posted",
-          postedDate: "2026-02-01",
-          merchant: "Preview merchant",
-          amount: 10,
-        }),
-        ctx.actor,
-      )
-    ).output;
-    await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
+      await createRepoEntity(ctx, "financialTransaction", {
         accountId: createdAccount.id,
         purchaseId: previewPurchase.id,
-        kind: "adjustment",
-        status: "void",
-        merchant: "Voided preview evidence",
-        amount: 1,
-      }),
-      ctx.actor,
-    );
+        kind: "purchase",
+        status: "posted",
+        postedDate: "2026-02-01",
+        merchant: "Preview merchant",
+        amount: 10,
+      })
+    ).output;
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: createdAccount.id,
+      purchaseId: previewPurchase.id,
+      kind: "adjustment",
+      status: "void",
+      merchant: "Voided preview evidence",
+      amount: 1,
+    });
 
     const previews = await loadRelatedPreviews(ctx.db, {
       source: "purchase",
@@ -805,29 +767,21 @@ describe("financial repositories — critical invariants", () => {
     });
     const vendorId = await findOrCreateVendor(ctx.db, "Finance test vendor");
     const purchase = (
-      await createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({
-          date: "2024-01-15",
-          vendorId: (await getVendorByID(ctx.db, vendorId)).id,
-          orderId: "finance-1",
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "purchase", {
+        date: "2024-01-15",
+        vendorId: (await getVendorByID(ctx.db, vendorId)).id,
+        orderId: "finance-1",
+      })
     ).output;
     const tx = (
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: a.id,
-          purchaseId: purchase.id,
-          kind: "purchase",
-          status: "pending",
-          amount: 10,
-          sourceRefs: [{ source: "statement", externalId: "tx-1" }],
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: a.id,
+        purchaseId: purchase.id,
+        kind: "purchase",
+        status: "pending",
+        amount: 10,
+        sourceRefs: [{ source: "statement", externalId: "tx-1" }],
+      })
     ).output;
     await expect(
       deleteThroughKernel(ctx.db, ctx.actor, "financialAccount", [a.id]),
@@ -835,17 +789,13 @@ describe("financial repositories — critical invariants", () => {
       reason: "ENTITY_DELETE_BLOCKED",
     });
     await expect(
-      createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: a.id,
-          kind: "purchase",
-          status: "pending",
-          amount: 10,
-          sourceRefs: [{ source: "statement", externalId: "tx-1" }],
-        }),
-        ctx.actor,
-      ),
+      createRepoEntity(ctx, "financialTransaction", {
+        accountId: a.id,
+        kind: "purchase",
+        status: "pending",
+        amount: 10,
+        sourceRefs: [{ source: "statement", externalId: "tx-1" }],
+      }),
     ).rejects.toMatchObject({
       reason: "FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT",
     });
@@ -887,58 +837,42 @@ describe("financial repositories — critical invariants", () => {
     const { getVendorByID } = await import("./vendor");
     const vendor = await getVendorByID(ctx.db, vendorId);
     const p1 = (
-      await createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({
-          date: "2024-01-15",
-          vendorId: vendor.id,
-          orderId: null,
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "purchase", {
+        date: "2024-01-15",
+        vendorId: vendor.id,
+        orderId: null,
+      })
     ).output;
     const p2 = (
-      await createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({
-          date: "2024-01-15",
-          vendorId: vendor.id,
-          orderId: "settle-2",
-        }),
-        ctx.actor,
-      )
-    ).output;
-    const expense = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
+      await createRepoEntity(ctx, "purchase", {
         date: "2024-01-15",
-        name: "settlement line",
-        trade: "other",
-        costType: "materials",
-        cost: 10,
-        vendor: "Reconcile Vendor",
-        orderId: null,
-        future: false,
-      }),
-      ctx.actor,
-    );
+        vendorId: vendor.id,
+        orderId: "settle-2",
+      })
+    ).output;
+    const expense = await createRepoEntity(ctx, "expense", {
+      date: "2024-01-15",
+      name: "settlement line",
+      trade: "other",
+      costType: "materials",
+      cost: 10,
+      vendor: "Reconcile Vendor",
+      orderId: null,
+      future: false,
+    });
     await linkExpensesToPurchase(
       ctx.db,
       { purchaseId: p1.id, expenseIds: [expense.output.id] },
       ctx.actor,
     );
-    await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
-        accountId: a.id,
-        purchaseId: p1.id,
-        kind: "purchase",
-        status: "posted",
-        postedDate: "2026-01-01",
-        amount: 10,
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: a.id,
+      purchaseId: p1.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-01-01",
+      amount: 10,
+    });
     const p1Uuid = parseEntityId(
       "purchase",
       requireTestValue(
@@ -981,30 +915,22 @@ describe("financial repositories — critical invariants", () => {
       cost: number | null,
     ) => {
       const purchase = (
-        await createPurchase(
-          ctx.db,
-          purchaseCreateInput.parse({
-            date: "2024-01-15",
-            vendorId: vendor.id,
-            orderId,
-          }),
-          ctx.actor,
-        )
-      ).output;
-      const line = await createExpense(
-        ctx.db,
-        expenseCreateInput.parse({
+        await createRepoEntity(ctx, "purchase", {
           date: "2024-01-15",
-          name: `line ${orderId}`,
-          trade: "other",
-          costType: "materials",
-          cost,
-          vendor: vendor.name,
+          vendorId: vendor.id,
           orderId,
-          future: false,
-        }),
-        ctx.actor,
-      );
+        })
+      ).output;
+      const line = await createRepoEntity(ctx, "expense", {
+        date: "2024-01-15",
+        name: `line ${orderId}`,
+        trade: "other",
+        costType: "materials",
+        cost,
+        vendor: vendor.name,
+        orderId,
+        future: false,
+      });
       await linkExpensesToPurchase(
         ctx.db,
         { purchaseId: purchase.id, expenseIds: [line.output.id] },
@@ -1026,18 +952,14 @@ describe("financial repositories — critical invariants", () => {
     ).toMatchObject({ status: "unknown", delta: null, transactionCount: 0 });
 
     const unpriced = await makePurchaseWithExpense("status-unpriced", null);
-    await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
-        accountId: a.id,
-        purchaseId: unpriced.purchase.id,
-        kind: "purchase",
-        status: "posted",
-        postedDate: "2026-01-01",
-        amount: 5,
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: a.id,
+      purchaseId: unpriced.purchase.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-01-01",
+      amount: 5,
+    });
     expect(
       (await getPurchaseByID(ctx.db, unpriced.uuid)).financialReconciliation,
     ).toMatchObject({ status: "unknown", delta: null, transactionCount: 1 });
@@ -1047,35 +969,27 @@ describe("financial repositories — critical invariants", () => {
     // a `future: true` row cannot have settled, so counting it would report a
     // mismatch for a purchase behaving exactly as intended.
     const schedule = await makePurchaseWithExpense("status-schedule", 100);
-    const plannedLine = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
-        date: "2027-01-15",
-        name: "status-schedule planned payment",
-        trade: "other",
-        costType: "materials",
-        cost: 400,
-        future: true,
-      }),
-      ctx.actor,
-    );
+    const plannedLine = await createRepoEntity(ctx, "expense", {
+      date: "2027-01-15",
+      name: "status-schedule planned payment",
+      trade: "other",
+      costType: "materials",
+      cost: 400,
+      future: true,
+    });
     await linkExpensesToPurchase(
       ctx.db,
       { purchaseId: schedule.purchase.id, expenseIds: [plannedLine.output.id] },
       ctx.actor,
     );
-    await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
-        accountId: a.id,
-        purchaseId: schedule.purchase.id,
-        kind: "purchase",
-        status: "posted",
-        postedDate: "2026-01-01",
-        amount: 100,
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: a.id,
+      purchaseId: schedule.purchase.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-01-01",
+      amount: 100,
+    });
     const scheduled = await getPurchaseByID(ctx.db, schedule.uuid);
     // The displayed total still carries the whole commitment...
     expect(scheduled.expenseTotal).toBe(500);
@@ -1087,30 +1001,22 @@ describe("financial repositories — critical invariants", () => {
     });
 
     const pending = await makePurchaseWithExpense("status-pending", 51.49);
-    await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
-        accountId: a.id,
-        purchaseId: pending.purchase.id,
-        kind: "purchase",
-        status: "posted",
-        postedDate: "2026-01-01",
-        amount: 60.56,
-      }),
-      ctx.actor,
-    );
-    await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
-        accountId: a.id,
-        purchaseId: pending.purchase.id,
-        kind: "refund",
-        status: "expected",
-        transactionDate: "2026-01-02",
-        amount: -9.07,
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: a.id,
+      purchaseId: pending.purchase.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-01-01",
+      amount: 60.56,
+    });
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: a.id,
+      purchaseId: pending.purchase.id,
+      kind: "refund",
+      status: "expected",
+      transactionDate: "2026-01-02",
+      amount: -9.07,
+    });
     expect(
       (await getPurchaseByID(ctx.db, pending.uuid)).financialReconciliation,
     ).toMatchObject({
@@ -1125,60 +1031,44 @@ describe("financial repositories — critical invariants", () => {
       "status-refund-adjusted",
       199.26,
     );
-    await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
-        accountId: a.id,
-        purchaseId: adjusted.purchase.id,
-        kind: "purchase",
-        status: "posted",
-        postedDate: "2026-01-03",
-        amount: 326.36,
-      }),
-      ctx.actor,
-    );
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: a.id,
+      purchaseId: adjusted.purchase.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-01-03",
+      amount: 326.36,
+    });
     const refunds = [
       { postedDate: "2026-01-04", amount: -100 },
       { postedDate: "2026-01-05", amount: -27.1 },
     ];
     for (const { postedDate, amount } of refunds) {
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: a.id,
-          purchaseId: adjusted.purchase.id,
-          kind: "refund",
-          status: "posted",
-          postedDate,
-          amount,
-        }),
-        ctx.actor,
-      );
-    }
-    await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
+      await createRepoEntity(ctx, "financialTransaction", {
         accountId: a.id,
         purchaseId: adjusted.purchase.id,
         kind: "refund",
-        status: "void",
-        amount: -999,
-      }),
-      ctx.actor,
-    );
+        status: "posted",
+        postedDate,
+        amount,
+      });
+    }
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: a.id,
+      purchaseId: adjusted.purchase.id,
+      kind: "refund",
+      status: "void",
+      amount: -999,
+    });
     const deletedRefund = (
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: a.id,
-          purchaseId: adjusted.purchase.id,
-          kind: "refund",
-          status: "posted",
-          postedDate: "2026-01-06",
-          amount: -999,
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: a.id,
+        purchaseId: adjusted.purchase.id,
+        kind: "refund",
+        status: "posted",
+        postedDate: "2026-01-06",
+        amount: -999,
+      })
     ).output;
     await deleteThroughKernel(ctx.db, ctx.actor, "financialTransaction", [
       deletedRefund.id,
@@ -1195,44 +1085,32 @@ describe("financial repositories — critical invariants", () => {
     expect(adjustedReconciliation.projectedTotal).toBeCloseTo(199.26);
 
     const mismatch = await makePurchaseWithExpense("status-mismatch", 10);
-    await createFinancialTransaction(
-      ctx.db,
-      financialTransactionCreateInput.parse({
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: a.id,
+      purchaseId: mismatch.purchase.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-01-03",
+      amount: 12,
+    });
+    const voided = (
+      await createRepoEntity(ctx, "financialTransaction", {
         accountId: a.id,
         purchaseId: mismatch.purchase.id,
-        kind: "purchase",
-        status: "posted",
-        postedDate: "2026-01-03",
-        amount: 12,
-      }),
-      ctx.actor,
-    );
-    const voided = (
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: a.id,
-          purchaseId: mismatch.purchase.id,
-          kind: "adjustment",
-          status: "void",
-          amount: 999,
-        }),
-        ctx.actor,
-      )
+        kind: "adjustment",
+        status: "void",
+        amount: 999,
+      })
     ).output;
     const deleted = (
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: a.id,
-          purchaseId: mismatch.purchase.id,
-          kind: "adjustment",
-          status: "posted",
-          postedDate: "2026-01-04",
-          amount: -2,
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: a.id,
+        purchaseId: mismatch.purchase.id,
+        kind: "adjustment",
+        status: "posted",
+        postedDate: "2026-01-04",
+        amount: -2,
+      })
     ).output;
     await deleteThroughKernel(ctx.db, ctx.actor, "financialTransaction", [
       deleted.id,
@@ -1262,31 +1140,23 @@ describe("financial repositories — critical invariants", () => {
 
     // A disposal: a Purchase whose Expense is negative, settled net of fees.
     const sale = (
-      await createPurchase(
-        ctx.db,
-        purchaseCreateInput.parse({
-          date: "2026-07-13",
-          vendorId: vendor.id,
-          orderId: "payout-sale-1",
-          statedTotal: -140.22,
-        }),
-        ctx.actor,
-      )
-    ).output;
-    const proceeds = await createExpense(
-      ctx.db,
-      expenseCreateInput.parse({
+      await createRepoEntity(ctx, "purchase", {
         date: "2026-07-13",
-        name: "nailer selling",
-        trade: "other",
-        costType: "tools",
-        cost: -140.22,
-        vendor: vendor.name,
+        vendorId: vendor.id,
         orderId: "payout-sale-1",
-        future: false,
-      }),
-      ctx.actor,
-    );
+        statedTotal: -140.22,
+      })
+    ).output;
+    const proceeds = await createRepoEntity(ctx, "expense", {
+      date: "2026-07-13",
+      name: "nailer selling",
+      trade: "other",
+      costType: "tools",
+      cost: -140.22,
+      vendor: vendor.name,
+      orderId: "payout-sale-1",
+      future: false,
+    });
     await linkExpensesToPurchase(
       ctx.db,
       { purchaseId: sale.id, expenseIds: [proceeds.output.id] },
@@ -1302,19 +1172,15 @@ describe("financial repositories — critical invariants", () => {
 
     // The payout is an inflow recorded as income, and it may link.
     const payout = (
-      await createFinancialTransaction(
-        ctx.db,
-        financialTransactionCreateInput.parse({
-          accountId: a.id,
-          purchaseId: sale.id,
-          kind: "income",
-          status: "posted",
-          postedDate: "2026-07-16",
-          amount: -140.22,
-          sourceRefs: [{ source: "statement", externalId: "payout-1" }],
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: a.id,
+        purchaseId: sale.id,
+        kind: "income",
+        status: "posted",
+        postedDate: "2026-07-16",
+        amount: -140.22,
+        sourceRefs: [{ source: "statement", externalId: "payout-1" }],
+      })
     ).output;
     expect(payout.purchaseId).toBe(sale.id);
 
@@ -1385,16 +1251,12 @@ describe("financial repositories — critical invariants", () => {
       await member("Stored Value Member B"),
     ];
     const storedValue = (name: string, owner: string | null) =>
-      createFinancialAccount(
-        ctx.db,
-        financialAccountCreateInput.parse({
-          name,
-          identity: { kind: "stored_value", provider: "Synthetic store" },
-          providerVendorId: vendor.id,
-          ledgerPartyId: owner,
-        }),
-        ctx.actor,
-      );
+      createRepoEntity(ctx, "financialAccount", {
+        name,
+        identity: { kind: "stored_value", provider: "Synthetic store" },
+        providerVendorId: vendor.id,
+        ledgerPartyId: owner,
+      });
 
     const a = (await storedValue("Credit A", memberA)).output;
     const b = (await storedValue("Credit B", memberB)).output;
@@ -1409,14 +1271,10 @@ describe("financial repositories — critical invariants", () => {
     await expect(storedValue("Shared card 2", null)).resolves.toBeDefined();
 
     await expect(
-      createFinancialAccount(
-        ctx.db,
-        financialAccountCreateInput.parse({
-          ...account("Provider on a credit card"),
-          providerVendorId: vendor.id,
-        }),
-        ctx.actor,
-      ),
+      createRepoEntity(ctx, "financialAccount", {
+        ...account("Provider on a credit card"),
+        providerVendorId: vendor.id,
+      }),
     ).rejects.toThrow(/stored-value account/);
     await expect(
       updateFinancialAccount(

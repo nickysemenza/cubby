@@ -1,3 +1,4 @@
+import { sleep } from "@cubby/shared/retry";
 import { describe, expect, it, vi } from "vitest";
 
 import { createConcurrencyLimiter } from "./concurrency-limiter";
@@ -25,7 +26,7 @@ describe("page suggestion scheduler", () => {
     expect(started).not.toContain(40);
     while (started.length < 64) {
       releases.splice(0).forEach((release) => release());
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await sleep(0);
     }
     releases.splice(0).forEach((release) => release());
     const results = await settled;

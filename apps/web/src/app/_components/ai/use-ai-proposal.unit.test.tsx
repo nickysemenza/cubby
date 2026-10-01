@@ -4,26 +4,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useAiProposal } from "./use-ai-proposal";
 
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-}
-
-function defer<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((res) => {
-    resolve = res;
-  });
-  return { promise, resolve };
-}
-
 describe("useAiProposal", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it("drops a response whose basis has moved on by the time it resolves", async () => {
-    const first = defer<{ value: string }>();
+    const first = Promise.withResolvers<{ value: string }>();
     const run = vi.fn().mockReturnValue(first.promise);
 
     const { result, rerender } = renderHook(

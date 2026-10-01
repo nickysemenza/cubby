@@ -1,19 +1,10 @@
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import type { FinancialTransactionFilters } from "@cubby/schemas/financial-transaction";
-import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
-import { expenseCreateInput } from "@cubby/schemas/project";
-import { purchaseCreateInput } from "@cubby/schemas/purchase";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { createExpense } from "./expense";
-import { createFinancialAccount } from "./financial-account";
-import {
-  createFinancialTransaction,
-  listFinancialTransactions,
-} from "./financial-transaction";
-import { createPurchase } from "./purchase";
+import { listFinancialTransactions } from "./financial-transaction";
 import {
   createProductFixture,
   makeExpenseInput,
@@ -34,16 +25,12 @@ describe("financial transaction itemization verdict", () => {
 
   const seed = async () => {
     const accountId = (
-      await createFinancialAccount(
-        ctx.db,
-        financialAccountCreateInput.parse({
-          name: "Itemization Visa",
-          identity: { kind: "credit_card", issuer: null, network: "visa" },
-          cardNumbers: [],
-          sourceAliases: [],
-        }),
-        ctx.actor,
-      )
+      await createRepoEntity(ctx, "financialAccount", {
+        name: "Itemization Visa",
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        cardNumbers: [],
+        sourceAliases: [],
+      })
     ).output.id;
     const vendor = await getVendorByID(
       ctx.db,
@@ -57,15 +44,11 @@ describe("financial transaction itemization verdict", () => {
 
     const purchase = async (orderId: string) =>
       (
-        await createPurchase(
-          ctx.db,
-          purchaseCreateInput.parse({
-            date: "2024-01-15",
-            vendorId: vendor.id,
-            orderId,
-          }),
-          ctx.actor,
-        )
+        await createRepoEntity(ctx, "purchase", {
+          date: "2024-01-15",
+          vendorId: vendor.id,
+          orderId,
+        })
       ).output.id;
 
     const line = (
@@ -73,19 +56,17 @@ describe("financial transaction itemization verdict", () => {
       cost: number,
       itemized: boolean,
     ) =>
-      createExpense(
-        ctx.db,
-        expenseCreateInput.parse(
-          makeExpenseInput({
-            name: `line ${cost}`,
-            cost,
-            purchaseId,
-            ...(itemized
-              ? { productId: product.id, productQuantity: 1 }
-              : { lineBasis: "allocation" }),
-          }),
-        ),
-        ctx.actor,
+      createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: `line ${cost}`,
+          cost,
+          purchaseId,
+          ...(itemized
+            ? { productId: product.id, productQuantity: 1 }
+            : { lineBasis: "allocation" }),
+        }),
       );
 
     const charge = async (
@@ -94,19 +75,15 @@ describe("financial transaction itemization verdict", () => {
       status: "posted" | "void" = "posted",
     ) =>
       (
-        await createFinancialTransaction(
-          ctx.db,
-          financialTransactionCreateInput.parse({
-            accountId,
-            kind: "purchase",
-            status,
-            postedDate: status === "posted" ? "2026-01-01" : null,
-            amount,
-            merchant: `charge ${amount} ${allocations.length} ${status}`,
-            allocations,
-          }),
-          ctx.actor,
-        )
+        await createRepoEntity(ctx, "financialTransaction", {
+          accountId,
+          kind: "purchase",
+          status,
+          postedDate: status === "posted" ? "2026-01-01" : null,
+          amount,
+          merchant: `charge ${amount} ${allocations.length} ${status}`,
+          allocations,
+        })
       ).output.id;
 
     return { purchase, line, charge };

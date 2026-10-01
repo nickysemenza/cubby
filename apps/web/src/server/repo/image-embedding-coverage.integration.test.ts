@@ -1,6 +1,6 @@
-import { projectCreateInput } from "@cubby/schemas/project";
 import { embeddableEntities } from "@cubby/schemas/search";
 import { and, eq, isNull } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -14,7 +14,6 @@ import {
   createPendingImageRecord,
   createUploadedImageRecord,
 } from "./image";
-import { createProject } from "./project";
 
 /**
  * Kinds that opt out of the kernel's generic mutation side effects
@@ -96,11 +95,9 @@ describe("image create paths project and enqueue embedding", () => {
   });
 
   it("createOrReuseAttachedImage refreshes only after the transaction commits", async () => {
-    const { entityId: projectId } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "Embedding coverage project" }),
-      ctx.actor,
-    );
+    const { entityId: projectId } = await createRepoEntity(ctx, "project", {
+      name: "Embedding coverage project",
+    });
     const { row } = await createOrReuseAttachedImage(
       ctx.db,
       {
