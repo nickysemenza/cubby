@@ -1,8 +1,7 @@
 diff --git a/dist/index.js b/dist/index.js
-index 7f0933ec1b3a5f3ce4a0d7d5b8fa00f9a1fe553e..8ac937d2c0d6bfbe892e503b2b6b5df7c31e326b 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -11,6 +11,7 @@ class CloudflareSocket extends events_1.EventEmitter {
+@@ -11,6 +11,7 @@
          this.ssl = ssl;
          this.writable = false;
          this.destroyed = false;
@@ -10,7 +9,7 @@ index 7f0933ec1b3a5f3ce4a0d7d5b8fa00f9a1fe553e..8ac937d2c0d6bfbe892e503b2b6b5df7
          this._upgrading = false;
          this._upgraded = false;
          this._cfSocket = null;
-@@ -37,7 +38,15 @@ class CloudflareSocket extends events_1.EventEmitter {
+@@ -37,7 +38,15 @@
              const options = this.ssl ? { secureTransport: 'starttls' } : {};
              const mod = await import('cloudflare:sockets');
              const connect = mod.connect;
@@ -26,7 +25,7 @@ index 7f0933ec1b3a5f3ce4a0d7d5b8fa00f9a1fe553e..8ac937d2c0d6bfbe892e503b2b6b5df7
              this._cfWriter = this._cfSocket.writable.getWriter();
              this._addClosedHandler();
              this._cfReader = this._cfSocket.readable.getReader();
-@@ -82,11 +91,15 @@ class CloudflareSocket extends events_1.EventEmitter {
+@@ -85,11 +94,15 @@
          if (typeof data === 'string')
              data = Buffer.from(data, encoding);
          log('sending data direct:', data);
@@ -43,10 +42,9 @@ index 7f0933ec1b3a5f3ce4a0d7d5b8fa00f9a1fe553e..8ac937d2c0d6bfbe892e503b2b6b5df7
          });
          return true;
 diff --git a/src/index.ts b/src/index.ts
-index 9b1e517ba3881462144cd1f9ecb825b957094327..92b811c9ca31794ad32c11b16aad354937a0183d 100644
 --- a/src/index.ts
 +++ b/src/index.ts
-@@ -8,6 +8,7 @@ export class CloudflareSocket extends EventEmitter {
+@@ -8,6 +8,7 @@
    writable = false
    destroyed = false
  
@@ -54,7 +52,7 @@ index 9b1e517ba3881462144cd1f9ecb825b957094327..92b811c9ca31794ad32c11b16aad3549
    private _upgrading = false
    private _upgraded = false
    private _cfSocket: Socket | null = null
-@@ -39,7 +40,15 @@ export class CloudflareSocket extends EventEmitter {
+@@ -39,7 +40,15 @@
        const options: SocketOptions = this.ssl ? { secureTransport: 'starttls' } : {}
        const mod = await import('cloudflare:sockets')
        const connect = mod.connect
@@ -70,7 +68,7 @@ index 9b1e517ba3881462144cd1f9ecb825b957094327..92b811c9ca31794ad32c11b16aad3549
        this._cfWriter = this._cfSocket.writable.getWriter()
        this._addClosedHandler()
  
-@@ -91,13 +100,17 @@ export class CloudflareSocket extends EventEmitter {
+@@ -95,13 +104,17 @@
      if (typeof data === 'string') data = Buffer.from(data, encoding)
  
      log('sending data direct:', data)

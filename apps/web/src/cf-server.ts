@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { SENTRY_DATA_COLLECTION } from "@cubby/worker-tracing/sentry-data-collection";
 import { CUBBY_SENTRY_DSN } from "@cubby/worker-tracing/sentry-dsn";
 import * as Sentry from "@sentry/cloudflare";
 // CF Workers production entry point.
@@ -1196,7 +1197,7 @@ export default Sentry.withSentry(
     // The e2e harness identity (see `tests/e2e/e2e-worker-runtime.ts`) must
     // never ship envelopes to the real DSN.
     enabled: workerSentryEnabled(env),
-    sendDefaultPii: false,
+    dataCollection: SENTRY_DATA_COLLECTION,
     release: `cubby@${__GIT_COMMIT__}`,
     // Covers queue/cron events without request URLs. Deployed previews retain
     // production reporting (NODE_ENV stays "production" there;
@@ -1206,7 +1207,6 @@ export default Sentry.withSentry(
     // Keep the scrubber as defense in depth for manually attached request data,
     // even though the SDK no longer sends default PII.
     beforeSend: scrubSentryEvent,
-    beforeSendTransaction: scrubSentryEvent,
     // Drop known-noise messages before send — free-plan quota hygiene.
     ignoreErrors: SENTRY_IGNORED_ERRORS,
     // Cloudflare native tracing already exports server spans. A sampled

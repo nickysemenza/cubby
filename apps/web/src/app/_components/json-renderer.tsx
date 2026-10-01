@@ -1,4 +1,4 @@
-import { JsonEditor } from "json-edit-react";
+import { JsonViewer } from "json-edit-react";
 import type { JSX } from "react";
 
 const JsonRenderer = ({
@@ -9,7 +9,7 @@ const JsonRenderer = ({
   pretty?: boolean;
 }): JSX.Element => {
   return pretty ? (
-    <JsonEditor data={input} rootFontSize="10px" viewOnly />
+    <JsonViewer data={input} baseFontSize="10px" />
   ) : (
     <pre className="overflow-auto">{JSON.stringify(input, null, 2)}</pre>
   );

@@ -155,6 +155,43 @@ jobs:
       - run: cargo clippy --manifest-path cubby-ffi/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path cubby-ffi/Cargo.toml
 
+  # Builds the Worker bundles once. Postgres integration and E2E download
+  # the result instead of rebuilding (and instead of polling for an artifact
+  # another job happens to publish).
+  build-worker:
+    name: Build Workers
+    needs: scope
+    if: needs.scope.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: "restore"
+          workspace-filter: "@cubby/web... @cubby/purchase-agent..."
+      - name: Build coupled workerd Workers
+        env:
+          CUBBY_SOURCE_COMMIT: ${{ github.sha }}
+          CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
+        run: |
+          # wasm-pack may add a trailing newline to the tracked package metadata.
+          git restore -- packages/wasm/package.json
+          pnpm --filter @cubby/purchase-agent run build
+          pnpm --filter @cubby/web run build:cf
+      # One artifact keeps the three outputs at their repository paths, so
+      # consumers extract it over the checkout.
+      - name: Save Worker build
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: worker-build
+          path: |
+            apps/web/dist
+            apps/purchase-agent/dist
+            packages/wasm
+          if-no-files-found: error
+          retention-days: 1
+
   test-web:
     name: Tests - web (${{ matrix.tier }})
     needs: scope
@@ -178,78 +215,44 @@ jobs:
         with:
           wasm: "restore"
           workspace-filter: "@cubby/web..."
-      - name: Build web Cloudflare bundle
+      # The mcp-contract project imports the built MCP App HTML; build:cf used
+      # to produce it here before the Worker build moved to build-worker.
+      - name: Build MCP App assets
         if: matrix.tier == 'node'
-        env:
-          CUBBY_SOURCE_COMMIT: ${{ github.sha }}
-          CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
-        run: |
-          # wasm-pack may add a trailing newline to the tracked package metadata.
-          git restore -- packages/wasm/package.json
-          pnpm --filter @cubby/web run build:cf
-      - name: Save recipebridge WASM
-        if: matrix.tier == 'node'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: recipebridge-wasm
-          path: packages/wasm
-          if-no-files-found: error
-          retention-days: 1
-      - name: Save Cloudflare bundle
-        if: matrix.tier == 'node'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: cf-build
-          path: apps/web/dist
-          if-no-files-found: error
-          retention-days: 1
+        run: pnpm --filter @cubby/mcp-apps run build
       - name: Run ${{ matrix.tier }} tests
         run: pnpm --dir apps/web exec vitest run ${{ matrix.args }}
 
+  # Sharded with Vitest's file-level --shard. `Web checks` aggregates the
+  # matrix, so the shard count can change without touching branch protection.
   test-postgres:
-    name: PostgreSQL integration tests
-    needs: scope
+    name: PostgreSQL integration tests (${{ matrix.shard }})
+    needs: [scope, build-worker]
     if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_DB: cubby
-          POSTGRES_HOST_AUTH_METHOD: trust
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 10
-          --health-start-period 3s
-        ports: ["5432:5432"]
-      integresql:
-        image: ghcr.io/allaboutapps/integresql@sha256:66b7433399f1907bad9e4b7cc7bd528ed4ebfccddecb8fd65da4af4d06a68c5a
-        ports: ["5000:5000"]
-        env:
-          PGHOST: postgres
-          PGUSER: postgres
-          PGPASSWORD: password
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ["1/3", "2/3", "3/3"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/start-test-services
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          wasm: "restore"
+          wasm: "false"
           workspace-filter: "@cubby/web... @cubby/purchase-agent..."
-      - name: Build coupled workerd Workers
-        env:
-          CUBBY_SOURCE_COMMIT: ${{ github.sha }}
-          CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
-        run: |
-          pnpm --filter @cubby/purchase-agent run build
-          pnpm --filter @cubby/web run build:cf
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: worker-build
+          path: .
       - name: Run PostgreSQL integration tests
         env:
           CUBBY_TEST_INTEGRATION: "1"
-        run: pnpm --dir apps/web exec vitest run --project integration
+        run: |
+          # The downloaded WASM package may carry regenerated metadata.
+          git restore -- packages/wasm/package.json
+          pnpm --dir apps/web exec vitest run --project integration --shard=${{ matrix.shard }}
 
   # Committed migrations are the only schema path: prove they carry every
   # schema.ts change and build the same catalog as schema.ts itself.
@@ -259,22 +262,11 @@ jobs:
     if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_DB: cubby
-          POSTGRES_HOST_AUTH_METHOD: trust
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 10
-          --health-start-period 3s
-        ports: ["5432:5432"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/start-test-services
+        with:
+          integresql: "false"
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "false"
@@ -283,7 +275,7 @@ jobs:
 
   test-e2e:
     name: E2E tests (${{ matrix.lane }})
-    needs: scope
+    needs: [scope, build-worker]
     if: needs.scope.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -309,32 +301,9 @@ jobs:
       E2E_TEST_USER_EMAIL: nicky@test.com
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
-    # Deliberately duplicated from test-postgres above: GitHub Actions YAML
-    # has no anchors and no reusable "services" construct that fits a
-    # per-job block like this.
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_DB: cubby
-          POSTGRES_HOST_AUTH_METHOD: trust
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 10
-          --health-start-period 3s
-        ports: ["5432:5432"]
-      integresql:
-        image: ghcr.io/allaboutapps/integresql@sha256:66b7433399f1907bad9e4b7cc7bd528ed4ebfccddecb8fd65da4af4d06a68c5a
-        ports: ["5000:5000"]
-        env:
-          PGHOST: postgres
-          PGUSER: postgres
-          PGPASSWORD: password
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/start-test-services
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: "false"
@@ -358,48 +327,10 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.browser }}
-      - name: Wait for the tested Cloudflare bundle
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        with:
-          script: |
-            const deadline = Date.now() + 20 * 60 * 1000;
-            for (;;) {
-              const artifacts = await github.paginate(
-                github.rest.actions.listWorkflowRunArtifacts,
-                { ...context.repo, run_id: context.runId, per_page: 100 },
-              );
-              if (artifacts.some(({ name }) => name === "cf-build")) return;
-
-              const jobs = await github.paginate(
-                github.rest.actions.listJobsForWorkflowRun,
-                { ...context.repo, run_id: context.runId, per_page: 100 },
-              );
-              // Matches the job's display name literally: renaming test-web
-              // silently turns a build failure into a 20-minute timeout here.
-              const build = jobs.find(
-                ({ name }) => name === "Tests - web (node)",
-              );
-              if (
-                build?.status === "completed" &&
-                build.conclusion !== "success"
-              ) {
-                core.setFailed(`Cloudflare build ended ${build.conclusion}`);
-                return;
-              }
-              if (Date.now() >= deadline) {
-                core.setFailed("cf-build was not published within twenty minutes");
-                return;
-              }
-              await new Promise((resolve) => setTimeout(resolve, 5_000));
-            }
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: cf-build
-          path: apps/web/dist
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: recipebridge-wasm
-          path: packages/wasm
+          name: worker-build
+          path: .
       - name: Run Playwright tests
         run: |
           # The downloaded WASM package may carry regenerated metadata.
@@ -414,6 +345,7 @@ jobs:
             apps/web/playwright-report/run-manifest.json
             apps/web/playwright-report/run-results.json
             apps/web/playwright-report/SHA256SUMS
+            apps/web/playwright-report/workerd-logs
           if-no-files-found: error
           retention-days: 7
 
@@ -421,7 +353,7 @@ jobs:
   # required check verifies their combined result whenever they run.
   web-checks:
     name: Web checks
-    needs: [scope, test-web, test-postgres, db-check, test-e2e]
+    needs: [scope, build-worker, test-web, test-postgres, db-check, test-e2e]
     if: always() && !(github.event_name == 'workflow_dispatch' && inputs.simulator_e2e)
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -430,6 +362,7 @@ jobs:
         env:
           SCOPE_RESULT: ${{ needs.scope.result }}
           WEB: ${{ needs.scope.outputs.web }}
+          BUILD_RESULT: ${{ needs.build-worker.result }}
           WEB_RESULT: ${{ needs.test-web.result }}
           POSTGRES_RESULT: ${{ needs.test-postgres.result }}
           DB_CHECK_RESULT: ${{ needs.db-check.result }}
@@ -437,6 +370,7 @@ jobs:
         run: |
           test "$SCOPE_RESULT" = success || exit 1
           if [ "$WEB" = true ]; then
+            test "$BUILD_RESULT" = success || exit 1
             test "$WEB_RESULT" = success || exit 1
             test "$POSTGRES_RESULT" = success || exit 1
             test "$DB_CHECK_RESULT" = success || exit 1

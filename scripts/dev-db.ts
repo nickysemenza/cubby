@@ -191,7 +191,7 @@ async function ready(): Promise<number> {
   const migrated = await runInWebWorkspace("db-migrate.ts", ["--target=dev"]);
   if (migrated !== 0) {
     console.error(
-      "[dev-db] Migration failed. `pnpm db:dev:reset` discards this synthetic local database and rebuilds it from the migrations.",
+      "[dev-db] Migration failed. `pnpm dev:reset` discards this synthetic local database and rebuilds it from the migrations.",
     );
     return migrated;
   }

@@ -31,9 +31,10 @@ async function templateContext() {
   });
   const hash = hashSchemaTemplateInputs([
     ...schemaTemplateInputs,
-    // Browser acceptance and Vitest run concurrently in `test:all`. A distinct
-    // template prevents either process's template initialization/reset cycle
-    // from invalidating the other's checked-out databases mid-run.
+    // Browser acceptance and Vitest can share one IntegreSQL service (a warm
+    // local service, or two terminals). A distinct template prevents either
+    // process's template initialization/reset cycle from invalidating the
+    // other's checked-out databases mid-run.
     "./tests/e2e/e2e-database.ts",
   ]);
 

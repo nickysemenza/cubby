@@ -31,6 +31,14 @@ they can contain household data or credentials. Run `shasum -a 256 -c
 SHA256SUMS` from the downloaded bundle directory to verify its contents, then
 replay the `command` array in `run-manifest.json` against the recorded commit.
 
+A failed E2E test attaches the Worker harness's structured workerd logs
+(`harness.getLogs()`, credential-shaped values scrubbed) to the Playwright
+result and copies them into the bundle under `workerd-logs/`; the case entry in
+`run-results.json` records the harness explorer URL. Each Playwright worker also
+prints `<origin>/cdn-cgi/local/explorer` at startup, so a paused (`PWDEBUG`,
+headed, or `--ui`) test can be inspected for Durable Object, queue, workflow,
+and R2 state. The URL is only valid while that worker is alive.
+
 Run `pnpm wasm` after WASM changes. The shared `CARGO_TARGET_DIR` can be
 written by another checkout, so confirm generated output is current. Generated
 API changes require the owning generated-surface workflow and affected native

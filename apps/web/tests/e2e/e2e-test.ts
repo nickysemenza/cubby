@@ -1,6 +1,10 @@
 import { test as base, expect } from "@playwright/test";
 
 import {
+  WORKERD_EXPLORER_ANNOTATION,
+  WORKERD_LOGS_ATTACHMENT,
+} from "../../tooling/e2e-workerd-logs";
+import {
   createE2EWorkerRuntime,
   type E2EWorkerRuntime,
 } from "./e2e-worker-runtime";
@@ -43,8 +47,20 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
   },
   e2eFailureDiagnostics: [
     async ({ e2eRuntime }, provide, testInfo) => {
+      // The harness is shared by every test in this Playwright worker.
+      e2eRuntime.clearLogs();
       await provide();
-      if (testInfo.status !== testInfo.expectedStatus) e2eRuntime.debug();
+      if (testInfo.status === testInfo.expectedStatus) return;
+      // A structured attachment replaces the harness's stdout-only debug()
+      // dump; the run reporter copies it into the sanitized E2E bundle.
+      await testInfo.attach(WORKERD_LOGS_ATTACHMENT, {
+        body: JSON.stringify(e2eRuntime.getLogs(), null, 2),
+        contentType: "application/json",
+      });
+      testInfo.annotations.push({
+        type: WORKERD_EXPLORER_ANNOTATION,
+        description: e2eRuntime.explorerUrl,
+      });
     },
     { auto: true },
   ],

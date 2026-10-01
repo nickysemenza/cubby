@@ -1,3 +1,4 @@
+import { SENTRY_DATA_COLLECTION } from "@cubby/worker-tracing/sentry-data-collection";
 import * as Sentry from "@sentry/cloudflare";
 import type { ExecutionContext } from "@cloudflare/workers-types";
 import {
@@ -63,6 +64,7 @@ export default Sentry.withSentry(
   (env: WorkerBindings) => ({
     dsn: CUBBY_SENTRY_DSN,
     environment: env.SENTRY_ENVIRONMENT,
+    dataCollection: SENTRY_DATA_COLLECTION,
     tracesSampleRate: 0,
     tracesSampler: () => 0,
     initialScope: { tags: { service: "usda-api" } },

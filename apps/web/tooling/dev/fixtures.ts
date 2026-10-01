@@ -100,7 +100,7 @@ export async function seedDevDatabase(options: {
     }
     if (marker)
       throw new Error(
-        `Local fixture pack ${pack} is partial or outdated; run pnpm db:dev:reset`,
+        `Local fixture pack ${pack} is partial or outdated; run pnpm dev:reset`,
       );
     if (pack === "core") {
       const legacy = await pool.query(`SELECT EXISTS (
@@ -108,7 +108,7 @@ export async function seedDevDatabase(options: {
       ) AS present`);
       if (legacy.rows[0]?.present)
         throw new Error(
-          "Unversioned or partial local corpus found; run pnpm db:dev:reset",
+          "Unversioned or partial local corpus found; run pnpm dev:reset",
         );
     } else {
       const core = await pool.query(

@@ -26,6 +26,7 @@ import {
   getErrorMessage,
   isDynamicImportError,
   isSupersededViewTransitionError,
+  type UnparsedError,
 } from "~/lib/error-utils";
 
 type ErrorCategory =
@@ -52,7 +53,7 @@ const categorizeError = (
   code: string | undefined,
   reason: string | undefined,
   message: string,
-  error: Error,
+  error: UnparsedError,
 ): ErrorCategory => {
   // Auth errors
   if (code === "UNAUTHORIZED" || reason === "UNAUTHORIZED") {

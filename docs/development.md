@@ -47,7 +47,7 @@ JSONL routes    →  cancellable workflow streams
 | `pnpm test`                                                        | Fast unit, UI, contract and auxiliary-package tests                 |
 | `pnpm test:postgres`                                               | Authoritative PostgreSQL contracts                                  |
 | `pnpm test:e2e`                                                    | PostgreSQL-backed Playwright tests                                  |
-| `pnpm test:all`                                                    | Fast tests, then PostgreSQL and Playwright concurrently             |
+| `pnpm test:all`                                                    | Fast tests, then PostgreSQL, then Playwright (sequential)           |
 | `pnpm test:e2e:local`                                              | Every local-only E2E lane (headless, photo, wardrobe, simulator)    |
 | `pnpm test:e2e:sim [-- --headless\|--watch\|--video\|--layout]`    | iOS simulator or headless CLI journey against a disposable DB       |
 | `pnpm --filter @cubby/web test:e2e:watch`                          | Warm services + `vite build --watch` + Playwright `--ui`            |

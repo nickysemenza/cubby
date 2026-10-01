@@ -19,19 +19,19 @@
     "@cubby/schemas": "workspace:*",
     "@cubby/shared": "workspace:*",
     "@cubby/worker-tracing": "workspace:*",
-    "@earendil-works/pi-ai": "0.83.0",
-    "@flue/runtime": "2.1.0",
-    "@sentry/cloudflare": "^10.66.0",
-    "valibot": "^1.1.0",
+    "@earendil-works/pi-ai": "0.99.2",
+    "@flue/runtime": "2.2.2",
+    "@sentry/cloudflare": "^11.2.0",
+    "valibot": "^1.5.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.45.1",
-    "@cloudflare/workers-types": "^5.20260719.1",
-    "@flue/sdk": "2.1.0",
-    "@flue/vite": "2.1.0",
+    "@cloudflare/vite-plugin": "^1.62.4",
+    "@cloudflare/workers-types": "^5.20261001.1",
+    "@flue/sdk": "2.2.2",
+    "@flue/vite": "2.2.2",
     "vite": "^8.1.5",
-    "vitest": "^5.0.1",
-    "wrangler": "^4.145.0"
+    "vitest": "^5.0.3",
+    "wrangler": "^4.146.0"
   }
 }

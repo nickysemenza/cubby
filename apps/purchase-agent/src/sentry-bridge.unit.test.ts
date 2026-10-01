@@ -1,4 +1,5 @@
 import type { FlueObservation } from "@flue/runtime";
+import { SENTRY_DATA_COLLECTION } from "@cubby/worker-tracing/sentry-data-collection";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -192,7 +193,7 @@ describe("purchase-agent Sentry bridge", () => {
     ).toMatchObject({
       enabled: true,
       environment: "production",
-      sendDefaultPii: false,
+      dataCollection: SENTRY_DATA_COLLECTION,
       initialScope: { tags: { service: "purchase-agent" } },
     });
   });

@@ -10,10 +10,11 @@ allowBuilds:
   "@prisma/engines": false
   "@sentry/cli": false
   "@swc/core": false
+  better-sqlite3: set this to true or false
   better-sqlite3@12.11.1: true
   # v13 bundles native binaries; binding.gyp otherwise triggers an implicit
   # node-gyp rebuild even though no install script is needed.
-  better-sqlite3@13.0.1: false
+  better-sqlite3@13.0.3: false
   core-js: false
   core-js-pure: false
   esbuild: true
@@ -26,22 +27,23 @@ strictDepBuilds: false
 minimumReleaseAge: 0
 
 overrides:
-  # Flue 2.1.0 cannot replay the system-role turn context emitted by pi 0.86.
-  # Keep its paired runtime packages on the last compatible release until Flue
-  # publishes support; the real two-Worker recovery test enforces this boundary.
-  "@earendil-works/pi-agent-core": 0.83.0
-  "@earendil-works/pi-ai": 0.83.0
+  # Flue 2.2.x declares pi ^0.87.1 but Cubby's gateway provider is written
+  # against pi 0.99 (createProvider/lazy API modules). Keep Flue's paired
+  # runtime packages on the same release as the direct dependency; the real
+  # two-Worker recovery test enforces this boundary.
+  "@earendil-works/pi-agent-core": 0.99.2
+  "@earendil-works/pi-ai": 0.99.2
   # better-auth pins @better-auth/core to its own exact version while the
   # @better-auth/* plugins peer on a caret range; auto-installed peers resolve
   # to the newest patch, so whenever better-auth lags core (Renovate skips
   # patches and holds releases 7 days) the tree gets two core copies and an
   # unmet exact @better-fetch/fetch peer. Keep this equal to better-auth in
   # apps/web; Renovate bumps both in the same grouped PR.
-  "@better-auth/core": 1.7.5
+  "@better-auth/core": 1.7.7
   # Keep Vite and Wrangler on a compatible pair: local auxiliary Workers use
   # the purchase agent's 2026-09-19 compatibility date. The older Vite runtime
   # only accepted dates through 2026-08-08.
-  "@cloudflare/vite-plugin": 1.62.1
+  "@cloudflare/vite-plugin": 1.62.4
   # Patched recursive brace parsing used by Nx and transitive minimatch.
   # Covers GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p, GHSA-q2hr-2g5m-vwhr.
   brace-expansion: ^5.0.12
@@ -75,7 +77,7 @@ overrides:
   undici@7.28.0: 8.10.2
   vite: ^8.0.0
   webpack: ^5.104.1
-  wrangler: 4.145.0
+  wrangler: 4.146.0
 
 # The global store cannot rely on project-local hoisting. The maintained type
 # fixer handles published devDependencies; these packages omit that metadata
@@ -87,6 +89,12 @@ packageExtensions:
   minimizer-webpack-plugin@5.10.0:
     dependencies:
       sharp: 0.35.4
+  # The plugin requires rollup at runtime without declaring it. An unrelated
+  # dependency used to supply it through auto-installed peers; Sentry 11 no
+  # longer does, which broke loading apps/web/vite.config.ts.
+  vite-plugin-top-level-await:
+    dependencies:
+      rollup: ^4.59.0
   vite-ssr-components:
     peerDependencies:
       vite: ^8.0.10
@@ -468,4 +476,4 @@ configDependencies:
 # Observation events preserve pg-cloudflare startup ordering; port when upgrading.
 patchedDependencies:
   agent-device@0.21.12: patches/agent-device@0.21.12.patch
-  pg-cloudflare@1.4.0: patches/pg-cloudflare@1.4.0.patch
+  pg-cloudflare@1.4.1: patches/pg-cloudflare@1.4.1.patch

@@ -45,8 +45,9 @@ remain the merge gate.
 
 Node 24, pnpm 12.4.1, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
 browsers must be available; [test tiers](agents/validation-tests.md) cover database setup.
-PostgreSQL remains the authoritative integration tier; Playwright retains a
-single worker and no retries. Both tiers reject an empty selection or an
+PostgreSQL remains the authoritative integration tier; Playwright defaults to
+one worker on hosted runners and two on local macOS (`tooling/e2e-workers.ts`),
+the CI workflow passes `--workers=2` for each shard, and there are no retries. Both tiers reject an empty selection or an
 unexpected skipped test without freezing the suite to a hand-maintained count.
 Browser verification always follows the current web build (the `e2e` target
 `dependsOn: ["build-cf"]`).
@@ -130,8 +131,10 @@ app, so edits there select the web lanes.
 Native, auxiliary, Rust, web, and PostgreSQL/E2E lanes run only when their inputs
 can affect them. A manual run selects all lanes. `Web checks` is the stable
 required aggregate: it checks the web, PostgreSQL, and browser matrix results
-whenever web validation is selected. The browser lanes test the exact bundle
-produced by the node test lane and retain the discovery and no-skip guard;
+whenever web validation is selected. A single `Build Workers` job builds the
+purchase-agent and web Cloudflare bundles once and uploads them with the WASM
+package as the `worker-build` artifact; the PostgreSQL integration and browser
+lanes `need` it and download that exact bundle. The browser lanes retain the discovery and no-skip guard;
 desktop Chromium runs as two Playwright shards (two workers each). Phone-web and
 WebKit browser coverage was removed from PR CI and the Playwright suite; native
 checks remain separate. There is no coverage mode.
@@ -142,10 +145,13 @@ build is marked as not exactly replayable. The manually dispatched native
 simulator E2E saves the same bundle format with its app build fingerprint and
 runtime. Raw reports, traces, screenshots, and logs stay local because they may
 contain household data or credentials.
-`test-postgres` and `test-e2e` each
-declare their own `postgres`/`integresql` `services:` block — GitHub Actions
-YAML has no anchors and no reusable construct that fits here, so the
-duplication is accepted rather than worked around. Affected jobs wait on
+PostgreSQL integration tests run as three Vitest `--shard` jobs (one
+aggregate result through `Web checks`, so required-check names do not change
+with the shard count). Jobs that need the databases (`test-postgres`,
+`test-e2e`, `db-check`) start them with the `start-test-services` composite
+action, which runs the pgvector PostgreSQL and IntegreSQL images on ports 5432
+and 5000; a composite action cannot declare `services:`, so it uses `docker
+run`. Affected jobs wait on
 `Scope`. The offline Markdown link check runs in `Validation` for Markdown
 changes. The
 `@claude` mention workflow (`claude.yml`) remains manual;

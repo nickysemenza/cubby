@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type {
   FullResult,
@@ -15,6 +15,10 @@ import {
 } from "../../tooling/e2e-run-bundle";
 import { FAKER_SEED_ANNOTATION } from "../../tooling/factories/faker";
 import { assertTestRunContract } from "../../tooling/test-run-contract";
+import {
+  WORKERD_EXPLORER_ANNOTATION,
+  WORKERD_LOGS_ATTACHMENT,
+} from "../../tooling/e2e-workerd-logs";
 
 import {
   NAVIGATION_ANNOTATION,
@@ -27,7 +31,9 @@ class E2EHarnessReporter implements Reporter {
     name: string;
     status: string;
     durationMs: number;
+    explorerUrl?: string;
   }> = [];
+  private workerdLogs: Array<{ name: string; body: Buffer }> = [];
   private runStatus = "interrupted";
   private navigation: Array<{ name: string; ms: number; count: number }> = [];
   private durations: Array<{
@@ -52,11 +58,20 @@ class E2EHarnessReporter implements Reporter {
         name,
         state: result.status,
       });
+      const explorerUrl = result.annotations.find(
+        (annotation) => annotation.type === WORKERD_EXPLORER_ANNOTATION,
+      )?.description;
       this.bundleCases.push({
         name,
         status: result.status,
         durationMs: result.duration,
+        ...(explorerUrl && { explorerUrl }),
       });
+      const logs = result.attachments.find(
+        (attachment) =>
+          attachment.name === WORKERD_LOGS_ATTACHMENT && attachment.body,
+      )?.body;
+      if (logs) this.workerdLogs.push({ name, body: logs });
     }
     if (result.status === "failed" || result.status === "timedOut") {
       const seed = result.annotations.find(
@@ -114,10 +129,21 @@ class E2EHarnessReporter implements Reporter {
       resultsPath,
       `${JSON.stringify({ status: this.runStatus, cases: this.bundleCases }, null, 2)}\n`,
     );
+    // Failed tests only; messages were credential-scrubbed in the test worker.
+    const logsDir = path.join(reportDir, "workerd-logs");
+    rmSync(logsDir, { recursive: true, force: true });
+    this.workerdLogs.forEach(({ name, body }, index) => {
+      mkdirSync(logsDir, { recursive: true });
+      writeFileSync(
+        path.join(logsDir, `failure-${index + 1}.json`),
+        `${JSON.stringify({ test: name, logs: JSON.parse(body.toString("utf8")) }, null, 2)}
+`,
+      );
+    });
     const manifest = writeE2ERunBundle({
       repoRoot,
       outputDir: reportDir,
-      evidence: [resultsPath],
+      evidence: [resultsPath, logsDir],
       kind: "browser",
       status: this.runStatus,
       started: this.started,

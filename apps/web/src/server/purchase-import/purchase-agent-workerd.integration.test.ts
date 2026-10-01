@@ -523,22 +523,24 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
         );
       }
 
-      expect(
-        (
-          await fetch(new URL("/browser-result", url), {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              vendorAccountId: account.id,
-              ledgerPartyId: party.id,
-              userId: ctx.actor.userId,
-              runId: started.run.id,
-              commandId: z.uuid().parse(browserCommand?.commandId),
-              operationId: browserCommand?.operationId,
-            }),
-          })
-        ).status,
-      ).toBe(202);
+      const browserResult = await fetch(new URL("/browser-result", url), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          vendorAccountId: account.id,
+          ledgerPartyId: party.id,
+          userId: ctx.actor.userId,
+          runId: started.run.id,
+          commandId: z.uuid().parse(browserCommand?.commandId),
+          operationId: browserCommand?.operationId,
+        }),
+      });
+      // A 500 here comes from the broker Durable Object; surface its body and
+      // the runtime logs, which the bare status assertion used to discard.
+      if (browserResult.status !== 202)
+        throw new Error(
+          `browser-result ${browserResult.status}: ${await browserResult.text()}\n${JSON.stringify(harness.getLogs().slice(-40), null, 1)}\n${await workerdDiagnostic(ctx.db, started.run.id)}`,
+        );
       try {
         await waitFor(async () => {
           const [run] = await getDb(ctx.db)

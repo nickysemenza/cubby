@@ -3,7 +3,7 @@
   "name": "upc-lookup",
   "account_id": "9f10f078d35d86c78dedece2300a6b88",
   // Bumped from 2025-08-03 so Workers tracing (open beta 2025-11-07) actually emits.
-  "compatibility_date": "2026-06-16",
+  "compatibility_date": "2026-09-19",
   "compatibility_flags": ["nodejs_compat"],
   "main": "./src/index.tsx",
 
