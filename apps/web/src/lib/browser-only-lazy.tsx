@@ -18,23 +18,23 @@ import { useHydrated } from "~/hooks/useHydrated";
  * pay as multi-second first requests.
  *
  * The returned component renders `Placeholder` on the server and on the first
- * client render, then the real component (behind its own Suspense) once
- * hydrated, so server HTML and hydration always agree. Omit `Placeholder` for
- * something only mounted after user interaction (a dialog, a popover body),
- * which never appears in server HTML.
+ * client render, then the real component (behind a Suspense showing the same
+ * placeholder) once hydrated, so server HTML and hydration always agree.
+ *
+ * Omit `Placeholder` for something only mounted after user interaction (a
+ * dialog, a popover body), which never appears in server HTML. It then renders
+ * nothing before hydration and adds no Suspense boundary of its own, so its
+ * chunk load shows the caller's loading fallback.
  */
-function Nothing() {
-  return null;
-}
-
 export function browserOnlyLazy<Props extends object>(
   load: (() => Promise<{ default: ComponentType<Props> }>) | null,
-  Placeholder: ComponentType = Nothing,
+  Placeholder?: ComponentType,
 ) {
   const Lazy = load ? lazy(load) : null;
   return function BrowserOnly(props: Props) {
     const hydrated = useHydrated();
-    if (!hydrated || !Lazy) return <Placeholder />;
+    if (!hydrated || !Lazy) return Placeholder ? <Placeholder /> : null;
+    if (!Placeholder) return <Lazy {...props} />;
     return (
       <Suspense fallback={<Placeholder />}>
         <Lazy {...props} />
