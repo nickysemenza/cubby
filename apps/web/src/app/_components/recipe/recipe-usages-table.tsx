@@ -5,14 +5,7 @@ import { useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Button } from "~/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
+import { StaticTable } from "~/components/ui/static-table";
 import {
   Tooltip,
   TooltipContent,
@@ -109,113 +102,123 @@ export function RecipeUsagesTable({
   if (rows.length === 0) return null;
 
   return (
-    <Table className="table-auto">
-      <TableHeader>
-        <TableRow>
-          <TableHead>Recipe</TableHead>
-          <TableHead>Section</TableHead>
-          <TableHead>Amount</TableHead>
-          <TableHead>Modifier</TableHead>
-          <TableHead>Source line</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.id}>
-            <TableCell className="align-top">
-              <EntityRefLink
-                displayImage={
-                  displayImages[
-                    entityDisplayImageKey({
-                      entityKind: "recipe",
-                      entityId: row.recipe.id,
-                    })
-                  ] ?? null
-                }
-                entity="recipe"
-                data={row.recipe}
+    <StaticTable
+      rows={rows}
+      rowKey={(row) => row.id}
+      className="table-auto"
+      cellClassName="align-top"
+      columns={[
+        {
+          id: "recipe",
+          header: "Recipe",
+          cell: (row) => (
+            <EntityRefLink
+              displayImage={
+                displayImages[
+                  entityDisplayImageKey({
+                    entityKind: "recipe",
+                    entityId: row.recipe.id,
+                  })
+                ] ?? null
+              }
+              entity="recipe"
+              data={row.recipe}
+            />
+          ),
+        },
+        {
+          id: "section",
+          header: "Section",
+          cellClassName: "text-muted-foreground",
+          cell: (row) => row.sectionName ?? "",
+        },
+        {
+          id: "amount",
+          header: "Amount",
+          cellClassName: "text-muted-foreground",
+          cell: (row) =>
+            row.drift.amounts !== null ? (
+              <DriftIndicator
+                axis="amount"
+                before={formatAmounts(row.amounts)}
+                after={formatAmounts(row.drift.amounts)}
+                className="max-w-[12rem]"
               />
-            </TableCell>
-            <TableCell className="align-top text-muted-foreground">
-              {row.sectionName ?? ""}
-            </TableCell>
-            <TableCell className="align-top text-muted-foreground">
-              {row.drift.amounts !== null ? (
-                <DriftIndicator
-                  axis="amount"
-                  before={formatAmounts(row.amounts)}
-                  after={formatAmounts(row.drift.amounts)}
-                  className="max-w-[12rem]"
-                />
-              ) : row.amounts.length > 0 ? (
-                formatAmounts(row.amounts)
-              ) : (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <span className="inline-flex items-center gap-1 text-warning" />
-                    }
-                  >
-                    <WarningCircleIcon className="size-3 shrink-0 text-warning" />
-                    —
-                  </TooltipTrigger>
-                  <TooltipContent>No parsed amount</TooltipContent>
-                </Tooltip>
-              )}
-            </TableCell>
-            <TableCell className="align-top whitespace-normal text-muted-foreground">
-              {row.drift.modifier !== null ? (
-                <DriftIndicator
-                  axis="modifier"
-                  before={row.modifier ?? ""}
-                  after={row.drift.modifier}
-                  className="max-w-[18rem]"
-                />
-              ) : (
-                (row.modifier ?? "")
-              )}
-            </TableCell>
-            <TableCell className="align-top whitespace-normal">
-              {row.rawLine ? (
-                <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <span className="text-muted-foreground">{row.rawLine}</span>
-                  {row.drift.name !== null && (
-                    <DriftIndicator
-                      axis="name"
-                      before={ingredientName}
-                      after={row.drift.name}
-                    />
-                  )}
-                  {onReparse && hasDrift(row.drift) && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 shrink-0 gap-1 px-1 text-xs"
-                      disabled={reparsingId !== null}
-                      onClick={() => {
-                        setReparsingId(row.id);
-                        void onReparse(row).finally(() => setReparsingId(null));
-                      }}
-                      title="Re-parse this line with the current parser and apply"
-                    >
-                      <ArrowClockwiseIcon className="size-3" />
-                      Re-parse
-                    </Button>
-                  )}
-                </span>
-              ) : (
-                <span
-                  className="text-muted-foreground italic"
-                  title="No source line captured for this usage"
+            ) : row.amounts.length > 0 ? (
+              formatAmounts(row.amounts)
+            ) : (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="inline-flex items-center gap-1 text-warning" />
+                  }
                 >
-                  (no source line)
-                </span>
-              )}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+                  <WarningCircleIcon className="size-3 shrink-0 text-warning" />
+                  —
+                </TooltipTrigger>
+                <TooltipContent>No parsed amount</TooltipContent>
+              </Tooltip>
+            ),
+        },
+        {
+          id: "modifier",
+          header: "Modifier",
+          cellClassName: "whitespace-normal text-muted-foreground",
+          cell: (row) =>
+            row.drift.modifier !== null ? (
+              <DriftIndicator
+                axis="modifier"
+                before={row.modifier ?? ""}
+                after={row.drift.modifier}
+                className="max-w-[18rem]"
+              />
+            ) : (
+              (row.modifier ?? "")
+            ),
+        },
+        {
+          id: "source-line",
+          header: "Source line",
+          cellClassName: "whitespace-normal",
+          cell: (row) =>
+            row.rawLine ? (
+              <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="text-muted-foreground">{row.rawLine}</span>
+                {row.drift.name !== null && (
+                  <DriftIndicator
+                    axis="name"
+                    before={ingredientName}
+                    after={row.drift.name}
+                  />
+                )}
+                {onReparse && hasDrift(row.drift) && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 shrink-0 gap-1 px-1 text-xs"
+                    disabled={reparsingId !== null}
+                    onClick={() => {
+                      setReparsingId(row.id);
+                      void onReparse(row).finally(() => setReparsingId(null));
+                    }}
+                    title="Re-parse this line with the current parser and apply"
+                  >
+                    <ArrowClockwiseIcon className="size-3" />
+                    Re-parse
+                  </Button>
+                )}
+              </span>
+            ) : (
+              <span
+                className="text-muted-foreground italic"
+                title="No source line captured for this usage"
+              >
+                (no source line)
+              </span>
+            ),
+        },
+      ]}
+    />
   );
 }

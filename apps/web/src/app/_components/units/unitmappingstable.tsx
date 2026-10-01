@@ -4,14 +4,7 @@ import { useMemo } from "react";
 
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row } from "~/components/layout";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
+import { StaticTable } from "~/components/ui/static-table";
 import { entityDetailFor } from "~/entities/entity-detail";
 import { useHydrated } from "~/hooks/useHydrated";
 import { usdaFood as usdaFoodOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -152,43 +145,45 @@ export const UnitMappingsTable: React.FC<{
 
   if (mappings.length === 0) return null;
 
-  // TableHead already owns the mono/text-2xs/uppercase/tracking-wider eyebrow
-  // look; this override only tightens the height/padding for the dense table.
-  const head = "h-auto p-1";
   // table-auto: From/To size to content (no overflow into neighbors); Source takes the slack via w-full and truncates the food name.
-  const cell = "whitespace-nowrap p-1 align-top";
   return (
-    <Table className="table-auto">
-      <TableHeader>
-        <TableRow className="hover:bg-transparent">
-          <TableHead className={head}>From</TableHead>
-          <TableHead className={head}>To</TableHead>
-          <TableHead className={`${head} w-full`}>Source</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {mappings.map((m) => (
-          <TableRow
-            key={`${m.a.value}-${m.a.unit}-${m.b.value}-${m.b.unit}-${m.source}`}
-            className="hover:bg-transparent"
-          >
-            <TableCell className={`${cell} pr-4 tabular-nums`}>
-              {wasm.format_amount(m.a)}
-            </TableCell>
-            <TableCell className={`${cell} pr-4`}>
-              <Row as="span" align="center" gap="xs">
-                <KindAccent unit={m.b.unit} covered={covered} />
-                <span className="tabular-nums">{wasm.format_amount(m.b)}</span>
-              </Row>
-            </TableCell>
-            <TableCell
-              className={`${cell} w-full truncate text-muted-foreground`}
-            >
-              <MappingSource mapping={m} />
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <StaticTable
+      rows={mappings}
+      rowKey={(m) =>
+        `${m.a.value}-${m.a.unit}-${m.b.value}-${m.b.unit}-${m.source}`
+      }
+      className="table-auto"
+      rowClassName="hover:bg-transparent"
+      // TableHead already owns the mono/text-2xs/uppercase/tracking-wider
+      // eyebrow look; this override only tightens the dense table.
+      headClassName="h-auto p-1"
+      cellClassName="p-1 align-top whitespace-nowrap"
+      columns={[
+        {
+          id: "from",
+          header: "From",
+          cellClassName: "pr-4 tabular-nums",
+          cell: (m) => wasm.format_amount(m.a),
+        },
+        {
+          id: "to",
+          header: "To",
+          cellClassName: "pr-4",
+          cell: (m) => (
+            <Row as="span" align="center" gap="xs">
+              <KindAccent unit={m.b.unit} covered={covered} />
+              <span className="tabular-nums">{wasm.format_amount(m.b)}</span>
+            </Row>
+          ),
+        },
+        {
+          id: "source",
+          header: "Source",
+          headClassName: "w-full",
+          cellClassName: "w-full truncate text-muted-foreground",
+          cell: (m) => <MappingSource mapping={m} />,
+        },
+      ]}
+    />
   );
 };

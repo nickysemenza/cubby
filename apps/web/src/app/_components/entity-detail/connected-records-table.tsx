@@ -8,14 +8,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
+import { StaticTable } from "~/components/ui/static-table";
 import {
   entityDetailParams,
   entities,
@@ -262,41 +255,40 @@ export function ConnectedRecordsTable({
     >
       <div className="space-y-3">
         <HopRange range={routeHopRange} />
-        <Table
+        <StaticTable
+          rows={items}
+          rowKey={(item) => item.target.entityId}
           containerClassName="rounded-md border border-border"
           className="table-auto text-sm"
-        >
-          <TableHeader>
-            <TableRow>
-              <TableHead className={HEAD_CLASS}>
-                {isBrowserRoutedEntity(target)
-                  ? entities[target].label
-                  : "Record"}
-              </TableHead>
-              {movementSource !== null ? (
-                <TableHead className={HEAD_CLASS}>Movement</TableHead>
-              ) : null}
-              <TableHead className={HEAD_CLASS}>Connected through</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item) => (
-              <TableRow key={item.target.entityId}>
-                <TableCell className={`${CELL_CLASS} font-medium`}>
-                  <RecordPathLink node={item.target} />
-                </TableCell>
-                {movementSource !== null ? (
-                  <TableCell className={CELL_CLASS}>
-                    <RelationshipMovementBadges id={item.target.entityId} />
-                  </TableCell>
-                ) : null}
-                <TableCell className={CELL_CLASS}>
-                  <RecordPaths paths={item.paths} />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+          headClassName={HEAD_CLASS}
+          cellClassName={CELL_CLASS}
+          columns={[
+            {
+              id: "record",
+              header: isBrowserRoutedEntity(target)
+                ? entities[target].label
+                : "Record",
+              cellClassName: "font-medium",
+              cell: (item) => <RecordPathLink node={item.target} />,
+            },
+            ...(movementSource !== null
+              ? [
+                  {
+                    id: "movement",
+                    header: "Movement",
+                    cell: (item: (typeof items)[number]) => (
+                      <RelationshipMovementBadges id={item.target.entityId} />
+                    ),
+                  },
+                ]
+              : []),
+            {
+              id: "through",
+              header: "Connected through",
+              cell: (item) => <RecordPaths paths={item.paths} />,
+            },
+          ]}
+        />
         <ConnectionPager
           openAll={openAll}
           page={page}
