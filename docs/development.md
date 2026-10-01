@@ -84,9 +84,11 @@ them, and stage incompatible changes as expand → migrate → deploy → cleanu
 - On macOS, each database or browser test command owns a disposable Apple
   `container` PostgreSQL/IntegreSQL pair, cleaned up on exit.
   - `CUBBY_TEST_SERVICES=warm` reuses fixed-name containers.
-  - `CUBBY_TEST_SERVICES=external` uses `docker compose -p cubby up -d`; Linux
-    and CI use this mode. For another service, override `INTEGRESQL_URL`,
-    `INTEGRESQL_DATABASE_HOST` and `INTEGRESQL_DATABASE_PORT` together.
+  - `CUBBY_TEST_SERVICES=external` connects to services already running; it
+    does not start a container runtime. Linux and CI use this mode with Docker
+    services (`docker compose -p cubby up -d` for local Linux setup). For another
+    service, override `INTEGRESQL_URL`, `INTEGRESQL_DATABASE_HOST` and
+    `INTEGRESQL_DATABASE_PORT` together.
   - After a SIGKILL, find leftovers with `container list --all`.
 - Parallelism overrides: `VITEST_MAX_WORKERS` and `CUBBY_E2E_WORKERS`.
 - In dev, `await __jsProfile(5000)` in the browser console summarizes the
