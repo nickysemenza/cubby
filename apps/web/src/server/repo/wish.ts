@@ -25,14 +25,13 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { entityLink, product, wish } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality";
 import {
   formatSearchTerm,
   getDb,
   notDeleted,
   unwrapDb,
-  updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import {
@@ -54,12 +53,12 @@ import {
 } from "~/server/repo/product/pricing";
 import {
   asActor,
+  createEntityCrud,
   defineRepository,
   listOn,
   listReadOn,
   onDb,
 } from "~/server/repo/repository";
-import { createEntityReader } from "~/server/repo/repository";
 import {
   resolveLiveShortcodes,
   resolveOrThrow,
@@ -382,21 +381,78 @@ export const wishList = completeListReader(
   wishListSummary,
 );
 
-const wishReader = createEntityReader({
+const candidateShortcodes = async (
+  tx: Database | DrizzleTransaction,
+  id: WishId,
+) => {
+  const rows = await unwrapDb(tx)
+    .select({ shortcode: product.shortcode })
+    .from(entityLink)
+    .innerJoin(product, eq(product.id, entityLink.toEntityId))
+    .where(
+      and(
+        eq(entityLink.fromEntityId, id),
+        liveLinks("wishCandidate"),
+        notDeleted(product),
+      ),
+    )
+    .orderBy(asc(product.shortcode));
+  return rows.map((row) => row.shortcode);
+};
+
+const wishCrud = createEntityCrud({
   entity: "wish",
+  table: wish,
   fetchById: (db, id) =>
-    getDb(db).query.wish.findFirst({
+    unwrapDb(db).query.wish.findFirst({
       where: and(eq(wish.id, id), notDeleted(wish)),
     }),
   fromDB: async (db, row) => (await hydrateWishes(db, [row]))[0]!,
+  toUpdate: (data: WishUpdateData, before) => {
+    const acquiredAt =
+      data.acquired === undefined
+        ? undefined
+        : data.acquired
+          ? (before.acquiredAt ?? new Date())
+          : null;
+    return {
+      name: data.name,
+      notes: data.notes,
+      acquiredAt,
+      updatedAt:
+        data.candidateProductIds === undefined &&
+        acquiredAt === undefined &&
+        data.name === undefined &&
+        data.notes === undefined
+          ? undefined
+          : new Date(),
+    };
+  },
+  auditUpdateFields: [...entityFieldModels.wish.audit],
+  // The candidate set is a link set, not a column, but it is audited as the
+  // `candidateProductIds` field.
+  relations: {
+    read: async (tx, id) => ({
+      candidateProductIds: await candidateShortcodes(tx, id),
+    }),
+    write: async (tx, id, data) => {
+      if (data.candidateProductIds === undefined) return;
+      await replaceLinkSet(
+        tx,
+        "wishCandidate",
+        id,
+        await resolveCandidateProductIds(tx, data.candidateProductIds),
+      );
+    },
+  },
 });
-const getWishByID = wishReader.getByID;
-const getWishByShortcode = wishReader.getByShortcode;
+const getWishByID = wishCrud.getByID;
+const getWishByShortcode = wishCrud.getByShortcode;
 
 /** Any live Product can be a wish candidate — the only requirement is that it
  * exists and is live. */
 async function resolveCandidateProductIds(
-  tx: DrizzleTransaction,
+  tx: Database | DrizzleTransaction,
   shortcodes: readonly string[],
 ): Promise<ProductId[]> {
   const codes = uniq(shortcodes);
@@ -439,22 +495,6 @@ export const createWish = async (
   return { output: await getWishByID(db, id), entityId: id };
 };
 
-const candidateShortcodes = async (tx: DrizzleTransaction, id: WishId) => {
-  const rows = await tx
-    .select({ shortcode: product.shortcode })
-    .from(entityLink)
-    .innerJoin(product, eq(product.id, entityLink.toEntityId))
-    .where(
-      and(
-        eq(entityLink.fromEntityId, id),
-        liveLinks("wishCandidate"),
-        notDeleted(product),
-      ),
-    )
-    .orderBy(asc(product.shortcode));
-  return rows.map((row) => row.shortcode);
-};
-
 export const updateWish = async (
   db: Database,
   shortcode: WishShortcode,
@@ -462,59 +502,7 @@ export const updateWish = async (
   actor: ActorContext,
 ): Promise<{ output: WishOut; entityId: WishId }> => {
   const id = await resolveOrThrow(db, "wish", shortcode);
-  await withTransaction(db, async (tx) => {
-    const before = await tx.query.wish.findFirst({
-      where: and(eq(wish.id, id), notDeleted(wish)),
-    });
-    if (!before)
-      throw createAppError("WISH_NOT_FOUND", `Wish not found: ${shortcode}`);
-    const beforeCandidates = await candidateShortcodes(tx, id);
-    let afterCandidates = beforeCandidates;
-    if (data.candidateProductIds !== undefined) {
-      const nextIds = await resolveCandidateProductIds(
-        tx,
-        data.candidateProductIds,
-      );
-      await replaceLinkSet(tx, "wishCandidate", id, nextIds);
-      afterCandidates = await candidateShortcodes(tx, id);
-    }
-    const acquiredAt =
-      data.acquired === undefined
-        ? undefined
-        : data.acquired
-          ? (before.acquiredAt ?? new Date())
-          : null;
-    const updated = await updateLiveAndReturn(
-      tx,
-      wish,
-      {
-        name: data.name,
-        notes: data.notes,
-        acquiredAt,
-        updatedAt:
-          data.candidateProductIds === undefined &&
-          acquiredAt === undefined &&
-          data.name === undefined &&
-          data.notes === undefined
-            ? undefined
-            : new Date(),
-      },
-      id,
-    );
-    const changes = computeChanges(
-      { ...before, candidateProductIds: beforeCandidates },
-      { ...updated, candidateProductIds: afterCandidates },
-      [...entityFieldModels.wish.audit],
-    );
-    if (changes)
-      await logAuditEntry(tx, actor, {
-        entityKind: "wish",
-        entityId: id,
-        action: "update",
-        changes,
-      });
-  });
-  return { output: await getWishByID(db, id), entityId: id };
+  return { output: await wishCrud.update(db, id, data, actor), entityId: id };
 };
 
 export const wishRepository = defineRepository("wish", {

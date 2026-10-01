@@ -177,15 +177,43 @@ interface EntityCrudConfig<
   TOut,
   TUpdate,
   E extends AuditableEntity & ShortcodeEntity,
+  TRelKey extends string,
 > extends Omit<EntityReaderConfig<TRow, TOut, E, ReaderDb>, "entity"> {
   table: TTable;
   entity: E;
-  toUpdate: (data: TUpdate) => PgUpdateSetSource<TTable>;
-  /** Columns whose change is recorded in the audit diff. */
-  auditUpdateFields: readonly Extract<
-    keyof TRow,
-    keyof InferSelectModel<TTable>
-  >[];
+  /** Column values to write; `before` is the live row, for derived values. */
+  toUpdate: (data: TUpdate, before: TRow) => PgUpdateSetSource<TTable>;
+  /** Fields recorded in the audit diff: columns, or keys of `relations`. */
+  auditUpdateFields: readonly (
+    | Extract<keyof TRow, keyof InferSelectModel<TTable>>
+    | TRelKey
+  )[];
+  /**
+   * Runs first in the update transaction, before the before-state is read:
+   * take a row lock and refuse transitions that depend on the stored state.
+   */
+  prepare?: (
+    tx: DrizzleTransaction,
+    id: EntityId<E>,
+    data: TUpdate,
+  ) => Promise<void>;
+  /**
+   * Id sets that are audited as fields but are not columns of `table` (a link
+   * set, a child list). `read` runs before and after the column UPDATE and
+   * both snapshots join the diff; `write` applies the update's relation
+   * changes between the first read and the UPDATE.
+   */
+  relations?: {
+    read: (
+      tx: DrizzleTransaction,
+      id: EntityId<E>,
+    ) => Promise<RelationSnapshot<TRelKey>>;
+    write?: (
+      tx: DrizzleTransaction,
+      id: EntityId<E>,
+      data: TUpdate,
+    ) => Promise<void>;
+  };
 }
 
 export interface EntityCrud<
@@ -208,6 +236,11 @@ export interface EntityCrud<
   ) => Promise<TOut>;
 }
 
+/** The id sets an entity's `relations` hook reports, keyed by audited field. */
+type RelationSnapshot<TKey extends string> = Partial<
+  Record<TKey, readonly string[]>
+>;
+
 /** {@link createEntityReader} plus the diff-audited column update. */
 export function createEntityCrud<
   TTable extends CrudTable,
@@ -215,8 +248,9 @@ export function createEntityCrud<
   TOut,
   TUpdate,
   E extends AuditableEntity & ShortcodeEntity,
+  TRelKey extends string = never,
 >(
-  config: EntityCrudConfig<TTable, TRow, TOut, TUpdate, E>,
+  config: EntityCrudConfig<TTable, TRow, TOut, TUpdate, E, TRelKey>,
 ): EntityCrud<TOut, TUpdate, E> {
   const reader = createEntityReader<TRow, TOut, E, ReaderDb>(config);
   const update = (
@@ -226,19 +260,33 @@ export function createEntityCrud<
     actor: ActorContext,
   ): Promise<TOut> =>
     withTransactionOn(db, async (tx) => {
+      await config.prepare?.(tx, id, data);
       const before = await config.fetchById(tx, id);
+      if (!before) {
+        throw createAppError(
+          ENTITY_NOT_FOUND_REASON[config.entity],
+          `${ENTITY_LABEL[config.entity]} ${id} not found`,
+        );
+      }
+      const relationsBefore: RelationSnapshot<TRelKey> =
+        (await config.relations?.read(tx, id)) ?? {};
+      await config.relations?.write?.(tx, id, data);
       const updated = await updateLiveAndReturn(
         tx,
         config.table,
-        config.toUpdate(data),
+        config.toUpdate(data, before),
         id,
       );
-      if (entityManifest[config.entity].auditable && before) {
+      if (entityManifest[config.entity].auditable) {
+        const relationsAfter: RelationSnapshot<TRelKey> =
+          (await config.relations?.read(tx, id)) ?? {};
         // The fetch may carry relations the UPDATE's returned row lacks;
         // overlaying keeps the richer row and the exact post-write scalars.
-        const changes = computeChanges(before, { ...before, ...updated }, [
-          ...config.auditUpdateFields,
-        ]);
+        const changes = computeChanges<TRow & RelationSnapshot<TRelKey>>(
+          { ...before, ...relationsBefore },
+          { ...before, ...updated, ...relationsAfter },
+          [...config.auditUpdateFields],
+        );
         if (changes)
           await logAuditEntry(tx, actor, {
             entityKind: config.entity,
