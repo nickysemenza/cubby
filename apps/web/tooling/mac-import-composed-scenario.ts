@@ -427,13 +427,14 @@ export async function createMacComposedScenario(input: Input) {
           eq(schema.runFinding.status, "open"),
         ),
       );
+    const fixKind = (finding: (typeof findings)[number]) =>
+      z.object({ kind: z.string() }).safeParse(finding.proposedFix).data?.kind;
     const replacements = findings.filter(
-      (finding) => finding.proposedFix?.kind === "replace_aggregate_line",
+      (finding) => fixKind(finding) === "replace_aggregate_line",
     );
     const arrivals = findings.filter(
       (finding) =>
-        finding.kind === "arrived" &&
-        finding.proposedFix?.kind === "receive_purchase",
+        finding.kind === "arrived" && fixKind(finding) === "receive_purchase",
     );
     if (
       arrivals.length !== 1 ||

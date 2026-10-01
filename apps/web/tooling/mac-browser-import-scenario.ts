@@ -171,10 +171,17 @@ export async function createMacBrowserScenario(input: Input) {
         await appDriver.click("id=settings.purchaseImport.reconnect");
         const deadline = Date.now() + 30_000;
         while (!(await broker.connected())) {
-          if (Date.now() >= deadline)
+          if (Date.now() >= deadline) {
+            const file = path.join(
+              input.artifacts,
+              "browser-connect-failure.txt",
+            );
+            writeFileSync(file, await appDriver.snapshot());
+            appDriver.evidence.push(file);
             throw new Error(
               "Actual Mac app did not connect to the fixture broker",
             );
+          }
           await setTimeout(250);
         }
         const before = await capture(
