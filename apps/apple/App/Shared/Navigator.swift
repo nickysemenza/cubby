@@ -135,6 +135,8 @@ final class Navigator {
     func open(_ link: CubbyLink) {
         launchLinkApplied = true
         switch link {
+        case .entity(.run, let id):
+            openPhotoReview(runID: id)
         case .entity(let key, let id):
             section = .browse
             #if os(macOS)

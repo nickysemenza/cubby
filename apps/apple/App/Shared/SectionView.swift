@@ -64,6 +64,7 @@ struct RouteDestinationView: View {
         case .activityDetail(let id): ActivityDetailView(id: id)
         case .localActivity(let id): LocalActivityDetailView(id: id)
         case .entityDetail(.image, let id): ImageEntityDetailView(id: ImageCode(id))
+        case .entityDetail(.run, let id): RunReviewView(runID: id)
         case .entityDetail(let key, let id): EntityDetailView(key: key, id: id)
         case .wardrobe(let ownerID, let ownerName):
             WardrobeView(ownerID: ownerID, ownerName: ownerName)
