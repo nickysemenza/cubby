@@ -27,6 +27,7 @@ struct RunFindingReviewSection: View {
                         id, true, confirming?["proposedFix"]?["reviewSnapshot"]?["fingerprint"]?.stringValue)
                     confirming = nil
                 }
+                .accessibilityIdentifier("run.finding.confirm.\(id)")
             }
         } message: {
             Text(

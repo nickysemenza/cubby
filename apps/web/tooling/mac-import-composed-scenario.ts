@@ -572,10 +572,8 @@ export async function createMacComposedScenario(input: Input) {
       await input.driver.wait(`id=run.finding.apply.${replacements[0].id}`);
       await input.driver.screenshot("native-receipt-replacement-review");
       await input.driver.click(`id=run.finding.apply.${replacements[0].id}`);
-      await input.driver.wait('label="Apply reviewed replacement" role=Button');
-      await input.driver.click(
-        'label="Apply reviewed replacement" role=Button',
-      );
+      await input.driver.wait(`id=run.finding.confirm.${replacements[0].id}`);
+      await input.driver.click(`id=run.finding.confirm.${replacements[0].id}`);
       await eventually(async () => {
         const [finding] = await database
           .select({ state: schema.runFinding.status })
