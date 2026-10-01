@@ -20,7 +20,7 @@ export const financialBookingInput = z.object({
   economicRole: z.enum(["vendor", "reimbursement"]).default("vendor"),
 });
 export const financialBookingPreview = financialBookingInput.extend({
-  spendingCategoryId: spendingCategoryShortcode.nullable(),
+  spendingCategoryId: spendingCategoryShortcode.nullable().default(null),
   categoryOverride: spendingCategoryShortcode.nullable().default(null),
   action: z.enum(["create_aggregate", "link_existing"]),
   accountName: z.string(),
