@@ -413,6 +413,38 @@ export async function createMacComposedScenario(input: Input) {
     input.onMilestone("nativePhotoApproved");
   }
 
+  async function receiptFindings() {
+    const findings = await database
+      .select({
+        id: schema.runFinding.id,
+        kind: schema.runFinding.kind,
+        proposedFix: schema.runFinding.proposedFix,
+      })
+      .from(schema.runFinding)
+      .where(
+        and(
+          eq(schema.runFinding.runId, run.id),
+          eq(schema.runFinding.status, "open"),
+        ),
+      );
+    const replacements = findings.filter(
+      (finding) => finding.proposedFix?.kind === "replace_aggregate_line",
+    );
+    const arrivals = findings.filter(
+      (finding) =>
+        finding.kind === "arrived" &&
+        finding.proposedFix?.kind === "receive_purchase",
+    );
+    if (
+      arrivals.length !== 1 ||
+      findings.length !== replacements.length + arrivals.length
+    )
+      throw new Error(
+        `Delivered native receipt has unexpected findings: ${JSON.stringify(findings)}`,
+      );
+    return { findings, replacements };
+  }
+
   async function receipt() {
     input.onStage("native-retailer-capture-and-resume");
     const capture = await input.browser.run(input.driver);
@@ -529,29 +561,17 @@ export async function createMacComposedScenario(input: Input) {
         `Production native retailer commit refused: ${JSON.stringify(committed)}`,
       );
     receiptCommitted = true;
-    const findings = await database
-      .select({
-        id: schema.runFinding.id,
-        kind: schema.runFinding.kind,
-        proposedFix: schema.runFinding.proposedFix,
-      })
-      .from(schema.runFinding)
-      .where(
-        and(
-          eq(schema.runFinding.runId, run.id),
-          eq(schema.runFinding.status, "open"),
-        ),
-      );
+    const { findings, replacements } = await receiptFindings();
     if (bookedPurchaseCode) {
-      if (findings.length !== 1 || !findings[0])
+      if (replacements.length !== 1 || !replacements[0])
         throw new Error(
           `CSV-first native receipt must offer exactly one reviewed aggregate replacement: ${JSON.stringify({ committed, findings })}`,
         );
       input.onStage("native-receipt-replacement-review");
       await input.driver.openEntity(run.publicId, input.appPath());
-      await input.driver.wait(`id=run.finding.apply.${findings[0].id}`);
+      await input.driver.wait(`id=run.finding.apply.${replacements[0].id}`);
       await input.driver.screenshot("native-receipt-replacement-review");
-      await input.driver.click(`id=run.finding.apply.${findings[0].id}`);
+      await input.driver.click(`id=run.finding.apply.${replacements[0].id}`);
       await input.driver.wait('label="Apply reviewed replacement" role=Button');
       await input.driver.click(
         'label="Apply reviewed replacement" role=Button',
@@ -560,10 +580,10 @@ export async function createMacComposedScenario(input: Input) {
         const [finding] = await database
           .select({ state: schema.runFinding.status })
           .from(schema.runFinding)
-          .where(eq(schema.runFinding.id, findings[0]!.id));
+          .where(eq(schema.runFinding.id, replacements[0]!.id));
         return finding?.state === "applied" ? finding : undefined;
       }, "native approved receipt aggregate replacement");
-    } else if (findings.length)
+    } else if (replacements.length)
       throw new Error(
         "Receipt-first fixture unexpectedly has unresolved findings",
       );
@@ -768,6 +788,31 @@ export async function createMacComposedScenario(input: Input) {
           projection: await project(),
         });
       }
+      // The photo review already recorded ownership. Dismiss receipt arrival
+      // through the native review instead of receiving a second owned unit.
+      const [arrival] = await database
+        .select({ id: schema.runFinding.id })
+        .from(schema.runFinding)
+        .where(
+          and(
+            eq(schema.runFinding.runId, run.id),
+            eq(schema.runFinding.kind, "arrived"),
+            eq(schema.runFinding.status, "open"),
+          ),
+        );
+      if (!arrival)
+        throw new Error("Delivered receipt arrival review is missing");
+      await input.driver.openEntity(run.publicId, input.appPath());
+      await input.driver.wait(`id=run.finding.dismiss.${arrival.id}`);
+      await input.driver.screenshot("native-existing-ownership-arrival-review");
+      await input.driver.click(`id=run.finding.dismiss.${arrival.id}`);
+      await eventually(async () => {
+        const [finding] = await database
+          .select({ state: schema.runFinding.status })
+          .from(schema.runFinding)
+          .where(eq(schema.runFinding.id, arrival.id));
+        return finding?.state === "dismissed" ? finding : undefined;
+      }, "native arrival dismissal for existing photo ownership");
       const final = await project();
       const expected = {
         purchases: 1,
