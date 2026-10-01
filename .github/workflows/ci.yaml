@@ -215,6 +215,11 @@ jobs:
         with:
           wasm: "restore"
           workspace-filter: "@cubby/web..."
+      # The mcp-contract project imports the built MCP App HTML; build:cf used
+      # to produce it here before the Worker build moved to build-worker.
+      - name: Build MCP App assets
+        if: matrix.tier == 'node'
+        run: pnpm --filter @cubby/mcp-apps run build
       - name: Run ${{ matrix.tier }} tests
         run: pnpm --dir apps/web exec vitest run ${{ matrix.args }}
 
