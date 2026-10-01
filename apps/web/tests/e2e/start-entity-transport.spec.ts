@@ -238,7 +238,7 @@ test("server error references remain usable on desktop", async ({
 
 // The real browser must remain usable while an independent field read hangs;
 // releasing a failed group must not replace its already visible base records.
-test("base list keeps row identity, selection and card space while enrichment fails", async ({
+test("base list keeps row identity, selection and phone cards while enrichment fails", async ({
   page,
 }) => {
   const name = `Progressive fixture ${Date.now()}`;
@@ -303,6 +303,17 @@ test("base list keeps row identity, selection and card space while enrichment fa
     const checkbox = row.getByRole("checkbox", { name: "Select row" });
     await checkbox.click();
     await expect(checkbox).toBeChecked();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(
+      page
+        .getByRole("list", { name: "Products list" })
+        .getByText(name, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("checkbox", { name: "Select item", exact: true }),
+    ).toBeChecked();
+    await expect(page.getByLabel("Loading field").first()).toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.getByRole("button", { name: "Cards view", exact: true }).click();
     const card = page
       .locator("[data-entity-card]")

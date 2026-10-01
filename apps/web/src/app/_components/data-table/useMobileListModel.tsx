@@ -249,7 +249,12 @@ function collectMobileSlots<TItem extends RowData>(
     const meta = cell.column.columnDef.meta;
     const slot = resolveSlot(colId, meta);
     if (slot === "hidden") continue;
-    if (cell.column.accessorFn && isEmptyCellValue(cell.getValue())) continue;
+    if (
+      !meta?.valueUnavailable?.(row.original) &&
+      cell.column.accessorFn &&
+      isEmptyCellValue(cell.getValue())
+    )
+      continue;
     const rendered = flexRender(cell.column.columnDef.cell, cell.getContext());
     if (!hasRenderableContent(rendered)) continue;
 
