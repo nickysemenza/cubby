@@ -824,7 +824,8 @@ export async function createMacComposedScenario(input: Input) {
         inventory: 1,
         ownedQuantity: 1,
         categorizedExpenses: 1,
-        images: 2,
+        // Two photo originals plus history, order, and product capture documents.
+        images: 5,
         unresolvedFindings: 0,
       };
       for (const key of Object.keys(expected)) {
