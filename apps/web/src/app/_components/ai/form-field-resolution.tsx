@@ -106,9 +106,7 @@ export function FormFieldResolution<TValues extends FieldValues>({
           className={resolutionActionClassName}
           onClick={() => applyPatch(policy.reset)}
         >
-          {resolution?.fallbackValue === null
-            ? "Clear override"
-            : "Use inherited"}
+          {resolution?.fallbackValue === null ? "Clear value" : "Use inherited"}
         </Button>
       )}
       {nonePatch && resolution?.mode !== "none" ? (

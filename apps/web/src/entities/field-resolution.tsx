@@ -9,8 +9,11 @@ import { parseShortcode } from "@cubby/shared";
 import { ArrowBendDownRightIcon } from "@phosphor-icons/react/dist/csr/ArrowBendDownRight";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { ChartPieIcon } from "@phosphor-icons/react/dist/csr/ChartPie";
+import { DotOutlineIcon } from "@phosphor-icons/react/dist/csr/DotOutline";
+import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
+import type { Icon } from "@phosphor-icons/react/lib";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { z } from "zod";
@@ -139,33 +142,51 @@ export function resolutionIsInformative(resolution: FieldResolution): boolean {
   }
 }
 
-function resolutionLabel(resolution: FieldResolution): string {
-  switch (resolution.mode) {
-    case "inherit":
-      return resolution.source;
-    case "none":
-      return "Explicitly none";
-    case "allocated":
-      return resolution.source;
-    case "explicit":
-      return resolution.matchesFallback
-        ? "Matches inherited value"
-        : "Override";
-  }
-}
+export type ResolutionTone =
+  | "set"
+  | "override"
+  | "redundant"
+  | "none"
+  | "inherit"
+  | "allocated";
 
-function resolutionIcon(resolution: FieldResolution) {
-  if (resolution.mode === "explicit" && resolution.matchesFallback)
-    return WarningIcon;
+/** One vocabulary for the caption, the rail icon, and the explanation
+ * popover. An explicit value with nothing above it is "Set here", never an
+ * override: there is nothing for it to override. */
+export type ResolutionState = {
+  tone: ResolutionTone;
+  label: string;
+  Icon: Icon;
+};
+
+export function resolutionState(resolution: FieldResolution): ResolutionState {
   switch (resolution.mode) {
     case "inherit":
-      return ArrowBendDownRightIcon;
+      return {
+        tone: "inherit",
+        label: "Inherited",
+        Icon: ArrowBendDownRightIcon,
+      };
     case "allocated":
-      return ChartPieIcon;
+      return {
+        tone: "allocated",
+        label: sentenceCase(resolution.source),
+        Icon: ChartPieIcon,
+      };
     case "none":
-      return ProhibitIcon;
+      return resolution.fallbackValue === null
+        ? { tone: "none", label: "None", Icon: ProhibitIcon }
+        : { tone: "none", label: "Blocks inherited", Icon: ProhibitIcon };
     case "explicit":
-      return ArrowCounterClockwiseIcon;
+      if (resolution.matchesFallback)
+        return { tone: "redundant", label: "Redundant", Icon: WarningIcon };
+      return resolution.fallbackValue === null
+        ? { tone: "set", label: "Set here", Icon: DotOutlineIcon }
+        : {
+            tone: "override",
+            label: "Overrides inherited",
+            Icon: ArrowCounterClockwiseIcon,
+          };
   }
 }
 
@@ -252,10 +273,34 @@ function FieldResolutionActions({
   const parsedRecord = recordResult.success
     ? parseShortcode(recordResult.data.id ?? "")
     : null;
-  const entity = generatedBrowserCrudEntities.find(
-    (candidate) => candidate === parsedRecord?.type,
+  if (!parsedRecord) return null;
+  return (
+    <FieldResolutionEntityActions
+      entity={parsedRecord.type}
+      id={parsedRecord.shortcode}
+      field={field}
+      resolution={resolution}
+    />
   );
-  if (!entity || !parsedRecord) return null;
+}
+
+/** Reset / set-to-none links for a record addressed by entity and shortcode
+ * (the explanation popover has no row record). */
+export function FieldResolutionEntityActions({
+  entity: candidateEntity,
+  id,
+  field,
+  resolution,
+}: {
+  entity: string;
+  id: string;
+  field: string;
+  resolution: FieldResolution;
+}) {
+  const entity = generatedBrowserCrudEntities.find(
+    (candidate) => candidate === candidateEntity,
+  );
+  if (!entity) return null;
   const policy = entityFieldModels[entity].fields.find(
     (candidate) => candidate.key === field,
   )?.resolution;
@@ -263,7 +308,7 @@ function FieldResolutionActions({
   return (
     <BoundFieldResolutionActions
       entity={entity}
-      id={parsedRecord.shortcode}
+      id={id}
       resolution={resolution}
       reset={resolutionPatchSchema.parse(policy.reset)}
       none={
@@ -320,7 +365,7 @@ function BoundFieldResolutionActions({
           }}
         >
           {resolution.fallbackValue === null
-            ? "Clear override"
+            ? "Clear value"
             : "Use inherited value"}
         </Button>
       ) : null}
@@ -363,19 +408,27 @@ export function FieldResolutionStatus({
     ? auditEntitySchema.safeParse(resolution.sourceEntity.entityKind)
     : null;
   if (compact) {
-    const Icon = resolutionIcon(resolution);
+    // A bare value (set here, or inheriting nothing) gets the neutral info
+    // glyph; a provenance glyph would claim a relationship that isn't there.
+    const state = resolutionIsInformative(resolution)
+      ? resolutionState(resolution)
+      : { label: "Details", Icon: InfoIcon };
+    const { Icon } = state;
+    // An inherited value announces where it comes from, not just "Inherited".
+    const label =
+      resolution.mode === "inherit" ? resolution.source : state.label;
     return (
       <span
         className="inline-flex shrink-0 text-muted-foreground"
-        title={`${resolutionLabel(resolution)} · ${resolution.sourceEntity?.name ?? resolution.source}`}
+        title={`${label} · ${resolution.sourceEntity?.name ?? resolution.source}`}
       >
         <Icon className="size-3.5" aria-hidden="true" />
-        <span className="sr-only">{resolutionLabel(resolution)}</span>
+        <span className="sr-only">{label}</span>
       </span>
     );
   }
   if (!resolutionIsInformative(resolution)) return action ?? null;
-  const Icon = resolutionIcon(resolution);
+  const { Icon } = resolutionState(resolution);
   return (
     <span
       data-slot="field-resolution"

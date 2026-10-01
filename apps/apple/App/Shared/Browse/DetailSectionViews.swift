@@ -301,7 +301,7 @@ struct FieldExplanationLabel: View {
     @State private var loadError: String?
 
     var body: some View {
-        if let explanation = field.explanation {
+        if field.explanation != nil {
             Button {
                 showingExplanation = true
             } label: {
@@ -329,7 +329,7 @@ struct FieldExplanationLabel: View {
                 loadError = nil
             }
             .popover(isPresented: $showingExplanation) {
-                explanationPopover(fallback: explanation.description)
+                explanationPopover()
                     .task(id: showingExplanation) { await loadExplanation() }
             }
         } else {
@@ -338,7 +338,7 @@ struct FieldExplanationLabel: View {
     }
 
     @ViewBuilder
-    private func explanationPopover(fallback: String) -> some View {
+    private func explanationPopover() -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                 HStack {
@@ -358,86 +358,60 @@ struct FieldExplanationLabel: View {
                     .accessibilityLabel("Close field explanation")
                     .accessibilityIdentifier("field.explanation.close")
                 }
-                Text(resolved?.rule.description ?? fallback)
-                    .font(.fieldGuideBody)
-                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 if let resolved {
                     if let resolution = resolved.resolution {
-                        Divider()
-                        Text("In effect").font(.fieldGuideLabel.weight(.semibold))
-                        Text(display(resolution.value) ?? "None").font(.fieldGuideData)
-                            .accessibilityIdentifier("field.explanation.effective-value")
-                        Text(
-                            resolution.mode == .explicit
-                                ? "Override on this \(EntityCatalog[subject.entity].singular.lowercased())"
-                                : resolution.source
-                        )
-                        .font(.caption).foregroundStyle(.secondary)
-                        if let source = resolution.sourceEntity,
+                        let hasFallback = display(resolution.fallbackValue) != nil
+                        let state = FieldResolutionState(resolution, hasFallback: hasFallback)
+                        HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
+                            Text(display(resolution.value) ?? "None")
+                                .font(.fieldGuideData.weight(.semibold))
+                                .accessibilityIdentifier("field.explanation.effective-value")
+                            Spacer(minLength: FieldGuideTokens.Space.sm)
+                            Label(state.label, systemImage: state.systemImage)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(
+                                    state.tone == .redundant
+                                        ? FieldGuideTokens.warning : FieldGuideTokens.graphiteSecondary
+                                )
+                                .accessibilityIdentifier("field.explanation.state")
+                        }
+                        if resolution.mode == .inherit || resolution.mode == .allocated,
+                            let source = resolution.sourceEntity,
                             let entity = EntityKey(rawValue: source.entityKind.rawValue)
                         {
-                            NavigationLink(
-                                source.name ?? source.entityId,
-                                value: Route.entityDetail(entity, id: source.entityId))
-                        }
-                        if resolution.mode == .explicit || resolution.mode == .none {
-                            Text("Without the override").font(.fieldGuideLabel.weight(.semibold))
-                            Text(display(resolution.fallbackValue) ?? "Nothing to inherit").font(
-                                .fieldGuideData
-                            )
-                            .accessibilityIdentifier("field.explanation.fallback-value")
-                            if let source = resolved.resolutionEvidence?.fallbackSource,
-                                let entity = EntityKey(rawValue: source.entityKind.rawValue)
-                            {
+                            explanationFact("From") {
                                 NavigationLink(
                                     source.name ?? source.entityId,
                                     value: Route.entityDetail(entity, id: source.entityId))
                             }
-                            if resolution.matchesFallback {
-                                Text("Same value — the override is redundant.").font(.caption)
-                                    .foregroundStyle(.secondary)
+                        }
+                        if resolution.mode == .explicit || resolution.mode == .none,
+                            let fallbackText = display(resolution.fallbackValue)
+                        {
+                            explanationFact("Fallback") {
+                                Text(fallbackText).font(.fieldGuideData)
+                                    .accessibilityIdentifier("field.explanation.fallback-value")
+                                if let source = resolved.resolutionEvidence?.fallbackSource,
+                                    let entity = EntityKey(rawValue: source.entityKind.rawValue)
+                                {
+                                    NavigationLink(
+                                        source.name ?? source.entityId,
+                                        value: Route.entityDetail(entity, id: source.entityId))
+                                }
                             }
                         }
                     }
                     if let evidence = resolved.resolutionEvidence, !evidence.hierarchy.isEmpty {
                         Divider()
-                        Text("Hierarchy").font(.fieldGuideLabel.weight(.semibold))
-                        ForEach(Array(evidence.hierarchy.enumerated()), id: \.offset) { index, source in
-                            let value = try? JSONValue(encoding: source.value)
-                            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                                Text("\(index + 1). \(source.label)")
-                                    .font(.caption).foregroundStyle(.secondary)
-                                if let reference = source.entity,
-                                    let entity = EntityKey(rawValue: reference.entityKind.rawValue)
-                                {
-                                    NavigationLink(
-                                        value?["name"]?.stringValue ?? reference.entityId,
-                                        value: Route.entityDetail(entity, id: reference.entityId)
-                                    )
-                                    .font(.fieldGuideBody.weight(.medium))
-                                    .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
-                                }
-                                if value?["assigned"]?.boolValue == false {
-                                    Text("No assignment here")
-                                        .font(.fieldGuideLabel).foregroundStyle(.secondary)
-                                } else if let nested = value?["value"], let text = displayJSON(nested) {
-                                    Text(text).font(.fieldGuideData)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                } else if let text = display(source.value) {
-                                    Text(text).font(.fieldGuideData)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(FieldGuideTokens.Space.sm)
-                            .background(
-                                FieldGuideTokens.inset,
-                                in: RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
+                        explanationSectionLabel("Resolution order")
+                        let winner = ladderWinner(resolved)
+                        ForEach(Array(evidence.hierarchy.enumerated()), id: \.offset) { _, source in
+                            ladderRow(source, winner: winner)
                         }
                     }
                     if !resolved.sources.isEmpty {
                         Divider()
-                        Text("Based on").font(.fieldGuideLabel.weight(.semibold))
+                        explanationSectionLabel("Evidence")
                         ForEach(Array(resolved.sources.enumerated()), id: \.offset) { _, source in
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(source.label).font(.fieldGuideLabel)
@@ -452,6 +426,16 @@ struct FieldExplanationLabel: View {
                     if resolved.truncated {
                         Text("Showing the most relevant evidence.")
                             .font(.caption)
+                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                    }
+                    Divider()
+                    DisclosureGroup {
+                        Text(resolved.rule.description)
+                            .font(.caption)
+                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } label: {
+                        Text("Rule · \(resolved.rule.id)").font(.caption.monospaced())
                             .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     }
                 } else if let loadError {
@@ -486,6 +470,76 @@ struct FieldExplanationLabel: View {
             loadError = String(describing: error)
             appModel.handle(error)
         }
+    }
+
+    @ViewBuilder
+    private func explanationSectionLabel(_ text: String) -> some View {
+        Text(text.uppercased()).font(.caption2.weight(.semibold)).tracking(0.6)
+            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+    }
+
+    private func explanationFact<Content: View>(
+        _ label: String, @ViewBuilder content: () -> Content
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
+            Text(label).font(.caption).foregroundStyle(FieldGuideTokens.graphiteSecondary)
+            content()
+        }
+    }
+
+    /// The ladder level that supplies the value: the inherited source, else the subject itself.
+    private func ladderWinner(_ resolved: FieldExplanationOutput) -> String? {
+        guard let resolution = resolved.resolution else { return nil }
+        switch resolution.mode {
+        case .inherit, .allocated: return resolution.sourceEntity?.entityId
+        case .explicit, .none: return subject.id
+        }
+    }
+
+    /// One level of the resolution ladder: its own assignment and whether it wins.
+    @ViewBuilder
+    private func ladderRow(_ source: FieldExplanationSource, winner: String?) -> some View {
+        let value = try? JSONValue(encoding: source.value)
+        let assigned = value?["assigned"]?.boolValue ?? (value != .null)
+        let wins = winner != nil && source.entity?.entityId == winner
+        let isSubject = source.entity?.entityId == subject.id
+        HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
+            if !isSubject, let reference = source.entity,
+                let entity = EntityKey(rawValue: reference.entityKind.rawValue)
+            {
+                NavigationLink(
+                    value?["name"]?.stringValue ?? reference.entityId,
+                    value: Route.entityDetail(entity, id: reference.entityId)
+                )
+                .font(.fieldGuideBody.weight(.medium))
+                .lineLimit(1)
+            } else {
+                Text(value?["name"]?.stringValue ?? source.label)
+                    .font(.fieldGuideBody.weight(.medium))
+                    .lineLimit(1)
+                if isSubject {
+                    Text("THIS").font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: FieldGuideTokens.Space.sm)
+            Text(
+                assigned
+                    ? (value?["value"].flatMap(displayJSON) ?? display(source.value) ?? "—")
+                    : "—"
+            )
+            .font(.fieldGuideData)
+            .strikethrough(assigned && !wins)
+            .lineLimit(1)
+            Text(wins ? "WINS" : assigned ? "SHADOWED" : "NOT SET")
+                .font(.caption2.weight(wins ? .semibold : .regular))
+                .foregroundStyle(wins ? FieldGuideTokens.interaction : .secondary)
+        }
+        .foregroundStyle(wins ? FieldGuideTokens.graphite : FieldGuideTokens.graphiteSecondary)
+        .frame(minHeight: FieldGuideTokens.touchTarget)
+        .padding(.horizontal, FieldGuideTokens.Space.sm)
+        .background(
+            wins ? FieldGuideTokens.inset : .clear,
+            in: RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
     }
 
     private func display(_ value: JsonValue) -> String? {

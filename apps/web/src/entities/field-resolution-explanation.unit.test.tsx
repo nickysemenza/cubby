@@ -50,15 +50,12 @@ describe("ResolutionExplanation", () => {
         }}
       />,
     );
-    expect(screen.getByText("Override on this expense")).toBeInTheDocument();
-    expect(
-      screen.getByText("Same value — the override is redundant."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Redundant")).toBeInTheDocument();
     expect(screen.getAllByText("Other")).toHaveLength(2);
     expect(screen.queryByText("other")).not.toBeInTheDocument();
   });
 
-  it("shows nothing-to-inherit when an override has no fallback", () => {
+  it("calls a value with nothing above it set here, not an override", () => {
     render(
       <ResolutionExplanation
         entity="expense"
@@ -75,11 +72,30 @@ describe("ResolutionExplanation", () => {
         }}
       />,
     );
-    expect(screen.getByText("Without the override")).toBeInTheDocument();
-    expect(screen.getByText("Nothing to inherit")).toBeInTheDocument();
-    expect(
-      screen.queryByText("Same value — the override is redundant."),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText("Set here")).toBeInTheDocument();
+    expect(screen.queryByText(/override/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/inherit/i)).not.toBeInTheDocument();
+  });
+
+  it("names the inherited value an override replaces", () => {
+    render(
+      <ResolutionExplanation
+        entity="expense"
+        field="trade"
+        resolution={{
+          mode: "explicit",
+          storedValue: "electrical",
+          value: "electrical",
+          fallbackValue: "building",
+          source: "expense override",
+          sourceEntity: null,
+          matchesFallback: false,
+          canReset: true,
+        }}
+      />,
+    );
+    expect(screen.getByText("Overrides inherited")).toBeInTheDocument();
+    expect(screen.getByText("Building & Framing")).toBeInTheDocument();
   });
 
   it("links an inherited value to its purchase source and offers the reset hint", () => {
@@ -111,13 +127,8 @@ describe("ResolutionExplanation", () => {
         `/purchases/${purchaseId}`,
       );
       expect(screen.getByText("Building & Framing")).toBeInTheDocument();
+      expect(screen.getByText("Inherited")).toBeInTheDocument();
       expect(screen.getByText(/Purchase default/)).toBeInTheDocument();
-      expect(screen.getByText("Stored on this expense")).toBeInTheDocument();
-      expect(
-        screen.getByText(
-          "Change it on the linked purchase, or set an override here.",
-        ),
-      ).toBeInTheDocument();
     } finally {
       harness.dispose();
     }
@@ -140,9 +151,61 @@ describe("ResolutionExplanation", () => {
         }}
       />,
     );
-    expect(screen.getByText(/Task override/)).toBeInTheDocument();
-    expect(screen.getByText("Without the override")).toBeInTheDocument();
-    expect(screen.getByText("Nothing to inherit")).toBeInTheDocument();
-    expect(screen.queryByText("Stored on this task")).not.toBeInTheDocument();
+    expect(screen.getByText("None")).toBeInTheDocument();
+    expect(screen.queryByText(/override/i)).not.toBeInTheDocument();
+  });
+
+  it("ladders the hierarchy: the subject wins and an assigned ancestor is shadowed", () => {
+    const self = testShortcode("productCategory", "fixture-paper");
+    const parent = testShortcode("productCategory", "fixture-household");
+    const root = testShortcode("productCategory", "fixture-home");
+    const node = (id: string, name: string, value: string | null) => ({
+      label: "Product category ancestry",
+      entity: { entityKind: "productCategory" as const, entityId: id },
+      value: { name, value, assigned: value !== null },
+    });
+    const harness = createBrowserTestHarness();
+    try {
+      render(
+        <ResolutionExplanation
+          entity="productCategory"
+          id={self}
+          field="feature"
+          resolution={{
+            mode: "explicit",
+            storedValue: "supplies",
+            value: "supplies",
+            fallbackValue: "food",
+            source: "Permanent feature binding",
+            sourceEntity: null,
+            matchesFallback: false,
+            canReset: false,
+          }}
+          evidence={{
+            hierarchy: [
+              node(self, "Paper goods", "supplies"),
+              node(parent, "Household", null),
+              node(root, "Home", "food"),
+            ],
+            fallbackSource: {
+              entityKind: "productCategory",
+              entityId: root,
+              name: "Home",
+            },
+          }}
+        />,
+        { wrapper: harness.wrapper },
+      );
+      const rows = screen.getAllByRole("listitem");
+      expect(rows.map((row) => row.dataset.role)).toEqual([
+        "wins",
+        "unset",
+        "shadowed",
+      ]);
+      expect(rows[0]).toHaveTextContent("Paper goods");
+      expect(rows[2]).toHaveTextContent("Home");
+    } finally {
+      harness.dispose();
+    }
   });
 });

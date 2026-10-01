@@ -110,15 +110,17 @@ export function useProgressiveList<T extends { id: string }>({
   useEffect(() => {
     const activePlan = planRef.current.progressive;
     if (!activePlan || paused || refreshing || !firstPage) return;
+    // `dispose` swaps the session's controller, so hold this run's signal.
+    const signal = session.signal;
     setSummary({ session, state: { state: "loading" } });
     void activePlan
-      .summary(session.signal)
+      .summary(signal)
       .then((sums) => {
-        if (!session.signal.aborted)
+        if (!signal.aborted)
           setSummary({ session, state: { state: "ready" }, sums });
       })
       .catch((error) => {
-        if (!session.signal.aborted)
+        if (!signal.aborted)
           setSummary({
             session,
             state: {

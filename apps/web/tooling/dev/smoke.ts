@@ -413,6 +413,24 @@ try {
       });
   });
 
+  await check(
+    "signed-out home offers one-click development sign-in",
+    async () => {
+      await page.goto("/");
+      await expect(page).toHaveURL(/\/auth\/sign-in$/u, { timeout: 30_000 });
+      await page
+        .getByRole("link", { name: "Continue as local dev user" })
+        .click();
+      await expect(page).toHaveURL(/\/$/u, { timeout: 30_000 });
+      const authResponse = await context.request.get("/api/auth/get-session");
+      assert.equal(
+        z
+          .object({ user: z.object({ email: z.string() }) })
+          .parse(await authResponse.json()).user.email,
+        DEV_USER_EMAIL,
+      );
+    },
+  );
   await check("real login and hydrated browser Product creation", async () => {
     await page.goto("/__dev/login?next=/products?create=true");
     await expect(page).toHaveURL(/\/products\?create=true$/u, {

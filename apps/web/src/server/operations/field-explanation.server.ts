@@ -618,12 +618,26 @@ function ownershipTrace(
   return { sources, evidenceFingerprint: ownership.evidenceFingerprint };
 }
 
+/** `editSource` points at the record that supplies an inherited value; with
+ * nothing inherited, the source is the subject itself. */
 function explanationActions(
   explanation: Explanation,
   subject: Subject,
   ownership: Ownership | null,
+  resolution: FieldResolution | null,
 ): z.input<typeof fieldExplanationOutput>["actions"] {
   return (explanation.actions ?? []).flatMap((kind) => {
+    if (kind === "editSource" && resolution?.sourceEntity)
+      return [
+        {
+          kind,
+          label: actionLabels[kind],
+          target: {
+            entityKind: resolution.sourceEntity.entityKind,
+            entityId: resolution.sourceEntity.entityId,
+          },
+        },
+      ];
     if (
       kind === "confirmOwner" &&
       ownership &&
@@ -687,7 +701,12 @@ export async function explainField(
     ? ownershipTrace(subject, ownership)
     : null;
   if (ownershipEvidence) sources = ownershipEvidence.sources;
-  const actions = explanationActions(explanation, subject, ownership);
+  const actions = explanationActions(
+    explanation,
+    subject,
+    ownership,
+    resolution,
+  );
   const boundedSources = boundExplanationSources(sources);
   return fieldExplanationOutput.parse({
     subject,
