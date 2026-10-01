@@ -6,16 +6,16 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { useMutation } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
-import { FormProvider } from "react-hook-form";
+import { useState } from "react";
 import { toast } from "sonner";
 
-import {
-  DestinationLocationField,
-  resolveDestination,
-  useDestinationLocationForm,
-} from "~/app/_components/inventory/destination-location-picker";
+import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import type { InventoryDialogItem } from "~/app/_components/inventory/dialog-item";
 import { useInventoryInvalidation } from "~/app/_components/inventory/hooks";
+import {
+  LocationDestinationPicker,
+  refuseSourceLocations,
+} from "~/app/_components/locations/location-move-dialog";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { inventory } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -39,8 +39,9 @@ export function MoveInventoryDialog({
   onSuccess,
 }: MoveInventoryDialogProps) {
   const invalidateInventory = useInventoryInvalidation();
-  const { form, error, setError, reset } = useDestinationLocationForm();
-  const targetLocation = form.watch("targetLocation");
+  const [targetLocation, setTargetLocation] =
+    useState<ComboboxItem<LocationShortcode> | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const sourceLocationIds = uniq(
     items.map((item) => sourceLocationIdProp ?? item.location.id),
   ).filter((id): id is LocationShortcode => Boolean(id));
@@ -54,27 +55,21 @@ export function MoveInventoryDialog({
   );
 
   const handleSubmit = async () => {
-    const values = form.getValues();
-
     if (sourceLocationIds.length === 0) {
       setError("No source location available");
       return;
     }
-
-    const resolved = resolveDestination(
-      values.targetLocation,
-      sourceLocationIds,
-      {
-        missingTarget: "Please select a target location",
-        sameAsSource:
-          "Target location must be different from every selected item's current location",
-      },
-    );
-    if (!resolved.ok) {
-      setError(resolved.error);
+    if (!targetLocation) {
+      setError("Please select a target location");
       return;
     }
-    const targetLocationId = resolved.id;
+    const targetLocationId = targetLocation.id;
+    if (sourceLocationIds.includes(targetLocationId)) {
+      setError(
+        "Target location must be different from every selected item's current location",
+      );
+      return;
+    }
 
     setError(null);
 
@@ -103,21 +98,21 @@ export function MoveInventoryDialog({
       `Successfully moved ${items.length} item${items.length !== 1 ? "s" : ""}`,
     );
     invalidateInventory({ sideEffects: result.sideEffects });
-    form.reset();
+    setTargetLocation(null);
     onSuccess();
     onOpenChange(false);
   };
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
-      reset();
+      setTargetLocation(null);
+      setError(null);
     }
     onOpenChange(newOpen);
   };
 
   return (
-    <FormProvider {...form}>
-      <BulkActionDialog
+    <BulkActionDialog
         open={open}
         onOpenChange={handleOpenChange}
         items={items}
@@ -127,7 +122,7 @@ export function MoveInventoryDialog({
         renderItem={(item) =>
           `${item.product.name} - ${item.amount.value} ${item.amount.unit}`
         }
-        // No blocked/unchanged arm: `DestinationLocationField` disables every
+        // No blocked/unchanged arm: `LocationDestinationPicker` disables every
         // source location in the picker, so a row cannot be asked to move
         // where it already is.
         effect={
@@ -140,15 +135,17 @@ export function MoveInventoryDialog({
         }
         onSubmit={handleSubmit}
         isPending={moveMutation.isPending}
+        error={error}
       >
-        <DestinationLocationField
-          form={form}
-          name="targetLocation"
+        <LocationDestinationPicker
           label="Move to Location"
-          error={error}
-          sourceLocationIds={sourceLocationIds}
+          value={targetLocation}
+          setValue={(item) => {
+            setTargetLocation(item);
+            setError(null);
+          }}
+          disabledReason={refuseSourceLocations(sourceLocationIds)}
         />
       </BulkActionDialog>
-    </FormProvider>
   );
 }
