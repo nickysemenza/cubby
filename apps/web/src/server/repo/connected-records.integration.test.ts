@@ -130,6 +130,8 @@ describe("complete connected record tables", () => {
     const vendor = await createVendor(
       ctx.db,
       {
+        defaultSpendingCategoryId: null,
+        spendingProfile: "unspecified",
         name: "Example supplier",
         website: null,
         orderUrlTemplate: null,

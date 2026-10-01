@@ -40,6 +40,17 @@ export default defineEntity({
         },
       },
       {
+        key: "aliases",
+        kind: "text-array",
+        control: { kind: "specialized", renderer: "tag-list" },
+        display: { detail: true },
+        validation: {
+          read: z.array(z.string()),
+          create: z.array(z.string()).default([]),
+          update: z.array(z.string()).optional(),
+        },
+      },
+      {
         key: "parentId",
         kind: "identifier",
         nullable: true,
@@ -112,6 +123,7 @@ export default defineEntity({
       { key: "id", specialized: "primary-key:SpendingCategoryId" },
       { key: "shortcode", specialized: "shortcode" },
       "name",
+      { key: "aliases", defaultValue: "'{}'::text[]" },
       { key: "parentId", reference: "spendingCategory" },
       {
         key: "evidenceExpectation",
@@ -127,13 +139,32 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: ["name", "parentId", "evidenceExpectation", "productExpectation"],
-    update: ["name", "parentId", "evidenceExpectation", "productExpectation"],
+    create: [
+      "name",
+      "aliases",
+      "parentId",
+      "evidenceExpectation",
+      "productExpectation",
+    ],
+    update: [
+      "name",
+      "aliases",
+      "parentId",
+      "evidenceExpectation",
+      "productExpectation",
+    ],
     bulk: [],
-    audit: ["name", "parentId", "evidenceExpectation", "productExpectation"],
+    audit: [
+      "name",
+      "aliases",
+      "parentId",
+      "evidenceExpectation",
+      "productExpectation",
+    ],
     output: [
       "id",
       "name",
+      "aliases",
       "parentId",
       "evidenceExpectation",
       "productExpectation",
@@ -144,7 +175,13 @@ export default defineEntity({
     intents: {
       fields: {
         capture: ["name", "evidenceExpectation", "productExpectation"],
-        full: ["name", "parentId", "evidenceExpectation", "productExpectation"],
+        full: [
+          "name",
+          "aliases",
+          "parentId",
+          "evidenceExpectation",
+          "productExpectation",
+        ],
       },
       create: ["capture", "full"],
       update: ["full"],

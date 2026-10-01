@@ -199,6 +199,11 @@ struct FieldsSectionView<Inline: View>: View {
                 return nil
             }
             if NativePresentationCoverage.unsupportedDetail(field) != nil { return nil }
+            if field.detailRenderer == .expenseSpendingCategory
+                || field.detailRenderer == .spendingCategorySummary
+            {
+                return field
+            }
             if field.detailRenderer == .recipeSource {
                 return RecipeSourcePresentation.parse(row.raw[field.key]) == nil ? nil : field
             }
@@ -215,7 +220,17 @@ struct FieldsSectionView<Inline: View>: View {
 
     @ViewBuilder
     private func fieldRow(_ field: FieldDescriptor) -> some View {
-        if field.detailRenderer == .recipeSource,
+        if field.detailRenderer == .spendingCategorySummary {
+            if let value = row.raw[field.key],
+                let summary = try? JSONDecoder.cubby().decode(
+                    SpendingCategorySummary.self, from: JSONEncoder.cubby().encode(value))
+            {
+                SpendingCategorySummaryView(
+                    summary: summary, contextOnly: descriptor.key == .financialTransaction)
+            }
+        } else if field.detailRenderer == .expenseSpendingCategory {
+            ExpenseSpendingCategoryView(row: row)
+        } else if field.detailRenderer == .recipeSource,
             let source = RecipeSourcePresentation.parse(row.raw[field.key])
         {
             recipeSourceRow(field, source: source)

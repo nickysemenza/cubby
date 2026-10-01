@@ -119,6 +119,7 @@ const actionCapability = {
   "image.schedule_processing": "attachment",
   "data_exception.set": "generic_mutation",
   "data_exception.clear": "generic_mutation",
+  "spending_classification_write.apply": "generic_mutation",
 } as const satisfies Record<CubbyMcpMutationAction, Capability>;
 
 const isMutationAction = (action: string): action is CubbyMcpMutationAction =>

@@ -179,7 +179,19 @@ export const detailSlots = {
       })),
     ),
   },
+  productCategory: {
+    "spending-classification": slot(() =>
+      import("~/app/finance/spending-classification-review").then((m) => ({
+        default: m.ProductCategoryClassification,
+      })),
+    ),
+  },
   vendor: {
+    "spending-classification": slot(() =>
+      import("~/app/finance/spending-classification-review").then((m) => ({
+        default: m.VendorClassification,
+      })),
+    ),
     "order-mail": slot(() =>
       import("~/app/vendors/order-mail-worklist").then((m) => ({
         default: m.VendorOrderMail,

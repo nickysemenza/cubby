@@ -1,3 +1,4 @@
+import { spendingCategoryAllocationsSchema } from "@cubby/schemas/spending-classification";
 import { financialTransactionShortcode } from "../identifier-fields";
 import { spendingCategoryShortcode } from "../identifier-fields";
 import { defineEntity } from "./definition.js";
@@ -87,6 +88,7 @@ export default defineEntity({
           "funders",
           "sourceClaims",
           "spendingCategoryId",
+          "spendingCategoryAllocations",
           "projectAllocations",
         ],
         media: ["vendorLogo", "displayImages"],
@@ -159,7 +161,11 @@ export default defineEntity({
             basis: ["name", "vendor", "productId", "notes", "lineKind"],
           },
         },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          renderer: { detail: "expense-spending-category" },
+        },
         resolution: {
           reset: { spendingCategoryId: null },
           redundancy: "eligible",
@@ -167,7 +173,7 @@ export default defineEntity({
         explanation: {
           ruleId: "expense.effective-spending-category",
           description:
-            "An Expense spending category override wins; otherwise the Expense uses its Purchase's spending category.",
+            "An explicit Expense category wins over contextual defaults, Product Category mappings, and the stored Purchase fallback. Shared adjustments use the principal lines' category allocation.",
           projections: {
             list: "fieldResolutions.spendingCategoryId.value",
             detail: "fieldResolutions.spendingCategoryId.value",
@@ -216,6 +222,15 @@ export default defineEntity({
         kind: "json",
         validation: {
           read: optionalFieldResolutionsSchema,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "spendingCategoryAllocations",
+        kind: "json",
+        validation: {
+          read: spendingCategoryAllocationsSchema.optional(),
           create: null,
           update: null,
         },
@@ -992,6 +1007,7 @@ export default defineEntity({
       "spendingCategoryId",
       "economicRole",
       "fieldResolutions",
+      "spendingCategoryAllocations",
       "projectAllocations",
       "id",
       "name",
@@ -1352,6 +1368,19 @@ export default defineEntity({
         deriveSchema: true,
         schemaDescription: "Substring match on url",
         stored: { columns: ["url"] },
+      },
+      {
+        columnId: "spendingCategoryId",
+        urlKey: "spendingCategory",
+        field: "spendingCategoryId",
+        kind: "idMulti",
+        placeholder: "Filter by spending category...",
+        optionsKey: "spendingCategory",
+        brandRef: { entity: "spendingCategory" },
+        nullable: {
+          field: "spendingCategoryPresenceFilter",
+          label: "category",
+        },
       },
       {
         columnId: "projectId",

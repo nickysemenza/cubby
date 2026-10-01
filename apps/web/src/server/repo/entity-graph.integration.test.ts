@@ -228,6 +228,8 @@ describe("entity graph repository", () => {
     const vendor = await createVendor(
       ctx.db,
       {
+        defaultSpendingCategoryId: null,
+        spendingProfile: "unspecified",
         name: "Evidence graph vendor",
         website: null,
         orderUrlTemplate: null,

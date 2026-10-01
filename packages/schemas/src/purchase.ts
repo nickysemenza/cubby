@@ -9,6 +9,7 @@ import {
   productShortcode,
   projectShortcode,
   purchaseShortcode,
+  spendingCategoryShortcode,
   vendorShortcode,
 } from "./identifiers";
 import { expenseLineKindSchema } from "./expense-line-kind";
@@ -266,6 +267,12 @@ export const splitExpenseInput = z.object({
         cost: money,
         lineKind: expenseLineKindSchema.optional(),
         costType: costTypeSchema,
+        spendingCategoryId: spendingCategoryShortcode
+          .nullable()
+          .optional()
+          .describe(
+            "Omit to preserve the original stored override; pass null to use inherited classification, or a category to explicitly classify this part.",
+          ),
         trade: tradeSchema.nullable(),
         projectId: projectShortcode.nullable().default(null),
         productId: productShortcode.nullable().default(null),

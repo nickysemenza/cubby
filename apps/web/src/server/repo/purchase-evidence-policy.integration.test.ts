@@ -218,7 +218,6 @@ describe("purchase evidence policy", () => {
         status: "posted",
         postedDate: "2026-09-01",
         merchant: "Quality fixture goods",
-        spendingCategoryId: category.shortcode,
         purchaseId: purchase.shortcode,
       }),
       ctx.actor,
@@ -254,7 +253,7 @@ describe("purchase evidence policy", () => {
   it.each(["reimbursement", "vendor", "mixed"] as const)(
     "keeps %s credit coverage tied to its explicit economic role",
     async (role) => {
-      const { purchase, category } = await fixture();
+      const { purchase } = await fixture();
       await unwrapDb(ctx.db).execute(
         sql`UPDATE "Purchase" SET "evidenceExpectation" = 'required' WHERE id = ${purchase.id}`,
       );
@@ -285,7 +284,6 @@ describe("purchase evidence policy", () => {
           status: "posted",
           postedDate: "2026-09-01",
           merchant: "Reviewed credit",
-          spendingCategoryId: category.shortcode,
           purchaseId: purchase.shortcode,
         }),
         ctx.actor,

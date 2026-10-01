@@ -1,3 +1,4 @@
+import { spendingCategorySummarySchema } from "../spending-classification";
 import { financialTransactionCoverage } from "../purchase-evidence-policy";
 import { optionalFieldResolutionsSchema } from "../field-resolution";
 import { spendingCategoryShortcode } from "../identifier-fields";
@@ -66,6 +67,7 @@ export default defineEntity({
           "itemizationCoverage",
           "productsCoverage",
           "coverage",
+          "spendingCategorySummary",
           "fieldResolutions",
           "itemization",
           "vendorInference",
@@ -216,28 +218,42 @@ export default defineEntity({
         },
       },
       {
+        key: "spendingCategorySummary",
+        kind: "json",
+        labelOverride: "Expense categories",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Live Expense category allocations" }],
+        },
+        display: {
+          list: true,
+          detail: true,
+          renderer: {
+            detail: "spending-category-summary",
+            list: "spending-category-summary",
+          },
+        },
+        explanation: {
+          ruleId: "financialTransaction.expense-category-summary",
+          description:
+            "Category context comes from linked live Expense lines. Settlement allocations identify Purchases; they do not attribute this transaction amount to individual categories.",
+        },
+        validation: {
+          read: spendingCategorySummarySchema,
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "spendingCategoryId",
         kind: "identifier",
         nullable: true,
         reference: { entity: "spendingCategory" },
-        control: {
-          kind: "specialized",
-          renderer: "entity-select",
-          suggest: {
-            basis: [
-              "merchant",
-              "rawDescription",
-              "sourceCategory",
-              "kind",
-              "notes",
-            ],
-          },
-        },
-        display: { list: true, detail: true },
+        display: { list: false, detail: false },
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
-          create: spendingCategoryShortcode.nullable().default(null),
-          update: spendingCategoryShortcode.nullable().optional(),
+          create: null,
+          update: null,
         },
       },
       {
@@ -754,7 +770,6 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
-      "spendingCategoryId",
       "evidenceExpectation",
       "accountId",
       "purchaseId",
@@ -771,7 +786,6 @@ export default defineEntity({
       "allocations",
     ],
     update: [
-      "spendingCategoryId",
       "evidenceExpectation",
       "accountId",
       "purchaseId",
@@ -789,7 +803,6 @@ export default defineEntity({
     ],
     bulk: [],
     audit: [
-      "spendingCategoryId",
       "evidenceExpectation",
       "accountId",
       "kind",
@@ -832,7 +845,6 @@ export default defineEntity({
           "notes",
         ],
         full: [
-          "spendingCategoryId",
           "evidenceExpectation",
           "accountId",
           "purchaseId",
@@ -866,6 +878,7 @@ export default defineEntity({
       "itemizationCoverage",
       "productsCoverage",
       "coverage",
+      "spendingCategorySummary",
       "spendingCategoryId",
       "spendingCategoryName",
       "fieldResolutions",
@@ -1484,14 +1497,6 @@ export default defineEntity({
           weight: 1,
           label: "Merchant",
           message: "No merchant is recorded for this transaction.",
-        },
-        {
-          id: "financial_transaction_spending_category",
-          facet: "identity",
-          weight: 1,
-          label: "Spending category",
-          message:
-            "This spending transaction has no reviewed spending category.",
         },
         {
           id: "financial_transaction_evidence_expectation",

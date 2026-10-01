@@ -57,6 +57,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { completeListReader } from "./list-read-adapters";
 import { categoryDescendantsSql } from "./product-category-sql";
+import { assertReviewedSpendingClassification } from "./spending-classification-review-authorization";
 
 const PRODUCT_CATEGORY_DELETE_EDGE_POLICY = {
   "ProductCategory.parentId": {
@@ -257,6 +258,11 @@ const hydrateRead = async (
           pathsFor(db, ids),
         ),
         loadListGroup(projection, "derived", () => productCountsFor(db, ids)),
+        lookupEntityReferences(
+          db,
+          "spendingCategory",
+          rows.map((row) => row.spendingCategoryId),
+        ),
         loadListGroup(projection, "relations", () =>
           lookupEntityReferences(
             db,
@@ -265,13 +271,19 @@ const hydrateRead = async (
           ),
         ),
       ]),
-    mapRow: (row, { loaded: [paths, productCounts, parents] }) => {
+    mapRow: (
+      row,
+      { loaded: [paths, productCounts, spendingCategories, parents] },
+    ) => {
       const path = paths?.get(row.id) ?? [];
       const parent = row.parentId ? parents?.get(row.parentId) : undefined;
       const result = {
         ...row,
         id: parseShortcodeFor("productCategory", row.shortcode),
         feature: parseFeature(row.feature),
+        spendingCategoryId: row.spendingCategoryId
+          ? (spendingCategories.get(row.spendingCategoryId)?.id ?? null)
+          : null,
       };
       if (wantsListGroup(projection, "relations"))
         Object.assign(result, {
@@ -344,7 +356,7 @@ const cleanAliases = (aliases: string[]) => [
   ...new Set(aliases.map((alias) => alias.trim()).filter(Boolean)),
 ];
 
-const assertValidParent = async (
+export const assertValidParent = async (
   db: Database | DrizzleTransaction,
   id: ProductCategoryId | null,
   parentId: ProductCategoryId | null,
@@ -442,6 +454,16 @@ export async function createProductCategory(
       ? await resolveOrThrow(tx, "productCategory", data.parentId)
       : null;
     await assertValidParent(tx, null, parentId);
+    const spendingCategoryId = data.spendingCategoryId
+      ? await resolveOrThrow(tx, "spendingCategory", data.spendingCategoryId)
+      : null;
+    if (
+      (data.spendingCategoryMode === "mapped") !==
+      (spendingCategoryId !== null)
+    )
+      throw new Error(
+        "Mapped requires a spending category; inherit and blocked require none",
+      );
     const row = await insertWithShortcode(tx, "productCategory", {
       name: data.name.trim(),
       aliases: cleanAliases(data.aliases),
@@ -449,6 +471,8 @@ export async function createProductCategory(
       parentId,
       sortOrder: data.sortOrder,
       feature: data.feature,
+      spendingCategoryMode: data.spendingCategoryMode,
+      spendingCategoryId,
     });
     await logAuditEntry(tx, actor, {
       entityKind: "productCategory",
@@ -467,6 +491,39 @@ export async function updateProductCategory(
   actor: ActorContext,
 ): Promise<{ output: ProductCategoryOut; entityId: ProductCategoryId }> {
   const id = await resolveOrThrow(db, "productCategory", shortcode);
+  if (
+    data.spendingCategoryMode !== undefined ||
+    data.spendingCategoryId !== undefined
+  ) {
+    const [current] = await unwrapDb(db)
+      .select({
+        mode: productCategory.spendingCategoryMode,
+        target: productCategory.spendingCategoryId,
+      })
+      .from(productCategory)
+      .where(and(eq(productCategory.id, id), notDeleted(productCategory)))
+      .limit(1);
+    if (!current) throw new Error("Product category not found");
+    const target =
+      data.spendingCategoryId === undefined
+        ? current.target
+        : data.spendingCategoryId === null
+          ? null
+          : await resolveOrThrow(
+              db,
+              "spendingCategory",
+              data.spendingCategoryId,
+            );
+    if (
+      (data.spendingCategoryMode ?? current.mode) !== current.mode ||
+      target !== current.target
+    ) {
+      const affected = await unwrapDb(db)
+        .execute(sql`SELECT 1 FROM "Expense" e JOIN "Product" p ON p.id=e."productId"
+        WHERE e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND p."categoryId" IN ${categoryDescendantsSql([id])} LIMIT 1`);
+      if (affected.rows.length) assertReviewedSpendingClassification(db);
+    }
+  }
   await withTransaction(db, async (tx) => {
     const parentId =
       data.parentId === undefined
@@ -492,7 +549,31 @@ export async function updateProductCategory(
         "A category behavior binding cannot be cleared or replaced",
       );
     }
+    const spendingCategoryId =
+      data.spendingCategoryId === undefined
+        ? undefined
+        : data.spendingCategoryId === null
+          ? null
+          : await resolveOrThrow(
+              tx,
+              "spendingCategory",
+              data.spendingCategoryId,
+            );
+    const spendingCategoryMode =
+      data.spendingCategoryMode ?? before.spendingCategoryMode;
+    if (
+      (spendingCategoryMode === "mapped") !==
+      ((spendingCategoryId === undefined
+        ? before.spendingCategoryId
+        : spendingCategoryId) !==
+        null)
+    )
+      throw new Error(
+        "Mapped requires a spending category; inherit and blocked require none",
+      );
     const patch = {
+      spendingCategoryMode: data.spendingCategoryMode,
+      spendingCategoryId,
       name: data.name?.trim(),
       aliases: data.aliases ? cleanAliases(data.aliases) : undefined,
       description: data.description,

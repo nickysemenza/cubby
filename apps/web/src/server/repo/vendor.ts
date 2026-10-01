@@ -10,8 +10,10 @@ import {
   parseShortcodeFor,
   type VendorId,
   type VendorShortcode,
+  type SpendingCategoryShortcode,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import { vendorSpendingProfile } from "@cubby/schemas/spending-classification";
 import type {
   VendorCreateInput,
   VendorFilters,
@@ -86,6 +88,8 @@ import {
   singularAttachmentImageIds,
 } from "~/server/repo/singular-attachment";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
+
+import { assertReviewedSpendingClassification } from "./spending-classification-review-authorization";
 
 export const VENDOR_DELETE_EDGE_POLICY = {
   "FinancialAccount.providerVendorId": {
@@ -287,6 +291,8 @@ const vendorColumns = {
   name: vendor.name,
   website: vendor.website,
   orderUrlTemplate: vendor.orderUrlTemplate,
+  spendingProfile: vendor.spendingProfile,
+  defaultSpendingCategoryId: sql<SpendingCategoryShortcode | null>`(SELECT sc.shortcode FROM "SpendingCategory" sc WHERE sc.id = ${vendor.defaultSpendingCategoryId} AND sc."deletedAt" IS NULL)`,
   evidenceExpectation: vendor.evidenceExpectation,
   orderEvidence: vendor.orderEvidence,
   orderEmailSenders: vendor.orderEmailSenders,
@@ -337,6 +343,8 @@ type VendorRow = {
   name: string;
   website: string | null;
   orderUrlTemplate: string | null;
+  spendingProfile: string;
+  defaultSpendingCategoryId: SpendingCategoryShortcode | null;
   evidenceExpectation: VendorOut["evidenceExpectation"];
   orderEvidence: string | null;
   orderEmailSenders: string[];
@@ -422,6 +430,8 @@ const dbVendorToAPI = (
   name: row.name,
   website: row.website,
   orderUrlTemplate: row.orderUrlTemplate,
+  spendingProfile: vendorSpendingProfile.parse(row.spendingProfile),
+  defaultSpendingCategoryId: row.defaultSpendingCategoryId,
   evidenceExpectation: row.evidenceExpectation,
   orderEvidence: vendorOrderEvidence.nullable().parse(row.orderEvidence),
   orderEmailSenders: row.orderEmailSenders,
@@ -667,6 +677,14 @@ export const createVendor = async (
       name: data.name.trim(),
       website: data.website,
       orderUrlTemplate: data.orderUrlTemplate,
+      spendingProfile: data.spendingProfile,
+      defaultSpendingCategoryId: data.defaultSpendingCategoryId
+        ? await resolveOrThrow(
+            tx,
+            "spendingCategory",
+            data.defaultSpendingCategoryId,
+          )
+        : null,
       evidenceExpectation: data.evidenceExpectation,
       orderEvidence: data.orderEvidence,
       orderEmailSenders: data.orderEmailSenders,
@@ -693,6 +711,41 @@ export const updateVendor = async (
 ): Promise<{ output: VendorOut; entityId: VendorId }> => {
   const id = await resolveOrThrow(db, "vendor", shortcode);
 
+  const defaultSpendingCategoryId =
+    data.defaultSpendingCategoryId === undefined
+      ? undefined
+      : data.defaultSpendingCategoryId === null
+        ? null
+        : await resolveOrThrow(
+            db,
+            "spendingCategory",
+            data.defaultSpendingCategoryId,
+          );
+  if (
+    data.spendingProfile !== undefined ||
+    defaultSpendingCategoryId !== undefined
+  ) {
+    const [current] = await getDb(db)
+      .select({
+        profile: vendor.spendingProfile,
+        target: vendor.defaultSpendingCategoryId,
+      })
+      .from(vendor)
+      .where(and(eq(vendor.id, id), notDeleted(vendor)))
+      .limit(1);
+    if (!current) throw new Error("Vendor not found");
+    if (
+      (data.spendingProfile ?? current.profile) !== current.profile ||
+      (defaultSpendingCategoryId === undefined
+        ? current.target
+        : defaultSpendingCategoryId) !== current.target
+    ) {
+      const affected = await getDb(db).execute(
+        sql`SELECT 1 FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" WHERE e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND p."vendorId"=${id}::uuid LIMIT 1`,
+      );
+      if (affected.rows.length) assertReviewedSpendingClassification(db);
+    }
+  }
   await patchEntityRows(
     db,
     actor,
@@ -702,7 +755,7 @@ export const updateVendor = async (
       fields: entityFieldModels.vendor.audit,
     },
     [id],
-    { ...data, name: data.name?.trim() },
+    { ...data, defaultSpendingCategoryId, name: data.name?.trim() },
   );
 
   return { output: await getVendorByID(db, id), entityId: id };

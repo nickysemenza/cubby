@@ -15,6 +15,27 @@
       "when": 1790734203636,
       "tag": "0001_import_evidence_convergence",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790834083256,
+      "tag": "0002_spending_classification",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790835501848,
+      "tag": "0003_spending_classification_policy",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790836407764,
+      "tag": "0004_purchase_category_origin",
+      "breakpoints": true
     }
   ]
 }

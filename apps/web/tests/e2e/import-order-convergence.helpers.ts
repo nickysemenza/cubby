@@ -1,3 +1,5 @@
+import { productCategoryCreateInput } from "@cubby/schemas/product-category";
+import { effectiveExpenseSpendingCategorySql } from "~/server/repo/expense-category-resolution";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -147,6 +149,15 @@ export async function createConvergenceHarness(
       productExpectation: "required",
     }),
   );
+  const productCategory = await createFixture(
+    page,
+    "productCategory",
+    productCategoryCreateInput.parse({
+      name: `${name} apparel`,
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: category.id,
+    }),
+  );
   const vendorId = await resolveOrThrow(db, "vendor", vendor.id);
   const accountId = await resolveOrThrow(db, "vendorAccount", account.id);
   const cardId = await resolveOrThrow(db, "financialAccount", card.id);
@@ -186,12 +197,25 @@ export async function createConvergenceHarness(
   };
   const readProduct = async () => {
     const [found] = await database
-      .select({ shortcode: schema.product.shortcode })
+      .select({
+        shortcode: schema.product.shortcode,
+        categoryId: schema.product.categoryId,
+      })
       .from(schema.product)
       .where(
         and(eq(schema.product.name, productName), notDeleted(schema.product)),
       )
       .limit(1);
+    if (found && found.categoryId === null) {
+      const classified = await page.request.patch(
+        `/api/v1/products/${found.shortcode}`,
+        {
+          headers: { Origin: baseURL },
+          data: { categoryId: productCategory.id },
+        },
+      );
+      expect(classified.ok(), await classified.text()).toBe(true);
+    }
     productCode = found?.shortcode;
     return productCode;
   };
@@ -521,7 +545,11 @@ export async function createConvergenceHarness(
               ? { kind: "existing", existingId: productCode }
               : {
                   kind: "create",
-                  create: { name: productName, manufacturer: name },
+                  create: {
+                    name: productName,
+                    manufacturer: name,
+                    categoryId: productCategory.id,
+                  },
                 },
             inventory: {
               locationId: location.id,
@@ -618,7 +646,7 @@ export async function createConvergenceHarness(
         transactionId: transaction.shortcode,
         purchaseId: receipt?.shortcode,
         vendorId: vendor.id,
-        spendingCategoryId: category.id,
+        spendingCategoryId: null,
         trade: "other",
       },
       financialBookingPreview,
@@ -684,7 +712,7 @@ export async function createConvergenceHarness(
         (SELECT count(*)::int FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" WHERE p."vendorId" = ${vendorId} AND e."deletedAt" IS NULL AND p."deletedAt" IS NULL) AS expenses,
         (SELECT count(*)::int FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" JOIN "Product" product ON product.id = e."productId" WHERE p."vendorId" = ${vendorId} AND e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND product.name = ${productName} AND product."deletedAt" IS NULL) AS "productLines",
         (SELECT count(*)::int FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" t ON t.id = a."transactionId" JOIN "Purchase" p ON p.id = a."purchaseId" WHERE t."accountId" = ${cardId} AND a."deletedAt" IS NULL AND t."deletedAt" IS NULL AND p."vendorId" = ${vendorId} AND p."orderId" = ${orderId} AND p."deletedAt" IS NULL) AS "settledPurchases",
-        (SELECT count(*)::int FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" JOIN "SpendingCategory" c ON c.id = COALESCE(e."spendingCategoryId", p."spendingCategoryId") WHERE p."vendorId" = ${vendorId} AND e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND c.shortcode = ${category.id} AND c."deletedAt" IS NULL) AS "categorizedExpenses",
+        (SELECT count(*)::int FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" JOIN "SpendingCategory" c ON c.id = ${effectiveExpenseSpendingCategorySql("e")} WHERE p."vendorId" = ${vendorId} AND e."deletedAt" IS NULL AND p."deletedAt" IS NULL AND c.shortcode = ${category.id} AND c."deletedAt" IS NULL) AS "categorizedExpenses",
         (SELECT round(sum(e.cost) * 100)::int FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId" WHERE p."vendorId" = ${vendorId} AND e."deletedAt" IS NULL AND p."deletedAt" IS NULL) AS spend,
         (SELECT count(*)::int FROM "FinancialTransaction" WHERE "accountId" = ${cardId} AND "deletedAt" IS NULL) AS transactions,
         (SELECT round(sum(a.amount) * 100)::int FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" t ON t.id = a."transactionId" WHERE t."accountId" = ${cardId} AND a."deletedAt" IS NULL AND t."deletedAt" IS NULL) AS settlement,

@@ -49,7 +49,7 @@ enum NativePresentationCoverage {
 
     static func list(_ renderer: ListRendererID) -> Status {
         switch renderer {
-        case .recipeSource: .implemented
+        case .recipeSource, .spendingCategorySummary: .implemented
         case .dataQuality:
             .unsupported("Data-quality status and score are available on web.")
         }
@@ -70,7 +70,7 @@ enum NativePresentationCoverage {
             .financialTransactionAllocations,
             .runFailureDetails:
             .generic
-        case .recipeSource:
+        case .recipeSource, .expenseSpendingCategory, .spendingCategorySummary:
             .implemented
         case .effectiveOwnership, .imageCaptureLocation:
             // `imageCaptureLocation` is `ImageEntityDetailView`'s own Provenance map row, not a
@@ -118,7 +118,8 @@ enum NativePresentationCoverage {
         }
         return switch id {
         case .ledgerPartyWardrobe, .mealNutrition, .runImportControls, .runPhotoBatch,
-            .purchaseOrderMail, .vendorOrderMail, .vendorAccountOrderMail:
+            .purchaseOrderMail, .vendorOrderMail, .vendorAccountOrderMail, .vendorSpendingClassification,
+            .productCategorySpendingClassification:
             .implemented
         case .productLabels,
             .productNutrition,

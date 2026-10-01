@@ -43,7 +43,7 @@ import {
 import {
   expenseAllocatedCostSql,
   expenseAllocationScopeConditionSql,
-  expenseProjectAllocationSql,
+  expenseJointAllocationSql,
   type ExpenseAllocationProjectScope,
 } from "../expense-project-allocation";
 import {
@@ -190,7 +190,7 @@ export async function expenseAnalytics(
           filter (where allocation."attributedCents"::bigint < 0), 0)::float8 AS credits,
         coalesce(sum(allocation."attributedCents"::bigint) / 100.0, 0)::float8 AS net,
         count(DISTINCT ${expense.id})::int AS count
-      FROM (${expenseProjectAllocationSql()}) allocation
+      FROM (${expenseJointAllocationSql()}) allocation
       JOIN ${expense} ON ${expense.id} = allocation."expenseId"
       JOIN ${project} p ON p."id" = allocation."projectId" AND p."deletedAt" IS NULL
       WHERE ${whereClause ?? sql`true`}

@@ -2,15 +2,22 @@ import type {
   ExpenseId,
   ProjectId,
   PurchaseId,
+  SpendingCategoryId,
 } from "@cubby/schemas/identifiers";
 import { sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/repo/database-helpers";
 
+import {
+  effectiveExpenseSpendingCategorySql,
+  storedExpenseSpendingCategorySql,
+  spendingCategoryCatalogSql,
+  type ExpenseSpendingCategoryResolutionDraft,
+} from "./expense-category-resolution";
 import { effectiveExpenseProjectSql } from "./expense-inheritance";
 
-type ExpenseProjectAllocationBasis =
+export type ExpenseProjectAllocationBasis =
   | "principal"
   | "positive"
   | "refund"
@@ -28,39 +35,42 @@ export type ExpenseProjectAllocationRow = {
   incomplete: boolean;
 };
 
-type RawAllocationRow = Omit<
-  ExpenseProjectAllocationRow,
-  "sourceCents" | "attributedCents"
-> & {
+export type ExpenseJointAllocationRow = ExpenseProjectAllocationRow & {
+  principalExpenseId: ExpenseId | null;
+  spendingCategoryId: SpendingCategoryId | null;
+  spendingCategoryShortcode: string | null;
+  spendingCategoryName: string | null;
+  categoryIncomplete: boolean;
+};
+
+type RawAllocationRow<T> = Omit<T, "sourceCents" | "attributedCents"> & {
   sourceCents: string | number | null;
   attributedCents: string | number | null;
 };
 
 /**
- * Reusable exact-cent allocation query for Expense/project reporting.
- *
- * The weight CTE deliberately sees every live principal in a live Purchase.
- * Consumers apply date, product, project, and other ledger filters only to the
- * final rows; narrowing the denominator first would reassign tax and shipping
- * when a chart filter hides one principal line. ID-scoped reads select complete
- * purchases first, so detail/list hydration never resolves unrelated purchases.
+ * Round shared adjustments once per principal line, before grouping dimensions.
+ * All live siblings supply the denominator; ledger filters only select final
+ * rows. The stable principal ID breaks remainder ties independently of mutable
+ * Project/category assignments. ID-scoped reads first select complete purchases.
  */
-export const expenseProjectAllocationSql = (
-  expenseIds?: readonly ExpenseId[],
+export const expenseJointAllocationSql = (
+  expenseIds?: readonly ExpenseId[] | SQL,
+  draft?: ExpenseSpendingCategoryResolutionDraft,
 ): SQL => sql`
   WITH ${
     expenseIds
       ? sql`selected_expense AS (
-    SELECT allocation_target."id", allocation_target."purchaseId" FROM "Expense" allocation_target
-    WHERE allocation_target."deletedAt" IS NULL AND allocation_target."id" = ANY(${uuidArrayParam(expenseIds)})
+    SELECT target."id", target."purchaseId" FROM "Expense" target
+    WHERE target."deletedAt" IS NULL AND target."id" = ANY(${uuidArrayParam(expenseIds)})
   ),`
       : sql``
   } principal_fact AS (
-    SELECT
-      e."id" AS "expenseId",
-      e."purchaseId",
+    SELECT e."id" AS "expenseId", e."purchaseId",
       ${effectiveExpenseProjectSql("e")} AS "projectId",
-      round((e."cost")::numeric * 100)::bigint AS cost_cents
+      ${effectiveExpenseSpendingCategorySql("e", draft)} AS "spendingCategoryId",
+      round(e."cost"::numeric * 100)::bigint AS cost_cents,
+      live_purchase."id" IS NOT NULL AS live_purchase
     FROM ${
       expenseIds
         ? sql`(
@@ -75,150 +85,112 @@ export const expenseProjectAllocationSql = (
         : sql`"Expense"`
     } e
     LEFT JOIN "Purchase" live_purchase
-      ON live_purchase."id" = e."purchaseId"
-     AND live_purchase."deletedAt" IS NULL
-    WHERE e."deletedAt" IS NULL
-      AND e."lineKind" = 'principal'
-      AND (e."purchaseId" IS NULL OR live_purchase."id" IS NOT NULL)
+      ON live_purchase."id" = e."purchaseId" AND live_purchase."deletedAt" IS NULL
+    WHERE e."deletedAt" IS NULL AND e."lineKind" = 'principal'
   ), purchase_direction AS (
-    SELECT
-      "purchaseId",
-      coalesce(bool_or(cost_cents > 0), false) AS has_positive,
-      coalesce(bool_or(cost_cents < 0), false) AS has_negative
-    FROM principal_fact
-    WHERE "purchaseId" IS NOT NULL AND cost_cents IS NOT NULL
-    GROUP BY "purchaseId"
-  ), purchase_coverage AS (
-    SELECT
-      "purchaseId",
+    SELECT "purchaseId", coalesce(bool_or(cost_cents > 0), false) AS has_positive,
+      coalesce(bool_or(cost_cents < 0), false) AS has_negative,
       bool_or(cost_cents IS NULL) AS has_unpriced_principal
-    FROM principal_fact
-    WHERE "purchaseId" IS NOT NULL
-    GROUP BY "purchaseId"
-  ), project_weight AS (
-    SELECT
-      f."purchaseId",
-      f."projectId",
+    FROM principal_fact WHERE live_purchase GROUP BY "purchaseId"
+  ), principal_weight AS (
+    SELECT f."purchaseId", f."expenseId" AS "principalExpenseId",
+      f."projectId", f."spendingCategoryId",
       CASE WHEN d.has_positive THEN 'positive' ELSE 'refund' END::text AS basis,
-      sum(CASE
-        WHEN d.has_positive AND f.cost_cents > 0 THEN f.cost_cents
-        WHEN NOT d.has_positive AND d.has_negative AND f.cost_cents < 0 THEN abs(f.cost_cents)
-        ELSE 0
-      END)::bigint AS weight
-    FROM principal_fact f
-    JOIN purchase_direction d ON d."purchaseId" = f."purchaseId"
-    GROUP BY f."purchaseId", f."projectId", d.has_positive, d.has_negative
-    HAVING sum(CASE
-      WHEN d.has_positive AND f.cost_cents > 0 THEN f.cost_cents
-      WHEN NOT d.has_positive AND d.has_negative AND f.cost_cents < 0 THEN abs(f.cost_cents)
-      ELSE 0
-    END) > 0
+      abs(f.cost_cents)::bigint AS weight
+    FROM principal_fact f JOIN purchase_direction d USING ("purchaseId")
+    WHERE (d.has_positive AND f.cost_cents > 0)
+      OR (NOT d.has_positive AND d.has_negative AND f.cost_cents < 0)
   ), fallback_weight AS (
-    SELECT
-      p."id" AS "purchaseId",
-      default_project."id" AS "projectId",
-      'default'::text AS basis,
-      1::bigint AS weight
-    FROM "Purchase" p
-    LEFT JOIN "Project" default_project
-      ON default_project."id" = p."defaultProjectId"
-     AND default_project."deletedAt" IS NULL
+    SELECT p."id" AS "purchaseId", NULL::uuid AS "principalExpenseId",
+      default_project."id" AS "projectId", NULL::uuid AS "spendingCategoryId",
+      'default'::text AS basis, 1::bigint AS weight
+    FROM "Purchase" p LEFT JOIN "Project" default_project
+      ON default_project."id" = p."defaultProjectId" AND default_project."deletedAt" IS NULL
     WHERE p."deletedAt" IS NULL
       ${expenseIds ? sql`AND p."id" IN (SELECT "purchaseId" FROM selected_expense)` : sql``}
-      AND NOT EXISTS (
-        SELECT 1 FROM project_weight w WHERE w."purchaseId" = p."id"
-      )
+      AND NOT EXISTS (SELECT 1 FROM principal_weight w WHERE w."purchaseId" = p."id")
   ), weights AS (
-    SELECT * FROM project_weight
-    UNION ALL
-    SELECT * FROM fallback_weight
+    SELECT * FROM principal_weight UNION ALL SELECT * FROM fallback_weight
   ), adjustment_seed AS (
-    SELECT
-      e."id" AS "expenseId",
-      e."purchaseId",
-      w."projectId",
-      w.basis,
-      w.weight,
-      round((e."cost")::numeric * 100)::bigint AS source_cents,
-      sum(w.weight) OVER (PARTITION BY e."id") AS total_weight,
-      coalesce(coverage.has_unpriced_principal, false) AS has_unpriced_principal,
-      coalesce(pj."shortcode", '~unassigned') AS allocation_key
-    FROM "Expense" e
-    JOIN "Purchase" p
+    SELECT e."id" AS "expenseId", e."purchaseId", w."principalExpenseId",
+      CASE WHEN p."id" IS NULL THEN standalone_project."id" ELSE w."projectId" END AS "projectId",
+      CASE
+        WHEN explicit_category."id" IS NOT NULL THEN explicit_category."id"
+        WHEN e."cost" < 0 AND e."lineKind" <> 'discount' AND coalesce(d.has_positive, false) THEN NULL
+        ELSE w."spendingCategoryId"
+      END AS "spendingCategoryId",
+      coalesce(w.basis, 'default') AS basis, coalesce(w.weight, 1::bigint) AS weight,
+      round(e."cost"::numeric * 100)::bigint AS source_cents,
+      sum(coalesce(w.weight, 1::bigint)) OVER (PARTITION BY e."id") AS total_weight,
+      explicit_category."id" IS NOT NULL AS has_explicit_category,
+      coalesce(d.has_unpriced_principal, false) AS has_unpriced_principal
+    FROM "Expense" e LEFT JOIN "Purchase" p
       ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
-    JOIN weights w ON w."purchaseId" = p."id"
-    LEFT JOIN purchase_coverage coverage
-      ON coverage."purchaseId" = p."id"
-    LEFT JOIN "Project" pj
-      ON pj."id" = w."projectId" AND pj."deletedAt" IS NULL
+    LEFT JOIN weights w ON w."purchaseId" = p."id"
+    LEFT JOIN purchase_direction d ON d."purchaseId" = p."id"
+    LEFT JOIN "Project" standalone_project
+      ON standalone_project."id" = e."projectId" AND standalone_project."deletedAt" IS NULL
+    LEFT JOIN ${spendingCategoryCatalogSql(draft)} explicit_category
+      ON explicit_category."id" = ${storedExpenseSpendingCategorySql("e", draft)} AND explicit_category."deletedAt" IS NULL
     WHERE e."deletedAt" IS NULL AND e."lineKind" <> 'principal'
       ${expenseIds ? sql`AND e."id" IN (SELECT "id" FROM selected_expense)` : sql``}
   ), adjustment_floor AS (
-    SELECT
-      *,
+    SELECT *, CASE WHEN source_cents IS NULL THEN NULL ELSE
+      floor(abs(source_cents)::numeric * weight::numeric / total_weight)::bigint END AS base_cents,
       CASE WHEN source_cents IS NULL THEN NULL ELSE
-        floor(abs(source_cents)::numeric * weight::numeric / total_weight)::bigint
-      END AS base_cents,
-      CASE WHEN source_cents IS NULL THEN NULL ELSE
-        mod(abs(source_cents)::numeric * weight::numeric, total_weight)
-      END AS fractional_rank
+        mod(abs(source_cents)::numeric * weight::numeric, total_weight) END AS fractional_rank
     FROM adjustment_seed
   ), adjustment_ranked AS (
-    SELECT
-      *,
-      sum(base_cents) OVER (PARTITION BY "expenseId") AS assigned_cents,
-      row_number() OVER (
-        PARTITION BY "expenseId"
-        ORDER BY fractional_rank DESC NULLS LAST, allocation_key ASC
-      ) AS remainder_rank
+    SELECT *, sum(base_cents) OVER (PARTITION BY "expenseId") AS assigned_cents,
+      row_number() OVER (PARTITION BY "expenseId"
+        ORDER BY fractional_rank DESC NULLS LAST, "principalExpenseId" ASC NULLS LAST) AS remainder_rank
     FROM adjustment_floor
   ), allocated AS (
-    SELECT
-      f."expenseId",
-      f."purchaseId",
-      f."projectId",
-      f.cost_cents AS source_cents,
-      f.cost_cents AS attributed_cents,
-      'principal'::text AS basis,
-      f.cost_cents IS NULL AS incomplete
+    SELECT f."expenseId", f."purchaseId", f."expenseId" AS "principalExpenseId",
+      f."projectId", f."spendingCategoryId", f.cost_cents AS source_cents,
+      f.cost_cents AS attributed_cents, 'principal'::text AS basis,
+      f.cost_cents IS NULL AS incomplete,
+      f."spendingCategoryId" IS NULL AS category_incomplete
     FROM principal_fact f
     UNION ALL
-    SELECT
-      r."expenseId",
-      r."purchaseId",
-      r."projectId",
-      r.source_cents,
-      CASE WHEN r.source_cents IS NULL THEN NULL ELSE
-        sign(r.source_cents) * (
-          r.base_cents + CASE
-            WHEN r.remainder_rank <= abs(r.source_cents) - r.assigned_cents THEN 1
-            ELSE 0
-          END
-        )
-      END::bigint AS attributed_cents,
-      r.basis,
-      r.basis = 'default' OR r.has_unpriced_principal AS incomplete
+    SELECT r."expenseId", r."purchaseId", r."principalExpenseId", r."projectId", r."spendingCategoryId",
+      r.source_cents, CASE WHEN r.source_cents IS NULL THEN NULL ELSE
+        sign(r.source_cents) * (r.base_cents + CASE
+          WHEN r.remainder_rank <= abs(r.source_cents) - r.assigned_cents THEN 1 ELSE 0 END)
+      END::bigint AS attributed_cents, r.basis,
+      r.source_cents IS NULL OR r.basis = 'default' OR r.has_unpriced_principal AS incomplete,
+      r."spendingCategoryId" IS NULL OR
+        (NOT r.has_explicit_category AND (r.basis = 'default' OR r.has_unpriced_principal)) AS category_incomplete
     FROM adjustment_ranked r
   )
-  SELECT
-    a."expenseId",
-    a."purchaseId",
-    a."projectId",
-    p."shortcode" AS "projectShortcode",
-    p."name" AS "projectName",
-    a.source_cents::text AS "sourceCents",
-    a.attributed_cents::text AS "attributedCents",
-    a.basis,
-    a.incomplete
+  SELECT a."expenseId", a."purchaseId", a."principalExpenseId", a."projectId",
+    p."shortcode" AS "projectShortcode", p."name" AS "projectName",
+    a."spendingCategoryId", c."shortcode" AS "spendingCategoryShortcode", c."name" AS "spendingCategoryName",
+    a.source_cents::text AS "sourceCents", a.attributed_cents::text AS "attributedCents",
+    a.basis, a.incomplete, a.category_incomplete AS "categoryIncomplete"
   FROM allocated a
-  LEFT JOIN "Project" p
-    ON p."id" = a."projectId" AND p."deletedAt" IS NULL
+  LEFT JOIN "Project" p ON p."id" = a."projectId" AND p."deletedAt" IS NULL
+  LEFT JOIN ${spendingCategoryCatalogSql(draft)} c ON c."id" = a."spendingCategoryId" AND c."deletedAt" IS NULL
   ${expenseIds ? sql`WHERE a."expenseId" IN (SELECT "id" FROM selected_expense)` : sql``}
+`;
+
+/** Project summaries group the canonical line allocations only after rounding. */
+export const expenseProjectAllocationSql = (
+  expenseIds?: readonly ExpenseId[],
+): SQL => sql`
+  SELECT a."expenseId", a."purchaseId", a."projectId", a."projectShortcode", a."projectName",
+    max(a."sourceCents"::bigint)::text AS "sourceCents",
+    sum(a."attributedCents"::bigint)::text AS "attributedCents",
+    a.basis, bool_or(a.incomplete) AS incomplete
+  FROM (${expenseJointAllocationSql(expenseIds)}) a
+  GROUP BY a."expenseId", a."purchaseId", a."projectId", a."projectShortcode", a."projectName", a.basis
 `;
 
 export type ExpenseAllocationProjectScope = {
   projectIds?: readonly ProjectId[];
   presence?: "has" | "none";
+  spendingCategoryIds?: readonly SpendingCategoryId[];
+  categoryPresence?: "has" | "none";
 };
 
 export const expenseAllocationScopeConditionSql = (
@@ -237,10 +209,28 @@ export const expenseAllocationScopeConditionSql = (
       : scope.presence === "none"
         ? sql`${allocation}."projectId" IS NULL`
         : undefined;
-  if (projectMatch && presenceMatch) {
-    return sql`(${projectMatch} OR ${presenceMatch})`;
-  }
-  return projectMatch ?? presenceMatch;
+  const projectCondition =
+    projectMatch && presenceMatch
+      ? sql`(${projectMatch} OR ${presenceMatch})`
+      : (projectMatch ?? presenceMatch);
+  const categoryMatch = scope.spendingCategoryIds
+    ? scope.spendingCategoryIds.length === 0
+      ? sql`false`
+      : sql`${allocation}."spendingCategoryId" = ANY(${uuidArrayParam(scope.spendingCategoryIds)})`
+    : undefined;
+  const categoryPresence =
+    scope.categoryPresence === "has"
+      ? sql`${allocation}."spendingCategoryId" IS NOT NULL`
+      : scope.categoryPresence === "none"
+        ? sql`${allocation}."spendingCategoryId" IS NULL`
+        : undefined;
+  const categoryCondition =
+    categoryMatch && categoryPresence
+      ? sql`(${categoryMatch} OR ${categoryPresence})`
+      : (categoryMatch ?? categoryPresence);
+  return projectCondition && categoryCondition
+    ? sql`(${projectCondition} AND ${categoryCondition})`
+    : (projectCondition ?? categoryCondition);
 };
 
 /** Search retains every attributed project while keeping one expense document. */
@@ -262,7 +252,7 @@ export const expenseAllocationExistsSql = (
     scope,
   );
   return sql`EXISTS (
-    SELECT 1 FROM (${expenseProjectAllocationSql()}) allocation
+    SELECT 1 FROM (${expenseJointAllocationSql()}) allocation
     WHERE allocation."expenseId" = ${expenseId}
       ${scopeCondition ? sql`AND ${scopeCondition}` : sql``}
   )`;
@@ -279,7 +269,7 @@ export const expenseAllocatedCostSql = (
   );
   return sql<number | null>`(
     SELECT (sum(allocation."attributedCents"::bigint) / 100.0)::double precision
-    FROM (${expenseProjectAllocationSql()}) allocation
+    FROM (${expenseJointAllocationSql()}) allocation
     WHERE allocation."expenseId" = ${expenseId}
       ${scopeCondition ? sql`AND ${scopeCondition}` : sql``}
   )`;
@@ -289,9 +279,25 @@ export async function loadExpenseProjectAllocations(
   db: Database | DrizzleTransaction,
   expenseIds?: readonly ExpenseId[],
 ): Promise<ExpenseProjectAllocationRow[]> {
-  const result = await unwrapDb(db).execute<RawAllocationRow>(
-    expenseProjectAllocationSql(expenseIds),
-  );
+  const result = await unwrapDb(db).execute<
+    RawAllocationRow<ExpenseProjectAllocationRow>
+  >(expenseProjectAllocationSql(expenseIds));
+  return result.rows.map((row) => ({
+    ...row,
+    sourceCents: row.sourceCents === null ? null : BigInt(row.sourceCents),
+    attributedCents:
+      row.attributedCents === null ? null : BigInt(row.attributedCents),
+  }));
+}
+
+export async function loadExpenseJointAllocations(
+  db: Database | DrizzleTransaction,
+  expenseIds?: readonly ExpenseId[],
+  draft?: ExpenseSpendingCategoryResolutionDraft,
+): Promise<ExpenseJointAllocationRow[]> {
+  const result = await unwrapDb(db).execute<
+    RawAllocationRow<ExpenseJointAllocationRow>
+  >(expenseJointAllocationSql(expenseIds, draft));
   return result.rows.map((row) => ({
     ...row,
     sourceCents: row.sourceCents === null ? null : BigInt(row.sourceCents),

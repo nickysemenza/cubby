@@ -16,6 +16,10 @@ enum DetailSlotRegistry {
             return AnyView(WardrobeDetailSlot(ownerID: row.id, ownerName: row.title))
         case (.vendor, .vendorOrderMail):
             return AnyView(OrderMailDetailSlot(scope: .vendor(row.id, nil)))
+        case (.vendor, .vendorSpendingClassification):
+            return AnyView(SpendingClassificationView(key: key, row: row))
+        case (.productCategory, .productCategorySpendingClassification):
+            return AnyView(SpendingClassificationView(key: key, row: row))
         case (.vendorAccount, .vendorAccountOrderMail):
             guard let vendorID = row.raw["vendorId"]?.stringValue else { return nil }
             return AnyView(

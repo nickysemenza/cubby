@@ -86,6 +86,8 @@ describe("entity graph cross-entity journey", () => {
     const vendor = await createVendor(
       ctx.db,
       {
+        defaultSpendingCategoryId: null,
+        spendingProfile: "unspecified",
         name: "Journey vendor",
         website: null,
         orderUrlTemplate: null,

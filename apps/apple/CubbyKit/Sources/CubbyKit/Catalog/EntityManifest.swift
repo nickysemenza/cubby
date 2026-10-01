@@ -78,11 +78,13 @@ public enum ControlRendererID: String, CaseIterable, Codable, Sendable {
 public enum ListRendererID: String, CaseIterable, Codable, Sendable {
     case dataQuality = "data-quality"
     case recipeSource = "recipe-source"
+    case spendingCategorySummary = "spending-category-summary"
 }
 
 public enum DetailRendererID: String, CaseIterable, Codable, Sendable {
     case effectiveOwnership = "effectiveOwnership"
     case expenseProject = "expense-project"
+    case expenseSpendingCategory = "expense-spending-category"
     case financialAccountCardNumbers = "financial-account-card-numbers"
     case financialAccountIdentity = "financial-account-identity"
     case financialAccountSourceAliases = "financial-account-source-aliases"
@@ -109,6 +111,7 @@ public enum DetailRendererID: String, CaseIterable, Codable, Sendable {
     case recipeTotals = "recipe-totals"
     case recipeYield = "recipe-yield"
     case runFailureDetails = "run-failure-details"
+    case spendingCategorySummary = "spending-category-summary"
     case vendorAgentHints = "vendor-agent-hints"
     case wishCandidates = "wish-candidates"
 }
@@ -143,6 +146,7 @@ public enum EntityDetailSlotID: String, CaseIterable, Codable, Sendable {
     case productRecipeAppearances = "product.recipe-appearances"
     case productRuns = "product.runs"
     case productUnitMappings = "product.unit-mappings"
+    case productCategorySpendingClassification = "productCategory.spending-classification"
     case projectAnalytics = "project.analytics"
     case projectBudget = "project.budget"
     case projectContribution = "project.contribution"
@@ -172,6 +176,7 @@ public enum EntityDetailSlotID: String, CaseIterable, Codable, Sendable {
     case runLiveProgress = "run.live-progress"
     case runPhotoBatch = "run.photo-batch"
     case vendorOrderMail = "vendor.order-mail"
+    case vendorSpendingClassification = "vendor.spending-classification"
     case vendorAccountOrderMail = "vendorAccount.order-mail"
 }
 

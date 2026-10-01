@@ -3,6 +3,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { ListRendererId } from "@cubby/schemas/entity-manifest";
 import type { ImageWithEntity } from "@cubby/schemas/image";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
+import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
 
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import {
@@ -21,6 +22,7 @@ import type {
 } from "~/entities/generated/entity-lists.gen";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 
+import { SpendingCategorySummaryValue } from "./detail-field-renderers/spending-category-summary";
 import {
   implemented,
   type PresentationCoverage,
@@ -139,13 +141,42 @@ const scoredCoverage = <E extends ScoredListEntity>() => ({
   ),
 });
 
+const categorySummaryRenderer = <
+  TRow extends { spendingCategorySummary?: SpendingCategorySummary },
+>(
+  helper: CubbyColumnHelper<TRow>,
+): CubbyColumnCollection<TRow> =>
+  createCubbyColumnCollection<TRow>((add) => {
+    add(
+      helper.accessor((row) => row.spendingCategorySummary, {
+        id: "spendingCategorySummary",
+        header: "Expense categories",
+        enableSorting: false,
+        meta: { className: "w-56", mobile: { slot: "meta", priority: 35 } },
+        cell: (info) => {
+          const summary = info.row.original.spendingCategorySummary;
+          return summary ? (
+            <SpendingCategorySummaryValue summary={summary} compact />
+          ) : (
+            <NoneValue />
+          );
+        },
+      }),
+    );
+  });
+
 export const listRendererCoverage = {
   recipe: {
     "recipe-source": implemented(recipeSourceRenderer),
     ...scoredCoverage<"recipe">(),
   },
   product: scoredCoverage<"product">(),
-  purchase: scoredCoverage<"purchase">(),
+  purchase: {
+    ...scoredCoverage<"purchase">(),
+    "spending-category-summary": implemented<ListRenderer<"purchase">>(
+      (helper) => categorySummaryRenderer(helper),
+    ),
+  },
   // pantry and garden entities
   ingredient: scoredCoverage<"ingredient">(),
   cookbook: {
@@ -167,7 +198,12 @@ export const listRendererCoverage = {
   task: scoredCoverage<"task">(),
   vendor: scoredCoverage<"vendor">(),
   financialAccount: scoredCoverage<"financialAccount">(),
-  financialTransaction: scoredCoverage<"financialTransaction">(),
+  financialTransaction: {
+    ...scoredCoverage<"financialTransaction">(),
+    "spending-category-summary": implemented<
+      ListRenderer<"financialTransaction">
+    >((helper) => categorySummaryRenderer(helper)),
+  },
   expense: scoredCoverage<"expense">(),
   wish: scoredCoverage<"wish">(),
   plant: scoredCoverage<"plant">(),

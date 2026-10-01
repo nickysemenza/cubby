@@ -33,11 +33,11 @@ describe("reviewed imported spending categories", () => {
       }),
       ctx.actor,
     );
-    const make = (
+    const make = async (
       sourceCategory: string,
       spendingCategoryId: string | null = null,
-    ) =>
-      createFinancialTransaction(
+    ) => {
+      const transaction = await createFinancialTransaction(
         ctx.db,
         financialTransactionCreateInput.parse({
           accountId: account.output.id,
@@ -47,13 +47,20 @@ describe("reviewed imported spending categories", () => {
           postedDate: "2026-09-01",
           merchant: "Synthetic shop",
           sourceCategory,
-          spendingCategoryId,
         }),
         ctx.actor,
       );
+      if (spendingCategoryId) {
+        // Legacy rollout data predates the removal of transaction category edits.
+        await unwrapDb(ctx.db).execute(
+          sql`UPDATE "FinancialTransaction" SET "spendingCategoryId" = (SELECT id FROM "SpendingCategory" WHERE shortcode = ${spendingCategoryId}) WHERE shortcode = ${transaction.output.id}`,
+        );
+      }
+      return transaction;
+    };
     return { make };
   }
-  it("previews without writes, reuses live categories, preserves explicit choices and is replay safe", async () => {
+  it("previews source evidence without promoting statement labels into spending policy", async () => {
     const { make } = await fixture();
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Fixture dining",
@@ -76,7 +83,9 @@ describe("reviewed imported spending categories", () => {
         )
       ).rows[0]?.count,
     ).toBe(1);
-    await applyImportedSpendingCategories(context(), preview.fingerprint);
+    await expect(
+      applyImportedSpendingCategories(context(), preview.fingerprint),
+    ).rejects.toThrow(/retired/i);
     const rows = await unwrapDb(ctx.db).execute(
       sql`SELECT shortcode, "spendingCategoryId", "evidenceExpectation", amount FROM "FinancialTransaction" WHERE shortcode IN (${preserved.output.id}, ${dining.output.id}, ${equipment.output.id})`,
     );
@@ -87,26 +96,19 @@ describe("reviewed imported spending categories", () => {
     expect(
       rows.rows.find((r) => r.shortcode === dining.output.id)
         ?.spendingCategoryId,
-    ).toBe(category.id);
+    ).toBeNull();
     expect(
       rows.rows.find((r) => r.shortcode === equipment.output.id)
         ?.spendingCategoryId,
-    ).not.toBeNull();
+    ).toBeNull();
     expect(
       rows.rows.every(
         (r) => r.evidenceExpectation === null && Number(r.amount) === 25,
       ),
     ).toBe(true);
     const replay = await previewImportedSpendingCategories(ctx.db);
-    expect(replay.transactions).toHaveLength(0);
-    await applyImportedSpendingCategories(context(), replay.fingerprint);
-    expect(
-      (
-        await unwrapDb(ctx.db).execute(
-          sql`SELECT count(*)::int AS count FROM "SpendingCategory" WHERE "deletedAt" IS NULL`,
-        )
-      ).rows[0]?.count,
-    ).toBe(2);
+    expect(replay.fingerprint).toBe(preview.fingerprint);
+    expect(rows.rows.every((row) => Number(row.amount) === 25)).toBe(true);
   });
   it("refuses stale approval and duplicate live names rather than guessing or overwriting", async () => {
     const { make } = await fixture();
@@ -120,7 +122,7 @@ describe("reviewed imported spending categories", () => {
     );
     await expect(
       applyImportedSpendingCategories(context(), preview.fingerprint),
-    ).rejects.toThrow(/changed/);
+    ).rejects.toThrow(/retired/i);
     await make("Fixture duplicate");
     await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Fixture duplicate",
@@ -163,14 +165,16 @@ describe("reviewed imported spending categories", () => {
     const preview = await previewImportedSpendingCategories(ctx.db);
     expect(preview.purchases.map((p) => p.id)).toEqual([unique.shortcode]);
     expect(preview.unresolvedPurchases).toBe(1);
-    await applyImportedSpendingCategories(context(), preview.fingerprint);
+    await expect(
+      applyImportedSpendingCategories(context(), preview.fingerprint),
+    ).rejects.toThrow(/retired/i);
     const result = await unwrapDb(ctx.db).execute(
       sql`SELECT shortcode, "spendingCategoryId" FROM "Purchase" WHERE id IN (${unique.id}, ${mixed.id})`,
     );
     expect(
       result.rows.find((r) => r.shortcode === unique.shortcode)
         ?.spendingCategoryId,
-    ).not.toBeNull();
+    ).toBeNull();
     expect(
       result.rows.find((r) => r.shortcode === mixed.shortcode)
         ?.spendingCategoryId,

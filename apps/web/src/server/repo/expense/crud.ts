@@ -76,6 +76,7 @@ import {
   validateExpenseInheritance,
 } from "../expense-inheritance";
 import { loadExpenseProjectAllocations } from "../expense-project-allocation";
+import { loadExpenseSpendingAllocations } from "../expense-spending-allocation";
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
@@ -209,6 +210,9 @@ const fetchExpenseById = (
     return {
       ...row,
       projectAllocations: await loadExpenseProjectAllocations(db, [id]),
+      spendingCategoryAllocations: (
+        await loadExpenseSpendingAllocations(db, [id])
+      ).get(id),
     };
   })();
 
@@ -854,9 +858,10 @@ const getExpensesByIDs = async (
     extras: expenseInheritanceReadExtras(),
     ...relations.expense.withProject,
   });
-  const [allocations, dataQualities] = await Promise.all([
+  const [allocations, dataQualities, spendingAllocations] = await Promise.all([
     loadExpenseProjectAllocations(db, ids),
     loadDataQualities(db, "expense", ids),
+    loadExpenseSpendingAllocations(db, ids),
   ]);
   const byExpense = new Map<ExpenseId, typeof allocations>();
   for (const allocation of allocations) {
@@ -869,6 +874,7 @@ const getExpensesByIDs = async (
       {
         ...row,
         projectAllocations: byExpense.get(row.id) ?? [],
+        spendingCategoryAllocations: spendingAllocations.get(row.id),
       },
       // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
       dataQualities.get(row.id)!,

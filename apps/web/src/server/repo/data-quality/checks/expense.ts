@@ -1,10 +1,8 @@
 import { sql, type SQL } from "drizzle-orm";
 
 import { expense } from "~/server/db/schema";
-import {
-  effectiveExpenseSpendingCategorySql,
-  expenseProductExpectedSql,
-} from "~/server/repo/purchase-evidence-policy";
+import { expenseSpendingAllocationSql } from "~/server/repo/expense-spending-allocation";
+import { expenseProductExpectedSql } from "~/server/repo/purchase-evidence-policy";
 
 import { defineEntityChecks } from "../registry";
 
@@ -34,9 +32,9 @@ export const expenseChecks = defineEntityChecks({
     expense_spending_category: {
       expected: (t) => sql`${t.future} = false`,
       missing: (t) =>
-        sql`${policyProjection(t, effectiveExpenseSpendingCategorySql)} IS NULL`,
+        sql`NOT EXISTS (SELECT 1 FROM (${expenseSpendingAllocationSql(sql`ARRAY[${t.id}]::uuid[]`)}) a WHERE a."expenseId"=${t.id}) OR EXISTS (SELECT 1 FROM (${expenseSpendingAllocationSql(sql`ARRAY[${t.id}]::uuid[]`)}) a WHERE a."expenseId"=${t.id} AND (a."spendingCategoryId" IS NULL OR a.incomplete))`,
       fingerprint: (t) => [
-        policyProjection(t, effectiveExpenseSpendingCategorySql),
+        sql`(SELECT jsonb_agg(jsonb_build_array(a."spendingCategoryId",a.amount,a.incomplete) ORDER BY a."spendingCategoryId") FROM (${expenseSpendingAllocationSql(sql`ARRAY[${t.id}]::uuid[]`)}) a WHERE a."expenseId"=${t.id})`,
       ],
     },
     expense_product_resolution: {

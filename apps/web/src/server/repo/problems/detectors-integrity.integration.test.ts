@@ -533,6 +533,17 @@ const SOURCE_FACTORIES = {
       name: uniq("Child spending category"),
       parentId: parseEntityId("spendingCategory", targetId),
     }),
+  "ProductCategory.spendingCategoryId": (db, targetId) =>
+    insertWithShortcode(db, "productCategory", {
+      name: uniq("Mapped product category"),
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: parseEntityId("spendingCategory", targetId),
+    }),
+  "Vendor.defaultSpendingCategoryId": (db, targetId) =>
+    insertWithShortcode(db, "vendor", {
+      name: uniq("Defaulted vendor"),
+      defaultSpendingCategoryId: parseEntityId("spendingCategory", targetId),
+    }),
   "Purchase.spendingCategoryId": async (db, targetId) =>
     insertWithShortcode(db, "purchase", {
       vendorId: (await mkVendor(db)).id,

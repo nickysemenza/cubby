@@ -37,7 +37,13 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
-import { expense, project, purchase, vendor } from "~/server/db/schema";
+import {
+  expense,
+  project,
+  purchase,
+  spendingCategory,
+  vendor,
+} from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   EXPENSE_MONTH_BUCKET,
@@ -50,11 +56,14 @@ import {
 import {
   expenseAllocatedCostSql,
   expenseAllocationScopeConditionSql,
-  expenseProjectAllocationSql,
+  expenseJointAllocationSql,
   type ExpenseAllocationProjectScope,
 } from "~/server/repo/expense-project-allocation";
 
-import { buildExpenseWhereClause } from "./lookup";
+import {
+  buildExpenseWhereClause,
+  resolveExpenseProjectAllocationScope,
+} from "./lookup";
 
 const ROW_LIMIT = 200;
 const MONTH_COLUMN_LIMIT = 24;
@@ -94,6 +103,11 @@ const dimensionSpecs = {
     label: EXPENSE_MONTH_BUCKET,
     relation: "expense",
   },
+  spendingCategory: {
+    key: spendingCategory.shortcode,
+    label: spendingCategory.name,
+    relation: "spendingCategory",
+  },
   project: { key: project.shortcode, label: project.name, relation: "project" },
   vendor: { key: vendor.shortcode, label: vendor.name, relation: "vendor" },
 } as const satisfies Record<
@@ -101,7 +115,7 @@ const dimensionSpecs = {
   {
     key: SQLWrapper;
     label: SQLWrapper;
-    relation: "expense" | "project" | "vendor";
+    relation: "expense" | "project" | "vendor" | "spendingCategory";
   }
 >;
 
@@ -185,6 +199,9 @@ const bucketFilter = (
     case "costType":
       filter.costType = key;
       break;
+    case "spendingCategory":
+      filter.spendingCategory = key;
+      break;
     case "project":
       filter.project = key;
       break;
@@ -263,7 +280,7 @@ async function allocatedProjectAggregate(
     .select(allocationAggregateFields())
     .from(expense)
     .innerJoin(
-      sql`(${expenseProjectAllocationSql()}) allocation`,
+      sql`(${expenseJointAllocationSql()}) allocation`,
       sql`allocation."expenseId" = ${expense.id}`,
     )
     .where(
@@ -286,32 +303,40 @@ async function groupedDimension(
 ): Promise<BucketRow[]> {
   const database = getDb(db);
   const spec = dimensionSpecs[dimension];
-  if (dimension === "project") {
+  if (dimension === "project" || dimension === "spendingCategory") {
     const rows = await database
       .select({
-        key: project.shortcode,
-        label: project.name,
+        key: spec.key,
+        label: spec.label,
         ...allocationAggregateFields(),
       })
       .from(expense)
       .innerJoin(
-        sql`(${expenseProjectAllocationSql()}) allocation`,
+        sql`(${expenseJointAllocationSql()}) allocation`,
         sql`allocation."expenseId" = ${expense.id}`,
       )
-      .innerJoin(
+      .leftJoin(
         project,
         and(sql`${project.id} = allocation."projectId"`, notDeleted(project)),
+      )
+      .leftJoin(
+        spendingCategory,
+        and(
+          sql`${spendingCategory.id} = allocation."spendingCategoryId"`,
+          notDeleted(spendingCategory),
+        ),
       )
       .where(
         and(
           where,
+          isNotNull(spec.key),
           allocationScope
             ? expenseAllocationScopeConditionSql("allocation", allocationScope)
             : undefined,
         ),
       )
-      .groupBy(project.shortcode, project.name)
-      .orderBy(project.name);
+      .groupBy(spec.key, spec.label)
+      .orderBy(spec.label);
     return rows.map((row) => ({
       ...row,
       key: String(row.key),
@@ -357,36 +382,52 @@ async function groupedCells(
   const database = getDb(db);
   const row = dimensionSpecs[rowDimension];
   const column = dimensionColumns(columnDimension);
-  if (rowDimension === "project") {
+  if (
+    rowDimension === "project" ||
+    rowDimension === "spendingCategory" ||
+    columnDimension === "spendingCategory"
+  ) {
+    const charge = alias(purchase, "analyzeAllocatedCellCharge");
     const rows = await database
       .select({
-        rowKey: project.shortcode,
+        rowKey: row.key,
         columnKey: column.key,
         ...allocationAggregateFields(),
       })
       .from(expense)
       .innerJoin(
-        sql`(${expenseProjectAllocationSql()}) allocation`,
+        sql`(${expenseJointAllocationSql()}) allocation`,
         sql`allocation."expenseId" = ${expense.id}`,
       )
-      .innerJoin(
+      .leftJoin(
         project,
         and(sql`${project.id} = allocation."projectId"`, notDeleted(project)),
       )
+      .leftJoin(
+        spendingCategory,
+        and(
+          sql`${spendingCategory.id} = allocation."spendingCategoryId"`,
+          notDeleted(spendingCategory),
+        ),
+      )
+      .leftJoin(
+        charge,
+        and(eq(expense.purchaseId, charge.id), notDeleted(charge)),
+      )
+      .leftJoin(vendor, and(eq(charge.vendorId, vendor.id), notDeleted(vendor)))
       .where(
         and(
           where,
+          row.relation !== "expense" ? isNotNull(row.key) : undefined,
+          column.relation !== "expense" ? isNotNull(column.key) : undefined,
           allocationScope
             ? expenseAllocationScopeConditionSql("allocation", allocationScope)
             : undefined,
         ),
       )
-      .groupBy(project.shortcode, column.key)
-      .orderBy(project.shortcode, column.key);
-    return rows.map((item) => ({
-      ...item,
-      rowKey: String(item.rowKey),
-    }));
+      .groupBy(row.key, column.key)
+      .orderBy(row.key, column.key);
+    return rows.map((item) => ({ ...item, rowKey: String(item.rowKey) }));
   }
   const charge = alias(purchase, "analyzeCellCharge");
   const rows = await database
@@ -563,6 +604,7 @@ async function entityFacetOptions(
   db: Database,
   where: SQL | undefined,
   dimension: "project" | "vendor",
+  allocationScope?: ExpenseAllocationProjectScope,
 ): Promise<ExpenseFacetOption[]> {
   if (dimension === "project") {
     const rows = await getDb(db)
@@ -573,14 +615,21 @@ async function entityFacetOptions(
       })
       .from(expense)
       .innerJoin(
-        sql`(${expenseProjectAllocationSql()}) allocation`,
+        sql`(${expenseJointAllocationSql()}) allocation`,
         sql`allocation."expenseId" = ${expense.id}`,
       )
       .innerJoin(
         project,
         and(sql`${project.id} = allocation."projectId"`, notDeleted(project)),
       )
-      .where(where)
+      .where(
+        and(
+          where,
+          allocationScope
+            ? expenseAllocationScopeConditionSql("allocation", allocationScope)
+            : undefined,
+        ),
+      )
       .groupBy(project.shortcode, project.name)
       .orderBy(project.name);
     return rows.map((row) => ({
@@ -638,18 +687,24 @@ async function presenceFacetOptions(
 async function projectPresenceFacetOptions(
   db: Database,
   where: SQL | undefined,
+  allocationScope?: ExpenseAllocationProjectScope,
 ): Promise<ExpenseFacetOption[]> {
+  const scope = allocationScope
+    ? expenseAllocationScopeConditionSql("allocation", allocationScope)
+    : undefined;
   const [presence] = await getDb(db)
     .select({
       any: sql<number>`count(*) filter (where exists (
-        select 1 from (${expenseProjectAllocationSql()}) allocation
+        select 1 from (${expenseJointAllocationSql()}) allocation
         where allocation."expenseId" = ${expense.id}
           and allocation."projectId" is not null
+          ${scope ? sql`AND ${scope}` : sql``}
       ))::int`,
       none: sql<number>`count(*) filter (where exists (
-        select 1 from (${expenseProjectAllocationSql()}) allocation
+        select 1 from (${expenseJointAllocationSql()}) allocation
         where allocation."expenseId" = ${expense.id}
           and allocation."projectId" is null
+          ${scope ? sql`AND ${scope}` : sql``}
       ))::int`,
     })
     .from(expense)
@@ -968,19 +1023,31 @@ export const loadExpenseScalarFacetOptions = (
   id: ScalarFacetId,
 ) => scalarFacetOptions(db, where, scalarFacetSpecs[id]);
 
+export const loadExpenseFacetAllocationScope = async (
+  db: Database,
+  filters: ExpenseFilters,
+  id: ExpenseFacetId,
+) =>
+  resolveExpenseProjectAllocationScope(
+    db,
+    emptyExpenseFacetFilters(filters, id),
+  );
+
 export const loadExpenseEntityFacetOptions = (
   db: Database,
   where: SQL | undefined,
   id: "project" | "vendor",
-) => entityFacetOptions(db, where, id);
+  allocationScope?: ExpenseAllocationProjectScope,
+) => entityFacetOptions(db, where, id, allocationScope);
 
 export const loadExpensePresenceFacetOptions = (
   db: Database,
   where: SQL | undefined,
   id: "project" | "vendor",
+  allocationScope?: ExpenseAllocationProjectScope,
 ) =>
   id === "project"
-    ? projectPresenceFacetOptions(db, where)
+    ? projectPresenceFacetOptions(db, where, allocationScope)
     : presenceFacetOptions(db, where, expense.purchaseId);
 
 export const loadExpenseOrderIdFacetOptions = async (

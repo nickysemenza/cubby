@@ -24,7 +24,9 @@ import {
 } from "~/server/repo/database-helpers";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
+import { parseExpenseCategoryResolution } from "../expense-category-resolution";
 import type { ExpenseProjectAllocationRow } from "../expense-project-allocation";
+import type { ExpenseSpendingAllocationRow } from "../expense-spending-allocation";
 
 /**
  * Reject a quantity whose sign contradicts the money's direction.
@@ -104,6 +106,7 @@ export type ExpenseRow = {
   name: string;
   cost: number | null;
   date: string | null;
+  spendingCategoryResolution?: unknown;
   spendingCategoryId?: SpendingCategoryId | null;
   spendingCategoryShortcode?: string | null;
   spendingCategoryName?: string | null;
@@ -128,6 +131,7 @@ export type ExpenseRow = {
   projectResolutionSource?: string;
   tradeResolutionSource?: string;
   projectAllocations?: ExpenseProjectAllocationRow[];
+  spendingCategoryAllocations?: ExpenseSpendingAllocationRow[];
   productId: ProductId | null;
   productQuantity: number | null;
   purchaseId: PurchaseId | null;
@@ -229,6 +233,31 @@ const expenseSpendingCategoryFieldResolution = (
   row: ExpenseRow,
   purchaseRow: ExpenseRow["purchase"],
 ): NonNullable<ExpenseOut["fieldResolutions"]>[string] => {
+  if (
+    row.lineKind !== "principal" &&
+    row.spendingCategoryId == null &&
+    row.spendingCategoryAllocations?.length
+  ) {
+    const categories = [
+      ...new Set(
+        row.spendingCategoryAllocations
+          .map((a) => a.spendingCategoryShortcode)
+          .filter(Boolean),
+      ),
+    ];
+    return {
+      mode: "allocated",
+      storedValue: null,
+      value: categories.length === 1 ? categories[0]! : null,
+      fallbackValue: null,
+      source: "Principal line allocation",
+      sourceEntity: null,
+      matchesFallback: true,
+      canReset: false,
+    };
+  }
+  if (row.spendingCategoryResolution !== undefined)
+    return parseExpenseCategoryResolution(row.spendingCategoryResolution);
   const value = row.spendingCategoryShortcode ?? null;
   const storedValue = row.storedSpendingCategoryShortcode ?? null;
   const fallbackValue = row.fallbackSpendingCategoryShortcode ?? null;
@@ -494,6 +523,20 @@ export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
             ),
           },
     projectAllocations: expenseProjectAllocations(row),
+    spendingCategoryAllocations: row.spendingCategoryAllocations?.map(
+      (allocation) => ({
+        spendingCategoryId: allocation.spendingCategoryShortcode
+          ? parseShortcodeFor(
+              "spendingCategory",
+              allocation.spendingCategoryShortcode,
+            )
+          : null,
+        spendingCategoryName: allocation.spendingCategoryName,
+        amount: allocation.amount,
+        basis: allocation.basis,
+        incomplete: allocation.incomplete,
+      }),
+    ),
     dataQuality,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

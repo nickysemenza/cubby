@@ -733,6 +733,14 @@ extension JSONValue {
  * hand-written in `CubbyClient.swift`.
  */
 const CLIENT_PASSTHROUGH_METHODS = {
+  "spendingClassification.preview": {
+    method: "previewSpendingClassification",
+    doc: null,
+  },
+  "spendingClassification.apply": {
+    method: "applySpendingClassification",
+    doc: null,
+  },
   "ai.suggestFieldsReview": { method: "suggestFieldsReview", doc: null },
   "ai.applyFinanceCategorySuggestion": {
     method: "applyFinanceCategorySuggestion",

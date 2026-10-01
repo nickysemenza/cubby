@@ -36,6 +36,8 @@ describe("entity graph path repository", () => {
     const vendor = await createVendor(
       ctx.db,
       {
+        defaultSpendingCategoryId: null,
+        spendingProfile: "unspecified",
         name: "Path vendor",
         website: null,
         orderUrlTemplate: null,

@@ -8,8 +8,15 @@ import { entities, entityDetailParams } from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
 
 import type { EntityDetailFieldRenderers } from "./index";
+import { renderSpendingCategorySummary } from "./spending-category-summary";
 
 export const financialTransactionDetailFields = {
+  "spending-category-summary": (transaction) => ({
+    value: renderSpendingCategorySummary(
+      transaction.spendingCategorySummary,
+      true,
+    ),
+  }),
   "financial-transaction-vendor-inference": (transaction) => ({
     value:
       transaction.vendorInference?.status === "suggested" ||

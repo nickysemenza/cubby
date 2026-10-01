@@ -63,6 +63,7 @@ import {
 } from "~/contracts/recipe.contract";
 import { recommendationsContract } from "~/contracts/recommendations.contract";
 import { searchContract } from "~/contracts/search.contract";
+import { spendingClassificationContract } from "~/contracts/spending-classification.contract";
 import { statementRowContract } from "~/contracts/statement-row.contract";
 import { taskContract } from "~/contracts/task.contract";
 import {
@@ -413,6 +414,29 @@ export const MCP_TOOLS = defineMcpTools({
         op: mealContract.ops.getShoppingList,
         description:
           "Use this when the user asks what to buy or what they are short on for planned meals in a date range. It compares aggregate recipe needs with recorded inventory. Usually-on-hand ingredients are assumed available, listed separately, and excluded from shopping estimates; assumptions never represent recorded stock. Quantity issues and blocked sub-recipes disclose incomplete information. Do not invoke it to add arbitrary manual household shopping items.",
+      }),
+    },
+  },
+
+  spending_classification_read: {
+    description:
+      "Review historical spending impact before changing Product Category mappings, Vendor defaults, or explicit Expense categories.",
+    actions: {
+      preview: mcpAction({
+        op: spendingClassificationContract.ops.preview,
+        readPolicy: "strong",
+        description:
+          "Nonmutating historical impact preview. Supply one complete Product Category mapping, Vendor spending policy, or selected Expense category assignment/reset. Returns signed exact-cent category totals and deltas including shared adjustments, unknown coverage, and a fingerprint. Review before applying; stored source evidence and Expense amounts remain unchanged.",
+      }),
+    },
+  },
+  spending_classification_write: {
+    description: "Apply reviewed spending classification changes atomically.",
+    actions: {
+      apply: mcpAction({
+        op: spendingClassificationContract.ops.apply,
+        description:
+          "Apply the exact reviewed request and fingerprint atomically. Refuses when policy or historical facts changed since preview. Mapping changes stay live historically; explicit Expense assignments win and null resets to inheritance. Never creates financial bookings or changes Expense amounts.",
       }),
     },
   },

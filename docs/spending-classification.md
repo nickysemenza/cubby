@@ -1,0 +1,58 @@
+# Spending classification
+
+An Expense records money and owns its spending classification. A Product
+Category describes a thing. Product Category mappings connect those two
+vocabularies without making a mixed retailer's entire order one category.
+
+The resolver uses an explicit Expense category first, then narrow food/merchant
+context, the nearest Product Category mapping, a stored Purchase fallback, and
+a selective merchant default. Unresolved values remain unresolved. A blocked
+Product Category mapping stops automatic defaults; deliberate Expense and
+Purchase choices remain available. Product mappings update historical Expenses
+live, while explicit purposes such as Gifts stay in place.
+
+Purchase categories are fallbacks, not summaries. Purchases and Financial
+Transactions expose derived single, mixed, partial, unclassified, or
+not-applicable summaries. Transaction allocations connect Purchases, not
+individual items; transaction summaries therefore show category context without
+inventing dollar allocations. Original statement categories remain source
+evidence. Legacy Purchase defaults retain their provenance review gap until an
+explicit save; API audit provenance alone cannot establish statement origin.
+
+Shared tax, shipping, tips, fees, and ordinary discounts are allocated once to
+principal Expense lines in whole cents. The principal Expense ID breaks rounding
+ties. Project and Spending Category reports group those same joint allocations;
+filtering never changes the full Purchase weights. Unknown shares remain in the
+report, and the allocated total equals `SUM(Expense.cost)`. Refund-only baskets
+use absolute principal weights; unidentified refund adjustments on a positive
+basket remain unknown unless explicitly classified.
+
+Category completeness is independent of pricing and Project completeness. A
+known category on an unpriced Expense is still classified. An automatic
+adjustment with unknown principal weights can remain partially classified.
+
+## Reviewed changes
+
+Product Category mappings and merchant policies affecting existing Expenses use
+`spendingClassification.preview` and `spendingClassification.apply`. The preview
+reports classification counts and signed category deltas; apply rechecks its
+fingerprint inside a serializable transaction before audited entity writes.
+Changes after preview require a fresh review. Web and native views use this same
+backend operation; the Swift review session supplies presentation state only.
+
+Splitting an Expense preserves its category when a part omits the field, resets
+it when a part supplies null, and stores an explicit category when supplied.
+Splits preserve allocation basis and cannot fabricate Product/receipt identity.
+
+## Initial taxonomy and mappings
+
+`apps/web/tooling/spending-classification-seed.ts` previews a curated manifest
+without writing. Apply requires that exact preview fingerprint and a real member
+actor. It preserves explicit/blocked mappings, refuses ambiguous names/aliases,
+and reports both category deltas and any Project rounding differences. It never
+rewrites Expense costs or legacy Purchase/Transaction scalar categories.
+
+Run committed migrations first against the explicit direct target. Inspect the
+seed preview and confirm category deltas conserve the ledger before applying it.
+Read back schema, audit writes, mappings, and exact ledger cents afterward.
+The older statement-category backfill apply command is retired.

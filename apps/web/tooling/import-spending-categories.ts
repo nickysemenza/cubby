@@ -1,16 +1,15 @@
-import { buildActorContext } from "@cubby/schemas/context";
-import { userId } from "@cubby/schemas/identifiers";
-import { z } from "zod";
+import process from "node:process";
 
 const flags = process.argv.slice(2);
 const target = flags.find((flag) => flag.startsWith("--target="))?.slice(9);
-const fingerprint = flags.find((flag) => flag.startsWith("--apply="))?.slice(8);
-if (
-  !["dev", "production"].includes(target ?? "") ||
-  flags.length !== (fingerprint ? 2 : 1)
-) {
+if (flags.some((flag) => flag.startsWith("--apply="))) {
   throw new Error(
-    "Usage: import-spending-categories.ts --target=dev|production [--apply=<reviewed fingerprint>]",
+    "Statement category backfill is retired. Use spending-classification-seed.ts or the reviewed classification workflow.",
+  );
+}
+if (!["dev", "production"].includes(target ?? "") || flags.length !== 1) {
+  throw new Error(
+    "Usage: import-spending-categories.ts --target=dev|production (read-only source evidence preview)",
   );
 }
 const connection =
@@ -36,46 +35,29 @@ delete process.env.E2E_DATABASE_URL;
 const { db, withRequestDbClient } = await import("../src/server/db");
 const { withTransactionDatabase } =
   await import("../src/server/repo/database-helpers");
-const { previewImportedSpendingCategories, applyImportedSpendingCategories } =
+const { previewImportedSpendingCategories } =
   await import("../src/server/repo/imported-spending-categories");
 
 await withRequestDbClient(connection, async () => {
-  if (fingerprint) {
-    const reviewed = z
-      .string()
-      .regex(/^[a-f\d]{64}$/u)
-      .parse(fingerprint);
-    const actor = userId.parse(process.env.CATEGORY_ROLLOUT_ACTOR_USER_ID);
-    const { buildCrudServices } = await import("../src/server/request-context");
-    const result = await applyImportedSpendingCategories(
-      {
-        ...buildCrudServices(db),
-        actorContext: buildActorContext(actor, "api"),
-      },
-      reviewed,
-    );
-    console.log(JSON.stringify({ target, applied: true, ...result }));
-  } else {
-    const plan = await withTransactionDatabase(
-      db,
-      (database) => previewImportedSpendingCategories(database),
-      { accessMode: "read only" },
-    );
-    console.log(
-      JSON.stringify({
-        target,
-        applied: false,
-        fingerprint: plan.fingerprint,
-        existingCategories: plan.categories.filter(
-          (category) => category.existingId !== null,
-        ).length,
-        newCategories: plan.categories.filter(
-          (category) => category.existingId === null,
-        ).length,
-        transactions: plan.transactions.length,
-        purchases: plan.purchases.length,
-        unresolvedPurchases: plan.unresolvedPurchases,
-      }),
-    );
-  }
+  const plan = await withTransactionDatabase(
+    db,
+    (database) => previewImportedSpendingCategories(database),
+    { accessMode: "read only" },
+  );
+  console.log(
+    JSON.stringify({
+      target,
+      applied: false,
+      fingerprint: plan.fingerprint,
+      existingCategories: plan.categories.filter(
+        (category) => category.existingId !== null,
+      ).length,
+      newCategories: plan.categories.filter(
+        (category) => category.existingId === null,
+      ).length,
+      transactions: plan.transactions.length,
+      purchases: plan.purchases.length,
+      unresolvedPurchases: plan.unresolvedPurchases,
+    }),
+  );
 });

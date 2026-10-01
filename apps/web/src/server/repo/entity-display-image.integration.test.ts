@@ -436,6 +436,8 @@ describe("entity display image resolver", () => {
       const created = await createVendor(
         ctx.db,
         {
+          defaultSpendingCategoryId: null,
+          spendingProfile: "unspecified",
           name: `Logo Vendor ${crypto.randomUUID()}`,
           website: null,
           orderUrlTemplate: null,

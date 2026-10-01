@@ -20,7 +20,11 @@ import { unwrapDb } from "~/server/repo/database-helpers";
 import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
-import { effectiveExpenseSpendingCategorySql } from "./purchase-evidence-policy";
+import {
+  effectiveExpenseSpendingCategorySql,
+  fallbackExpenseSpendingCategorySql,
+  expenseSpendingCategoryResolutionSql,
+} from "./expense-category-resolution";
 import { effectiveProjectTradeSql } from "./task-project-inheritance";
 
 const column = (alias: string, name: string) => sql.raw(`${alias}."${name}"`);
@@ -99,9 +103,7 @@ export const effectiveExpenseTradeSql = (
 /** Scalar extras used by relational Expense reads. */
 export const expenseInheritanceReadExtras = (alias = "expense") => {
   const spendingCategoryId = effectiveExpenseSpendingCategorySql(alias);
-  const fallbackSpendingCategoryId = sql`(SELECT inherited_purchase."spendingCategoryId"
-    FROM "Purchase" inherited_purchase WHERE inherited_purchase.id = ${column(alias, "purchaseId")}
-      AND inherited_purchase."deletedAt" IS NULL)`;
+  const fallbackSpendingCategoryId = fallbackExpenseSpendingCategorySql(alias);
   const projectId = effectiveExpenseProjectSql(alias);
   const lineKind = column(alias, "lineKind");
   const purchaseId = column(alias, "purchaseId");
@@ -159,6 +161,9 @@ export const expenseInheritanceReadExtras = (alias = "expense") => {
     ELSE 'none'
   END`;
   return {
+    spendingCategoryResolution: expenseSpendingCategoryResolutionSql(alias).as(
+      "spendingCategoryResolution",
+    ),
     spendingCategoryShortcode: sql<
       string | null
     >`(SELECT c."shortcode" FROM "SpendingCategory" c WHERE c."id" = ${spendingCategoryId} AND c."deletedAt" IS NULL)`.as(
