@@ -1,5 +1,5 @@
 import { capitalize } from "@cubby/shared/text-case";
-import { upc } from "@cubby/shared/upc";
+import { barcodeDigits } from "@cubby/shared/upc";
 import { z } from "zod";
 
 // Re-exported so importers that also need USDA schemas keep one import.
@@ -126,7 +126,7 @@ export const brandedFoodInfo = z.object({
   brand_owner: z.string().nullable(),
   brand_name: z.string().nullable(),
   branded_food_category: z.string().nullable(),
-  gtin_upc: upc,
+  gtin_upc: barcodeDigits,
   ingredients: z.string().nullable(),
   serving: z.object({
     serving_size: z.number().nullable(),
@@ -188,7 +188,7 @@ export type FoodSummaryMcpOut = z.infer<typeof foodSummaryMcpOut>;
 export type FoodPortion = z.infer<typeof foodPortion>;
 
 export const foodLookupParam = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("upc"), gtin_upc: upc }),
+  z.object({ kind: z.literal("upc"), gtin_upc: barcodeDigits }),
   z.object({ kind: z.literal("ndb"), ndb_number: ndb }),
   // The explicit, type-agnostic link — reaches Foundation/Survey foods that have
   // neither a UPC nor an NDB number. See `fdcId`.

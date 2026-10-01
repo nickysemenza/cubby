@@ -23,12 +23,16 @@ export const isGtin = (value: string): boolean => {
 export const BARCODE_CHECK_DIGIT_MESSAGE =
   "Barcode check digit does not match; re-scan or re-type it";
 
-export const upc = z
-  .string()
-  .trim()
-  .regex(BARCODE_RE, {
-    message: "Barcode must be 8, 12, 13, or 14 digits",
-    abort: true,
-  })
+/**
+ * Barcode-shaped digits without the check-digit rule, for third-party datasets
+ * (USDA FoodData Central `gtin_upc`) whose published codes we must ingest
+ * as-is. Anything a person scans or types uses `upc`.
+ */
+export const barcodeDigits = z.string().trim().regex(BARCODE_RE, {
+  message: "Barcode must be 8, 12, 13, or 14 digits",
+  abort: true,
+});
+
+export const upc = barcodeDigits
   .refine(isGtin, BARCODE_CHECK_DIGIT_MESSAGE)
   .describe("EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode");

@@ -386,10 +386,20 @@ mod tests {
     #[test]
     fn scan_code_gtin14_rejects_a_bad_check_digit_at_every_length() {
         // 8 / 12 / 13 / 14 digits, each with its check digit off by one.
-        for code in ["12345678", "012345678900", "4006381333932", "00012345678900"] {
+        for code in [
+            "12345678",
+            "012345678900",
+            "4006381333932",
+            "00012345678900",
+        ] {
             assert_eq!(scan_code_gtin14(code), None, "code {code:?}");
         }
-        for code in ["12345670", "012345678905", "4006381333931", "00012345678905"] {
+        for code in [
+            "12345670",
+            "012345678905",
+            "4006381333931",
+            "00012345678905",
+        ] {
             assert!(scan_code_gtin14(code).is_some(), "code {code:?}");
         }
     }
