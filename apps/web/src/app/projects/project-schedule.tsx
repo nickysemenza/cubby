@@ -6,7 +6,7 @@ import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
 import type { ListSlotProps } from "~/app/_components/entity-list/list-slot-types";
