@@ -57,12 +57,21 @@ appId: com.nickysemenza.cubby
       id: "relation.evidence.purchase.${PURCHASE_ID}.movement.acquired"
     direction: DOWN
     timeout: 30000
-- assertVisible:
-    id: "relation.evidence.purchase.${PURCHASE_ID}.movement.adjusted"
-- assertVisible:
-    id: "relation.evidence.purchase.${PURCHASE_ID}.planned"
-- assertVisible:
-    id: "relation.evidence.purchase.${PURCHASE_ID}.linked"
+- scrollUntilVisible:
+    element:
+      id: "relation.evidence.purchase.${PURCHASE_ID}.movement.adjusted"
+    direction: DOWN
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "relation.evidence.purchase.${PURCHASE_ID}.planned"
+    direction: DOWN
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "relation.evidence.purchase.${PURCHASE_ID}.linked"
+    direction: DOWN
+    timeout: 30000
 - tapOn:
     id: "relation.row.purchase.${PURCHASE_ID}"
 - scrollUntilVisible:
@@ -70,9 +79,18 @@ appId: com.nickysemenza.cubby
       id: "relation.evidence.product.${PRODUCT_ID}.movement.acquired"
     direction: DOWN
     timeout: 30000
-- assertVisible:
-    id: "relation.evidence.product.${PRODUCT_ID}.movement.adjusted"
-- assertVisible:
-    id: "relation.evidence.product.${PRODUCT_ID}.planned"
-- assertVisible:
-    id: "relation.evidence.product.${PRODUCT_ID}.linked"
+- scrollUntilVisible:
+    element:
+      id: "relation.evidence.product.${PRODUCT_ID}.movement.adjusted"
+    direction: DOWN
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "relation.evidence.product.${PRODUCT_ID}.planned"
+    direction: DOWN
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      id: "relation.evidence.product.${PRODUCT_ID}.linked"
+    direction: DOWN
+    timeout: 30000
