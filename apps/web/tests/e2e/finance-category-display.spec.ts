@@ -297,7 +297,7 @@ test("draft category edits hide obsolete policy provenance while the replacement
     evidenceExpectation: null,
   });
   await dialog
-    .getByRole("button", { name: "Save purchase", exact: true })
+    .getByRole("button", { name: "Save changes", exact: true })
     .click();
   await expect(dialog).toHaveCount(0);
   await expect
