@@ -26,7 +26,7 @@ public final class SpendingClassificationReviewSession {
         preview = nil
         applied = false
         defer { isBusy = false }
-        let result = try await client.previewSpendingClassification(input)
+        let result = try await client.previewSpendingClassification(.init(request: input))
         guard generation == requestGeneration else { throw CancellationError() }
         preview = result
     }

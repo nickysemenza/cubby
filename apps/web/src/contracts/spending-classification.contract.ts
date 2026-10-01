@@ -4,6 +4,7 @@ import {
   spendingClassificationReviewPreview,
   spendingClassificationReviewResult,
 } from "@cubby/schemas/spending-classification-review";
+import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
@@ -11,7 +12,7 @@ export const spendingClassificationContract = defineContract(
   "spendingClassification",
   {
     preview: query({
-      input: spendingClassificationReviewInput,
+      input: z.object({ request: spendingClassificationReviewInput }),
       output: spendingClassificationReviewPreview,
       transport: "post",
       readPolicy: "strong",

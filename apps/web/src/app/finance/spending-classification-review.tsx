@@ -40,7 +40,7 @@ function ClassificationReview({
     useState<SpendingClassificationReviewPreview | null>(null);
   const preview = useMutation({
     mutationFn: (input: SpendingClassificationReviewInput) =>
-      spendingClassification.preview.call(input),
+      spendingClassification.preview.call({ request: input }),
   });
   const apply = useMutation(spendingClassification.apply.mutationOptions());
   const busy = preview.isPending || apply.isPending;

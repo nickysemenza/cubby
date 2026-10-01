@@ -9,7 +9,7 @@ export const spendingClassificationHandlers = implementOperationDomain(
   spendingClassificationContract,
   {
     preview: (context, input) =>
-      previewSpendingClassificationReview(context.db, input),
+      previewSpendingClassificationReview(context.db, input.request),
     apply: (context, input) =>
       applySpendingClassificationReview(context, input),
   },

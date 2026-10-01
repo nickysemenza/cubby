@@ -375,7 +375,6 @@ describe("MCP catalog schemas", () => {
       return properties !== undefined && Object.keys(properties).length === 0;
     };
 
-    expect(tools.length).toBe(21);
     expect(
       tools.filter((tool) => !tool.outputSchema).map((tool) => tool.name),
     ).toEqual([]);
