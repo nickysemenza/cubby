@@ -6,6 +6,7 @@ import {
 } from "@playwright/test";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { dispatchesOperation } from "./dispatch-wire";
 
 async function nextAnimationFrame(locator: Locator) {
   await locator.evaluate(
@@ -71,8 +72,16 @@ export async function waitForDndMutation(
     }
     // Responses are observed in arrival order, so a match here comes from the
     // mutation's invalidation, not from the page load before the gesture.
-    return committed && operationHeader(response) === refetchOperation;
+    return (
+      committed &&
+      refetchOperation !== undefined &&
+      dispatchesOperation(response.request(), refetchOperation)
+    );
   });
   // A response resolves at its headers; the framed body can still be streaming.
-  await settled.finished();
+  // Playwright never reports `finished` for a batched NDJSON body the page
+  // reads as a stream (verified: the stream itself closes in ~50 ms), so a
+  // batched refetch counts as settled at its headers.
+  if (!(settled.headers()["content-type"] ?? "").includes("x-ndjson"))
+    await settled.finished();
 }

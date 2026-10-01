@@ -235,7 +235,7 @@ function isInteractiveEventTarget(target: EventTarget | null) {
   return (
     target instanceof HTMLElement &&
     target.closest(
-      "a, button, input, select, textarea, [role=button], [role=link]",
+      "a, button, input, select, textarea, [role=button], [role=link], [role=checkbox]",
     ) !== null
   );
 }
@@ -306,9 +306,13 @@ function DesktopDataRowInner<TItem extends RowData>({
         onRowHoverEnd?.(row);
       }}
       onFocus={(event) => {
+        if (isInteractiveEventTarget(event.target)) return;
+        // Only the row or a selected cell activates on focus (the keyboard
+        // path). Flipping activity while a control inside the row held focus
+        // remounted the selection checkbox between mousedown and mouseup, so
+        // the click never toggled; pointer users activate on hover first.
         setFocusWithin(true);
-        if (onRowHover && !isInteractiveEventTarget(event.target))
-          onRowHover(row);
+        onRowHover?.(row);
       }}
       onBlur={(event: FocusEvent<HTMLTableRowElement>) => {
         if (event.currentTarget.contains(event.relatedTarget)) return;

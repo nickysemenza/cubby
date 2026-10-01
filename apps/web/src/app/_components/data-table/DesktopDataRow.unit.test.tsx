@@ -320,6 +320,33 @@ describe("DesktopDataRow", () => {
     expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
   });
 
+  // Regression: flipping row activity while the selection checkbox held focus
+  // remounted it between mousedown and mouseup, so the click never toggled.
+  it("does not activate the row when focus lands on a control inside it", () => {
+    function Cell() {
+      const active = useRowActive();
+      return (
+        <>
+          <input type="checkbox" aria-label="Select row" />
+          {active ? <button type="button">Edit</button> : null}
+        </>
+      );
+    }
+    const { result } = renderHook(() => useTestTable(() => <Cell />));
+    const row = result.current.getRow("PRD-TEST");
+    render(
+      <table>
+        <tbody>
+          <DesktopDataRow {...desktopRowProps(row)} />
+        </tbody>
+      </table>,
+    );
+    const checkbox = screen.getByRole("checkbox");
+    fireEvent.focus(checkbox);
+    expect(screen.getByRole("checkbox")).toBe(checkbox);
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+  });
+
   it("keeps affordances mounted outside a table row", () => {
     function Affordance() {
       return useRowActive() ? <button type="button">Edit</button> : null;

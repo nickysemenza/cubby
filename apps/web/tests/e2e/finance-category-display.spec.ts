@@ -2,6 +2,7 @@ import { z } from "zod";
 import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
 import { gotoAuthenticatedPage, selectComboboxItem } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
 
 test("saved transaction categories display their readable label and effective expectation", async ({
   page,
@@ -69,8 +70,8 @@ test("saved transaction categories display their readable label and effective ex
   });
   const enrichment = page.waitForResponse(
     (response) =>
-      response.request().headers()["x-cubby-operation"] ===
-        "entity.listEnrichment" && response.ok(),
+      dispatchesOperation(response.request(), "entity.listEnrichment") &&
+      response.ok(),
   );
   await gotoAuthenticatedPage(
     page,
@@ -109,8 +110,8 @@ test("saved transaction categories display their readable label and effective ex
   expect(updated.ok(), await updated.text()).toBeTruthy();
   const reloaded = page.waitForResponse(
     (response) =>
-      response.request().headers()["x-cubby-operation"] ===
-        "entity.listEnrichment" && response.ok(),
+      dispatchesOperation(response.request(), "entity.listEnrichment") &&
+      response.ok(),
   );
   await page.reload();
   await reloaded;
@@ -246,6 +247,7 @@ test("draft category edits hide obsolete policy provenance while the replacement
   });
   let requestBlocked = false;
   await page.route("**/api/browser/dispatch", async (route) => {
+    if (await unbatchFor(route, ["ai.suggestFields"])) return;
     const request = suggestionRequest.safeParse(route.request().postDataJSON());
     if (
       request.success &&

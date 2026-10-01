@@ -90,33 +90,39 @@ describe("browser operation transport", () => {
     ]);
   });
 
-  it("keeps a mutation in its own request", async () => {
+  it("sends a mutation, or a query alone in its tick, as a single operation", async () => {
     const { sent } = stubDispatch();
-    await Promise.all([
-      dispatchBrowserOperation(
-        "ai.applyFinanceCategorySuggestion",
-        {},
-        transport(),
-      ),
-      dispatchBrowserOperation("dashboard.counts", {}, transport()),
-    ]);
-    expect(sent).toContainEqual(
-      expect.objectContaining({
-        operation: "ai.applyFinanceCategorySuggestion",
-      }),
+    await dispatchBrowserOperation(
+      "ai.applyFinanceCategorySuggestion",
+      {},
+      transport(),
     );
-    expect(sent.find((body) => body.batch)?.batch).toHaveLength(1);
+    await dispatchBrowserOperation("dashboard.counts", {}, transport());
+    expect(sent.map((body) => body.operation)).toEqual([
+      "ai.applyFinanceCategorySuggestion",
+      "dashboard.counts",
+    ]);
+    expect(sent.some((body) => body.batch)).toBe(false);
   });
 
-  it("rejects every query in a batch whose request fails", async () => {
-    stubDispatch(() => Response.json({ unexpected: true }, { status: 500 }));
-    const settled = await Promise.allSettled([
+  // Covers an HTTP failure and a server without batch support mid-deploy:
+  // each query is resent alone and keeps its single-operation result.
+  it("resends each query alone when the batch request fails", async () => {
+    const { sent } = stubDispatch((body) =>
+      body.batch
+        ? new Response("Internal Server Error", { status: 500 })
+        : Response.json(
+            superjson.serialize({ ok: true, data: body.operation }),
+          ),
+    );
+    const results = await Promise.all([
       dispatchBrowserOperation("dashboard.counts", {}, transport()),
       dispatchBrowserOperation("entity.connectedRecords", {}, transport()),
     ]);
-    expect(settled.map((result) => result.status)).toEqual([
-      "rejected",
-      "rejected",
+    expect(results).toEqual([
+      { ok: true, data: "dashboard.counts" },
+      { ok: true, data: "entity.connectedRecords" },
     ]);
+    expect(sent.filter((body) => !body.batch)).toHaveLength(2);
   });
 });

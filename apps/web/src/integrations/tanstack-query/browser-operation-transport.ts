@@ -24,6 +24,20 @@ type DispatchItem = {
 
 type DispatchResult = StartOperationResult<UnparsedStartOperationData>;
 
+/**
+ * The batch could not answer this item (one queued alone, an HTTP failure, a
+ * server without batch support during a deploy, a broken stream). The caller
+ * resends it alone, so it gets exactly the single-operation result or error —
+ * request id, status, diagnostics — it always had. Only queries batch, and
+ * they are safe to resend.
+ */
+class BatchFallback extends Error {
+  constructor() {
+    super("Browser operation batch fell back to single requests");
+    this.name = "BatchFallback";
+  }
+}
+
 const streamedLineSchema = z.object({
   i: z.number().int().nonnegative(),
   r: superJsonResultSchema,
@@ -85,12 +99,11 @@ async function streamDispatch(
     postInit({ batch }, headersInit, signal),
   );
   if (
+    !response.ok ||
     !response.body ||
     !response.headers.get("content-type")?.includes("application/x-ndjson")
   ) {
-    throw new Error(
-      `Browser operation batch returned HTTP ${response.status}: ${await response.text()}`,
-    );
+    throw new BatchFallback();
   }
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffered = "";
@@ -133,8 +146,15 @@ function queryBatcherFor(headers: HeadersInit) {
   let batcher = queryBatchers.get(key);
   if (!batcher) {
     batcher = createRequestBatcher(
-      (batch: DispatchItem[], signal, deliver) =>
-        streamDispatch(batch, entries, signal, deliver),
+      async (batch: DispatchItem[], signal, deliver) => {
+        if (batch.length === 1) throw new BatchFallback();
+        await streamDispatch(batch, entries, signal, deliver).catch(
+          (error: Error) => {
+            if (signal.aborted) throw error;
+            throw new BatchFallback();
+          },
+        );
+      },
       { max: 20, concurrency: 4 },
     );
     queryBatchers.set(key, batcher);
@@ -149,10 +169,14 @@ export async function dispatchBrowserOperation(
   transport: { signal?: AbortSignal; headers: HeadersInit },
 ): Promise<DispatchResult> {
   if (startOperationDefinitionFor(operation)?.kind === "query") {
-    return queryBatcherFor(transport.headers).load(
-      { operation, input },
-      transport.signal ?? new AbortController().signal,
-    );
+    try {
+      return await queryBatcherFor(transport.headers).load(
+        { operation, input },
+        transport.signal ?? new AbortController().signal,
+      );
+    } catch (error) {
+      if (!(error instanceof BatchFallback)) throw error;
+    }
   }
   return postDispatch(
     { operation, input },
