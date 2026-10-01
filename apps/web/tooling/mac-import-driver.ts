@@ -64,12 +64,19 @@ export class MacImportDriver {
     readonly session: string,
   ) {}
 
-  private invoke<T>(args: string[], schema: z.ZodType<T>): T {
-    const output = execFileSync(this.helper, args, {
-      encoding: "utf8",
-      timeout: 10000,
-      maxBuffer: 4 * 1024 * 1024,
-    });
+  private invoke<T>(args: string[], schema: z.ZodType<T>, attempt = 0): T {
+    let output: string;
+    try {
+      output = execFileSync(this.helper, args, {
+        encoding: "utf8",
+        timeout: 10000,
+        maxBuffer: 4 * 1024 * 1024,
+      });
+    } catch (error) {
+      const failure = z.object({ stdout: z.string().min(1) }).safeParse(error);
+      if (!failure.success) throw error;
+      output = failure.data.stdout;
+    }
     const envelope = z
       .object({
         ok: z.boolean(),
@@ -77,10 +84,20 @@ export class MacImportDriver {
         error: z.unknown().optional(),
       })
       .parse(JSON.parse(output));
-    if (!envelope.ok)
-      throw new Error(
-        `Native Mac helper ${args[0]} failed: ${JSON.stringify(envelope.error)}`,
-      );
+    if (!envelope.ok) {
+      const diagnostic = JSON.stringify(envelope.error);
+      // SwiftUI editor transitions can briefly expose infinite AX bounds.
+      // Retry observations only; no input is sent without a valid owned tree.
+      if (
+        args[0] === "snapshot" &&
+        attempt < 3 &&
+        diagnostic.includes("EncodingError.invalidValue: inf (Double)")
+      ) {
+        execFileSync("osascript", ["-e", "delay 0.1"], { timeout: 1000 });
+        return this.invoke(args, schema, attempt + 1);
+      }
+      throw new Error(`Native Mac helper ${args[0]} failed: ${diagnostic}`);
+    }
     return schema.parse(envelope.data);
   }
 
