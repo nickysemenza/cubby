@@ -19,16 +19,14 @@ const context: ListOverrideContext = {
 };
 
 describe("list overrides", () => {
-  // SAFETY: Object.keys of the override registry yields exactly its own keys.
-  it.each(Object.keys(listOverrides) as (keyof typeof listOverrides)[])(
+  it.each(Object.entries(listOverrides))(
     "%s keeps its column parts referentially stable across renders",
-    async (entity) => {
+    async (_entity, override) => {
       harness = createBrowserTestHarness({ initialPath: "/" });
       await harness.loadRouter();
-      const { result, rerender } = renderHook(
-        () => listOverrides[entity].use(context),
-        { wrapper: harness.routerWrapper },
-      );
+      const { result, rerender } = renderHook(() => override.use(context), {
+        wrapper: harness.routerWrapper,
+      });
       const first = result.current;
       rerender();
       expect(result.current.overrides).toBe(first.overrides);
