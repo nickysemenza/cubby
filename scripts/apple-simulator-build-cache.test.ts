@@ -32,6 +32,10 @@ function fixture() {
     writeFileSync(target, bytes);
   };
   for (const input of inputs) write(input, "synthetic build input");
+  write(
+    inputs.at(-1)!,
+    JSON.stringify({ version: 6, object: { dependencies: [], artifacts: [] } }),
+  );
   write(`${bundle}/Cubby`, "synthetic executable");
   write(`${bundle}/Info.plist`, "synthetic app settings");
   return {
@@ -89,6 +93,53 @@ test("refuses to certify inputs changed during compilation", () => {
     assert.throws(
       () => stampSimulatorBuild(f.root, "synthetic Xcode", before),
       /changed/,
+    );
+    assert.equal(hasMatchingSimulatorBuild(f.root, "synthetic Xcode"), false);
+  } finally {
+    f.dispose();
+  }
+});
+
+test("package metadata ordering does not invalidate a build, but revisions do", () => {
+  const f = fixture();
+  const graph = inputs.at(-1)!;
+  try {
+    const first = {
+      packageRef: { identity: "synthetic-a" },
+      state: { revision: "one" },
+    };
+    const second = {
+      packageRef: { identity: "synthetic-b" },
+      state: { revision: "two" },
+    };
+    f.write(
+      graph,
+      JSON.stringify({
+        version: 6,
+        object: { dependencies: [first, second], artifacts: [] },
+      }),
+    );
+    const key = simulatorBuildFingerprint(f.root, "synthetic Xcode");
+    f.write(
+      graph,
+      JSON.stringify(
+        {
+          object: { artifacts: [], dependencies: [second, first] },
+          version: 6,
+        },
+        null,
+        2,
+      ),
+    );
+    assert.equal(simulatorBuildFingerprint(f.root, "synthetic Xcode"), key);
+    stampSimulatorBuild(f.root, "synthetic Xcode", key);
+    first.state.revision = "changed";
+    f.write(
+      graph,
+      JSON.stringify({
+        version: 6,
+        object: { dependencies: [first, second], artifacts: [] },
+      }),
     );
     assert.equal(hasMatchingSimulatorBuild(f.root, "synthetic Xcode"), false);
   } finally {

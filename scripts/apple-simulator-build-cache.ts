@@ -9,6 +9,7 @@ import { digestFiles, walkFiles } from "./lib/tree-digest.ts";
 const bundlePath =
   "apps/apple/DerivedData/Build/Products/Debug-iphonesimulator/Cubby.app";
 const markerPath = "apps/apple/DerivedData/cubby-simulator-build.json";
+const packageWorkspacePath = "apps/apple/SourcePackages/workspace-state.json";
 const sourceTrees = [
   "apps/apple/App",
   "apps/apple/CubbyKit/Sources",
@@ -20,8 +21,32 @@ const requiredInputs = [
   "apps/apple/CubbyKit/Package.resolved",
   "apps/apple/project.yml",
   "apps/apple/Cubby.xcodeproj/project.pbxproj",
-  "apps/apple/SourcePackages/workspace-state.json",
+  packageWorkspacePath,
 ];
+
+// Swift rewrites the dependency/artifact sets in different orders while
+// resolving and building. Preserve every value, but not serialization order.
+function canonicalPackageState(source: string): string {
+  // The reviver visits children first. Collect every property so the sorted
+  // replacer preserves unknown Swift fields as well as current dependency data.
+  const keys = new Set<string>();
+  const state = JSON.parse(source, (key, value) => {
+    keys.add(key);
+    if (
+      (key === "dependencies" || key === "artifacts") &&
+      Array.isArray(value)
+    ) {
+      const properties = [...keys].sort();
+      value.sort((left, right) =>
+        JSON.stringify(left, properties).localeCompare(
+          JSON.stringify(right, properties),
+        ),
+      );
+    }
+    return value;
+  });
+  return JSON.stringify(state, [...keys].sort());
+}
 const buildDrivers = [
   "scripts/apple-check.sh",
   "apps/apple/scripts/prepare-project.sh",
@@ -50,10 +75,18 @@ export function simulatorBuildFingerprint(
   inputs.push(
     ...buildDrivers.flatMap((file) => walkFiles(path.join(root, file))),
   );
-  return digestFiles(root, [...new Set(inputs)].sort(), {
-    seed: `simulator-app-v1:Debug:arm64:batch:${toolchain}`,
-    links: true,
-  });
+  const workspaceFile = path.join(root, packageWorkspacePath);
+  const packageState = canonicalPackageState(
+    readFileSync(workspaceFile, "utf8"),
+  );
+  return digestFiles(
+    root,
+    [...new Set(inputs)].filter((file) => file !== workspaceFile).sort(),
+    {
+      seed: `simulator-app-v2:Debug:arm64:batch:${toolchain}:${packageState}`,
+      links: true,
+    },
+  );
 }
 
 function buildCertificate(root: string, toolchain: string) {
