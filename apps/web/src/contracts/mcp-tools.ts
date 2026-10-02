@@ -146,7 +146,7 @@ export const MCP_TOOLS = defineMcpTools({
       update: mcpAction({
         op: kernelAction("update", "mutation"),
         description:
-          "Patch one record by `id`; fields left out of `data` are unchanged. A recipe also returns `lineCoverage` (see create).",
+          "Patch one record by `id`; fields left out of `data` are unchanged. A recipe also returns `lineCoverage` (see create). A product update that touches price, unitMappings, fdc_id, labelNutrition, ingredientId or usdaUnavailable also returns `recipeCoverageChanges`: for up to 25 recipes using its ingredient, the lines whose missing price/weight/nutrients it closed or regressed (`before`/`after`), with `truncated` when more recipes use it.",
       }),
       delete: mcpAction({
         op: kernelAction("delete", "mutation"),
@@ -178,7 +178,7 @@ export const MCP_TOOLS = defineMcpTools({
       commands: mcpAction({
         op: kernelAction("commands", "mutation"),
         description:
-          "Run up to 50 create/update commands (`commands: [{action, entity, ...}]`) in request order, each with the same validation, side effects and result shape as a single create or update. Items succeed or fail independently — a failed item does not stop or roll back the others — so read every result. Use this for a receipt's lines or a batch of products.",
+          "Run up to 50 create/update commands (`commands: [{action, entity, ...}]`) in request order, each with the same validation, side effects and result shape as a single create or update (including `lineCoverage` and `recipeCoverageChanges`). Items succeed or fail independently — a failed item does not stop or roll back the others — so read every result. Use this for a receipt's lines or a batch of products.",
       }),
       resolve: mcpAction({
         op: kernelAction("resolveOrCreate", "mutation"),
@@ -767,17 +767,17 @@ export const MCP_TOOLS = defineMcpTools({
         op: recipeContract.ops.importFromUrl,
         openWorld: true,
         description:
-          "Scrape a recipe from a URL and save it in one step; returns the new recipe's shortcode. recipe_insights.scrape parses without saving.",
+          "Scrape a recipe from a URL and save it in one step; returns the new recipe's shortcode and `lineCoverage` (per line, which of price/weight/nutrients are still missing). recipe_insights.scrape parses without saving.",
       }),
       from_text: mcpAction({
         op: recipeContract.ops.createFromText,
         description:
-          "Create a recipe from raw text lines WITHOUT pre-resolving ingredient IDs — the path for a pasted prep sheet. Use entity.create(recipe) when you already have ingredient ids.",
+          "Create a recipe from raw text lines WITHOUT pre-resolving ingredient IDs — the path for a pasted prep sheet. Use entity.create(recipe) when you already have ingredient ids. Also returns `lineCoverage`.",
       }),
       patch_line: mcpAction({
         op: recipeContract.ops.patchLine,
         description:
-          "Change one recipe ingredient line — its amounts, the ingredient or sub-recipe it points at, or its source text/modifier — without resending the recipe's sections. The line keeps its position and every other line and instruction is left as-is. `lineId` comes from recipe_insights.costing's per-line diagnostics or recipe_insights.using_ingredient's usages.",
+          "Change one recipe ingredient line — its amounts, the ingredient or sub-recipe it points at, or its source text/modifier — without resending the recipe's sections. The line keeps its position and every other line and instruction is left as-is. `lineId` comes from recipe_insights.costing's per-line diagnostics or recipe_insights.using_ingredient's usages. Also returns the recipe's refreshed `lineCoverage`.",
       }),
     },
   },

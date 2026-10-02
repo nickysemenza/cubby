@@ -1,6 +1,10 @@
 import { previewOperationSchema } from "@cubby/schemas/entity-integrity";
 import { productShortcode } from "@cubby/schemas/identifiers";
 import {
+  productRecipeCoverageChangesOut,
+  recipeLineCoverageOut,
+} from "@cubby/schemas/import-recipe";
+import {
   ingredientResolvableNamesInput,
   ingredientResolveOrCreateResultOut,
 } from "@cubby/schemas/ingredient";
@@ -8,6 +12,7 @@ import { resolvePlantsInput, resolvePlantsOutput } from "@cubby/schemas/plant";
 import {
   productResolveNamesInput,
   productResolveNamesOut,
+  productUpdateData,
 } from "@cubby/schemas/product";
 import { z } from "zod";
 
@@ -54,6 +59,7 @@ import {
 } from "~/server/generated/entity-relation-contracts.gen";
 import { previewOperation } from "~/server/operations/entity-integrity-preview.server";
 import { resolveWithProductCandidatesWorkflow } from "~/server/operations/ingredient.server";
+import { beginProductCoverage } from "~/server/operations/product-recipe-coverage.server";
 import { recipeLineCoverage } from "~/server/operations/recipe.server";
 import { resolveOrCreatePlants } from "~/server/repo/plant";
 import { resolveProductNames } from "~/server/repo/product/resolve-names";
@@ -118,27 +124,65 @@ export type McpEntityExecutor = (
   command: McpEntityCommand,
 ) => Promise<z.output<z.ZodType>>;
 
-const recipeWriteIdentity = z.object({
-  entity: z.literal("recipe"),
+const writtenEntity = z.object({
+  entity: z.string(),
   item: z.object({ id: z.string() }),
 });
 
 /**
- * A recipe create/update answers with `lineCoverage` beside the entity: per
- * costed line, which of price / weight / nutrients are still missing. It
- * lives on the MCP projection only — the entity output schema is unchanged.
+ * A write answers with coverage diagnostics beside the entity: a recipe's
+ * `lineCoverage` (per costed line, which of price / weight / nutrients are
+ * still missing) and a Product update's `recipeCoverageChanges` (which recipe
+ * lines it closed or regressed). They live on the MCP projection only — the
+ * entity output schemas are unchanged.
  */
-const recipeLineCoverageOut = z.object({
-  lineCoverage: z
-    .array(
-      z.object({
-        id: z.string(),
-        name: z.string(),
-        missing: z.array(z.enum(["price", "weight", "nutrients"])),
-      }),
-    )
-    .optional(),
+const writeCoverageOut = z.object({
+  lineCoverage: recipeLineCoverageOut.optional(),
+  recipeCoverageChanges: productRecipeCoverageChangesOut.optional(),
 });
+
+const productUpdateIdentity = z.object({
+  action: z.literal("update"),
+  entity: z.literal("product"),
+  id: z.string(),
+  data: productUpdateData,
+});
+
+/**
+ * Runs a kernel write and merges coverage diagnostics into its result. A
+ * Product update snapshots the affected recipe lines before the write so the
+ * result can say which it closed; a recipe write reads its lines after.
+ */
+async function executeWithCoverage(
+  execute: McpEntityExecutor,
+  context: ReturnType<typeof getEntityKernelContext>,
+  command: McpEntityCommand,
+  project: (result: z.output<z.ZodType>) => z.output<z.ZodType> = (r) => r,
+) {
+  const productUpdate = productUpdateIdentity.safeParse(command);
+  const finishProduct = productUpdate.success
+    ? await beginProductCoverage(
+        context,
+        productUpdate.data.id,
+        productUpdate.data.data,
+      )
+    : null;
+  const result = z
+    .object({ action: z.string(), entity: z.string() })
+    .passthrough()
+    .parse(await execute(context, command));
+  const projected = z.looseObject({}).parse(project(result));
+  const written = writtenEntity.safeParse(projected);
+  if (!written.success) return projected;
+  if (written.data.entity === "recipe")
+    return {
+      ...projected,
+      lineCoverage: await recipeLineCoverage(context, written.data.item.id),
+    };
+  if (finishProduct)
+    return { ...projected, recipeCoverageChanges: await finishProduct() };
+  return projected;
+}
 
 /** A kernel command run through the executor, then projected by `resultDetail`. */
 const commandAction = (
@@ -146,7 +190,7 @@ const commandAction = (
   verb: string,
   input: z.ZodType,
   output: z.ZodType,
-  options: { recipeLineCoverage?: boolean } = {},
+  options: { coverage?: boolean } = {},
 ): KernelMcpAction => ({
   verb,
   input,
@@ -154,22 +198,26 @@ const commandAction = (
   run: async (raw, extra) => {
     const command = commandWithDetail.parse(raw);
     const context = getEntityKernelContext(extra);
-    const result = z
-      .object({ action: z.string(), entity: z.string() })
-      .passthrough()
-      .parse(await execute(context, kernelCommand(command)));
-    // SAFETY: every kernel result names its entity; the projection reads only
-    // the manifest title field for it and the published output re-parses.
-    const projected = projectEntityResult(
-      command,
-      result as Parameters<typeof projectEntityResult>[1],
+    const project = (result: z.output<z.ZodType>) =>
+      // SAFETY: every kernel result names its entity; the projection reads only
+      // the manifest title field for it and the published output re-parses.
+      projectEntityResult(
+        command,
+        result as Parameters<typeof projectEntityResult>[1],
+      );
+    if (options.coverage)
+      return executeWithCoverage(
+        execute,
+        context,
+        kernelCommand(command),
+        project,
+      );
+    return project(
+      z
+        .object({ action: z.string(), entity: z.string() })
+        .passthrough()
+        .parse(await execute(context, kernelCommand(command))),
     );
-    const written = recipeWriteIdentity.safeParse(projected);
-    if (!options.recipeLineCoverage || !written.success) return projected;
-    return {
-      ...projected,
-      lineCoverage: await recipeLineCoverage(context, written.data.item.id),
-    };
   },
 });
 
@@ -178,8 +226,8 @@ const batchCommandItemInput = z.union([
   generatedMcpEntityUpdateCommandSchema,
 ]);
 const batchCommandItemOutput = z.union([
-  generatedMcpEntityMutationCreateResultSchema,
-  generatedMcpEntityMutationUpdateResultSchema,
+  generatedMcpEntityMutationCreateResultSchema.and(writeCoverageOut),
+  generatedMcpEntityMutationUpdateResultSchema.and(writeCoverageOut),
 ]);
 
 type BatchSpec<TInput extends z.ZodType, TOutput extends z.ZodType> = Omit<
@@ -197,7 +245,7 @@ const commandsBatch = (
   mutation: true,
   telemetryEntity: (items: Array<{ entity: string }>) => items[0]?.entity,
   run: async (item: z.output<typeof batchCommandItemInput>, extra: ToolExtra) =>
-    execute(getEntityKernelContext(extra), item),
+    executeWithCoverage(execute, getEntityKernelContext(extra), item),
 });
 
 const previewBatch: BatchSpec<
@@ -289,20 +337,20 @@ export const createKernelMcpActions = (
       "create",
       entityMcpCreateCommandSchema,
       z.union([
-        generatedMcpEntityMutationCreateResultSchema.and(recipeLineCoverageOut),
+        generatedMcpEntityMutationCreateResultSchema.and(writeCoverageOut),
         entitySummaryResultSchema,
       ]),
-      { recipeLineCoverage: true },
+      { coverage: true },
     ),
     update: commandAction(
       execute,
       "update",
       entityMcpUpdateCommandSchema,
       z.union([
-        generatedMcpEntityMutationUpdateResultSchema.and(recipeLineCoverageOut),
+        generatedMcpEntityMutationUpdateResultSchema.and(writeCoverageOut),
         entitySummaryResultSchema,
       ]),
-      { recipeLineCoverage: true },
+      { coverage: true },
     ),
     merge: commandAction(
       execute,
