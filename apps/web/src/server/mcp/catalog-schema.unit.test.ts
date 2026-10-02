@@ -166,7 +166,7 @@ describe("MCP catalog schemas", () => {
     expect(concreteOutputSchema({ type: "object", properties: {} })).toBe(
       false,
     );
-    const intersection = {
+    const intersection: JsonObject = {
       allOf: [
         { $ref: "#/definitions/item" },
         { type: "object", required: ["item"] },

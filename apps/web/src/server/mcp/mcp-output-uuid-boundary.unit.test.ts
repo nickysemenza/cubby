@@ -46,6 +46,10 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "activity.runFindings[].proposedFix.expenseId",
   "activity.runFindings[].proposedFix.productId",
   "activity.runFindings[].proposedFix.purchaseId",
+  // Nullable row handles in the reviewed replacement snapshot participate in
+  // the approval fingerprint and attribution comparison in applyFix.
+  "activity.runFindings[].proposedFix.reviewedLineIdentities[].productId",
+  "activity.runFindings[].proposedFix.reviewedLineAttributions[].partyId",
 ]);
 
 const NOT_YET_CUT_OVER: string[] = [];
@@ -62,15 +66,29 @@ function collectUuidFindings(
   path: string,
   visited: Set<unknown>,
   out: UuidFinding[],
+  fieldContext?: Pick<UuidFinding, "field" | "siblings">,
 ) {
   if (visited.has(node)) return;
-  visited.add(node);
+  const ancestry = new Set([...visited, node]);
+  if (node["format"] === "uuid" && fieldContext) {
+    out.push({ tool: toolName, path, ...fieldContext });
+  }
 
   const ref = node["$ref"];
   if (isJsonString(ref)) {
     const refName = ref.split("/").pop();
     const target = refName ? defs[refName] : undefined;
-    if (target) collectUuidFindings(target, defs, toolName, path, visited, out);
+    if (target) {
+      collectUuidFindings(
+        target,
+        defs,
+        toolName,
+        path,
+        ancestry,
+        out,
+        fieldContext,
+      );
+    }
     return;
   }
 
@@ -79,7 +97,15 @@ function collectUuidFindings(
     if (isJsonArray(branches)) {
       for (const branch of branches) {
         if (isJsonSchemaNode(branch)) {
-          collectUuidFindings(branch, defs, toolName, path, visited, out);
+          collectUuidFindings(
+            branch,
+            defs,
+            toolName,
+            path,
+            ancestry,
+            out,
+            fieldContext,
+          );
         }
       }
     }
@@ -87,23 +113,21 @@ function collectUuidFindings(
 
   const items = node["items"];
   if (node["type"] === "array" && isJsonSchemaNode(items)) {
-    collectUuidFindings(items, defs, toolName, `${path}[]`, visited, out);
+    collectUuidFindings(items, defs, toolName, `${path}[]`, ancestry, out);
   }
 
   const properties = node["properties"];
   if (isJsonSchemaMap(properties)) {
     const siblings = Object.keys(properties);
     for (const [field, value] of Object.entries(properties)) {
-      if (value["format"] === "uuid") {
-        out.push({ tool: toolName, path: `${path}.${field}`, field, siblings });
-      }
       collectUuidFindings(
         value,
         defs,
         toolName,
         `${path}.${field}`,
-        visited,
+        ancestry,
         out,
+        { field, siblings },
       );
     }
   }
@@ -133,6 +157,39 @@ function isJsonSchemaMap(
 }
 
 describe("MCP output schemas expose shortcodes, not uuids, outside declared exceptions", () => {
+  it("checks every path through shared references while stopping cycles", () => {
+    const defs = {
+      identifier: { type: "string", format: "uuid" },
+      row: {
+        type: "object",
+        properties: {
+          id: {
+            anyOf: [{ $ref: "#/definitions/identifier" }, { type: "null" }],
+          },
+          next: { $ref: "#/definitions/row" },
+        },
+      },
+    } satisfies Record<string, JsonSchemaNode>;
+    const findings: UuidFinding[] = [];
+    collectUuidFindings(
+      {
+        type: "object",
+        properties: {
+          left: { $ref: "#/definitions/row" },
+          right: { $ref: "#/definitions/row" },
+        },
+      },
+      defs,
+      "probe",
+      "probe",
+      new Set(),
+      findings,
+    );
+    expect(findings.map((finding) => finding.path)).toEqual([
+      "probe.left.id",
+      "probe.right.id",
+    ]);
+  });
   it("walks every registered tool's OUTPUT schema off the live catalog", async () => {
     const { tools } = await listMcpToolCatalog();
 
