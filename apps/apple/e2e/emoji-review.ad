@@ -1,6 +1,6 @@
 context platform=ios timeout=240000
 
-open com.nickysemenza.cubby
+open com.nickysemenza.cubby --launch-url "cubby://entity/${PRODUCT_ID}"
 wait "role=Button id=detail.productCategory.edit" 240000
 click "role=Button id=detail.productCategory.edit"
 wait "label=Name editable=true" 30000
