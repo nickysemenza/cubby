@@ -29,6 +29,10 @@ import { loadDataQualities } from "./data-quality/hydrate";
 import { getDb } from "./database-helpers";
 import { updateFinancialTransaction } from "./financial-transaction";
 import { updateProduct } from "./product/crud";
+import {
+  externalIdKey,
+  findProductsByExternalIds,
+} from "./product/find-by-external-ids";
 import { getPurchaseByID } from "./purchase";
 import { getNotionRecipePageIds, upsertNotionRecipe } from "./recipe/crud";
 import {
@@ -42,6 +46,58 @@ import { findOrCreateVendor, getVendorByID } from "./vendor";
 
 describe("EntityExternalId", () => {
   const ctx = withTestDb();
+
+  it("batches exact identifiers without conflating kinds or hiding conflicting products", async () => {
+    const first = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic first",
+        externalIds: [
+          { source: "sample-store", kind: "asin", externalId: "shared-code" },
+        ],
+      }),
+      ctx.actor,
+    );
+    const second = await createProduct(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic second",
+        externalIds: [
+          {
+            source: "sample-store",
+            kind: "retailer_sku",
+            externalId: "shared-code",
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const asin = {
+      source: "sample-store",
+      kind: "asin" as const,
+      externalId: "shared-code",
+    };
+    const sku = { ...asin, kind: "retailer_sku" as const };
+    const anyKind = { source: asin.source, externalId: asin.externalId };
+    const hits = await findProductsByExternalIds(ctx.db, [
+      asin,
+      sku,
+      anyKind,
+      asin,
+    ]);
+    expect(hits.get(externalIdKey(asin))?.map((hit) => hit.shortcode)).toEqual([
+      first.id,
+    ]);
+    expect(hits.get(externalIdKey(sku))?.map((hit) => hit.shortcode)).toEqual([
+      second.id,
+    ]);
+    expect(
+      hits
+        .get(externalIdKey(anyKind))
+        ?.map((hit) => hit.shortcode)
+        .sort(),
+    ).toEqual([first.id, second.id].sort());
+  });
 
   const mkAccount = async (name: string) =>
     (

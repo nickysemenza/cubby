@@ -39,7 +39,6 @@ import { runJevChoice, type JevChoiceResult } from "~/server/ai/jev";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityAttachment,
-  entityExternalId,
   expense,
   financialAccount,
   financialTransaction,
@@ -68,6 +67,10 @@ import {
   applyAllocationChanges,
   readAllocations,
 } from "~/server/repo/financial-transaction-allocations";
+import {
+  externalIdKey,
+  findProductsByExternalIds,
+} from "~/server/repo/product/find-by-external-ids";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { sha256Hex } from "~/server/semantic/hash";
 import { dateOnly } from "~/server/utils/date-only";
@@ -437,6 +440,13 @@ async function decideLineIdentities(
   const decisionsByExternalIdentity = new Map<string, LineIdentityDecision>();
   const candidate = input.extraction.candidate;
   if (!candidate) return [];
+  const exactRequests = candidate.lines.map((line) =>
+    lineIdentifiers(line).map((identifier) => ({
+      ...identifier,
+      source: externalSource(line.productUrl, input.vendorId),
+    })),
+  );
+  const exactHits = await findProductsByExternalIds(db, exactRequests.flat());
   for (const [index, line] of candidate.lines.entries()) {
     const role = await chooseLineStage(db, input.runId, index, line, "role");
     const selectedRole = expenseLineKindValues[role.selectedIndex ?? -1];
@@ -477,7 +487,6 @@ async function decideLineIdentities(
       });
       continue;
     }
-    const source = externalSource(line.productUrl, input.vendorId);
     const identity = lineExternalIdentity(line, input.vendorId);
     const decidedEarlier = identity
       ? decisionsByExternalIdentity.get(identity)
@@ -486,38 +495,22 @@ async function decideLineIdentities(
       decisions.push(decidedEarlier);
       continue;
     }
-    const identifiers = lineIdentifiers(line);
-    const [externalMatch] = identifiers.length
-      ? await database
-          .select({ productId: entityExternalId.entityId })
-          .from(entityExternalId)
-          .innerJoin(
-            product,
-            and(eq(product.id, entityExternalId.entityId), notDeleted(product)),
-          )
-          .where(
-            and(
-              eq(entityExternalId.source, source),
-              or(
-                ...identifiers.map((identifier) =>
-                  and(
-                    eq(entityExternalId.kind, identifier.kind),
-                    eq(entityExternalId.externalId, identifier.externalId),
-                  ),
-                ),
-              ),
-              notDeleted(entityExternalId),
-            ),
-          )
-          .limit(1)
-      : [];
-    if (externalMatch) {
+    const matches = new Map(
+      (exactRequests[index] ?? [])
+        .flatMap((identifier) => exactHits.get(externalIdKey(identifier)) ?? [])
+        .map((hit) => [hit.id, hit]),
+    );
+    if (matches.size > 0) {
+      const match = [...matches.values()][0]!;
+      const ambiguous = matches.size > 1;
       const decision = {
-        productId: externalMatch.productId,
-        promote: true,
-        variantDoubt: false,
-        probability: 1,
-        unresolvedReason: null,
+        productId: ambiguous ? null : match.id,
+        promote: !ambiguous,
+        variantDoubt: ambiguous,
+        probability: ambiguous ? 0 : 1,
+        unresolvedReason: ambiguous
+          ? "Exact identifiers refer to different Products; choose the intended Product."
+          : null,
         ...baseDecision,
       };
       decisions.push(decision);
