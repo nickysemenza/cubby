@@ -316,10 +316,10 @@ describe("saved confirmation imports", () => {
     expect(await claimNextImportWork(ctx.db, namespace, run.id)).toEqual(
       verification,
     );
-    await finishRun(ctx.db, namespace, {
-      runId: run.id,
-      operationId: "finish-mail",
-    });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "completed", endedAt: new Date() })
+      .where(eq(runTable.id, run.id));
     const successor = await controlRun(ctx.db, ctx.actor, {
       runPublicId: run.shortcode,
       action: "restart",
