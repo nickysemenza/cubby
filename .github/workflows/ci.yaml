@@ -11,6 +11,11 @@ on:
         description: Run the disposable-database iPhone simulator E2E lane
         type: boolean
         default: false
+      tester_army:
+        description: Run the experimental synthetic Tester Army journeys
+        type: choice
+        options: [none, web, ios, both]
+        default: none
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -24,7 +29,7 @@ permissions:
 jobs:
   scope:
     name: Scope
-    if: github.event_name != 'workflow_dispatch' || !inputs.simulator_e2e
+    if: github.event_name != 'workflow_dispatch' || (!inputs.simulator_e2e && inputs.tester_army == 'none')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -349,7 +354,7 @@ jobs:
   web-checks:
     name: Web checks
     needs: [scope, build-worker, test-web, test-postgres, db-check, test-e2e]
-    if: always() && !(github.event_name == 'workflow_dispatch' && inputs.simulator_e2e)
+    if: always() && !(github.event_name == 'workflow_dispatch' && (inputs.simulator_e2e || inputs.tester_army != 'none'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -530,7 +535,7 @@ jobs:
 
   simulator-e2e:
     name: iPhone simulator E2E (manual)
-    if: github.event_name == 'workflow_dispatch' && inputs.simulator_e2e
+    if: github.event_name == 'workflow_dispatch' && inputs.simulator_e2e && inputs.tester_army == 'none'
     runs-on: macos-26
     timeout-minutes: 70
     steps:
@@ -569,3 +574,95 @@ jobs:
             artifacts/sim-e2e/**/run-manifest.json
             artifacts/sim-e2e/**/run-results.json
             artifacts/sim-e2e/**/SHA256SUMS
+
+  tester-army-inputs:
+    name: Tester Army dispatch inputs
+    if: github.event_name == 'workflow_dispatch' && inputs.tester_army != 'none'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject conflicting manual lanes
+        env:
+          SIMULATOR_E2E: ${{ inputs.simulator_e2e }}
+        run: test "$SIMULATOR_E2E" != true
+
+  tester-army-web:
+    name: Tester Army web (manual)
+    needs: tester-army-inputs
+    if: github.event_name == 'workflow_dispatch' && (inputs.tester_army == 'web' || inputs.tester_army == 'both')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TESTER_ARMY_CF_API_TOKEN: ${{ secrets.TESTER_ARMY_CF_API_TOKEN }}
+      TESTER_ARMY_CF_ACCOUNT_ID: ${{ vars.TESTER_ARMY_CF_ACCOUNT_ID }}
+      TESTER_ARMY_CF_GATEWAY_ID: cubby-testing
+      TESTER_ARMY_MODEL: ${{ vars.TESTER_ARMY_MODEL || 'openai/gpt-6-luna' }}
+      E2E_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: restore
+      - run: pnpm test:e2e:agent:preflight
+      - uses: ./.github/actions/start-test-services
+      - run: pnpm --filter @cubby/web run test:e2e:install-browser chromium --with-deps
+      - run: pnpm test:e2e:agent:web
+      - name: Save sanitized web run bundle
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: tester-army-web-run
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            artifacts/tester-army/web/*/run-manifest.json
+            artifacts/tester-army/web/*/run-results.json
+            artifacts/tester-army/web/*/agent-summary.json
+            artifacts/tester-army/web/*/SHA256SUMS
+
+  tester-army-ios:
+    name: Tester Army iOS (manual)
+    needs: tester-army-inputs
+    if: github.event_name == 'workflow_dispatch' && (inputs.tester_army == 'ios' || inputs.tester_army == 'both')
+    runs-on: macos-26
+    timeout-minutes: 70
+    env:
+      TESTER_ARMY_CF_API_TOKEN: ${{ secrets.TESTER_ARMY_CF_API_TOKEN }}
+      TESTER_ARMY_CF_ACCOUNT_ID: ${{ vars.TESTER_ARMY_CF_ACCOUNT_ID }}
+      TESTER_ARMY_CF_GATEWAY_ID: cubby-testing
+      TESTER_ARMY_MODEL: ${{ vars.TESTER_ARMY_MODEL || 'openai/gpt-6-luna' }}
+      E2E_TELEMETRY_DISABLED: "1"
+      CUBBY_SIM_DB_EXTERNAL: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: restore
+      - run: pnpm test:e2e:agent:preflight
+      - uses: ./.github/actions/setup-apple-ffi
+        with:
+          targets: sim
+      - uses: ./.github/actions/setup-apple-tools
+      - name: Start native PostgreSQL 17 with pgvector
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install postgresql@17 pgvector
+          pg_bin="$(brew --prefix postgresql@17)/bin"
+          echo "$pg_bin" >> "$GITHUB_PATH"
+          "$pg_bin/initdb" -D "$RUNNER_TEMP/cubby-sim-pg" -A trust -U postgres
+          "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/cubby-sim-pg" -l "$RUNNER_TEMP/cubby-sim-pg.log" -o '-h 127.0.0.1 -p 55432' start
+          "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -c "ALTER USER postgres WITH PASSWORD 'password'"
+          "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -Atc "SELECT name FROM pg_available_extensions WHERE name = 'vector'" | grep -qx vector
+      - run: pnpm test:e2e:agent:ios
+      - name: Save sanitized iOS run bundle
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: tester-army-ios-run
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            artifacts/sim-tester-army-e2e/*/run-manifest.json
+            artifacts/sim-tester-army-e2e/*/run-results.json
+            artifacts/sim-tester-army-e2e/*/agent-summary.json
+            artifacts/sim-tester-army-e2e/*/SHA256SUMS
