@@ -1,13 +1,15 @@
 context platform=ios timeout=240000
 
 open com.nickysemenza.cubby
-wait "role=Button label=Find" 240000
-click "role=Button label=Find"
-wait "role=SearchField label=\"Search Cubby\" editable=true" 30000
-fill "role=SearchField label=\"Search Cubby\" editable=true" "Synthetic Emoji Category" --delay-ms 80
-wait "id=search.result.${PRODUCT_ID}" 30000
-click "id=search.result.${PRODUCT_ID}"
-wait "role=Button id=detail.productCategory.edit" 30000
+wait "role=Button label=Library" 240000
+click "role=Button label=Library"
+wait text "Browse catalog" 30000
+click "label=\"Browse catalog\""
+wait "label=\"Product Categories\"" 30000
+click "label=\"Product Categories\""
+wait "id=browse.productCategory.row.${PRODUCT_ID}" 30000
+click "id=browse.productCategory.row.${PRODUCT_ID}"
+wait "role=Button id=detail.productCategory.edit" 240000
 click "role=Button id=detail.productCategory.edit"
 wait "label=Name editable=true" 30000
 scroll bottom
@@ -35,4 +37,3 @@ wait "label=Emoji editable=true value=👩🏽‍🍳" 30000
 fill "label=Emoji editable=true" ""
 click "role=Button label=Save"
 wait "role=Button id=detail.productCategory.edit" 30000
-

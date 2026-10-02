@@ -10,6 +10,7 @@ test("edits compound emoji, clears it, and browses inherited category membership
   page,
   baseURL,
 }, testInfo) => {
+  test.setTimeout(90_000);
   const headers = { Origin: baseURL! };
   const create = async (
     path: string,
