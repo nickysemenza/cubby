@@ -385,7 +385,7 @@ export const attachFileFields = {
     .string()
     .optional()
     .describe(
-      "MIME type (image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, or application/pdf). Required for base64 `data` unless a data: URI carries it; inferred from the response for `url`.",
+      "MIME type (image/jpeg, image/png, image/gif, image/webp, image/avif, image/heic, image/heif, or application/pdf). Required for base64 `data` unless a data: URI carries it; inferred from the response for `url`.",
     ),
   filename: z
     .string()
@@ -498,7 +498,7 @@ export const createFileUploadInput = z.object({
   contentType: z
     .string()
     .describe(
-      "MIME type (image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, or application/pdf). Must match the Content-Type header sent on the PUT.",
+      "MIME type (image/jpeg, image/png, image/gif, image/webp, image/avif, image/heic, image/heif, or application/pdf). Must match the Content-Type header sent on the PUT.",
     ),
   size: z
     .int()
