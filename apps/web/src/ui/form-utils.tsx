@@ -545,6 +545,7 @@ export function NullableNumericField<
     <Controller
       control={form.control}
       name={name}
+      defaultValue={null}
       render={({ field, fieldState }) => {
         if (fraction) {
           return (

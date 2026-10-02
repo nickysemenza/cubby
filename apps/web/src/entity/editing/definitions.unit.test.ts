@@ -286,60 +286,86 @@ describe("entity edit definitions", () => {
   // untouched edit stays a no-op — in particular the write-only `upc`
   // (`readKey: null`, seeded `null`) must not reach the wire as `upc: null`,
   // which `syncPrimaryGtin` would read as "retire the primary GTIN".
-  it("opens a record with nested Dates and keeps an untouched edit empty, write-only fields included", () => {
-    const record = mock(productWithMappingsAndFoodOut, {
-      seed: 5,
-      overrides: {
-        images: [],
-        notes: "Keep dry",
-        unitMappings: [
-          {
-            id: "6b1c2c1e-0000-4000-8000-000000000001",
-            a: { value: 8, unit: "oz" },
-            b: { value: 1, unit: "each" },
-            source: "manual",
-            sourceMetadata: { type: "manual" as const },
-            createdAt: new Date("2026-01-02T03:04:05.000Z"),
-            updatedAt: new Date("2026-01-02T03:04:05.000Z"),
-          },
-        ],
-      },
-    });
-    const request = {
-      entity: "product" as const,
-      operation: "update" as const,
-      intent: "full" as const,
-      surface: "dialog" as const,
-      record,
-    };
-    const resolved = resolveEntityEdit(entityEditRegistry, request);
-    if (!("definition" in resolved)) throw new Error("product must resolve");
-    const values = initialEntityEditValues(resolved, request);
-    expect(values.unitMappings).toEqual([
-      {
-        id: "6b1c2c1e-0000-4000-8000-000000000001",
-        a: { value: 8, unit: "oz" },
-        b: { value: 1, unit: "each" },
-        source: "manual",
-      },
-    ]);
-    expect(values.upc).toBeNull();
-    const untouched = buildEntityEdit(resolved, request, values);
-    expect(untouched).toMatchObject({ ok: true, changed: false });
-    if (!untouched.ok || untouched.command.operation !== "update")
-      throw new Error("untouched edit must build an update");
-    expect(untouched.command.data).toEqual({});
+  it.each([
+    {
+      servingGrams: 30,
+      source: "Synthetic prior label",
+      nutrients: { kcal: 90, fat: 0 },
+    },
+    {
+      servingGrams: 30,
+      source: "Synthetic prior label",
+      nutrients: { kcal: 90 },
+      inferredZeroNutrients: ["fat" as const],
+      inferenceEvidence: "Not a significant source of total fat.",
+    },
+  ])(
+    "opens a record with nested Dates and keeps untouched nutrition and write-only fields empty",
+    (labelNutrition) => {
+      const record = mock(productWithMappingsAndFoodOut, {
+        seed: 5,
+        overrides: {
+          images: [],
+          notes: "Keep dry",
+          labelNutrition,
+          unitMappings: [
+            {
+              id: "6b1c2c1e-0000-4000-8000-000000000001",
+              a: { value: 8, unit: "oz" },
+              b: { value: 1, unit: "each" },
+              source: "manual",
+              sourceMetadata: { type: "manual" as const },
+              createdAt: new Date("2026-01-02T03:04:05.000Z"),
+              updatedAt: new Date("2026-01-02T03:04:05.000Z"),
+            },
+          ],
+        },
+      });
+      const request = {
+        entity: "product" as const,
+        operation: "update" as const,
+        intent: "full" as const,
+        surface: "dialog" as const,
+        record,
+      };
+      const resolved = resolveEntityEdit(entityEditRegistry, request);
+      if (!("definition" in resolved)) throw new Error("product must resolve");
+      const values = initialEntityEditValues(resolved, request);
+      expect(values.unitMappings).toEqual([
+        {
+          id: "6b1c2c1e-0000-4000-8000-000000000001",
+          a: { value: 8, unit: "oz" },
+          b: { value: 1, unit: "each" },
+          source: "manual",
+        },
+      ]);
+      expect(values.upc).toBeNull();
+      const untouched = buildEntityEdit(resolved, request, values);
+      expect(untouched).toMatchObject({ ok: true, changed: false });
+      if (!untouched.ok || untouched.command.operation !== "update")
+        throw new Error("untouched edit must build an update");
+      expect(untouched.command.data).toEqual({});
 
-    // An explicitly cleared nullable *read* field is a real change.
-    const cleared = buildEntityEdit(resolved, request, {
-      ...values,
-      notes: null,
-    });
-    expect(cleared).toMatchObject({ ok: true, changed: true });
-    if (!cleared.ok || cleared.command.operation !== "update")
-      throw new Error("cleared edit must build an update");
-    expect(cleared.command.data).toEqual({ notes: null });
-  });
+      // An explicitly cleared nullable *read* field is a real change.
+      const cleared = buildEntityEdit(resolved, request, {
+        ...values,
+        notes: null,
+      });
+      expect(cleared).toMatchObject({ ok: true, changed: true });
+      if (!cleared.ok || cleared.command.operation !== "update")
+        throw new Error("cleared edit must build an update");
+      expect(cleared.command.data).toEqual({ notes: null });
+
+      const clearedLabel = buildEntityEdit(resolved, request, {
+        ...values,
+        labelNutrition: { servingGrams: null },
+      });
+      expect(clearedLabel).toMatchObject({ ok: true, changed: true });
+      if (!clearedLabel.ok || clearedLabel.command.operation !== "update")
+        throw new Error("cleared label must build an update");
+      expect(clearedLabel.command.data).toEqual({ labelNutrition: null });
+    },
+  );
 
   it("still emits null for a nullable read field cleared against a partial record", () => {
     const request = {

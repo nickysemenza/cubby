@@ -50,13 +50,11 @@ const EDIT_HOOK_BASELINE: readonly string[] = [
   "location.create.full",
   "location.fields.collections",
   "location.update.full",
-  "product.create.full",
   "product.fields.externalIds",
   "product.fields.isbn",
   "product.fields.labelNutrition",
   "product.fields.unitMappings",
   "product.fields.upc",
-  "product.update.full",
   "task.fields.notes",
 ];
 

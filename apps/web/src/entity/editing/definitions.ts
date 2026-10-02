@@ -1029,16 +1029,6 @@ const productLabelNutritionValidate: NonNullable<
       }));
 };
 
-/** Draft → stored transform, run only when `labelNutrition` actually
- * changed (an untouched field never enters the patch). */
-const productBuildData = (patch: EntityEditValueBag): EntityEditValueBag => {
-  if (!("labelNutrition" in patch)) return patch;
-  return {
-    ...patch,
-    labelNutrition: productLabelNutritionFromDraft(patch.labelNutrition),
-  };
-};
-
 /**
  * "1 each = $X" duplicates `product.price` (the scalar valuation column) —
  * forbidden as a conversion edge, same guard the retired `product-form.tsx`
@@ -1046,12 +1036,9 @@ const productBuildData = (patch: EntityEditValueBag): EntityEditValueBag => {
  * ("1 quart = $4") stay legitimate conversion edges.
  */
 const productUnitMappingsValidate: NonNullable<
-  IntentOptions<"product">["validate"]
-> = ({ values }) => {
-  const mappings = z
-    .array(unitMappingInput)
-    .catch([])
-    .parse(values.unitMappings);
+  FieldOptions<"product">["validate"]
+> = ({ value }) => {
+  const mappings = z.array(unitMappingInput).catch([]).parse(value);
   return mappings.flatMap((mapping, index) => {
     if (!isCanonicalPriceMapping(mapping)) return [];
     const moneySide = isMoneyUnit(mapping.b.unit) ? "b" : "a";
@@ -1078,24 +1065,16 @@ export const editHooks: EditHooksMap = {
     fields: {
       upc: { initial: productUpcInitial },
       isbn: { initial: productIsbnInitial },
-      unitMappings: { initial: productUnitMappingsInitial },
+      unitMappings: {
+        initial: productUnitMappingsInitial,
+        validate: productUnitMappingsValidate,
+      },
       externalIds: { initial: productExternalIdsInitial },
-      labelNutrition: { validate: productLabelNutritionValidate },
-    },
-    create: {
-      capture: {
-        buildData: productBuildData,
-        validate: productUnitMappingsValidate,
-      },
-      full: {
-        buildData: productBuildData,
-        validate: productUnitMappingsValidate,
-      },
-    },
-    update: {
-      full: {
-        buildData: productBuildData,
-        validate: productUnitMappingsValidate,
+      labelNutrition: {
+        initial: ({ record }) =>
+          productLabelNutritionFromDraft(record?.labelNutrition),
+        normalize: productLabelNutritionFromDraft,
+        validate: productLabelNutritionValidate,
       },
     },
   },
