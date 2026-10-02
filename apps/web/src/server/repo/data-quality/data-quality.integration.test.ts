@@ -50,7 +50,8 @@ describe("data quality: list filters, sort and hydration agree", () => {
       makeProductInput({ name: "DQ middling", manufacturer: "Acme", price: 4 }),
       TEST_ACTOR,
     );
-    // Neither stocked nor purchased: no check is expected, so complete at 100.
+    // Neither stocked nor purchased: completeness stays 100, while the
+    // unscored orphan diagnostic remains visible and cannot be exempted.
     const outOfScope = await createProductFixture(
       ctx.db,
       makeProductInput({
@@ -82,9 +83,9 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(hydrated.get(weak.entityId)?.status).toBe("needs_data");
     expect(hydrated.get(middling.entityId)?.status).toBe("needs_data");
     expect(hydrated.get(outOfScope.entityId)).toMatchObject({
-      status: "complete",
+      status: "defect",
       score: 100,
-      gaps: [],
+      gaps: [expect.objectContaining({ check: "product_orphaned" })],
     });
     expect(hydrated.get(weak.entityId)?.gaps.map((gap) => gap.check)).toContain(
       "product_manufacturer",
@@ -106,8 +107,10 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(needsData.has(outOfScope.id)).toBe(false);
 
     const complete = await listed({ dataStatus: "complete" });
-    expect(complete.has(outOfScope.id)).toBe(true);
+    expect(complete.has(outOfScope.id)).toBe(false);
     expect(complete.has(weak.id)).toBe(false);
+    const defects = await listed({ dataStatus: "defect" });
+    expect(defects.has(outOfScope.id)).toBe(true);
 
     const noMaker = await listed({ dataGap: ["product_manufacturer"] });
     expect(noMaker.has(weak.id)).toBe(true);
