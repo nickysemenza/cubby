@@ -147,6 +147,44 @@ export const parseRecipeHtmlInput = z.object({
   url: z.url(),
 });
 
+const recipeCoverageGap = z.enum(["price", "weight", "nutrients"]);
+
+/**
+ * Per costed recipe line, which of price / weight / nutrients cannot be
+ * derived. Attached by MCP recipe writes (create/update, `commands`,
+ * `recipe_import`) so an unmapped line is visible before costing is read.
+ */
+export const recipeLineCoverageOut = z.array(
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    missing: z.array(recipeCoverageGap),
+  }),
+);
+
+const recipeCoverageChangedLine = z.object({
+  recipeId: recipeShortcode,
+  id: z.string().describe("The recipe line id (usable with patch_line)."),
+  name: z.string(),
+  before: z.array(recipeCoverageGap),
+  after: z.array(recipeCoverageGap),
+});
+
+/**
+ * What a Product write did to the recipe lines that use its ingredient:
+ * `closed` lines lost a missing gap, `regressed` lines gained one.
+ */
+export const productRecipeCoverageChangesOut = z.object({
+  recipesChecked: z.number().int().nonnegative(),
+  truncated: z
+    .boolean()
+    .describe(
+      "True when more recipes use the ingredient than were checked; the reported lines are a subset.",
+    ),
+  closed: z.array(recipeCoverageChangedLine),
+  regressed: z.array(recipeCoverageChangedLine),
+});
+
 export const recipeImportIdOut = z.object({
   id: recipeShortcode,
 });

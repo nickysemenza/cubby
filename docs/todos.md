@@ -322,11 +322,6 @@ See also the image operational passes at the end of this file.
   (`server/repo/recipe/crud.ts`) and decide whether the recipe form's cookbook
   picker (`recipe-cookbook-field.tsx`, `resolveCookbookRepoint`) stays.
 
-- 🟢 **Coverage diagnostics on product writes.** MCP recipe create/update
-  return per-line `lineCoverage`; `entity.commands` and `recipe_import` do not.
-  Product updates should report which recipe lines the change closed — one
-  corrected package-weight mapping can repair many recipes.
-
 - 🟢 **Import extracted cookbook bundles.** Accept ingredient-parser
   `.cookbook` archives through the existing review/import flow
   (`recipe/cookbook-import/cookbook-dropzone.tsx`). Read ZIP entries

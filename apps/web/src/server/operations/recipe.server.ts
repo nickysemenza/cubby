@@ -355,6 +355,14 @@ export async function recipeLineCoverage(
   }));
 }
 
+const withLineCoverage = async <T extends { id: string }>(
+  context: EntityKernelContext,
+  saved: T,
+) => ({
+  ...saved,
+  lineCoverage: await recipeLineCoverage(context, saved.id),
+});
+
 export const recipeHandlers = implementOperationDomain(recipeContract, {
   getManyByIDs: (context, input) => getManyRecipesByIDs(context.db, input),
   duplicate: (context, input) => duplicateWorkflow(context, input),
@@ -419,11 +427,14 @@ export const recipeHandlers = implementOperationDomain(recipeContract, {
   tags: (context) => getAllTags(context.db),
   scrapeUrl: (_context, input) => imports.scrapeWorkflow(input.url),
   importFromUrl: async (context, input) =>
-    imports.insertImportWorkflow(
+    withLineCoverage(
       context,
-      await imports.scrapeWorkflow(input.url),
+      await imports.insertImportWorkflow(
+        context,
+        await imports.scrapeWorkflow(input.url),
+      ),
     ),
-  createFromText: (context, input) => {
+  createFromText: async (context, input) => {
     const importRecipe = {
       meta: {
         title: input.name,
@@ -438,9 +449,18 @@ export const recipeHandlers = implementOperationDomain(recipeContract, {
       references: [],
       servings: input.servings ?? undefined,
     };
-    return imports.insertImportWorkflow(context, importRecipe);
+    return withLineCoverage(
+      context,
+      await imports.insertImportWorkflow(context, importRecipe),
+    );
   },
-  patchLine: (context, input) => patchRecipeLine(context, input),
+  patchLine: async (context, input) => {
+    const patched = await patchRecipeLine(context, input);
+    return {
+      ...patched,
+      lineCoverage: await recipeLineCoverage(context, patched.recipeId),
+    };
+  },
 });
 
 export const effectiveRecipeServings = recipeServingsForRead;

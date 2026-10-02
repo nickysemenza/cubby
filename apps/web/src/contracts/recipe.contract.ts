@@ -26,6 +26,7 @@ import {
   notionPreviewOut,
   parseRecipeHtmlInput,
   recipeImportIdOut,
+  recipeLineCoverageOut,
   scrapeRecipeInput,
   setCookbookProductInput,
   upsertCookbookInput,
@@ -126,8 +127,14 @@ const recipeLinePatchInput = z.object({
   patch: recipeLinePatchFields,
 });
 
+/** The saved recipe's id plus per-line costing gaps (MCP-only writes). */
+const recipeImportWriteOut = recipeImportIdOut.extend({
+  lineCoverage: recipeLineCoverageOut,
+});
+
 const recipeLinePatchOut = z.object({
   recipeId: recipeShortcode,
+  lineCoverage: recipeLineCoverageOut,
   line: z.object({
     type: z.enum(["ingredient", "recipe"]),
     ingredientId: ingredientShortcode.nullable(),
@@ -234,13 +241,13 @@ export const recipeContract = defineContract("recipe", {
   importFromUrl: mutation({
     http: false,
     input: z.object({ url: scrapeRecipeInput }),
-    output: recipeImportIdOut,
+    output: recipeImportWriteOut,
     invalidates: ["recipe"],
   }),
   createFromText: mutation({
     http: false,
     input: mcpRecipeCreateFromTextInput,
-    output: recipeImportIdOut,
+    output: recipeImportWriteOut,
     invalidates: ["recipe"],
   }),
   /** Change one ingredient line without resending the recipe's sections. */
