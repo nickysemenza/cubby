@@ -8,6 +8,26 @@ import Testing
 
 @Suite("Companion image processor")
 struct CompanionImageProcessorTests {
+    @Test("Decodes a checksum-verified AVIF catalog source")
+    func decodesAVIFCatalogSource() async throws {
+        // Synthetic 2 × 3 white image; exercises ImageIO rather than a MIME-only check.
+        let bytes = try #require(
+            Data(
+                base64Encoded:
+                    "AAAAHGZ0eXBhdmlmAAAAAG1pZjFhdmlmbWlhZgAAANZtZXRhAAAAAAAAACFoZGxyAAAAAAAAAABwaWN0AAAAAAAAAAAAAAAAAAAAACJpbG9jAAAAAERAAAEAAQAAAAAA+gABAAAAAAAAACEAAAAjaWluZgAAAAAAAQAAABVpbmZlAgAAAAABAABhdjAxAAAAAA5waXRtAAAAAAABAAAAVmlwcnAAAAA4aXBjbwAAAAxhdjFDgUBsAAAAABRpc3BlAAAAAAAAAAIAAAADAAAAEHBpeGkAAAAAAwwMDAAAABZpcG1hAAAAAAAAAAEAAQOBAgMAAAApbWRhdBIACghYAHNaAhoNwjITGUeHhiGJpppmgAAAkD+bDGCKZg=="
+            ))
+        let processor = CompanionImageProcessor(
+            download: { _ in bytes },
+            put: { _, _, _ in Issue.record("Decoding must not upload a replacement") })
+        let decoded = try await processor.decodedSourceImage(
+            CompanionImageSource(
+                url: URL(string: "https://images.example.invalid/catalog.avif")!,
+                sha256: Self.sha256(bytes), contentType: "image/avif"))
+        #expect(decoded.image.width == 2)
+        #expect(decoded.image.height == 3)
+        #expect(decoded.diagnostics.decodeMilliseconds != nil)
+    }
+
     @Test("Uploads a transparent PNG derived from an unchanged source", .requiresVisionHardware)
     func uploadsTransparentPNGFromUnchangedSource() async throws {
         let sourceBytes = try ImageEncoding.encode(
