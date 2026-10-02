@@ -158,14 +158,15 @@ function isJsonSchemaMap(
 
 describe("MCP output schemas expose shortcodes, not uuids, outside declared exceptions", () => {
   it("checks every path through shared references while stopping cycles", () => {
+    const nullableIdentifier: JsonSchemaNode = {
+      anyOf: [{ $ref: "#/definitions/identifier" }, { type: "null" }],
+    };
     const defs = {
       identifier: { type: "string", format: "uuid" },
       row: {
         type: "object",
         properties: {
-          id: {
-            anyOf: [{ $ref: "#/definitions/identifier" }, { type: "null" }],
-          },
+          id: nullableIdentifier,
           next: { $ref: "#/definitions/row" },
         },
       },
