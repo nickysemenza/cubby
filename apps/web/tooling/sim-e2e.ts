@@ -1,3 +1,4 @@
+import { readTesterArmySummary } from "./tester-army/report";
 import { execFileSync, spawn } from "node:child_process";
 import { pollUntil } from "@cubby/shared/retry";
 import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
@@ -41,7 +42,20 @@ const watch = flags.includes("--watch");
 const video = flags.includes("--video");
 const layout = flags.includes("--layout");
 const productClarity = flags.includes("--product-clarity");
+const testerArmy = flags.includes("--tester-army");
+const testerArmyReplay = flags.includes("--replay");
+const wrongName = flags.includes("--wrong-name");
 if (
+  (testerArmy &&
+    (headless ||
+      photo ||
+      purchase ||
+      statementCsv ||
+      watch ||
+      video ||
+      layout ||
+      productClarity)) ||
+  ((testerArmyReplay || wrongName) && !testerArmy) ||
   (watch && video) ||
   (video && headless) ||
   (layout && (headless || photo || purchase || watch || productClarity)) ||
@@ -61,27 +75,32 @@ if (
         "--layout",
         "--product-clarity",
         "--statement-csv",
+        "--tester-army",
+        "--replay",
+        "--wrong-name",
       ].includes(argument),
   )
 )
   throw new Error(
-    "Usage: sim-e2e.ts [--video | --layout [--video] | --product-clarity [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
+    "Usage: sim-e2e.ts [--tester-army [--replay] [--wrong-name] | --video | --layout [--video] | --product-clarity [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
   );
-const lane = productClarity
-  ? "sim-product-clarity-e2e"
-  : statementCsv
-    ? "headless-statement-csv-e2e"
-    : layout
-      ? "sim-layout-e2e"
-      : purchase
-        ? "headless-wardrobe-e2e"
-        : photo
-          ? "headless-photo-e2e"
-          : headless
-            ? "headless-e2e"
-            : watch
-              ? "sim-dev"
-              : "sim-e2e";
+const lane = testerArmy
+  ? "sim-tester-army-e2e"
+  : productClarity
+    ? "sim-product-clarity-e2e"
+    : statementCsv
+      ? "headless-statement-csv-e2e"
+      : layout
+        ? "sim-layout-e2e"
+        : purchase
+          ? "headless-wardrobe-e2e"
+          : photo
+            ? "headless-photo-e2e"
+            : headless
+              ? "headless-e2e"
+              : watch
+                ? "sim-dev"
+                : "sim-e2e";
 // Database bootstrap validates the caller's environment before simulation-only overrides.
 const bootstrapEnvironment = { ...process.env };
 for (const [key, value] of Object.entries({
@@ -1077,6 +1096,17 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
     const status = failure === undefined ? "passed" : "failed";
     const durationMs = Math.round(performance.now() - runStartedAt);
     const resultsPath = path.join(artifacts, "run-results.json");
+    if (testerArmy) {
+      const summary = path.join(artifacts, "raw", "agent-summary.json");
+      if (existsSync(summary)) {
+        const evidence = path.join(artifacts, "agent-summary.json");
+        writeFileSync(
+          evidence,
+          `${JSON.stringify(readTesterArmySummary(path.dirname(summary)), null, 2)}\n`,
+        );
+        scenarioEvidence.push(evidence);
+      }
+    }
     writeFileSync(
       resultsPath,
       `${JSON.stringify({ schemaVersion: 1, status, scenario: lane, durationMs }, null, 2)}\n`,
@@ -1103,7 +1133,14 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
       fixtureVersion: 1,
       phase,
       phases,
-      runtime,
+      runtime: testerArmy
+        ? {
+            ...runtime,
+            testerArmy: "0.15.2",
+            model: process.env.TESTER_ARMY_MODEL ?? "openai/gpt-6-luna",
+            effort: "medium",
+          }
+        : runtime,
       build,
     });
     console.log(`[${lane}] E2E artifact: ${manifest}`);
@@ -1157,6 +1194,33 @@ async function runNativeJourney(
   layoutRunID?: string,
   purchaseId?: string,
 ): Promise<void> {
+  if (testerArmy) {
+    const output = path.join(artifacts, "raw");
+    await run(
+      "pnpm",
+      ["--dir", webRoot, "exec", "e2e", "run", "--output", output],
+      repoRoot,
+      undefined,
+      false,
+      {
+        ...process.env,
+        E2E_TELEMETRY_DISABLED: "1",
+        TESTER_ARMY_TARGET: "ios",
+        TESTER_ARMY_ORIGIN: process.env.TESTER_ARMY_ORIGIN,
+        TESTER_ARMY_PRODUCT_ID: productId,
+        TESTER_ARMY_DEVICE_ID: deviceID,
+        TESTER_ARMY_SESSION: `tester-army-${simName}`,
+        ...(testerArmyReplay && { TESTER_ARMY_REPLAY: "1" }),
+        ...(wrongName && {
+          TESTER_ARMY_EXPECTED_NAME: "Synthetic deliberately incorrect name",
+        }),
+      },
+    );
+    const summary = readTesterArmySummary(output);
+    if (summary.status !== "passed")
+      throw new Error("Tester Army iOS journey did not pass");
+    return;
+  }
   const stopRecording = video
     ? await recordSimulatorVideo(deviceID)
     : undefined;
@@ -1245,6 +1309,12 @@ async function main(): Promise<void> {
     return errors;
   };
   try {
+    if (testerArmy) {
+      phase = "model-preflight";
+      const { preflightTesterArmyModel } = await import("./tester-army/model");
+      process.env.E2E_TELEMETRY_DISABLED = "1";
+      await preflightTesterArmyModel();
+    }
     phase = "web-build";
     const buildStarted = performance.now();
     const buildAction = await ensureWebBuild(
@@ -1310,6 +1380,7 @@ async function main(): Promise<void> {
     objectStorage = await createE2EObjectStorage();
     harness = runtime.createLocalWorkerdHarness(databaseURL, objectStorage.url);
     const { url } = await harness.listen();
+    if (testerArmy) process.env.TESTER_ARMY_ORIGIN = url.origin;
     const context = await request.newContext({
       baseURL: url.origin,
       extraHTTPHeaders: { Origin: url.origin },

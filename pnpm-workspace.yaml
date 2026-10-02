@@ -475,5 +475,5 @@ configDependencies:
   "@pnpm/plugin-types-fixer": 0.1.0
 # Observation events preserve pg-cloudflare startup ordering; port when upgrading.
 patchedDependencies:
-  agent-device@0.21.12: patches/agent-device@0.21.12.patch
+  agent-device@0.21.18: patches/agent-device@0.21.18.patch
   pg-cloudflare@1.4.1: patches/pg-cloudflare@1.4.1.patch
