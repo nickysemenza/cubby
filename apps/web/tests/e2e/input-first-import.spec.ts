@@ -261,15 +261,20 @@ for (const statementFirst of [true, false]) {
         `/financial-transactions/${transaction.shortcode}`,
       );
       if (purchaseCode) {
-        await selectComboboxItem(
-          page,
-          page.getByRole("combobox", {
-            name: "Existing purchase",
-            exact: true,
-          }),
-          purchaseCode,
-          { query: purchaseCode, code: purchaseCode },
-        );
+        const purchasePicker = page.getByRole("combobox", {
+          name: "Existing purchase",
+          exact: true,
+        });
+        await expect(async () => {
+          await purchasePicker.click();
+          await expect(purchasePicker).toHaveAttribute("aria-expanded", "true");
+        }).toPass({ timeout: 5000 });
+        await purchasePicker.fill(purchaseCode);
+        await page
+          .getByRole("option", {
+            name: new RegExp(`^${escapeRegExp(names.orderId)}`),
+          })
+          .click();
       } else {
         await selectComboboxItem(
           page,

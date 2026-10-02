@@ -8,11 +8,26 @@ import {
   normalizeImageDescriptionResult,
   imageDescriptionInputFingerprint,
 } from "~/server/services/image-description.service";
+import { verifyProductImages } from "~/server/services/image-verification.service";
 import { getFixtureDb } from "./fixtures-core";
 
 /** Synthetic provider output injected at the external AI seam; upload/review/save remain real. */
 export async function seedDetectedLabelNutrition(productName: string) {
   const db = getFixtureDb();
+  const [target] = await getDb(db)
+    .select({ id: product.id })
+    .from(product)
+    .where(eq(product.name, productName));
+  if (!target) throw new Error("Synthetic label Product was not created");
+  const verification = await verifyProductImages(
+    db,
+    parseEntityId("product", target.id),
+  );
+  if (
+    verification.length !== 1 ||
+    verification[0]?.storageStatus !== "available"
+  )
+    throw new Error("Uploaded synthetic label failed stored-byte verification");
   const [source] = await getDb(db)
     .select({
       id: image.id,
