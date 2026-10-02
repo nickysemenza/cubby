@@ -1,6 +1,15 @@
 context platform=ios timeout=240000
 
-open com.nickysemenza.cubby --launch-url "cubby://entity/${PRODUCT_ID}"
+open com.nickysemenza.cubby
+wait "role=Button label=Library" 240000
+click "role=Button label=Library"
+wait text "Browse catalog" 30000
+click "label=\"Browse catalog\""
+scroll bottom
+wait "id=browse.catalog.productCategory" 30000
+click "id=browse.catalog.productCategory"
+wait "id=browse.productCategory.row.${PRODUCT_ID}" 30000
+click "id=browse.productCategory.row.${PRODUCT_ID}"
 wait "role=Button id=detail.productCategory.edit" 240000
 click "role=Button id=detail.productCategory.edit"
 wait "label=Name editable=true" 30000
