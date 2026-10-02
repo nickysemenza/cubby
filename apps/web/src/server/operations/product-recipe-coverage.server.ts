@@ -39,7 +39,7 @@ const COSTING_FIELDS = [
  * Bound on the recipes re-explained per Product write: each costs one full
  * `explainRecipe` before and after. The report says when it was cut.
  */
-export const COVERAGE_RECIPE_CAP = 25;
+const COVERAGE_RECIPE_CAP = 25;
 
 type Gap = "price" | "weight" | "nutrients";
 const GAPS: readonly Gap[] = ["price", "weight", "nutrients"];
