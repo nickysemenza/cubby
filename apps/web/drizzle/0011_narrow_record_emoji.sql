@@ -1,0 +1,22 @@
+ALTER TABLE "Cookbook" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "Device" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "Expense" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "FinancialAccount" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "FinancialTransaction" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "GardenEntry" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "Image" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "Ingredient" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "InventoryEntry" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "LedgerParty" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "LedgerTransfer" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "Location" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "Meal" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "Plant" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "Planting" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "Product" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "Purchase" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "Recipe" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "Task" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "Vendor" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "VendorAccount" DROP COLUMN "emoji";--> statement-breakpoint
+ALTER TABLE "Wish" DROP COLUMN "emoji";

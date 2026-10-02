@@ -78,6 +78,13 @@
       "when": 1790972586434,
       "tag": "0010_derived_ddl",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790972905017,
+      "tag": "0011_narrow_record_emoji",
+      "breakpoints": true
     }
   ]
 }

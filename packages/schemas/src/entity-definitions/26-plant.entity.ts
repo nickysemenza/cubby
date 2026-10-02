@@ -1,4 +1,3 @@
-import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { ingredientShortcode, plantShortcode } from "../identifier-fields.js";
 import { plantBreeding, plantVerdict } from "@cubby/schemas/garden-fields";
@@ -57,7 +56,6 @@ export default defineEntity({
   table: "Plant",
   identifiers: { brand: "PlantId", shortcode: "PLANT-" },
   presentation: {
-    recordEmojiField: "emoji",
     titleField: "displayName",
     domain: "house",
     description:
@@ -82,17 +80,6 @@ export default defineEntity({
   },
   model: {
     fields: [
-      {
-        ...recordEmojiField,
-        control: {
-          ...recordEmojiField.control,
-          suggest: {
-            ...recordEmojiField.control.suggest,
-            basis: ["name", "displayName", "notes"],
-          },
-        },
-      },
-
       {
         key: "name",
         kind: "text",
@@ -253,7 +240,6 @@ export default defineEntity({
       },
     ],
     storage: [
-      "emoji",
       {
         key: "id",
         specialized: "primary-key:PlantId",
@@ -275,7 +261,6 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
-      "emoji",
       "name",
       "gardenGuideKey",
       "verdict",
@@ -289,7 +274,6 @@ export default defineEntity({
       "notes",
     ],
     update: [
-      "emoji",
       "name",
       "gardenGuideKey",
       "verdict",
@@ -309,9 +293,8 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["emoji", "name", "gardenGuideKey"],
+        capture: ["name", "gardenGuideKey"],
         full: [
-          "emoji",
           "name",
           "gardenGuideKey",
           "verdict",
@@ -329,7 +312,6 @@ export default defineEntity({
       update: ["full"],
     },
     output: [
-      "emoji",
       "id",
       "name",
       "gardenGuideKey",

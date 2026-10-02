@@ -1,4 +1,3 @@
-import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { LOCATION_UNSPECIFIED_GROUP_KEY } from "../group-keys";
 import { selectControlOptions } from "./select-control-options.js";
@@ -21,7 +20,6 @@ export default defineEntity({
   table: "Location",
   identifiers: { brand: "LocationId", shortcode: "LOC-" },
   presentation: {
-    recordEmojiField: "emoji",
     titleField: "name",
     domain: "pantry",
     description: "The hierarchy of household storage places.",
@@ -182,17 +180,6 @@ export default defineEntity({
   },
   model: {
     fields: [
-      {
-        ...recordEmojiField,
-        control: {
-          ...recordEmojiField.control,
-          suggest: {
-            ...recordEmojiField.control.suggest,
-            basis: ["name", "notes", "parentId", "type"],
-          },
-        },
-      },
-
       {
         key: "name",
         kind: "text",
@@ -541,7 +528,6 @@ export default defineEntity({
       },
     ],
     storage: [
-      "emoji",
       {
         key: "id",
         specialized: "primary-key:LocationId",
@@ -568,7 +554,6 @@ export default defineEntity({
       "notes",
     ],
     create: [
-      "emoji",
       "name",
       "aliases",
       "tags",
@@ -579,7 +564,6 @@ export default defineEntity({
       "pendingImageIds",
     ],
     update: [
-      "emoji",
       "name",
       "aliases",
       "tags",
@@ -617,9 +601,8 @@ export default defineEntity({
       fields: {
         // Quick add: alternate names, collections, and photos are filled in
         // afterward from the location's own edit dialog (`full`, below).
-        capture: ["emoji", "name", "type", "parentId", "productId"],
+        capture: ["name", "type", "parentId", "productId"],
         full: [
-          "emoji",
           "name",
           "aliases",
           "type",
@@ -631,8 +614,8 @@ export default defineEntity({
           "removeImageIds",
           "imageOrder",
         ],
-        identity: ["emoji", "name", "aliases", "type", "productId"],
-        parent: ["emoji", "parentId"],
+        identity: ["name", "aliases", "type", "productId"],
+        parent: ["parentId"],
       },
       create: ["capture", "full"],
       update: ["full", "identity", "parent"],
@@ -643,7 +626,6 @@ export default defineEntity({
       editorFields: ["collections"],
     },
     output: [
-      "emoji",
       "id",
       "name",
       "aliases",

@@ -1,5 +1,4 @@
 import { mealChildren } from "../child-tables/meal.js";
-import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { imageShortcode, mealShortcode } from "../identifier-fields.js";
@@ -23,7 +22,6 @@ export default defineEntity({
   children: mealChildren,
   identifiers: { brand: "MealId", shortcode: "MEL-" },
   presentation: {
-    recordEmojiField: "emoji",
     titleField: "displayName",
     domain: "plan",
     description: "Dated meal plans and preparation records.",
@@ -109,17 +107,6 @@ export default defineEntity({
   },
   model: {
     fields: [
-      {
-        ...recordEmojiField,
-        control: {
-          ...recordEmojiField.control,
-          suggest: {
-            ...recordEmojiField.control.suggest,
-            basis: ["name", "displayName"],
-          },
-        },
-      },
-
       {
         key: "date",
         kind: "date",
@@ -448,7 +435,6 @@ export default defineEntity({
       },
     ],
     storage: [
-      "emoji",
       {
         key: "id",
         specialized: "primary-key:MealId",
@@ -468,7 +454,6 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
-      "emoji",
       "date",
       "name",
       "sortOrder",
@@ -478,7 +463,6 @@ export default defineEntity({
       "pendingImageIds",
     ],
     update: [
-      "emoji",
       "date",
       "name",
       "sortOrder",
@@ -495,16 +479,8 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: [
-          "emoji",
-          "date",
-          "name",
-          "mealType",
-          "mealKind",
-          "pendingImageIds",
-        ],
+        capture: ["date", "name", "mealType", "mealKind", "pendingImageIds"],
         full: [
-          "emoji",
           "date",
           "name",
           "mealType",
@@ -514,13 +490,12 @@ export default defineEntity({
           "removeImageIds",
           "imageOrder",
         ],
-        calendar: ["emoji", "date", "name", "mealType", "mealKind"],
+        calendar: ["date", "name", "mealType", "mealKind"],
       },
       create: ["capture", "full"],
       update: ["full", "calendar"],
     },
     output: [
-      "emoji",
       "id",
       "date",
       "name",

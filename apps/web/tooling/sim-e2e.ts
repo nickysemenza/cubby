@@ -231,12 +231,21 @@ async function assertNativeEdit(
   const checkPool = new Pool({ connectionString: databaseURL });
   try {
     const { SIM_PRODUCT_UPDATED_NAME } = await import("./scenarios/simulator");
-    const targetName = expectedName ?? SIM_PRODUCT_UPDATED_NAME;
+    const targetName =
+      expectedName ??
+      (emojiReview
+        ? "Synthetic Emoji Category Updated"
+        : SIM_PRODUCT_UPDATED_NAME);
     const readName = async () => {
       const result = await checkPool.query<{
         name: string;
         emoji: string | null;
-      }>('SELECT name, emoji FROM "Product" WHERE shortcode = $1', [productId]);
+      }>(
+        emojiReview
+          ? 'SELECT name, emoji FROM "ProductCategory" WHERE shortcode = $1'
+          : 'SELECT name, NULL::text AS emoji FROM "Product" WHERE shortcode = $1',
+        [productId],
+      );
       const row = result.rows[0];
       return expectedEmoji === undefined || row?.emoji === expectedEmoji
         ? row?.name
@@ -1198,12 +1207,15 @@ async function seedNativeScenario(userId: string): Promise<{
     const {
       seedSimulatorPhotoActor,
       seedSimulatorScenario,
+      seedSimulatorEmojiCategory,
       seedSimulatorLayoutRun,
       seedSimulatorProductClarity,
     } = await import("./scenarios/simulator");
     await seedSimulatorPhotoActor(seedPool, userId);
     if (productClarity)
       return await seedSimulatorProductClarity(seedPool, userId);
+    if (emojiReview)
+      return { productId: await seedSimulatorEmojiCategory(seedPool, userId) };
     return {
       productId:
         photo || statementCsv || inputJourney

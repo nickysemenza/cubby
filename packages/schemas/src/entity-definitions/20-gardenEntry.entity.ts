@@ -1,4 +1,3 @@
-import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
@@ -21,7 +20,6 @@ export default defineEntity({
   table: "GardenEntry",
   identifiers: { brand: "GardenEntryId", shortcode: "GDE-" },
   presentation: {
-    recordEmojiField: "emoji",
     titleField: "displayName",
     domain: "house",
     description: "Dated garden photos, observations, and harvests.",
@@ -48,16 +46,6 @@ export default defineEntity({
   },
   model: {
     fields: [
-      {
-        ...recordEmojiField,
-        control: {
-          ...recordEmojiField.control,
-          suggest: {
-            ...recordEmojiField.control.suggest,
-            basis: ["displayName", "notes", "kind"],
-          },
-        },
-      },
       {
         key: "locationId",
         kind: "identifier",
@@ -246,7 +234,6 @@ export default defineEntity({
       },
     ],
     storage: [
-      "emoji",
       {
         key: "id",
         specialized: "primary-key:GardenEntryId",
@@ -266,7 +253,6 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
-      "emoji",
       "locationId",
       "plantingIds",
       "kind",
@@ -276,7 +262,6 @@ export default defineEntity({
       "pendingImageIds",
     ],
     update: [
-      "emoji",
       "locationId",
       "plantingIds",
       "kind",
@@ -301,15 +286,8 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: [
-          "emoji",
-          "locationId",
-          "observedOn",
-          "notes",
-          "pendingImageIds",
-        ],
+        capture: ["locationId", "observedOn", "notes", "pendingImageIds"],
         full: [
-          "emoji",
           "locationId",
           "plantingIds",
           "kind",
@@ -325,7 +303,6 @@ export default defineEntity({
       update: ["full"],
     },
     output: [
-      "emoji",
       "id",
       "locationId",
       "plantingIds",

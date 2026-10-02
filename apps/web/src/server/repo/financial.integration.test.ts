@@ -229,8 +229,8 @@ describe("financial repositories — critical invariants", () => {
       ).items;
     const accounts = await accountRoster();
     expect(accounts).toEqual([
-      { id: busy.id, label: "Roster Busy Visa", count: 2, emoji: null },
-      { id: quiet.id, label: "Roster Quiet Visa", count: 2, emoji: null },
+      { id: busy.id, label: "Roster Busy Visa", count: 2 },
+      { id: quiet.id, label: "Roster Quiet Visa", count: 2 },
     ]);
     // The id is the shortcode the filter brands, not the uuid.
     expect(accounts[0]?.id).toMatch(/^FAC-/);
@@ -243,8 +243,8 @@ describe("financial repositories — critical invariants", () => {
       { source: "amazon-order-export", count: 1 },
     ]);
     expect(await accountRoster()).toEqual([
-      { id: busy.id, label: "Roster Busy Visa", count: 2, emoji: null },
-      { id: quiet.id, label: "Roster Quiet Visa", count: 1, emoji: null },
+      { id: busy.id, label: "Roster Busy Visa", count: 2 },
+      { id: quiet.id, label: "Roster Quiet Visa", count: 1 },
     ]);
   });
 

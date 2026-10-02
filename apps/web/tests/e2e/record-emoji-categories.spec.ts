@@ -5,7 +5,7 @@ import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
 import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-// Real HTTP, editor and reference rendering verify persistence and the transition alias together.
+// Real HTTP, editor and reference rendering verify reviewed identity persistence.
 test("edits compound emoji, clears it, and browses inherited category membership", async ({
   page,
   baseURL,
@@ -74,7 +74,7 @@ test("edits compound emoji, clears it, and browses inherited category membership
                 detail: null,
                 confidence: "high",
                 probability: 0.99,
-                reasoning: "Synthetic food supplier",
+                reasoning: "Synthetic food category",
                 alternatives: [],
               },
             },
@@ -87,15 +87,20 @@ test("edits compound emoji, clears it, and browses inherited category membership
   await expect(
     page.getByRole("link", { name: /Synthetic emoji groceries/ }).first(),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Edit Vendor", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Edit Vendor" });
+  await gotoAuthenticatedPage(page, `/product-categories/${root}`);
+  await page
+    .getByRole("button", { name: "Edit Product Category", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Edit Product Category" });
   await dialog
     .getByRole("button", { name: "Suggest emoji", exact: true })
     .click();
   await expect(
     dialog.getByRole("textbox", { name: "Emoji", exact: true }),
   ).toHaveValue("");
-  const beforeAcceptance = await page.request.get(`/api/v1/vendors/${vendor}`);
+  const beforeAcceptance = await page.request.get(
+    `/api/v1/product-categories/${root}`,
+  );
   expect(
     z.object({ emoji: z.null() }).parse(await beforeAcceptance.json()).emoji,
   ).toBeNull();
@@ -112,10 +117,14 @@ test("edits compound emoji, clears it, and browses inherited category membership
     z
       .object({ emoji: z.string().nullable() })
       .parse(
-        await (await page.request.get(`/api/v1/vendors/${vendor}`)).json(),
+        await (
+          await page.request.get(`/api/v1/product-categories/${root}`)
+        ).json(),
       );
   await expect.poll(async () => (await read()).emoji).toBe("👩🏽‍🍳");
-  await page.getByRole("button", { name: "Edit Vendor", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Edit Product Category", exact: true })
+    .click();
   await dialog.getByRole("textbox", { name: "Emoji", exact: true }).fill("");
   await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect(dialog).toBeHidden();

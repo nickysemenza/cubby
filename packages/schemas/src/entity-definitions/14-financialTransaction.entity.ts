@@ -1,5 +1,4 @@
 import { financialTransactionChildren } from "../child-tables/financialTransaction.js";
-import { recordEmojiField } from "../emoji";
 import { spendingCategorySummarySchema } from "../spending-classification";
 import { financialTransactionCoverage } from "../purchase-evidence-policy";
 import { optionalFieldResolutionsSchema } from "../field-resolution";
@@ -53,7 +52,6 @@ export default defineEntity({
   // `displayName` falls back through `rawDescription` and `kind` for a
   // human-identifying label that is never blank.
   presentation: {
-    recordEmojiField: "emoji",
     list: {
       savedViews: [
         {
@@ -124,17 +122,6 @@ export default defineEntity({
   },
   model: {
     fields: [
-      {
-        ...recordEmojiField,
-        control: {
-          ...recordEmojiField.control,
-          suggest: {
-            ...recordEmojiField.control.suggest,
-            basis: ["displayName", "notes", "kind"],
-          },
-        },
-      },
-
       { key: "bookingDecisionFingerprint", kind: "text", nullable: true },
       { key: "bookingExpenseFingerprint", kind: "text", nullable: true },
       { key: "bookingCorrectionReceipt", kind: "json", nullable: true },
@@ -819,7 +806,6 @@ export default defineEntity({
       },
     ],
     storage: [
-      "emoji",
       "bookingDecisionFingerprint",
       "bookingExpenseFingerprint",
       "bookingCorrectionReceipt",
@@ -846,7 +832,6 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
-      "emoji",
       "evidenceExpectation",
       "accountId",
       "purchaseId",
@@ -863,7 +848,6 @@ export default defineEntity({
       "allocations",
     ],
     update: [
-      "emoji",
       "evidenceExpectation",
       "accountId",
       "purchaseId",
@@ -909,7 +893,6 @@ export default defineEntity({
     intents: {
       fields: {
         capture: [
-          "emoji",
           "accountId",
           "purchaseId",
           "kind",
@@ -924,7 +907,6 @@ export default defineEntity({
           "notes",
         ],
         full: [
-          "emoji",
           "evidenceExpectation",
           "accountId",
           "purchaseId",
@@ -940,7 +922,6 @@ export default defineEntity({
           "notes",
         ],
         settlement: [
-          "emoji",
           "accountId",
           "purchaseId",
           "kind",
@@ -954,7 +935,6 @@ export default defineEntity({
       update: ["full", "settlement"],
     },
     output: [
-      "emoji",
       "bookingCoverage",
       "documentCoverage",
       "itemizationCoverage",

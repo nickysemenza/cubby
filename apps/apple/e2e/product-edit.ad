@@ -11,15 +11,9 @@ wait "role=Button id=detail.product.edit" 30000
 click "role=Button id=detail.product.edit"
 wait "label=Name editable=true" 30000
 fill "label=Name editable=true" "Synthetic Atlas Lantern Updated"
-fill "label=Emoji editable=true" "👩🏽‍🍳"
 click "role=Button label=Save"
 wait "role=Button id=detail.product.edit" 30000
 wait text "Synthetic Atlas Lantern Updated" 30000
-click "role=Button id=detail.product.edit"
-wait "label=Emoji editable=true value=👩🏽‍🍳" 30000
-fill "label=Emoji editable=true" ""
-click "role=Button label=Save"
-wait "role=Button id=detail.product.edit" 30000
 
 click "label=Library id=BackButton"
 wait text "Browse catalog" 30000

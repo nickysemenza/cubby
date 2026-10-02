@@ -1,4 +1,3 @@
-import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { productShortcode, wishShortcode } from "../identifier-fields.js";
 import {
@@ -13,7 +12,6 @@ export default defineEntity({
   table: "Wish",
   identifiers: { brand: "WishId", shortcode: "WSH-" },
   presentation: {
-    recordEmojiField: "emoji",
     titleField: "name",
     domain: "plan",
     description: "Wanted items and candidate products.",
@@ -67,16 +65,6 @@ export default defineEntity({
   },
   model: {
     fields: [
-      {
-        ...recordEmojiField,
-        control: {
-          ...recordEmojiField.control,
-          suggest: {
-            ...recordEmojiField.control.suggest,
-            basis: ["name", "notes"],
-          },
-        },
-      },
       {
         key: "name",
         kind: "text",
@@ -260,7 +248,6 @@ export default defineEntity({
       },
     ],
     storage: [
-      "emoji",
       {
         key: "id",
         specialized: "primary-key:WishId",
@@ -273,8 +260,8 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: ["emoji", "name", "notes", "candidateProductIds"],
-    update: ["emoji", "name", "notes", "candidateProductIds", "acquired"],
+    create: ["name", "notes", "candidateProductIds"],
+    update: ["name", "notes", "candidateProductIds", "acquired"],
     bulk: [],
     audit: ["name", "notes", "acquiredAt", "candidateProductIds"],
     sort: {
@@ -284,16 +271,15 @@ export default defineEntity({
     intents: {
       fields: {
         // A wish has nothing worth deferring: capture is the full form.
-        capture: ["emoji", "name", "notes", "candidateProductIds", "acquired"],
-        full: ["emoji", "name", "notes", "candidateProductIds", "acquired"],
-        identity: ["emoji", "name", "notes", "candidateProductIds"],
-        acquisition: ["emoji", "acquired"],
+        capture: ["name", "notes", "candidateProductIds", "acquired"],
+        full: ["name", "notes", "candidateProductIds", "acquired"],
+        identity: ["name", "notes", "candidateProductIds"],
+        acquisition: ["acquired"],
       },
       create: ["capture", "full"],
       update: ["full", "identity", "acquisition"],
     },
     output: [
-      "emoji",
       "id",
       "name",
       "notes",

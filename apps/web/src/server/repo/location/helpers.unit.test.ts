@@ -61,7 +61,6 @@ const DELETED_AT = new Date("2024-01-03T00:00:00.000Z");
 const baseLocation = {
   id: LOCATION_ID,
   shortcode: "LOC-TEST",
-  emoji: null,
   name: "Pantry",
   type: "room",
   parentId: null,
@@ -78,7 +77,6 @@ const parentLocation = {
   ...baseLocation,
   id: PARENT_ID,
   shortcode: "LOC-2345",
-  emoji: null,
   name: "Kitchen",
   deletedAt: null,
 };
@@ -87,7 +85,6 @@ const childLocation = {
   ...baseLocation,
   id: CHILD_ID,
   shortcode: "LOC-3456",
-  emoji: null,
   name: "Shelf",
   type: "shelf",
   parentId: LOCATION_ID,
@@ -98,13 +95,11 @@ const deletedChildLocation = {
   ...childLocation,
   id: DELETED_CHILD_ID,
   shortcode: "LOC-4567",
-  emoji: null,
   deletedAt: DELETED_AT,
 };
 
 const image = {
   shortcode: IMAGE_SHORTCODE,
-  emoji: null,
   key: "location.jpg",
   filename: "location.jpg",
   size: 100,
@@ -118,14 +113,12 @@ const image = {
 const deletedImage = {
   ...image,
   shortcode: DELETED_IMAGE_SHORTCODE,
-  emoji: null,
   deletedAt: DELETED_AT,
 };
 
 const product = {
   id: PRODUCT_ID,
   shortcode: "PRD-TEST",
-  emoji: null,
   name: "Flour",
   manufacturer: "Generic",
   tags: [],
@@ -152,7 +145,6 @@ const deletedProduct = {
   ...product,
   id: DELETED_PRODUCT_ID,
   shortcode: "PRD-9WK4",
-  emoji: null,
   deletedAt: DELETED_AT,
 };
 
@@ -191,7 +183,6 @@ describe("location mappers", () => {
         {
           id: INVENTORY_ID,
           shortcode: "INV-2345",
-          emoji: null,
           productId: PRODUCT_ID,
           locationId: LOCATION_ID,
           amountValue: 2,
@@ -209,7 +200,6 @@ describe("location mappers", () => {
         {
           id: DELETED_PRODUCT_INVENTORY_ID,
           shortcode: "INV-3456",
-          emoji: null,
           productId: DELETED_PRODUCT_ID,
           locationId: LOCATION_ID,
           amountValue: 1,

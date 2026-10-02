@@ -8,7 +8,7 @@ import {
 /** Only AI inference is synthetic; native authentication, reads and saves reach Workerd. */
 export async function createNativeEmojiReviewPeer(
   upstream: URL,
-  productId: string,
+  categoryId: string,
 ) {
   const server = createServer(async (request, response) => {
     try {
@@ -21,8 +21,8 @@ export async function createNativeEmojiReviewPeer(
       ) {
         const input = fieldSuggestionsInput.parse(JSON.parse(body.toString()));
         if (
-          input.entity !== "product" ||
-          input.entityId !== productId ||
+          input.entity !== "productCategory" ||
+          input.entityId !== categoryId ||
           !input.targets.includes("emoji")
         )
           throw new Error("Emoji review fixture received an unexpected target");

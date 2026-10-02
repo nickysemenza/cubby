@@ -1,4 +1,3 @@
-import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -25,7 +24,6 @@ export default defineEntity({
   table: "Task",
   identifiers: { brand: "TaskId", shortcode: "TSK-" },
   presentation: {
-    recordEmojiField: "emoji",
     titleField: "name",
     domain: "house",
     description: "Concrete work, schedules, and completion state.",
@@ -126,13 +124,6 @@ export default defineEntity({
   },
   model: {
     fields: [
-      {
-        ...recordEmojiField,
-        control: {
-          ...recordEmojiField.control,
-          suggest: { ...recordEmojiField.control.suggest, basis: ["name"] },
-        },
-      },
       {
         key: "fieldResolutions",
         kind: "json",
@@ -568,7 +559,6 @@ export default defineEntity({
       },
     ],
     storage: [
-      "emoji",
       {
         key: "id",
         specialized: "primary-key:TaskId",
@@ -602,7 +592,6 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
-      "emoji",
       "name",
       "status",
       "projectId",
@@ -617,7 +606,6 @@ export default defineEntity({
       "pendingImageIds",
     ],
     update: [
-      "emoji",
       "name",
       "status",
       "projectId",
@@ -671,7 +659,6 @@ export default defineEntity({
     intents: {
       fields: {
         capture: [
-          "emoji",
           "name",
           "status",
           "projectId",
@@ -683,7 +670,6 @@ export default defineEntity({
           "pendingImageIds",
         ],
         full: [
-          "emoji",
           "name",
           "status",
           "projectId",
@@ -698,10 +684,10 @@ export default defineEntity({
           "removeImageIds",
           "imageOrder",
         ],
-        schedule: ["emoji", "name", "status", "dueDate", "dueEndDate"],
-        status: ["emoji", "status"],
-        project: ["emoji", "projectId"],
-        subject: ["emoji", "subjectProductId"],
+        schedule: ["name", "status", "dueDate", "dueEndDate"],
+        status: ["status"],
+        project: ["projectId"],
+        subject: ["subjectProductId"],
       },
       create: ["capture", "full"],
       update: ["full", "schedule", "status", "project", "subject"],
@@ -713,7 +699,6 @@ export default defineEntity({
       required: { schedule: ["dueDate"] },
     },
     output: [
-      "emoji",
       "fieldResolutions",
       "id",
       "name",

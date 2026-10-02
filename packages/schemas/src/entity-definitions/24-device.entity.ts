@@ -1,4 +1,3 @@
-import { recordEmojiField } from "../emoji";
 import { z } from "zod";
 
 import { devicePlatform } from "../device-fields.js";
@@ -20,7 +19,6 @@ export default defineEntity({
   table: "Device",
   identifiers: { brand: "DeviceId", shortcode: "DEV-" },
   presentation: {
-    recordEmojiField: "emoji",
     list: {
       read: {
         relations: [
@@ -46,14 +44,6 @@ export default defineEntity({
   },
   model: {
     fields: [
-      {
-        ...recordEmojiField,
-        control: {
-          ...recordEmojiField.control,
-          suggest: { ...recordEmojiField.control.suggest, basis: ["name"] },
-        },
-      },
-
       {
         key: "installationId",
         kind: "text",
@@ -235,7 +225,6 @@ export default defineEntity({
       },
     ],
     storage: [
-      "emoji",
       {
         key: "id",
         specialized: "primary-key:DeviceId",
@@ -256,7 +245,6 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
-      "emoji",
       "installationId",
       "name",
       "platform",
@@ -268,7 +256,6 @@ export default defineEntity({
       "productId",
     ],
     update: [
-      "emoji",
       "name",
       "appVersion",
       "osVersion",
@@ -294,9 +281,8 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["emoji", "installationId", "name", "platform"],
+        capture: ["installationId", "name", "platform"],
         full: [
-          "emoji",
           "installationId",
           "name",
           "platform",
@@ -308,13 +294,12 @@ export default defineEntity({
           "ledgerPartyId",
           "productId",
         ],
-        identity: ["emoji", "installationId", "name"],
+        identity: ["installationId", "name"],
       },
       create: ["capture", "full"],
       update: ["full", "identity"],
     },
     output: [
-      "emoji",
       "id",
       "installationId",
       "name",

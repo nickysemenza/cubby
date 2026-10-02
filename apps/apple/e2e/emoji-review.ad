@@ -4,11 +4,11 @@ open com.nickysemenza.cubby
 wait "role=Button label=Find" 240000
 click "role=Button label=Find"
 wait "role=SearchField label=\"Search Cubby\" editable=true" 30000
-fill "role=SearchField label=\"Search Cubby\" editable=true" "Synthetic Atlas Lantern" --delay-ms 80
+fill "role=SearchField label=\"Search Cubby\" editable=true" "Synthetic Emoji Category" --delay-ms 80
 wait "id=search.result.${PRODUCT_ID}" 30000
 click "id=search.result.${PRODUCT_ID}"
-wait "role=Button id=detail.product.edit" 30000
-click "role=Button id=detail.product.edit"
+wait "role=Button id=detail.productCategory.edit" 30000
+click "role=Button id=detail.productCategory.edit"
 wait "label=Name editable=true" 30000
 scroll bottom
 wait "id=editor.suggestions.request" 30000
@@ -22,17 +22,17 @@ click "id=editor.suggestions.emoji.apply"
 scroll top
 wait "label=Emoji editable=true value=🥕" 30000
 click "role=Button label=Save"
-wait "role=Button id=detail.product.edit" 30000
-click "role=Button id=detail.product.edit"
+wait "role=Button id=detail.productCategory.edit" 30000
+click "role=Button id=detail.productCategory.edit"
 wait "label=Emoji editable=true value=🥕" 30000
-fill "label=Name editable=true" "Synthetic Atlas Lantern Updated"
+fill "label=Name editable=true" "Synthetic Emoji Category Updated"
 fill "label=Emoji editable=true" "👩🏽‍🍳"
 click "role=Button label=Save"
-wait "role=Button id=detail.product.edit" 30000
-wait text "Synthetic Atlas Lantern Updated" 30000
-click "role=Button id=detail.product.edit"
+wait "role=Button id=detail.productCategory.edit" 30000
+wait text "Synthetic Emoji Category Updated" 30000
+click "role=Button id=detail.productCategory.edit"
 wait "label=Emoji editable=true value=👩🏽‍🍳" 30000
 fill "label=Emoji editable=true" ""
 click "role=Button label=Save"
-wait "role=Button id=detail.product.edit" 30000
+wait "role=Button id=detail.productCategory.edit" 30000
 

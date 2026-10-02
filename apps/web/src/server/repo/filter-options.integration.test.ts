@@ -37,7 +37,7 @@ describe("entity reference filter options", () => {
       include: [],
     });
     expect(searched.items).toEqual([
-      { id: crop.id, label: "Selected winter squash", emoji: null },
+      { id: crop.id, label: "Selected winter squash" },
     ]);
 
     const hydrated = await getFilterOptions(ctx.db, {
@@ -49,7 +49,7 @@ describe("entity reference filter options", () => {
       include: [],
     });
     expect(hydrated.items).toEqual([
-      { id: crop.id, label: "Selected winter squash", emoji: null },
+      { id: crop.id, label: "Selected winter squash" },
     ]);
   });
 
@@ -120,7 +120,6 @@ describe("entity reference filter options", () => {
         id: member.output.id,
         label: "Household member",
         kind: "member",
-        emoji: null,
       },
     ]);
 

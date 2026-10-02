@@ -1,4 +1,3 @@
-import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { ledgerPartyShortcode } from "../identifier-fields.js";
@@ -11,7 +10,6 @@ export default defineEntity({
   table: "LedgerParty",
   identifiers: { brand: "LedgerPartyId", shortcode: "LPY-" },
   presentation: {
-    recordEmojiField: "emoji",
     list: { read: { media: ["displayImages"], quality: ["dataQuality"] } },
     titleField: "name",
     domain: "finance",
@@ -35,17 +33,6 @@ export default defineEntity({
   },
   model: {
     fields: [
-      {
-        ...recordEmojiField,
-        control: {
-          ...recordEmojiField.control,
-          suggest: {
-            ...recordEmojiField.control.suggest,
-            basis: ["name", "notes", "kind"],
-          },
-        },
-      },
-
       {
         key: "name",
         kind: "text",
@@ -124,7 +111,6 @@ export default defineEntity({
       },
     ],
     storage: [
-      "emoji",
       {
         key: "id",
         specialized: "primary-key:LedgerPartyId",
@@ -137,8 +123,8 @@ export default defineEntity({
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: ["emoji", "name", "kind", "notes"],
-    update: ["emoji", "name", "kind", "notes"],
+    create: ["name", "kind", "notes"],
+    update: ["name", "kind", "notes"],
     bulk: [],
     audit: ["name", "kind", "notes"],
     sort: {
@@ -147,12 +133,12 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        full: ["emoji", "name", "kind", "notes"],
+        full: ["name", "kind", "notes"],
       },
       create: ["full"],
       update: ["full"],
     },
-    output: ["emoji", "id", "name", "kind", "notes", "createdAt", "updatedAt"],
+    output: ["id", "name", "kind", "notes", "createdAt", "updatedAt"],
   },
   fields: {
     create: {

@@ -52,7 +52,6 @@ const baseProduct = productRowFixture({
 const baseIngredient = {
   id: INGREDIENT_ID,
   shortcode: "ING-TEST",
-  emoji: null,
   name: "Wheat flour",
   aliases: ["flour"],
   naKinds: [],
@@ -66,7 +65,6 @@ const baseIngredient = {
 const baseRecipe = {
   id: RECIPE_ID,
   shortcode: "RCP-TEST",
-  emoji: null,
   name: "Pancakes",
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,

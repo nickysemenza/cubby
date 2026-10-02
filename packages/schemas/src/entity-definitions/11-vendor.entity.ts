@@ -1,4 +1,3 @@
-import { recordEmojiField } from "../emoji";
 import { vendorSpendingProfile } from "../spending-classification.js";
 import { productCategoryShortcode } from "../identifier-fields";
 import { spendingCategoryShortcode } from "../identifier-fields.js";
@@ -21,7 +20,6 @@ export default defineEntity({
   table: "Vendor",
   identifiers: { brand: "VendorId", shortcode: "VEN-" },
   presentation: {
-    recordEmojiField: "emoji",
     titleField: "name",
     domain: "finance",
     description: "Sources for purchases and expense evidence.",
@@ -146,16 +144,6 @@ export default defineEntity({
           read: z.string().nullable().optional(),
           create: null,
           update: null,
-        },
-      },
-      {
-        ...recordEmojiField,
-        control: {
-          ...recordEmojiField.control,
-          suggest: {
-            ...recordEmojiField.control.suggest,
-            basis: ["name", "notes"],
-          },
         },
       },
 
@@ -523,7 +511,6 @@ export default defineEntity({
       },
     ],
     storage: [
-      "emoji",
       {
         key: "spendingProfile",
         specialized: "enum:spendingProfile",
@@ -563,7 +550,6 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
-      "emoji",
       "spendingProfile",
       "defaultSpendingCategoryId",
       "evidenceExpectation",
@@ -578,7 +564,6 @@ export default defineEntity({
       "notes",
     ],
     update: [
-      "emoji",
       "spendingProfile",
       "defaultSpendingCategoryId",
       "evidenceExpectation",
@@ -623,9 +608,8 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["emoji", "name", "website", "notes"],
+        capture: ["name", "website", "notes"],
         full: [
-          "emoji",
           "spendingProfile",
           "defaultSpendingCategoryId",
           "evidenceExpectation",
@@ -638,7 +622,7 @@ export default defineEntity({
           "returnWindowDays",
           "notes",
         ],
-        identity: ["emoji", "name"],
+        identity: ["name"],
       },
       create: ["capture", "full"],
       update: ["full", "identity"],
@@ -649,7 +633,6 @@ export default defineEntity({
       "unknownCategoryLineCount",
       "defaultSpendingCategoryName",
       "defaultSpendingCategoryEmoji",
-      "emoji",
       "spendingProfile",
       "defaultSpendingCategoryId",
       "evidenceExpectation",

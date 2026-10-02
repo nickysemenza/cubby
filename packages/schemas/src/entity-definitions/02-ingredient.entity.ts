@@ -1,4 +1,3 @@
-import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { ingredientShortcode } from "../identifier-fields.js";
 import { ingredientApplicabilityKey } from "../codec.js";
@@ -14,7 +13,6 @@ export default defineEntity({
   table: "Ingredient",
   identifiers: { brand: "IngredientId", shortcode: "ING-" },
   presentation: {
-    recordEmojiField: "emoji",
     titleField: "name",
     domain: "cook",
     description: "Canonical cooking ingredients and aliases.",
@@ -112,14 +110,6 @@ export default defineEntity({
   },
   model: {
     fields: [
-      {
-        ...recordEmojiField,
-        control: {
-          ...recordEmojiField.control,
-          suggest: { ...recordEmojiField.control.suggest, basis: ["name"] },
-        },
-      },
-
       {
         key: "name",
         kind: "text",
@@ -253,7 +243,6 @@ export default defineEntity({
       },
     ],
     storage: [
-      "emoji",
       {
         key: "id",
         specialized: "primary-key:IngredientId",
@@ -276,8 +265,8 @@ export default defineEntity({
       "deletedAt",
       { key: "recipeId", reference: "recipe" },
     ],
-    create: ["emoji", "name", "aliases", "naKinds", "usuallyOnHand"],
-    update: ["emoji", "naKinds", "usuallyOnHand", "name", "aliases"],
+    create: ["name", "aliases", "naKinds", "usuallyOnHand"],
+    update: ["naKinds", "usuallyOnHand", "name", "aliases"],
     bulk: ["usuallyOnHand"],
     audit: ["name", "aliases", "naKinds", "usuallyOnHand"],
     sort: {
@@ -286,15 +275,14 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["emoji", "name", "aliases", "usuallyOnHand"],
-        full: ["emoji", "name", "aliases", "naKinds", "usuallyOnHand"],
-        identity: ["emoji", "name", "aliases"],
+        capture: ["name", "aliases", "usuallyOnHand"],
+        full: ["name", "aliases", "naKinds", "usuallyOnHand"],
+        identity: ["name", "aliases"],
       },
       create: ["capture", "full"],
       update: ["full", "identity"],
     },
     output: [
-      "emoji",
       "id",
       "name",
       "aliases",

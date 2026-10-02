@@ -296,7 +296,6 @@ const vendorColumns = {
   website: vendor.website,
   orderUrlTemplate: vendor.orderUrlTemplate,
   spendingProfile: vendor.spendingProfile,
-  emoji: vendor.emoji,
   defaultSpendingCategoryName: sql<
     string | null
   >`(SELECT sc.name FROM "SpendingCategory" sc WHERE sc.id = ${vendor.defaultSpendingCategoryId} AND sc."deletedAt" IS NULL)`,
@@ -358,7 +357,6 @@ type VendorRow = {
   defaultSpendingCategoryId: SpendingCategoryShortcode | null;
   defaultSpendingCategoryName: string | null;
   defaultSpendingCategoryEmoji: string | null;
-  emoji: string | null;
   evidenceExpectation: VendorOut["evidenceExpectation"];
   orderEvidence: string | null;
   orderEmailSenders: string[];
@@ -442,7 +440,6 @@ const dbVendorToAPI = (
 ): VendorOut => ({
   id: parseShortcodeFor("vendor", row.shortcode),
   name: row.name,
-  emoji: row.emoji,
   defaultSpendingCategoryName: row.defaultSpendingCategoryName,
   defaultSpendingCategoryEmoji: row.defaultSpendingCategoryEmoji,
   website: row.website,
