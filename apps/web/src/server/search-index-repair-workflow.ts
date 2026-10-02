@@ -13,10 +13,10 @@ import { setCfEnv } from "~/server/cf-env";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { withRequestDbClient, type Database } from "~/server/db";
 import type { SearchDocumentCursor } from "~/server/repo/search-document";
-
-interface SearchIndexRepairWorkflowParams {
-  readonly requestedAt: string;
-}
+import type {
+  SearchIndexRepairWorkflow as SearchIndexRepairEntrypoint,
+  SearchIndexRepairWorkflowParams,
+} from "~/server/worker-bindings";
 
 const RETRIES = {
   retries: { limit: 3, delay: "1 second", backoff: "exponential" as const },
@@ -42,10 +42,10 @@ const withFreshDb = async <T>(env: Env, run: (db: Database) => Promise<T>) =>
   });
 
 /** Cloudflare's durable entrypoint. All database state is resolved per step. */
-export class SearchIndexRepairWorkflow extends WorkflowEntrypoint<
-  Env,
-  SearchIndexRepairWorkflowParams
-> {
+export class SearchIndexRepairWorkflow
+  extends WorkflowEntrypoint<Env, SearchIndexRepairWorkflowParams>
+  implements SearchIndexRepairEntrypoint
+{
   async run(
     event: Readonly<WorkflowEvent<SearchIndexRepairWorkflowParams>>,
     step: WorkflowStep,

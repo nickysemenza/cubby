@@ -1,11 +1,37 @@
-// The Durable Object and Workflow classes the Worker exports. `cf-server.ts`
-// re-exports this module, and `worker-configuration.d.ts` types its bindings
-// from here rather than from `cf-server.ts`: that file is a global script, and
-// importing the Worker entry (which reaches the route tree) from it made most
-// edits re-check the whole program. See scripts/worker-type-imports.ts.
-export { AiResponseCacheDurableObject } from "./ai/response-cache-durable-object";
-export { CalendarFeedDurableObject } from "./calendar/durable-object";
-export { DatabaseFreshnessDurableObject } from "./database-freshness/durable-object";
-export { ImageProcessingDurableObject } from "./image-processing/durable-object";
-export { PurchaseImportDurableObject } from "./purchase-import/durable-object";
-export { SearchIndexRepairWorkflow } from "./search-index-repair-workflow";
+// Types only. worker-configuration.d.ts types the Worker's Durable Object and
+// Workflow bindings from here (scripts/worker-type-imports.ts rewrites
+// Wrangler's `import("./src/cf-server")`). That file is a global script, and
+// TypeScript re-checks the whole program whenever a global file falls in an
+// edit's importer closure, so nothing here may reach the server graph: the
+// heavy Durable Objects bind through the RPC interfaces they implement.
+// docs/local-check-performance.md#typechecking
+import type { Rpc } from "@cloudflare/workers-types";
+import type { SearchIndexRepairCounters } from "@cubby/schemas/maintenance";
+import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
+
+import type { CalendarFeedDurableObjectRpc } from "./calendar/contracts";
+import type { DatabaseFreshnessRpc } from "./database-freshness/state";
+import type { ImageProcessingCompanionRpc } from "./image-processing/contracts";
+
+// Their implementations reach only a handful of files.
+export type { AiResponseCacheDurableObject } from "./ai/response-cache-durable-object";
+export type { PurchaseImportDurableObject } from "./purchase-import/durable-object";
+
+export type CalendarFeedDurableObject = CalendarFeedDurableObjectRpc &
+  Rpc.DurableObjectBranded;
+export type DatabaseFreshnessDurableObject = DatabaseFreshnessRpc &
+  Rpc.DurableObjectBranded;
+export type ImageProcessingDurableObject = ImageProcessingCompanionRpc &
+  Rpc.DurableObjectBranded;
+
+export interface SearchIndexRepairWorkflowParams {
+  readonly requestedAt: string;
+}
+
+/** The entrypoint shape the `SEARCH_INDEX_REPAIR` binding's params come from. */
+export interface SearchIndexRepairWorkflow {
+  run(
+    event: Readonly<WorkflowEvent<SearchIndexRepairWorkflowParams>>,
+    step: WorkflowStep,
+  ): Promise<SearchIndexRepairCounters>;
+}

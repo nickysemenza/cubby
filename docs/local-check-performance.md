@@ -54,10 +54,12 @@ make the invalidated set large:
   (`import("./src/cf-server")`), which reaches the route tree through the
   `@tanstack/react-start` server entry. A closure that reaches it re-checks
   all 3,457 files (the 37 s row). `types:generate` now rewrites those imports
-  to `src/server/worker-bindings.ts`, which exports only those classes
+  to the type-only `src/server/worker-bindings.ts`
   (`scripts/worker-type-imports.ts`; Wrangler's `--check` compares only its
-  hash header). Moving the `declare global` blocks out of three `.ts` files
-  alone measured no change, because the same closures reach this file.
+  hash header), where the heavy Durable Objects bind through the RPC
+  interfaces their classes implement, so the file reaches 17 small modules.
+  `tooling/integration-teardown.ts` was the other global in most server
+  closures; its `declare global` now lives in `tooling/globals.d.ts`.
 
 Server modules no longer type-import client modules. The generated kernel
 bindings carried the port-existence check (`EntityPortExportChecks`, now in
@@ -74,8 +76,17 @@ With the env types pointed at `worker-bindings.ts`, a global file sits in the
 closure of 760 of 2,940 source files, mostly server modules the Durable
 Objects reach. The eight client files then took 26.4–28.6 s CPU, down from
 52.6–56.0 s on the original layout: they now re-check the route-tree closure
-instead of everything. The two server files still re-check everything
+instead of everything. The two server files still re-checked everything
 (56–71 s).
+
+With the bindings typed through RPC interfaces and the teardown global moved,
+only the env file's 17 dependencies (and two script-global files
+themselves) have a global file in their importer closure. A server file's first edit after a fresh build re-checks about 1,925
+files instead of 3,461 (counted from `--generateTrace`), yet costs only ~5%
+less, 49–51 s CPU versus 51–54 s: recomputing declaration signatures across
+the importer closure dominates that edit, not checking. Adding an export once
+signatures are real (one earlier edit to the file) went from 29–33 s to 25 s
+CPU for server files; client files were unchanged at about 16 s.
 
 Server modules no longer type-import client modules. The generated kernel
 bindings carried the port-existence check (`EntityPortExportChecks`, now in
