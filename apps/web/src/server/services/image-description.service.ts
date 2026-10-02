@@ -239,13 +239,20 @@ export function normalizeImageDescriptionResult(
       (claim) =>
         claim.evidenceKind !== "visual" && claim.text.includes(evidence),
     );
-  const namedFootnote =
-    quoted && /\bnot\s+(?:a\s+)?significant\s+source\s+of\b/i.test(evidence);
-  const inferredZeroNutrients = namedFootnote
+  const footnoteClauses = quoted
+    ? [
+        ...evidence.matchAll(
+          /\bnot\s+(?:a\s+)?significant\s+source\s+of\s+([^.!?;\r\n]+)/gi,
+        ),
+      ].map((match) => match[1] ?? "")
+    : [];
+  const inferredZeroNutrients = footnoteClauses.length
     ? (parsed.nutritionFacts?.inferredZeroNutrients ?? []).filter((key) => {
         const name = TIER1_NUTRIENTS[key].displayName.toLowerCase();
         const named = name.endsWith("s") ? `${name.slice(0, -1)}s?` : name;
-        return new RegExp(`\\b${named}\\b`, "i").test(evidence);
+        return footnoteClauses.some((clause) =>
+          new RegExp(`\\b${named}\\b`, "i").test(clause),
+        );
       })
     : [];
   return imageDescriptionResult.parse({

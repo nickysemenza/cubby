@@ -5,6 +5,9 @@ import type {
 } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { displayGtin } from "@cubby/schemas/external-id";
+import { productShortcode } from "@cubby/schemas/identifiers";
+import { duplicateProductIdentitySchema } from "@cubby/schemas/problems";
+import { productListItemOut } from "@cubby/schemas/product";
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
 import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
@@ -29,6 +32,7 @@ import { StorefrontIcon } from "@phosphor-icons/react/dist/csr/Storefront";
 import { TagIcon } from "@phosphor-icons/react/dist/csr/Tag";
 import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
 import type { Icon, IconProps } from "@phosphor-icons/react/lib";
+import { z } from "zod";
 
 import { entityListFor } from "~/entity/entity-list";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -51,10 +55,11 @@ interface IngredientMergeRow extends MergeDisplayRow {
   name: string;
 }
 
-interface ProductMergeRow extends IngredientMergeRow {
-  gtins: string[];
-  sources: string[];
-}
+const productMergeRowSchema = z.union([
+  duplicateProductIdentitySchema.shape.products.element,
+  productListItemOut.pick({ id: true, name: true, primaryGtin: true }),
+]);
+type ProductMergeRow = z.output<typeof productMergeRowSchema>;
 
 interface VendorMergeRow extends MergeDisplayRow {
   name: string;
@@ -72,20 +77,13 @@ interface PurchaseMergeRow extends MergeDisplayRow {
   vendorName: string | null;
 }
 
-const isString = (value: unknown): value is string => typeof value === "string";
-
 const isIngredientMergeRow = (
   row: MergeDisplayRow,
 ): row is IngredientMergeRow => "name" in row && typeof row.name === "string";
 
 const isProductMergeRow = (row: MergeDisplayRow): row is ProductMergeRow =>
-  isIngredientMergeRow(row) &&
-  "gtins" in row &&
-  Array.isArray(row.gtins) &&
-  row.gtins.every(isString) &&
-  "sources" in row &&
-  Array.isArray(row.sources) &&
-  row.sources.every(isString);
+  productShortcode.safeParse(row.id).success &&
+  productMergeRowSchema.safeParse(row).success;
 
 const isVendorMergeRow = (row: MergeDisplayRow): row is VendorMergeRow =>
   "name" in row &&
@@ -289,18 +287,24 @@ const entityDefinitions = withEntityNames({
       keeperMode: "ranked",
       isRow: isProductMergeRow,
       rowLabel: (row) => <span className="truncate">{row.name}</span>,
-      rowStat: (row) => (
-        <>
-          {row.gtins.length > 0 && (
-            <span>UPC {row.gtins.map(displayGtin).join(", ")}</span>
-          )}
-          <span>
-            {row.sources.length > 0
-              ? row.sources.join(", ")
-              : "no external ids"}
-          </span>
-        </>
-      ),
+      rowStat: (row) => {
+        const gtins =
+          "gtins" in row ? row.gtins : row.primaryGtin ? [row.primaryGtin] : [];
+        return (
+          <>
+            {gtins.length > 0 && (
+              <span>UPC {gtins.map(displayGtin).join(", ")}</span>
+            )}
+            <span>
+              {"sources" in row
+                ? row.sources.length > 0
+                  ? row.sources.join(", ")
+                  : "no external ids"
+                : "Review external identities in the merge preview"}
+            </span>
+          </>
+        );
+      },
       copy: {
         title: "Merge products?",
         description:
