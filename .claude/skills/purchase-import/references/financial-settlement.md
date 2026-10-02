@@ -3,6 +3,31 @@
 Read the section needed for the current settlement question. All worked amounts
 and identifiers below are synthetic; derive live references from authorized reads.
 
+## Default import verification
+
+For every committed account-sync order, including a saved email confirmation,
+check settlement before finishing the run. This is routine import work; the
+member need not supply transaction or account candidates.
+
+1. Read the committed Purchase, its allocations, and existing
+   FinancialTransactions. Search saved StatementRows by the vendor's known
+   descriptors, then verify amount, posted date, account identity, and source
+   references. Include matched and ignored rows: a prior disposition or source
+   category is a judgment to verify, not proof that the charge is unrelated.
+2. Reuse the existing transaction when its evidence agrees. Read every
+   allocation and source reference before proposing a missing Purchase link or
+   additional reference; preserve unrelated allocations and references. Check
+   alternate exports for the same charge before considering creation.
+3. For an unmatched saved row, use `finance_read.preview_import` with its
+   normalized provider amount and source identity. Verify the proposed kind
+   and sign. Propose a new transaction only for `ready_to_create` with a
+   uniquely verified account and Purchase allocation. Generic settlement
+   mutations retain exact typed approval and stable run-operation identities.
+4. Report each order's settlement outcome: already matched, awaiting approval,
+   ambiguous, or source evidence absent. Keep conflicting dispositions and
+   ambiguous allocations reviewable. An absent charge is a coverage gap unless
+   the source window proves otherwise; an email total alone cannot create one.
+
 ## Authority and signs
 
 Vendor documents establish Purchase identity, literal stated total, and
