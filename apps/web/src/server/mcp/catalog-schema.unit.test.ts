@@ -139,6 +139,8 @@ function concreteOutputSchema(value: JSONType): boolean {
     }
     if (node.properties && isJsonObject(node.properties))
       return Object.keys(node.properties).length > 0;
+    if (Array.isArray(node.allOf))
+      return node.allOf.some((branch) => visit(branch, seen));
     const alternatives = node.anyOf ?? node.oneOf;
     return (
       Array.isArray(alternatives) &&
@@ -164,6 +166,17 @@ describe("MCP catalog schemas", () => {
     expect(concreteOutputSchema({ type: "object", properties: {} })).toBe(
       false,
     );
+    const intersection: JsonObject = {
+      allOf: [
+        { $ref: "#/definitions/item" },
+        { type: "object", required: ["item"] },
+      ],
+      definitions: { item: concrete },
+    };
+    expect(concreteOutputSchema(intersection)).toBe(true);
+    expect(
+      concreteOutputSchema({ anyOf: [intersection, { type: "object" }] }),
+    ).toBe(false);
   });
   it("removes fixture-only mock keys recursively", () => {
     const stripped = stripMockFromJsonSchema({
@@ -411,13 +424,15 @@ describe("MCP catalog schemas", () => {
     ).toEqual([]);
   });
 
-  it("publishes valid Draft-7 schemas including empty merchant candidate tuples", async () => {
+  it("publishes valid Draft-7 schemas with resolvable references and empty merchant candidate tuples", async () => {
     const validator = new Ajv({ strict: false, validateFormats: false });
     const invalid: string[] = [];
     for (const tool of (await listMcpToolCatalog()).tools) {
       for (const field of ["inputSchema", "outputSchema"] as const) {
         if (!validator.validateSchema(tool[field] ?? {})) {
           invalid.push(`${tool.name}.${field}`);
+        } else {
+          validator.compile(tool[field] ?? {});
         }
       }
     }

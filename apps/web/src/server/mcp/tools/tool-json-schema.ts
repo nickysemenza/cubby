@@ -54,6 +54,9 @@ export function safeToJsonSchema(
     // MCP-advertised JSON Schema.
     const converted = z.toJSONSchema(toWire(schema, io), {
       target: "draft-7",
+      // Repeated entity outputs otherwise expand the catalog into megabytes
+      // that ChatGPT rejects during discovery. References retain constraints.
+      reused: io === "output" ? "ref" : "inline",
       io,
       unrepresentable: "any",
       override: ({ jsonSchema }) => {
