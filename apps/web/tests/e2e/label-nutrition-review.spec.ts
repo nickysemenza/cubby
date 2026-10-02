@@ -38,6 +38,22 @@ test("detected label nutrition stays editable and requires Save before replacing
     dialog.getByRole("button", { name: "Remove synthetic-wardrobe-label.png" }),
   ).toBeVisible();
   await expect(dialog.getByText("Uploading images")).toHaveCount(0);
+  expect(
+    await dialog.locator("form").evaluate((form) =>
+      Array.from(form.querySelectorAll("input, select, textarea")).flatMap(
+        (control) => {
+          if (
+            (control instanceof HTMLInputElement ||
+              control instanceof HTMLSelectElement ||
+              control instanceof HTMLTextAreaElement) &&
+            !control.checkValidity()
+          )
+            return [{ name: control.name, message: control.validationMessage }];
+          return [];
+        },
+      ),
+    ),
+  ).toEqual([]);
   await dialog.getByRole("button", { name: /^Create$/ }).click();
   await expect(dialog).not.toBeVisible();
   await openProductFromPalette(page, name);

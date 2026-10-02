@@ -603,6 +603,9 @@ mod tests {
             WMeasureEstimate::known(2.0, None, true, 1),
         ]);
         assert_eq!(total, WMeasureEstimate::known(2.0, None, true, 1));
-        assert_eq!(aggregate_estimates_impl(&[opt_out.clone()]), opt_out);
+        assert_eq!(
+            aggregate_estimates_impl(std::slice::from_ref(&opt_out)),
+            opt_out
+        );
     }
 }
