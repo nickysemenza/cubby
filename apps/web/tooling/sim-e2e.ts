@@ -1,4 +1,7 @@
-import { readTesterArmySummary } from "./tester-army/report";
+import {
+  readTesterArmySummary,
+  testerArmyRawOutput,
+} from "./tester-army/report";
 import { execFileSync, spawn } from "node:child_process";
 import { pollUntil } from "@cubby/shared/retry";
 import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
@@ -1097,7 +1100,10 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
     const durationMs = Math.round(performance.now() - runStartedAt);
     const resultsPath = path.join(artifacts, "run-results.json");
     if (testerArmy) {
-      const summary = path.join(artifacts, "raw", "agent-summary.json");
+      const summary = path.join(
+        testerArmyRawOutput(artifacts),
+        "agent-summary.json",
+      );
       if (existsSync(summary)) {
         const evidence = path.join(artifacts, "agent-summary.json");
         writeFileSync(
@@ -1195,7 +1201,7 @@ async function runNativeJourney(
   purchaseId?: string,
 ): Promise<void> {
   if (testerArmy) {
-    const output = path.join(artifacts, "raw");
+    const output = testerArmyRawOutput(artifacts);
     await run(
       "pnpm",
       ["--dir", webRoot, "exec", "e2e", "run", "--output", output],

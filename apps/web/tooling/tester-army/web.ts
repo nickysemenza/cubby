@@ -9,7 +9,7 @@ import { runOrThrow, spawnToExit } from "../../../../scripts/lib/run.ts";
 import { captureE2ERunIdentity, writeE2ERunBundle } from "../e2e-run-bundle";
 import { ensureWebBuild } from "../web-build-provenance";
 import { modelConfiguration, preflightTesterArmyModel } from "./model";
-import { readTesterArmySummary } from "./report";
+import { readTesterArmySummary, testerArmyRawOutput } from "./report";
 
 const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -32,7 +32,7 @@ const output =
   process.env.TESTER_ARMY_OUTPUT ??
   path.join(repoRoot, "artifacts/tester-army/web", randomUUID());
 mkdirSync(output, { recursive: true });
-const rawOutput = path.join(output, "raw");
+const rawOutput = testerArmyRawOutput(output);
 
 let child: ChildProcess | undefined;
 const trackChild = {

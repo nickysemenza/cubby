@@ -69,7 +69,9 @@ Bundles live under `artifacts/tester-army/web/<run>/` or
 `shasum -a 256 -c SHA256SUMS`. Manifests record revision, source/build provenance,
 replay command, status and phases. Dirty-source runs are not replayable evidence.
 
-`raw/` retains local SDK reports, screenshots, traces and logs for diagnosis.
+`apps/web/.e2e/runs/<lane>/<run>/` retains local SDK reports, screenshots,
+traces and logs for diagnosis. The SDK requires its output inside the web
+project; the harness copies only a validated summary to the run bundle.
 CI uploads only the sanitized bundle files, with seven-day retention. The
 summary includes only fixed synthetic case names and numeric usage/replay
 metrics; credentials and fixture identifiers are excluded. Estimated cost may

@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Reporter } from "e2e";
 import { z } from "zod";
 import { modelConfiguration } from "./model";
@@ -76,4 +77,12 @@ export function readTesterArmySummary(output: string) {
   )
     throw new Error("Tester Army passed without exactly one passing journey");
   return summary;
+}
+
+export function testerArmyRawOutput(runDirectory: string) {
+  return path.join(
+    fileURLToPath(new URL("../../.e2e/runs/", import.meta.url)),
+    path.basename(path.dirname(runDirectory)),
+    path.basename(runDirectory),
+  );
 }
