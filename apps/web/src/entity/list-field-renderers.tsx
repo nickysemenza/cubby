@@ -14,12 +14,14 @@ import {
   RecipeSourceLink,
   sourceLabel,
 } from "~/features/recipes/recipe-source";
+import { numberCellData } from "~/ui/data-table/cell-data";
 import { createImageColumn } from "~/ui/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   type CubbyColumnCollection,
   type CubbyColumnHelper,
 } from "~/ui/data-table/table-features";
+import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 import { DataQualityValue } from "./data-quality-value";
@@ -125,7 +127,7 @@ const dataQualityRenderer = <TRow extends object>(
     add(
       helper.accessor((row) => qualityOf(row)?.status ?? "not_assessed", {
         id: "dataQuality",
-        header: "Data quality",
+        header: "Quality",
         enableSorting: scored,
         sortDescFirst: false,
         sortFn: (left, right) => {
@@ -135,10 +137,15 @@ const dataQualityRenderer = <TRow extends object>(
           if (!rightQuality) return -1;
           return leftQuality.score - rightQuality.score;
         },
-        meta: {
-          className: "w-32",
+        meta: attachCubbyColumnMeta<TRow>({
+          className: "w-20",
+          numeric: true,
+          cellData: numberCellData<TRow>(
+            "number",
+            (row) => qualityOf(row)?.score ?? null,
+          ),
           mobile: { slot: "meta", priority: 0 },
-        },
+        }),
         cell: (info) => {
           const quality = qualityOf(info.row.original);
           return <DataQualityValue quality={quality} scored={scored} />;

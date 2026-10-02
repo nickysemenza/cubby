@@ -13,6 +13,10 @@ export type FilterFieldConfig = {
   type: "text" | "select" | "multiselect";
   options?: FilterOption[];
   placeholder?: string;
+  inputType?: "text" | "number" | "date";
+  min?: number;
+  max?: number;
+  description?: string;
   onActivate?: (selectedIds?: readonly string[]) => void;
   onSearchChange?: (query: string) => void;
   isLoading?: boolean;

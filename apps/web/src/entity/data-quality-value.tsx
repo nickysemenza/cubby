@@ -4,7 +4,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import { z } from "zod";
 
 import { dataQualityOptions } from "~/lib/data-quality-options";
-import { renderOptionCell } from "~/ui/data-table/columnHelpers";
+import { EnumPill } from "~/ui/primitives/enum-pill";
 
 import { FieldExplanation } from "./field-explanation";
 
@@ -12,18 +12,25 @@ export function DataQualityValue({
   quality,
   scored = true,
 }: {
-  quality?: DataQuality;
+  quality?: Pick<DataQuality, "score" | "status">;
   scored?: boolean;
 }) {
   return quality ? (
-    renderOptionCell(
-      quality.status,
-      dataQualityOptions,
-      `${Math.round(quality.score)}/100`,
-    )
+    <EnumPill
+      color={
+        dataQualityOptions.find((option) => option.value === quality.status)
+          ?.color
+      }
+      className="tabular-nums"
+    >
+      {Math.round(quality.score)}/100
+    </EnumPill>
   ) : (
-    <span className="text-muted-foreground">
-      {scored ? "Unavailable" : "Not assessed"}
+    <span
+      className="text-muted-foreground"
+      aria-label={scored ? "Quality unavailable" : "Quality not assessed"}
+    >
+      —
     </span>
   );
 }

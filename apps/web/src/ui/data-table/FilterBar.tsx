@@ -180,7 +180,7 @@ function MultiselectEditor({
 }
 
 /** The editor body for one field's popover — shape depends on its declared type. */
-function FilterEditor({
+function FilterValueEditor({
   field,
   filter,
   setValues,
@@ -199,6 +199,9 @@ function FilterEditor({
         value={filter?.values[0] ?? ""}
         onChange={(event) => setValues([event.target.value])}
         placeholder={field.placeholder}
+        type={field.inputType ?? "text"}
+        min={field.min}
+        max={field.max}
         aria-label={`Filter ${field.label ?? field.key}`}
       />
     );
@@ -228,6 +231,19 @@ function FilterEditor({
       onSearchChange={field.onSearchChange}
       isLoading={field.isLoading}
     />
+  );
+}
+
+function FilterEditor(props: Parameters<typeof FilterValueEditor>[0]) {
+  return (
+    <div className="flex flex-col gap-2">
+      <FilterValueEditor {...props} />
+      {props.field.description && (
+        <p className="text-xs text-muted-foreground">
+          {props.field.description}
+        </p>
+      )}
+    </div>
   );
 }
 

@@ -18,16 +18,7 @@ const DATA_QUALITY_TONE = {
   defect: "destructive",
 } satisfies Record<DataQualityStatus, BadgeVariant>;
 
-/**
- * The one roster for `dataQuality.status` — labels, tone, and filter options.
- *
- * Previously the products table humanized it while the purchases table rendered
- * `info.getValue()`, printing the raw `needs_data` at the operator; and the
- * filter manifest declared the same three labels twice, once per entity. The
- * label a cell shows and the label its filter offers are now the same string by
- * construction. `needs_data` is amber rather than red: it is a worklist item, and
- * only `defect` is a thing that is actually wrong.
- */
+/** Shared internal status roster and tone; quality values display only the score. */
 export const dataQualityOptions: FilterableComboboxItem[] =
   dataQualityStatus.options.map((value) => ({
     value,

@@ -456,6 +456,11 @@ See also the image operational passes at the end of this file.
 
 ## Web UI
 
+- 🤔 **All-entities record interaction parity.** Reuse standard row inspection,
+  selection, clipboard behavior, and actions in the Records tab. Decide which
+  actions are eligible for mixed entity types before enabling batch work;
+  build on `EntityRecordsTab` and shared RTable behavior.
+
 - 🟢 **Web `src/` layout.** UI code lives in `components/`,
   `app/_components/`, `hooks/`, `app/_components/hooks/`, `lib/`, `misc/` and
   `server-functions/`. Move to `ui/`, `features/<domain>/`, `entity/`, and

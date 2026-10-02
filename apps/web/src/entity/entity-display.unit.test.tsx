@@ -408,7 +408,7 @@ describe("declared entity displays", () => {
         copied: column.meta?.cellData?.getCopyPayload(row),
       }));
       expect(details.map(({ id, header }) => ({ id, header }))).toEqual([
-        { id: "dataQuality", header: "Data quality" },
+        { id: "dataQuality", header: "Quality" },
         { id: "kind", header: "Kind" },
         { id: "notes", header: "Notes" },
         { id: "dataGaps", header: "Data gaps" },

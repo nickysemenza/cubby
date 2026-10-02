@@ -14,12 +14,21 @@ import { expect, test } from "./e2e-test";
 
 test("combined records retain server sorting, pagination, and filters after reload", async ({
   page,
-}) => {
+}, testInfo) => {
+  test.setTimeout(60_000);
   await page.setViewportSize({ width: 1280, height: 900 });
   const prefix = `Combined records ${Date.now()}`;
   const location = await seedLocationPrerequisite(page, `${prefix} Alpha`);
   const product = await seedProductPrerequisite(page, {
     name: `${prefix} Zulu`,
+  });
+  await createFixture(page, "expense", {
+    name: `Quality evidence ${Date.now()}`,
+    productId: product.id,
+    cost: 2,
+    date: "2026-09-10",
+    costType: "materials",
+    trade: "other",
   });
   await gotoAuthenticatedPage(
     page,
@@ -40,25 +49,90 @@ test("combined records retain server sorting, pagination, and filters after relo
   await page.getByRole("button", { name: "Go to next page" }).click();
   await expect(zulu).toHaveAttribute("href", `/products/${product.id}`);
   await expect(alpha).toHaveCount(0);
-  await page.getByLabel("Filter entity type").selectOption("location");
+  const qualityCell = () => page.locator('[data-cell-col="quality"]').first();
+  await expect(qualityCell()).toHaveText(/^\d+\/100$/);
+  expect((await qualityCell().boundingBox())?.width).toBeLessThanOrEqual(104);
+  await page
+    .getByRole("button", { name: "Sort by Quality", exact: true })
+    .click();
+  await expect(zulu).toBeVisible();
+  await expect(alpha).toHaveCount(0);
+  await expect(page).toHaveURL(/orderBy=quality/);
+  await page.getByRole("button", { name: "Sort by Name", exact: true }).click();
+  await expect(alpha).toBeVisible();
+  await page.getByRole("button", { name: "Go to next page" }).click();
+  await expect(zulu).toBeVisible();
+  await page.getByRole("button", { name: "Type: any", exact: true }).click();
+  await page.getByRole("combobox", { name: "Filter Type" }).fill("Location");
+  await page.getByRole("option", { name: "Location", exact: true }).click();
+  await page.getByRole("heading", { name: "Entities", exact: true }).click();
+  await expect(page).toHaveURL(/kind=location/);
   await expect(alpha).toBeVisible();
   await expect(page).toHaveURL(/page=1/);
   await page.reload();
-  await expect(page.getByLabel("Filter entity type")).toHaveValue("location");
+  await expect(
+    page.getByRole("button", { name: "Type: Location" }),
+  ).toBeVisible();
   await expect(alpha).toBeVisible();
-  await page.getByLabel("Maximum quality").fill("0");
+
+  const editOverflow = async (label: string, value: string) => {
+    await page.getByRole("button", { name: "More", exact: true }).click();
+    await page.getByRole("button", { name: new RegExp(`^${label}:`) }).click();
+    await page.getByLabel(`Filter ${label}`, { exact: true }).fill(value);
+  };
+  await editOverflow("Maximum quality", "0");
   await expect(alpha).toHaveCount(0);
-  await page.getByLabel("Maximum quality").fill("");
+  await page.getByLabel("Filter Maximum quality", { exact: true }).fill("");
   await expect(alpha).toBeVisible();
-  await page.getByLabel("Filter image presence").selectOption("none");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Image: any", exact: true }).click();
+  await page.getByRole("combobox", { name: "Filter Image" }).fill("No image");
+  await page.getByRole("option", { name: "No image", exact: true }).click();
   await expect(alpha).toBeVisible();
-  await page.getByLabel("Filter image presence").selectOption("has");
+  await page.getByRole("combobox", { name: "Filter Image" }).fill("Has image");
+  await page.getByRole("option", { name: "Has image", exact: true }).click();
   await expect(alpha).toHaveCount(0);
-  await page.getByLabel("Filter image presence").selectOption("");
-  await page.getByLabel("Updated through").fill("2000-01-01");
+  await page.getByRole("button", { name: "Clear filter", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await editOverflow("Updated through", "2000-01-01");
   await expect(alpha).toHaveCount(0);
-  await page.getByLabel("Updated through").fill("");
+  await page.getByLabel("Filter Updated through", { exact: true }).fill("");
   await expect(alpha).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", { name: "Sort by Quality", exact: true })
+    .click();
+  await expect(page).toHaveURL(/orderBy=quality/);
+  await expect(qualityCell()).toHaveText(/^\d+\/100$/);
+  await page.getByRole("button", { name: /^Clear \d+$/ }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Name or shortcode" }),
+  ).toHaveValue("");
+  await expect(page.getByRole("button", { name: "Type: any" })).toBeVisible();
+  await page.goBack();
+  await expect(
+    page.getByRole("button", { name: "Type: Location" }),
+  ).toBeVisible();
+  await expect(alpha).toBeVisible();
+
+  await page.screenshot({ path: testInfo.outputPath("records-desktop.png") });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByRole("textbox", { name: "Name or shortcode" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /^Filter(?: \d+)?$/ }).click();
+  await page.getByRole("button", { name: /Minimum quality/ }).click();
+  await expect(
+    page.getByLabel("Filter Minimum quality", { exact: true }),
+  ).toHaveAttribute("type", "number");
+  await expect(
+    page.getByLabel("Filter Minimum quality", { exact: true }),
+  ).toHaveAttribute("max", "100");
+  await page.keyboard.press("Escape");
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: testInfo.outputPath("records-phone.png") });
 });
 
 // Desktop-only: this is the SSR + cross-page navigation proof for declared
@@ -102,6 +176,9 @@ test("declared record lists retain identities, relationships and amounts on desk
   });
   await expect(expense).toHaveCount(1);
   const expenseRecord = page.getByRole("row").filter({ has: expense });
+  await expect(
+    expenseRecord.locator('[data-cell-col="dataQuality"] [data-cell-value]'),
+  ).toHaveText(/^\d+\/100$/);
   await expect(
     expenseRecord.getByText("$12.34", { exact: true }),
   ).toBeVisible();

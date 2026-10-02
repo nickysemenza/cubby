@@ -165,7 +165,7 @@ describe("recipe list display columns", () => {
       source: "Source",
       meals: "Meals",
       notes: "Notes",
-      dataQuality: "Data quality",
+      dataQuality: "Quality",
       dataGaps: "Data gaps",
     });
   });

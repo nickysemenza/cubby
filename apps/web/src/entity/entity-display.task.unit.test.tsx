@@ -167,7 +167,7 @@ describe("task list display columns", () => {
       dueDate: "Due",
       trade: "Trade",
       sortOrder: "Sort order",
-      dataQuality: "Data quality",
+      dataQuality: "Quality",
       dataGaps: "Data gaps",
     });
   });

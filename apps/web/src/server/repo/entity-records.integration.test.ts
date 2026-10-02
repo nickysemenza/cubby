@@ -4,21 +4,25 @@ import { describe, expect, it } from "vitest";
 
 import { entityRecordsInputSchema } from "~/contracts/entity-records.schema";
 import { product, run as runTable } from "~/server/db/schema";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { getDb } from "~/server/repo/database-helpers";
 import {
   buildEntityRecordsQuery,
   listEntityRecords,
 } from "~/server/repo/entity-records";
+import { createExpense } from "~/server/repo/expense/crud";
 import {
   createLocationFixture,
   createProductFixture,
+  makeExpenseInput,
   makeLocationInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { ensureRun } from "~/server/runs/ensure-run";
 
 // Regressions: paging before sorting/filtering, payload updates confused with
-// identity creation, deleted identities leaking, and unscored rows called 100%.
+// identity creation, deleted identities leaking, unscored rows called 100%,
+// and score-only rosters losing the authoritative status needed for pill color.
 describe("combined entity records", () => {
   const ctx = withTestDb();
   it("evaluates default-list quality and image subplans only for the requested page", async () => {
@@ -62,6 +66,19 @@ describe("combined entity records", () => {
       makeProductInput({ name: "Records roster Zulu" }),
       ctx.actor,
     );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Quality evidence",
+        productId: item.id,
+        cost: 2,
+      }),
+      ctx.actor,
+    );
+    const quality = (
+      await loadDataQualities(ctx.db, "product", [item.entityId])
+    ).get(item.entityId);
+    expect(quality?.status).toBe("needs_data");
     const first = await listEntityRecords(
       ctx.db,
       entityRecordsInputSchema.parse({
@@ -94,6 +111,14 @@ describe("combined entity records", () => {
       }),
     );
     expect(second.items.map((row) => row.id)).toEqual([item.id]);
+    expect(first.items[0]).toMatchObject({
+      quality: location.dataQuality.score,
+      qualityStatus: location.dataQuality.status,
+    });
+    expect(second.items[0]).toMatchObject({
+      quality: quality?.score,
+      qualityStatus: quality?.status,
+    });
     expect(first.items[0]?.quality).toBeGreaterThanOrEqual(0);
     expect(first.items[0]?.quality).toBeLessThanOrEqual(100);
     expect(
@@ -153,7 +178,7 @@ describe("combined entity records", () => {
       q: identity!.shortcode,
     });
     expect((await listEntityRecords(ctx.db, input)).items).toMatchObject([
-      { id: identity!.shortcode, quality: null },
+      { id: identity!.shortcode, quality: null, qualityStatus: null },
     ]);
     expect(
       await listEntityRecords(ctx.db, { ...input, qualityMin: 0 }),

@@ -764,7 +764,7 @@ export function explainInterpretation(
   return {
     interpretation: {
       result: quality?.success
-        ? `${quality.data.score}/100 · ${resultLabel}`
+        ? `${Math.round(quality.data.score)}/100`
         : resultLabel,
       summary,
       caveats,

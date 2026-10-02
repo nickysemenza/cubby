@@ -37,7 +37,7 @@ const DATA_QUALITY_FIELD = "dataQuality";
 const DATA_GAPS_FIELD = "dataGaps";
 /**
  * The sort shares the column's id: a list column sorts by its own id, so the
- * one "Data quality" column is what sorts by score (asc = weakest first).
+ * one "Quality" column is what sorts by score (asc = weakest first).
  */
 const DATA_QUALITY_SORT = "dataQuality";
 const DATA_QUALITY_LIST_RENDERER = "data-quality";
@@ -52,7 +52,7 @@ const qualityField = (entityKey: string): EntityField => ({
   key: DATA_QUALITY_FIELD,
   kind: "json",
   nullable: false,
-  label: "Data quality",
+  label: "Quality",
   description: null,
   readKey: DATA_QUALITY_FIELD,
   reference: null,
@@ -67,8 +67,8 @@ const qualityField = (entityKey: string): EntityField => ({
       "Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.",
     resolver: "field",
     projections: {
-      list: "dataQuality.status",
-      summary: "dataQuality.status",
+      list: "dataQuality.score",
+      summary: "dataQuality.score",
     },
     sourceDependencies: [{ path: "dataQuality.gaps", label: "Detected gaps" }],
     actions: ["editSource"],
