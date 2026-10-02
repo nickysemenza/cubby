@@ -171,7 +171,6 @@ describe("inventory mappers", () => {
           {
             image: {
               shortcode: IMAGE_SHORTCODE,
-              emoji: null,
               key: "image.jpg",
               filename: "image.jpg",
               size: 100,

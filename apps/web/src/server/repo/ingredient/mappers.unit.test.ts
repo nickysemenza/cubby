@@ -183,7 +183,6 @@ describe("ingredient product mappers", () => {
           {
             image: {
               shortcode: IMAGE_SHORTCODE,
-              emoji: null,
               key: "image.jpg",
               filename: "image.jpg",
               size: 100,
@@ -198,7 +197,6 @@ describe("ingredient product mappers", () => {
           {
             image: {
               shortcode: DELETED_IMAGE_SHORTCODE,
-              emoji: null,
               key: "deleted.jpg",
               filename: "deleted.jpg",
               size: 100,
