@@ -25,11 +25,12 @@ describe("project repository", () => {
       ctx.db,
       createProjectFromTasksInput.parse({
         taskIds: [task.output.id],
-        project: { name: "Workflow promotion project" },
+        project: { name: "Workflow promotion project", emoji: "👩🏽‍🍳" },
       }),
       ctx.actor,
     );
     expect(result.project.name).toBe("Workflow promotion project");
+    expect(result.project.emoji).toBe("👩🏽‍🍳");
     expect(result.tasks.map(({ id }) => id)).toEqual([task.output.id]);
     const saved = await getTaskByShortcode(ctx.db, task.output.id);
     expect(saved?.projectId).toBe(result.project.id);

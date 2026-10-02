@@ -413,7 +413,7 @@ export default defineEntity({
         display: {},
         validation: {
           read: z.string().describe("Emoji shown next to the name").nullable(),
-          create: z.string().nullable().default(null),
+          create: z.string().nullable().optional(),
           update: z.string().nullable().optional(),
         },
       },

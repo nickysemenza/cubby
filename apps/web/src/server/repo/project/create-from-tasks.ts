@@ -9,6 +9,7 @@
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
+import { projectCreateInput } from "@cubby/schemas/project";
 import type {
   CreateProjectFromTasksInput,
   CreateProjectFromTasksOut,
@@ -24,6 +25,7 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
+import { normalizeRecordEmoji } from "~/server/repo/entity-emoji";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -46,36 +48,39 @@ export async function createProjectFromTasks(
   // Resolved live-only up front — the same "resolving IS the liveness check"
   // pattern as `createProject`.
   const taskIdsUuid = await resolveAllOrThrow(db, "task", input.taskIds);
+  const projectInput = projectCreateInput.parse(
+    normalizeRecordEmoji("project", input.project),
+  );
 
   const { projectId, taskIds } = await withTransaction(db, async (tx) => {
     let parentProjectId: ProjectId | null = null;
-    if (input.project.parentProjectId) {
+    if (projectInput.parentProjectId) {
       parentProjectId = await resolveOrThrow(
         tx,
         "project",
-        input.project.parentProjectId,
+        projectInput.parentProjectId,
       );
     }
 
     const created = await insertWithShortcode(tx, "project", {
-      name: input.project.name,
-      status: input.project.status,
-      kind: input.project.kind,
-      locations: input.project.locations,
+      name: projectInput.name,
+      status: projectInput.status,
+      kind: projectInput.kind,
+      locations: projectInput.locations,
       locationsMode:
-        input.project.locationsMode ??
-        (input.project.locations.length ? "explicit" : "inherit"),
-      defaultTrade: input.project.defaultTrade,
-      costEstimate: input.project.costEstimate,
+        projectInput.locationsMode ??
+        (projectInput.locations.length ? "explicit" : "inherit"),
+      defaultTrade: projectInput.defaultTrade,
+      costEstimate: projectInput.costEstimate,
       parentProjectId,
-      startDate: input.project.startDate,
-      endDate: input.project.endDate,
-      icon: input.project.icon,
-      notes: input.project.notes,
+      startDate: projectInput.startDate,
+      endDate: projectInput.endDate,
+      emoji: projectInput.emoji ?? null,
+      notes: projectInput.notes,
     });
     await setProjectExternalUrls(tx, created.id, {
-      googleDriveFolderUrl: input.project.googleDriveFolderUrl,
-      notionPageUrl: input.project.notionPageUrl,
+      googleDriveFolderUrl: projectInput.googleDriveFolderUrl,
+      notionPageUrl: projectInput.notionPageUrl,
     });
     await logAuditEntry(tx, actor, {
       entityKind: "project",
