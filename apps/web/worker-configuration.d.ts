@@ -26,18 +26,18 @@ interface __BaseEnv_Env {
 	USDA_API_URL: string;
 	UPC_UPSTREAM_DISABLED: string;
 	NOTION_API_KEY: string;
-	DB_FRESHNESS: DurableObjectNamespace<import("./src/cf-server").DatabaseFreshnessDurableObject>;
-	CALENDAR_FEED: DurableObjectNamespace<import("./src/cf-server").CalendarFeedDurableObject>;
-	PURCHASE_IMPORT: DurableObjectNamespace<import("./src/cf-server").PurchaseImportDurableObject>;
-	IMAGE_PROCESSING: DurableObjectNamespace<import("./src/cf-server").ImageProcessingDurableObject>;
-	AI_RESPONSE_CACHE: DurableObjectNamespace<import("./src/cf-server").AiResponseCacheDurableObject>;
+	DB_FRESHNESS: DurableObjectNamespace<import("./src/server/worker-bindings").DatabaseFreshnessDurableObject>;
+	CALENDAR_FEED: DurableObjectNamespace<import("./src/server/worker-bindings").CalendarFeedDurableObject>;
+	PURCHASE_IMPORT: DurableObjectNamespace<import("./src/server/worker-bindings").PurchaseImportDurableObject>;
+	IMAGE_PROCESSING: DurableObjectNamespace<import("./src/server/worker-bindings").ImageProcessingDurableObject>;
+	AI_RESPONSE_CACHE: DurableObjectNamespace<import("./src/server/worker-bindings").AiResponseCacheDurableObject>;
 	USDA_API: Fetcher /* usda-api */;
 	PURCHASE_AGENT: Fetcher /* purchase-agent */;
-	SEARCH_INDEX_REPAIR: Workflow<Parameters<import("./src/cf-server").SearchIndexRepairWorkflow['run']>[0]['payload']>;
+	SEARCH_INDEX_REPAIR: Workflow<Parameters<import("./src/server/worker-bindings").SearchIndexRepairWorkflow['run']>[0]['payload']>;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
-		mainModule: typeof import("./src/cf-server");
+		mainModule: typeof import("./src/server/worker-bindings");
 		durableNamespaces: "DatabaseFreshnessDurableObject" | "CalendarFeedDurableObject" | "PurchaseImportDurableObject" | "ImageProcessingDurableObject" | "AiResponseCacheDurableObject";
 	}
 	interface Env extends __BaseEnv_Env {}
