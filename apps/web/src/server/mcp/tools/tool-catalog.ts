@@ -1,14 +1,9 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import type {
-  ServerNotification,
-  ServerRequest,
-  ToolAnnotations,
-} from "@modelcontextprotocol/sdk/types.js";
+import { ListToolsResultSchema } from "@modelcontextprotocol/core";
 import {
-  ListToolsRequestSchema,
-  ListToolsResultSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+  type McpServer,
+  type ServerContext,
+  type ToolAnnotations,
+} from "@modelcontextprotocol/server";
 import { type JSONType, z } from "zod";
 
 import { advertisedJsonSchema } from "./tool-json-schema";
@@ -140,13 +135,11 @@ export type ToolCatalogView = (
  */
 export function installMockStrippedListToolsHandler(
   server: McpServer,
-  narrow?: (
-    extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
-  ) => Promise<ToolCatalogView | undefined>,
+  narrow?: (extra: ServerContext) => Promise<ToolCatalogView | undefined>,
 ): void {
   const registeredTools = getRegisteredTools(server);
 
-  server.server.setRequestHandler(ListToolsRequestSchema, async (_, extra) => {
+  server.server.setRequestHandler("tools/list", async (_, extra) => {
     const view = narrow ? await narrow(extra) : undefined;
     return ListToolsResultSchema.parse({
       tools: listDeclaredToolSchemas(server).flatMap(

@@ -1,15 +1,13 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import type {
-  CallToolRequest,
-  CallToolResult,
-  ServerNotification,
-  ServerRequest,
-} from "@modelcontextprotocol/sdk/types.js";
+import {
+  type McpServer,
+  type ServerContext,
+  type CallToolRequest,
+  type CallToolResult,
+} from "@modelcontextprotocol/server";
 
 export type ToolCallProtocolHandler = (
   request: CallToolRequest,
-  extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
+  extra: ServerContext,
 ) => Promise<CallToolResult>;
 
 type SdkRequestHandlerRegistry = {
@@ -34,7 +32,7 @@ export function installToolCallProtocolHandler(
   decorate: (
     dispatch: ToolCallProtocolHandler,
     request: CallToolRequest,
-    extra: RequestHandlerExtra<ServerRequest, ServerNotification>,
+    extra: ServerContext,
   ) => Promise<CallToolResult>,
 ): void {
   const protocol: object = server.server;

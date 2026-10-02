@@ -1,4 +1,3 @@
-import { normalizeObjectSchema } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import { type JSONType, z } from "zod";
 
 import { toWire } from "~/lib/http-api/wire";
@@ -83,11 +82,10 @@ export function advertisedJsonSchema(
       `${toolName}: registered input schema is not a Zod schema.`,
     );
   }
-  const normalized = normalizeObjectSchema(schema);
-  if (!(normalized instanceof z.ZodType)) {
+  if (!(schema instanceof z.ZodObject)) {
     throw new Error(
       `${toolName}: registered ${io} schema is not an object schema, so it cannot be advertised without dropping every field.`,
     );
   }
-  return safeToJsonSchema(normalized, io);
+  return safeToJsonSchema(schema, io);
 }

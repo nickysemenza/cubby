@@ -271,7 +271,7 @@ importers:
         version: link:../../packages/design-tokens
       '@modelcontextprotocol/ext-apps':
         specifier: ^2.0.3
-        version: 2.0.3(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/core@2.0.0)(@modelcontextprotocol/server@2.0.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(zod@4.6.5)
+        version: 2.0.3(@modelcontextprotocol/client@2.2.0)(@modelcontextprotocol/core@2.2.0)(@modelcontextprotocol/server@2.0.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(zod@4.6.5)
       zod:
         specifier: 4.6.5
         version: 4.6.5
@@ -419,9 +419,6 @@ importers:
       '@better-auth/oauth-provider':
         specifier: 1.7.7
         version: 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(@opentelemetry/api@1.9.1)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7(@opentelemetry/api@1.9.1)(@tanstack/react-start@1.168.60(@types/react@19.3.0)(esbuild@0.28.2)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(rolldown@1.2.12)(rollup@4.63.6)(supports-color@10.2.2)(vite@8.3.2(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.0)))(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20261001.1)(@opentelemetry/api@1.9.1)(@types/better-sqlite3@9.6.0)(@types/pg@8.23.1)(better-sqlite3@13.0.3)(kysely@0.29.6)(pg@8.23.1))(pg@8.23.1)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(solid-js@1.9.15)(vitest@5.0.3))(better-call@1.4.0(zod@4.6.5))
-      '@cfworker/json-schema':
-        specifier: ^4.1.1
-        version: 4.1.1
       '@cubby/design-tokens':
         specifier: workspace:*
         version: link:../../packages/design-tokens
@@ -476,12 +473,18 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.9.1
         version: 5.9.1(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.89.0(@types/react@19.3.0)(react@19.3.0))(valibot@1.5.0(typescript@7.0.2))(zod@4.6.5)
+      '@modelcontextprotocol/client':
+        specifier: ^2.2.0
+        version: 2.2.0
+      '@modelcontextprotocol/core':
+        specifier: ^2.2.0
+        version: 2.2.0
       '@modelcontextprotocol/ext-apps':
         specifier: ^2.0.3
-        version: 2.0.3(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/core@2.0.0)(@modelcontextprotocol/server@2.0.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(zod@4.6.5)
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.31.0
-        version: 1.31.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5)
+        version: 2.0.3(@modelcontextprotocol/client@2.2.0)(@modelcontextprotocol/core@2.2.0)(@modelcontextprotocol/server@2.2.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(zod@4.6.5)
+      '@modelcontextprotocol/server':
+        specifier: ^2.2.0
+        version: 2.2.0
       '@nivo/bar':
         specifier: ^0.99.0
         version: 0.99.0(@types/react@19.3.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
@@ -2354,8 +2357,16 @@ packages:
     resolution: {integrity: sha512-8f1OghQ2rjzIOfqgUCP+8GiUWqRs89njoWLNqAe8kWmDePv3s1fZXseej+QXemssEuuOvLLmLO/kqM3IQHtISw==}
     engines: {node: '>=20'}
 
+  '@modelcontextprotocol/client@2.2.0':
+    resolution: {integrity: sha512-LxCou/CSYQ6dwEnjhLZY0KnEuc8V4UJ3IEQCl/uR2yHobSQIEdJKUlKLRYRF5i5FqRGHy1eK7une3aAWDHLtig==}
+    engines: {node: '>=20'}
+
   '@modelcontextprotocol/core@2.0.0':
     resolution: {integrity: sha512-pJCEwGG7Lfr/+PQp9ZTwKXNeO5wzbfKL7H3MYpCorM4oFBoQrdjnBgEoqG+RjhsvS1FKrDbKux+M1HhlnGWqcA==}
+    engines: {node: '>=20'}
+
+  '@modelcontextprotocol/core@2.2.0':
+    resolution: {integrity: sha512-iLhmprRmWI8EcosOA3wVvww22z02NkgqhV4fBH6f/odQBsi7xnJc0HGmi21yWO+/iKw2yzqVE127Zhna5/+JXw==}
     engines: {node: '>=20'}
 
   '@modelcontextprotocol/ext-apps@2.0.3':
@@ -2398,6 +2409,10 @@ packages:
 
   '@modelcontextprotocol/server@2.0.0':
     resolution: {integrity: sha512-YhHWdHfpFMQfd0prsEnxKeS3Qz3ytIGmsS0sth4KDjnacIT7hxk6hXHkJ9KysxlkvTM+WZAtQbbcUhdoP4Hvtw==}
+    engines: {node: '>=20'}
+
+  '@modelcontextprotocol/server@2.2.0':
+    resolution: {integrity: sha512-qFnltjus6Gk8Lx6J1w2RXmr3YPN22MNT6qD6zjAkaiWIlFIFxWClz0rXHNuJF/KSUyn5YGhkSvXkWDbQHVLFEQ==}
     engines: {node: '>=20'}
 
   '@napi-rs/keyring-darwin-arm64@1.3.0':
@@ -11633,18 +11648,43 @@ snapshots:
       pkce-challenge: 5.0.1
       zod: 4.6.5
 
+  '@modelcontextprotocol/client@2.2.0':
+    dependencies:
+      '@modelcontextprotocol/core': 2.2.0
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.1.1
+      jose: 6.2.12
+      pkce-challenge: 5.0.1
+      zod: 4.6.5
+
   '@modelcontextprotocol/core@2.0.0':
     dependencies:
       zod: 4.6.5
 
-  '@modelcontextprotocol/ext-apps@2.0.3(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/core@2.0.0)(@modelcontextprotocol/server@2.0.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(zod@4.6.5)':
+  '@modelcontextprotocol/core@2.2.0':
     dependencies:
-      '@modelcontextprotocol/client': 2.0.0
-      '@modelcontextprotocol/core': 2.0.0
+      zod: 4.6.5
+
+  '@modelcontextprotocol/ext-apps@2.0.3(@modelcontextprotocol/client@2.2.0)(@modelcontextprotocol/core@2.2.0)(@modelcontextprotocol/server@2.0.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(zod@4.6.5)':
+    dependencies:
+      '@modelcontextprotocol/client': 2.2.0
+      '@modelcontextprotocol/core': 2.2.0
       '@standard-schema/spec': 1.1.0
       zod: 4.6.5
     optionalDependencies:
       '@modelcontextprotocol/server': 2.0.0
+      react: 19.3.0
+      react-dom: 19.3.0(@types/react@19.3.0)(react@19.3.0)
+
+  '@modelcontextprotocol/ext-apps@2.0.3(@modelcontextprotocol/client@2.2.0)(@modelcontextprotocol/core@2.2.0)(@modelcontextprotocol/server@2.2.0)(react-dom@19.3.0(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(zod@4.6.5)':
+    dependencies:
+      '@modelcontextprotocol/client': 2.2.0
+      '@modelcontextprotocol/core': 2.2.0
+      '@standard-schema/spec': 1.1.0
+      zod: 4.6.5
+    optionalDependencies:
+      '@modelcontextprotocol/server': 2.2.0
       react: 19.3.0
       react-dom: 19.3.0(@types/react@19.3.0)(react@19.3.0)
 
@@ -11699,6 +11739,11 @@ snapshots:
   '@modelcontextprotocol/server@2.0.0':
     dependencies:
       '@modelcontextprotocol/core': 2.0.0
+      zod: 4.6.5
+
+  '@modelcontextprotocol/server@2.2.0':
+    dependencies:
+      '@modelcontextprotocol/core': 2.2.0
       zod: 4.6.5
 
   '@napi-rs/keyring-darwin-arm64@1.3.0':

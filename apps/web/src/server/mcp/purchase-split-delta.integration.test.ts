@@ -12,12 +12,12 @@
  */
 
 import type { UserId } from "@cubby/schemas/identifiers";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client } from "@modelcontextprotocol/client";
+import { CallToolResultSchema } from "@modelcontextprotocol/core";
 import {
   type CallToolResult,
-  CallToolResultSchema,
-} from "@modelcontextprotocol/sdk/types.js";
+  InMemoryTransport,
+} from "@modelcontextprotocol/server";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";

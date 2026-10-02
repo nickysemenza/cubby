@@ -1,5 +1,5 @@
 import { PUBLIC_SHORTCODE_PREFIXES } from "@cubby/shared";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 import { type JSONType, z } from "zod";

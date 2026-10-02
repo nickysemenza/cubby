@@ -196,7 +196,7 @@ export async function runMcpBatch<TItemInput extends z.ZodType, TItemOutput>(
           error,
           {
             operation: config.name,
-            authenticated: extra.authInfo !== undefined,
+            authenticated: extra.http?.authInfo !== undefined,
             entity: config.telemetryEntity?.(input.items),
             batchIndex: index,
           },

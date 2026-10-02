@@ -1,9 +1,13 @@
 import { SHORTCODE_PREFIX } from "@cubby/shared";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { Client } from "@modelcontextprotocol/client";
+import {
+  InMemoryTransport,
+  type AuthInfo,
+  McpServer,
+  createMcpHandler,
+  isLegacyRequest,
+  WebStandardStreamableHTTPServerTransport,
+} from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { MCP_TOOLS } from "~/contracts/mcp-tools";
@@ -204,20 +208,29 @@ export async function listMcpResourceCatalog() {
   return introspect((client) => client.listResources());
 }
 
-/**
- * Handle an authenticated MCP request.
- * Per-request server+transport: the SDK's McpServer.connect() can only be
- * called once per instance, and the transport can't be reused in stateless mode.
- */
+const httpHandler = createMcpHandler(createMcpServer, {
+  legacy: "reject",
+});
+
+/** Both protocol eras get a fresh server with the authenticated caller context. */
 export async function handleMcpRequest(
   request: Request,
   authInfo: AuthInfo,
 ): Promise<Response> {
+  if (!(await isLegacyRequest(request))) {
+    return httpHandler.fetch(request, { authInfo });
+  }
+  // The private Worker binding closes its database client when fetch returns.
+  // Keep legacy responses buffered until dispatch finishes, as in SDK v1.
   const server = createMcpServer();
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });
-  await server.connect(transport);
-  return transport.handleRequest(request, { authInfo });
+  try {
+    await server.connect(transport);
+    return await transport.handleRequest(request, { authInfo });
+  } finally {
+    await server.close();
+  }
 }
