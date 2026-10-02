@@ -57,6 +57,8 @@ uses fresh fixture state. Install the Chromium browser with
 `pnpm --dir apps/web exec playwright install chromium` if needed.
 The iOS prerequisites are the same as `pnpm test:e2e:sim`.
 
+The shared Node setup restores the portable WASM package from the exact Rust
+source key used by Linux jobs, avoiding a second macOS compilation.
 Both manual simulator lanes restore the same Xcode-versioned DerivedData cache
 as the regular Apple build gate. Hosted builds use its SPM clone directory,
 content-based source mtimes, native arm64 slice, and batch compilation. They
