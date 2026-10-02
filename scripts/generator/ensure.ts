@@ -10,7 +10,13 @@
 //   ensure.ts --postinstall  generate if stale, but skip a filtered install
 //                            that left out the web app's dependencies
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -75,6 +81,10 @@ const current =
   existsSync(STAMP) &&
   readFileSync(STAMP, "utf8") === key;
 if (!current) {
+  // Invalidate first: a run that fails after rewriting some outputs must not
+  // leave the previous stamp claiming them current, or returning to those
+  // inputs (reverting the edit that broke generation) skips regeneration.
+  rmSync(STAMP, { force: true });
   execFileSync(
     join(ROOT, "node_modules/.bin/tsx"),
     ["--tsconfig", "apps/web/tsconfig.json", "scripts/generator/main.ts"],
