@@ -5,6 +5,7 @@ import type {
 import { Link } from "@tanstack/react-router";
 import { type Ref, useMemo } from "react";
 
+import { EntityQualityFact } from "~/entity/data-quality-value";
 import { EntityIcon } from "~/entity/entities";
 import { cn, formatCurrency } from "~/lib/utils";
 import { Row } from "~/ui/layout";
@@ -113,6 +114,11 @@ export const LocationGalleryCard = function LocationGalleryCard({
                 </span>
               )}
             </Row>
+            <EntityQualityFact
+              entity="location"
+              id={location.id}
+              quality={location.dataQuality}
+            />
           </div>
           {extraLocationImages.length > 0 && (
             <Row gap="xs" className="hidden shrink-0 sm:flex">

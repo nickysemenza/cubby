@@ -383,6 +383,19 @@ function computeDefaultLayout(
   const lockedIds = new Set([...lockedStart, ...lockedEnd]);
   const columnIds = descriptors.map(({ id }) => id);
   const rest = columnIds.filter((id) => !lockedIds.has(id));
+  const qualityIndex = rest.indexOf("dataQuality");
+  if (qualityIndex >= 0) {
+    rest.splice(qualityIndex, 1);
+    const identityIndex = descriptors.findIndex(
+      (descriptor) => descriptor.role === "identity",
+    );
+    const identityID = descriptors[identityIndex]?.id;
+    rest.splice(
+      identityID ? Math.max(0, rest.indexOf(identityID) + 1) : 0,
+      0,
+      "dataQuality",
+    );
+  }
   const columnVisibility: ColumnVisibilityState = {};
   for (const id of columnIds) {
     columnVisibility[id] =

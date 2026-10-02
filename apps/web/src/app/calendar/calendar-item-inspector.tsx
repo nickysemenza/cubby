@@ -3,6 +3,7 @@ import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOu
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { EntityQualityFact } from "~/entity/data-quality-value";
 import { fieldClearing } from "~/entity/editing/field-clearing";
 import type { EntityMutationPort } from "~/entity/editing/types";
 import { useEntityEditSession } from "~/entity/editing/use-entity-edit-session";
@@ -99,6 +100,13 @@ function CalendarInspectorOverlay({
     >
       <PopoverHeader className="border-b pb-2">
         <PopoverTitle>{item.title}</PopoverTitle>
+        {item.kind === "meal" ? (
+          <EntityQualityFact
+            entity="meal"
+            id={item.id}
+            quality={item.dataQuality}
+          />
+        ) : null}
         <div className="text-muted-foreground">{itemMetadata(item)}</div>
       </PopoverHeader>
       {content}

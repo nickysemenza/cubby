@@ -123,8 +123,8 @@ Three layers — pick by what the surface is, never hand-roll table styling:
 
 ### Column widths
 
-- **`useCubbyTableLayout` owns order, pinning, visibility, and sizing** behind one `table-layout:v1:{layoutKey}` contract. `layoutKey` defaults to the entity; give embedded/specialized tables a distinct stable key. Do not add separate visibility or sizing stores.
-- **Widths are TanStack numeric `size` / `minSize` / `maxSize` values.** The table platform publishes matching CSS width variables for header, body, footer, sticky offsets, native resize, and persistence. Tailwind width classes on `meta.className` are legacy input only and are normalized at the platform boundary.
+- **`useCubbyTableLayout` owns order, pinning, visibility, and sizing** in session state. Reloading or reopening restores declared defaults; do not add browser or account persistence for column layouts.
+- **Widths are TanStack numeric `size` / `minSize` / `maxSize` values.** The table platform publishes matching CSS width variables for header, body, footer, sticky offsets, native resize, and session customization. Tailwind width classes on `meta.className` are legacy input only and are normalized at the platform boundary.
 - **Select and Image are structural leading columns.** When present, layout normalization keeps them visible, start-pinned, and first/second; their definitions disable pinning, hiding, cell selection, and reorder handles. Actions remains movable and pinnable but non-hideable.
 - Keep the trailing gutter cell at `w-0`; declared numeric widths own the rendered geometry and overflow scrolls horizontally when the table is wider than its container.
 

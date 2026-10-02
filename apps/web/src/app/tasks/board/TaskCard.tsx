@@ -9,6 +9,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { TradeBadge } from "~/app/projects/shared";
 import { VerbMenuItem } from "~/entity/actions/action-verb-ui";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { EntityQualityFact } from "~/entity/data-quality-value";
 import { entities, entityDetailParams } from "~/entity/entities";
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { formatCalendarDay } from "~/lib/date-format";
@@ -253,6 +254,11 @@ export function TaskCard({
           </Row>
         </Row>
 
+        <EntityQualityFact
+          entity="task"
+          id={task.id}
+          quality={task.dataQuality}
+        />
         <Row wrap align="center" gap="tight" className="text-muted-foreground">
           {task.dueDate && (
             <span

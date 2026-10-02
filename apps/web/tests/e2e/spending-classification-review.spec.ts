@@ -256,7 +256,11 @@ test("reviews historical item classification and preserves explicit purpose", as
   ).toBeVisible();
   failExplanation = false;
   await page.getByRole("button", { name: "Retry explanation" }).click();
-  await expect(page.getByText("Rule ·", { exact: true })).toBeVisible();
+  const popover = page.locator("[data-slot=popover-content]");
+  await expect(
+    popover.getByRole("heading", { name: "Technical details" }),
+  ).toBeVisible();
+  await expect(popover.getByText("Rule:", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 1440, height: 900 });
   await patch(expense, { spendingCategoryId: null });

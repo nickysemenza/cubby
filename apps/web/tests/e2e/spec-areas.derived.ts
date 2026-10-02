@@ -272,6 +272,17 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
   "purchase-split-settlement.spec.ts": [
     "apps/web/src/routes/_authenticated/purchases.$shortcode.tsx",
   ],
+  "quality-explanations.spec.ts": [
+    "apps/web/src/routes/_authenticated/$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/locations.index.tsx",
+    "apps/web/src/routes/_authenticated/plants.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/products.index.tsx",
+    "apps/web/src/routes/_authenticated/purchases.index.tsx",
+    "apps/web/src/routes/_authenticated/spending-categories.index.tsx",
+    "apps/web/src/routes/_authenticated/tasks.index.tsx",
+    "apps/web/src/routes/api/browser/dispatch.ts",
+    "apps/web/src/routes/api/v1/$resource/$operation.ts",
+  ],
   "recipe-flow.spec.ts": [
     "apps/web/src/routes/_authenticated/recipes.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/recipes.new.tsx",

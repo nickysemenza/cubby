@@ -380,6 +380,14 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/features/command-menu/command-menu-loader.ts`,
     `${WEB}/src/features/command-menu/command-menu-search-groups.unit.test.tsx`,
   ],
+  "quality-explanations.spec.ts": [
+    `${WEB}/src/ui/data-table/**`,
+    `${WEB}/src/server/operations/field-explanation*`,
+    `${WEB}/src/server/repo/data-quality/**`,
+    `${WEB}/src/server/repo/field-explanation*`,
+    "packages/schemas/src/field-explanation.ts",
+    "packages/schemas/src/entity-definitions/**",
+  ],
   "finance-category-display.spec.ts": [
     `${WEB}/src/entity/**`,
     `${WEB}/src/ui/hooks/progressive-list.ts`,

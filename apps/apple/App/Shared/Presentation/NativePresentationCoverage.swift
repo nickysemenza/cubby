@@ -49,9 +49,7 @@ enum NativePresentationCoverage {
 
     static func list(_ renderer: ListRendererID) -> Status {
         switch renderer {
-        case .recipeSource, .spendingCategorySummary: .implemented
-        case .dataQuality:
-            .unsupported("Data-quality status and score are available on web.")
+        case .recipeSource, .spendingCategorySummary, .dataQuality: .implemented
         case .expectedQuantity, .quantityVariance, .estimateCost, .estimateKcal, .totalTime,
             .mealCost, .unitPrice, .valuationSummary, .financialSettlement,
             .reconciliationStatus, .expenseCount:

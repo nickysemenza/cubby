@@ -1,3 +1,4 @@
+import { dataQuality, scoredEntities } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
@@ -24,12 +25,15 @@ import {
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getCookbookSummary } from "~/server/repo/cookbook";
+import { loadQualityBreakdown } from "~/server/repo/data-quality/hydrate";
 import {
   loadFieldCountEvidence,
   withFieldExplanationSnapshot,
 } from "~/server/repo/field-explanation-evidence";
 import { loadFieldResolutionEvidence } from "~/server/repo/field-resolution-evidence";
 import { RecipeCostingService } from "~/server/services/recipe-costing.service";
+
+import { interpretFieldValue } from "./field-explanation-interpretation";
 
 const jsonValue = z.json();
 const jsonRecord = z.record(z.string(), jsonValue);
@@ -275,7 +279,16 @@ function dependencySources(
           ]
         : [];
     });
-    return linked.length > 0 ? [source, ...linked] : [source];
+    // Keep unlinked evidence too, without repeating linked records in an aggregate.
+    const unlinked = resolved.value.filter(
+      (item) => entityReferenceFromValue(item) === null,
+    );
+    return linked.length > 0
+      ? [
+          ...linked,
+          ...(unlinked.length > 0 ? [{ ...source, value: unlinked }] : []),
+        ]
+      : [source];
   });
 }
 
@@ -544,6 +557,7 @@ async function loadExplanationSnapshot(
       countEvidence: null,
       resolutionEvidence: null,
       resolutionEvidenceTruncated: false,
+      qualityBreakdown: undefined,
     };
   }
   return withFieldExplanationSnapshot(context.db, async (snapshotDb) => {
@@ -573,6 +587,15 @@ async function loadExplanationSnapshot(
     );
     return {
       projection,
+      qualityBreakdown:
+        fieldKey === "dataQuality" &&
+        z.enum(scoredEntities).safeParse(entity).success
+          ? await loadQualityBreakdown(
+              snapshotDb,
+              z.enum(scoredEntities).parse(entity),
+              input.entityId,
+            )
+          : undefined,
       resolutionEvidence: evidence.evidence,
       resolutionEvidenceTruncated: evidence.truncated,
       countEvidence: needsCountEvidence
@@ -626,7 +649,7 @@ function explanationActions(
   ownership: Ownership | null,
   resolution: FieldResolution | null,
 ): z.input<typeof fieldExplanationOutput>["actions"] {
-  return (explanation.actions ?? []).flatMap((kind) => {
+  return (explanation.actions ?? ["editSource"]).flatMap((kind) => {
     if (kind === "editSource" && resolution?.sourceEntity)
       return [
         {
@@ -649,6 +672,125 @@ function explanationActions(
   });
 }
 
+function qualityGapSummary(
+  breakdown: z.infer<typeof fieldExplanationOutput>["qualityBreakdown"],
+): string {
+  const weightedGaps = breakdown?.checks.filter(
+    (check) => check.state === "gap" && check.weight > 0,
+  ).length;
+  const unscoredGaps = breakdown?.checks.filter(
+    (check) => check.state === "gap" && check.weight === 0,
+  ).length;
+  return [
+    weightedGaps
+      ? `${weightedGaps} unresolved ${weightedGaps === 1 ? "check reduces" : "checks reduce"} this record's score.`
+      : null,
+    unscoredGaps
+      ? `${unscoredGaps} unresolved ${unscoredGaps === 1 ? "diagnostic does" : "diagnostics do"} not reduce this record's score.`
+      : null,
+    "Missing information and detected defects are shown separately below.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function explainInterpretation(
+  field: (typeof entityFieldModels)[Entity]["fields"][number],
+  value: Json,
+  projection: JsonRecord,
+  sources: z.infer<typeof fieldExplanationOutput>["sources"],
+  unscoredQuality: boolean,
+  resolution: FieldResolution | null,
+  qualityBreakdown: z.infer<typeof fieldExplanationOutput>["qualityBreakdown"],
+  resolutionEvidenceTruncated: boolean,
+) {
+  const boundedSources = boundExplanationSources(sources);
+  const quality =
+    field.key === "dataQuality"
+      ? dataQuality.safeParse(projection.dataQuality)
+      : null;
+  const interpretation = interpretFieldValue(field, value);
+  const resultLabel = interpretation.result;
+  const caveats = interpretation.caveats;
+  const nextSteps = interpretation.nextSteps;
+  let summary = interpretation.summary;
+  if (quality?.success) {
+    caveats.length = 0;
+    nextSteps.length = 0;
+    const q = quality.data;
+    summary =
+      q.gaps.length === 0
+        ? "All applicable checks are satisfied, including any accepted exceptions. This score describes the checks defined for this record; it does not guarantee that every possible detail is correct."
+        : qualityGapSummary(qualityBreakdown);
+    if (qualityBreakdown?.expectedWeight === 0)
+      caveats.push(
+        "No weighted checks apply to this record. The scoring rule returns 100 when the expected weight is zero; unscored diagnostics remain visible.",
+      );
+    caveats.push(
+      "Only this record's applicable weighted checks affect its score. Related records' gaps are reported separately.",
+    );
+    if (q.exceptions.length > 0)
+      caveats.push(
+        "Active exceptions count as satisfied. Stale exceptions no longer excuse a detected gap because their supporting evidence has changed.",
+      );
+    nextSteps.push(...q.gaps.map((gap) => gap.message));
+    sources = [
+      ...sources,
+      { label: "Exceptions", entity: null, value: q.exceptions },
+      { label: "Related record gaps", entity: null, value: q.relatedGaps },
+      {
+        label: "Related record exceptions",
+        entity: null,
+        value: q.relatedExceptions,
+      },
+    ];
+  } else if (unscoredQuality) {
+    summary =
+      "No quality checks are defined for this entity. Not assessed is not a score of zero or a guarantee of completeness.";
+  } else if (resolution) {
+    caveats.push(
+      resolution.mode === "inherit"
+        ? "This value follows its source and may change when that source changes."
+        : "The resolution evidence below shows the selected value and any available fallback.",
+    );
+  }
+  if (boundedSources.truncated || resolutionEvidenceTruncated)
+    caveats.push(
+      "Evidence is bounded; the displayed sources are not an exhaustive list.",
+    );
+  const finalSources = quality?.success
+    ? boundExplanationSources(sources)
+    : boundedSources;
+  return {
+    interpretation: {
+      result: quality?.success
+        ? `${quality.data.score}/100 · ${resultLabel}`
+        : resultLabel,
+      summary,
+      caveats,
+      nextSteps,
+    },
+    finalSources,
+  };
+}
+
+function explanationResolution(
+  projection: JsonRecord,
+  fieldKey: string,
+): FieldResolution | null {
+  const resolutionPath = readExplanationPath(
+    projection,
+    `fieldResolutions.${fieldKey}`,
+  );
+  const parsedResolution = resolutionPath.found
+    ? fieldResolutionSchema.safeParse(resolutionPath.value)
+    : null;
+  const resolution: FieldResolution | null = parsedResolution?.success
+    ? parsedResolution.data
+    : null;
+  return resolution;
+}
+
 export async function explainField(
   context: EntityKernelContext,
   input: ExplainFieldInput,
@@ -665,34 +807,30 @@ export async function explainField(
     input,
     entity,
     field.key,
-    (explanation.sourceDependencies?.length ?? 0) === 0,
+    !explanation.sourceDependencies?.length,
   );
   const { projection, countEvidence } = snapshot;
   const path = projectionPath(field, explanation, input.surface);
   const resolved = readExplanationPath(projection, path);
-  if (!resolved.found)
+  const unscoredQuality =
+    field.key === "dataQuality" &&
+    !z.enum(scoredEntities).safeParse(entity).success;
+  if (!resolved.found && !unscoredQuality)
     throw new Error(`Explanation projection does not expose ${path}`);
-  const value = resolved.value;
+  const value = unscoredQuality ? "Not assessed" : resolved.value;
   const subject = { entityKind: entity, entityId: input.entityId };
-  const resolutionPath = readExplanationPath(
-    projection,
-    `fieldResolutions.${field.key}`,
-  );
-  const parsedResolution = resolutionPath.found
-    ? fieldResolutionSchema.safeParse(resolutionPath.value)
-    : null;
-  const resolution: FieldResolution | null = parsedResolution?.success
-    ? parsedResolution.data
-    : null;
-  let sources = [
-    ...explainProjectionSources(
-      projection,
-      explanation,
-      value,
-      resolution !== null,
-    ),
-    ...(countEvidence?.sources ?? []),
-  ];
+  const resolution = explanationResolution(projection, field.key);
+  let sources = unscoredQuality
+    ? []
+    : [
+        ...explainProjectionSources(
+          projection,
+          explanation,
+          value,
+          resolution !== null,
+        ),
+        ...(countEvidence?.sources ?? []),
+      ];
   const ownership =
     explanation.resolver === "inventoryOwnership"
       ? effectiveInventoryOwnership.parse(value)
@@ -707,23 +845,34 @@ export async function explainField(
     ownership,
     resolution,
   );
-  const boundedSources = boundExplanationSources(sources);
+  const { interpretation, finalSources } = explainInterpretation(
+    field,
+    value,
+    projection,
+    sources,
+    unscoredQuality,
+    resolution,
+    snapshot.qualityBreakdown,
+    snapshot.resolutionEvidenceTruncated,
+  );
   return fieldExplanationOutput.parse({
     subject,
     field: field.key,
     label: field.label,
     value,
     evaluatedAt: new Date().toISOString(),
+    interpretation,
+    qualityBreakdown: snapshot.qualityBreakdown,
     rule: {
       id: explanation.ruleId,
       revision: explanation.version,
       description: explanation.description,
     },
-    sources: boundedSources.sources,
+    sources: finalSources.sources,
     resolution,
     resolutionEvidence: snapshot.resolutionEvidence,
     truncated:
-      boundedSources.truncated ||
+      finalSources.truncated ||
       (countEvidence?.truncated ?? false) ||
       snapshot.resolutionEvidenceTruncated,
     evidenceFingerprint: ownershipEvidence?.evidenceFingerprint ?? null,

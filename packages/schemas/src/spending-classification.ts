@@ -53,6 +53,14 @@ export const spendingCategorySummarySchema = z.object({
 export type SpendingCategorySummary = z.infer<
   typeof spendingCategorySummarySchema
 >;
+
+export const spendingCategorySummaryLabels = {
+  single: "Single category",
+  mixed: "Mixed categories",
+  partial: "Partially classified",
+  unclassified: "Unclassified",
+  not_applicable: "Not applicable",
+} satisfies Record<SpendingCategorySummary["state"], string>;
 export type SpendingCategoryAllocation = z.infer<
   typeof spendingCategoryAllocationSchema
 >;

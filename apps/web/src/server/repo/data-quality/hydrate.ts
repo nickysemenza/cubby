@@ -1,10 +1,12 @@
 import {
   type DataCheck,
+  dataCheck,
   type DataQuality,
   type DataQualityException,
   type DataQualityGap,
   dataCheckFacet,
   dataCheckKind,
+  dataCheckLabel,
   dataCheckMessage,
   dataCheckWeight,
   dataCheckExemptible,
@@ -14,6 +16,7 @@ import {
   relatedDataQualityEntities,
   type ScoredEntity,
 } from "@cubby/schemas/data-quality";
+import { qualityBreakdown } from "@cubby/schemas/field-explanation";
 import { type EntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 import { uniq, uniqBy } from "es-toolkit";
@@ -54,6 +57,77 @@ export const calculateDataQualityScore = (
   const score =
     Math.round(((totalWeight - unresolvedWeight) / totalWeight) * 10_000) / 100;
   return Math.max(0, score);
+};
+
+export const buildQualityBreakdown = (
+  expectedChecks: readonly DataCheck[],
+  unresolvedChecks: readonly DataCheck[],
+  activeExceptions: readonly DataCheck[],
+): z.infer<typeof qualityBreakdown> => {
+  const expected = [...new Set(expectedChecks)];
+  const gaps = new Set(unresolvedChecks);
+  const exceptions = new Set(activeExceptions);
+  return qualityBreakdown.parse({
+    score: calculateDataQualityScore(
+      expected,
+      [...gaps].map((check) => ({ check })),
+    ),
+    expectedWeight: expected.reduce(
+      (sum, check) => sum + dataCheckWeight[check],
+      0,
+    ),
+    satisfiedWeight: expected.reduce(
+      (sum, check) => sum + (gaps.has(check) ? 0 : dataCheckWeight[check]),
+      0,
+    ),
+    checks: expected.map((check) => ({
+      check,
+      label: dataCheckLabel[check],
+      facet: dataCheckFacet[check],
+      kind: dataCheckKind[check],
+      weight: dataCheckWeight[check],
+      state: gaps.has(check)
+        ? "gap"
+        : exceptions.has(check)
+          ? "excepted"
+          : "satisfied",
+      description: dataCheckMessage[check],
+    })),
+  });
+};
+
+/** The lazy explanation reuses the same SQL evaluation as list hydration. */
+export const loadQualityBreakdown = async (
+  db: Database | DrizzleTransaction,
+  entity: ScoredEntity,
+  id: string,
+) => {
+  const entry = entryFor(entity);
+  const selected = z
+    .array(z.object({ id: z.string() }))
+    .parse(
+      (
+        await unwrapDb(db).execute(
+          sql`SELECT ${entry.table.id} AS "id" FROM ${entry.table} WHERE ${entry.table.shortcode} = ${id} AND ${entry.table.deletedAt} IS NULL`,
+        )
+      ).rows,
+    );
+  const target = selected[0];
+  if (!target)
+    throw new Error(`No live ${entity} record for quality explanation`);
+  const [row] = await loadEvaluations(db, entity, [target.id]);
+  if (!row) throw new Error("Quality evaluation was not loaded");
+  const evaluation = evaluateRow(entity, row);
+  const expected = checksOf(entity).filter(
+    (_, index) => row[expectedKey(index)] === true,
+  );
+  return buildQualityBreakdown(
+    expected,
+    evaluation.gaps.map((gap) => dataCheck.parse(gap.check)),
+    evaluation.exceptions
+      .filter((exception) => exception.state === "active")
+      .map((exception) => dataCheck.parse(exception.check)),
+  );
 };
 
 const qualityStatus = (

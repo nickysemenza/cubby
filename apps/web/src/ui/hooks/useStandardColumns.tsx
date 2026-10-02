@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import type { EntityActionSubject } from "~/entity/actions/entity-actions";
 import { browserEntityDefinition, getSortableFields } from "~/entity/entities";
+import { createEntityDisplayColumns } from "~/entity/entity-display";
 import { identityWidthClassName } from "~/entity/entity-list/identity-list-config";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
 import { createUnitMappingsColumn } from "~/entity/list-columns/product";
@@ -339,6 +340,16 @@ export function useStandardColumns<TData extends BaseListRow>({
         // Custom columns get two things applied from the registries: sorting from
         // `sortableFields`, and their filter control from the manifest.
         const sortableFields = getSortableFields(entity);
+        if (
+          !customColumns
+            .visit((column) => columnIdentifier(column) === "dataQuality")
+            .some(Boolean)
+        ) {
+          createEntityDisplayColumns(entity, columnHelper, undefined, {
+            only: ["dataQuality"],
+          }).visit(add);
+        }
+
         customColumns
           // Audit timestamps have one canonical position: after every domain and
           // related column, immediately before Actions. A few older custom tables

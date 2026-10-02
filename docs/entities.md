@@ -499,7 +499,7 @@ no second standard-column roster in the browser registry.
 list order; it must be a nonnegative integer. Unspecified facts retain model
 order after explicitly ordered facts. `display.listOrder` does the same for
 generated list columns (model order also drives form field order, so it cannot
-be re-sequenced), and `display.columnId` keeps a persisted column id when the
+be re-sequenced), and `display.columnId` keeps a stable column id when the
 field key differs — ids are saved layouts, filter bindings, sort ids and
 saved-view keys, so a rename is never free.
 
