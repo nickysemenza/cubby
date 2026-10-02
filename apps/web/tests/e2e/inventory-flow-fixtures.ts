@@ -13,13 +13,19 @@ export async function seedLedgerProduct(
   opts: {
     name: string;
     bought: number;
+    /** Line cost; the net basis the triage `minSpend` bound reads. */
+    cost?: number;
+    categoryId?: string;
     stocked?: { locationId: string; quantity: number };
   },
 ) {
-  const product = await seedProductPrerequisite(page, { name: opts.name });
+  const product = await seedProductPrerequisite(page, {
+    name: opts.name,
+    categoryId: opts.categoryId,
+  });
   await createEntityFixture(page, "expense", {
     name: `${opts.name} line`,
-    cost: 10,
+    cost: opts.cost ?? 10,
     date: "2026-01-05",
     costType: "materials",
     trade: "other",

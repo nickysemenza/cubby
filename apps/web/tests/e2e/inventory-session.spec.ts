@@ -1,6 +1,7 @@
 import {
   seedInventoryPrerequisites,
   seedLocationPrerequisite,
+  seedProductCategoryPrerequisite,
 } from "./fixtures-catalog";
 import { seedLedgerProduct } from "./inventory-flow-fixtures";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
@@ -253,6 +254,44 @@ test("shelf triage stocks with the ledger default, parks in Unknown, and discard
       .getByRole("heading", { name: "Shelf triage complete" })
       .or(queueItem(discardName).filter({ hasText: "done" })),
   ).toBeVisible({ timeout: 15000 });
+});
+
+test("shelf triage bounds the pass by spend and by category", async ({
+  page,
+}, testInfo) => {
+  const category = await seedProductCategoryPrerequisite(page, {
+    name: uniqueName(testInfo, "Triage category"),
+  });
+  const bigName = uniqueName(testInfo, "Triage big");
+  const smallName = uniqueName(testInfo, "Triage small");
+  const categorizedName = uniqueName(testInfo, "Triage categorized");
+  // Net basis is cost x lines: 500 clears the 100 floor, 10 does not.
+  await seedLedgerProduct(page, { name: bigName, bought: 1, cost: 500 });
+  await seedLedgerProduct(page, { name: smallName, bought: 1 });
+  await seedLedgerProduct(page, {
+    name: categorizedName,
+    bought: 1,
+    categoryId: category.id,
+  });
+
+  const queueItem = (name: string) =>
+    page.getByRole("button", { name: new RegExp(escapeRegExp(name)) });
+
+  await gotoAuthenticatedPage(
+    page,
+    "/inventory/triage?minSpend=100",
+    queueItem(bigName),
+  );
+  await expect(queueItem(smallName)).toHaveCount(0);
+  await expect(queueItem(categorizedName)).toHaveCount(0);
+
+  await gotoAuthenticatedPage(
+    page,
+    `/inventory/triage?categoryId=${category.id}`,
+    queueItem(categorizedName),
+  );
+  await expect(queueItem(bigName)).toHaveCount(0);
+  await expect(queueItem(smallName)).toHaveCount(0);
 });
 
 test("the not-on-a-shelf view offers a triage of its rows", async ({

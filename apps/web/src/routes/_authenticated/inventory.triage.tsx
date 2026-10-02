@@ -1,4 +1,7 @@
-import { runShortcode } from "@cubby/schemas/identifiers";
+import {
+  productCategoryShortcode,
+  runShortcode,
+} from "@cubby/schemas/identifiers";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 import { z } from "zod";
@@ -19,9 +22,16 @@ const ShelfTriageWorkbench = lazy(() =>
 const searchSchema = z.object({
   // Narrow the pass to the products bought on one import run's purchases.
   run: runShortcode.optional().catch(undefined),
+  // Bound the pass to the costly rows: a net-basis floor and/or one category.
+  minSpend: z.coerce.number().positive().optional().catch(undefined),
+  categoryId: productCategoryShortcode.optional().catch(undefined),
 });
 
-const searchDefaults = { run: undefined } as const;
+const searchDefaults = {
+  run: undefined,
+  minSpend: undefined,
+  categoryId: undefined,
+} as const;
 
 export const Route = createFileRoute("/_authenticated/inventory/triage")({
   validateSearch: searchSchema,
@@ -33,7 +43,8 @@ export const Route = createFileRoute("/_authenticated/inventory/triage")({
 });
 
 function ShelfTriagePage() {
-  const { run } = Route.useSearch();
+  const { run, minSpend, categoryId } = Route.useSearch();
+  const navigate = Route.useNavigate();
 
   return (
     <Page
@@ -44,7 +55,14 @@ function ShelfTriagePage() {
       decoration="none"
     >
       <Suspense fallback={<SimpleLoading text="Loading shelf triage..." />}>
-        <ShelfTriageWorkbench run={run} />
+        <ShelfTriageWorkbench
+          run={run}
+          minSpend={minSpend}
+          categoryId={categoryId}
+          onBoundsChange={(bounds) =>
+            void navigate({ search: (prev) => ({ ...prev, ...bounds }) })
+          }
+        />
       </Suspense>
     </Page>
   );
