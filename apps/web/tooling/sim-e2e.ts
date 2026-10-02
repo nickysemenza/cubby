@@ -12,6 +12,7 @@ import {
   stampSimulatorBuild,
 } from "../../../scripts/apple-simulator-build-cache.ts";
 import { createHash, randomBytes } from "node:crypto";
+import { homedir } from "node:os";
 import {
   appendFileSync,
   existsSync,
@@ -32,6 +33,7 @@ import { z } from "zod";
 
 import { writeE2ERunBundle } from "./e2e-run-bundle";
 import { collectNativeDriverDiagnostics } from "./native-driver-diagnostics";
+import { scrubErrorMessage } from "../src/lib/error-diagnostics";
 import { assertSimulatorAdminUrl } from "./sim-db-guard";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
 
@@ -1133,6 +1135,66 @@ function nativeBuildMetadata() {
   };
 }
 
+function retainRunDiagnostics(failure: Error | undefined): string[] {
+  const evidenceFiles: string[] = [];
+  if (failure) {
+    const driverRoot = path.resolve(
+      process.env.AGENT_DEVICE_STATE_DIR ??
+        path.join(homedir(), ".agent-device"),
+    );
+    const log = path.join(artifacts, "runner.log");
+    const diagnosticPaths = existsSync(log)
+      ? [...readFileSync(log, "utf8").matchAll(/Diagnostics Log: ([^\r\n]+)/gu)]
+      : [];
+    for (const [index, match] of diagnosticPaths.entries()) {
+      const source = path.resolve(match[1].trim());
+      const relative = path.relative(driverRoot, source);
+      if (
+        relative.startsWith("..") ||
+        path.isAbsolute(relative) ||
+        !existsSync(source) ||
+        statSync(source).size > 2 * 1024 * 1024
+      )
+        continue;
+      const diagnostic = path.join(artifacts, `driver-diagnostic-${index}.log`);
+      writeFileSync(
+        diagnostic,
+        readFileSync(source, "utf8")
+          .split("\n")
+          .map(scrubErrorMessage)
+          .join("\n"),
+      );
+      evidenceFiles.push(diagnostic);
+    }
+  }
+  const sourceStatus = path.join(artifacts, "source-status.txt");
+  writeFileSync(
+    sourceStatus,
+    execFileSync("git", ["status", "--porcelain"], { cwd: repoRoot }),
+  );
+  evidenceFiles.push(sourceStatus);
+  for (const name of [
+    "failure.txt",
+    "failure.png",
+    "failure-ui-tree.ndjson",
+    "diagnostic-error.txt",
+    "fixture-app-settings.json",
+  ]) {
+    const evidence = path.join(artifacts, name);
+    if (!existsSync(evidence)) continue;
+    if (name !== "failure.png")
+      writeFileSync(
+        evidence,
+        readFileSync(evidence, "utf8")
+          .split("\n")
+          .map(scrubErrorMessage)
+          .join("\n"),
+      );
+    evidenceFiles.push(evidence);
+  }
+  return evidenceFiles;
+}
+
 function finishE2ERun(failure: Error | undefined): Error | undefined {
   if (watch) return failure;
   try {
@@ -1140,6 +1202,7 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
     const status = failure === undefined ? "passed" : "failed";
     const durationMs = Math.round(performance.now() - runStartedAt);
     const resultsPath = path.join(artifacts, "run-results.json");
+    scenarioEvidence.push(...retainRunDiagnostics(failure));
     if (testerArmy) {
       const summary = path.join(
         testerArmyRawOutput(artifacts),
@@ -1718,6 +1781,7 @@ async function main(): Promise<void> {
             "agent-device",
             "prepare",
             "ios-runner",
+            "--debug",
             ...common,
             "--timeout",
             "240000",
