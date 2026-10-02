@@ -14,6 +14,7 @@ import { householdDateTime } from "~/lib/household-date";
 import { formatEstimate } from "~/lib/nutrition-format";
 
 import { UID_DOMAIN } from "./contracts";
+import type { IcsFeed } from "./rpc";
 
 /**
  * RFC 5545 serializer for the published calendar feed.
@@ -40,7 +41,7 @@ const CRLF = "\r\n";
 /** RFC 5545 §3.1: lines are folded at 75 *octets*, excluding the CRLF. */
 const MAX_LINE_OCTETS = 75;
 
-export type IcsFeed = "meals" | "tasks" | "all" | "garden";
+export type { IcsFeed };
 
 /** Nonempty by construction — `calendarRangeInput.kinds` rejects an empty list,
  * since "no kinds" would silently mean "no events" rather than "everything". */

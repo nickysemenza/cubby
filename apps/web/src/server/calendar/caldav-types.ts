@@ -11,12 +11,15 @@ import { taskStatusSchema } from "@cubby/schemas/project";
 import type { Trade } from "@cubby/schemas/task-fields";
 import { z } from "zod";
 
+import type { CalDavCollection } from "./rpc";
+
+export type { CalDavCollection };
+
 export const CALDAV_COLLECTIONS = {
   tasks: "Cubby Tasks",
   "completed-tasks": "Cubby Completed Tasks",
   meals: "Cubby Meals",
-} as const;
-export type CalDavCollection = keyof typeof CALDAV_COLLECTIONS;
+} as const satisfies Record<CalDavCollection, string>;
 export type CalendarProjection =
   | {
       entity: "task";

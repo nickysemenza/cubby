@@ -66,7 +66,10 @@ make the invalidated set large:
   to the type-only `src/server/worker-bindings.ts`
   (`scripts/worker-type-imports.ts`; Wrangler's `--check` compares only its
   hash header), where the heavy Durable Objects bind through the RPC
-  interfaces their classes implement, so the file reaches 17 small modules.
+  interfaces their classes implement. Each interface lives in a type-only
+  `rpc.ts` (or `image-processing/contracts.ts`) that imports only schema
+  types, so the file reaches six app modules instead of 17, none of them
+  the shared `lib/` helpers.
   `tooling/integration-teardown.ts` was the other global in most server
   closures; its `declare global` now lives in `tooling/globals.d.ts`.
 
@@ -89,8 +92,8 @@ instead of everything. The two server files still re-checked everything
 (56–71 s).
 
 With the bindings typed through RPC interfaces and the teardown global moved,
-only the env file's 17 dependencies (and two script-global files
-themselves) have a global file in their importer closure. A server file's first edit after a fresh build re-checks about 1,925
+only files the env file reaches (its six RPC modules and about 90 schema
+files) and two script-global files themselves have a global file in their importer closure. A server file's first edit after a fresh build re-checks about 1,925
 files instead of 3,461 (counted from `--generateTrace`), yet costs only ~5%
 less, 49–51 s CPU versus 51–54 s: recomputing declaration signatures across
 the importer closure dominates that edit, not checking. Adding an export once
@@ -105,6 +108,11 @@ reached a global file. After them, the first body edit after a fresh build
 went from 25.5–25.9 s to 16.7–17.6 s CPU for three client files and from
 50.4–51.4 s to 25.9–27.4 s for two server files; a cold check is unchanged
 (about 30 s CPU) and it reported no new errors.
+
+Moving the RPC interfaces into those leaves took `lib/utils.ts` and
+`lib/date-format.ts`, which the calendar contracts had pulled in, out of the
+escalating set: a first edit to either went from 30.3–30.5 s to 25.6–26.7 s
+CPU, and adding an export from 29.1–32.2 s to 26.7–28.2 s.
 
 Server modules no longer type-import client modules. The generated kernel
 bindings carried the port-existence check (`EntityPortExportChecks`, now in
