@@ -27,12 +27,14 @@ history is the archive. Permanent product constraints live in the
 ## Images & photos
 
 - 🟢 **Turn on automatic image description.** Decided: yes; attempts are now
-  recorded only when an executor takes the job. Image-processing settings still ship `enabled: false, paused:
-true` (`repo/image-processing-maintenance.ts`), so new uploads stay
-  undescribed and category suggestions see only text. Measured about $1.10 per
-  1,000 images at ~7 s each; `backfillImageProcessing` with `kinds:
-["describe_image"]` covers existing images. Unblocks the label-nutrition
-  extraction, the suggestion sweep, and a useful image search backfill.
+  recorded only when an executor takes the job. Production settings are
+  `enabled: false` (`repo/image-processing-maintenance.ts`), so new uploads stay
+  undescribed and category suggestions see only text. Flip "Enable new upload
+  processing" on `/problems` (it also schedules subject lift), then run
+  `backfillImageProcessing` with `kinds: ["describe_image"]` for existing
+  images (~5.5k; measured about $1.10 per 1,000 at ~7 s each). Unblocks the
+  label-nutrition extraction, the suggestion sweep, and a useful image search
+  backfill.
 
 - 🟢 **Label photo → `labelNutrition`.** Reuse the existing Product attachment
   `purpose: "label"` (no new purpose): when the description pass finds a
@@ -829,7 +831,7 @@ unit}` for measured lines (`0.5 lb @ $4/lb`), folding both into derived cost
 
 Built but barely used. Each stays until someone decides to use or remove it;
 counts are production rows at the 2026-09 consolidation. (The contribution
-ledger left this list: it is kept for use, starting with attribution prefill.)
+ledger left this list: attribution prefill now reads it.)
 
 - **Run and import machinery.** `RunApproval`, `RunControlEvent`, `RunEvidence`,
   `RunOrderCandidate`, `ImportHunt` (all 0); `ImportPreparedOrder` /
