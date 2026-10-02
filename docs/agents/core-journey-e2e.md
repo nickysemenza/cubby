@@ -105,6 +105,13 @@ order scenarios compose CSV, photo, and retailer receipt input; the final comman
 runs all six orders sequentially. See [Mac import checks](../../apps/web/tooling/mac-import-e2e.md)
 for fixture signing, host requirements, and artifact boundaries.
 
+The interactive CSV/photo journey can also run on the dedicated hosted simulator
+job, which retains the checksum-listed evidence in its downloadable run bundle:
+
+```sh
+gh workflow run ci.yaml --ref "$(git branch --show-current)" -f simulator_e2e=true -f simulator_journey=inputs
+```
+
 ## Delivery evidence
 
 [PR #1491](https://github.com/nickysemenza/cubby/pull/1491) was merged at
