@@ -47,6 +47,7 @@ const baseProduct = {
 const baseLocation = {
   id: LOCATION_ID,
   shortcode: "LOC-TEST",
+  emoji: null,
   name: "Pantry",
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
@@ -63,6 +64,7 @@ const baseLocation = {
 const baseInventoryEntry = {
   id: INVENTORY_ID,
   shortcode: "INV-TEST",
+  emoji: null,
   productId: PRODUCT_ID,
   amountValue: 2,
   amountUnit: "each",
@@ -169,6 +171,7 @@ describe("inventory mappers", () => {
           {
             image: {
               shortcode: IMAGE_SHORTCODE,
+              emoji: null,
               key: "image.jpg",
               filename: "image.jpg",
               size: 100,

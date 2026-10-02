@@ -47,6 +47,7 @@ const DELETED_AT = new Date("2023-01-03T00:00:00.000Z");
 const baseRecipe = {
   id: RECIPE_ID,
   shortcode: "RCP-A3F2",
+  emoji: null,
   name: "Test Recipe",
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
@@ -71,6 +72,7 @@ const subRecipe = {
   ...baseRecipe,
   id: SUB_RECIPE_ID,
   shortcode: "RCP-SUB7",
+  emoji: null,
   name: "Sub Recipe",
   sourceType: "Other" as const,
   sourceUrl: null,
@@ -80,6 +82,7 @@ const subRecipe = {
 const baseIngredient = {
   id: INGREDIENT_ID,
   shortcode: "ING-TEST",
+  emoji: null,
   name: "Flour",
   aliases: ["all-purpose flour"],
   naKinds: [],
@@ -98,6 +101,7 @@ const baseIngredientRelation = {
 
 const image = {
   shortcode: IMAGE_SHORTCODE,
+  emoji: null,
   key: "recipe.jpg",
   filename: "recipe.jpg",
   size: 100,
@@ -111,6 +115,7 @@ const image = {
 const deletedImage = {
   ...image,
   shortcode: DELETED_IMAGE_SHORTCODE,
+  emoji: null,
 };
 
 const fullRecipeRow = {

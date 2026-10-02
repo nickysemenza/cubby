@@ -132,7 +132,7 @@ test("edits compound emoji, clears it, and browses inherited category membership
     { emoji: null },
     { icon: "🛠️" },
   ]) {
-    await patch(`projects/${project}`, data);
+    await patch(`projects/${project}`, z.json().parse(data));
     const persisted = z
       .object({ emoji: z.string().nullable(), icon: z.string().nullable() })
       .parse(

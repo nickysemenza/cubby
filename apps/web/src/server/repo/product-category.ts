@@ -25,6 +25,7 @@ import {
 } from "@cubby/schemas/product-category-fields";
 import type { categoryMappingSchema } from "@cubby/schemas/spending-classification";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";

@@ -115,6 +115,7 @@ const baseProduct = {
 
 const baseImage = {
   shortcode: IMAGE_SHORTCODE,
+  emoji: null,
   key: "image.jpg",
   filename: "image.jpg",
   size: 100,
@@ -127,6 +128,7 @@ const baseImage = {
 
 const joinedImage = {
   shortcode: JOIN_IMAGE_SHORTCODE,
+  emoji: null,
   key: "joined.jpg",
   filename: "joined.jpg",
   size: 200,
@@ -140,6 +142,7 @@ const joinedImage = {
 const deletedImage = {
   ...baseImage,
   shortcode: DELETED_IMAGE_SHORTCODE,
+  emoji: null,
   deletedAt: DELETED_AT,
 };
 
@@ -187,6 +190,7 @@ const deletedUnitMapping = {
 const activeLocation = {
   id: LOCATION_ID,
   shortcode: "LOC-TEST",
+  emoji: null,
   name: "Pantry",
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
@@ -205,6 +209,7 @@ const deletedLocation = {
   ...activeLocation,
   id: testEntityId("location", "c23e4567-e89b-12d3-a456-426614174000"),
   shortcode: "LOC-9WK4",
+  emoji: null,
   deletedAt: DELETED_AT,
 };
 
@@ -255,6 +260,7 @@ describe("product mappers", () => {
       ingredient: {
         id: INGREDIENT_ID,
         shortcode: "ING-TEST",
+        emoji: null,
         name: "Wheat flour",
         aliases: ["flour"],
         naKinds: [],
@@ -274,6 +280,7 @@ describe("product mappers", () => {
         {
           id: INVENTORY_ID,
           shortcode: "INV-2345",
+          emoji: null,
           productId: PRODUCT_ID,
           amountValue: 2,
           amountUnit: "each",
@@ -291,6 +298,7 @@ describe("product mappers", () => {
         {
           id: DELETED_LOCATION_INVENTORY_ID,
           shortcode: "INV-3456",
+          emoji: null,
           productId: PRODUCT_ID,
           amountValue: 1,
           amountUnit: "each",
@@ -374,6 +382,7 @@ describe("product mappers", () => {
       ingredient: {
         id: INGREDIENT_ID,
         shortcode: "ING-TEST",
+        emoji: null,
         name: "Wheat flour",
         aliases: ["flour"],
         naKinds: [],
@@ -393,6 +402,7 @@ describe("product mappers", () => {
         {
           id: testEntityId("cookbook", "523e4567-e89b-12d3-a456-426614174000"),
           shortcode: "CKB-2345",
+          emoji: null,
           name: "Weeknight Cooking",
           author: [],
           subjects: [],
@@ -409,6 +419,7 @@ describe("product mappers", () => {
         {
           id: testEntityId("cookbook", "623e4567-e89b-12d3-a456-426614174000"),
           shortcode: "CKB-DELETED",
+          emoji: null,
           name: "Deleted Book",
           author: [],
           subjects: [],
@@ -425,6 +436,7 @@ describe("product mappers", () => {
         {
           id: testEntityId("cookbook", "723e4567-e89b-12d3-a456-426614174000"),
           shortcode: "CKB-2346",
+          emoji: null,
           name: "Weekend Cooking",
           author: [],
           subjects: [],
@@ -443,6 +455,7 @@ describe("product mappers", () => {
         {
           id: INVENTORY_ID,
           shortcode: "INV-2345",
+          emoji: null,
           productId: PRODUCT_ID,
           amountValue: 2,
           amountUnit: "each",
@@ -468,6 +481,7 @@ describe("product mappers", () => {
           // two surfaces.
           id: DELETED_LOCATION_INVENTORY_ID,
           shortcode: "INV-3456",
+          emoji: null,
           productId: PRODUCT_ID,
           amountValue: 1,
           amountUnit: "each",
@@ -605,6 +619,7 @@ describe("on-hand counts units in service as locations", () => {
               {
                 id: INVENTORY_ID,
                 shortcode: "INV-2345",
+                emoji: null,
                 productId: PRODUCT_ID,
                 amountValue: entryValue,
                 amountUnit: "each",
