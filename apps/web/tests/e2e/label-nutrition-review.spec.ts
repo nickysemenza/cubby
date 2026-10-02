@@ -44,7 +44,7 @@ test("detected label nutrition stays editable and requires Save before replacing
   await dialog.getByRole("button", { name: /^Create$/ }).click();
   await expect(dialog).not.toBeVisible();
   await openProductFromPalette(page, name);
-  const imageCode = await seedDetectedLabelNutrition(name);
+  const imageCode = await seedDetectedLabelNutrition(page, name);
   await page.reload();
   await waitForAppHydration(page);
   const review = page.getByRole("button", {
