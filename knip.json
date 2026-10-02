@@ -23,6 +23,7 @@
         "scripts/dev-db.ts!",
         "scripts/stamp-source-mtimes.ts!",
         "scripts/apple-simulator-build-cache.ts!",
+        "scripts/prewarm-ios-simulator.ts!",
         "scripts/generator/ensure.ts!"
       ],
       "project": ["neon.ts!", "scripts/**/*.ts!"],

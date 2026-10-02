@@ -32,6 +32,11 @@ import { z } from "zod";
 
 import { writeE2ERunBundle } from "./e2e-run-bundle";
 import { collectNativeDriverDiagnostics } from "./native-driver-diagnostics";
+import { simulatorInventorySchema } from "./simulator-inventory-schema";
+import {
+  iosSimulatorDeviceType,
+  selectIOSSimulator,
+} from "../../../scripts/apple-simulator-selection.ts";
 import { assertSimulatorAdminUrl } from "./sim-db-guard";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
 
@@ -495,14 +500,9 @@ async function run(
     );
 }
 
-async function simulator(): Promise<{
-  udid: string;
-  name: string;
-  state: string;
-  runtime: string;
-  deviceTypeIdentifier: string;
-}> {
-  const deviceType = "com.apple.CoreSimulator.SimDeviceType.iPhone-17";
+async function simulator(): Promise<
+  NonNullable<ReturnType<typeof selectIOSSimulator>>
+> {
   const raw = await new Promise<string>((resolve, reject) => {
     const child = spawn("xcrun", [
       "simctl",
@@ -520,43 +520,16 @@ async function simulator(): Promise<{
     );
     child.once("error", reject);
   });
-  const parsed = z
-    .object({
-      devices: z.record(
-        z.string(),
-        z.array(
-          z
-            .object({
-              name: z.string(),
-              udid: z.string(),
-              state: z.string(),
-              deviceTypeIdentifier: z.string(),
-            })
-            .loose(),
-        ),
-      ),
-    })
-    .parse(JSON.parse(raw));
-  const phones = Object.entries(parsed.devices)
-    .filter(([runtime]) => runtime.includes(".iOS-"))
-    .flatMap(([runtime, devices]) =>
-      devices.map((device) => ({ ...device, runtime })),
-    )
-    .filter((device) => device.name.includes("iPhone"));
+  const parsed = simulatorInventorySchema.parse(JSON.parse(raw));
   const preferred = process.env.CUBBY_SIM_DEVICE;
-  const selected = preferred
-    ? phones.find(
-        (device) =>
-          device.deviceTypeIdentifier === deviceType &&
-          (device.name === preferred || device.udid === preferred),
-      )
-    : (phones.find(
-        (device) =>
-          device.deviceTypeIdentifier === deviceType &&
-          device.state === "Booted",
-      ) ?? phones.find((device) => device.deviceTypeIdentifier === deviceType));
+  const selected = selectIOSSimulator(parsed, preferred);
   if (!selected && !preferred) {
-    await run("xcrun", ["simctl", "create", "cubby-e2e-iPhone17", deviceType]);
+    await run("xcrun", [
+      "simctl",
+      "create",
+      "cubby-e2e-iPhone17",
+      iosSimulatorDeviceType,
+    ]);
     return simulator();
   }
   if (!selected)
