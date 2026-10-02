@@ -148,7 +148,6 @@ describe("task list display columns", () => {
       "subjectProductId",
       "parentTaskId",
       "dueDate",
-      "dueEndDate",
       "trade",
       "sortOrder",
       "dataQuality",
@@ -165,8 +164,7 @@ describe("task list display columns", () => {
       projectId: "Project",
       subjectProductId: "Subject product",
       parentTaskId: "Parent task",
-      dueDate: "Due date",
-      dueEndDate: "Due end date",
+      dueDate: "Due",
       trade: "Trade",
       sortOrder: "Sort order",
       dataQuality: "Data quality",
@@ -186,7 +184,6 @@ describe("task list display columns", () => {
     expect(byId.trade).toBe(true);
     // Not in the roster.
     expect(byId.parentTaskId).toBe(false);
-    expect(byId.dueEndDate).toBe(false);
     expect(byId.sortOrder).toBe(false);
   });
 
@@ -200,11 +197,11 @@ describe("task list display columns", () => {
       priority: 10,
       interactive: undefined,
     });
-    expect(byId.dueDate?.className).toBe("w-28");
+    expect(byId.dueDate?.className).toBe("w-40");
     expect(byId.dueDate?.mobile).toEqual({
       slot: "meta",
       priority: 40,
-      interactive: true,
+      interactive: false,
     });
     expect(byId.trade?.className).toBe("w-28");
     expect(byId.trade?.mobile).toEqual({
@@ -212,17 +209,18 @@ describe("task list display columns", () => {
       priority: 50,
       interactive: undefined,
     });
-    // `dueEndDate` and `sortOrder` declare no width/mobile at all — hidden by
-    // default in `tasklist.tsx`'s `initialColumnVisibility`, but still built.
-    expect(byId.dueEndDate?.className).toBeUndefined();
-    expect(byId.dueEndDate?.mobile).toBeUndefined();
+    // `sortOrder` declares no width/mobile at all.
     expect(byId.sortOrder?.className).toBeUndefined();
     expect(byId.sortOrder?.mobile).toBeUndefined();
   });
 
-  it("renders the generic dueDate column through the declared plainDate format", () => {
-    render(<>{renderTaskCell("dueDate", TASK_ROW)}</>);
-    expect(screen.getByText("Sep 20, 2026")).toBeVisible();
+  it("folds dueDate and dueEndDate into the one declared span column", () => {
+    render(
+      <>
+        {renderTaskCell("dueDate", { ...TASK_ROW, dueEndDate: "2026-09-23" })}
+      </>,
+    );
+    expect(screen.getByText(/Sep 20 – 23/)).toBeVisible();
   });
 
   it("renders the generic status column as its rich label, never the stored value", () => {

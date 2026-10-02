@@ -941,6 +941,26 @@ const buildMetadataSchemas = () => {
           emoji: nonEmptyString(),
         })
         .strict(),
+      /**
+       * Date pairs that read as one span: `start` (usually one day) and an
+       * optional `end`. Detail and list surfaces render one row labelled
+       * `label` ("Sep 22 – 25") in the start field's place and hide the end
+       * field; both stay editable, and the editor rejects an end before its
+       * start. The one declaration for the span — `edit` validation, the
+       * native catalog's `editDateRanges` and the calendar read it.
+       */
+      spans: z
+        .array(
+          z
+            .object({
+              start: fieldKey,
+              end: fieldKey,
+              label: nonEmptyString(),
+            })
+            .strict(),
+        )
+        .optional()
+        .default([]),
       detail: z
         .object({
           /**
@@ -1327,14 +1347,6 @@ const buildMetadataSchemas = () => {
             .nullable()
             .optional()
             .default(null),
-          /**
-           * Date pairs whose end may not precede their start; the editor
-           * reports it beside the end field.
-           */
-          dateRanges: z
-            .array(z.object({ start: fieldKey, end: fieldKey }).strict())
-            .optional()
-            .default([]),
           /** Fields the update editor shows read-only, unconditionally. */
           readOnlyOnUpdate: z.array(fieldKey).optional().default([]),
           /** Fields locked when `field` equals `equals` on the record. */
@@ -1377,13 +1389,11 @@ const buildMetadataSchemas = () => {
         .transform(
           ({
             sectionOverrides,
-            dateRanges,
             readOnlyOnUpdate,
             readOnlyWhen,
             hiddenWhen,
           }) => ({
             sections: sectionOverrides,
-            dateRanges,
             readOnlyOnUpdate,
             readOnlyWhen,
             hiddenWhen,

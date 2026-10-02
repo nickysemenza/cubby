@@ -45,7 +45,6 @@ export {
 } from "~/lib/nivo-theme";
 export {
   capitalize,
-  formatDateRange,
   monthLabel,
   PROJECT_STATUS_LABELS,
   TRADE_LABELS,

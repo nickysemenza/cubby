@@ -707,13 +707,13 @@ describe("declared entity displays", () => {
       // "status" is in `generatedEntitySort.task.fields` — the auto column
       // picks that up with no explicit `enableSorting` needed.
       expect(byId.status?.enableSorting).toBe(true);
-      // "dueDate" is declared `format: "plainDate"`, `width: "sm"`, and a
-      // `mobile` placement — all read straight off the task entity file.
-      expect(byId.dueDate?.className).toBe("w-28");
+      // "dueDate" is the declared span column: its own width, the declared
+      // `mobile` placement, and no inline-edit affordance.
+      expect(byId.dueDate?.className).toBe("w-40");
       expect(byId.dueDate?.mobile).toEqual({
         slot: "meta",
         priority: 40,
-        interactive: true,
+        interactive: false,
       });
       expect(byId.dueDate?.enableSorting).toBe(true);
       // An override whose declared column id is a roster sort id sorts;

@@ -36,6 +36,7 @@ export const seedTaskPrerequisite = (
   opts: {
     name: string;
     dueDate?: string;
+    dueEndDate?: string;
     status?: TaskStatus;
     projectId?: string;
   },
@@ -44,6 +45,7 @@ export const seedTaskPrerequisite = (
     name: opts.name,
     trade: "other",
     dueDate: opts.dueDate,
+    dueEndDate: opts.dueEndDate,
     status: opts.status,
     projectId: opts.projectId,
   });

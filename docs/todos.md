@@ -423,17 +423,6 @@ See also the image operational passes at the end of this file.
 
 ## Tasks, projects & garden
 
-- 🟢 **Date spans for Task, Project, and Planting.** A task is usually one
-  day, a project usually spans several, and either may have an end. Declare a
-  manifest-level span (start, optional end) and render one detail/list row —
-  "Sep 22" or "Sep 22 – 25", collapsed when the end is null or equals the
-  start, in human date format — with both ends editable in the edit sheet.
-  Today Task's `dueEndDate` and Project's `startDate`/`endDate` have no
-  `display.format`, so they show raw ISO (Task Overview prints `2026-09-22`
-  twice). Task already declares the range (`dueDate` → `dueEndDate`); Planting
-  has `sowedOn`/`transplantedOn` → `finishedOn` plus the derived expected
-  harvest window. Calendar and timeline views read the same span.
-
 - 🧱 **Project materials and shortfalls.** A project-material edge with
   quantity, free-text unit, optional Product, and durable/consumable semantics
   (see `Product.kind`); derive have/need/buy through the availability engine

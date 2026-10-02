@@ -35,6 +35,7 @@ export default defineEntity({
       actionLabel: "New Project",
     },
     icons: { phosphor: "Hammer", sfSymbol: "hammer", emoji: "🛠️" },
+    spans: [{ start: "startDate", end: "endDate", label: "Dates" }],
     detail: {
       relationFilterOverrides: {
         purchases: { descriptor: "related:purchase.projects" },
@@ -364,6 +365,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          format: "plainDate",
         },
         validation: {
           read: plainDate
@@ -381,6 +383,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          format: "plainDate",
         },
         validation: {
           read: plainDate

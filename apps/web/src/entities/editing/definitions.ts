@@ -504,7 +504,7 @@ const isBlank = (value: EntityEditValue): boolean => {
 
 /**
  * The intent's declared checks: `intents.required` fields that are blank and
- * `edit.dateRanges` whose end precedes its start. Both are data in the
+ * `presentation.spans` whose end precedes its start. Both are data in the
  * entity declaration; only `options.validate` is entity-specific.
  */
 const declaredIntentIssues = <E extends EditableEntity>(
@@ -523,9 +523,9 @@ const declaredIntentIssues = <E extends EditableEntity>(
         source: "client",
       });
   }
-  const dateRanges: readonly { start: string; end: string }[] =
-    entitySummary[entity].edit.dateRanges;
-  for (const { start, end } of dateRanges) {
+  const spans: readonly { start: string; end: string }[] =
+    entitySummary[entity].spans;
+  for (const { start, end } of spans) {
     if (!fields.includes(start) || !fields.includes(end)) continue;
     const from = z.string().min(1).safeParse(values[start]);
     const to = z.string().min(1).safeParse(values[end]);

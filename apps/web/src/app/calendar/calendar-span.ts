@@ -1,7 +1,7 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { addDays } from "date-fns";
 
-import { formatDateRange } from "~/app/projects/project-formatting";
+import { formatDateSpan } from "~/lib/date-span";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 
 /**
@@ -26,5 +26,5 @@ export function itemSpanLabel(item: CalendarItem): string | null {
   // the same shift `persistMove` applies when it writes a task's `dueEndDate`.
   const endInclusive = addDays(parsePlainDate(item.endDateExclusive), -1);
   if (endInclusive.getTime() <= start.getTime()) return null;
-  return formatDateRange(item.startDate, formatPlainDate(endInclusive));
+  return formatDateSpan(item.startDate, formatPlainDate(endInclusive));
 }

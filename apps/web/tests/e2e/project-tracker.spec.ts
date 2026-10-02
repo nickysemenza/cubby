@@ -39,3 +39,19 @@ test("task quick-add requires a deliberate trade and saves assignment modes", as
   await expect(dialog).not.toBeVisible();
   await expect(page.getByText(name, { exact: true })).toBeVisible();
 });
+
+test("task detail shows one human date span for a ranged due date", async ({
+  page,
+}) => {
+  const name = `e2e ranged task ${Date.now()}`;
+  const task = await seedTaskPrerequisite(page, {
+    name,
+    dueDate: "2031-09-22",
+    dueEndDate: "2031-09-25",
+  });
+  await gotoAuthenticatedPage(page, `/tasks/${task.id}`);
+
+  await expect(page.getByText("Sep 22 – 25, 2031")).toHaveCount(1);
+  await expect(page.getByText("2031-09-22")).toHaveCount(0);
+  await expect(page.getByText("2031-09-25")).toHaveCount(0);
+});
