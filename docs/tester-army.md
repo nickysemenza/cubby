@@ -115,6 +115,10 @@ summary includes only fixed synthetic case names and numeric usage/replay
 metrics; credentials and fixture identifiers are excluded. Estimated cost may
 be absent when the SDK does not report it. Telemetry is disabled.
 
+Deterministic native replays print validated step counters, command names, and
+elapsed milliseconds for timeout diagnosis. Selector values and session paths
+are excluded from those progress messages.
+
 This trial establishes only the synthetic rename journey on Chromium and an
 iOS simulator. It does not establish broader agent reliability or physical
 device behavior.

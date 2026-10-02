@@ -1267,6 +1267,8 @@ async function runNativeJourney(
       "--reporter",
       "default",
       "--reporter",
+      path.join(webRoot, "tooling/native-replay-progress-reporter.ts"),
+      "--reporter",
       `junit:${path.join(artifacts, "junit.xml")}`,
       "-e",
       `PRODUCT_ID=${productId}`,
