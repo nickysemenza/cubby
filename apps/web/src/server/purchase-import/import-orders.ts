@@ -76,6 +76,7 @@ import {
 
 import { assertRunCapability } from "./capabilities";
 import { learnPurchaseProductExternalId } from "./external-id-learning";
+import { loadOrderMailImportEvidence } from "./gmail/import";
 import {
   attachPendingOrderMailEvidence,
   type OrderMailEvidencePorts,
@@ -372,6 +373,25 @@ export async function preparePurchaseImport(
     throw new Error(
       "Purchase validation accepts only run-scoped evidence, never shared images",
     );
+  const assignedMail = await loadOrderMailImportEvidence(
+    db,
+    scope.public.runId,
+  );
+  if (
+    assignedMail &&
+    (input.orders.length !== 1 ||
+      input.orders.some(
+        (order) =>
+          order.source.kind !== assignedMail.source.kind ||
+          order.source.externalKey !== assignedMail.source.externalKey ||
+          order.source.checksum !== assignedMail.evidenceChecksum ||
+          order.evidenceChecksum !== assignedMail.evidenceChecksum ||
+          order.extraction.candidate?.orderId !== assignedMail.orderId,
+      ))
+  )
+    throw new Error(
+      "Preparation must use the assigned order confirmation evidence unchanged.",
+    );
   if (!scope.vendorId) throw new Error("Purchase import run has no vendor");
   const vendorId = scope.vendorId;
   const inputFingerprint = await sha256Hex(JSON.stringify(input.orders));
@@ -652,6 +672,7 @@ export async function commitPurchaseImport(
           scope.public.runId,
           input.prepareOperationId,
         );
+        await loadOrderMailImportEvidence(transactionDb, scope.public.runId);
         const defaultProjectId = input.defaultProjectId
           ? await resolveOrThrow(
               transactionDb,

@@ -29,7 +29,7 @@ import { runStructuredFeature } from "~/server/ai/run-feature";
 import { cachedCall } from "~/server/clients/ai-adapters";
 import { gatewayBaseURL, gatewayFetch } from "~/server/clients/ai-gateway";
 import type { Database } from "~/server/db";
-import { image } from "~/server/db/schema";
+import { image, type orderMail } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { cents } from "~/server/repo/money";
 import { ensureRun, systemActor } from "~/server/runs/ensure-run";
@@ -73,7 +73,65 @@ export const extractPurchaseCapture = async (
   },
   ports = { runStructured: runStructuredFeature },
 ) => {
-  const request = purchaseExtractionPrompt(browserCapture.parse(args.capture));
+  return extractPurchaseText(
+    {
+      ...args,
+      request: purchaseExtractionPrompt(browserCapture.parse(args.capture)),
+    },
+    ports,
+  );
+};
+
+export const extractPurchaseOrderMail = async (args: {
+  db: Database;
+  runId: string;
+  orderId: string;
+  mail: Pick<
+    typeof orderMail.$inferSelect,
+    "sender" | "subject" | "receivedAt" | "content"
+  >;
+}) => {
+  const content = JSON.stringify({
+    kind: "order_confirmation_email",
+    orderId: args.orderId,
+    sender: args.mail.sender,
+    subject: args.mail.subject,
+    receivedAt: args.mail.receivedAt,
+    content: args.mail.content,
+  });
+  if (content.length > 256 * 1024)
+    throw new Error(
+      "Saved order confirmation exceeds the extraction limit; review its itemized evidence.",
+    );
+  const request = {
+    systemPrompts: [
+      purchaseImportPromptText.extraction,
+      purchaseImportPromptText.extractionOutput,
+    ],
+    messages: [{ role: "user" as const, content }],
+  };
+  const extraction = await extractPurchaseText({
+    db: args.db,
+    runId: args.runId,
+    request,
+  });
+  if (extraction.candidate && extraction.candidate.orderId !== args.orderId)
+    throw new Error(
+      "Extracted confirmation order id differs from its assigned order; review the saved email.",
+    );
+  return extraction;
+};
+
+const extractPurchaseText = async (
+  args: {
+    db: Database;
+    runId: string;
+    request: ReturnType<typeof purchaseExtractionPrompt>;
+    screenshotImageId?: string | null;
+  },
+  ports = { runStructured: runStructuredFeature },
+) => {
+  const request = args.request;
   const first = normalizeImportExtractionModelOutput(
     await ports.runStructured(PURCHASE_IMPORT_EXTRACTION_FEATURE, request, {
       db: args.db,

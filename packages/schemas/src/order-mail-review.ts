@@ -91,6 +91,13 @@ export const orderMailDecisionOut = orderMailDecisionInput.pick({
   decision: true,
 });
 
+export const orderMailImportInput = orderMailDecisionInput.pick({
+  eventId: true,
+  evidenceChecksum: true,
+});
+export type OrderMailImportInput = z.infer<typeof orderMailImportInput>;
+export const orderMailImportOut = z.object({ runId: runShortcode });
+
 export const purchaseOrderMailInput = z.object({
   purchaseId: purchaseShortcode,
 });

@@ -954,6 +954,33 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
         db,
         { ...input, kind: "extract_run_evidence", payload: input },
         async () => {
+          const { loadOrderMailImportEvidence } =
+            await import("./server/purchase-import/gmail/import");
+          const mail = await loadOrderMailImportEvidence(db, input.runId);
+          if (mail) {
+            const { extractPurchaseOrderMail } =
+              await import("./server/agents/purchase-import/extract");
+            const extraction = await extractPurchaseOrderMail({
+              db,
+              runId: input.runId,
+              mail: mail.mail,
+              orderId: mail.orderId,
+            });
+            const stableOrderId = `mail:${mail.eventId}`;
+            return {
+              stableOrderId,
+              itemOperationId: stableOrderId,
+              source: mail.source,
+              evidenceChecksum: mail.evidenceChecksum,
+              extractionRevision: "order-mail@1",
+              extraction,
+              lineIds: (extraction.candidate?.lines ?? []).map(
+                (_line, index) => `${stableOrderId}:line:${index}`,
+              ),
+              primaryDocumentImageId: null,
+              screenshotImageId: null,
+            };
+          }
           const [
             { extractPurchaseEvidence },
             { loadRunEvidenceForExtraction },

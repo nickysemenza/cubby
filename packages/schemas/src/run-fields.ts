@@ -66,5 +66,13 @@ export const mailSearchRunProgress = z.object({
   error: z.string().nullable().optional(),
 });
 export type MailSearchRunProgress = z.infer<typeof mailSearchRunProgress>;
-export type RunInput = MailSearchRunInput;
+export const orderMailImportRunInput = z.object({
+  kind: z.literal("order_mail_import"),
+  eventId: z.uuid(),
+  evidenceChecksum: z.string().min(1),
+  orderId: z.string().min(1),
+});
+export type RunInput =
+  | MailSearchRunInput
+  | z.infer<typeof orderMailImportRunInput>;
 export type RunProgress = MailSearchRunProgress;
