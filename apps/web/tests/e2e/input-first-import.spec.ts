@@ -1,21 +1,16 @@
+import { prepareCapturedRetailerOrder } from "./prepare-retailer-source";
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
-import { preparePurchaseImportInput } from "@cubby/schemas/purchase-import";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 
 import * as schema from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { setMemberLoginParty } from "~/server/repo/member-login";
-import { preparePurchaseImport } from "~/server/purchase-import/import-orders";
-import { extractPurchaseCapture } from "~/server/agents/purchase-import/extract";
-import { connectRetailerBrowserPeer } from "./retailer-browser-peer";
-import { startOrResumeRun } from "~/server/purchase-import/run-service";
 import {
   convergenceNames,
   createConvergenceFixtures,
   sha256Hex,
-  syntheticOrderIds,
 } from "../../tooling/convergence-harness";
 import {
   createEntityFixture,
@@ -43,7 +38,6 @@ for (const statementFirst of [true, false]) {
     test.setTimeout(180_000);
     const provider = e2eRuntime.googleProvider;
     if (!provider) throw new Error("Gmail journey requires its local provider");
-    const providerURL = provider.url;
     const token = `joined-${Date.now()}`;
     const names = convergenceNames(token);
     const { db, actor } = await createEvidenceHarnessContext(page);
@@ -386,92 +380,20 @@ for (const statementFirst of [true, false]) {
         },
       );
       expect(allowed.ok(), await allowed.text()).toBe(true);
-      const run = await startOrResumeRun(db, {
-        ledgerPartyId: member.id,
-        vendorAccountId: accountId,
-        trigger: "manual",
-      });
-      const namespace = await e2eRuntime.browserNamespace();
-      const peer = await connectRetailerBrowserPeer({
+      const run = await prepareCapturedRetailerOrder({
         page,
         db,
-        namespace,
-        baseURL: e2eRuntime.baseURL,
+        actor,
+        runtime: e2eRuntime,
+        ledgerPartyId: member.id,
+        vendorAccountId: accountId,
         accountCode: prerequisites.account.id,
-        accountId,
-        runId: run.id,
+        targetPurchaseId: purchaseCode,
+        token,
+        url,
+        productUrl,
+        expectedProductText: asin,
       });
-      const ids = syntheticOrderIds(token);
-      try {
-        const captured = await peer.capture(url, `capture-order:${token}`);
-        const capturedProduct = await peer.capture(
-          productUrl,
-          `capture-product:${token}`,
-        );
-        expect(capturedProduct.readableText).toContain(asin);
-        const capture = {
-          url: captured.sourceURL,
-          title: captured.title,
-          text: captured.readableText,
-          capturedAt: captured.capturedAt,
-          links: captured.links.map((link) => ({
-            id: link.id,
-            href: link.url,
-            text: link.label ?? "",
-          })),
-          images: captured.images.map((image) => ({
-            src: image.url,
-            alt: image.alt ?? "",
-          })),
-        };
-        const extraction = await extractPurchaseCapture(
-          { db, runId: run.id, capture },
-          {
-            runStructured: async (feature) => {
-              const response = await fetch(
-                `${providerURL}/model/extract-capture`,
-                {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify(capture),
-                },
-              );
-              if (!response.ok) throw new Error(await response.text());
-              return feature.schema.parse(await response.json());
-            },
-          },
-        );
-        const checksum = sha256Hex(
-          JSON.stringify({ captured, capturedProduct }),
-        );
-        await preparePurchaseImport(
-          db,
-          preparePurchaseImportInput.parse({
-            _runExecution: {
-              runId: run.id,
-              operationId: ids.prepare,
-              itemOperationIds: [ids.item],
-            },
-            orders: [
-              {
-                targetPurchaseId: purchaseCode,
-                stableOrderId: ids.order,
-                itemOperationId: ids.item,
-                source: { kind: "browser_order", externalKey: url, checksum },
-                evidenceChecksum: checksum,
-                extractionRevision: "synthetic-provider@1",
-                extraction,
-                lineIds: [ids.line],
-                primaryDocumentImageId: null,
-                screenshotImageId: null,
-              },
-            ],
-          }),
-          actor,
-        );
-      } finally {
-        await peer.close();
-      }
       await gotoAuthenticatedPage(page, `/runs/${run.publicId}`);
       const approve = page.getByRole("button", {
         name: "Approve and import",
