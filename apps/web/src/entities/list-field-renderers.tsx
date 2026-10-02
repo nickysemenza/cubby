@@ -1,14 +1,15 @@
+import type { ActivityRun } from "@cubby/schemas/activity";
+import { dataQuality } from "@cubby/schemas/data-quality";
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ListRendererId } from "@cubby/schemas/entity-manifest";
 import type { ImageWithEntity } from "@cubby/schemas/image";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import { z } from "zod";
 
-import {
-  createImageColumn,
-  renderOptionCell,
-} from "~/app/_components/data-table/columnHelpers";
+import { createImageColumn } from "~/app/_components/data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   type CubbyColumnCollection,
@@ -20,8 +21,8 @@ import {
 } from "~/app/_components/recipe/recipe-source";
 import { NoneValue } from "~/components/ui/none-value";
 import type { ListEntity } from "~/entities/generated/entity-lists.gen";
-import { dataQualityOptions } from "~/lib/data-quality-options";
 
+import { DataQualityValue } from "./data-quality-value";
 import { SpendingCategorySummaryValue } from "./detail-field-renderers/spending-category-summary";
 import type { ListRenderer, ListRowOf } from "./list-renderer-types";
 import { financialTransactionListRenderers } from "./list-renderers/finance";
@@ -45,6 +46,8 @@ import {
  */
 type ClientListRows = {
   cookbook: CookbookSummary;
+  run: ActivityRun;
+  "usda-food": FoodSummaryWithLinkedProducts;
   // `dataQuality` is optional on `ImageWithEntity` at the schema level (it's
   // a postprocessed field `imageWithRelationsToAPI`'s callers merge in, like
   // `representations`/`processingIssue`), but `imageList` — the only
@@ -112,25 +115,34 @@ type ScoredListEntity = {
  * that carries the 0–100 score. Its id is also the sort field, so the
  * column header sorts by score (asc = weakest row first — the worklist).
  */
-const dataQualityRenderer = <TRow extends ScoredRow>(
+const qualityRow = z.object({ dataQuality: dataQuality.optional() });
+const dataQualityRenderer = <TRow extends object>(
   helper: CubbyColumnHelper<TRow>,
+  scored = true,
 ): CubbyColumnCollection<TRow> =>
   createCubbyColumnCollection<TRow>((add) => {
+    const qualityOf = (row: TRow) => qualityRow.parse(row).dataQuality;
     add(
-      helper.accessor((row) => row.dataQuality.status, {
+      helper.accessor((row) => qualityOf(row)?.status ?? "not_assessed", {
         id: "dataQuality",
         header: "Data quality",
-        enableSorting: true,
+        enableSorting: scored,
+        sortDescFirst: false,
+        sortFn: (left, right) => {
+          const leftQuality = qualityOf(left.original);
+          const rightQuality = qualityOf(right.original);
+          if (!leftQuality) return rightQuality ? 1 : 0;
+          if (!rightQuality) return -1;
+          return leftQuality.score - rightQuality.score;
+        },
         meta: {
           className: "w-32",
-          mobile: { slot: "meta", priority: 75 },
+          mobile: { slot: "meta", priority: 0 },
         },
-        cell: (info) =>
-          renderOptionCell(
-            info.getValue(),
-            dataQualityOptions,
-            Math.round(info.row.original.dataQuality.score),
-          ),
+        cell: (info) => {
+          const quality = qualityOf(info.row.original);
+          return <DataQualityValue quality={quality} scored={scored} />;
+        },
       }),
     );
   });
@@ -265,6 +277,26 @@ export const listRendererCoverage = {
   ledgerParty: scoredCoverage<"ledgerParty">(),
   ledgerTransfer: scoredCoverage<"ledgerTransfer">(),
   device: scoredCoverage<"device">(),
+  spendingCategory: {
+    "data-quality": implemented<ListRenderer<"spendingCategory">>((helper) =>
+      dataQualityRenderer(helper, false),
+    ),
+  },
+  vendorAccount: {
+    "data-quality": implemented<ListRenderer<"vendorAccount">>((helper) =>
+      dataQualityRenderer(helper, false),
+    ),
+  },
+  run: {
+    "data-quality": implemented<ClientListRenderer<ClientListRows["run"]>>(
+      (helper) => dataQualityRenderer(helper, false),
+    ),
+  },
+  "usda-food": {
+    "data-quality": implemented<
+      ClientListRenderer<ClientListRows["usda-food"]>
+    >((helper) => dataQualityRenderer(helper, false)),
+  },
 } satisfies {
   [E in ListRendererEntity]: EntityListRendererCoverage<E>;
 };

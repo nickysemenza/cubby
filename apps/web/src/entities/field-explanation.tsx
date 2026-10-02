@@ -1,5 +1,7 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
+import { scoredEntities } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   fieldExplanationSource,
   type FieldExplanationOutput,
@@ -81,7 +83,9 @@ export function ReadableExplanationValue({
       ? boolean.data
         ? "Yes"
         : "No"
-      : scalar.data;
+      : textValue.success && /^[a-z]+(?:_[a-z]+)+$/.test(textValue.data)
+        ? humanizeKey(textValue.data)
+        : scalar.data;
     return <span className="break-words">{display}</span>;
   }
   if (Array.isArray(value)) {
@@ -102,15 +106,41 @@ export function ReadableExplanationValue({
       </ul>
     );
   }
+  return <ReadableExplanationRecord value={value} depth={depth} />;
+}
+
+function ReadableExplanationRecord({
+  value,
+  depth,
+}: {
+  value: ExplanationValue;
+  depth: number;
+}) {
   const record = explanationRecord.safeParse(value);
   if (!record.success) return <span>Unavailable</span>;
-  if (depth >= 2) {
-    const summary = Object.entries(record.data)
-      .filter(([, item]) => explanationScalar.safeParse(item).success)
-      .slice(0, 3)
-      .map(([key, item]) => `${humanizeKey(key)}: ${String(item)}`)
-      .join(" · ");
-    return <span>{summary || "Supporting details"}</span>;
+  const recordID = z.string().safeParse(record.data.id);
+  const recordReference = recordID.success
+    ? parseShortcode(recordID.data)
+    : null;
+  if (recordReference) {
+    const recordName = z.string().safeParse(record.data.name);
+    const facts = Object.fromEntries(
+      Object.entries(record.data).filter(
+        ([key]) => key !== "id" && key !== "name",
+      ),
+    );
+    return (
+      <div className="grid gap-1.5">
+        <ExplanationEntityLink
+          entity={recordReference.type}
+          id={recordReference.shortcode}
+          name={recordName.success ? recordName.data : null}
+        />
+        {Object.keys(facts).length > 0 ? (
+          <ReadableExplanationValue value={facts} depth={depth} />
+        ) : null}
+      </div>
+    );
   }
   return (
     <dl className="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-[auto_1fr]">
@@ -172,6 +202,124 @@ export function ExplanationEntityLink({
   );
 }
 
+function ExplanationSourceRow({ source }: { source: ExplanationSource }) {
+  const record = explanationRecord.safeParse(source.value);
+  const name = record.success ? z.string().safeParse(record.data.name) : null;
+  return (
+    <div className="grid gap-1">
+      <dt className="text-sm text-muted-foreground">{source.label}</dt>
+      <dd className="grid min-w-0 gap-1.5">
+        {source.entity ? (
+          <ExplanationEntityLink
+            entity={source.entity.entityKind}
+            id={source.entity.entityId}
+            name={name?.success ? name.data : null}
+          />
+        ) : null}
+        {source.value !== null || source.entity === null ? (
+          <ReadableExplanationValue
+            value={source.entity ? sourceFacts(source) : source.value}
+          />
+        ) : null}
+      </dd>
+    </div>
+  );
+}
+
+function sourceFacts(source: ExplanationSource): ExplanationValue {
+  const record = explanationRecord.safeParse(source.value);
+  if (!record.success || !source.entity) return source.value;
+  return Object.fromEntries(
+    Object.entries(record.data).filter(
+      ([key, value]) => key !== "name" && !(value === source.entity?.entityId),
+    ),
+  );
+}
+
+function UnassessedQualityExplanation({
+  entity,
+  id,
+}: Pick<FieldExplanationProps, "entity" | "id">) {
+  const rule = entityFieldModels[entity].fields.find(
+    (field) => field.key === "dataQuality",
+  )?.explanation;
+
+  return (
+    <div className="grid gap-4">
+      <PopoverTitle className="text-base font-semibold">
+        Data quality
+      </PopoverTitle>
+      <section className="grid gap-2">
+        <h3 className="font-medium">What this means</h3>
+        <p className="text-lg font-semibold">Not assessed</p>
+        <p className="text-sm leading-relaxed">
+          No quality checks are defined for this entity. Review its fields and
+          supporting records directly.
+        </p>
+        {parseShortcode(id)?.type === entity ? (
+          <ExplanationEntityLink entity={entity} id={id} name="Open record" />
+        ) : null}
+      </section>
+      <section className="grid gap-2 border-t border-border pt-4">
+        <h3 className="font-medium">Technical details</h3>
+        <p className="text-sm leading-relaxed">
+          There is no score, calculation, or check evaluation for this entity.
+          Not assessed is not a score of zero or a guarantee of completeness.
+        </p>
+        {rule ? (
+          <p className="font-mono text-xs break-all">
+            Rule: {rule.ruleId} · r{rule.version}
+          </p>
+        ) : null}
+        <p className="text-xs text-muted-foreground">
+          Evaluation: not performed; no checks are defined.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+function QualityCalculation({
+  breakdown,
+}: {
+  breakdown: NonNullable<FieldExplanationOutput["qualityBreakdown"]>;
+}) {
+  return (
+    <div className="grid gap-3">
+      <h4 className="font-medium">Score calculation</h4>
+      <p className="text-sm tabular-nums">
+        {breakdown.expectedWeight === 0
+          ? "No applicable checks: the score is 100/100."
+          : `${breakdown.satisfiedWeight} satisfied weight ÷ ${breakdown.expectedWeight} applicable weight × 100 = ${breakdown.score}/100`}
+      </p>
+      <ul className="grid gap-3">
+        {breakdown.checks.map((check) => (
+          <li key={check.check} className="grid gap-1 text-sm">
+            <div className="flex flex-wrap justify-between gap-2">
+              <span className="font-medium">{check.label}</span>
+              <span className="text-muted-foreground">
+                {check.state === "excepted"
+                  ? "Accepted exception"
+                  : check.state === "gap"
+                    ? check.kind === "defect"
+                      ? "Defect"
+                      : "Missing data"
+                    : "Satisfied"}{" "}
+                · weight {check.weight}
+              </span>
+            </div>
+            {check.state === "gap" ? <p>{check.description}</p> : null}
+            <p className="text-xs text-muted-foreground">
+              {humanizeKey(check.facet)} ·{" "}
+              <span className="font-mono break-all">{check.check}</span>
+            </p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 type FieldExplanationProps = {
   entity: Entity;
   id: string;
@@ -215,8 +363,12 @@ export function FieldExplanation({
           <InfoIcon className={surface === "list" ? "size-3" : "size-3.5"} />
         )}
       </PopoverTrigger>
-      <PopoverContent className="max-h-[min(32rem,80dvh)] w-80 overflow-y-auto">
-        {open ? (
+      <PopoverContent className="max-h-[min(42rem,85dvh,var(--available-height))] w-[min(34rem,calc(100vw-2rem))] overflow-y-auto">
+        {open &&
+        field === "dataQuality" &&
+        !z.enum(scoredEntities).safeParse(entity).success ? (
+          <UnassessedQualityExplanation entity={entity} id={id} />
+        ) : open ? (
           <FieldExplanationContents
             entity={entity}
             id={id}
@@ -245,25 +397,19 @@ function FieldExplanationContents({
       field,
       surface,
     }),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
   const subjectAction = (target: { entityKind: Entity; entityId: string }) =>
     target.entityKind === entity && target.entityId === id;
-  // minmax(0,1fr): grid tracks otherwise size to their widest nowrap child
-  // (the truncated rule footer), pushing content past the popover edge.
+  // Long rule identifiers must wrap inside the viewport-bounded popover.
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
-      <header className="flex items-baseline justify-between gap-3">
-        <PopoverTitle className={sectionLabelClassName}>
-          <span className="sr-only">How </span>
-          {label}
-          <span className="sr-only"> is determined</span>
-        </PopoverTitle>
-        {result.data ? (
-          <span className="truncate font-mono text-[10px] text-muted-foreground">
-            {result.data.rule.id} · r{result.data.rule.revision}
-          </span>
-        ) : null}
-      </header>
+      <PopoverTitle className="text-base font-semibold">
+        <span className="sr-only">How </span>
+        {label}
+        <span className="sr-only"> is determined</span>
+      </PopoverTitle>
       {result.isPending ? (
         <p className="text-muted-foreground">Loading…</p>
       ) : result.isError ? (
@@ -280,55 +426,129 @@ function FieldExplanationContents({
         </Stack>
       ) : (
         <>
-          {result.data.resolution ? (
-            <ResolutionExplanation
-              entity={entity}
-              id={id}
-              field={field}
-              resolution={result.data.resolution}
-              evidence={result.data.resolutionEvidence}
-            />
-          ) : result.data.value !== null ||
-            !result.data.sources.some(
-              (source) =>
-                source.label === "Project share" ||
-                source.label === "Unassigned share",
-            ) ? (
-            <div className="text-base font-semibold break-words">
-              <ReadableExplanationValue value={result.data.value} />
-            </div>
-          ) : null}
-          {visibleSources(result.data).length > 0 ? (
-            <section className="grid gap-1.5">
-              <h3 className={sectionLabelClassName}>Evidence</h3>
-              <dl className="grid gap-2">
-                {visibleSources(result.data).map((source) => (
-                  <div
-                    key={explanationSourceKey(source)}
-                    className="grid gap-0.5"
-                  >
-                    <dt className="text-muted-foreground">{source.label}</dt>
-                    <dd className="min-w-0">
-                      {source.entity ? (
-                        <ExplanationEntityLink
-                          entity={source.entity.entityKind}
-                          id={source.entity.entityId}
-                        />
-                      ) : null}
-                      {source.value !== null || source.entity === null ? (
-                        <ReadableExplanationValue value={source.value} />
-                      ) : null}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-              {result.data.truncated ? (
-                <p className="text-muted-foreground">
-                  Showing the first sources.
+          <section className="grid gap-3">
+            <h3 className="font-medium">What this means</h3>
+            {result.data.interpretation ? (
+              <>
+                <p className="text-lg font-semibold break-words">
+                  {result.data.interpretation.result}
                 </p>
+                <p className="text-sm leading-relaxed">
+                  {result.data.interpretation.summary}
+                </p>
+                {result.data.interpretation.caveats.map((caveat) => (
+                  <p key={caveat} className="text-sm text-muted-foreground">
+                    {caveat}
+                  </p>
+                ))}
+                {result.data.interpretation.nextSteps.length > 0 ? (
+                  <div className="grid gap-1.5">
+                    <h4 className="font-medium">Next steps</h4>
+                    <ul className="list-disc pl-4 text-sm">
+                      {result.data.interpretation.nextSteps.map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+            {result.data.resolution ? (
+              <ResolutionExplanation
+                entity={entity}
+                id={id}
+                field={field}
+                resolution={result.data.resolution}
+                evidence={result.data.resolutionEvidence}
+              />
+            ) : !result.data.interpretation &&
+              (result.data.value !== null ||
+                !result.data.sources.some(
+                  (source) =>
+                    source.label === "Project share" ||
+                    source.label === "Unassigned share",
+                )) ? (
+              <div className="text-base font-semibold break-words">
+                <ReadableExplanationValue value={result.data.value} />
+              </div>
+            ) : null}
+          </section>
+          <section className="grid gap-3 border-t border-border pt-4">
+            <h3 className="font-medium">Technical details</h3>
+            <p className="text-sm leading-relaxed">
+              {result.data.rule.description}
+            </p>
+            <dl className="grid gap-1 text-xs text-muted-foreground">
+              <div>
+                <dt className="inline">Rule: </dt>
+                <dd className="inline font-mono break-all">
+                  {result.data.rule.id} · r{result.data.rule.revision}
+                </dd>
+              </div>
+              {z.string().safeParse(result.data.value).success &&
+              result.data.interpretation?.result !== result.data.value ? (
+                <div>
+                  <dt className="inline">Result code: </dt>
+                  <dd className="inline font-mono">
+                    {String(result.data.value)}
+                  </dd>
+                </div>
               ) : null}
-            </section>
-          ) : null}
+              <div>
+                <dt className="inline">Evaluated: </dt>
+                <dd className="inline">
+                  {new Date(result.data.evaluatedAt).toLocaleString()}
+                </dd>
+              </div>
+            </dl>
+            {result.data.qualityBreakdown ? (
+              <QualityCalculation breakdown={result.data.qualityBreakdown} />
+            ) : null}
+            {!explanationScalar.safeParse(result.data.value).success &&
+            result.data.value !== null &&
+            !result.data.resolution ? (
+              <ReadableExplanationValue value={result.data.value} />
+            ) : null}
+            {visibleSources(result.data).length > 0 ? (
+              <section className="grid gap-1.5">
+                <h3 className={sectionLabelClassName}>Evidence</h3>
+                <dl className="grid gap-2">
+                  {visibleSources(result.data)
+                    .slice(0, 6)
+                    .map((source) => (
+                      <ExplanationSourceRow
+                        key={explanationSourceKey(source)}
+                        source={source}
+                      />
+                    ))}
+                </dl>
+                {visibleSources(result.data).length > 6 ? (
+                  <details className="grid gap-2">
+                    <summary className="cursor-pointer text-sm font-medium">
+                      Show {visibleSources(result.data).length - 6} more
+                      evidence entries
+                    </summary>
+                    <dl className="grid gap-3 pt-3">
+                      {visibleSources(result.data)
+                        .slice(6)
+                        .map((source) => (
+                          <ExplanationSourceRow
+                            key={explanationSourceKey(source)}
+                            source={source}
+                          />
+                        ))}
+                    </dl>
+                  </details>
+                ) : null}
+                {result.data.truncated ? (
+                  <p className="text-muted-foreground">
+                    Evidence is bounded; the displayed sources are not an
+                    exhaustive list.
+                  </p>
+                ) : null}
+              </section>
+            ) : null}
+          </section>
           <ExplanationFooter
             entity={entity}
             id={id}
@@ -343,8 +563,7 @@ function FieldExplanationContents({
   );
 }
 
-/** Actions first, the rule's prose last and folded: the facts above already
- * say what happened, the rule is there for when they don't. */
+/** Existing mutation and navigation actions retain their original contracts. */
 function ExplanationFooter({
   entity,
   id,
@@ -439,6 +658,7 @@ function ExplanationFooter({
       resolution={resolution}
     />
   ) : null;
+  if (actions.length === 0 && !resolution?.canReset) return null;
   return (
     <footer className="grid grid-cols-[minmax(0,1fr)] gap-2 border-t border-border pt-2">
       {actions.length > 0 || resolution?.canReset ? (
@@ -447,12 +667,6 @@ function ExplanationFooter({
           {actions}
         </div>
       ) : null}
-      <details className="group text-muted-foreground">
-        <summary className="cursor-pointer list-none truncate group-open:whitespace-normal [&::-webkit-details-marker]:hidden">
-          <span className="font-medium text-foreground">Rule · </span>
-          {data.rule.description}
-        </summary>
-      </details>
     </footer>
   );
 }

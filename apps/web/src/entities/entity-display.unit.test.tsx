@@ -408,15 +408,15 @@ describe("declared entity displays", () => {
         copied: column.meta?.cellData?.getCopyPayload(row),
       }));
       expect(details.map(({ id, header }) => ({ id, header }))).toEqual([
+        { id: "dataQuality", header: "Data quality" },
         { id: "kind", header: "Kind" },
         { id: "notes", header: "Notes" },
-        { id: "dataQuality", header: "Data quality" },
         { id: "dataGaps", header: "Data gaps" },
       ]);
-      expect(details[0]).toMatchObject({
+      expect(details[1]).toMatchObject({
         cellIsOverride: false,
       });
-      expect(details[1]?.copied).toEqual({
+      expect(details[2]?.copied).toEqual({
         text: "Review these notes",
         json: "Review these notes",
       });
@@ -451,10 +451,10 @@ describe("declared entity displays", () => {
     expect(result.current.visit((column) => column.id).slice(0, 6)).toEqual([
       "image",
       "displayName",
+      "dataQuality",
       "vendorId",
       "displayLabel",
       "date",
-      "statedTotal",
     ]);
   });
 

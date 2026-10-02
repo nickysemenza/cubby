@@ -133,7 +133,10 @@ struct MealCalendarListView: View {
                             if let id = item["id"]?.stringValue {
                                 NavigationLink(value: Route.entityDetail(.meal, id: id)) {
                                     HStack {
-                                        Text(item["title"]?.stringValue ?? "Meal")
+                                        VStack(alignment: .leading) {
+                                            Text(item["title"]?.stringValue ?? "Meal")
+                                            EntityQualityFact(key: .meal, id: id, raw: item)
+                                        }
                                         Spacer()
                                         Image(systemName: "chevron.right")
                                     }
@@ -283,7 +286,10 @@ struct TaskBoardListView: View {
         if let id = task["id"]?.stringValue {
             HStack {
                 NavigationLink(value: Route.entityDetail(.task, id: id)) {
-                    Text(task["name"]?.stringValue ?? id)
+                    VStack(alignment: .leading) {
+                        Text(task["name"]?.stringValue ?? id)
+                        EntityQualityFact(key: .task, id: id, raw: task)
+                    }
                 }
                 Menu("Move", systemImage: "arrow.up.arrow.down") {
                     ForEach(statuses, id: \.self) { status in
@@ -376,6 +382,7 @@ struct LocationGalleryListView: View {
                             Thumb(url: url, size: 48, symbol: "shippingbox")
                             VStack(alignment: .leading) {
                                 Text(node.name)
+                                EntityQualityFact(key: .location, id: node.id.rawValue, raw: wire(node))
                                 Text("\(node.totalItems) items · \(node.childNodes.count) sublocations")
                                     .font(.caption).foregroundStyle(.secondary)
                             }

@@ -415,6 +415,7 @@ private struct ActivityRunRow: View {
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 4) {
                 Text(run.subjectName).font(.headline)
+                EntityQualityFact(key: .run, id: run.id, raw: .null)
                 HStack(spacing: 6) {
                     Text(run.kind.title)
                     Text("·")

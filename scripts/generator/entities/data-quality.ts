@@ -46,6 +46,55 @@ const STATUS_OPTIONS = [
   { value: "defect", label: "Defect", color: "var(--destructive)" },
 ] as const;
 
+const qualityField = (entityKey: string): EntityField => ({
+  key: DATA_QUALITY_FIELD,
+  kind: "json",
+  nullable: false,
+  label: "Data quality",
+  description: null,
+  readKey: DATA_QUALITY_FIELD,
+  reference: null,
+  provenance: {
+    kind: "derived",
+    sources: [{ entity: entityKey, relation: null, label: null }],
+  },
+  explanation: {
+    ruleId: `${entityKey}.data-quality`,
+    version: 1,
+    description:
+      "Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.",
+    resolver: "field",
+    projections: {
+      list: "dataQuality.status",
+      summary: "dataQuality.status",
+    },
+    sourceDependencies: [{ path: "dataQuality.gaps", label: "Detected gaps" }],
+    actions: ["editSource"],
+  },
+  resolution: null,
+  control: null,
+  display: {
+    list: true,
+    detail: false,
+    columnId: DATA_QUALITY_FIELD,
+    standard: null,
+    detailOrder: null,
+    listOrder: -1,
+    width: null,
+    readPath: null,
+    format: null,
+    renderer: { list: DATA_QUALITY_LIST_RENDERER, detail: null },
+    mobile: null,
+    listHidden: false,
+    valueOptions: [...STATUS_OPTIONS],
+    preview: false,
+  },
+  // The real read schema is `dataQuality` from `@cubby/schemas/data-quality`,
+  // spliced in by the field-schema renderer: the compiler cannot import it
+  // without importing the check registry it is about to generate.
+  validation: { read: z.unknown(), create: null, update: null },
+});
+
 /**
  * One `capabilities.dataQuality` block expands into the two derived model
  * fields, the two filter descriptors and the score sort that Product and
@@ -88,7 +137,30 @@ export const compileDataQuality = (
       throw new EntityDeclarationError(
         `${context} spells ${DATA_QUALITY_FIELD}/${DATA_GAPS_FIELD}/${DATA_QUALITY_SORT} by hand; declare capabilities.dataQuality instead.`,
       );
-    return { dataQuality: null, fieldModel, descriptors };
+    const field = qualityField(entityKey);
+    return {
+      dataQuality: null,
+      fieldModel: {
+        ...fieldModel,
+        fields: [
+          ...fieldModel.fields,
+          {
+            ...field,
+            readKey: null,
+            provenance: null,
+            validation: { read: null, create: null, update: null },
+            explanation: {
+              ruleId: `${entityKey}.data-quality`,
+              version: 1,
+              resolver: "field",
+              description:
+                "No quality checks are declared for this entity. Not assessed is not a score of zero or a guarantee of completeness.",
+            },
+          },
+        ],
+      },
+      descriptors,
+    };
   }
   if (declaredReserved || reservedDescriptor || declaredSort)
     throw new EntityDeclarationError(
@@ -115,52 +187,7 @@ export const compileDataQuality = (
     kind: "derived" as const,
     sources: [{ entity: entityKey, relation: null, label: null }],
   };
-  const dataQualityField: EntityField = {
-    key: DATA_QUALITY_FIELD,
-    kind: "json",
-    nullable: false,
-    label: "Data quality",
-    description: null,
-    readKey: DATA_QUALITY_FIELD,
-    reference: null,
-    provenance,
-    explanation: {
-      ruleId: `${entityKey}.data-quality`,
-      version: 1,
-      description:
-        "Data-quality gaps and the 0–100 completeness score are evaluated from the checks this entity declares.",
-      resolver: "field",
-      projections: {
-        list: "dataQuality.status",
-        summary: "dataQuality.status",
-      },
-      sourceDependencies: [
-        { path: "dataQuality.gaps", label: "Detected gaps" },
-      ],
-    },
-    resolution: null,
-    control: null,
-    display: {
-      list: true,
-      detail: false,
-      columnId: DATA_QUALITY_FIELD,
-      standard: null,
-      detailOrder: null,
-      listOrder: raw.listOrder ?? null,
-      width: null,
-      readPath: null,
-      format: null,
-      renderer: { list: DATA_QUALITY_LIST_RENDERER, detail: null },
-      mobile: null,
-      listHidden: true,
-      valueOptions: null,
-      preview: false,
-    },
-    // The real read schema is `dataQuality` from `@cubby/schemas/data-quality`,
-    // spliced in by the field-schema renderer: the compiler cannot import it
-    // without importing the check registry it is about to generate.
-    validation: { read: z.unknown(), create: null, update: null },
-  };
+  const dataQualityField = qualityField(entityKey);
   const dataGapsField: EntityField = {
     key: DATA_GAPS_FIELD,
     kind: "json",

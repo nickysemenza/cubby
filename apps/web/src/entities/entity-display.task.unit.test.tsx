@@ -143,6 +143,7 @@ describe("task list display columns", () => {
   it("builds exactly the declared columns, in model order", () => {
     const ids = buildTaskColumnMeta().map((d) => d.id);
     expect(ids).toEqual([
+      "dataQuality",
       "status",
       "projectId",
       "subjectProductId",
@@ -150,7 +151,6 @@ describe("task list display columns", () => {
       "dueDate",
       "trade",
       "sortOrder",
-      "dataQuality",
       "dataGaps",
     ]);
   });

@@ -31,6 +31,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
+import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
@@ -247,11 +248,18 @@ export function RunHistory({
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<HistoryRow>((add) => {
+        createEntityDisplayColumns("run", helper, undefined, {
+          only: ["dataQuality"],
+        }).visit(add);
         add(
           helper.accessor("subjectName", {
             header: "Subject",
             size: 270,
-            meta: { surplus: true, mobile: { slot: "title", priority: 1 } },
+            meta: {
+              entityColumnRole: "identity",
+              surplus: true,
+              mobile: { slot: "title", priority: 1 },
+            },
             cell: ({ row, getValue }) => (
               <div className={row.original.depth ? "pl-6" : ""}>
                 {grouped &&

@@ -271,6 +271,8 @@ public struct FieldDescriptor: Codable, Sendable {
     public let key: String
     /// The list/relation column id this source field supplies, when renamed.
     public let columnId: String?
+    public let readKey: String?
+    public let valueOptions: [LabeledOption]?
     public let label: String
     public let kind: EntityFieldKind
     /// Whether the server accepts `null` for this field; only a nullable key may be cleared.

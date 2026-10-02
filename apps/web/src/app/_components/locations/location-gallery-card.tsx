@@ -7,6 +7,7 @@ import { type Ref, useMemo } from "react";
 
 import { Row } from "~/components/layout";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
+import { EntityQualityFact } from "~/entities/data-quality-value";
 import { EntityIcon } from "~/entities/entities";
 import { cn, formatCurrency } from "~/lib/utils";
 
@@ -113,6 +114,11 @@ export const LocationGalleryCard = function LocationGalleryCard({
                 </span>
               )}
             </Row>
+            <EntityQualityFact
+              entity="location"
+              id={location.id}
+              quality={location.dataQuality}
+            />
           </div>
           {extraLocationImages.length > 0 && (
             <Row gap="xs" className="hidden shrink-0 sm:flex">

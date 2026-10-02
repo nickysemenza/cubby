@@ -21,6 +21,7 @@ import {
   PopoverTitle,
 } from "~/components/ui/popover";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
+import { EntityQualityFact } from "~/entities/data-quality-value";
 import { fieldClearing } from "~/entities/editing/field-clearing";
 import type { EntityMutationPort } from "~/entities/editing/types";
 import { useEntityEditSession } from "~/entities/editing/use-entity-edit-session";
@@ -99,6 +100,13 @@ function CalendarInspectorOverlay({
     >
       <PopoverHeader className="border-b pb-2">
         <PopoverTitle>{item.title}</PopoverTitle>
+        {item.kind === "meal" ? (
+          <EntityQualityFact
+            entity="meal"
+            id={item.id}
+            quality={item.dataQuality}
+          />
+        ) : null}
         <div className="text-muted-foreground">{itemMetadata(item)}</div>
       </PopoverHeader>
       {content}

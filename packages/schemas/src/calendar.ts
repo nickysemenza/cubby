@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dataQuality } from "./data-quality";
 import { money, moneyNullable } from "./money";
 import {
   mealShortcode,
@@ -66,6 +67,7 @@ export const calendarMealItem = z.object({
   recipeNames: z.array(z.string()),
   coverImageUrl: z.url().nullable(),
   mealTotals: nutritionTotals,
+  dataQuality: dataQuality.optional(),
 });
 
 export const calendarTaskItem = z.object({

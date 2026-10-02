@@ -7,7 +7,7 @@ type ResizeStartEvent = MouseEvent<HTMLDivElement> | TouchEvent<HTMLDivElement>;
 /**
  * Thin adapter around v9's native mouse/touch resize handler. With
  * `columnResizeMode: "onEnd"`, the table commits once at gesture end and the
- * external layout atom persists that committed width.
+ * table retains that width for the current session.
  */
 export function ColumnResizeHandle({
   onResizeStart,

@@ -303,6 +303,7 @@ const mapMealItems = (
         .map((recipe) => recipeCoverImageUrls.get(recipe.recipeId))
         .find((url) => url !== undefined) ?? null,
     mealTotals: meal.totals,
+    dataQuality: meal.dataQuality,
   }));
 
 const mapTaskItems = async (
