@@ -456,7 +456,7 @@ test("feature explanation ladders ancestry and calls a root binding set here", a
   await expect(
     popover.getByText("Resolution order", { exact: true }),
   ).toBeVisible();
-  const rows = popover.getByRole("listitem");
+  const rows = popover.locator("li[data-role]");
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toHaveAttribute("data-role", "unset");
   await expect(rows.last()).toHaveAttribute("data-role", "wins");
