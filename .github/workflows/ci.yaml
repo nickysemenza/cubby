@@ -18,7 +18,7 @@ on:
         default: none
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ inputs.simulator_e2e }}-${{ inputs.tester_army }}
   cancel-in-progress: true
 
 permissions:
