@@ -164,7 +164,7 @@ struct EntityEditorSheet: View {
                     field, value, label in
                     initialDraft[field] = value
                     if let id = value.stringValue, let label { pickedTitles[id] = label }
-                    appModel.recordEntityMutation(keys: [.financialTransaction, .purchase, .expense])
+                    appModel.recordEntityMutation(keys: [key, .financialTransaction, .purchase, .expense, .product])
                 }
             }
             if descriptor.acceptsImages {
