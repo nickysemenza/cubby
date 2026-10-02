@@ -477,7 +477,7 @@ jobs:
             !apps/apple/DerivedData/Logs
           key: ${{ steps.derived-data.outputs.cache-key }}
           cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
-          matched-key: ${{ steps.derived-data.outputs.matched-key }}
+          matched-key: ${{ steps.derived-data.outputs.save-matched-key }}
       - name: Save SPM clone cache
         if: always()
         uses: ./.github/actions/save-cache-main-only
@@ -571,7 +571,7 @@ jobs:
             !apps/apple/DerivedData/Logs
           key: ${{ steps.derived-data.outputs.cache-key }}
           cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
-          matched-key: ${{ steps.derived-data.outputs.matched-key }}
+          matched-key: ${{ steps.derived-data.outputs.save-matched-key }}
       - name: Save simulator E2E run bundle
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -694,7 +694,7 @@ jobs:
             !apps/apple/DerivedData/Logs
           key: ${{ steps.derived-data.outputs.cache-key }}
           cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
-          matched-key: ${{ steps.derived-data.outputs.matched-key }}
+          matched-key: ${{ steps.derived-data.outputs.save-matched-key }}
       - name: Save sanitized iOS run bundle
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

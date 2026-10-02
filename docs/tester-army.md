@@ -71,8 +71,11 @@ their existing pnpm cache; the WASM and Apple build caches remain enabled.
 Both manual simulator lanes restore the same Xcode-versioned DerivedData cache
 as the regular Apple build gate. Hosted builds use its SPM clone directory,
 content-based source mtimes, native arm64 slice, and batch compilation. They
-still run an incremental build against the current generated inputs before
-installing the app. Simulator boot follows compilation to avoid CPU contention. App replacement
+resolve package dependencies before validating a certificate for the cached app.
+An unchanged toolchain, generated inputs, Swift and resource files, FFI bytes,
+dependency pins, and complete app-bundle checksum allow compilation to be skipped.
+Otherwise they run the normal incremental build and certify its result. The
+required Apple gate always compiles and supplies the same certificate. Simulator boot follows compilation to avoid CPU contention. App replacement
 uses `simctl` directly, before preparing the driver, so installation does not
 start XCTest or inherit the SDK's short command timeout.
 Both lanes also cache agent-device's compiled Apple test runner, keyed by its
@@ -111,6 +114,10 @@ CI uploads only the sanitized bundle files, with seven-day retention. The
 summary includes only fixed synthetic case names and numeric usage/replay
 metrics; credentials and fixture identifiers are excluded. Estimated cost may
 be absent when the SDK does not report it. Telemetry is disabled.
+
+Deterministic native replays print validated step counters, command names, and
+elapsed milliseconds for timeout diagnosis. Selector values and session paths
+are excluded from those progress messages.
 
 This trial establishes only the synthetic rename journey on Chromium and an
 iOS simulator. It does not establish broader agent reliability or physical

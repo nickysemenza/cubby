@@ -1,6 +1,9 @@
 name: Setup Apple build cache
 description: Restore shared simulator DerivedData with the matching Xcode toolchain.
 outputs:
+  save-matched-key:
+    description: Matching key for save policy; initialize a new cache generation from legacy restores
+    value: ${{ startsWith(steps.derived-data.outputs.cache-matched-key, 'xcode-dd-v3-') && steps.derived-data.outputs.cache-matched-key || '' }}
   toolchain-hash:
     value: ${{ steps.xcode-version.outputs.hash }}
     description: Xcode toolchain hash
@@ -32,7 +35,12 @@ runs:
         path: |
           apps/apple/DerivedData
           !apps/apple/DerivedData/Logs
-        key: xcode-dd-v1-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/App/**', 'apps/apple/CubbyKit/**') }}
+        # v2 may contain successful builds without a certificate because Swift
+        # rewrote package ordering. Seed v3 with canonical dependency metadata.
+        key: xcode-dd-v3-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/App/**', 'apps/apple/CubbyKit/**') }}-${{ hashFiles('scripts/apple-check.sh', 'scripts/apple-simulator-build-cache.ts', 'apps/apple/scripts/prepare-project.sh', 'apps/web/tooling/sim-e2e.ts', '.github/workflows/ci.yaml') }}
         restore-keys: |
+          xcode-dd-v3-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-
+          xcode-dd-v3-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-
+          xcode-dd-v2-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-
+          xcode-dd-v2-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-
           xcode-dd-v1-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-
-          xcode-dd-v1-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-

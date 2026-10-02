@@ -86,7 +86,7 @@ if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
   # The macOS-26 hosted runner is Apple Silicon. Restrict the generic
   # Simulator build to its native slice; a release artifact still builds its
   # supported architectures outside this PR gate.
-  build_settings+=(SWIFT_ENABLE_BATCH_MODE=YES ARCHS=arm64 ONLY_ACTIVE_ARCH=YES)
+  build_settings+=(SWIFT_ENABLE_BATCH_MODE=YES ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO)
 fi
 
 # CI-only: reuse the SPM clone directory .github/actions/setup-apple-tools
@@ -99,13 +99,29 @@ if [ "$mode" = "ci" ]; then
   clone_args+=(-clonedSourcePackagesDirPath apps/apple/SourcePackages)
 fi
 
-xcodebuild \
-  -project apps/apple/Cubby.xcodeproj \
-  -scheme Cubby-iOS \
-  -destination "generic/platform=iOS Simulator" \
-  -derivedDataPath apps/apple/DerivedData \
-  ${clone_args[@]+"${clone_args[@]}"} \
-  -skipPackagePluginValidation \
-  -skipMacroValidation \
-  "${build_settings[@]}" \
-  build
+build_args=(
+  -project apps/apple/Cubby.xcodeproj
+  -scheme Cubby-iOS
+  -configuration Debug
+  -destination "generic/platform=iOS Simulator"
+  -derivedDataPath apps/apple/DerivedData
+  ${clone_args[@]+"${clone_args[@]}"}
+  -skipPackagePluginValidation
+  -skipMacroValidation
+  "${build_settings[@]}"
+)
+
+simulator_cache_key=""
+if [ "$mode" = "ci" ] && [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+  xcodebuild "${build_args[@]}" -resolvePackageDependencies
+  if ! simulator_cache_key="$(node scripts/apple-simulator-build-cache.ts key)"; then
+    echo "Simulator app cannot be certified; retaining the normal build."
+  fi
+fi
+
+# The required gate still compiles; only optional simulator lanes reuse a
+# certified result. Signing is disabled for their temporary plist fixtures.
+xcodebuild "${build_args[@]}" build
+if [ -n "$simulator_cache_key" ]; then
+  node scripts/apple-simulator-build-cache.ts stamp "$simulator_cache_key"
+fi
