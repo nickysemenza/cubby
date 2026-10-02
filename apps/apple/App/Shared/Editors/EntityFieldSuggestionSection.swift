@@ -75,6 +75,7 @@ struct EntityFieldSuggestionSection: View {
                                 Button("Dismiss") { review.dismiss(field.key) }
                                     .disabled(review.isApplying)
                             }
+                            .buttonStyle(.borderless)
                         }
                         .accessibilityElement(children: .contain)
                     } else {
