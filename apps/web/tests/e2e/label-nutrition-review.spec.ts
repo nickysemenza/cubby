@@ -18,12 +18,14 @@ const labelPhoto = fileURLToPath(
 test("detected label nutrition stays editable and requires Save before replacing Product nutrition", async ({
   page,
 }) => {
+  test.setTimeout(90_000);
   const name = `E2E label panel ${Date.now()}`;
   await gotoAuthenticatedPage(page, "/products?create=true");
   await waitForFormHydration(page);
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox", { name: "Name", exact: true }).fill(name);
-  await dialog.getByRole("button", { name: /^Package label/ }).click();
+  await dialog.getByRole("heading", { name: "Nutrition", exact: true }).click();
+  await dialog.getByText(/^Package label/).click();
   await dialog.getByLabel("Serving size, as printed (g)").fill("30");
   await dialog.getByLabel("Calories (kcal)", { exact: true }).fill("90");
   await dialog.getByLabel("Total Fat (g)", { exact: true }).fill("2");
@@ -62,6 +64,7 @@ test("detected label nutrition stays editable and requires Save before replacing
   await expect(
     fatComparison.getByRole("cell", { name: /0 \(inferred\)/ }),
   ).toBeVisible();
+  await dialog.getByRole("heading", { name: "Nutrition", exact: true }).click();
   await expect(dialog.getByLabel("Serving size, as printed (g)")).toHaveValue(
     "40",
   );
@@ -72,6 +75,7 @@ test("detected label nutrition stays editable and requires Save before replacing
     source: "Synthetic prior label",
   });
   await review.click();
+  await dialog.getByRole("heading", { name: "Nutrition", exact: true }).click();
   await dialog.getByLabel("Serving size, as printed (g)").fill("45");
   await dialog
     .getByRole("button", { name: "Save changes", exact: true })

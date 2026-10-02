@@ -373,7 +373,7 @@ for (const statementFirst of [true, false]) {
                   body: JSON.stringify(capture),
                 },
               );
-              if (!response.ok()) throw new Error(await response.text());
+              if (!response.ok) throw new Error(await response.text());
               return feature.schema.parse(await response.json());
             },
           },

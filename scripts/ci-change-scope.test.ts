@@ -1,5 +1,17 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { classifyCiChanges } from "./ci-change-scope.ts";
 
 const active = (files: string[], full = false) =>
@@ -75,5 +87,131 @@ test("runs full verification for shared configuration, unknown paths, and manual
     assert.ok(Object.values(classifyCiChanges(files)).every(Boolean));
   assert.ok(
     Object.values(classifyCiChanges(["README.md"], true)).every(Boolean),
+  );
+});
+
+const scopeScript = fileURLToPath(
+  new URL("./ci-change-scope.ts", import.meta.url),
+);
+const git = (directory: string, ...args: string[]) =>
+  execFileSync("git", ["-C", directory, ...args], { encoding: "utf8" }).trim();
+const commit = (directory: string) => {
+  git(directory, "add", ".");
+  git(
+    directory,
+    "-c",
+    "user.name=CI fixture",
+    "-c",
+    "user.email=fixture@example.test",
+    "-c",
+    "commit.gpgsign=false",
+    "commit",
+    "--quiet",
+    "-m",
+    "Synthetic scope fixture",
+  );
+  return git(directory, "rev-parse", "HEAD");
+};
+const runScope = (
+  directory: string,
+  event: string,
+  base: string,
+  head: string,
+) => {
+  const output = join(directory, "scope-output.txt");
+  writeFileSync(output, "");
+  const { CUBBY_CHANGED_FILES: _changedFiles, ...environment } = process.env;
+  execFileSync(process.execPath, [scopeScript], {
+    cwd: directory,
+    env: {
+      ...environment,
+      GITHUB_EVENT_NAME: event,
+      GITHUB_OUTPUT: output,
+      CUBBY_BASE_SHA: base,
+      CUBBY_HEAD_SHA: head,
+    },
+    stdio: "pipe",
+  });
+  return readFileSync(output, "utf8")
+    .trim()
+    .split("\n")
+    .filter((line) => line.endsWith("=true"))
+    .map((line) => line.split("=")[0]);
+};
+
+// Path JSON can exceed the Linux per-environment-value limit before Node starts.
+// Collecting it inside the process must retain both rename endpoints and each
+// event's range semantics; unavailable Git data must still run every check.
+test("collects a large renamed diff through short SHA inputs", (context) => {
+  const directory = mkdtempSync(join(tmpdir(), "cubby-ci-scope-"));
+  context.after(() => rmSync(directory, { recursive: true, force: true }));
+  git(directory, "init", "--quiet", "-b", "main");
+  const before = join(directory, "apps/apple/App");
+  const after = join(directory, "apps/web/src");
+  mkdirSync(before, { recursive: true });
+  for (let index = 0; index < 1_200; index++) {
+    writeFileSync(
+      join(before, `synthetic-${"review-".repeat(12)}${index}.swift`),
+      "Synthetic fixture\n",
+    );
+  }
+  const base = commit(directory);
+  mkdirSync(dirname(after), { recursive: true });
+  renameSync(before, after);
+  const head = commit(directory);
+  const paths = execFileSync(
+    "git",
+    [
+      "-C",
+      directory,
+      "diff",
+      "--name-only",
+      "--no-renames",
+      "-z",
+      `${base}...${head}`,
+    ],
+    { encoding: "utf8" },
+  )
+    .split("\0")
+    .filter(Boolean);
+  assert.ok(Buffer.byteLength(JSON.stringify(paths)) > 128 * 1_024);
+  assert.deepEqual(runScope(directory, "pull_request", base, head), [
+    "validation",
+    "web",
+    "apple",
+  ]);
+});
+
+test("uses the PR merge base but the previous push tip on diverged history", (context) => {
+  const directory = mkdtempSync(join(tmpdir(), "cubby-ci-scope-"));
+  context.after(() => rmSync(directory, { recursive: true, force: true }));
+  git(directory, "init", "--quiet", "-b", "main");
+  writeFileSync(join(directory, "README.md"), "Synthetic fixture\n");
+  const common = commit(directory);
+  mkdirSync(join(directory, "apps/apple/App"), { recursive: true });
+  writeFileSync(
+    join(directory, "apps/apple/App/Fixture.swift"),
+    "Synthetic native fixture\n",
+  );
+  const base = commit(directory);
+  git(directory, "checkout", "--quiet", "-b", "fixture-head", common);
+  mkdirSync(join(directory, "apps/web/src"), { recursive: true });
+  writeFileSync(
+    join(directory, "apps/web/src/fixture.ts"),
+    "// Synthetic web fixture\n",
+  );
+  const head = commit(directory);
+  assert.deepEqual(runScope(directory, "pull_request", base, head), [
+    "validation",
+    "web",
+  ]);
+  assert.deepEqual(runScope(directory, "push", base, head), [
+    "validation",
+    "web",
+    "apple",
+  ]);
+  assert.deepEqual(
+    runScope(directory, "push", "0".repeat(40), head),
+    active([]),
   );
 });

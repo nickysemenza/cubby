@@ -59,19 +59,13 @@ jobs:
         run: |
           gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
             --jq '.title + "\n" + .body' | node scripts/check-outward-text.ts --stdin
-      - id: filter
-        if: github.event_name != 'workflow_dispatch'
-        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
-        with:
-          base: ${{ github.event_name == 'push' && 'main' || '' }}
-          list-files: json
-          filters: |
-            changed:
-              - '**'
       - name: Classify affected checks
         id: classify
         env:
-          CUBBY_CHANGED_FILES: ${{ steps.filter.outputs.changed_files || '[]' }}
+          # Keep paths out of the process environment: large renamed diffs can
+          # exceed Linux's per-value limit before even bash starts.
+          CUBBY_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          CUBBY_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node scripts/ci-change-scope.ts
 
   validation:

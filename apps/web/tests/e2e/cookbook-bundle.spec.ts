@@ -1,6 +1,7 @@
 import { syntheticCookbookArchive } from "../../tooling/cookbook-bundle-fixture";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
+import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 test("imports an incomplete cookbook bundle, retries its staged photo, and preserves success on reselection", async ({
@@ -24,7 +25,7 @@ test("imports an incomplete cookbook bundle, retries its staged photo, and prese
       await route.abort("failed");
     } else await route.continue();
   });
-  await page.goto("/recipes/import");
+  await gotoAuthenticatedPage(page, "/recipes/import");
   const input = page.locator('input[type="file"][accept*=".cookbook"]').first();
   await input.setInputFiles(file);
   await expect(

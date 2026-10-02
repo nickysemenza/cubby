@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 
 export interface CiChangeScope {
@@ -129,12 +130,40 @@ export function classifyCiChanges(
   return scope;
 }
 
+const changedPaths = (): string[] => {
+  const event = process.env.GITHUB_EVENT_NAME;
+  if (event !== "pull_request" && event !== "push") return [];
+  const base = process.env.CUBBY_BASE_SHA;
+  const head = process.env.CUBBY_HEAD_SHA;
+  const sha = /^[a-f0-9]{40}$/i;
+  if (!base || !head || !sha.test(base) || !sha.test(head)) return [];
+  // PRs compare against the merge base; pushes compare their exact old tip.
+  // Disabling rename detection retains both old and new owners' checks.
+  const range = `${base}${event === "pull_request" ? "..." : ".."}${head}`;
+  try {
+    return execFileSync(
+      "git",
+      ["diff", "--name-only", "--no-renames", "-z", range, "--"],
+      {
+        encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    )
+      .split("\0")
+      .filter(Boolean);
+  } catch (error) {
+    console.warn(
+      "CI diff unavailable; running all checks:",
+      error instanceof Error ? error.message : String(error),
+    );
+    return [];
+  }
+};
+
 if (process.argv[1]?.endsWith("ci-change-scope.ts")) {
-  const files: unknown = JSON.parse(process.env.CUBBY_CHANGED_FILES ?? "[]");
-  if (!Array.isArray(files))
-    throw new Error("CUBBY_CHANGED_FILES must be a JSON array of paths.");
   const scope = classifyCiChanges(
-    files.map(String),
+    changedPaths(),
     process.env.GITHUB_EVENT_NAME === "workflow_dispatch",
   );
   const output = process.env.GITHUB_OUTPUT;
