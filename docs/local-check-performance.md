@@ -38,10 +38,12 @@ reclaiming slots whose holder died.
 **Why a small edit can cost more than a cold check.** Under `--noEmit`, tsc
 never emits declarations, so a fresh build records each file's version as its
 "signature". The first change to a file after that, even inside a function
-body, looks like a declaration-shape change. A shape change drops cached
+body, looks like a declaration-shape change. Without `isolatedModules`, tsc
+then recomputes the declaration signature of every transitive importer to
+decide what is affected (Strada and TS 7 alike). A shape change drops cached
 diagnostics for every file that transitively imports the changed file's
-direct importers (Strada and TS 7 alike; `isolatedModules` changes only emit)
-and for _every_ file once a global-scope file falls in that set. Later body
+direct importers, and for _every_ file once a global-scope file falls in that
+set. Later body
 edits to the same file compare real signatures and stay cheap. Two structures
 make the invalidated set large:
 
@@ -87,6 +89,15 @@ less, 49–51 s CPU versus 51–54 s: recomputing declaration signatures across
 the importer closure dominates that edit, not checking. Adding an export once
 signatures are real (one earlier edit to the file) went from 29–33 s to 25 s
 CPU for server files; client files were unchanged at about 16 s.
+
+`isolatedModules` (which Vite's per-file compilation already requires) makes
+the builder skip that importer-signature walk: the affected set is the edited
+file, and only its importers' cached diagnostics are dropped. Before the
+escalation fixes above it measured no change, because every closure then
+reached a global file. After them, the first body edit after a fresh build
+went from 25.5–25.9 s to 16.7–17.6 s CPU for three client files and from
+50.4–51.4 s to 25.9–27.4 s for two server files; a cold check is unchanged
+(about 30 s CPU) and it reported no new errors.
 
 Server modules no longer type-import client modules. The generated kernel
 bindings carried the port-existence check (`EntityPortExportChecks`, now in
