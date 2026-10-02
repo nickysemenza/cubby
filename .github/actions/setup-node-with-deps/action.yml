@@ -8,6 +8,10 @@ inputs:
       skips it.
     required: false
     default: "false"
+  pnpm-store-cache:
+    description: Cache the pnpm store; disable when packing costs exceed installation time
+    required: false
+    default: "true"
   workspace-filter:
     description: "Optional space-separated pnpm workspace filters for a narrower install"
     required: false
@@ -26,7 +30,8 @@ runs:
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
       with:
         node-version: "24"
-        cache: pnpm
+        cache: ${{ inputs.pnpm-store-cache == 'true' && 'pnpm' || '' }}
+        package-manager-cache: false
 
     # WASM is restored independently so consumers can start in parallel. See
     # docs/ci.md for the measured producer-job and cache tradeoffs.
