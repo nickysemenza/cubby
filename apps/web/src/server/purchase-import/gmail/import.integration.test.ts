@@ -299,9 +299,6 @@ describe("saved confirmation imports", () => {
         throw new Error("Mail must not contact Chrome");
       },
     };
-    expect(await claimNextImportWork(ctx.db, namespace, run.id)).toEqual({
-      kind: "none",
-    });
     const purchases = await getDb(ctx.db)
       .select()
       .from(purchase)
@@ -309,6 +306,33 @@ describe("saved confirmation imports", () => {
     expect(purchases).toHaveLength(1);
     expect(purchases[0]?.statedTotal).toBe(5);
     if (!purchases[0]) throw new Error("Missing imported Purchase");
+    // Committed mail must still expose its Purchase for settlement checks,
+    // including a new run whose source was already imported by its predecessor.
+    const verification = {
+      kind: "settlement_verification",
+      purchaseId: purchases[0].shortcode,
+      orderId: evidence.orderId,
+    };
+    expect(await claimNextImportWork(ctx.db, namespace, run.id)).toEqual(
+      verification,
+    );
+    await finishRun(ctx.db, namespace, {
+      runId: run.id,
+      operationId: "finish-mail",
+    });
+    const successor = await controlRun(ctx.db, ctx.actor, {
+      runPublicId: run.shortcode,
+      action: "restart",
+    });
+    if (!successor.successorRunId) throw new Error("Missing replay run");
+    const [replayRun] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, successor.successorRunId));
+    if (!replayRun) throw new Error("Missing replay run record");
+    expect(await claimNextImportWork(ctx.db, namespace, replayRun.id)).toEqual(
+      verification,
+    );
     const lines = await getDb(ctx.db)
       .select()
       .from(expense)
