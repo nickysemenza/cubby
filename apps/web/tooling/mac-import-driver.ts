@@ -438,7 +438,22 @@ export class MacImportDriver {
         hit = readHit();
         break;
       } catch (error) {
-        if (Date.now() >= deadline) throw error;
+        if (Date.now() >= deadline) {
+          this.record(
+            ["owned-point-failure", selector],
+            1,
+            JSON.stringify({
+              x,
+              y,
+              target: node.rect,
+              windows: this.nodes
+                .filter((entry) => role(entry) === "window")
+                .map((entry) => ({ id: entry.identifier, rect: entry.rect })),
+              ownedPID: this.pid,
+            }),
+          );
+          throw error;
+        }
         this.guardForeground();
       }
     }
