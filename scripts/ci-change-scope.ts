@@ -76,7 +76,11 @@ const affectedByPath = (path: string): Partial<CiChangeScope> | null => {
     return null;
   if (path.startsWith("apps/apple/")) return { apple: true };
   if (path.startsWith("cubby-ffi/")) return { rust: true, apple: true };
-  if (path.startsWith("recipebridge/"))
+  if (
+    path.startsWith("recipebridge/") ||
+    path === "Cargo.toml" ||
+    path === "Cargo.lock"
+  )
     return {
       validation: true,
       web: true,

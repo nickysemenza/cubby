@@ -70,6 +70,8 @@
       "cache": true,
       "inputs": [
         "{workspaceRoot}/recipebridge/**/*",
+        "{workspaceRoot}/Cargo.toml",
+        "{workspaceRoot}/Cargo.lock",
         "{workspaceRoot}/packages/wasm/package.json",
         "{workspaceRoot}/packages/wasm/.gitignore",
         "{workspaceRoot}/scripts/ensure-wasm.ts",
@@ -89,6 +91,8 @@
       "inputs": [
         "{workspaceRoot}/cubby-ffi/**/*",
         "{workspaceRoot}/recipebridge/**/*",
+        "{workspaceRoot}/Cargo.toml",
+        "{workspaceRoot}/Cargo.lock",
         "{workspaceRoot}/apps/apple/scripts/build-rust.sh",
         "{workspaceRoot}/scripts/ensure-apple-ffi.ts",
         "{workspaceRoot}/scripts/rust-fingerprint.ts",

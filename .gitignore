@@ -138,3 +138,7 @@ artifacts/local-dev-fixtures/
 
 # Isolated macOS import acceptance runs, including failed milestones.
 artifacts/mac-import-e2e/
+
+# Cargo workspace build output (CI builds into the repo root)
+/target
+/target-*

@@ -42,13 +42,23 @@ const WASM_DIR = join(ROOT, "packages/wasm");
 const BINARY = "recipebridge_bg.wasm";
 const MARKER = ".fingerprint";
 
+const WASM_RELEASE_PROFILE = {
+  CARGO_PROFILE_RELEASE_OPT_LEVEL: "z",
+  CARGO_PROFILE_RELEASE_LTO: "true",
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1",
+  CARGO_PROFILE_RELEASE_PANIC: "abort",
+  CARGO_PROFILE_RELEASE_INCREMENTAL: "false",
+};
+
 const fingerprint = () => {
   // Match pnpm wasm's build environment before hashing. Otherwise its stamp
   // includes the default target directory but every startup computes another key.
-  process.env.CARGO_TARGET_DIR ??= join(
-    homedir(),
-    ".cache/cubby/recipebridge-target",
-  );
+  process.env.CARGO_TARGET_DIR ??= join(homedir(), ".cache/cubby/cargo-target");
+  // The `wasm` script sets the release profile through CARGO_PROFILE_RELEASE_*
+  // (member profiles are ignored in the workspace, and wasm-pack only takes
+  // --release). Mirror it here so the key tracks the profile. Keep in sync with
+  // package.json and setup-node-with-deps.
+  Object.assign(process.env, WASM_RELEASE_PROFILE);
   const extra = [command("wasm-pack", ["--version"])];
   // wasm-pack can provision its own optimizer when none is installed on PATH.
   try {
@@ -56,7 +66,7 @@ const fingerprint = () => {
   } catch {
     extra.push("wasm-pack-managed optimizer");
   }
-  return rustFingerprint(resolve(ROOT, "recipebridge/Cargo.toml"), extra);
+  return rustFingerprint(resolve(ROOT, "Cargo.toml"), extra);
 };
 
 // The binary must exist too: a marker alone survives a partial clean.

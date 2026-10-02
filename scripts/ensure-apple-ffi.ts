@@ -40,7 +40,7 @@ if (!["all", "sim", "device", "mac"].includes(TARGETS)) {
 }
 
 const fingerprint = () =>
-  rustFingerprint(resolve(ROOT, "cubby-ffi/Cargo.toml"), [
+  rustFingerprint(resolve(ROOT, "Cargo.toml"), [
     command("xcodebuild", ["-version"]),
     command("uname", ["-m"]),
     `profile=${PROFILE}`,

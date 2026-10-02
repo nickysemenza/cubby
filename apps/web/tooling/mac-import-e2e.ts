@@ -238,7 +238,7 @@ function nativeSourceFingerprint(): string {
     hash.update("\0");
   }
   hash.update(
-    rustFingerprint(path.join(repoRoot, "cubby-ffi/Cargo.toml"), [
+    rustFingerprint(path.join(repoRoot, "Cargo.toml"), [
       execFileSync("xcodebuild", ["-version"], { encoding: "utf8" }),
       process.arch,
       `profile=${process.env.CUBBY_FFI_PROFILE ?? "release"}`,

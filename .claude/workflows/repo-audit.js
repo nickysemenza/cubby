@@ -30,7 +30,7 @@ const ROOT_GATES = {
   owner: "root",
   commands: [
     "pnpm check",
-    "cargo fmt --manifest-path recipebridge/Cargo.toml -- --check",
+    "cargo fmt --all -- --check",
   ],
   result:
     "array of { command, status: pass|fail, output } with compact evidence",

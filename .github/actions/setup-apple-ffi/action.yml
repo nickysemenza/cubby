@@ -32,7 +32,7 @@ runs:
             ;;
         esac
         {
-          echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/cubby-ffi/target-${{ inputs.targets }}-${{ inputs.profile }}"
+          echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target-${{ inputs.targets }}-${{ inputs.profile }}"
           echo "CUBBY_FFI_PROFILE=${{ inputs.profile }}"
           echo "CUBBY_FFI_TARGETS=${{ inputs.targets }}"
         } >> "$GITHUB_ENV"
@@ -40,7 +40,7 @@ runs:
     - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
       with:
         cache: true
-        cache-workspaces: cubby-ffi -> target-${{ inputs.targets }}-${{ inputs.profile }}
+        cache-workspaces: . -> target-${{ inputs.targets }}-${{ inputs.profile }}
         cache-key: apple-ffi-${{ inputs.targets }}-${{ inputs.profile }}
 
     - name: Install requested Apple Rust targets

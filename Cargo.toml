@@ -1,0 +1,47 @@
+# One workspace for the Rust crates so they share a single Cargo.lock and
+# target directory. Member `[profile.*]` tables are ignored inside a
+# workspace; every profile lives here.
+[workspace]
+resolver = "3"
+members = ["recipebridge", "cubby-ffi"]
+
+# Line numbers are kept for backtraces; full DWARF only inflated the shared
+# target dir.
+[profile.dev]
+debug = "line-tables-only"
+
+# Dev-iteration tuning: optimizing dependencies even in debug builds keeps
+# `cargo test`/`cargo clippy` fast despite the heavy `ingredient`/`serde`/
+# `uniffi` deps; a light opt-level on the test profile trims runtime without
+# the slow full-release compile.
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.test]
+opt-level = 1
+
+# Plain release is cubby-ffi's inner-loop profile (`build-rust.sh` default).
+# Do NOT set `panic = "abort"` here or in `dist`: UniFFI's generated
+# scaffolding wraps every export in `catch_unwind`, which needs unwinding to
+# turn a Rust panic into a thrown Swift error instead of a hard abort.
+# Incremental is off for release by cargo default; on, an edit to a path crate
+# is a partial recompile per target instead of a full one.
+#
+# The wasm build overrides this through CARGO_PROFILE_RELEASE_* in the root
+# `wasm` script and the CI wasm step (wasm-pack only takes --release, and
+# member profiles are ignored): opt-level z, lto, one codegen unit,
+# panic = abort, no incremental. Keep those lists in sync.
+[profile.release]
+strip = "debuginfo"
+incremental = true
+
+# Shipped-binary tuning (`build-rust.sh --profile dist`): LTO + one codegen
+# unit let the linker drop cross-crate dead code, `opt-level = "s"` favors
+# binary size over compile speed. `incremental` would be inherited and cargo
+# does not turn it off under LTO on its own.
+[profile.dist]
+inherits = "release"
+opt-level = "s"
+lto = true
+codegen-units = 1
+incremental = false
