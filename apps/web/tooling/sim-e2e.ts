@@ -1147,7 +1147,9 @@ function retainRunDiagnostics(failure: Error | undefined): string[] {
       ? [...readFileSync(log, "utf8").matchAll(/Diagnostics Log: ([^\r\n]+)/gu)]
       : [];
     for (const [index, match] of diagnosticPaths.entries()) {
-      const source = path.resolve(match[1].trim());
+      const diagnosticPath = match[1];
+      if (!diagnosticPath) continue;
+      const source = path.resolve(diagnosticPath.trim());
       const relative = path.relative(driverRoot, source);
       if (
         relative.startsWith("..") ||
