@@ -25,6 +25,31 @@ struct PhotoVisualEvidenceMatcherTests {
         #expect(PhotoVisualEvidenceMatcher.clearWinner([("PLT-A", 0.8)]) == nil)
     }
 
+    @Test func ownImageEvidenceKeepsItemAndCoverPhotosButNotLabels() {
+        let row = EntityRow(
+            id: "PRD-1", title: "Jar", subtitle: nil, imageURL: nil,
+            raw: [
+                "attachments": [
+                    [
+                        "role": "attachment", "purpose": "item", "status": "UPLOADED",
+                        "url": "https://gallery.example/item.jpg",
+                    ],
+                    [
+                        "role": "attachment", "purpose": "label", "status": "UPLOADED",
+                        "url": "https://gallery.example/label.jpg",
+                    ],
+                    ["role": "cover", "status": "UPLOADED", "url": "https://cover.example/c.jpg"],
+                    ["role": "attachment", "status": "PENDING", "url": "https://p.example/x.jpg"],
+                ]
+            ])
+
+        #expect(
+            PhotoVisualEvidenceMatcher.ownImageURLs(in: row) == [
+                URL(string: "https://gallery.example/item.jpg")!,
+                URL(string: "https://cover.example/c.jpg")!,
+            ])
+    }
+
     @Test func visualEvidenceUsesOnlyUploadedDirectAttachments() throws {
         let row = EntityRow(
             id: "MEA-1", title: "Dinner", subtitle: nil,

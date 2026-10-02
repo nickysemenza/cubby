@@ -1440,7 +1440,8 @@ const buildMetadataSchemas = () => {
     .strict();
   const imageVisualEvidenceMetadataSchema = z
     .object({
-      relationPath: imageRelationPathSchema,
+      // An empty path is the record's own gallery images (no relation hop).
+      relationPath: z.array(nonEmptyString()),
       priority: z.number().int().nonnegative(),
       ordering: z.enum(["declared", "newest", "oldest"]),
     })

@@ -480,6 +480,36 @@ describe("typed entity compiler", () => {
       ]),
     ).toThrow("targets alpha, which does not have gallery image storage");
 
+    // An empty relationPath is the record's own gallery: valid with gallery
+    // storage, rejected without it (the matcher could never read a URL).
+    const ownPath: string[] = [];
+    const selfEvidence = (storage: false | "gallery") => ({
+      ...related,
+      capabilities: {
+        ...related.capabilities,
+        images: {
+          ...related.capabilities.images,
+          storage,
+          routing: {
+            ...routing,
+            visualEvidence: [
+              {
+                relationPath: ownPath,
+                priority: 1,
+                ordering: "newest" as const,
+              },
+            ],
+          },
+        },
+      },
+    });
+    expect(() =>
+      compileEntityDeclarations([source, selfEvidence("gallery")]),
+    ).not.toThrow();
+    expect(() =>
+      compileEntityDeclarations([source, selfEvidence(false)]),
+    ).toThrow("does not have gallery image storage");
+
     // Cover/logo storage is also rejected: PhotoVisualEvidenceMatcher only
     // reads attachment-role (gallery) images, so evidence aimed at a
     // cover/logo-only target could never fire.

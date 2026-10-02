@@ -104,6 +104,20 @@ struct PhotoVisualEvidenceMatcher: Sendable {
 
         var urls: [URL] = []
         for binding in evidence {
+            if binding.relationPath.isEmpty {
+                do {
+                    if let row = try await client.row(
+                        EntityCatalog[candidate.source], id: candidate.sourceID)
+                    {
+                        urls.append(contentsOf: Self.ownImageURLs(in: row))
+                    }
+                } catch is CancellationError {
+                    return [:]
+                } catch {
+                    Diagnostics.report(error, context: "photos.manifest.visual-evidence")
+                }
+                continue
+            }
             guard let relationshipKey = binding.relationPath.first else { continue }
             do {
                 let root = EntityRef(entity: candidate.source, id: candidate.sourceID)
@@ -141,6 +155,20 @@ struct PhotoVisualEvidenceMatcher: Sendable {
             }
         }
         return result
+    }
+
+    /// The candidate's own uploaded images (empty `relationPath`): gallery and cover media both
+    /// show what the record looks like, but a `label` photo shows packaging text, not the item.
+    static func ownImageURLs(in row: EntityRow) -> [URL] {
+        (row.raw["attachments"]?.arrayValue ?? []).compactMap { attachment in
+            guard ["attachment", "cover"].contains(attachment["role"]?.stringValue),
+                attachment["purpose"]?.stringValue != "label",
+                attachment["status"]?.stringValue?.uppercased() == "UPLOADED",
+                let rawURL = attachment["url"]?.stringValue,
+                let url = URL(string: rawURL)
+            else { return nil }
+            return url
+        }
     }
 
     static func directGalleryURLs(in row: EntityRow) -> [URL] {

@@ -3048,6 +3048,9 @@ export default defineEntity({
           classifierLabels: ["container"],
         },
         abstention: { minimumScore: 0.72, minimumMargin: 0.12 },
+        // Empty path = the Product's own gallery photos (inventory photos attach to the
+        // Product); label-purpose attachments are excluded by the matcher.
+        visualEvidence: [{ relationPath: [], priority: 1, ordering: "newest" }],
       },
     },
     countable: true,
