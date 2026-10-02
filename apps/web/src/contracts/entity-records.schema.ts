@@ -1,3 +1,4 @@
+import { dataQualityStatus } from "@cubby/schemas/data-quality";
 import { displayImagesField } from "@cubby/schemas/display-images";
 import { entitySchema } from "@cubby/schemas/entity";
 import { z } from "zod";
@@ -34,6 +35,7 @@ export const entityRecordSchema = z.object({
   kind: entitySchema,
   name: z.string(),
   quality: z.number().min(0).max(100).nullable(),
+  qualityStatus: dataQualityStatus.nullable(),
   hasImage: z.boolean(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),

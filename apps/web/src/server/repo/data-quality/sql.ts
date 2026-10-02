@@ -166,6 +166,15 @@ export const statusCondition = (
   }
 };
 
+/** Authoritative pill tone; a defect cannot be inferred from the numeric score. */
+export const statusSql = (
+  entity: ScoredEntity,
+  t: ScoredTable = entryFor(entity).table,
+): SQL => sql`CASE
+  WHEN ${statusCondition(entity, "defect", t)} THEN 'defect'
+  WHEN ${statusCondition(entity, "needs_data", t)} THEN 'needs_data'
+  ELSE 'complete' END`;
+
 /**
  * `100 * satisfied expected weight / expected weight`, 100 when nothing is
  * expected; an excepted check counts as satisfied because `gapCondition`

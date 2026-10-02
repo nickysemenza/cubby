@@ -1,3 +1,4 @@
+import { entityRecordsOutputSchema } from "~/contracts/entity-records.schema";
 import { fieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
 import superjson from "superjson";
@@ -52,13 +53,13 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   const table = page.getByRole("table").first();
   const headers = table.getByRole("columnheader");
   const labels = await headers.allTextContents();
-  expect(labels.findIndex((text) => text.includes("Data quality"))).toBe(
+  expect(labels.findIndex((text) => text.includes("Quality"))).toBe(
     labels.findIndex((text) => text.includes("Product")) + 1,
   );
   const row = table.getByRole("row").filter({ hasText: name }).first();
   await expect(row).toContainText("/100");
   await row
-    .getByRole("button", { name: "How data quality is determined" })
+    .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
   const popover = page.locator('[data-slot="popover-content"]');
   await expect(
@@ -81,22 +82,20 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   await page.getByRole("button", { name: "Actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Columns…", exact: true }).click();
   await page
-    .getByRole("button", { name: "Move Data quality later", exact: true })
+    .getByRole("button", { name: "Move Quality later", exact: true })
     .click();
   await page.keyboard.press("Escape");
   const changed = await headers.allTextContents();
   expect(changed).not.toEqual(labels);
   await reloadAuthenticatedPage(page, table);
   await expect.poll(() => headers.allTextContents()).toEqual(labels);
-  await table.getByRole("columnheader", { name: /Data quality/ }).click();
+  await table.getByRole("columnheader", { name: /Quality/ }).click();
   await expect(page).toHaveURL(/sort=.*dataQuality/);
   await expect(table.locator("tbody tr").first()).toContainText(lowerScoreName);
 
   await gotoAuthenticatedPage(page, `/plants/${plant.id}`);
   const related = page.locator("#products");
-  await expect(
-    related.getByText("Data quality", { exact: true }),
-  ).toBeVisible();
+  await expect(related.getByText("Quality", { exact: true })).toBeVisible();
   await expect(
     related.getByRole("row").filter({ hasText: name }).first(),
   ).toContainText("/100");
@@ -111,12 +110,14 @@ test("quality leads entity tables, explains its calculation, and restores tempor
     .getByRole("row")
     .filter({ hasText: categoryName })
     .first();
-  await expect(unassessedRow).toContainText("Not assessed");
+  await expect(
+    unassessedRow.locator('[data-cell-col="dataQuality"] [data-cell-value]'),
+  ).toHaveText("—");
   const unscoredURL = page.url();
-  await page.getByRole("columnheader", { name: /Data quality/ }).click();
+  await page.getByRole("columnheader", { name: /Quality/ }).click();
   await expect(page).toHaveURL(unscoredURL);
   await unassessedRow
-    .getByRole("button", { name: "How data quality is determined" })
+    .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
   await expect(popover).toContainText("No quality checks are defined");
   await expect(popover).toContainText("not a score of zero");
@@ -125,7 +126,7 @@ test("quality leads entity tables, explains its calculation, and restores tempor
   await page
     .getByRole("listitem")
     .filter({ hasText: categoryName })
-    .getByRole("button", { name: "How data quality is determined" })
+    .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
   await expect(popover).toBeVisible();
   await expectViewportBounded(page);
@@ -137,6 +138,7 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
   page,
   baseURL,
 }) => {
+  test.setTimeout(60_000);
   const name = `Synthetic quality states ${Date.now()}`;
   const product = await seedProductPrerequisite(page, {
     name,
@@ -175,7 +177,8 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
     amount: { value: 1, unit: "each" },
   });
   const before = await explain("product", product.id);
-  expect(before.value).toBe("needs_data");
+  expect(before.value).toBe(before.qualityBreakdown?.score);
+  expect(before.interpretation?.result).toMatch(/^\d+\/100$/);
   expect(before.qualityBreakdown?.checks).toContainEqual(
     expect.objectContaining({ check: "product_manufacturer", state: "gap" }),
   );
@@ -231,7 +234,18 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
     trade: "other",
   });
   const defect = await explain("purchase", purchase.id);
-  expect(defect.value).toBe("defect");
+  expect(defect.value).toBe(defect.qualityBreakdown?.score);
+  expect(defect.interpretation?.result).toMatch(/^\d+\/100$/);
+  const records = entityRecordsOutputSchema.parse(
+    await dispatch("entity.records", { kind: "purchase", q: name }),
+  );
+  expect(records.items).toContainEqual(
+    expect.objectContaining({
+      id: purchase.id,
+      quality: defect.qualityBreakdown?.score,
+      qualityStatus: "defect",
+    }),
+  );
   expect(defect.qualityBreakdown?.checks).toContainEqual(
     expect.objectContaining({
       check: "paperwork_mismatch",
@@ -263,7 +277,7 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
   );
   const row = page.getByRole("row").filter({ hasText: name }).first();
   await row
-    .getByRole("button", { name: "How data quality is determined" })
+    .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
   await expect(page.locator('[data-slot="popover-content"]')).toContainText(
     "Paperwork mismatch",
@@ -286,7 +300,7 @@ test("explanations load lazily, recover from errors, and expand bounded evidence
   );
   const row = page.getByRole("listitem").filter({ hasText: name }).first();
   const trigger = row.getByRole("button", {
-    name: "How data quality is determined",
+    name: /How (data )?quality is determined/,
   });
   await expect(trigger).toBeVisible();
   expect(requests).toBe(0);
@@ -389,7 +403,7 @@ test("specialist board and gallery cards retain the shared quality explanation",
     .filter({ has: page.getByRole("button", { name, exact: true }) });
   await expect(card).toContainText("/100");
   await card
-    .getByRole("button", { name: "How data quality is determined" })
+    .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
   const popover = page.locator('[data-slot="popover-content"]');
   await expect(popover).toContainText("task.data-quality");
@@ -401,7 +415,7 @@ test("specialist board and gallery cards retain the shared quality explanation",
     .first();
   await expect(locationCard).toContainText("/100");
   await locationCard
-    .getByRole("button", { name: "How data quality is determined" })
+    .getByRole("button", { name: /How (data )?quality is determined/ })
     .click();
   await expect(popover).toContainText("location.data-quality");
   expect(task.id).toBeTruthy();

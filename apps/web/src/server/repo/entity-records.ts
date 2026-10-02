@@ -12,7 +12,7 @@ import {
   type EntityRecordsInput,
 } from "~/contracts/entity-records.schema";
 import type { Database } from "~/server/db";
-import { entryFor, scoreSql } from "~/server/repo/data-quality/sql";
+import { entryFor, scoreSql, statusSql } from "~/server/repo/data-quality/sql";
 import { unwrapDb } from "~/server/repo/database-helpers";
 import {
   entityDisplayImagePresenceSql,
@@ -58,7 +58,10 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
       image: sql`${entityDisplayImagePresenceSql(kind, id)} AS "hasImage"`,
     };
     const early: SQL[] = [];
-    const late: SQL[] = [];
+    // Status is display-only: evaluate it for the requested page, never the roster.
+    const late: SQL[] = [
+      sql`, ${scored(kind) ? statusSql(kind, entryFor(kind).table) : sql`NULL::text`} AS "qualityStatus"`,
+    ];
     for (const [field, needed] of [
       [fields.name, earlyName],
       [fields.quality, earlyQuality],
