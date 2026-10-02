@@ -565,9 +565,6 @@ See also the image operational passes at the end of this file.
 
 ## Web UI
 
-- 🟢 **Refresh `apps/web/PRODUCT.md`.** It predates the manifest
-  consolidation.
-
 - 🟢 **Web `src/` layout.** UI code lives in `components/`,
   `app/_components/`, `hooks/`, `app/_components/hooks/`, `lib/`, `misc/` and
   `server-functions/`. Move to `ui/`, `features/<domain>/`, `entity/`, and
@@ -814,19 +811,24 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
 
 ## Infra & deploy
 
-- 🟢 **Maintenance mode.** The `MAINTENANCE_MODE` Worker secret makes the web
+- 🤔 **Maintenance mode.** The `MAINTENANCE_MODE` Worker secret makes the web
   Worker answer 503 and skips the cron (`server/maintenance.ts`); queues are
   paused by hand. Wanted: status in a Durable Object checked per request (503
-  page except health and the switch), by every queue consumer (leave messages
-  unacked), and by Flue run workflows before each step; toggle from Settings
-  and MCP.
+  page except a new health route and the switch), by every queue consumer
+  (`background-tasks/consume.ts`, `telemetry-queue.ts`, the purchase-agent
+  consumer), and by the Flue purchase-import run before each tool call (via a
+  `PurchaseImportService` RPC); toggle from Settings and MCP. Decide first how
+  consumers hold messages: a normally returning handler acks them, and
+  `retry()` spends `max_retries: 3` with no dead-letter queue, so either call
+  the Queues pause-delivery API from the toggle or retry with long delays.
 
-- 🟢 **Use Wrangler's local R2 binding for isolated object-storage tests.**
-  Local dev uses `apps/web/tooling/local-r2*`, not a binding; production
-  signing is `server/utils/s3.ts`. Switch only with an adapter that keeps
-  presigned browser and native upload/download URLs working alongside the
-  binding; exercise upload, direct read, image processing, and replay under
-  `wrangler dev`, keeping the workerd CI gate. Changes the deploy surface.
+- 🟢 **Move E2E object storage onto the local R2 binding.** Local dev already
+  serves R2 through the S3-shaped `tooling/dev/storage.ts` handler; the
+  Playwright, simulator, and Mac import harnesses still start the in-memory
+  Node server in `tooling/local-object-storage.ts`. Point them at the binding
+  with a bucket per run, keeping the workerd CI gate. A production binding
+  adapter behind `server/utils/s3.ts` is separate: it must keep presigned
+  browser and native upload/download URLs and changes the deploy surface.
 
 - 🤔 **Evaluate Cloudflare Workflows across durable background work.** Start
   with vendor Gmail discovery: one instance per Run, bounded pages, a
