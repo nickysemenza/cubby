@@ -21,6 +21,11 @@
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": false,
+    // Vite already compiles each file alone. For tsc it also skips recomputing
+    // declaration signatures across an edited file's importer closure, which
+    // roughly halves the first incremental check after an edit; measurements
+    // in docs/local-check-performance.md.
+    "isolatedModules": true,
     "noEmit": true,
 
     /* Linting */
