@@ -39,8 +39,10 @@ runs:
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: packages/wasm
+        # WASM/JS outputs are portable; retain the existing Linux cache namespace
+        # so native lanes reuse main's exact source revision without Rust compilation.
         # Exact key only: a prefix hit would restore the wrong parser revision.
-        key: wasm-pkg-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'recipebridge/Cargo.toml', 'recipebridge/src/**', 'rust-toolchain.toml') }}
+        key: wasm-pkg-Linux-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'recipebridge/Cargo.toml', 'recipebridge/src/**', 'rust-toolchain.toml') }}
 
     - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
       if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
@@ -83,7 +85,7 @@ runs:
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: packages/wasm
-        key: wasm-pkg-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'recipebridge/Cargo.toml', 'recipebridge/src/**', 'rust-toolchain.toml') }}
+        key: wasm-pkg-Linux-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'recipebridge/Cargo.toml', 'recipebridge/src/**', 'rust-toolchain.toml') }}
 
     # packages/wasm now matches the exact recipebridge sources in the cache
     # key (restored or just built), so the Nx `wasm` target need not rebuild
