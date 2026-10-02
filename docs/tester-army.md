@@ -57,6 +57,15 @@ uses fresh fixture state. Install the Chromium browser with
 `pnpm --dir apps/web exec playwright install chromium` if needed.
 The iOS prerequisites are the same as `pnpm test:e2e:sim`.
 
+Both manual simulator lanes restore the same Xcode-versioned DerivedData cache
+as the regular Apple build gate. Hosted builds use its SPM clone directory,
+content-based source mtimes, native arm64 slice, and batch compilation. They
+still run an incremental build against the current generated inputs before
+installing the app. Simulator boot follows compilation to avoid CPU contention.
+Bundles record native build, boot, and installation durations separately.
+A cold cache still requires compilation; warm-cache performance must be
+measured from the full hosted job, not just the agent test duration.
+
 Dispatch **CI** manually with `tester_army` set to `web`, `ios`, or `both` and
 `simulator_e2e` disabled. These optional jobs do not run on PRs and do not replace
 the required checks. Run each engine three times for the live acceptance sample.

@@ -17,7 +17,9 @@ test("iOS product rename persists after reopening", async ({
   await agent.act("Use Find to search for {name} and open that product", {
     params: { name },
   });
-  await expect(screen.getByTestId("detail.product.edit")).toBeVisible();
+  await expect(
+    screen.getByRole("button", "Edit", { exact: true }),
+  ).toBeVisible();
   await expect(
     screen.getByTestId("detail.product").getByText(name),
   ).toBeVisible();
@@ -27,7 +29,9 @@ test("iOS product rename persists after reopening", async ({
       params: { name: updatedName },
     },
   );
-  await expect(screen.getByTestId("detail.product.edit")).toBeVisible();
+  await expect(
+    screen.getByRole("button", "Edit", { exact: true }),
+  ).toBeVisible();
   await expect(
     screen.getByTestId("detail.product").getByText(expectedProductName()),
   ).toBeVisible();
@@ -35,7 +39,9 @@ test("iOS product rename persists after reopening", async ({
   await agent.act("Use Find to search for {name} and open that product", {
     params: { name: updatedName },
   });
-  await expect(screen.getByTestId("detail.product.edit")).toBeVisible();
+  await expect(
+    screen.getByRole("button", "Edit", { exact: true }),
+  ).toBeVisible();
   await expect(
     screen.getByTestId("detail.product").getByText(expectedProductName()),
   ).toBeVisible();
