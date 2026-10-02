@@ -11,6 +11,7 @@ import {
   Controller,
   type FieldValues,
   type FieldPathByValue,
+  type FieldPathValue,
   FormProvider,
   type Path,
   type UseFormReturn,
@@ -545,7 +546,9 @@ export function NullableNumericField<
     <Controller
       control={form.control}
       name={name}
-      defaultValue={null}
+      // SAFETY: this nullable field's unknown value is null; RHF's generic
+      // path lookup cannot carry that constraint into its defaultValue type.
+      defaultValue={null as FieldPathValue<TFieldValues, typeof name>}
       render={({ field, fieldState }) => {
         if (fraction) {
           return (
