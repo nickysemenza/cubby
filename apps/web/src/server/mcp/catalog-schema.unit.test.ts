@@ -1,4 +1,5 @@
 import { PUBLIC_SHORTCODE_PREFIXES } from "@cubby/shared";
+import { Ajv } from "@modelcontextprotocol/client/validators/ajv";
 import { McpServer } from "@modelcontextprotocol/server";
 import { fromAny } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
@@ -9,7 +10,10 @@ import { withErrorReporting } from "~/server/errors/report-error";
 import { callMcpTool, registerTestTool } from "./mcp-test-utils";
 import { McpOperationContext } from "./operation-context";
 import { listMcpToolCatalog } from "./server";
-import { stripMockFromJsonSchema } from "./tools/tool-json-schema";
+import {
+  safeToJsonSchema,
+  stripMockFromJsonSchema,
+} from "./tools/tool-json-schema";
 
 type JsonObject = Extract<JSONType, { [key: string]: JSONType }>;
 
@@ -406,6 +410,40 @@ describe("MCP catalog schemas", () => {
         .map((tool) => tool.name),
     ).toEqual([]);
   });
+
+  it("publishes valid Draft-7 schemas including empty merchant candidate tuples", async () => {
+    const validator = new Ajv({ strict: false, validateFormats: false });
+    const invalid: string[] = [];
+    for (const tool of (await listMcpToolCatalog()).tools) {
+      for (const field of ["inputSchema", "outputSchema"] as const) {
+        if (!validator.validateSchema(tool[field] ?? {})) {
+          invalid.push(`${tool.name}.${field}`);
+        }
+      }
+    }
+    expect(invalid).toEqual([]);
+  });
+
+  it.each([
+    { candidates: z.tuple([]), accepted: [], rejected: ["candidate"] },
+    {
+      candidates: z.tuple([]).rest(z.string()),
+      accepted: ["candidate"],
+      rejected: [1],
+    },
+  ])(
+    "preserves empty-prefix tuple validation in advertised schemas",
+    (fixture) => {
+      const schema = safeToJsonSchema(
+        z.object({ candidates: fixture.candidates }),
+        "output",
+      );
+      const validator = new Ajv({ strict: false, validateFormats: false });
+      const validate = validator.compile(schema);
+      expect(validate({ candidates: fixture.accepted })).toBe(true);
+      expect(validate({ candidates: fixture.rejected })).toBe(false);
+    },
+  );
 
   it("keeps public entity-id fields self-describing in the published schemas", async () => {
     const uuidExceptions = new Set([
