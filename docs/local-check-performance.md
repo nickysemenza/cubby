@@ -49,14 +49,33 @@ make the invalidated set large:
   `@tanstack/react-start`, so each of the ~330 files importing them references
   it, and it imports every route. About 1,930 of 3,450 source files
   transitively import `router.tsx` (the 20 s row).
-- `worker-configuration.d.ts` is a global script that imports
-  `./src/cf-server` for its Durable Object types (`wrangler types` has no
-  option to avoid this), and `cf-server.ts` reaches the route tree through the
+- `worker-configuration.d.ts` is a global script, and `wrangler types` points
+  its Durable Object and Workflow types at the Worker entry
+  (`import("./src/cf-server")`), which reaches the route tree through the
   `@tanstack/react-start` server entry. A closure that reaches it re-checks
-  all 3,457 files (the 37 s row). Typing those bindings through leaf RPC
-  interfaces would remove that escalation. Moving the `declare global` blocks
-  out of three `.ts` files alone measured no change, because the same
-  closures already reach this file.
+  all 3,457 files (the 37 s row). `types:generate` now rewrites those imports
+  to `src/server/worker-bindings.ts`, which exports only those classes
+  (`scripts/worker-type-imports.ts`; Wrangler's `--check` compares only its
+  hash header). Moving the `declare global` blocks out of three `.ts` files
+  alone measured no change, because the same closures reach this file.
+
+Server modules no longer type-import client modules. The generated kernel
+bindings carried the port-existence check (`EntityPortExportChecks`, now in
+the unimported `entity-port-checks.gen.ts`), and the problem-registry
+validator read `getSortableFields` from `entities.tsx` (the roster lookup is
+now the leaf `entities/sortable-fields.ts`). Those two edges let 476 of 669
+server files reach the route tree; four do now (`cf-server.ts` and three
+`@tanstack/react-start` middleware files). With a fresh build per probe and
+one body edit, the same 10 files went from 51.5–61.8 s CPU (mean 54.3 s) to
+39.6–57.9 s (mean 43.9 s): about −24% for the eight client files, and no clear
+change for the two server files, which still escalate through `cf-server.ts`.
+
+With the env types pointed at `worker-bindings.ts`, a global file sits in the
+closure of 760 of 2,940 source files, mostly server modules the Durable
+Objects reach. The eight client files then took 26.4–28.6 s CPU, down from
+52.6–56.0 s on the original layout: they now re-check the route-tree closure
+instead of everything. The two server files still re-check everything
+(56–71 s).
 
 Server modules no longer type-import client modules. The generated kernel
 bindings carried the port-existence check (`EntityPortExportChecks`, now in

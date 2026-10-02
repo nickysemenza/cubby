@@ -1150,10 +1150,16 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
   }
 }
 
-export { CalendarFeedDurableObject } from "./server/calendar/durable-object";
-export { PurchaseImportDurableObject } from "./server/purchase-import/durable-object";
-export { ImageProcessingDurableObject } from "./server/image-processing/durable-object";
-export { SearchIndexRepairWorkflow } from "./server/search-index-repair-workflow";
+// Named, not `export *`: `wrangler types` finds Durable Object classes by
+// reading this entry's named exports.
+export {
+  AiResponseCacheDurableObject,
+  CalendarFeedDurableObject,
+  DatabaseFreshnessDurableObject,
+  ImageProcessingDurableObject,
+  PurchaseImportDurableObject,
+  SearchIndexRepairWorkflow,
+} from "./server/worker-bindings";
 
 export default Sentry.withSentry(
   (env: Env) => ({
@@ -1181,6 +1187,3 @@ export default Sentry.withSentry(
   }),
   handler,
 );
-
-export { DatabaseFreshnessDurableObject } from "./server/database-freshness/durable-object";
-export { AiResponseCacheDurableObject } from "./server/ai/response-cache-durable-object";
