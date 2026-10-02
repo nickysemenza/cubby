@@ -27,6 +27,9 @@ strictDepBuilds: false
 minimumReleaseAge: 0
 
 overrides:
+  # The mobile SDK pins its driver independently of our CLI; both must use
+  # the same patched runner and simulator startup fixes.
+  agent-device: 0.21.20
   # Flue 2.2.x declares pi ^0.87.1 but Cubby's gateway provider is written
   # against pi 0.99 (createProvider/lazy API modules). Keep Flue's paired
   # runtime packages on the same release as the direct dependency; the real
@@ -475,5 +478,5 @@ configDependencies:
   "@pnpm/plugin-types-fixer": 0.1.0
 # Observation events preserve pg-cloudflare startup ordering; port when upgrading.
 patchedDependencies:
-  agent-device@0.21.18: patches/agent-device@0.21.18.patch
+  agent-device@0.21.20: patches/agent-device@0.21.20.patch
   pg-cloudflare@1.4.1: patches/pg-cloudflare@1.4.1.patch
