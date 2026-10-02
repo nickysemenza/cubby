@@ -58,7 +58,7 @@ export function purchaseImportTools(
     defineTool({
       name: "claim_next_import_work",
       description:
-        "Claim and describe the run's next bounded work item. Use this before choosing receipt or browser evidence work, and again after each committed item until it returns none.",
+        "Claim and describe the run's next bounded work item. Use this before choosing saved mail, receipt or browser evidence work, and again after each committed item until it returns none.",
       input: v.object({ operationId }),
       output: serviceResult,
       durable: true,
@@ -84,7 +84,7 @@ export function purchaseImportTools(
     defineTool({
       name: "extract_run_evidence",
       description:
-        "Extract the immutable run-scoped evidence uploaded for a purchase validation target. Use this instead of any shared Image or document API.",
+        "Extract the saved confirmation assigned to mail_evidence work, or immutable uploaded evidence for a purchase validation target. Pass the returned source, checksum, extraction, revision and stable ids unchanged to purchase_import.prepare. Use this instead of a shared Image or document API.",
       input: v.object({ operationId }),
       output: serviceResult,
       durable: true,

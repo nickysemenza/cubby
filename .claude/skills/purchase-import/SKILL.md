@@ -6,7 +6,7 @@ description: Support Cubby purchase imports when learning a vendor, ingesting a 
 # Purchase-import support
 
 For a durable account sync, purchase validation, or product enrichment run,
-load [run-workflow.md](references/run-workflow.md). For receipt or browser
+load [run-workflow.md](references/run-workflow.md). For receipt, browser, or saved confirmation
 extraction and post-commit audit, load the respective
 [extraction](references/extraction.md) and [audit](references/audit.md)
 instructions. For a photographed receipt or a Gmail order event, load
@@ -25,9 +25,7 @@ through Cubby's prepare/commit writer rather than generic entity mutation.
    mail by the Vendor website's domain, any optional known sender, order id,
    and time window. On Vendor detail, **Search Gmail now** scans a bounded page
    from the past year; **Search older email** continues when Gmail has more.
-   An email event
-   establishes lifecycle context; open the retailer order detail or a receipt
-   for itemized variants. If a retailer requests login, pause the browser run
+   An email event establishes lifecycle context. Use **Import order** on a saved placement confirmation to let Flue extract its itemization through Cubby’s Gmail integration and prepare/commit writer. If the confirmation lacks itemized variants, stop for review and open the retailer order detail or a receipt. Shipping and delivery notices cannot start an order import. If a retailer requests login, pause the browser run
    and let the member sign in to the Cubby-managed browser tab before resuming.
 2. For a statement CSV, use `/statement-rows/import` or parse the export in the
    MCP client. Known provider columns (Monarch, Mint, Copilot, Apple Card) use

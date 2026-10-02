@@ -1,4 +1,6 @@
 import {
+  orderMailImportInput,
+  orderMailImportOut,
   orderMailDecisionInput,
   orderMailDecisionOut,
   purchaseOrderMailOut,
@@ -35,6 +37,11 @@ export const vendorContract = defineContract("vendor", {
     input: vendorSearchMailStatusInput,
     output: vendorSearchMailOut.nullable(),
     cache: { tags: [] },
+  }),
+  importOrderMail: mutation({
+    input: orderMailImportInput,
+    output: orderMailImportOut,
+    invalidates: ["vendor"],
   }),
   decideOrderMail: mutation({
     native: "Confirm or dismiss an order email Purchase match in Apple apps",

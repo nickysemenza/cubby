@@ -6,6 +6,7 @@ import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 
 import { seedVendorDisplayPrerequisite } from "./fixtures-catalog";
 import {
+  seedUnimportedOrderMail,
   seedFailedVendorMailSearchRun,
   seedLiveVendorMailSearchRun,
   seedPagedVendorMailSearchRun,
@@ -280,4 +281,73 @@ test("keeps one Run live through every Gmail page and shows saved search inputs"
   await expect(
     page.getByRole("region", { name: "Search inputs" }),
   ).toContainText("example.test");
+});
+
+test("starts Flue from saved itemized email and exposes errors and the import Run", async ({
+  page,
+}) => {
+  const seed = await seedUnimportedOrderMail(
+    page,
+    `Synthetic confirmation vendor ${Date.now()}`,
+  );
+  const starts: unknown[] = [];
+  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+    if (await unbatchFor(route, ["vendor.importOrderMail"])) return;
+    if (
+      route.request().headers()["x-cubby-operation"] !==
+      "vendor.importOrderMail"
+    )
+      return route.fallback();
+    const payload = superjson.deserialize<{ input: unknown }>(
+      JSON.parse(route.request().postData() ?? "{}"),
+    );
+    starts.push(payload.input);
+    if (starts.length === 1) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(
+          superjson.serialize({
+            ok: false,
+            error: {
+              message:
+                "Synthetic order email evidence changed; refresh before importing.",
+              code: "INTERNAL_SERVER_ERROR",
+            },
+          }),
+        ),
+      });
+    } else {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(
+          superjson.serialize({ ok: true, data: { runId: "RUN-TEST" } }),
+        ),
+      });
+    }
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/vendors/${seed.vendor.shortcode}`,
+    page.getByText("Synthetic itemized confirmation"),
+  );
+  const article = page
+    .getByRole("article")
+    .filter({ hasText: "Synthetic itemized confirmation" });
+  await article
+    .getByRole("button", { name: "Import order", exact: true })
+    .click();
+  await expect(article.getByRole("alert")).toContainText(/evidence changed/u);
+  await article
+    .getByRole("button", { name: "Import order", exact: true })
+    .click();
+  expect(starts).toEqual([
+    { eventId: seed.eventId, evidenceChecksum: seed.checksum },
+    { eventId: seed.eventId, evidenceChecksum: seed.checksum },
+  ]);
+  await expect(
+    article.getByRole("link", { name: "View import" }),
+  ).toHaveAttribute("href", "/runs/RUN-TEST");
+  await expect(
+    article.getByRole("button", { name: "Import order", exact: true }),
+  ).toHaveCount(0);
 });

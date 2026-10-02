@@ -43,6 +43,7 @@ import {
   type RunTrigger,
   type RunPurpose,
 } from "@cubby/schemas/purchase-import";
+import { orderMailImportRunInput } from "@cubby/schemas/run-fields";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
 import { vendorAgentHints } from "@cubby/schemas/vendor-import-fields";
 import {
@@ -124,6 +125,10 @@ import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 import { loadPurchaseAuditBatch } from "./audit-batch";
 import type { PurchaseImportDurableObjectRpc } from "./contracts";
 import { resolveRunFinding } from "./findings";
+import {
+  loadOrderMailImportEvidence,
+  orderMailImportIsCommitted,
+} from "./gmail/import";
 import { attachPendingOrderMailEvidence } from "./gmail/process";
 import { classifyOrderCapture } from "./order-list";
 import { loadReceiptEvidenceForRun } from "./receipt-evidence";
@@ -1315,6 +1320,19 @@ export async function claimNextImportWork(
   runId: string,
 ) {
   const scope = await loadRunScope(db, runId);
+  if (scope.public.status === "paused_approval")
+    return { kind: "paused_approval" as const };
+  const mail = await loadOrderMailImportEvidence(db, scope.public.runId);
+  if (mail) {
+    assertRunActive(scope.public.status);
+    return (await orderMailImportIsCommitted(db, mail))
+      ? { kind: "none" as const }
+      : {
+          kind: "mail_evidence" as const,
+          orderId: mail.orderId,
+          evidenceChecksum: mail.evidenceChecksum,
+        };
+  }
   const receipt = await loadReceiptEvidenceForRun(db, scope.public.runId);
   if (receipt) {
     assertRunActive(scope.public.status);
@@ -1325,8 +1343,7 @@ export async function claimNextImportWork(
       evidenceChecksum: receipt.evidenceChecksum,
     };
   }
-  if (scope.public.status === "paused_approval")
-    return { kind: "paused_approval" as const };
+
   if (
     scope.public.status === "paused_auth" ||
     scope.public.status === "paused_offline"
@@ -2605,6 +2622,11 @@ export async function finishRun(
         })
         .where(and(eq(runTable.id, runId), eq(runTable.status, "running")));
     } else {
+      const mail = await loadOrderMailImportEvidence(db, runId);
+      if (mail && !(await orderMailImportIsCommitted(db, mail)))
+        throw new Error(
+          "Import run still has uncommitted order confirmation mail.",
+        );
       const [pendingHunt] = scope.public.vendorAccountId
         ? await getDb(db)
             .select({ id: importHunt.id })
@@ -3461,6 +3483,7 @@ export async function controlRun(
           purpose: runTable.purpose,
           trigger: runTable.trigger,
           notes: runTable.notes,
+          input: runTable.input,
           skillRevision: runTable.skillRevision,
           runtimeRevision: runTable.runtimeRevision,
           dispatchEventId: runTable.dispatchEventId,
@@ -3504,7 +3527,11 @@ export async function controlRun(
           sourceTargets.some((target) => target.entityKind !== "image")
         )
           throw new Error("Photo run inputs are incomplete");
-        if (locked.purpose === "account_sync" && !locked.vendorAccountId)
+        if (
+          locked.purpose === "account_sync" &&
+          !locked.vendorAccountId &&
+          !orderMailImportRunInput.safeParse(locked.input).success
+        )
           throw new Error(
             "This account run has no vendor account to start again",
           );
@@ -3525,6 +3552,7 @@ export async function controlRun(
           purpose: locked.purpose,
           trigger: "manual",
           notes: locked.notes,
+          input: locked.input,
           coordinatorModel: coordinatorModelFor(locked.purpose),
           skillRevision: locked.skillRevision,
           runtimeRevision: locked.runtimeRevision,
@@ -3745,6 +3773,7 @@ export async function controlRun(
           predecessorRunId: scope.public.runId,
           purpose: locked.purpose,
           trigger: locked.trigger,
+          input: locked.input,
           dispatchEventId,
           coordinatorModel: coordinatorModelFor(locked.purpose),
           skillRevision: locked.skillRevision,

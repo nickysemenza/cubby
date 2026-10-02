@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { vendor } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
+import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
@@ -55,6 +56,18 @@ const matchEvidence = (candidate: MailCandidate) => {
 };
 
 function OrderMailEvent({ event }: { event: MailEvent }) {
+  const importOrder = useActionMutation({
+    mutationFn: vendor.importOrderMail.mutationOptions,
+    success: "Order import started",
+  });
+  const canImport =
+    event.event === "placed" &&
+    event.orderId &&
+    !event.candidates.some(
+      (candidate) =>
+        candidate.reason === "exact_order_id" ||
+        candidate.decision === "linked",
+    );
   const decide = useActionMutation({
     mutationFn: vendor.decideOrderMail.mutationOptions,
     success: "Order email match reviewed",
@@ -72,6 +85,42 @@ function OrderMailEvent({ event }: { event: MailEvent }) {
           </span>
         ) : null}
       </Row>
+      {canImport ? (
+        <Stack gap="sm" className="mt-2">
+          {importOrder.data ? (
+            <Link
+              to="/runs/$shortcode"
+              params={{ shortcode: importOrder.data.runId }}
+              className="text-primary underline underline-offset-4"
+            >
+              View import
+            </Link>
+          ) : (
+            <div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={importOrder.isPending}
+                onClick={() =>
+                  importOrder.mutate({
+                    eventId: event.id,
+                    evidenceChecksum: event.evidenceChecksum,
+                  })
+                }
+              >
+                {importOrder.isPending ? "Starting import…" : "Import order"}
+              </Button>
+              <p className="mt-1 text-muted-foreground">
+                Flue reads the saved confirmation and imports its itemized
+                order.
+              </p>
+            </div>
+          )}
+          {importOrder.error ? (
+            <TechnicalError error={getErrorMessage(importOrder.error)} />
+          ) : null}
+        </Stack>
+      ) : null}
       {event.candidates.length === 0 ? (
         <p className="mt-1 text-muted-foreground">No likely Purchase yet.</p>
       ) : (
