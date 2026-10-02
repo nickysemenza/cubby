@@ -1,0 +1,38 @@
+name: Setup Apple build cache
+description: Restore shared simulator DerivedData with the matching Xcode toolchain.
+outputs:
+  toolchain-hash:
+    value: ${{ steps.xcode-version.outputs.hash }}
+    description: Xcode toolchain hash
+  cache-key:
+    value: ${{ steps.derived-data.outputs.cache-primary-key }}
+    description: Primary DerivedData cache key
+  cache-hit:
+    value: ${{ steps.derived-data.outputs.cache-hit }}
+    description: Exact cache hit
+  matched-key:
+    value: ${{ steps.derived-data.outputs.cache-matched-key }}
+    description: Restored DerivedData key
+runs:
+  using: composite
+  steps:
+    - name: Compute Xcode version hash
+      id: xcode-version
+      uses: ./.github/actions/toolchain-hash
+      with:
+        command: xcodebuild -version
+    - name: Ignore file-system inode changes in XCBuild
+      shell: bash
+      run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
+    - name: Restore cached DerivedData
+      id: derived-data
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        # Must list exactly the save step's paths: the cache version hashes them.
+        path: |
+          apps/apple/DerivedData
+          !apps/apple/DerivedData/Logs
+        key: xcode-dd-v1-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/App/**', 'apps/apple/CubbyKit/**') }}
+        restore-keys: |
+          xcode-dd-v1-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-
+          xcode-dd-v1-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-

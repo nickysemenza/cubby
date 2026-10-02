@@ -54,8 +54,19 @@ export function safeToJsonSchema(
     // MCP-advertised JSON Schema.
     const converted = z.toJSONSchema(toWire(schema, io), {
       target: "draft-7",
+      // Repeated entity outputs otherwise expand the catalog into megabytes
+      // that ChatGPT rejects during discovery. References retain constraints.
+      reused: io === "output" ? "ref" : "inline",
       io,
       unrepresentable: "any",
+      override: ({ jsonSchema }) => {
+        // Draft-7 requires a nonempty tuple prefix. Zod emits items: [] for
+        // empty tuples; the rest schema (or false) preserves their contract.
+        if (Array.isArray(jsonSchema.items) && jsonSchema.items.length === 0) {
+          jsonSchema.items = jsonSchema.additionalItems ?? true;
+          delete jsonSchema.additionalItems;
+        }
+      },
     });
     const parsed = z.json().parse(converted);
     if (!isJsonObject(parsed)) {

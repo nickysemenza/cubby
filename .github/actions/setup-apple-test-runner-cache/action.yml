@@ -1,0 +1,29 @@
+name: Setup Apple test runner cache
+description: Restore agent-device's validated Apple test runner build products.
+inputs:
+  toolchain-hash:
+    required: true
+    description: Xcode version hash from the Apple build cache setup
+outputs:
+  cache-key:
+    value: ${{ steps.runner.outputs.cache-primary-key }}
+    description: Primary test runner cache key
+  cache-hit:
+    value: ${{ steps.runner.outputs.cache-hit }}
+    description: Exact test runner cache hit
+  matched-key:
+    value: ${{ steps.runner.outputs.cache-matched-key }}
+    description: Restored test runner key
+runs:
+  using: composite
+  steps:
+    # The SDK revalidates its runner source, Xcode/SDK and build settings on use.
+    # Session state lives outside this build cache; logs are excluded.
+    - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      id: runner
+      with:
+        path: |
+          ~/.agent-device/apple-runner
+          !~/.agent-device/apple-runner/**/Logs
+          !~/.agent-device/apple-runner/**/*.log
+        key: agent-device-apple-runner-v1-${{ runner.os }}-${{ inputs.toolchain-hash }}-${{ hashFiles('node_modules/agent-device/package.json') }}
