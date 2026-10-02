@@ -975,6 +975,8 @@ function renderEditableField<TRecord extends object>(
   save: (next: EditableFieldValue) => Promise<void>,
   record: TRecord,
   surface: DisplaySurface,
+  /** A date field folded into a span shows the span text but edits its own value. */
+  spanValue?: ReactNode,
 ): ReactNode {
   const { key, control } = field;
   const format = field.display.format;
@@ -1071,11 +1073,16 @@ function renderEditableField<TRecord extends object>(
           onSave={save}
           renderValue={(v) =>
             displayed(
-              v ? (
-                renderFormattedScalar(format, { kind: "date", raw: v }, surface)
-              ) : (
-                <NoneValue />
-              ),
+              spanValue ??
+                (v ? (
+                  renderFormattedScalar(
+                    format,
+                    { kind: "date", raw: v },
+                    surface,
+                  )
+                ) : (
+                  <NoneValue />
+                )),
             )
           }
         />
@@ -1302,12 +1309,22 @@ export function createEntityDisplayColumns<TRecord extends object>(
         });
         continue;
       }
-      // A declared span is one column in its start field's place; edits go
-      // through the edit sheet, which owns both ends.
+      // A declared span is one column in its start field's place. The start
+      // keeps its inline editor; the end is edited in the edit sheet.
       if (spans.ends.has(field.key)) continue;
       const span = spans.byStart.get(field.key);
       if (span !== undefined) {
         const startOf = (row: TRecord) => spanDateOf(entity, row, span.start);
+        const startControl = field.control;
+        const startEditable =
+          onSaveField !== undefined &&
+          startControl !== null &&
+          startControl.kind === "date" &&
+          updateFields.includes(field.key);
+        const saveStart = (
+          row: TRecord,
+          value: string | number | boolean | null,
+        ) => onSaveField?.(row, field.key, value) ?? Promise.resolve();
         add(
           helper.accessor(startOf, {
             id: columnId,
@@ -1316,15 +1333,24 @@ export function createEntityDisplayColumns<TRecord extends object>(
             meta: attachCubbyColumnMeta({
               entityColumnRole: "fact",
               className: widthClassName("md"),
-              mobile: field.display.mobile
-                ? {
-                    ...toMobileColumnMeta(field.display.mobile),
-                    interactive: false,
-                  }
-                : undefined,
-              cellData: dateCellData<TRecord>(startOf),
+              mobile: toMobileColumnMeta(field.display.mobile),
+              cellData: dateCellData<TRecord>(
+                startOf,
+                startEditable ? saveStart : undefined,
+              ),
             }),
-            cell: ({ row }) => renderSpanValue(entity, row.original, span),
+            cell: ({ row }) =>
+              startEditable && startControl !== null
+                ? renderEditableField(
+                    entity,
+                    { ...field, control: startControl },
+                    startOf(row.original),
+                    (next) => saveStart(row.original, next),
+                    row.original,
+                    "list",
+                    renderSpanValue(entity, row.original, span),
+                  )
+                : renderSpanValue(entity, row.original, span),
           }),
         );
         continue;

@@ -713,7 +713,7 @@ describe("declared entity displays", () => {
       expect(byId.dueDate?.mobile).toEqual({
         slot: "meta",
         priority: 40,
-        interactive: false,
+        interactive: true,
       });
       expect(byId.dueDate?.enableSorting).toBe(true);
       // An override whose declared column id is a roster sort id sorts;

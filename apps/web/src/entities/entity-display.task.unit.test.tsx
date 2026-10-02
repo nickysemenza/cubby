@@ -201,7 +201,7 @@ describe("task list display columns", () => {
     expect(byId.dueDate?.mobile).toEqual({
       slot: "meta",
       priority: 40,
-      interactive: false,
+      interactive: true,
     });
     expect(byId.trade?.className).toBe("w-28");
     expect(byId.trade?.mobile).toEqual({
