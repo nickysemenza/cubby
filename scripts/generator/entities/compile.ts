@@ -2166,8 +2166,8 @@ const validateCreateSelfRoute = (
       );
     // Weaker than the runtime lookup `createDestination` uses
     // (`ENTITY_KERNEL_BINDINGS[entity].schemas.createInput`/`repository.create`): the generator
-    // runs before that generated file exists, so this checks the same manifest-declared signal
-    // `kernelActionsFor` uses to add "create" to the entity's kernel action roster instead.
+    // runs before that generated file exists. `photo-import-route.adapter.unit.test.ts`
+    // checks the runtime binding for every enabled creating route.
     if (entity.contract === null || entity.contract.create === null)
       throw new EntityDeclarationError(
         `${routeContext} is enabled but ${entity.key} has no create contract.`,
