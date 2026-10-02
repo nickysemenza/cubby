@@ -297,6 +297,7 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/recipes.new.tsx",
   ],
   "record-emoji-categories.spec.ts": [
+    "apps/web/src/routes/_authenticated/product-categories.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/spending-categories.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/vendors.$shortcode.tsx",
     "apps/web/src/routes/api/v1/$resource.ts",

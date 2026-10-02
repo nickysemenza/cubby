@@ -243,7 +243,7 @@ describe("EntityPrimitiveFields", () => {
     // Serialized image ordering must never surface as a text control.
     expect(
       screen.getAllByRole("textbox").map((el) => el.getAttribute("name")),
-    ).toEqual(["emoji", "name", "notes"]);
+    ).toEqual(["name", "notes"]);
     expect(screen.queryByLabelText(/image order/i)).not.toBeInTheDocument();
     // `type` is the only combobox: its manifest `control.kind: "select"`
     // (added for `control.suggest`, see `04-location.entity.ts`) is the sole
