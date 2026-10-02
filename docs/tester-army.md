@@ -20,7 +20,8 @@ journey must also pass after the agent-device upgrade.
 
 The pinned `agent-device` patch preserves the macOS infinite-bounds guard and
 ignores an empty Toolbar whose bounds equal its entire enclosing panel during
-occlusion checks. SwiftUI sheets expose that phantom Toolbar alongside their
+occlusion checks, including flat iOS floating-bar nodes covering at least 95%
+of the window width and 85% of its height. SwiftUI sheets expose that phantom Toolbar alongside their
 form content; treating it as an opaque overlay blocks semantic field editing.
 Toolbars with controls or smaller bounds still block covered targets. The iOS
 rename journey exercises this regression through real semantic agent actions.
