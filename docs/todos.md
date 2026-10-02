@@ -71,14 +71,10 @@ true` (`repo/image-processing-maintenance.ts`), so new uploads stay
      `PhotoVisualEvidenceMatcher` — which already follows manifest
      `visualEvidence` paths and takes the best of several references — works
      for products, not only recipes and plantings.
-  2. 🟢 A native photo routed to a Location runs the existing
-     `location-inventory-detection` feature (`services/ai-enrichment/location-vision.ts`,
-     today only on the web inventory session) and offers its detected
-     products and proposed inventory for review.
-  3. 🤔 Compare detected items visually against Product covers and
+  2. 🤔 Compare detected items visually against Product covers and
      subject-lift cutouts, not only by exact name then semantic name
      similarity. Needs an eval set like `inventory-detection-evals.ts`.
-  4. ⏳ Server vision ranking of a single record (`photo-import.identify`, a
+  3. ⏳ Server vision ranking of a single record (`photo-import.identify`, a
      `defineFeature` sibling of `product-identification`, fed into
      `PhotoEvidenceScorer` as an identity score) when deterministic evidence
      still leaves the chooser in default order often enough to matter.

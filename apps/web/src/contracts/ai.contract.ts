@@ -10,6 +10,7 @@ import {
   approveDetectedInventoryItemInput,
   approveDetectedInventoryItemOut,
   detectedInventorySchema,
+  detectInventoryItemsInput,
   enrichmentProposalPrecomputeInput,
   externalIdKindSuggestionInput,
   financeCategoryApplyInput,
@@ -64,14 +65,16 @@ export const aiContract = defineContract("ai", {
     invalidates: ["location"],
   }),
   detectInventoryItems: mutation({
-    input: aiLocationIdInput,
+    input: detectInventoryItemsInput,
     output: detectedInventoryWithProvenance,
     invalidates: ["inventory"],
+    native: "Detect items in a just-added location photo",
   }),
   approveDetectedInventoryItem: mutation({
     input: approveDetectedInventoryItemInput,
     output: approveDetectedInventoryItemOut,
     invalidates: ["inventory"],
+    native: "Approve one detected item into a location's inventory",
   }),
   identifyProduct: mutation({
     input: productIdentificationInput,

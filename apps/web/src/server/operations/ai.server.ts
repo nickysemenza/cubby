@@ -227,6 +227,7 @@ export const aiHandlers = implementOperationDomain(aiContract, {
       context.db,
       await resolveOrThrow(context.db, "location", input.locationId),
       runId,
+      input.imageIds,
     );
   },
   approveDetectedInventoryItem: async (context, input) =>

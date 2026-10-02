@@ -15,6 +15,7 @@ struct AddPhotoSheet: View {
     @State private var operationTask: Task<Void, Never>?
     @State private var draftDismissal = DraftDismissalState()
     @State private var deliveredResult = false
+    @State private var detection: LocationDetectionModel?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -82,7 +83,7 @@ struct AddPhotoSheet: View {
                                 .foregroundStyle(FieldGuideTokens.destructive)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                    case .done:
+                    case .done(let imageID):
                         Panel {
                             HStack(spacing: FieldGuideTokens.Space.md) {
                                 Image(systemName: "checkmark.circle")
@@ -91,6 +92,16 @@ struct AddPhotoSheet: View {
                                     .font(.fieldGuideTitle)
                                     .foregroundStyle(FieldGuideTokens.graphite)
                             }
+                        }
+                        if capture.entity == .location {
+                            Button("Find items in this photo", systemImage: "sparkle.magnifyingglass") {
+                                detection = LocationDetectionModel(
+                                    client: appModel.client, locationID: LocationCode(capture.entityID),
+                                    locationTitle: capture.entityTitle, imageID: imageID)
+                                path.append(.detection)
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityIdentifier("photo.add.findItems")
                         }
                     }
                 }
@@ -140,6 +151,8 @@ struct AddPhotoSheet: View {
                                 startUpload()
                             })
                     }
+                case .detection:
+                    if let detection { LocationDetectionView(model: detection) }
                 }
             }
         }
@@ -313,7 +326,8 @@ struct AddPhotoSheet: View {
         guard !Task.isCancelled, capture.uses(client: appModel.client) else { return }
         if case .done(let id) = capture.phase {
             deliverResult(id)
-            dismiss()
+            // A Location photo stays open on its done state so it can offer item detection.
+            if capture.entity != .location { dismiss() }
             Task { await appModel.photoMatches.refresh(client: appModel.client) }
         }
     }
@@ -339,6 +353,7 @@ struct AddPhotoSheet: View {
 
 private enum AddPhotoRoute: Hashable {
     case review
+    case detection
 }
 
 #Preview {

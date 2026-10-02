@@ -744,6 +744,11 @@ const CLIENT_PASSTHROUGH_METHODS = {
     method: "applySpendingClassification",
     doc: null,
   },
+  "ai.detectInventoryItems": { method: "detectInventoryItems", doc: null },
+  "ai.approveDetectedInventoryItem": {
+    method: "approveDetectedInventoryItem",
+    doc: null,
+  },
   "ai.suggestFieldsReview": { method: "suggestFieldsReview", doc: null },
   "ai.applyFinanceCategorySuggestion": {
     method: "applyFinanceCategorySuggestion",
