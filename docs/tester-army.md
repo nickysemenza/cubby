@@ -18,6 +18,11 @@ Model calls, tokens, reported cost, and timings are evidence, not a promise of
 equal reliability or savings. The existing deterministic simulator product-edit
 journey must also pass after the agent-device upgrade.
 
+The CLI and mobile SDK share patched `agent-device` 0.21.20 through a workspace
+override. Its iOS runner stops inspecting windows after finding a usable one
+and avoids retaining full snapshot responses in its command journal. Hosted
+startup and journey timings determine whether these changes improve this lane.
+
 The pinned `agent-device` patch preserves the macOS infinite-bounds guard and
 ignores an empty Toolbar whose bounds equal its entire enclosing panel during
 occlusion checks, including flat iOS floating-bar nodes covering at least 95%
