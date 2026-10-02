@@ -790,7 +790,18 @@ export class MacImportDriver {
     await this.click('label="Open" role=Button');
   }
   async openSettings(): Promise<void> {
-    this.nativeMenu("Cubby", "Settings…");
+    this.guardForeground();
+    // SwiftUI's Settings command can ignore AXPress on its menu item.
+    // Use the standard shortcut after verifying the owned fixture is frontmost.
+    execFileSync(
+      "osascript",
+      [
+        "-e",
+        'tell application "System Events" to keystroke "," using command down',
+      ],
+      { timeout: 10000 },
+    );
+    this.record(["settings-shortcut"], 0, this.observe());
     await this.wait('label="Settings" role=window');
     this.guardForeground();
     execFileSync(
