@@ -18,8 +18,8 @@ click "id=\"Cubby, Container\""
 wait text "synthetic-input-statement" 30000
 click "label=synthetic-input-statement"
 wait text "Synthetic Input Card" 30000
-wait "label=\"Record transaction\"" 30000
-click "label=\"Record transaction\""
+wait "id=statement.csv.select.1" 30000
+click "id=statement.csv.select.1"
 wait "label=Kind" 30000
 click "label=Kind"
 wait "label=Purchase" 30000
