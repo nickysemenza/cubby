@@ -1083,6 +1083,10 @@ export const editHooks: EditHooksMap = {
       labelNutrition: { validate: productLabelNutritionValidate },
     },
     create: {
+      capture: {
+        buildData: productBuildData,
+        validate: productUnitMappingsValidate,
+      },
       full: {
         buildData: productBuildData,
         validate: productUnitMappingsValidate,

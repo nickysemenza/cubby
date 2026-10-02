@@ -113,10 +113,9 @@ export const expenseCaptureRequest = (input?: {
 };
 
 /**
- * The rich "full" create request (unlike `captureRequest("product")`'s
- * name+manufacturer-only quick add) — used where a caller has more than a
- * bare name to seed: the USDA food detail page's "create product"/"link to
- * an ingredient" actions.
+ * The "full" create request used by the USDA food detail page to seed
+ * identity and ingredient links. The list's `capture` intent also exposes
+ * the whole Product editor.
  */
 export const productCreateRequest = (input?: {
   name?: string;
