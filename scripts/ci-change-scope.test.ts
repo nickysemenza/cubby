@@ -57,7 +57,10 @@ test("routes web, shared, auxiliary, Rust, and Apple dependencies", () => {
     "rust",
     "apple",
   ]);
-  assert.deepEqual(active(["Cargo.lock"]), active(["recipebridge/src/lib.rs"]));
+  assert.deepEqual(
+    active(["Cargo.lock"]),
+    active(["recipebridge/src/lib.rs"]),
+  );
   assert.deepEqual(active(["cubby-ffi/src/lib.rs"]), ["rust", "apple"]);
   assert.deepEqual(active(["apps/usda-api/src/index.ts"]), [
     "validation",
