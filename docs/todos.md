@@ -80,11 +80,12 @@ history is the archive. Permanent product constraints live in the
   analysis measurably slows while the sweep runs: add a `PhotoVisionGate`
   actor both acquire, with the sheet yielding the sweep.
 
-- 🤔 **Receiving an already-photographed purchase.** Purchase import raises a
-  receive finding for every order; receiving an item already stocked from
-  photos double-counts it, and the match card only warns that merge sums both
-  sides. Decide whether the receive finding checks for a pending match pair
-  first.
+- 🟢 **Receiving an already-photographed purchase.** Keep import stock-neutral.
+  Surface existing photo inventory and pending Product matches before offering
+  receive; resolve identity first, then explicitly confirm whether additional
+  units arrived and their quantity. Never treat a merge or later purchase
+  evidence as another receipt of already-counted stock. Contract:
+  [product identity](product-identity-journey.md).
 
 - 🤔 **Product match queue recall and cost.** A full queue read makes up to 60
   vector lookups (top 20 neighbours each), and a photo↔purchase pair is missed
@@ -144,74 +145,39 @@ See also the image operational passes at the end of this file.
 
 ## Purchases, finance & household ledger
 
-- 🟢 **Finish the input-first retailer and statement journey.** Make a saved
-  synthetic order-history and product HTML page drive the browser capture and
-  purchase prepare/commit path, then confirm the order in the web UI. Cover
-  statement-before-order and order-before-statement allocation with a
-  synthetic Monarch CSV; keep account identity and Product merge as explicit
-  review decisions. Extend to native CSV/photo review and a Gmail
-  connect-to-order approval check. Track boundaries in
-  [core journey E2E](agents/core-journey-e2e.md), seeding only account/login
-  prerequisites.
+### Import and resume orders reliably
 
-- 🤔 **Incremental import cursors and paced backfill.** The account cursor
-  declares newest-date/order-ID and backfill bounds, but imports do not advance
-  them. Advance cursors after successful processing and resume newest-first
-  backfill at the planned 20–30 orders/hour.
+- 🟢 **Manual purchase lifecycle.** Use the existing run machinery to expand
+  selected order, mail, or charge candidates into retained evidence, receipts
+  with attachment ids and classifications, itemization, and settlement.
+  Record confirmed and terminal outcomes so interruption resumes without
+  duplicate writes; handle several orders in one run and leave ambiguous
+  decisions reviewable. Reuse the bounded prepare/commit and approval paths in
+  [purchase import](../.claude/skills/purchase-import/SKILL.md).
 
-- 🤔 **Vendor evidence classification.** `orderEvidence` has a manual editor
-  and drives checks, but no suggested classification or batch review. Suggest
-  from vendor identity, website, charge descriptors, and order mail; decide
-  confidence thresholds and fit accepted writes into the approval model.
+- 🟢 **Resumable historical backfill.** Successful completed imports already
+  advance the account's newest-order cursor. Add explicit date-range backfill,
+  newest first, with progress persisted after confirmed outcomes and pacing
+  according to vendor constraints rather than a fixed orders/hour promise.
+  Preserve same-day order ids and never rewind the incremental cursor
+  (`purchase-import/run-service.ts`, `VendorAccount.cursor`).
 
-- 🤔 **Complete charge-to-order discovery.** Gmail discovery handles unique
-  exact amounts and order subsets. Next: consult retained shipment-payment
-  evidence before mailbox matching, then a bounded Jev tie-break for ambiguous
-  mail candidates. Preserve member/vendor scoping and unresolved outcomes.
+- 🟢 **Vendor evidence classification and policy.** Automatically classify
+  `orderEvidence` only from clear deterministic evidence; review uncertain
+  inference and preserve explicit choices. Resolved `evidenceExpectation`
+  governs whether evidence is wanted; source classification guides where to
+  look, never silently suppressing required discovery. Surface contradictory
+  choices in one review path, without another policy or confidence setting
+  (`repo/purchase-evidence-policy.ts`, `purchase-import/hunts.ts`).
 
-- 🤔 **Manual purchase lifecycle.** One compact run that expands selected
-  candidates into evidence, receipt outcomes with attachment ids and
-  classifications, replay-safe writes, and multi-order handling, recording
-  terminal outcomes so interruption resumes. Close grouped settlement: Gmail
-  can identify several orders for one charge, but the writer matches separate
-  exact-amount transactions per Purchase; turn a confirmed group into
-  allocations atomically and leave ambiguous groups for review.
-
-- 🤔 **Apply a reviewed purchase-validation diff.** Targeted validation
-  records a read-only semantic diff and stops. Design human confirmation,
-  stale-target revalidation, and transactional application before any change
-  touches Purchases, Expenses, Product assignments, settlement, or evidence.
-
-- 🤔 **Import decision evaluation.** Build sanitized identity, line-role, and
-  reversal cases with known outcomes; the static Product reuse fixture checks a
-  shape, not accuracy. Include GPT-6 Luna/Sol and Opus 5.5 on a fixed
-  extraction, audit, and coordinator corpus; compare success, latency, and cost
-  before changing automatic tier choices again.
-
-- 🤔 **Generalize evidence-backed Product enrichment beyond Amazon.** Fixed
-  source adapters for retailer SKU, catalog/item number, and GTIN; each batch
-  declares expected current and replacement values and applies only proven
-  corrections. Page text and free-text hints are not write authority.
-
-- 🤔 **Cross-vendor style-number matching.** Prep reports an exact match only
-  for vendor-sourced `retailer_sku`/`asin` or a GTIN, so a brand style number
-  matches only the brand's own shop. Decide whether a manufacturer part-number
-  kind is worth adding or barcodes plus the match queue suffice.
-
-- ⏳ **Attribute Flue provider calls to their run.** The Flue provider
-  (`apps/purchase-agent/src/cubby-ai-provider.ts`) still tags gateway metadata
-  with `jobKind: "purchase_import_run"`; send the run id once Flue exposes the
-  current run to module-scope providers.
-
-- ⏳ **Person-to-person repayment discovery.** Promote once Ledger Transfers
-  entered by hand become a chore. Sources: imported statement rows for payment
-  apps never promoted to Financial Transactions, and Gmail "paid you" mail.
-  Review-only; never resolve a counterparty automatically. Context:
-  `docs/plans/household-ledger-attribution-followups.md`.
-
-- ⏳ **Project default beneficiaries.** Promote if shared-cost projects become
-  frequent: explicit, then project default, then household, following
-  `expense-inheritance.ts`. Needs schema and allocation-SQL changes.
+- 🟢 **Finish the input-first retailer and statement journey.** Join saved
+  synthetic order-history and Product HTML through browser capture,
+  prepare/commit, and purchase approval. Cover both statement/order sequences,
+  refunds and grouped settlement with synthetic CSV; keep account identity
+  and Product merges explicit. Include native CSV/photo review and Gmail
+  connection through itemized-order approval. These are acceptance checks for
+  the purchase outcomes, tracked in [core journey E2E](agents/core-journey-e2e.md),
+  seeding only account/login prerequisites.
 
 - ⏳ **Conditional purchase-import browser extension.** Promote only if the
   Apple-event browser bridge repeatedly fails to background its window, cannot
@@ -235,52 +201,50 @@ See also the image operational passes at the end of this file.
 - ⏳ **Typed pagination and final grocery evidence.** Promote when a vendor
   exposes pagination or grocery pages whose last page the hints miss.
 
-- ⏳ **`imports_read.vendor_coverage` per account.** Promote when two members
-  hold accounts at the same vendor.
+### Reconcile charges and refunds
 
-- ⏳ **`PurchaseLine` SKU annotation.** Promote when store SKU, quantity, or
-  unit-price detail is genuinely wanted; `Expense` stays financial truth.
+- 🟢 **Complete charge-to-order discovery and grouped settlement.** Consult
+  retained shipment/payment evidence before mailbox matching, then use a
+  bounded Jev tie-break to rank ambiguous candidates. Automatically allocate
+  only a uniquely evidenced full payment set, including groups: account/vendor
+  scope, charge/refund direction, conserved amounts, and no competing
+  allocations must agree. Amount/date coincidence or AI ranking alone stays
+  reviewable. Apply confirmed groups atomically and leave incomplete evidence
+  unresolved; settlement never changes stock. Contract:
+  [product identity and settlement](product-identity-journey.md).
 
-- ⏳ **Purchase evidence references** when Gmail, Drive, or portal evidence
-  must be queried beyond notes and attachments; **purchase
-  replacement/exchange relations** when they need navigation, not notes.
+### Review and apply corrections
 
-- ⏳ **Per-edge breakdown for purchase merges.** Promote if `merge_entity`'s
-  empty `moved` array on purchase is noticed; `foldChargeInto` does not count
-  moved expenses and documents.
+- 🟢 **Apply a reviewed purchase-validation diff.** Validation currently
+  records a read-only semantic diff. Show before/after values, let the person
+  select corrections, revalidate affected records against the proposal, and
+  apply the accepted set atomically. Preserve explicit Product assignments
+  and existing typed approval boundaries across Purchases, Expenses,
+  settlement, and evidence (`purchase-import/import-orders.ts`).
 
-- ⏳ **Multi-product Expense links.** Promote when one Expense needs several
-  Products and `splitExpense` cannot truthfully split the money.
+- 🟢 **Generalize evidence-backed Product enrichment beyond Amazon.** Extend
+  verified adapters for retailer SKU, catalog/item number, and GTIN; use agent
+  research when adapters cannot establish facts. Primary manufacturer/retailer
+  evidence must prove the exact variant; search results and free-text hints
+  are leads, not write authority. Batches retain expected current/replacement
+  values and existing approvals; uncertain identity remains reviewable and
+  merges explicit. Reuse [Product enrichment](../.claude/skills/product-enrichment/SKILL.md),
+  without a new enrichment queue or evidence table.
 
-- ⏳ **Returned-unit price advisory.** Promote when another stocked Product
-  has a materially inflated derived price or returns become structurally
-  distinguishable from sales; stay advisory.
+- 🧱 **Cross-vendor manufacturer identifiers.** Add manufacturer-scoped
+  part/style identity distinct from retailer SKU, with contract/generation
+  compatibility planned across clients. Only identifiers proven to name an
+  exact variant may resolve identity in the unique external-ID namespace;
+  shared family/style numbers remain descriptive candidate-ranking evidence
+  requiring size/color/model corroboration. Do not add a Product-family entity
+  or merge automatically (`packages/schemas/src/external-id.ts`).
 
-- ⏳ **Services-with-product advisory.** Promote when the first live row
-  appears or an import repeatedly creates one; advisory, not a constraint.
-
-- ⏳ **Estimated-allocation analytics caveat.** Promote when
-  materials-versus-labor analytics inform a real decision; disclose the
-  allocation-basis portion without excluding it from total spend.
-
-- ⏳ **Evaluate trade affinity in expense project suggestions.** Once the
-  `expense.projectId` roster's per-project trade tallies
-  (`server/ai/field-suggest/registry.ts`) have served real suggestions, compare
-  accept/override rates on `/ai-usage` and drop the tallies if they do not help.
-
-- ⏳ **Shared-expense export re-import dedupe.** A Splitwise-style CSV has no
-  row id, so provider ids derive from date + description + amount; promote if
-  a re-export with edited descriptions is imported again.
-
-- 🔭 **Household cash-flow projection.** Planned in
-  [household finance synthesis](plans/household-finance-synthesis.md) Phase 2
-  with category analytics, a funder-to-category Sankey, and transfer-pair
-  acceptance. Net worth and retirement stay out until the trusted-household
-  tenet is amended for a time-series table.
-
-- 🔭 **Household balance sheet.** Generalize location valuation into
-  replacement forecasts, cost-per-project analysis, and insurance or
-  cost-basis exports.
+- 🤔 **Import decision evaluation.** Build a synthetic outcome corpus for
+  identity, variants, line roles, reversals, ambiguous matches, and grouped
+  settlement. Measure correctness, unsafe decisions, latency, and cost before
+  changing matching or model routing; choose model candidates when the
+  comparison runs. The static Product reuse fixture checks shape, not
+  accuracy; evaluation must establish behavior, not another routing control.
 
 ---
 
@@ -375,57 +339,39 @@ See also the image operational passes at the end of this file.
 
 ## Inventory, products & locations
 
-- 🧱 **Consumable vs durable as a Product attribute.** Decided: add
-  `Product.kind: consumable | durable`. Today the distinction is "expense on
-  `PRJ-HSHD` vs no project", documented only in purchase-import notes, and
-  `stockTracked` half-encodes it — check whether `stockTracked` becomes
-  derivable before adding a second flag. Drives the import's default project,
-  shelf worklist filters, project materials, and household maintenance.
+- 🧱 **Consumable vs durable as a Product attribute.** Add optional
+  `Product.kind: consumable | durable`, independent of the choice to count
+  stock (`stockTracked`). Use kind for useful worklist filters and contextual
+  import project suggestions: routine supplies suggest Household, project
+  materials use order/project evidence, and explicit choices win. Leave kind
+  unset when uncertain, with no completeness penalty or classification wizard;
+  do not rewrite existing Expenses. Plan schema and generated-client
+  compatibility before adding the field.
 
-- ⏳ **Let the negative-expected-quantity worklist converge.** Survivors are
-  mostly big-ticket items whose acquisition predates ledger coverage, with
-  nowhere to record that. The operator chose (2026-08-18) to leave the
-  detector alone. Options when worked: book the missing unit as an Expense with
-  `cost: null, productQuantity: 1`, or a product data check with a
-  ledger-derived fingerprint (an `updatedAt` key is unsafe).
+- 🧱 **Record historical acquisitions with unknown cost and date.** Record a
+  known acquired quantity through the existing Expense path with `cost: null`
+  and an absent date when unknown; never invent quantity, price, or date, and
+  never receive stock as a side effect. The current date contract allows an
+  absent date only for zero cost: plan its cross-client compatibility change
+  and distinguish undated history in date-based reports
+  (`packages/schemas/src/expense-fields.ts`,
+  `repo/product/quantity-ledger.ts`). This
+  addresses negative expected quantities from exits whose earlier acquisition
+  is missing; filling known acquisition quantities remains an operational pass.
 
-- ⏳ **Persisted Collections and operational dashboard.** Smart starters
-  evaluate manufacturer, tags, Location names, and historical Trades with
-  editable OR rules. Promote when Collection tags need metadata, rename-safe
-  identity, durable rules, or richer rules; migrate `collection:*` tags into
-  durable records, and evaluate smart membership from a saved Product filter at
-  read time. Extend the Trade predicate with "primary inferred Trade matches".
+- 🟢 **Location subtree filters.** Include descendants of a selected Location
+  in inventory/Product filtering through the generic filter path. Reuse a
+  scoped descendant-id helper rather than loading the whole-tree CTE.
 
-- ⏳ **Location subtree filters.** Promote when direct-child filtering blocks a
-  workflow; use a scoped descendant-id helper, not the whole-tree CTE.
-
-- ⏳ **Product external-ID collision worklist.** Promote if auto-minting
-  imports create a persistent queue beyond `product.externalIdCollisions`.
-
-- ⏳ **Repeat-purchase ranking.** Promote when enough Products have genuine
-  repeated acquisitions.
-
-- ⏳ **Before-drywall spatial capture.** Promote immediately when construction
-  is scheduled; define the smallest room/wall-indexed photo packet before
-  walls close.
-
-- 🔭 **Digital twin and spatial memory.** Attach shutoffs, breaker maps,
-  paint, hidden utilities, and other building knowledge to the location tree.
+- 🟢 **Product external-ID collision review.** Make collisions encountered
+  during imports/enrichment actionable through existing
+  `product.externalIdCollisions` and collision review paths. Keep exact
+  variants and explicit merges; never silently reassign an identifier. Add no
+  separate persistent queue unless real unresolved volume demonstrates a need.
 
 ---
 
 ## Tasks, projects & garden
-
-- 🧱 **Project materials and shortfalls.** A project-material edge with
-  quantity, free-text unit, optional Product, and durable/consumable semantics
-  (see `Product.kind`); derive have/need/buy through the availability engine
-  without reservations or automatic decrement.
-
-- 🔭 **House timeline.** A chronological journal with project milestones,
-  before/after photos, and an annual wrapped-style view, built on
-  `resources.<entity>.timeline`. First concrete step: generalize
-  `GardenEntry` (almost all notes, a handful of harvests) into a dated journal
-  on Location, Planting, and Project.
 
 - 🔭 **Grow-to-table loop.** Beds and plantings, harvests received into pantry
   inventory, and what the yard can supply this week.
@@ -434,9 +380,6 @@ See also the image operational passes at the end of this file.
   `garden-plan-import` toward revising a standing plan season over season,
   comparing dated bed photos with AI, and explaining keep-versus-replace
   recommendations. Planting windows alone do not establish harvest forecasts.
-
-- 🔭 **Heirloom outputs.** A future-owner house manual, project yearbooks, and
-  a durable archive/export format.
 
 ---
 
@@ -577,19 +520,17 @@ See also the image operational passes at the end of this file.
 
 ## Entity platform & data model
 
-- 🟢 **One data-quality framework.** `repo/problems/detectors-*` and the
-  declared checks in `repo/data-quality/` are two systems for "this record is
-  wrong"; make detectors declared checks and have Problems read their results.
+- 🤔 **Remove duplicate record checks and expose useful exceptions.** Coverage
+  Problems already consume declared checks. Identify demonstrated duplicate
+  per-record predicates and move each onto its existing declaration/binding;
+  keep operational Problems and aggregate rules, including subtree budgets,
+  explicit. Durable evidence-bound exceptions already work through entity
+  declarations; identify only missing surfaces needed by real workflows, not
+  a second exception system, global weight tuning, or a universal ignore
+  control. Contract: [data quality](entities.md#data-quality).
 
 - 🟢 **Declare non-entity child tables in the manifest (`children:`)** so
   their DDL is generated like entity tables.
-
-- 🤔 **Completeness score exceptions.** Every scored entity declares
-  `capabilities.dataQuality` (see `docs/entities.md` → "Data quality").
-  Remaining: durable "not available" exceptions exist only for Product and
-  Purchase (`dataExceptions`, `data_exception.set/clear`); generic exceptions
-  are undesigned. Weights are a first cut. `projectsMissingBudget` stays a
-  Problems rule because its subtree spend rollup is not a per-row predicate.
 
 - 🤔 **One FROM context per entity list.** Each list repo pairs a relational
   `findMany` (root aliased) with an unaliased `$count`, so a predicate
@@ -797,48 +738,178 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
 ## Probably not anytime soon
 
 Parked on purpose: wanted in principle, but nothing in current household use
-pulls them forward. Promote only with a concrete trigger.
+pulls them forward. Promote only with a concrete trigger; group by domain so
+related active work can find its deferred follow-ups.
+
+### Purchases, finance & household ledger
 
 - **Extend source-neutral statement import beyond CSV.** PDF and OFX with
   source text, date semantics, and account evidence preserved; AI-proposed
   mappings behind a visible preview; never infer kind from the amount's sign.
+
+- **Bulk expense attribution and contribution-gap links.** Reuse the existing
+  ledger editors and generic bulk path when shared-cost tagging or finding
+  unresolved attribution becomes repetitive. Keep per-role replacement and
+  one shared gap definition. Remaining slices and importer guidance:
+  [ledger attribution follow-ups](plans/household-ledger-attribution-followups.md).
+
+- **Person-to-person repayment discovery.** Promote once Ledger Transfers
+  entered by hand become a chore. Sources: imported statement rows for payment
+  apps never promoted to Financial Transactions, and Gmail "paid you" mail.
+  Review-only; never resolve a counterparty automatically. Context:
+  `docs/plans/household-ledger-attribution-followups.md`.
+
+- **Project default beneficiaries.** Promote if shared-cost projects become
+  frequent: explicit, then project default, then household, following
+  `expense-inheritance.ts`. Needs schema and allocation-SQL changes.
+
+- **Household finance analytics and cash-flow projection.** Category
+  breakdowns, a funder-to-category Sankey, transfer-pair acceptance, and Phase 2
+  projection remain deferred until household planning needs these views.
+  Preserve the proposed contracts in
+  [household finance synthesis](plans/household-finance-synthesis.md); net worth
+  and retirement need a separate product/tenet decision before a time-series
+  model is introduced.
+
+- **Household balance sheet.** Promote when replacement planning, insurance,
+  or cost-basis exports are actually needed. Generalize location valuation
+  into replacement forecasts and cost-per-project analysis.
+
+- **Attribute Flue provider calls to their run.** The Flue provider
+  (`apps/purchase-agent/src/cubby-ai-provider.ts`) still tags gateway metadata
+  with `jobKind: "purchase_import_run"`; send the run id once Flue exposes the
+  current run to module-scope providers.
+
+- **`imports_read.vendor_coverage` per account.** Promote when two members
+  hold accounts at the same vendor.
+
+- **`PurchaseLine` SKU annotation.** Promote when store SKU, quantity, or
+  unit-price detail is genuinely wanted; `Expense` stays financial truth.
+
+- **Purchase evidence references** when Gmail, Drive, or portal evidence
+  must be queried beyond notes and attachments; **purchase
+  replacement/exchange relations** when they need navigation, not notes.
+
+- **Per-edge breakdown for purchase merges.** Promote if `merge_entity`'s
+  empty `moved` array on purchase is noticed; `foldChargeInto` does not count
+  moved expenses and documents.
+
+- **Multi-product Expense links.** Promote when one Expense needs several
+  Products and `splitExpense` cannot truthfully split the money.
+
+- **Returned-unit price advisory.** Promote when another stocked Product
+  has a materially inflated derived price or returns become structurally
+  distinguishable from sales; stay advisory.
+
+- **Services-with-product advisory.** Promote when the first live row
+  appears or an import repeatedly creates one; advisory, not a constraint.
+
+- **Estimated-allocation analytics caveat.** Promote when
+  materials-versus-labor analytics inform a real decision; disclose the
+  allocation-basis portion without excluding it from total spend.
+
+- **Evaluate trade affinity in expense project suggestions.** Once the
+  `expense.projectId` roster's per-project trade tallies
+  (`server/ai/field-suggest/registry.ts`) have served real suggestions, compare
+  accept/override rates on `/ai-usage` and drop the tallies if they do not help.
+
+- **Shared-expense export re-import dedupe.** A Splitwise-style CSV has no
+  row id, so provider ids derive from date + description + amount; promote if
+  a re-export with edited descriptions is imported again.
+
+### Inventory, products & locations
+
+- **Persisted Collections and operational dashboard.** Smart starters
+  evaluate manufacturer, tags, Location names, and historical Trades with
+  editable OR rules. Promote when Collection tags need metadata, rename-safe
+  identity, durable rules, or richer rules; migrate `collection:*` tags into
+  durable records, and evaluate smart membership from a saved Product filter at
+  read time. Extend the Trade predicate with "primary inferred Trade matches".
+
+- **Repeat-purchase ranking.** Promote when enough Products have genuine
+  repeated acquisitions.
+
+- **Before-drywall spatial capture.** Promote immediately when construction
+  is scheduled; define the smallest room/wall-indexed photo packet before
+  walls close.
+
+- **Digital twin and spatial memory.** Promote when a specific building
+  knowledge retrieval need exceeds Location notes and attachments. Attach
+  shutoffs, breaker maps, paint, and hidden utilities to the location tree.
+
+- **`location.tags` redundant-token pruning.** Locations hold only
+  `collection:*` tags today.
+
+### Ingredients, recipes & nutrition
+
 - **Durable shopping list.** Server-backed manual items (milk, paper towels)
   and checked state across date ranges and devices, independent of inventory.
   Blocks sending meal-suggestion shortfalls to the list and shopping pack
   rounding.
+
 - **Grocery cost basis.** Allow `productId` on `discount` rows (Whole Foods
   promos, Buy-Again are per line) and let `productQuantity` carry `{value,
 unit}` for measured lines (`0.5 lb @ $4/lb`), folding both into derived cost
   basis without changing `SUM(Expense.cost)`. Promote when per-serving or
   per-unit cost numbers are actually used.
-- **Saved user-created views.** Named filter/sort sets via the versioned
-  external-state pattern, beside manifest `presentation.list.views`.
-- **Project locations as Locations.** `Project.locations` holds a few
-  free-text street addresses, mostly former residences.
-- **Recurring maintenance tasks.** Every-N-weeks/months; completing an
-  instance creates the next through one idempotent transactional rule.
+
 - **Recurring meals, meal templates, and meal nutrition goals.** Each its own
   slice; goals would compare planned nutrition against explicit targets.
-- **Accept recipe links from the iOS Share Sheet.**
-- **`location.tags` redundant-token pruning.** Locations hold only
-  `collection:*` tags today.
+
+### Tasks, projects & garden
+
+- **Project materials and shortfalls.** A project-material edge with
+  quantity, free-text unit, optional Product, and durable/consumable semantics
+  (see `Product.kind`); derive have/need/buy through the availability engine
+  without reservations or automatic decrement. Promote when a concrete
+  project needs a have/need/buy worklist.
+
+- **House timeline.** Promote when project journals or before/after retrieval
+  need a chronological view beyond current timelines. Generalize `GardenEntry`
+  into dated Location, Planting, and Project journal entries on
+  `resources.<entity>.timeline`, then project milestones, photo comparisons,
+  and an annual view.
+
+- **Heirloom outputs.** Promote when preparing an actual handoff or archive:
+  a future-owner house manual, project yearbooks, and a durable export format.
+
+- **Project locations as Locations.** `Project.locations` holds a few
+  free-text street addresses, mostly former residences.
+
+- **Recurring maintenance tasks.** Every-N-weeks/months; completing an
+  instance creates the next through one idempotent transactional rule.
+
 - **Hierarchical Project/Task parent pickers.** Rosters are shallow; revisit
   on deep nesting.
+
+### Native app
+
+- **Accept recipe links from the iOS Share Sheet.**
+
+### Web UI
+
+- **Saved user-created views.** Named filter/sort sets via the versioned
+  external-state pattern, beside manifest `presentation.list.views`.
 
 ---
 
 ## Dormant schema — revisit
 
 Built but barely used. Each stays until someone decides to use or remove it;
-counts are production rows at the 2026-09 consolidation. (The contribution
-ledger left this list: attribution prefill now reads it.)
+counts are dated observations from the 2026-09 consolidation, not current
+usage measurements or proof of obsolescence. (The contribution ledger left
+this list: attribution prefill now reads it.)
 
 - **Run and import machinery.** `RunApproval`, `RunControlEvent`, `RunEvidence`,
   `RunOrderCandidate`, `ImportHunt` (all 0); `ImportPreparedOrder` /
-  `ImportPreparedLine` (1 / 5).
+  `ImportPreparedLine` (1 / 5). Recheck use against
+  [import and resume orders](#import-and-resume-orders-reliably) before deciding
+  whether to use or remove these tables.
 - **Review queues.** `SuggestionDismissal`, `ProductMatchCandidate`,
   `ImageDescriptionCorrection`, `OrderMailCandidateDecision`,
-  `MerchantVendorRule`, `MailboxCursor` (all 0).
+  `MerchantVendorRule`, `MailboxCursor` (all 0). Recheck against Product match
+  recall, collision review, and [purchase corrections](#review-and-apply-corrections);
+  an empty queue alone does not establish that its workflow is unnecessary.
 - **Always-null columns.** `Plant.daysFrom*` and `Plant.breeding`,
   `Planting.outcome`, `Vendor.returnWindowDays` and `Vendor.orderEvidence`,
   Image `sourcePageUrl`, `sourceAssetUrl`, `sourceName`,
