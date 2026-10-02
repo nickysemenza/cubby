@@ -84,6 +84,9 @@ before reuse. Only its derived build directory is cached. Device leases,
 per-session launch files, test results, logs, and lock files are excluded so
 a new runner cannot inherit another host's process state.
 Bundles record native build, boot, installation, and driver preparation durations separately.
+If driver preparation fails, diagnostics retain the simulator screenshot and
+original error without starting XCTest again for a UI snapshot. Failures after
+successful preparation still capture the UI tree.
 A cold cache still requires compilation; warm-cache performance must be
 measured from the full hosted job, not just the agent test duration.
 
@@ -118,6 +121,10 @@ be absent when the SDK does not report it. Telemetry is disabled.
 Deterministic native replays print validated step counters, command names, and
 elapsed milliseconds for timeout diagnosis. Selector values and session paths
 are excluded from those progress messages.
+Hosted native bundles also include `native-driver-diagnostics.json`: fixed SDK
+startup phase names, cache outcomes, and numeric timings from this run. SDK
+traces remain local to the runner; their arguments, responses, identifiers,
+paths, and raw error text are excluded from the uploaded summary.
 
 This trial establishes only the synthetic rename journey on Chromium and an
 iOS simulator. It does not establish broader agent reliability or physical

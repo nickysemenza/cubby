@@ -582,6 +582,7 @@ jobs:
           path: |
             artifacts/sim-e2e/**/run-manifest.json
             artifacts/sim-e2e/**/run-results.json
+            artifacts/sim-e2e/**/native-driver-diagnostics.json
             artifacts/sim-e2e/**/SHA256SUMS
 
   tester-army-inputs:
@@ -706,4 +707,5 @@ jobs:
             artifacts/sim-tester-army-e2e/*/run-manifest.json
             artifacts/sim-tester-army-e2e/*/run-results.json
             artifacts/sim-tester-army-e2e/*/agent-summary.json
+            artifacts/sim-tester-army-e2e/*/native-driver-diagnostics.json
             artifacts/sim-tester-army-e2e/*/SHA256SUMS
