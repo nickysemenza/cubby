@@ -402,8 +402,9 @@ export const createKernelMcpActions = (
       },
     },
     /**
-     * Name → id lookup that never creates: a Product is identity plus cost
-     * basis, not just a name, so its create stays a deliberate `entity` call.
+     * Name or external-id → id lookup that never creates: a Product is
+     * identity plus cost basis, not just a name, so its create stays a
+     * deliberate `entity` call.
      */
     resolve: {
       input: productResolveInput,
@@ -413,7 +414,7 @@ export const createKernelMcpActions = (
         return {
           results: await resolveProductNames(
             getEntityKernelContext(extra).db,
-            input.names,
+            input,
           ),
         };
       },
