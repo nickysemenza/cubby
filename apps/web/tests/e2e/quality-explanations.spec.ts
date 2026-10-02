@@ -68,7 +68,9 @@ test("quality leads entity tables, explains its calculation, and restores tempor
     popover.getByRole("heading", { name: "Technical details" }),
   ).toBeVisible();
   await expect(popover).toContainText("applicable weight");
-  await expect(popover).toContainText("Only this record's applicable checks");
+  await expect(popover).toContainText(
+    "Only this record's applicable weighted checks",
+  );
   await expect(popover).toContainText("product.data-quality");
   await expect(popover.locator("pre")).toHaveCount(0);
   await expectViewportBounded(page);
