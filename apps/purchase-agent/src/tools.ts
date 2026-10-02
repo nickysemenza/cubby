@@ -58,7 +58,7 @@ export function purchaseImportTools(
     defineTool({
       name: "claim_next_import_work",
       description:
-        "Claim and describe the run's next bounded work item. Use this before choosing saved mail, receipt or browser evidence work, and again after each committed item until it returns none.",
+        "Claim and describe the run's next bounded work item. Use this before choosing saved mail, receipt or browser evidence work, and again after each committed item. For settlement_verification, verify the named existing Purchase against saved statement evidence, then finish or stop for review rather than claiming this item repeatedly. Otherwise continue until none.",
       input: v.object({ operationId }),
       output: serviceResult,
       durable: true,

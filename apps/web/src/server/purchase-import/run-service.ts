@@ -127,7 +127,7 @@ import type { PurchaseImportDurableObjectRpc } from "./contracts";
 import { resolveRunFinding } from "./findings";
 import {
   loadOrderMailImportEvidence,
-  orderMailImportIsCommitted,
+  orderMailImportedPurchase,
 } from "./gmail/import";
 import { attachPendingOrderMailEvidence } from "./gmail/process";
 import { classifyOrderCapture } from "./order-list";
@@ -1325,8 +1325,13 @@ export async function claimNextImportWork(
   const mail = await loadOrderMailImportEvidence(db, scope.public.runId);
   if (mail) {
     assertRunActive(scope.public.status);
-    return (await orderMailImportIsCommitted(db, mail))
-      ? { kind: "none" as const }
+    const purchaseId = await orderMailImportedPurchase(db, mail);
+    return purchaseId
+      ? {
+          kind: "settlement_verification" as const,
+          purchaseId,
+          orderId: mail.orderId,
+        }
       : {
           kind: "mail_evidence" as const,
           orderId: mail.orderId,
@@ -2623,7 +2628,7 @@ export async function finishRun(
         .where(and(eq(runTable.id, runId), eq(runTable.status, "running")));
     } else {
       const mail = await loadOrderMailImportEvidence(db, runId);
-      if (mail && !(await orderMailImportIsCommitted(db, mail)))
+      if (mail && !(await orderMailImportedPurchase(db, mail)))
         throw new Error(
           "Import run still has uncommitted order confirmation mail.",
         );

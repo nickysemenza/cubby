@@ -15,6 +15,7 @@ import {
   ledgerParty,
   orderMail,
   orderMailEvent,
+  purchase,
   run as runTable,
   user,
 } from "~/server/db/schema";
@@ -204,15 +205,19 @@ export async function loadOrderMailImportEvidence(db: Database, runId: string) {
   };
 }
 
-export async function orderMailImportIsCommitted(
+export async function orderMailImportedPurchase(
   db: Database,
   evidence: NonNullable<
     Awaited<ReturnType<typeof loadOrderMailImportEvidence>>
   >,
 ) {
   const [claim] = await getDb(db)
-    .select({ purchaseId: importSourceClaim.purchaseId })
+    .select({ purchaseId: purchase.shortcode })
     .from(importSourceClaim)
+    .innerJoin(
+      purchase,
+      and(eq(purchase.id, importSourceClaim.purchaseId), notDeleted(purchase)),
+    )
     .where(
       and(
         eq(importSourceClaim.ledgerPartyId, evidence.mail.ledgerPartyId),
@@ -222,5 +227,5 @@ export async function orderMailImportIsCommitted(
       ),
     )
     .limit(1);
-  return Boolean(claim?.purchaseId);
+  return claim?.purchaseId ?? null;
 }
