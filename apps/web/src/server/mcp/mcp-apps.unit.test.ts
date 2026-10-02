@@ -2,9 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { USDA_PICKER_HTML } from "@cubby/mcp-apps/dev";
 import { USDA_PICKER } from "@cubby/mcp-apps/metadata";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Client } from "@modelcontextprotocol/client";
+import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";

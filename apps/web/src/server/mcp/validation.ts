@@ -1,4 +1,4 @@
-import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/cfworker";
+import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/client/validators/cf-worker";
 
 /**
  * Cubby's MCP tool schemas are advertised as JSON Schema draft 7. The SDK's

@@ -13,7 +13,7 @@ import {
   withCubbyOrigin,
 } from "@cubby/mcp-apps";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 
 import { APP_ORIGIN } from "~/lib/auth-constants";
 import { getAssetsFetcher } from "~/server/cf-env";
@@ -58,9 +58,6 @@ async function loadUsdaPickerHtml(): Promise<string> {
 }
 
 export function registerMcpApps(server: McpServer) {
-  // ext-apps v2's helper is typed against the split MCP v2 server package,
-  // while Cubby's server remains on the compatible v1 SDK. The helper only
-  // adds this MIME type before delegating to registerResource.
   server.registerResource(
     USDA_PICKER.name,
     USDA_PICKER.uri,
