@@ -74,10 +74,10 @@ them, and stage incompatible changes as expand → migrate → deploy → cleanu
 - Fresh worktrees run `pnpm agent:setup`: a frozen install, then a WASM build
   restored from the shared Nx cache. Gitignored env comes from
   [.worktreeinclude](../.worktreeinclude).
-- Rust builds share `~/.cache/cubby/recipebridge-target`.
+- Rust builds share `~/.cache/cubby/cargo-target`.
   [scripts/ensure-wasm.ts](../scripts/ensure-wasm.ts) keys the WASM artifact on
   Cargo's resolved graph and file contents, so it never drifts silently.
-  `recipebridge/Cargo.lock` is tracked so worktrees share a key. Commit its
+  The workspace `Cargo.lock` is tracked so worktrees share a key. Commit its
   churn after a parser bump.
 - `pnpm dev` gives each checkout its own database and Worker namespace on free
   ports. Discover the session with `pnpm dev:status -- --json`.

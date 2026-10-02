@@ -60,31 +60,3 @@ unwrap_used = "deny"
 expect_used = "deny"
 panic = "deny"
 uninlined_format_args = "warn"
-
-# Release profile tuned for the wasm consumer (mirrors ingredient-parser's): LTO +
-# a single codegen unit let the linker drop cross-crate dead code, `panic = "abort"`
-# removes unwind tables, and `opt-level = "z"` favors download size over raw speed.
-# wasm-pack runs wasm-opt on top of this. `cargo test` is unaffected — tests build
-# under the `test` profile (derived from `dev`), which keeps unwinding.
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-panic = "abort"
-strip = "debuginfo"
-
-# Line numbers are kept for backtraces; full DWARF only inflated the shared
-# target dir.
-[profile.dev]
-debug = "line-tables-only"
-
-# Dev-iteration tuning (mirrors ingredient-parser's). Optimizing dependencies even
-# in debug builds keeps `cargo test`/`cargo clippy` fast despite the heavy
-# `ingredient`/`serde` deps; a light opt-level on the test profile trims runtime
-# without the slow full-release compile. Neither affects the wasm consumer (that's
-# `profile.release` above).
-[profile.dev.package."*"]
-opt-level = 2
-
-[profile.test]
-opt-level = 1

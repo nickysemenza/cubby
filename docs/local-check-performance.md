@@ -171,7 +171,7 @@ retained boundaries are:
 - `ensure-wasm.ts` fingerprints Rust sources, configuration, tool versions, and
   build environment, then restores the complete generated WASM package from
   Nx cache. A local marker avoids a repeat restore when nothing changed.
-  Tracking `recipebridge/Cargo.lock` and excluding `.DS_Store` from the source
+  Tracking the workspace `Cargo.lock` and excluding `.DS_Store` from the source
   digest make that fingerprint stable across worktrees. A measured fresh
   worktree WASM step fell from 54.8 seconds of compilation to a 1.6-second
   cache hit; a warm unchanged check fell from about 7 seconds to 0.3 seconds.

@@ -731,12 +731,6 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   runs and per-suite timings, then consolidate costly duplicate coverage or
   fixture setup without weakening the merge gate.
 
-- 🟢 **One Cargo workspace for `recipebridge` and `cubby-ffi`.** Trap: member
-  `[profile.*]` tables are ignored in a workspace and `wasm-pack` takes only
-  `--dev/--profiling/--release`, so recipebridge's `panic = "abort"` would
-  break UniFFI's `catch_unwind`; set wasm's panic strategy through the `wasm`
-  script's environment.
-
 - 🤔 **Spike Drizzle 1.0 RC for test factories.** `drizzle-orm@1.0` RC
   exports `./zod` and `drizzle-seed` generates seeded rows; installed is
   0.45.2. `server/db/create-shape-drift.unit.test.ts` records a decision

@@ -40,14 +40,14 @@ runs:
       with:
         path: packages/wasm
         # Exact key only: a prefix hit would restore the wrong parser revision.
-        key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml', 'recipebridge/Cargo.lock', 'recipebridge/src/**', 'rust-toolchain.toml') }}
+        key: wasm-pkg-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'recipebridge/Cargo.toml', 'recipebridge/src/**', 'rust-toolchain.toml') }}
 
     - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
       if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
       with:
         cache: true
         # Must match CARGO_TARGET_DIR on the build step below.
-        cache-workspaces: "recipebridge -> target"
+        cache-workspaces: ". -> target"
         # wasm32 and native artifacts must not share a cache bucket.
         cache-key: wasm32
 
@@ -65,8 +65,15 @@ runs:
       run: wasm-pack build --scope cubby --out-dir ../packages/wasm recipebridge
       env:
         RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
+        # Same release profile as the root `wasm` script (member profiles are
+        # ignored in the workspace and wasm-pack takes only --release).
+        CARGO_PROFILE_RELEASE_OPT_LEVEL: z
+        CARGO_PROFILE_RELEASE_LTO: "true"
+        CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
+        CARGO_PROFILE_RELEASE_PANIC: abort
+        CARGO_PROFILE_RELEASE_INCREMENTAL: "false"
         # Match rust-cache's cache-workspaces above.
-        CARGO_TARGET_DIR: ${{ github.workspace }}/recipebridge/target
+        CARGO_TARGET_DIR: ${{ github.workspace }}/target
 
     - name: Save WASM pkg to cache
       if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
@@ -76,7 +83,7 @@ runs:
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: packages/wasm
-        key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml', 'recipebridge/Cargo.lock', 'recipebridge/src/**', 'rust-toolchain.toml') }}
+        key: wasm-pkg-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'recipebridge/Cargo.toml', 'recipebridge/src/**', 'rust-toolchain.toml') }}
 
     # packages/wasm now matches the exact recipebridge sources in the cache
     # key (restored or just built), so the Nx `wasm` target need not rebuild

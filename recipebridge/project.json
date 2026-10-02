@@ -11,6 +11,8 @@
       "inputs": [
         "{projectRoot}/**",
         "{workspaceRoot}/rust-toolchain.toml",
+        "{workspaceRoot}/Cargo.toml",
+        "{workspaceRoot}/Cargo.lock",
         {
           "runtime": "rustc -V"
         }

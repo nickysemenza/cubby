@@ -37,13 +37,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-CUBBY_FFI_MANIFEST="$ROOT/cubby-ffi/Cargo.toml"
+CUBBY_FFI_MANIFEST="$ROOT/cubby-ffi/Cargo.toml" # workspace member
 APPLE_ROOT="$ROOT/apps/apple"
 CUBBYKIT_ROOT="$APPLE_ROOT/CubbyKit"
 XCFRAMEWORK_OUT="$CUBBYKIT_ROOT/Frameworks/CubbyFFI.xcframework"
 SWIFT_SHIM_DEST="$CUBBYKIT_ROOT/Sources/CubbyFFI/cubby_ffi.swift"
 
-CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/cubby/cubby-ffi-target}"
+CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/cubby/cargo-target}"
 export CARGO_TARGET_DIR
 
 PROFILE="release"
