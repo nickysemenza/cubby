@@ -20,7 +20,7 @@ const requiredInputs = [
   "apps/apple/CubbyKit/Package.resolved",
   "apps/apple/project.yml",
   "apps/apple/Cubby.xcodeproj/project.pbxproj",
-  "apps/apple/Cubby.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
+  "apps/apple/SourcePackages/workspace-state.json",
 ];
 const buildDrivers = [
   "scripts/apple-check.sh",
