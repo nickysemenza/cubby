@@ -93,6 +93,18 @@ export const expenseInventoryOwnershipContextOut = z.object({
   suggestedBeneficiaries: z.array(ledgerAttributionInput),
 });
 
+export const vendorAttributionDefaultsInput = z.object({
+  vendor: z.string(),
+});
+
+export const vendorAttributionDefaultsOut = z.object({
+  beneficiaries: z.array(ledgerAttributionInput),
+  funders: z.array(ledgerAttributionInput),
+});
+export type VendorAttributionDefaultsOut = z.infer<
+  typeof vendorAttributionDefaultsOut
+>;
+
 export const confirmInventoryExpenseBeneficiaryInput = z.object({
   inventoryEntryId: inventoryShortcode,
   expenseId: expenseShortcode,

@@ -177,11 +177,6 @@ See also the image operational passes at the end of this file.
   [core journey E2E](agents/core-journey-e2e.md), seeding only account/login
   prerequisites.
 
-- 🟢 **Attribution prefill.** First step toward actually using the
-  contribution ledger (`LedgerTransfer`, `ExpenseAttribution`, ownership
-  columns — kept on purpose, unused so far): default the expense editor's
-  beneficiaries/funders to the last set used with the same vendor.
-
 - 🤔 **Incremental import cursors and paced backfill.** The account cursor
   declares newest-date/order-ID and backfill bounds, but imports do not advance
   them. Advance cursors after successful processing and resume newest-first

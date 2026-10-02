@@ -4,6 +4,8 @@ import {
   confirmInventoryExpenseBeneficiaryOut,
   expenseInventoryOwnershipContextInput,
   expenseInventoryOwnershipContextOut,
+  vendorAttributionDefaultsInput,
+  vendorAttributionDefaultsOut,
 } from "@cubby/schemas/inventory-ownership";
 import * as schemas from "@cubby/schemas/project";
 import { z } from "zod";
@@ -45,6 +47,11 @@ export const expenseContract = defineContract("expense", {
   inventoryOwnershipContext: query({
     input: expenseInventoryOwnershipContextInput,
     output: expenseInventoryOwnershipContextOut,
+  }),
+  /** Beneficiaries/funders last used with a vendor, for prefilling the create form. */
+  vendorAttributionDefaults: query({
+    input: vendorAttributionDefaultsInput,
+    output: vendorAttributionDefaultsOut,
   }),
   confirmInventoryBeneficiary: mutation({
     input: confirmInventoryExpenseBeneficiaryInput,
