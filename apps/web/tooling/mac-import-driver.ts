@@ -819,7 +819,7 @@ export class MacImportDriver {
     this.record(["settings-shortcut"], 0, this.observe());
     await this.wait('label="Settings" role=window');
     await this.scrollTo(
-      "id=settings.purchaseImport.reconnect",
+      "id=settings.purchaseImport.syncNow",
       "com_apple_SwiftUI_Settings_window",
     );
     await this.wait("id=settings.purchaseImport.syncNow");
