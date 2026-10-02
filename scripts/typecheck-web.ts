@@ -12,6 +12,10 @@
 // Concurrency: one check holds 5-7 GB of live type data that Go GC tuning
 // cannot shrink, so checks across worktrees wait for a slot instead of pushing
 // the machine into swap. `CUBBY_TYPECHECK_SLOTS` sets the count (0 disables).
+//
+// `--app` checks tsconfig.app.json (the program without tests and test
+// tooling, ~20% cheaper) with its own buildinfo; the default is the full
+// program, which `pnpm check` and CI run.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -25,9 +29,15 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 const WEB = resolve(import.meta.dirname, "../apps/web");
-const BUILD_INFO = join(WEB, "tsconfig.tsbuildinfo");
+const APP = process.argv.includes("--app");
+const TSC_ARGS = process.argv.slice(2).filter((arg) => arg !== "--app");
+const CONFIG = APP ? "tsconfig.app.json" : "tsconfig.json";
+const BUILD_INFO = join(WEB, CONFIG.replace(/\.json$/, ".tsbuildinfo"));
 // Content hashes of the program's own files when BUILD_INFO was last written.
-const INPUTS = join(WEB, "node_modules/.cache/cubby-typecheck-inputs.json");
+const INPUTS = join(
+  WEB,
+  `node_modules/.cache/cubby-typecheck-inputs${APP ? "-app" : ""}.json`,
+);
 // Above this many changed files an incremental run measured slower than a fresh
 // one; below it, files the cache already re-signed keep cheap body edits.
 const STALE_FILES = 100;
@@ -136,7 +146,7 @@ process.on("exit", release);
 dropStaleBuildInfo();
 const child = spawn(
   join(WEB, "node_modules/.bin/tsc"),
-  ["--noEmit", "--checkers", "1", ...process.argv.slice(2)],
+  ["-p", CONFIG, "--noEmit", "--checkers", "1", ...TSC_ARGS],
   { cwd: WEB, stdio: "inherit" },
 );
 // Native tsc exits 0 when interrupted, so an interrupted run must not record

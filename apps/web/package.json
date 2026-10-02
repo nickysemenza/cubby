@@ -24,6 +24,7 @@
     "test:e2e:install-browser": "playwright install",
     "test:e2e:install-deps": "playwright install-deps",
     "typecheck": "node ../../scripts/generator/ensure.ts && node ../../scripts/typecheck-web.ts",
+    "typecheck:app": "node ../../scripts/generator/ensure.ts && node ../../scripts/typecheck-web.ts --app",
     "db:generate": "node ../../scripts/generator/ensure.ts && tsx tooling/db-generate.ts",
     "db:check": "node ../../scripts/generator/ensure.ts && node ../../scripts/test-services.ts -- tsx tooling/db-check.ts",
     "db:migrate": "tsx tooling/db-migrate.ts",

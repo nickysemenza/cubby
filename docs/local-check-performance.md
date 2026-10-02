@@ -31,6 +31,23 @@ Before them, a first edit or export change cost 50–54 s of CPU and up to 7 GB
 for most files (a full re-check, more than a cold run), and a buildinfo copied
 from a days-old checkout cost 71 s of CPU and 7.6 GB.
 
+Those rows are the full program (`pnpm typecheck:web:tests`, `pnpm check`,
+CI). `pnpm typecheck:web` checks `tsconfig.app.json`, which leaves out tests
+and test tooling: 983 of the program's ~3,500 own files, and a quarter of a
+client file's re-check set or a third of a server file's. Measured back to
+back, cold went from 20.8 s to 16.0 s wall (32.9 to 25.2 s CPU), adding an
+export to a client file from 10.6 to 8.7 s, to a server file from 18.4 to
+14.1 s, and peak RSS fell 0.6–1.1 GB.
+
+Two further ideas measured worse. Exporting three names (`MyRouterContext`,
+`QueryDescriptor`, `MutationDescriptor`) cut declaration-emit errors from 482
+to 73, but emitting declarations, which project references require and which
+would record real signatures from the first build, doubled the cost: 71 s CPU
+and 8.1 GB cold, 50–55 s to add an export to a server file. The remaining
+re-check sets come from the route tree: every route, including the server API
+routes, is imported by `routeTree.gen.ts`, which ~330 router importers
+reference through TanStack Router's type registration.
+
 The program is about 9,100 files, 3.3M types and 19.3M instantiations (10.1M
 in September). Zod accounts for a quarter of all types. The cost is spread
 thin: the slowest file (`entity-list-read-bindings.gen.ts`) is about 1.3 s of
