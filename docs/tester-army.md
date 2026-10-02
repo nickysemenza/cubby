@@ -18,6 +18,13 @@ Model calls, tokens, reported cost, and timings are evidence, not a promise of
 equal reliability or savings. The existing deterministic simulator product-edit
 journey must also pass after the agent-device upgrade.
 
+The pinned `agent-device` patch preserves the macOS infinite-bounds guard and
+ignores an empty Toolbar whose bounds equal its entire enclosing panel during
+occlusion checks. SwiftUI sheets expose that phantom Toolbar alongside their
+form content; treating it as an opaque overlay blocks semantic field editing.
+Toolbars with controls or smaller bounds still block covered targets. The iOS
+rename journey exercises this regression through real semantic agent actions.
+
 ## Configuration and commands
 
 Use a Cloudflare API token authorized for inference through Unified Billing.
