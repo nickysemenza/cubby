@@ -1,4 +1,5 @@
 import { ledgerAttributions } from "@cubby/schemas/ledger-party";
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { isEqual } from "es-toolkit";
 import { useEffect, useRef } from "react";
@@ -113,7 +114,11 @@ function useVendorAttributionPrefill(
   enabled: boolean,
 ) {
   const vendor: unknown = useWatch({ control: form.control, name: "vendor" });
-  const vendorName = z.string().catch("").parse(vendor).trim();
+  // The vendor field is typed into, so wait for it to settle before querying.
+  const [vendorName] = useDebouncedValue(
+    z.string().catch("").parse(vendor).trim(),
+    { wait: 400 },
+  );
   const { data } = useQuery({
     ...expense.vendorAttributionDefaults.queryOptions({ vendor: vendorName }),
     enabled: enabled && vendorName.length > 0,
