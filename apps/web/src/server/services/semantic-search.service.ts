@@ -66,20 +66,35 @@ async function semanticSearchCandidates(
   });
 }
 
-/** Internal semantic fallback for product matching; never used by global UX. */
-export async function semanticProductCandidates(
+/** Internal semantic fallback for candidate matching; never used by global UX. */
+export async function semanticEntityCandidates(
   db: Database,
   query: string,
   limit: number,
+  entityKind: SearchableEntity,
   runId?: RunId,
 ): Promise<SemanticProductCandidate[]> {
   try {
-    return await semanticSearchCandidates(db, query, limit, ["product"], runId);
+    return await semanticSearchCandidates(
+      db,
+      query,
+      limit,
+      [entityKind],
+      runId,
+    );
   } catch (error) {
-    log.warn("product-candidates failed", {
+    log.warn(`${entityKind}-candidates failed`, {
       query,
       message: getErrorMessage(error),
     });
     return [];
   }
 }
+
+export const semanticProductCandidates = (
+  db: Database,
+  query: string,
+  limit: number,
+  runId?: RunId,
+): Promise<SemanticProductCandidate[]> =>
+  semanticEntityCandidates(db, query, limit, "product", runId);
