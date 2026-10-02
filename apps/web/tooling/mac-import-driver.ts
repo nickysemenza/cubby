@@ -641,6 +641,8 @@ export class MacImportDriver {
     return this.action(["snapshot", "-i"]);
   }
   async click(selector: string, containerID?: string): Promise<string> {
+    if (selector.startsWith("id=settings."))
+      await this.scrollTo(selector, "com_apple_SwiftUI_Settings_window");
     return this.action([
       "click",
       selector,
@@ -818,10 +820,6 @@ export class MacImportDriver {
     );
     this.record(["settings-shortcut"], 0, this.observe());
     await this.wait('label="Settings" role=window');
-    await this.scrollTo(
-      "id=settings.purchaseImport.syncNow",
-      "com_apple_SwiftUI_Settings_window",
-    );
     await this.wait("id=settings.purchaseImport.syncNow");
   }
   async importStatement(file: string): Promise<void> {
