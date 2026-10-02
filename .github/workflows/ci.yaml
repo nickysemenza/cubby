@@ -552,9 +552,13 @@ jobs:
         uses: ./.github/actions/save-cache-main-only
         with:
           path: |
-            ~/.agent-device/apple-runner
-            !~/.agent-device/apple-runner/**/Logs
-            !~/.agent-device/apple-runner/**/*.log
+            ~/.agent-device/apple-runner/derived
+            !~/.agent-device/apple-runner/derived/**/Logs
+            !~/.agent-device/apple-runner/derived/**/TestResults
+            !~/.agent-device/apple-runner/derived/**/*.log
+            !~/.agent-device/apple-runner/derived/**/AgentDeviceRunner.env.session-*
+            !~/.agent-device/apple-runner/derived/**/lock
+            !~/.agent-device/apple-runner/derived/**/*.lock
           key: ${{ steps.test-runner.outputs.cache-key }}
           cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
           matched-key: ${{ steps.test-runner.outputs.matched-key }}
@@ -671,9 +675,13 @@ jobs:
         uses: ./.github/actions/save-cache-main-only
         with:
           path: |
-            ~/.agent-device/apple-runner
-            !~/.agent-device/apple-runner/**/Logs
-            !~/.agent-device/apple-runner/**/*.log
+            ~/.agent-device/apple-runner/derived
+            !~/.agent-device/apple-runner/derived/**/Logs
+            !~/.agent-device/apple-runner/derived/**/TestResults
+            !~/.agent-device/apple-runner/derived/**/*.log
+            !~/.agent-device/apple-runner/derived/**/AgentDeviceRunner.env.session-*
+            !~/.agent-device/apple-runner/derived/**/lock
+            !~/.agent-device/apple-runner/derived/**/*.lock
           key: ${{ steps.test-runner.outputs.cache-key }}
           cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
           matched-key: ${{ steps.test-runner.outputs.matched-key }}

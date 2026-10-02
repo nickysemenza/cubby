@@ -72,7 +72,9 @@ uses `simctl` directly, before preparing the driver, so installation does not
 start XCTest or inherit the SDK's short command timeout.
 Both lanes also cache agent-device's compiled Apple test runner, keyed by its
 package and Xcode toolchain. The SDK verifies source, SDK, and build settings
-before reuse. Session state and logs are excluded from that cache.
+before reuse. Only its derived build directory is cached. Device leases,
+per-session launch files, test results, logs, and lock files are excluded so
+a new runner cannot inherit another host's process state.
 Bundles record native build, boot, installation, and driver preparation durations separately.
 A cold cache still requires compilation; warm-cache performance must be
 measured from the full hosted job, not just the agent test duration.

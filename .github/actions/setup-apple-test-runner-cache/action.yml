@@ -18,12 +18,17 @@ runs:
   using: composite
   steps:
     # The SDK revalidates its runner source, Xcode/SDK and build settings on use.
-    # Session state lives outside this build cache; logs are excluded.
+    # Leases live beside derived data; per-session launch files live within it.
+    # Restore only compiled products and metadata, never live process state.
     - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       id: runner
       with:
         path: |
-          ~/.agent-device/apple-runner
-          !~/.agent-device/apple-runner/**/Logs
-          !~/.agent-device/apple-runner/**/*.log
-        key: agent-device-apple-runner-v1-${{ runner.os }}-${{ inputs.toolchain-hash }}-${{ hashFiles('node_modules/agent-device/package.json') }}
+          ~/.agent-device/apple-runner/derived
+          !~/.agent-device/apple-runner/derived/**/Logs
+          !~/.agent-device/apple-runner/derived/**/TestResults
+          !~/.agent-device/apple-runner/derived/**/*.log
+          !~/.agent-device/apple-runner/derived/**/AgentDeviceRunner.env.session-*
+          !~/.agent-device/apple-runner/derived/**/lock
+          !~/.agent-device/apple-runner/derived/**/*.lock
+        key: agent-device-apple-runner-v2-${{ runner.os }}-${{ inputs.toolchain-hash }}-${{ hashFiles('node_modules/agent-device/package.json') }}
