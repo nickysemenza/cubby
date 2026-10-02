@@ -69,6 +69,7 @@ describe("MCP protocol smoke", () => {
     "serves catalog, tool calls, and authenticated telemetry over MCP %s HTTP",
     async (version) => {
       const emit = vi.fn(async () => undefined);
+      const responseTypes: Array<string | null> = [];
       const client = new Client(
         { name: "test", version: "1.0.0" },
         {
@@ -81,8 +82,8 @@ describe("MCP protocol smoke", () => {
       const transport = new StreamableHTTPClientTransport(
         new URL("https://cubby.test/api/mcp"),
         {
-          fetch: (input, init) =>
-            handleMcpRequest(new Request(input, init), {
+          fetch: async (input, init) => {
+            const response = await handleMcpRequest(new Request(input, init), {
               token: "",
               clientId: "test",
               scopes: [],
@@ -97,7 +98,14 @@ describe("MCP protocol smoke", () => {
                   emit,
                 },
               },
-            }),
+            });
+            // Worker database I/O must finish before a service-binding response
+            // escapes its request; the legacy SSE default releases it early.
+            if (response.status === 200) {
+              responseTypes.push(response.headers.get("content-type"));
+            }
+            return response;
+          },
         },
       );
       try {
@@ -118,6 +126,10 @@ describe("MCP protocol smoke", () => {
         });
         expect(result.isError).not.toBe(true);
         expect(result.structuredContent).toBeDefined();
+        expect(responseTypes.length).toBeGreaterThan(0);
+        expect(responseTypes).toEqual(
+          responseTypes.map(() => expect.stringContaining("application/json")),
+        );
         expect(emit).toHaveBeenCalledWith(
           expect.objectContaining({
             userId: "user_1",
