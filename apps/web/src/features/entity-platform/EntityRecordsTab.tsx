@@ -43,6 +43,7 @@ import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/ui/data-table/table-features";
+import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useFilterBarDraft } from "~/ui/data-table/useFilterBarDraft";
 import { Stack } from "~/ui/layout";
 import { EnumPill } from "~/ui/primitives/enum-pill";
@@ -58,11 +59,11 @@ const columns = createCubbyColumnCollection<EntityRecord>((add) => {
       enableSorting: true,
       enableHiding: false,
       enablePinning: false,
-      meta: {
+      meta: attachCubbyColumnMeta<EntityRecord>({
         entityColumnRole: "image",
         className: "h-px w-16 overflow-hidden px-0 py-0",
         mobile: { slot: "image", priority: -10 },
-      },
+      }),
       cell: ({ row }) => (
         <ImageThumbnail
           images={row.original.displayImages}
@@ -76,12 +77,12 @@ const columns = createCubbyColumnCollection<EntityRecord>((add) => {
     helper.accessor((row) => row.name, {
       id: "name",
       header: "Name",
-      meta: {
+      meta: attachCubbyColumnMeta<EntityRecord>({
         entityColumnRole: "identity",
         className: "w-64",
         mobile: { slot: "title" },
         cellData: textCellData<EntityRecord>("text", (row) => row.name),
-      },
+      }),
       cell: ({ row }) =>
         isBrowserRoutedEntity(row.original.kind) ? (
           <EntityRefLink
@@ -102,13 +103,13 @@ const columns = createCubbyColumnCollection<EntityRecord>((add) => {
     helper.accessor((row) => row.kind, {
       id: "kind",
       header: "Type",
-      meta: {
+      meta: attachCubbyColumnMeta<EntityRecord>({
         className: "w-32",
         mobile: { slot: "subtitle" },
         cellData: textCellData<EntityRecord>("select", (row) =>
           entityLabel(row.kind),
         ),
-      },
+      }),
       cell: (info) => (
         <EnumPill icon={<EntityIcon entity={info.getValue()} colored />}>
           {entityLabel(info.getValue())}
@@ -120,12 +121,12 @@ const columns = createCubbyColumnCollection<EntityRecord>((add) => {
     helper.accessor((row) => row.id, {
       id: "id",
       header: "Shortcode",
-      meta: {
+      meta: attachCubbyColumnMeta<EntityRecord>({
         className: "w-32",
         mono: true,
         mobile: { slot: "meta" },
         cellData: textCellData<EntityRecord>("text", (row) => row.id),
-      },
+      }),
     }),
   );
   add(
@@ -133,7 +134,7 @@ const columns = createCubbyColumnCollection<EntityRecord>((add) => {
       id: "quality",
       header: "Quality",
       sortDescFirst: false,
-      meta: {
+      meta: attachCubbyColumnMeta<EntityRecord>({
         className: "w-20",
         numeric: true,
         mobile: { slot: "meta" },
@@ -145,7 +146,7 @@ const columns = createCubbyColumnCollection<EntityRecord>((add) => {
             label: "Data quality",
           }),
         },
-      },
+      }),
       cell: ({ row: { original } }) => (
         <DataQualityValue
           quality={
@@ -166,11 +167,11 @@ const columns = createCubbyColumnCollection<EntityRecord>((add) => {
       helper.accessor((row) => row[id], {
         id,
         header,
-        meta: {
+        meta: attachCubbyColumnMeta<EntityRecord>({
           className: "w-32",
           mobile: { slot: "meta" },
           cellData: timestampCellData<EntityRecord>((row) => row[id]),
-        },
+        }),
         cell: (info) =>
           renderScalarValue({ kind: "timestamp", raw: info.getValue() }),
       }),
@@ -307,7 +308,10 @@ export function EntityRecordsTab({
     enableMultiSort: false,
     enableSortingRemoval: false,
     enableRowSelection: false,
-    meta: { defaultLayout, scrollRestorationId: "entity-records" },
+    meta: {
+      defaultLayout,
+      scrollRestorationId: "entity-records",
+    },
   });
   const externalFilters = useMemo(
     () =>

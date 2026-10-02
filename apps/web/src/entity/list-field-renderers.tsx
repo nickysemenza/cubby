@@ -21,6 +21,7 @@ import {
   type CubbyColumnCollection,
   type CubbyColumnHelper,
 } from "~/ui/data-table/table-features";
+import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 import { DataQualityValue } from "./data-quality-value";
@@ -136,7 +137,7 @@ const dataQualityRenderer = <TRow extends object>(
           if (!rightQuality) return -1;
           return leftQuality.score - rightQuality.score;
         },
-        meta: {
+        meta: attachCubbyColumnMeta<TRow>({
           className: "w-20",
           numeric: true,
           cellData: numberCellData<TRow>(
@@ -144,7 +145,7 @@ const dataQualityRenderer = <TRow extends object>(
             (row) => qualityOf(row)?.score ?? null,
           ),
           mobile: { slot: "meta", priority: 0 },
-        },
+        }),
         cell: (info) => {
           const quality = qualityOf(info.row.original);
           return <DataQualityValue quality={quality} scored={scored} />;
