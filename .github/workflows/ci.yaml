@@ -532,6 +532,10 @@ jobs:
       - uses: ./.github/actions/setup-apple-tools
       - uses: ./.github/actions/setup-apple-build-cache
         id: derived-data
+      - uses: ./.github/actions/setup-apple-test-runner-cache
+        id: test-runner
+        with:
+          toolchain-hash: ${{ steps.derived-data.outputs.toolchain-hash }}
       - name: Start native PostgreSQL 17 with pgvector
         shell: bash
         run: |
@@ -548,6 +552,17 @@ jobs:
           CUBBY_SIM_DB_EXTERNAL: "1"
           CI: "1"
         run: pnpm test:e2e:sim
+      - name: Save Apple test runner cache
+        if: always()
+        uses: ./.github/actions/save-cache-main-only
+        with:
+          path: |
+            ~/.agent-device/apple-runner
+            !~/.agent-device/apple-runner/**/Logs
+            !~/.agent-device/apple-runner/**/*.log
+          key: ${{ steps.test-runner.outputs.cache-key }}
+          cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
+          matched-key: ${{ steps.test-runner.outputs.matched-key }}
       - name: Save DerivedData cache
         if: always()
         uses: ./.github/actions/save-cache-main-only
@@ -639,6 +654,10 @@ jobs:
       - uses: ./.github/actions/setup-apple-tools
       - uses: ./.github/actions/setup-apple-build-cache
         id: derived-data
+      - uses: ./.github/actions/setup-apple-test-runner-cache
+        id: test-runner
+        with:
+          toolchain-hash: ${{ steps.derived-data.outputs.toolchain-hash }}
       - name: Start native PostgreSQL 17 with pgvector
         shell: bash
         run: |
@@ -651,6 +670,17 @@ jobs:
           "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -c "ALTER USER postgres WITH PASSWORD 'password'"
           "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -Atc "SELECT name FROM pg_available_extensions WHERE name = 'vector'" | grep -qx vector
       - run: pnpm test:e2e:agent:ios
+      - name: Save Apple test runner cache
+        if: always()
+        uses: ./.github/actions/save-cache-main-only
+        with:
+          path: |
+            ~/.agent-device/apple-runner
+            !~/.agent-device/apple-runner/**/Logs
+            !~/.agent-device/apple-runner/**/*.log
+          key: ${{ steps.test-runner.outputs.cache-key }}
+          cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
+          matched-key: ${{ steps.test-runner.outputs.matched-key }}
       - name: Save DerivedData cache
         if: always()
         uses: ./.github/actions/save-cache-main-only

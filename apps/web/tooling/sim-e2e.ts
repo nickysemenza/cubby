@@ -1543,6 +1543,7 @@ async function main(): Promise<void> {
       };
       try {
         await install();
+        const driverStarted = performance.now();
         await run("pnpm", [
           "exec",
           "agent-device",
@@ -1552,6 +1553,10 @@ async function main(): Promise<void> {
           "--timeout",
           "240000",
         ]);
+        phases.push({
+          name: "native-driver-prepare",
+          durationMs: Math.round(performance.now() - driverStarted),
+        });
         await launch();
         if (watch) {
           await runWarmSimulator({

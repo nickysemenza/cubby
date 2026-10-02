@@ -1,6 +1,9 @@
 name: Setup Apple build cache
 description: Restore shared simulator DerivedData with the matching Xcode toolchain.
 outputs:
+  toolchain-hash:
+    value: ${{ steps.xcode-version.outputs.hash }}
+    description: Xcode toolchain hash
   cache-key:
     value: ${{ steps.derived-data.outputs.cache-primary-key }}
     description: Primary DerivedData cache key

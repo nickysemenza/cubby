@@ -64,7 +64,10 @@ as the regular Apple build gate. Hosted builds use its SPM clone directory,
 content-based source mtimes, native arm64 slice, and batch compilation. They
 still run an incremental build against the current generated inputs before
 installing the app. Simulator boot follows compilation to avoid CPU contention.
-Bundles record native build, boot, and installation durations separately.
+Both lanes also cache agent-device's compiled Apple test runner, keyed by its
+package and Xcode toolchain. The SDK verifies source, SDK, and build settings
+before reuse. Session state and logs are excluded from that cache.
+Bundles record native build, boot, installation, and driver preparation durations separately.
 A cold cache still requires compilation; warm-cache performance must be
 measured from the full hosted job, not just the agent test duration.
 
