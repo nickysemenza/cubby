@@ -13,6 +13,8 @@ wait "label=Photos" 30000
 press 80 210
 wait "label=Add" 30000
 click "label=Add"
+wait "id=photos.review.continue" 30000
+click "id=photos.review.continue"
 wait "label=\"Add to import run…\"" 30000
 click "label=\"Add to import run…\""
 wait "id=photos.run.startNew" 30000
