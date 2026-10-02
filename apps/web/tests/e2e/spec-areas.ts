@@ -110,6 +110,7 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/server/services/image-storage.service.ts`,
   ],
   "input-first-import.spec.ts": [
+    `${WEB}/tests/e2e/prepare-retailer-source.ts`,
     `${WEB}/tests/e2e/retailer-browser-peer.ts`,
     `${WEB}/src/lib/auth.ts`,
     `${WEB}/src/lib/e2e-google-provider.ts`,
@@ -119,6 +120,18 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/server/repo/financial-*.ts`,
     `${WEB}/src/server/repo/product/**`,
     `${WEB}/src/contracts/run.contract.ts`,
+    `${WEB}/src/server/operations/run.server.ts`,
+  ],
+  "input-first-settlement.spec.ts": [
+    `${WEB}/tests/e2e/prepare-retailer-source.ts`,
+    `${WEB}/tests/e2e/retailer-browser-peer.ts`,
+    `${WEB}/src/lib/e2e-google-provider.ts`,
+    `${WEB}/src/server/agents/purchase-import/**`,
+    `${WEB}/src/server/purchase-import/**`,
+    `${WEB}/src/server/statement-csv-import.ts`,
+    `${WEB}/src/server/repo/financial-*.ts`,
+    `${WEB}/src/server/repo/purchase.ts`,
+    `${WEB}/src/app/purchases/**`,
     `${WEB}/src/server/operations/run.server.ts`,
   ],
   "activity.spec.ts": [

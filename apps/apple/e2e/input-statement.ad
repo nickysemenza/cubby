@@ -13,8 +13,8 @@ wait "id=DOC.browsingModeTabBar" 30000
 click "label=Browse"
 wait text "On My iPhone" 30000
 click "label=\"On My iPhone\""
-wait "label=Cubby" 30000
-click "label=Cubby"
+wait "id=\"Cubby, Container\"" 30000
+click "id=\"Cubby, Container\""
 wait text "synthetic-input-statement" 30000
 click "label=synthetic-input-statement"
 wait text "Synthetic Input Card" 30000
