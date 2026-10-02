@@ -312,6 +312,7 @@ struct GenericEntityEditModelTests {
         EntityDescriptor(
             key: .gardenEntry, singular: "record", plural: "records", basePath: "records",
             shortcodePrefix: nil, titleField: "id", domain: nil, sfSymbol: "circle", emoji: "📓",
+            recordEmojiField: nil,
             searchable: false,
             primarySearch: nil,
             timeline: nil, fields: [], filters: [], relations: [],

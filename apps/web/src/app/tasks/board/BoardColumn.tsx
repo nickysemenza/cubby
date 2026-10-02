@@ -4,8 +4,8 @@ import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
 
-import { ProjectMarkById } from "~/app/projects/project-mark";
 import { getTradeColor } from "~/app/projects/trade-colors";
+import { RecordMarkById } from "~/entity/components/record-mark";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { getStatusChartColor } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
@@ -66,7 +66,7 @@ function axisColor(key: BoardColumnKey | BoardLaneKey): string | null {
 export function axisColorChip(key: BoardColumnKey | BoardLaneKey) {
   if (key.kind === "project") {
     return key.projectId ? (
-      <ProjectMarkById projectId={key.projectId} size={12} />
+      <RecordMarkById entity="project" recordId={key.projectId} size={12} />
     ) : null;
   }
   const color = axisColor(key);

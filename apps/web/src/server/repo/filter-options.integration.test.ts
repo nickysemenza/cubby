@@ -116,7 +116,11 @@ describe("entity reference filter options", () => {
       include: ["kind"],
     });
     expect(roster.items).toEqual([
-      { id: member.output.id, label: "Household member", kind: "member" },
+      {
+        id: member.output.id,
+        label: "Household member",
+        kind: "member",
+      },
     ]);
 
     await expect(
@@ -131,35 +135,23 @@ describe("entity reference filter options", () => {
     ).rejects.toThrow("Filter option kind is not defined for project");
   });
 
-  it("projects a project's icon, refusing it for an entity with no such column", async () => {
+  it("projects record emoji through the shared reference roster", async () => {
     const hammer = await createProject(
       ctx.db,
-      buildEntity("project", { name: "Deck rebuild", icon: "hammer" }),
+      buildEntity("project", { name: "Synthetic workshop", emoji: "🛠️" }),
       TEST_ACTOR,
     );
-
     const roster = await getFilterOptions(ctx.db, {
       source: "entity",
       entity: "project",
       search: "",
       selectedIds: [],
       limit: 25,
-      include: ["icon"],
+      include: ["emoji"],
     });
     expect(roster.items).toEqual([
-      { id: hammer.output.id, label: "Deck rebuild", icon: "hammer" },
+      { id: hammer.output.id, label: "Synthetic workshop", emoji: "🛠️" },
     ]);
-
-    await expect(
-      getFilterOptions(ctx.db, {
-        source: "entity",
-        entity: "ledgerParty",
-        search: "",
-        selectedIds: [],
-        limit: 25,
-        include: ["icon"],
-      }),
-    ).rejects.toThrow("Filter option icon is not defined for ledgerParty");
   });
 
   // The `dates` projection must reuse `projectNameOptions` (and, through it,

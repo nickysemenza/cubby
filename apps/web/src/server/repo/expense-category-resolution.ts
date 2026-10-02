@@ -46,6 +46,34 @@ export type ExpenseSpendingCategoryResolutionDraft = {
   }[];
 };
 
+/** Same nearest-ancestor mapping policy for expense classification and category navigation. */
+export function productCategorySpendingAncestorsSql(
+  categoryId: SQL,
+  draft?: ExpenseSpendingCategoryResolutionDraft,
+): SQL {
+  const categoryParent = projectedValue(
+    "c",
+    "parentId",
+    draft?.productCategories,
+  );
+  const categoryMode = projectedValue(
+    "c",
+    "spendingCategoryMode",
+    draft?.productCategories,
+  );
+  const categoryTarget = projectedValue(
+    "c",
+    "spendingCategoryId",
+    draft?.productCategories,
+  );
+  return sql`      SELECT c.id,${categoryParent} AS "parentId",c.feature,c.name,c.shortcode,${categoryMode} AS "spendingCategoryMode",${categoryTarget} AS "spendingCategoryId",0 AS depth,ARRAY[c.id] AS visited
+      FROM "ProductCategory" c WHERE c.id=${categoryId} AND c."deletedAt" IS NULL
+      UNION ALL
+      SELECT c.id,${categoryParent} AS "parentId",c.feature,c.name,c.shortcode,${categoryMode} AS "spendingCategoryMode",${categoryTarget} AS "spendingCategoryId",a.depth+1,a.visited||c.id
+      FROM ancestors a JOIN "ProductCategory" c ON c.id=a."parentId" AND c."deletedAt" IS NULL
+      WHERE NOT c.id=ANY(a.visited) AND a.depth<3`;
+}
+
 /** New taxonomy targets exist only in this read-only review projection. */
 export const spendingCategoryCatalogSql = (
   draft?: ExpenseSpendingCategoryResolutionDraft,
@@ -85,21 +113,6 @@ export function expenseSpendingCategoryResolutionSql(
     : storedExpenseSpendingCategorySql(alias, draft);
   const categoryCatalog = spendingCategoryCatalogSql(draft);
   const principal = sql`${column(alias, "lineKind")} = 'principal'`;
-  const categoryParent = projectedValue(
-    "c",
-    "parentId",
-    draft?.productCategories,
-  );
-  const categoryMode = projectedValue(
-    "c",
-    "spendingCategoryMode",
-    draft?.productCategories,
-  );
-  const categoryTarget = projectedValue(
-    "c",
-    "spendingCategoryId",
-    draft?.productCategories,
-  );
   const vendorProfile = projectedValue("v", "spendingProfile", draft?.vendors);
   const vendorTarget = projectedValue(
     "v",
@@ -109,13 +122,7 @@ export function expenseSpendingCategoryResolutionSql(
   const food = sql`COALESCE((SELECT a.feature = 'food' FROM ancestors a WHERE a.feature IS NOT NULL ORDER BY a.depth LIMIT 1),FALSE)`;
   return sql`(
     WITH RECURSIVE ancestors AS (
-      SELECT c.id,${categoryParent} AS "parentId",c.feature,c.name,c.shortcode,${categoryMode} AS "spendingCategoryMode",${categoryTarget} AS "spendingCategoryId",0 AS depth,ARRAY[c.id] AS visited
-      FROM "Product" g JOIN "ProductCategory" c ON c.id=${projectedValue("g", "categoryId", draft?.products)} AND c."deletedAt" IS NULL
-      WHERE g.id=${productId} AND g."deletedAt" IS NULL
-      UNION ALL
-      SELECT c.id,${categoryParent} AS "parentId",c.feature,c.name,c.shortcode,${categoryMode} AS "spendingCategoryMode",${categoryTarget} AS "spendingCategoryId",a.depth+1,a.visited||c.id
-      FROM ancestors a JOIN "ProductCategory" c ON c.id=a."parentId" AND c."deletedAt" IS NULL
-      WHERE NOT c.id=ANY(a.visited) AND a.depth<3
+      ${productCategorySpendingAncestorsSql(sql`(SELECT ${projectedValue("g", "categoryId", draft?.products)} FROM "Product" g WHERE g.id=${productId} AND g."deletedAt" IS NULL)`, draft)}
     ), mapping AS (
       SELECT a.* FROM ancestors a WHERE a."spendingCategoryMode"<>'inherit' ORDER BY a.depth LIMIT 1
     ), facts AS (

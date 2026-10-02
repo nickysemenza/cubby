@@ -1,4 +1,7 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+
+import { Button } from "~/ui/primitives/button";
 
 import { FieldSuggestionHint } from "./field-suggestion-hint";
 import { useFieldSuggestionContext } from "./field-suggestion-provider";
@@ -42,8 +45,25 @@ export function AutoSuggestSlot<TFieldValues extends FieldValues>({
     valueKind,
     disabled,
   });
+  const definition = context
+    ? entityFieldModels[context.entity].fields.find(
+        (item) => item.key === field,
+      )
+    : undefined;
   return (
     <>
+      {definition?.control?.suggest?.reviewRequired &&
+        context?.requestSuggestions && (
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            disabled={isPending || disabled}
+            onClick={() => context.requestSuggestions?.()}
+          >
+            Suggest {definition.label.toLowerCase()}
+          </Button>
+        )}
       <FormFieldResolution form={form} field={field} />
       <FieldSuggestionHint
         currentLabel={currentLabel}

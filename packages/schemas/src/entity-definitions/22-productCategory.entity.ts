@@ -1,3 +1,5 @@
+import { categoryMappingSchema } from "../spending-classification";
+import { recordEmojiField } from "../emoji";
 import { z } from "zod";
 
 import { optionalFieldResolutionsSchema } from "../field-resolution.js";
@@ -16,6 +18,7 @@ export default defineEntity({
   table: "ProductCategory",
   identifiers: { brand: "ProductCategoryId", shortcode: "CAT-" },
   presentation: {
+    recordEmojiField: "emoji",
     titleField: "name",
     detail: {
       additionalSectionOverrides: [
@@ -36,9 +39,28 @@ export default defineEntity({
     },
     icons: { phosphor: "Tag", sfSymbol: "tag", emoji: "🏷️" },
     list: {
+      savedViews: [
+        {
+          id: "needs-classification",
+          label: "Needs classification",
+          description: "Records missing an effective spending category",
+          filters: [{ id: "needsClassification", value: "true" }],
+        },
+      ],
       read: {
-        relations: ["parentId", "parentName", "path"],
-        derived: ["fieldResolutions", "productCount"],
+        relations: [
+          "parentId",
+          "parentName",
+          "path",
+          "spendingCategoryName",
+          "spendingCategoryEmoji",
+        ],
+        derived: [
+          "fieldResolutions",
+          "productCount",
+          "spendingCategoryMapping",
+          "effectiveSpendingCategory",
+        ],
         media: ["displayImages"],
         quality: ["dataQuality"],
         dependencies: { derived: ["relations"] },
@@ -52,6 +74,59 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        key: "spendingCategoryMapping",
+        kind: "json",
+        validation: {
+          read: categoryMappingSchema.optional(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "effectiveSpendingCategory",
+        kind: "identifier",
+        nullable: true,
+        reference: { entity: "spendingCategory" },
+        display: { list: true, detail: true },
+        validation: {
+          read: categoryMappingSchema.shape.category.optional(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "spendingCategoryName",
+        kind: "text",
+        nullable: true,
+        validation: {
+          read: z.string().nullable().optional(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "spendingCategoryEmoji",
+        kind: "text",
+        nullable: true,
+        validation: {
+          read: z.string().nullable().optional(),
+          create: null,
+          update: null,
+        },
+      },
+
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: {
+            ...recordEmojiField.control.suggest,
+            basis: ["name", "description", "parentId"],
+          },
+        },
+      },
+
       {
         key: "spendingCategoryMode",
         kind: "enum",
@@ -372,6 +447,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      "emoji",
       {
         key: "spendingCategoryMode",
         specialized: "enum:spendingCategoryMode",
@@ -397,6 +473,7 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "emoji",
       "spendingCategoryMode",
       "spendingCategoryId",
       "name",
@@ -407,6 +484,7 @@ export default defineEntity({
       "feature",
     ],
     update: [
+      "emoji",
       "spendingCategoryMode",
       "spendingCategoryId",
       "name",
@@ -433,8 +511,9 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["name", "parentId"],
+        capture: ["emoji", "name", "parentId"],
         full: [
+          "emoji",
           "spendingCategoryMode",
           "spendingCategoryId",
           "name",
@@ -444,12 +523,17 @@ export default defineEntity({
           "sortOrder",
           "feature",
         ],
-        identity: ["name", "parentId"],
+        identity: ["emoji", "name", "parentId"],
       },
       create: ["capture", "full"],
       update: ["full", "identity"],
     },
     output: [
+      "spendingCategoryMapping",
+      "effectiveSpendingCategory",
+      "spendingCategoryName",
+      "spendingCategoryEmoji",
+      "emoji",
       "spendingCategoryMode",
       "spendingCategoryId",
       "fieldResolutions",
@@ -514,6 +598,24 @@ export default defineEntity({
       export: "productCategoryFilterFields",
     },
     descriptors: [
+      {
+        columnId: "effectiveSpendingCategory",
+        field: "effectiveSpendingCategoryId",
+        urlKey: "spendingCategory",
+        kind: "idMulti",
+        placeholder: "Effective spending category",
+        optionsKey: "spendingCategory",
+        brandRef: { entity: "spendingCategory" },
+        deriveSchema: true,
+      },
+      {
+        columnId: "needsClassification",
+        field: "needsClassification",
+        urlKey: "needsClassification",
+        kind: "boolean",
+        placeholder: "Needs classification",
+        deriveSchema: true,
+      },
       {
         columnId: "name",
         field: "search",

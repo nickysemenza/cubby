@@ -209,7 +209,9 @@ export function isBasisSufficient(
   if (targets.targets.length === 0) return false;
   if (
     (entityId ?? basis.__financeEntityId) &&
-    ["financialTransaction", "purchase", "expense"].includes(entity) &&
+    ["financialTransaction", "purchase", "expense", "vendor"].includes(
+      entity,
+    ) &&
     targets.targets.some((target) => target.key === "spendingCategoryId")
   )
     return true;
@@ -231,7 +233,9 @@ export function financeSuggestionEntityId(
   entity: string,
   record: unknown,
 ): string | undefined {
-  if (!["financialTransaction", "purchase", "expense"].includes(entity))
+  if (
+    !["financialTransaction", "purchase", "expense", "vendor"].includes(entity)
+  )
     return undefined;
   const parsed = z.object({ id: z.string() }).safeParse(record);
   return parsed.success && parseShortcode(parsed.data.id)?.type === entity

@@ -80,7 +80,9 @@ describe("entity display image resolver", () => {
       },
     ];
 
-    expect(await withListEntityMedia(ctx.db, "product", rows)).toBe(rows);
+    const hydrated = await withListEntityMedia(ctx.db, "product", rows);
+    expect(hydrated[0]?.displayImages).toBe(rows[0]?.displayImages);
+    expect(hydrated).toEqual(rows);
   });
 
   const expectedRepresentations = (key: string) => {

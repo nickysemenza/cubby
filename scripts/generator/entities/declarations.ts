@@ -140,6 +140,7 @@ type EntityFieldControl = Readonly<{
   suggest: Readonly<{
     basis: readonly string[];
     mode: "fill" | "prune";
+    reviewRequired: boolean;
   }> | null;
 }>;
 type EntityFieldProvenance = Readonly<{
@@ -234,6 +235,7 @@ export type EntityField = Readonly<{
           color?: string;
         }>[]
       | null;
+    referencePreviewLimit: number | null;
     preview: boolean;
   }>;
   validation: Readonly<{

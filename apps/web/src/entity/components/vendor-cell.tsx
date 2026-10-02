@@ -1,4 +1,5 @@
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { RecordMarkById } from "~/entity/components/record-mark";
 import { cn } from "~/lib/utils";
 import { vendorMonogram } from "~/lib/vendor-logo";
 import { Row } from "~/ui/layout";
@@ -28,6 +29,7 @@ const hasVendorLogo = (logo: VendorLogo): logo is { url: string } =>
  */
 export function VendorMark({
   vendor,
+  vendorId,
   logo,
   className,
 }: {
@@ -58,7 +60,17 @@ export function VendorMark({
         src={logoUrl}
         alt=""
         displayWidth={MARK_PX}
-        fallback={vendorMonogram(vendor)}
+        fallback={
+          vendorId ? (
+            <RecordMarkById
+              entity="vendor"
+              recordId={vendorId}
+              fallback={vendorMonogram(vendor)}
+            />
+          ) : (
+            vendorMonogram(vendor)
+          )
+        }
         className="size-full object-contain grayscale transition-[filter] group-hover/row:grayscale-0 max-sm:grayscale-0"
       />
     </span>

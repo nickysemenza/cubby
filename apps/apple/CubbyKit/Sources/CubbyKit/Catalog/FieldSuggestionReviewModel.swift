@@ -105,7 +105,9 @@ public final class FieldSuggestionReviewModel {
         }
         let reviewedDraft = currentValue(key)
         if let review = proposed.financeReview {
-            guard key == "spendingCategoryId" else { return nil }
+            guard ["spendingCategoryId", "defaultSpendingCategoryId", "spendingProfile"].contains(key) else {
+                return nil
+            }
             isApplying = true
             defer { isApplying = false }
             do {
@@ -113,10 +115,18 @@ public final class FieldSuggestionReviewModel {
                     .init(
                         // Both generated enums come from financeCategoryReviewSchema.
                         entity: .init(rawValue: review.entity.rawValue)!, entityId: review.entityId,
-                        fingerprint: review.fingerprint, spendingCategoryId: value))
+                        fingerprint: review.fingerprint, field: .init(rawValue: key),
+                        spendingCategoryId: key == "spendingCategoryId" ? value : nil,
+                        defaultSpendingCategoryId: key == "defaultSpendingCategoryId" ? value : nil,
+                        spendingProfile: key == "spendingProfile" ? .init(rawValue: value) : nil))
                 guard scope.accepts(ticket) else { return nil }
+                let savedValue =
+                    key == "spendingProfile"
+                    ? saved.spendingProfile?.rawValue
+                    : key == "defaultSpendingCategoryId"
+                        ? saved.defaultSpendingCategoryId : saved.spendingCategoryId
                 guard saved.entity.rawValue == review.entity.rawValue, saved.entityId == review.entityId,
-                    saved.spendingCategoryId == value
+                    savedValue == value
                 else { throw ReviewError.unexpectedAcceptance }
                 editor.acknowledgeSavedField(key, value: .string(value), reviewedDraftValue: reviewedDraft)
                 response = nil
@@ -130,6 +140,50 @@ public final class FieldSuggestionReviewModel {
         editor.markEdited(key)
         dismissed.insert(key)
         return .draft
+    }
+
+    public var reviewedFinanceFields: [String] {
+        let keys = fields.compactMap { field in proposal(field.key)?.financeReview == nil ? nil : field.key }
+        guard let first = keys.first, let review = proposal(first)?.financeReview,
+            keys.allSatisfy({ proposal($0)?.financeReview?.fingerprint == review.fingerprint })
+        else { return [] }
+        return keys
+    }
+
+    public func applyReviewedFields() async throws -> [Acceptance] {
+        let keys = reviewedFinanceFields
+        guard !isApplying, keys.count > 1, let first = keys.first,
+            let review = proposal(first)?.financeReview, let ticket
+        else { return [] }
+        let values = Dictionary(
+            uniqueKeysWithValues: keys.compactMap { key in proposal(key)?.value.map { (key, $0) } })
+        let drafts = Dictionary(uniqueKeysWithValues: keys.map { ($0, currentValue($0)) })
+        isApplying = true
+        defer { isApplying = false }
+        let saved = try await saveCategory(
+            .init(
+                entity: .init(rawValue: review.entity.rawValue)!, entityId: review.entityId,
+                fingerprint: review.fingerprint, spendingCategoryId: values["spendingCategoryId"],
+                defaultSpendingCategoryId: values["defaultSpendingCategoryId"],
+                spendingProfile: values["spendingProfile"].flatMap { .init(rawValue: $0) }))
+        guard scope.accepts(ticket), saved.entity.rawValue == review.entity.rawValue,
+            saved.entityId == review.entityId
+        else { throw ReviewError.unexpectedAcceptance }
+        let savedValues = [
+            "spendingCategoryId": saved.spendingCategoryId,
+            "defaultSpendingCategoryId": saved.defaultSpendingCategoryId,
+            "spendingProfile": saved.spendingProfile?.rawValue,
+        ]
+        var accepted: [Acceptance] = []
+        for key in keys {
+            guard let value = values[key], savedValues[key] == value else {
+                throw ReviewError.unexpectedAcceptance
+            }
+            editor.acknowledgeSavedField(key, value: .string(value), reviewedDraftValue: drafts[key] ?? .null)
+            accepted.append(.saved(field: key, value: .string(value)))
+        }
+        response = nil
+        return accepted
     }
 
     public func dismiss(_ key: String) { dismissed.insert(key) }

@@ -801,6 +801,7 @@ export function UnifiedTextField<
   nullable = false,
   getIcon,
   focusOnMount = false,
+  suggestField,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: FieldPathByValue<TFieldValues, string | null | undefined>;
@@ -811,6 +812,7 @@ export function UnifiedTextField<
   getIcon?: (value: string | null) => ReactNode;
   /** Focus this field on mount — e.g. a quick-add dialog's name field. */
   focusOnMount?: boolean;
+  suggestField?: string;
 }) {
   const descriptionId = useId();
   return (
@@ -854,6 +856,9 @@ export function UnifiedTextField<
                 </span>
               )}
             </div>
+            {suggestField && (
+              <AutoSuggestSlot form={form} name={name} field={suggestField} />
+            )}
           </FormFieldGroup>
         );
       }}

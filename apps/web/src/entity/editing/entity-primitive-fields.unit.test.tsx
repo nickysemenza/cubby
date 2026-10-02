@@ -240,8 +240,7 @@ describe("EntityPrimitiveFields", () => {
   it("keeps serialized image ordering in the specialized image editor", () => {
     render(<LocationMainFields />);
     expect(screen.getByRole("textbox", { name: "Name" })).toBeVisible();
-    // Name and the notes textarea are the only textboxes: `imageOrder` must
-    // never surface as a text control.
+    // Serialized image ordering must never surface as a text control.
     expect(
       screen.getAllByRole("textbox").map((el) => el.getAttribute("name")),
     ).toEqual(["name", "notes"]);

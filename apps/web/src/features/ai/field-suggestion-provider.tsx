@@ -2,6 +2,7 @@ import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
 } from "@cubby/schemas/ai";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
@@ -22,6 +23,9 @@ import {
 } from "react";
 import { useFormContext, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
+
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Button } from "~/ui/primitives/button";
 
 import {
   basisValueOf,
@@ -44,6 +48,7 @@ import { SuggestionStatus } from "./suggestion-status";
 import { useFinanceCategoryApply } from "./use-finance-category-apply";
 
 export interface FieldSuggestionContextValue {
+  readonly requestSuggestions?: () => Promise<void>;
   readonly questionKey: string;
   readonly entity: ShortcodeEntity;
   readonly mode: "create" | "edit";
@@ -192,6 +197,7 @@ export function FieldSuggestionProvider({
   children: ReactNode;
 }) {
   const form = useFormContext();
+  const [batchFailure, setBatchFailure] = useState<unknown>(null);
   // One id per page mount, grouping every suggestFields call this provider
   // makes into one `ai_suggest` run.
   const [runKey] = useState(() => crypto.randomUUID());
@@ -543,6 +549,9 @@ export function FieldSuggestionProvider({
   const refetchAlternatives = alternativeQuery.refetch;
   const value = useMemo<FieldSuggestionContextValue>(
     () => ({
+      requestSuggestions: async () => {
+        await Promise.all([refetchSuggested(), refetchAlternatives()]);
+      },
       questionKey: JSON.stringify([suggestedSource, alternativeSource]),
       entity,
       mode,
@@ -593,6 +602,60 @@ export function FieldSuggestionProvider({
     ],
   );
 
+  const batch = Object.entries(value.suggestions).flatMap(([key, proposal]) =>
+    proposal?.financeReview &&
+    actionableSuggestion(
+      proposal,
+      value.currentValueFor(key),
+      value.isAlternative(key),
+    )
+      ? [{ key, proposal }]
+      : [],
+  );
+  const sameReview =
+    batch.length > 1 &&
+    batch.every(
+      ({ proposal }) =>
+        proposal.financeReview?.fingerprint ===
+        batch[0]?.proposal.financeReview?.fingerprint,
+    );
+  const applyBatch = async () => {
+    setBatchFailure(null);
+    const drafts = new Map(
+      batch.map(({ key }) => [key, form.getValues(paths?.[key] ?? key)]),
+    );
+    try {
+      await financeApply.applyMany(batch.map(({ proposal }) => proposal));
+      for (const { key, proposal } of batch) {
+        const path = paths?.[key] ?? key;
+        const latestDraft = form.getValues(path);
+        const changedDuringApply =
+          basisValueOf(latestDraft) !== basisValueOf(drafts.get(key));
+        const field = entityFieldModels[entity].fields.find(
+          (item) => item.key === key,
+        );
+        form.resetField(path, {
+          defaultValue: field?.reference
+            ? {
+                id: proposal.value,
+                name: proposal.label ?? proposal.value,
+                shortcode: proposal.value,
+              }
+            : proposal.value,
+        });
+        if (changedDuringApply)
+          form.setValue(path, latestDraft, {
+            shouldDirty: true,
+            shouldTouch: true,
+          });
+        clearAutoFilled(key);
+      }
+      await Promise.all([refetchSuggested(), refetchAlternatives()]);
+    } catch (error) {
+      setBatchFailure(error);
+    }
+  };
+
   return (
     <SuggestionVisitProvider>
       <FieldSuggestionContext.Provider value={value}>
@@ -603,6 +666,23 @@ export function FieldSuggestionProvider({
           failures={failures}
         />
         {children}
+        {sameReview && (
+          <div className="space-y-2">
+            <p>
+              {batch
+                .map(({ proposal }) => proposal.label ?? proposal.value)
+                .join(" · ")}
+            </p>
+            <Button
+              type="button"
+              disabled={financeApply.isPending || value.isFetching}
+              onClick={applyBatch}
+            >
+              Apply {batch.length} reviewed suggestions
+            </Button>
+          </div>
+        )}
+        {batchFailure != null && <ErrorDisplay error={batchFailure} />}
       </FieldSuggestionContext.Provider>
     </SuggestionVisitProvider>
   );

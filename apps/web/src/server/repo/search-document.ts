@@ -198,7 +198,7 @@ export async function executeSearchDocumentSql<Schema extends z.ZodType>(
  * Spelling the comparison out field by field would leave a rule that quietly
  * stops covering whatever column is added to `SearchDocumentSource` next, and
  * comparing the semantic body alone covers a projected column only where that
- * column happens to also appear in the embedding text — `project.icon` never
+ * column happens to also appear in the embedding text — `project.emoji` never
  * does, and a `typeHint` outliving its enum is exactly the drift that hides
  * there (#750 narrowed the location enum and nothing re-projected the 100
  * documents still carrying a retired value).
@@ -311,7 +311,7 @@ async function getSearchDocumentSources(
       SELECT 'meal', m."id"::text, m."shortcode", COALESCE(NULLIF(m."name", ''), m."date"::text), m."date"::text, NULL, ARRAY[]::text[], ARRAY[m."date"::text]::text[]
       FROM "Meal" m WHERE m."deletedAt" IS NULL AND 'meal' IN (${types}) AND ${requested(sql`m."id"`)}`,
     project: sql`
-      SELECT 'project', p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."icon", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[] || ${effectiveProjectLocationsSql(sql`p."id"`)}
+      SELECT 'project', p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."emoji", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[] || ${effectiveProjectLocationsSql(sql`p."id"`)}
       FROM "Project" p WHERE p."deletedAt" IS NULL AND 'project' IN (${types}) AND ${requested(sql`p."id"`)}`,
     task: sql`
       SELECT 'task', t."id"::text, t."shortcode", t."name", p."name", ${effectiveTaskTradeSql("t")}, ARRAY[]::text[], ARRAY[${effectiveTaskTradeSql("t")}, sp."name"]::text[]

@@ -2,22 +2,26 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import {
-  ProjectChartLabel,
-  ProjectChartTick,
-  ProjectMark,
-} from "./project-mark";
+  RecordChartLabel,
+  RecordChartTick,
+  RecordMark,
+} from "~/entity/components/record-mark";
 
-describe("ProjectMark", () => {
+describe("RecordMark", () => {
   it("renders a configured emoji in a fixed decorative mark", () => {
-    render(<ProjectMark icon="🛠️" size={20} />);
+    render(<RecordMark entity="project" emoji="🛠️" size={20} />);
 
     const mark = screen.getByText("🛠️");
     expect(mark).toHaveAttribute("aria-hidden", "true");
-    expect(mark).toHaveClass("size-5", "text-xl");
+    expect(mark).toHaveStyle({
+      width: "20px",
+      height: "20px",
+      fontSize: "20px",
+    });
   });
 
   it("falls back to the colored project glyph", () => {
-    const { container } = render(<ProjectMark icon={null} />);
+    const { container } = render(<RecordMark entity="project" emoji={null} />);
 
     const mark = container.querySelector("svg");
     expect(mark).toHaveAttribute("aria-hidden", "true");
@@ -29,12 +33,13 @@ describe("ProjectMark", () => {
   it("renders project identity inside a chart axis tick", () => {
     render(
       <svg aria-hidden="true">
-        <ProjectChartTick
+        <RecordChartTick
+          entity="project"
           x={0}
           y={12}
           value="PRJ-6ABC"
           identityById={
-            new Map([["PRJ-6ABC", { name: "Garage workshop", icon: "🔧" }]])
+            new Map([["PRJ-6ABC", { name: "Garage workshop", emoji: "🔧" }]])
           }
         />
       </svg>,
@@ -50,8 +55,14 @@ describe("ProjectMark", () => {
   it("renders custom and fallback marks in chart tooltip labels", () => {
     render(
       <>
-        <ProjectChartLabel identity={{ name: "Kitchen", icon: "🍳" }} />
-        <ProjectChartLabel identity={{ name: "Garage", icon: null }} />
+        <RecordChartLabel
+          entity="project"
+          identity={{ name: "Kitchen", emoji: "🍳" }}
+        />
+        <RecordChartLabel
+          entity="project"
+          identity={{ name: "Garage", emoji: null }}
+        />
       </>,
     );
 

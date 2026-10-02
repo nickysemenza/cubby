@@ -305,6 +305,7 @@ const buildMetadataSchemas = () => {
         .object({
           basis: z.array(nonEmptyString()).min(1),
           mode: z.enum(["fill", "prune"]).optional().default("fill"),
+          reviewRequired: z.boolean().optional().default(false),
         })
         .strict()
         .nullable()
@@ -410,6 +411,13 @@ const buildMetadataSchemas = () => {
        * per-page `initialColumnVisibility` literal actually carried; everything
        * else in those objects was a plain columnId echo of `display.list`.
        */
+      referencePreviewLimit: z
+        .number()
+        .int()
+        .positive()
+        .nullable()
+        .optional()
+        .default(null),
       listHidden: z
         .boolean({ error: "must be a boolean" })
         .optional()
@@ -458,6 +466,7 @@ const buildMetadataSchemas = () => {
         renderer,
         mobile,
         listHidden,
+        referencePreviewLimit,
         valueOptions,
         preview,
       }) => ({
@@ -473,6 +482,7 @@ const buildMetadataSchemas = () => {
         renderer,
         mobile,
         listHidden,
+        referencePreviewLimit,
         valueOptions,
         preview,
       }),
@@ -932,6 +942,7 @@ const buildMetadataSchemas = () => {
           actionLabel: nonEmptyString().optional(),
         })
         .strict(),
+      recordEmojiField: fieldKey.nullable().optional().default(null),
       icons: z
         .object({
           /** A `@phosphor-icons/react` export name; the browser registry resolves it. */

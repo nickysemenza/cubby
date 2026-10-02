@@ -13,6 +13,7 @@ struct Thumb: View {
     let url: URL?
     var size: CGFloat = 56
     var symbol: String = "photo"
+    var emoji: String? = nil
 
     @Environment(\.displayScale) private var displayScale
     @State private var useCanonicalURL = false
@@ -60,10 +61,14 @@ struct Thumb: View {
             processors: [ImageProcessors.Resize(size: CGSize(width: pixels, height: pixels))])
     }
 
-    private var glyph: some View {
-        Image(systemName: symbol)
-            .font(.system(size: size * 0.34))
-            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+    @ViewBuilder private var glyph: some View {
+        Group {
+            if let emoji, !emoji.isEmpty {
+                Text(emoji).font(.system(size: size * 0.34))
+            } else {
+                Image(systemName: symbol).font(.system(size: size * 0.34))
+            }
+        }.foregroundStyle(FieldGuideTokens.graphiteSecondary)
     }
 }
 

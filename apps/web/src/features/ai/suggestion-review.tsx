@@ -363,7 +363,7 @@ function CellReviewSlot({
     >
       {!isRemove && currentValue?.trim() ? (
         <Description size="xs" className="text-muted-foreground">
-          Current: {currentLabel ?? currentValue}
+          Current: <span>{currentLabel ?? currentValue}</span>
         </Description>
       ) : null}
       <ReviewButtons
@@ -417,6 +417,41 @@ export function suggestionReviewKey(
       ? [suggestion.financeReview.fingerprint]
       : []),
   ]);
+}
+
+function reviewEvidenceContent(
+  suggestion: FieldSuggestion,
+  children: ReactNode,
+  currentLabel: ReactNode,
+  currentValue: string | null,
+): ReactNode {
+  const evidence = suggestion.financeReview?.evidence;
+  if (!evidence) return children;
+  return (
+    <>
+      {children ?? <span>{currentLabel ?? currentValue}</span>}
+      {evidence && (
+        <div className="space-y-1 text-xs">
+          <p>
+            {evidence.principalLineCount} principal lines across{" "}
+            {evidence.distinctPurchaseCount} purchases;{" "}
+            {evidence.unknownCategoryLineCount} lines without a product
+            category.
+          </p>
+          {evidence.categories.map((category) => (
+            <p key={category.id}>
+              <a
+                className="underline"
+                href={`/product-categories/${category.id}`}
+              >
+                {category.emoji} {category.name}
+              </a>
+            </p>
+          ))}
+        </div>
+      )}
+    </>
+  );
 }
 
 export function SuggestionReview({
@@ -509,7 +544,7 @@ export function SuggestionReview({
   }
   const isRemove = suggestion.operation === "remove";
   const resolvedApplyLabel = suggestion.financeReview
-    ? "Apply and save category"
+    ? "Apply and save"
     : (applyLabel ?? (isRemove ? "Remove tags" : "Use suggestion"));
   // Phones fold every inline review into the glyph too: an inline review
   // arriving after load grew the page under the reader's finger (+96px), and
@@ -565,7 +600,12 @@ export function SuggestionReview({
     notice: suggestion.financeReview
       ? "Based on saved record and linked items"
       : undefined,
-    children,
+    children: reviewEvidenceContent(
+      suggestion,
+      children,
+      currentLabel,
+      currentValue,
+    ),
     outcome,
     surface,
     alternative,

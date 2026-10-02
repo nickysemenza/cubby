@@ -141,7 +141,9 @@ struct EntityPickerSheet: View {
         case .loaded:
             if model.rows.isEmpty { Text("No matches").foregroundStyle(.secondary) }
             ForEach(model.rows, id: \.entityPickerResultIdentity) { row in
-                pickRow(EntityPick(id: row.id, title: row.title), imageURL: row.imageURL)
+                pickRow(
+                    EntityPick(id: row.id, title: row.title), imageURL: row.imageURL,
+                    emoji: descriptor.recordEmoji(in: row))
             }
             if model.hasMore {
                 Button("Load more") { Task { await model.loadNextPage() } }
@@ -150,7 +152,7 @@ struct EntityPickerSheet: View {
         }
     }
 
-    private func pickRow(_ pick: EntityPick, imageURL: URL?) -> some View {
+    private func pickRow(_ pick: EntityPick, imageURL: URL?, emoji: String? = nil) -> some View {
         let isSelected = selected.contains { $0.id == pick.id }
         return Button {
             if multiple {
@@ -165,7 +167,7 @@ struct EntityPickerSheet: View {
             }
         } label: {
             HStack(spacing: FieldGuideTokens.Space.md) {
-                Thumb(url: imageURL, size: 40, symbol: descriptor.sfSymbol)
+                Thumb(url: imageURL, size: 40, symbol: descriptor.sfSymbol, emoji: emoji)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(pick.title).foregroundStyle(FieldGuideTokens.graphite)
                     Text(pick.id).font(.fieldGuideCode).foregroundStyle(.secondary)

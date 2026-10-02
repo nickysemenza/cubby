@@ -709,15 +709,24 @@ struct EntityRowView: View {
                     .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
                     .accessibilityHidden(true)
             } else if let imageURL = presentation.imageURL {
-                Thumb(url: imageURL, size: thumbnailSize, symbol: entitySymbol(for: key))
+                Thumb(
+                    url: imageURL, size: thumbnailSize, symbol: entitySymbol(for: key),
+                    emoji: EntityCatalog[key].recordEmoji(in: row))
             } else if row.pendingFields.contains("displayImages") {
-                Thumb(url: nil, size: thumbnailSize, symbol: entitySymbol(for: key))
+                Thumb(
+                    url: nil, size: thumbnailSize, symbol: entitySymbol(for: key),
+                    emoji: EntityCatalog[key].recordEmoji(in: row))
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(presentation.title)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(FieldGuideTokens.graphite)
-                    .lineLimit(2)
+                HStack {
+                    if presentation.imageURL == nil, let emoji = EntityCatalog[key].recordEmoji(in: row) {
+                        Text(emoji).accessibilityHidden(true)
+                    }
+                    Text(presentation.title)
+                }
+                .font(.body.weight(.semibold))
+                .foregroundStyle(FieldGuideTokens.graphite)
+                .lineLimit(2)
                 if let quality = presentation.facts.first(where: { $0.id == "dataQuality" }),
                     let field = EntityCatalog[key].field("dataQuality")
                 {

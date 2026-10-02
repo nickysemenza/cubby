@@ -1,3 +1,5 @@
+import { productCategoryShortcode } from "../identifier-fields";
+import { recordEmojiField } from "../emoji";
 import { z } from "zod";
 import { spendingCategoryShortcode as code } from "../identifier-fields";
 import { defineEntity } from "./definition";
@@ -10,6 +12,7 @@ export default defineEntity({
   table: "SpendingCategory",
   identifiers: { brand: "SpendingCategoryId", shortcode: "SPC-" },
   presentation: {
+    recordEmojiField: "emoji",
     titleField: "name",
     domain: "finance",
     description: "Spending classification and household evidence expectations.",
@@ -22,12 +25,57 @@ export default defineEntity({
     icons: { phosphor: "Tag", sfSymbol: "tag", emoji: "🏷️" },
     detail: {},
     list: {
-      read: { relations: ["parentId"], media: ["displayImages"] },
+      read: {
+        relations: ["parentId", "productCategories"],
+        media: ["displayImages"],
+      },
       tree: { parentField: "parentId" },
     },
   },
   model: {
     fields: [
+      {
+        key: "productCategories",
+        kind: "identifier",
+        reference: {
+          entity: "productCategory",
+          multiple: true,
+          scope: [
+            { sourceField: "id", targetField: "effectiveSpendingCategoryId" },
+          ],
+        },
+        display: {
+          list: true,
+          detail: true,
+          width: "lg",
+          referencePreviewLimit: 2,
+        },
+        validation: {
+          read: z
+            .array(
+              z.object({
+                id: productCategoryShortcode,
+                name: z.string(),
+                emoji: z.string().nullable(),
+                inherited: z.boolean(),
+              }),
+            )
+            .optional(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: {
+            ...recordEmojiField.control.suggest,
+            basis: ["name", "parentId"],
+          },
+        },
+      },
+
       {
         key: "name",
         kind: "text",
@@ -120,6 +168,7 @@ export default defineEntity({
       { key: "deletedAt", kind: "timestamp", nullable: true },
     ],
     storage: [
+      "emoji",
       { key: "id", specialized: "primary-key:SpendingCategoryId" },
       { key: "shortcode", specialized: "shortcode" },
       "name",
@@ -140,6 +189,7 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "emoji",
       "name",
       "aliases",
       "parentId",
@@ -147,6 +197,7 @@ export default defineEntity({
       "productExpectation",
     ],
     update: [
+      "emoji",
       "name",
       "aliases",
       "parentId",
@@ -162,6 +213,8 @@ export default defineEntity({
       "productExpectation",
     ],
     output: [
+      "productCategories",
+      "emoji",
       "id",
       "name",
       "aliases",
@@ -174,8 +227,9 @@ export default defineEntity({
     sort: { fields: ["name", "updatedAt"], directionOverride: "asc" },
     intents: {
       fields: {
-        capture: ["name", "evidenceExpectation", "productExpectation"],
+        capture: ["emoji", "name", "evidenceExpectation", "productExpectation"],
         full: [
+          "emoji",
           "name",
           "aliases",
           "parentId",

@@ -11,6 +11,7 @@ nonisolated enum EntityFieldValue {
         let entity: EntityKey
         let id: String
         let name: String?
+        var emoji: String? = nil
     }
 
     static func text(in raw: JSONValue, field: FieldDescriptor, surface: String) -> String? {
@@ -62,11 +63,14 @@ nonisolated enum EntityFieldValue {
         {
             return Reference(
                 entity: target.entity, id: id,
-                name: FieldResolutionPresentation.referenceName(in: raw, field: field, effectiveID: id))
+                name: FieldResolutionPresentation.referenceName(in: raw, field: field, effectiveID: id),
+                emoji: raw[stem + "Emoji"]?.stringValue ?? raw[stem]?["emoji"]?.stringValue)
         }
         if FieldResolutionPresentation(raw: raw, field: field) != nil { return nil }
         if let nested = raw[stem], let id = nested["id"]?.stringValue, !id.isEmpty {
-            return Reference(entity: target.entity, id: id, name: nested["name"]?.stringValue)
+            return Reference(
+                entity: target.entity, id: id, name: nested["name"]?.stringValue,
+                emoji: nested["emoji"]?.stringValue)
         }
         return nil
     }

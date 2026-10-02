@@ -346,7 +346,8 @@ private struct SearchHitRow: View {
     var body: some View {
         HStack(spacing: FieldGuideTokens.Space.md) {
             Thumb(
-                url: hit.imageURL, size: 48, symbol: hit.key.map(entitySymbol(for:)) ?? "questionmark.square"
+                url: hit.imageURL, size: 48, symbol: hit.key.map(entitySymbol(for:)) ?? "questionmark.square",
+                emoji: hit.emoji
             )
             VStack(alignment: .leading, spacing: 2) {
                 Text(hit.title)

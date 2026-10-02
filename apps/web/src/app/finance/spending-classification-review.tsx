@@ -12,6 +12,7 @@ import type { VendorOut } from "@cubby/schemas/vendor";
 import { useMutation } from "@tanstack/react-query";
 import { useId, useState } from "react";
 
+import { RecordEmoji } from "~/entity/components/record-emoji";
 import { spendingClassification } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
 import type { ComboboxItem } from "~/ui/combobox/combobox-types";
@@ -23,14 +24,17 @@ import { StaticTable } from "~/ui/primitives/static-table";
 
 function ClassificationReview({
   initial,
+  initialCategory,
 }: {
   initial: SpendingClassificationReviewInput;
+  initialCategory?: ComboboxItem<SpendingCategoryShortcode> | null;
 }) {
   const mappingId = useId();
   const profileId = useId();
   const [request, setRequest] = useState(initial);
   const [category, setCategory] =
     useState<ComboboxItem<SpendingCategoryShortcode> | null>(() => {
+      if (initialCategory !== undefined) return initialCategory;
       const id =
         initial.action === "products"
           ? null
@@ -206,6 +210,20 @@ export function ProductCategoryClassification({
 }) {
   return (
     <ClassificationReview
+      initialCategory={
+        record.spendingCategoryId
+          ? {
+              id: record.spendingCategoryId,
+              name: record.spendingCategoryName ?? record.spendingCategoryId,
+              icon: (
+                <RecordEmoji
+                  entity="spendingCategory"
+                  emoji={record.spendingCategoryEmoji}
+                />
+              ),
+            }
+          : null
+      }
       initial={{
         action: "productCategory",
         productCategoryId: record.id,
@@ -218,6 +236,22 @@ export function ProductCategoryClassification({
 export function VendorClassification({ record }: { record: VendorOut }) {
   return (
     <ClassificationReview
+      initialCategory={
+        record.defaultSpendingCategoryId
+          ? {
+              id: record.defaultSpendingCategoryId,
+              name:
+                record.defaultSpendingCategoryName ??
+                record.defaultSpendingCategoryId,
+              icon: (
+                <RecordEmoji
+                  entity="spendingCategory"
+                  emoji={record.defaultSpendingCategoryEmoji}
+                />
+              ),
+            }
+          : null
+      }
       initial={{
         action: "vendor",
         vendorId: record.id,

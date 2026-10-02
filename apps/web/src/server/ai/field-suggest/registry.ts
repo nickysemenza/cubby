@@ -1,10 +1,11 @@
+import { emojiCandidates } from "@cubby/schemas/emoji";
 /**
  * One entry per `GeneratedSuggestFieldKey` (`packages/schemas`'s
  * `control.suggest`-declared fields): what kind of Jev call the field runs
  * as, its vocabulary/roster, and how to render the subject the model sees.
  * `suggest-fields.ts` is the only reader; it resolves basis values and walks
  * this table, so adding a field is one manifest line (step 1) plus one entry
- * here — the `satisfies Record<GeneratedSuggestFieldKey, FieldSuggestSpec>`
+ * here — the `satisfies Record<Exclude<GeneratedSuggestFieldKey, `${string}.emoji`>, FieldSuggestSpec>`
  * below makes a missing entry a typecheck failure in both directions.
  */
 import {
@@ -50,6 +51,7 @@ import {
   spendingCategoryFilters,
   type SpendingCategoryOut,
 } from "@cubby/schemas/spending-category";
+import { vendorSpendingProfileValues } from "@cubby/schemas/spending-classification";
 import { isCollectionTag } from "@cubby/shared/collection-tag";
 import {
   redundantTokens,
@@ -450,7 +452,7 @@ async function spendingCategoryRoster(
 }
 
 function spendingCategorySpec(
-  entity: "purchase" | "expense",
+  entity: "purchase" | "expense" | "vendor",
 ): ReferenceSuggestSpec<SpendingCategoryCandidate> {
   return {
     kind: "reference",
@@ -483,7 +485,7 @@ function expectationSpec(
         unknown: "Unclassified",
         required: "Expected",
         not_expected: "Not expected",
-      })[value],
+      })[value] ?? value,
     describe: (value) =>
       products
         ? {
@@ -506,6 +508,26 @@ function expectationSpec(
 }
 
 export const FIELD_SUGGEST_REGISTRY = {
+  "vendor.defaultSpendingCategoryId": {
+    ...spendingCategorySpec("vendor"),
+    rules:
+      "Suggest an existing spending category suitable as this vendor's fallback from saved principal purchase lines, purchased Products and their category mappings, and independent explicit classifications. Compare the full spending-category tree. Never use the vendor's existing default or classifications inherited from it as evidence. A mixed retailer or sparse, ambiguous history can support no single default: choose none. Preserve explicit decisions until reviewed and applied. Refunds and reimbursements are not additional goods; truncated evidence cannot justify a recommendation.",
+  },
+  "vendor.spendingProfile": {
+    kind: "enum",
+    values: vendorSpendingProfileValues,
+    describe: (value) =>
+      ({
+        unspecified: "Insufficient evidence",
+        mixed_retail: "Mixed retailer selling multiple kinds of goods",
+        food_retail: "Groceries and food retail",
+        restaurant: "Prepared restaurant meals",
+        coffee_shop: "Coffee shop",
+      })[value] ?? value,
+    rules:
+      "Suggest this vendor's spending profile using saved independent purchase and ProductCategory evidence. Food products alone do not distinguish groceries from restaurant meals. Mixed goods support mixed_retail; ambiguous or truncated evidence supports unspecified. The current profile is a review target, never proof. Return a proposal only.",
+    subject: (basis) => renderSubject("vendor", basis),
+  },
   "purchase.spendingCategoryId": spendingCategorySpec("purchase"),
   "expense.spendingCategoryId": spendingCategorySpec("expense"),
   "vendor.evidenceExpectation": expectationSpec("vendor"),
@@ -827,12 +849,26 @@ export const FIELD_SUGGEST_REGISTRY = {
     rules: PRODUCT_CATEGORY_FEATURE_RULES,
     subject: (basis) => renderSubject("productCategory", basis),
   } satisfies EnumSuggestSpec<ProductCategoryFeature>,
-} satisfies Record<GeneratedSuggestFieldKey, FieldSuggestSpec>;
+} satisfies Record<
+  Exclude<GeneratedSuggestFieldKey, `${string}.emoji`>,
+  FieldSuggestSpec
+>;
 
 export function fieldSuggestSpecFor(
   entity: string,
   field: string,
 ): FieldSuggestSpec | undefined {
+  if (field === "emoji" && Object.hasOwn(entityFieldModels, entity)) {
+    return {
+      kind: "enum",
+      values: emojiCandidates,
+      describe: (value) => value,
+      labelOf: (value) => value,
+      rules:
+        "Choose one emoji that makes this record easy to recognize from its saved identity and category context. Use none when there is insufficient evidence. This is a reviewed proposal; never change a saved value automatically.",
+      subject: (basis) => renderSubject(entity, basis),
+    };
+  }
   const key = `${entity}.${field}`;
   // SAFETY: `Object.hasOwn` just proved `key` names one of
   // `FIELD_SUGGEST_REGISTRY`'s own declared keys, not an arbitrary string.

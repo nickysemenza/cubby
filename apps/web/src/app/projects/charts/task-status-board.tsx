@@ -8,11 +8,11 @@ import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
+import { RecordMark } from "~/entity/components/record-mark";
 import { entities, entityDetailParams } from "~/entity/entities";
 import { getStatusChartColor } from "~/lib/status-colors";
 import { NoneValue } from "~/ui/primitives/none-value";
 
-import { ProjectMark } from "../project-mark";
 import { TASK_STATUS_LABELS } from "../shared";
 import { ChartEmpty } from "./chart-empty";
 
@@ -63,7 +63,7 @@ export function TaskStatusBoard({
           projectId: row.projectId,
           projectShortcode: proj?.id ?? null,
           name: proj?.name ?? "Unknown project",
-          icon: proj?.icon,
+          emoji: proj?.emoji,
           date: proj?.startDate ?? "",
           breakdown: row,
           remaining: total,
@@ -133,7 +133,11 @@ export function TaskStatusBoard({
                     title={row.name}
                   >
                     <span className="inline-flex max-w-full items-center gap-1">
-                      <ProjectMark icon={row.icon} size={12} />
+                      <RecordMark
+                        entity="project"
+                        emoji={row.emoji}
+                        size={12}
+                      />
                       <span className="truncate">{row.name}</span>
                     </span>
                   </Link>
@@ -142,7 +146,7 @@ export function TaskStatusBoard({
                     title={row.name}
                     className="inline-flex max-w-full items-center gap-1"
                   >
-                    <ProjectMark icon={row.icon} size={12} />
+                    <RecordMark entity="project" emoji={row.emoji} size={12} />
                     <span className="truncate">{row.name}</span>
                   </span>
                 )}

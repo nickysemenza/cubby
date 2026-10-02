@@ -127,9 +127,9 @@ export function ResponsiveDialog({
                 >
                   {headerActions.cancel.label}
                 </button>
-                <span className="text-base font-bold tracking-[-0.01em]">
+                <SheetTitle className="text-base font-bold tracking-[-0.01em]">
                   {title}
-                </span>
+                </SheetTitle>
                 <button
                   type={headerActions.submit.type ?? "button"}
                   form={headerActions.submit.form}

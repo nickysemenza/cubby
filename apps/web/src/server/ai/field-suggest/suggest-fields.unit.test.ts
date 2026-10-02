@@ -526,7 +526,7 @@ describe("suggestFields", () => {
     const base = {
       id: testShortcode("project", "PRJ-4K7M"),
       name: "Bath refresh",
-      icon: null,
+      emoji: null,
       effectiveStart: "2026-01-05",
       effectiveEnd: null,
     };

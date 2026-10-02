@@ -25,6 +25,15 @@ import {
   withUniversalEntityMedia,
 } from "~/server/repo/entity-display-image";
 import {
+  normalizeRecordEmoji,
+  repositoryRecordInput,
+  writeRecordEmoji,
+  withRecordEmoji,
+  recordEmojiBeforeUpdate,
+  auditRecordEmoji,
+  normalizeSavedRecordEmoji,
+} from "~/server/repo/entity-emoji";
+import {
   describeUnresolvableCode,
   isShortcodeEntity,
   resolveEntityIdentity,
@@ -112,7 +121,7 @@ const writeWithProjections = async <
   source: string,
   write: (context: EntityKernelContext) => Promise<TResult>,
 ): Promise<TResult> => {
-  if (!binding.sideEffects) return write(context);
+  // Every declared write, including identity-only entities, uses the transaction-bound context.
   // Everything the adapter reaches through the context must run on the
   // transaction: a service still bound to the request pool would UPDATE a row
   // this transaction holds and wait on it forever. Its task publications are
@@ -336,7 +345,10 @@ export const defineEntityOperations = <
           );
         return {
           run,
-          data: parseSchema(presentSchema<S["createInput"]>(schema), input),
+          data: parseSchema(
+            presentSchema<S["createInput"]>(schema),
+            normalizeRecordEmoji(binding.entity, input),
+          ),
         };
       })
       .commit("created", async ({ context }, { validated }) =>
@@ -345,7 +357,29 @@ export const defineEntityOperations = <
           binding,
           "created",
           `${binding.entity}.create`,
-          (writeContext) => validated.run(writeContext, validated.data),
+          async (writeContext) => {
+            const created = await validated.run(
+              writeContext,
+              parseSchema(
+                presentSchema<S["createInput"]>(binding.schemas.createInput),
+                repositoryRecordInput(binding.entity, validated.data),
+              ),
+            );
+            await writeRecordEmoji(
+              writeContext.db,
+              binding.entity,
+              created.entityId,
+              validated.data,
+            );
+            return {
+              ...created,
+              output: (
+                await withRecordEmoji(writeContext.db, binding.entity, [
+                  created.output,
+                ])
+              )[0],
+            };
+          },
         ),
       )
       .effect("storage", async ({ context }, { created }) =>
@@ -376,7 +410,7 @@ export const defineEntityOperations = <
     workflow<EntityKernelContext, { id: string; data: unknown }>(
       `${binding.entity}.update`,
     )
-      .call("validated", async (_, { input }) => {
+      .call("validated", async ({ context }, { input }) => {
         const schema = binding.schemas.updateInput;
         const run = binding.repository.update;
         if (!schema || !run)
@@ -389,7 +423,12 @@ export const defineEntityOperations = <
           id: parseSchema<S["id"], string>(binding.schemas.id, input.id),
           data: parseSchema(
             presentSchema<S["updateInput"]>(schema),
-            input.data,
+            await normalizeSavedRecordEmoji(
+              context.db,
+              binding.entity,
+              input.id,
+              input.data,
+            ),
           ),
         };
       })
@@ -399,8 +438,44 @@ export const defineEntityOperations = <
           binding,
           "updated",
           `${binding.entity}.update`,
-          (writeContext) =>
-            validated.run(writeContext, validated.id, validated.data),
+          async (writeContext) => {
+            const previousEmoji = await recordEmojiBeforeUpdate(
+              writeContext.db,
+              binding.entity,
+              z.string().parse(validated.id),
+              validated.data,
+            );
+            const updated = await validated.run(
+              writeContext,
+              validated.id,
+              parseSchema(
+                presentSchema<S["updateInput"]>(binding.schemas.updateInput),
+                repositoryRecordInput(binding.entity, validated.data),
+              ),
+            );
+            await writeRecordEmoji(
+              writeContext.db,
+              binding.entity,
+              updated.entityId,
+              validated.data,
+            );
+            await auditRecordEmoji(
+              writeContext.db,
+              writeContext.actorContext,
+              binding.entity,
+              updated.entityId,
+              previousEmoji,
+              validated.data,
+            );
+            return {
+              ...updated,
+              output: (
+                await withRecordEmoji(writeContext.db, binding.entity, [
+                  updated.output,
+                ])
+              )[0],
+            };
+          },
         ),
       )
       .effect("storage", async ({ context }, { updated }) =>
