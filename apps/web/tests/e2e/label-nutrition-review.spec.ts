@@ -37,7 +37,10 @@ test("detected label nutrition stays editable and requires Save before replacing
   await expect(
     dialog.getByRole("button", { name: "Remove synthetic-wardrobe-label.png" }),
   ).toBeVisible();
-  await expect(dialog.getByText("Uploading images")).toHaveCount(0);
+  await expect(dialog.getByText("Uploading...", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.getByText("Photo added", { exact: true })).toBeVisible();
   expect(
     await dialog.locator("form").evaluate((form) =>
       Array.from(form.querySelectorAll("input, select, textarea")).flatMap(
@@ -54,7 +57,18 @@ test("detected label nutrition stays editable and requires Save before replacing
       ),
     ),
   ).toEqual([]);
+  await dialog.locator("form").evaluate((form) => {
+    form.addEventListener(
+      "submit",
+      () => document.documentElement.setAttribute("data-e2e-submitted", "true"),
+      { once: true },
+    );
+  });
   await dialog.getByRole("button", { name: /^Create$/ }).click();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-e2e-submitted",
+    "true",
+  );
   await expect(dialog).not.toBeVisible();
   await openProductFromPalette(page, name);
   const imageCode = await seedDetectedLabelNutrition(name);
