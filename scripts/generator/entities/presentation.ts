@@ -432,7 +432,7 @@ function recordEmojiEdit(
             ? {
                 ...section,
                 fields: [
-                  section.fields[0]!,
+                  ...section.fields.slice(0, 1),
                   emojiField,
                   ...section.fields.slice(1),
                 ],
@@ -538,6 +538,7 @@ export const compilePresentation = (
   const shelfSubtitle = list.shelf?.subtitle ?? mobileSubtitle;
   return {
     ...presentation,
+    edit,
     detail: {
       variant: detail.variant,
       hero: {
