@@ -75,7 +75,7 @@ for (const statementFirst of [true, false]) {
       "financialAccount",
       prerequisites.card.id,
     );
-    const asin = "B0SYN00123";
+    const asin = `B0${sha256Hex(`${token}:${statementFirst}`).slice(0, 8).toUpperCase()}`;
     const sku = `SYN-SKU-${token}`;
     const product = await createEntityFixture(page, "product", {
       name: names.productName,
@@ -160,10 +160,18 @@ for (const statementFirst of [true, false]) {
       name: "Disconnect Google & Gmail",
       exact: true,
     });
+    await expect(
+      page.getByRole("button", {
+        name: /^(?:Connect|Disconnect) Google & Gmail$/u,
+      }),
+    ).toBeEnabled();
     if (await disconnect.isVisible()) await disconnect.click();
-    await page
-      .getByRole("button", { name: "Connect Google & Gmail", exact: true })
-      .click();
+    const connect = page.getByRole("button", {
+      name: "Connect Google & Gmail",
+      exact: true,
+    });
+    await expect(connect).toBeEnabled();
+    await connect.click();
     await expect(
       page.getByRole("heading", { name: "Synthetic Google consent" }),
     ).toBeVisible();

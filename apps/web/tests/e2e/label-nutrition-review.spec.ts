@@ -40,7 +40,7 @@ test("detected label nutrition stays editable and requires Save before replacing
   await expect(dialog.getByText("Uploading...", { exact: true })).toHaveCount(
     0,
   );
-  await expect(page.getByText("Photo added", { exact: true })).toBeVisible();
+  await expect(page.getByText("Photo added.", { exact: true })).toBeVisible();
   expect(
     await dialog.locator("form").evaluate((form) =>
       Array.from(form.querySelectorAll("input, select, textarea")).flatMap(
