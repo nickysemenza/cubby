@@ -59,6 +59,10 @@ The iOS prerequisites are the same as `pnpm test:e2e:sim`.
 
 The shared Node setup restores the portable WASM package from the exact Rust
 source key used by Linux jobs, avoiding a second macOS compilation.
+The two optional macOS lanes disable pnpm store caching: measured installs took
+47–76 seconds without it, while packing a store miss added 4m20s after tests
+completed. A warm restore plus install took 91 seconds. Regular jobs retain
+their existing pnpm cache; the WASM and Apple build caches remain enabled.
 Both manual simulator lanes restore the same Xcode-versioned DerivedData cache
 as the regular Apple build gate. Hosted builds use its SPM clone directory,
 content-based source mtimes, native arm64 slice, and batch compilation. They
