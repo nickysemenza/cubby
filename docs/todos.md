@@ -313,19 +313,14 @@ See also the image operational passes at the end of this file.
   the commodity layer, but imports never fill `ingredientId`, so
   `Cauliflower` / `Organic Cauliflower, 1 Each` and three ground-beef 80/20s
   stand unconnected. In order:
-  1. 🟢 Jev suggestion for `product.ingredientId` from semantic candidates
-     (`services/semantic-search.service.ts`); lexical prefix search ANDs every
-     term (`buildPrefixTsQuery`), so a full product name never matches a short
-     ingredient. Basis `name, manufacturer, categoryId, notes` so non-food
-     returns none. The registry already supports `readKey: null` references.
-  2. 🟢 One-call resolve: `entity_read.resolve` takes `{name, externalIds[]}`
+  1. 🟢 One-call resolve: `entity_read.resolve` takes `{name, externalIds[]}`
      per line and returns exact-id hits, ingredient-alias hits, and lexical
      candidates together (grocery ASINs split across Fresh / Whole Foods /
      in-store). Today `entityResolveCommandSchema` takes only names.
-  3. 🧱 Piece units resolve on the ingredient: `whole/bunch/crown/clove` come
+  2. 🧱 Piece units resolve on the ingredient: `whole/bunch/crown/clove` come
      from USDA `portionInfo` or an ingredient-level mapping; product `each`
      prices the package and never satisfies a piece unit.
-  4. 🧱 A durable ingredient-level unit mapping store, which the harvested
+  3. 🧱 A durable ingredient-level unit mapping store, which the harvested
      equivalences report (`lib/harvest-equivalences.ts`) then writes accepted
      suggestions into.
 

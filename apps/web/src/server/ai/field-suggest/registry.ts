@@ -95,6 +95,7 @@ import {
   findLexicalSearchCandidates,
   type InternalSearchCandidate,
 } from "~/server/services/search.service";
+import { semanticEntityCandidates } from "~/server/services/semantic-search.service";
 
 import { rankCategoryCandidates } from "./category-ranking";
 
@@ -294,6 +295,8 @@ const projectOptionDetail = (candidate: ProjectOptionsOut): string | null =>
 const REFERENCE_ROSTER_CAP = 200;
 /** Vendor names: small enough Jev sees the whole household roster. */
 const VENDOR_ROSTER_CAP = 200;
+/** Semantic neighbours of a product name; the right ingredient is near the top. */
+const INGREDIENT_ROSTER_CAP = 25;
 /** A text basis shorter than this is too little signal to search on. */
 const MIN_SEARCH_TEXT_LENGTH = 3;
 
@@ -308,6 +311,45 @@ async function lexicalProductCandidates(
     { query: trimmed, entityKinds: ["product"], limit: REFERENCE_ROSTER_CAP },
     REFERENCE_ROSTER_CAP,
   );
+}
+
+interface IngredientCandidate {
+  id: string;
+  title: string;
+  subtitle: string | null;
+}
+
+/** Lexical prefix search ANDs every term (`buildPrefixTsQuery`), so a full
+ * product name rarely matches a short ingredient; semantic neighbours of the
+ * name carry the roster, and lexical hits on the name are added when present. */
+async function ingredientCandidatesForProduct(
+  db: Database,
+  name: string | null,
+): Promise<readonly IngredientCandidate[]> {
+  const trimmed = name?.trim() ?? "";
+  if (trimmed.length < MIN_SEARCH_TEXT_LENGTH) return [];
+  const [semantic, lexical] = await Promise.all([
+    semanticEntityCandidates(db, trimmed, INGREDIENT_ROSTER_CAP, "ingredient"),
+    findLexicalSearchCandidates(
+      db,
+      {
+        query: trimmed,
+        entityKinds: ["ingredient"],
+        limit: INGREDIENT_ROSTER_CAP,
+      },
+      INGREDIENT_ROSTER_CAP,
+    ),
+  ]);
+  const byId = new Map<string, IngredientCandidate>();
+  for (const candidate of [...semantic.map(({ item }) => item), ...lexical]) {
+    if (!byId.has(candidate.id))
+      byId.set(candidate.id, {
+        id: candidate.id,
+        title: candidate.title,
+        subtitle: candidate.subtitle,
+      });
+  }
+  return [...byId.values()].slice(0, INGREDIENT_ROSTER_CAP);
 }
 
 const renderProductCandidate = (candidate: InternalSearchCandidate): string =>
@@ -525,6 +567,21 @@ export const FIELD_SUGGEST_REGISTRY = {
     subject: (basis) => renderSubject("product", basis),
     parentIdOf: (c) => c.ancestorIds.at(-1) ?? null,
   } satisfies ReferenceSuggestSpec<ProductCategorySuggestionOption>,
+  "product.ingredientId": {
+    kind: "reference",
+    entity: "ingredient",
+    rules:
+      "You link a stocked product to the generic cooking ingredient it is a package of (for example a branded 2 lb bag of jasmine rice → jasmine rice). Choose the ONE listed ingredient a recipe line would name for this product. Choose none for non-food products (tools, supplies, clothing, household goods) and when no listed ingredient is the same food; never pick a merely related food or invent one.",
+    maxCandidates: INGREDIENT_ROSTER_CAP,
+    roster: (db, basis) =>
+      ingredientCandidatesForProduct(db, basis.name ?? null),
+    idOf: (c) => c.id,
+    labelOf: (c) => c.title,
+    detailOf: (c) => c.subtitle,
+    renderLine: (c) =>
+      `${c.id} | ${c.title}${c.subtitle ? ` — ${c.subtitle}` : ""}`,
+    subject: (basis) => renderSubject("product", basis),
+  } satisfies ReferenceSuggestSpec<IngredientCandidate>,
   "product.tags": {
     kind: "prune",
     rules: TAG_PRUNE_RULES,
