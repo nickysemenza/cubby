@@ -10,8 +10,8 @@ click "id=search.result.${PRODUCT_ID}"
 wait "role=Button id=detail.product.edit" 30000
 click "role=Button id=detail.product.edit"
 wait "label=Name editable=true" 30000
-fill 300 300 "Synthetic Atlas Lantern Updated"
-press 350 100
+fill "label=Name editable=true" "Synthetic Atlas Lantern Updated"
+click "role=Button label=Save"
 wait "role=Button id=detail.product.edit" 30000
 wait text "Synthetic Atlas Lantern Updated" 30000
 
