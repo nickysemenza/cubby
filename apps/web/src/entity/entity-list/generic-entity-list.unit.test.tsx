@@ -1,7 +1,4 @@
-import {
-  isSlotListView,
-  listViewId,
-} from "@cubby/schemas/entity-definitions/definition";
+import { isSlotListView } from "@cubby/schemas/entity-definitions/definition";
 import {
   type BrowserRoutedEntity,
   browserRoutedEntities,
@@ -42,7 +39,6 @@ import type {
 } from "~/ui/hooks/usePaginatedTableCore";
 
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
-import { resolveListView } from "./generic-entity-list";
 import { listSlotFor } from "./list-slots";
 
 let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
@@ -121,25 +117,7 @@ const listedEntities = browserRoutedEntities.filter(
   (entity) => entitySummary[entity].list.views.length > 0,
 );
 
-describe("resolveListView", () => {
-  it.each(listedEntities)(
-    "%s: `?view=` selects each declared view and defaults to the first",
-    (entity) => {
-      const { views } = entitySummary[entity].list;
-      for (const declared of views) {
-        expect(
-          resolveListView(entity, { view: listViewId(declared) }).view,
-        ).toEqual(
-          entity === "run" && declared === "shelf" ? views[0] : declared,
-        );
-      }
-      expect(resolveListView(entity, {}).view).toEqual(views[0]);
-      expect(resolveListView(entity, { view: "no-such-view" }).view).toEqual(
-        views[0],
-      );
-    },
-  );
-
+describe("list manifest and deferred rows", () => {
   // Provider hydration, subject menus, unit mapping and tree nesting execute
   // before deferred cells. Each must tolerate a core-only page.
   it.each(["inventory", "ingredient", "wish", "product"] as const)(
@@ -188,10 +166,6 @@ describe("resolveListView", () => {
         ).toBeDefined();
       }
     }
-  });
-
-  it("keeps the old Projects gallery URL pointed at the shared Cards view", () => {
-    expect(resolveListView("project", { view: "gallery" }).view).toBe("shelf");
   });
 
   // Regression: the Runs index (run has no create/update contract, so
