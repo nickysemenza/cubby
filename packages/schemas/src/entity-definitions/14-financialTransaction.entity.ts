@@ -1,3 +1,4 @@
+import { financialTransactionChildren } from "../child-tables/financialTransaction.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
 import { financialTransactionCoverage } from "../purchase-evidence-policy";
 import { optionalFieldResolutionsSchema } from "../field-resolution";
@@ -42,6 +43,7 @@ export default defineEntity({
     basePath: "financial-transactions",
   },
   table: "FinancialTransaction",
+  children: financialTransactionChildren,
   identifiers: {
     brand: "FinancialTransactionId",
     shortcode: "FTX-",
@@ -1536,6 +1538,15 @@ export default defineEntity({
     dataQuality: {
       exceptions: true,
       checks: [
+        {
+          id: "financial_transaction_allocation_integrity",
+          facet: "integrity",
+          kind: "defect",
+          scoring: "unscored",
+          exceptions: "forbidden",
+          label: "Allocation integrity",
+          message: "Allocated totals or signs conflict with this settlement.",
+        },
         {
           id: "financial_transaction_classification",
           facet: "identity",

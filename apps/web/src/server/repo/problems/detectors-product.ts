@@ -24,10 +24,8 @@ import {
   gt,
   inArray,
   isNotNull,
-  isNull,
   notExists,
   or,
-  type SQL,
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -37,30 +35,23 @@ import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { sizeUnitAlternation } from "~/lib/title-unit-size";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import type { Database, DrizzleClient } from "~/server/db";
+import type { Database } from "~/server/db";
 import {
-  cookbook,
-  device,
   entityAttachment,
   entityExternalId,
   entityLink,
   expense,
   image,
   ingredient,
-  inventoryEntry,
   location,
-  mealFoodEntry,
-  photoGroupProposal,
-  planting,
   product,
   productUnitMappings,
   project,
   recipe,
   recipeSection,
   recipeSectionIngredient,
-  runTarget,
-  task,
 } from "~/server/db/schema";
+import { gapCondition } from "~/server/repo/data-quality/sql";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { liveLinks } from "~/server/repo/entity-links";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
@@ -69,11 +60,6 @@ import {
   categoryFeatureSql,
   categorySummarySql,
 } from "~/server/repo/product-category-sql";
-import {
-  isRetainingEdgeKey,
-  PRODUCT_EDGE_ROLES,
-  type ProductRetainingEdgeKey,
-} from "~/server/repo/product/edge-roles";
 import {
   loadPrimaryGtins,
   productHasAnyGtin,
@@ -86,7 +72,6 @@ import { loadProductPricing } from "~/server/repo/product/pricing";
 import { unitMappingSides } from "~/server/repo/product/unit-mappings";
 import { loadProjectDateWindows } from "~/server/repo/project/subtree";
 import { buildTimelineGates } from "~/server/repo/project/tools";
-import { effectiveTaskSubjectProductSql } from "~/server/repo/task-project-inheritance";
 
 const log = createLogger("problems");
 
@@ -99,153 +84,6 @@ type ProductWithUpcGapCandidate = {
   effectivePrice: number | null;
   hasImage: boolean;
 };
-
-/** Orphan suggestions are not a saved predicate: delete eligibility must use the canonical incoming-edge policy. */
-const PRODUCT_RETAINING_NOT_EXISTS = {
-  "RunTarget.entityId": (dbClient) =>
-    notExists(
-      dbClient
-        .select({ id: sql`1` })
-        .from(runTarget)
-        .where(eq(runTarget.entityId, product.id)),
-    ),
-  "Planting.sourceProductId": (dbClient) =>
-    notExists(
-      dbClient
-        .select({ id: sql`1` })
-        .from(planting)
-        .where(
-          and(eq(planting.sourceProductId, product.id), notDeleted(planting)),
-        ),
-    ),
-  "InventoryEntry.productId": (dbClient) =>
-    notExists(
-      dbClient
-        .select({ id: sql`1` })
-        .from(inventoryEntry)
-        .where(
-          and(
-            eq(inventoryEntry.productId, product.id),
-            notDeleted(inventoryEntry),
-          ),
-        ),
-    ),
-  // Unlike the `productIdsWithExpenses` subquery in product/crud.ts, this
-  // needs no `isNotNull(expense.productId)`: that one is an uncorrelated
-  // NOT IN list, where a single NULL makes the whole predicate UNKNOWN. A
-  // correlated `eq` simply never matches NULL.
-  "Expense.productId": (dbClient) =>
-    notExists(
-      dbClient
-        .select({ id: sql`1` })
-        .from(expense)
-        .where(and(eq(expense.productId, product.id), notDeleted(expense))),
-    ),
-  "Task.subjectProductId": (dbClient) =>
-    notExists(
-      dbClient
-        .select({ id: sql`1` })
-        .from(task)
-        .where(
-          and(
-            eq(effectiveTaskSubjectProductSql(), product.id),
-            notDeleted(task),
-          ),
-        ),
-    ),
-  "EntityLink[projectTool].to": (dbClient) =>
-    notExists(
-      dbClient
-        .select({ id: sql`1` })
-        .from(entityLink)
-        .where(
-          and(eq(entityLink.toEntityId, product.id), liveLinks("projectTool")),
-        ),
-    ),
-  "EntityLink[purchaseProduct].to": (dbClient) =>
-    notExists(
-      dbClient
-        .select({ id: sql`1` })
-        .from(entityLink)
-        .where(
-          and(
-            eq(entityLink.toEntityId, product.id),
-            liveLinks("purchaseProduct"),
-          ),
-        ),
-    ),
-  "MealFoodEntry.productId": (dbClient) =>
-    notExists(
-      dbClient
-        .select({ id: sql`1` })
-        .from(mealFoodEntry)
-        .where(
-          and(
-            eq(mealFoodEntry.productId, product.id),
-            notDeleted(mealFoodEntry),
-          ),
-        ),
-    ),
-  "EntityLink[wishCandidate].to": (dbClient) =>
-    notExists(
-      dbClient
-        .select({ id: sql`1` })
-        .from(entityLink)
-        .where(
-          and(
-            eq(entityLink.toEntityId, product.id),
-            liveLinks("wishCandidate"),
-          ),
-        ),
-    ),
-  "Location.productId": (dbClient) =>
-    notExists(
-      dbClient
-        .select({ id: sql`1` })
-        .from(location)
-        .where(and(eq(location.productId, product.id), notDeleted(location))),
-    ),
-  "Cookbook.productId": (dbClient) =>
-    notExists(
-      dbClient
-        .select({ id: sql`1` })
-        .from(cookbook)
-        .where(and(eq(cookbook.productId, product.id), notDeleted(cookbook))),
-    ),
-  "EntityLink[productComponent].to": (dbClient) =>
-    notExists(
-      dbClient
-        .select({ id: sql`1` })
-        .from(entityLink)
-        .where(
-          and(
-            eq(entityLink.toEntityId, product.id),
-            liveLinks("productComponent"),
-          ),
-        ),
-    ),
-  "Device.productId": (dbClient) =>
-    notExists(
-      dbClient
-        .select({ id: sql`1` })
-        .from(device)
-        .where(and(eq(device.productId, product.id), notDeleted(device))),
-    ),
-  // Only a still-pending proposal intends to use the Product; a committed
-  // one is history and must not hide an otherwise-orphaned Product forever.
-  "PhotoGroupProposal.productId": (dbClient) =>
-    notExists(
-      dbClient
-        .select({ id: sql`1` })
-        .from(photoGroupProposal)
-        .where(
-          and(
-            eq(photoGroupProposal.productId, product.id),
-            eq(photoGroupProposal.state, "proposed"),
-          ),
-        ),
-    ),
-} satisfies Record<ProductRetainingEdgeKey, (dbClient: DrizzleClient) => SQL>;
 
 /** Orphan candidates have no live evidence; deletion remains a transactional canonical-policy decision. */
 export const findOrphanedProducts = async (
@@ -265,25 +103,7 @@ export const findOrphanedProducts = async (
     .where(
       and(
         notDeleted(product),
-        isNull(product.ingredientId),
-        ...Object.keys(PRODUCT_EDGE_ROLES)
-          .filter(isRetainingEdgeKey)
-          .map((key) => PRODUCT_RETAINING_NOT_EXISTS[key](dbClient)),
-        // A composition parent owns no retaining incoming edge: deleting it
-        // merely removes its `productComponent` links. It is still a meaningful
-        // live product, though, so offering it as an orphan would discard the
-        // kit or multi-pack identity represented by those rows.
-        notExists(
-          dbClient
-            .select({ id: sql`1` })
-            .from(entityLink)
-            .where(
-              and(
-                eq(entityLink.fromEntityId, product.id),
-                liveLinks("productComponent"),
-              ),
-            ),
-        ),
+        gapCondition("product", "product_orphaned", product),
       ),
     );
 

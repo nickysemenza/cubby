@@ -61,6 +61,7 @@ export const derivedProblemQueries = [
   }),
   defineProblem({
     key: "orphanedProducts",
+    quality: { rowChecks: [{ entity: "product", check: "product_orphaned" }] },
     problemClass: PROBLEM_CLASS.orphanedProducts,
     executionLane: "fast",
     continuation: {
@@ -187,6 +188,9 @@ export const derivedProblemQueries = [
   }),
   defineProblem({
     key: "staleParentRecipes",
+    quality: {
+      rowChecks: [{ entity: "recipe", check: "recipe_deleted_dependency" }],
+    },
     problemClass: PROBLEM_CLASS.staleParentRecipes,
     executionLane: "fast",
     continuation: {
@@ -430,6 +434,11 @@ export const derivedProblemQueries = [
   }),
   defineProblem({
     key: "provisionalFinancialAccounts",
+    quality: {
+      rowChecks: [
+        { entity: "financialAccount", check: "financial_account_unclaimed" },
+      ],
+    },
     problemClass: PROBLEM_CLASS.provisionalFinancialAccounts,
     executionLane: "fast",
     continuation: {

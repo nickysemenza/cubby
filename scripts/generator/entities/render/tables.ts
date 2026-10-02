@@ -1,4 +1,11 @@
 import { generatedHeader } from "../../artifacts.ts";
+import {
+  childTableMetadataSchema,
+  type ChildTableDeclaration,
+} from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
+import { validateChildTables } from "../child-tables.ts";
+import { retainedTableExports } from "../../../../packages/schemas/src/child-tables/retained.ts";
+import { childTableDependencies, renderChildTables } from "./children.ts";
 import type {
   CompiledEntity,
   CompiledEntityTable,
@@ -140,6 +147,7 @@ const renderRelations = (
  */
 export const renderEntityTablesArtifact = (
   entities: readonly CompiledEntity[],
+  moduleChildren: readonly ChildTableDeclaration[] = [],
 ): string => {
   const tabled = entities.filter(
     (entity): entity is TabledEntity => entity.table !== null,
@@ -153,20 +161,57 @@ export const renderEntityTablesArtifact = (
       throw new Error(`Entity ${entity} has no generated table.`);
     return name;
   };
-  const tableExports = new Set(exports.values());
+  const declaredChildren = validateChildTables(
+    [
+      ...entities.flatMap((entity) => entity.children),
+      ...moduleChildren.map((child) => childTableMetadataSchema.parse(child)),
+    ],
+    new Set([
+      ...exports.values(),
+      ...retainedTableExports,
+      "user",
+      "entityIdentity",
+    ]),
+  );
+  const tableNames = new Set(tabled.map(({ table }) => table.name));
+  for (const child of declaredChildren)
+    if (tableNames.has(child.name))
+      throw new Error(`Duplicate table ${child.name}.`);
+  const tableExports = new Set([
+    ...exports.values(),
+    ...declaredChildren.map((table) => table.exportName),
+  ]);
   const childTables = [
-    ...new Set(
-      tabled.flatMap(({ table }) =>
+    ...new Set([
+      ...childTableDependencies(declaredChildren).filter(
+        (name) =>
+          !tableExports.has(name) &&
+          name !== "user" &&
+          name !== "entityIdentity",
+      ),
+      ...tabled.flatMap(({ table }) =>
         table.relations.flatMap((relation) =>
           "table" in relation.target && !tableExports.has(relation.target.table)
             ? [relation.target.table]
             : [],
         ),
       ),
-    ),
+    ]),
   ].sort();
   const identifierTypes = new Set<string>(Object.values(identifierTypeNames));
   const typeImports = new Map<string, Set<string>>();
+  for (const table of declaredChildren)
+    for (const { module, exports: names } of table.types)
+      for (const name of names) {
+        if (
+          module === "@cubby/schemas/identifiers" &&
+          identifierTypes.has(name)
+        )
+          continue;
+        const imports = typeImports.get(module) ?? new Set<string>();
+        imports.add(name);
+        typeImports.set(module, imports);
+      }
   for (const { table } of tabled)
     for (const { type } of table.columns) {
       if (type === null) continue;
@@ -179,9 +224,11 @@ export const renderEntityTablesArtifact = (
       names.add(type.export);
       typeImports.set(type.module, names);
     }
-  const usesUser = tabled.some(({ table }) =>
-    table.columns.some(({ reference }) => reference === "user"),
-  );
+  const usesUser =
+    childTableDependencies(declaredChildren).includes("user") ||
+    tabled.some(({ table }) =>
+      table.columns.some(({ reference }) => reference === "user"),
+    );
   return (
     generatedHeader +
     "// Import through `~/server/db/schema`, never directly: the cycle with\n" +
@@ -195,14 +242,16 @@ export const renderEntityTablesArtifact = (
       )
       .join("") +
     'import { relations, sql } from "drizzle-orm";\n' +
-    'import { type AnyPgColumn, boolean, check, date, doublePrecision, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n\n' +
+    'import { type AnyPgColumn, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n\n' +
     (usesUser ? 'import { user } from "../auth.schema";\n' : "") +
-    'import { entityIdentityFk } from "../entity-identity-schema";\n' +
+    'import { entityIdentity, entityIdentityFk } from "../entity-identity-schema";\n' +
     (childTables.length === 0
       ? ""
       : `import { ${childTables.join(", ")} } from "../schema";\n`) +
     "\n" +
     tabled.map((entity) => renderTable(entity, exportOf)).join("\n\n") +
+    "\n\n" +
+    renderChildTables(declaredChildren) +
     "\n\n" +
     tabled
       .filter(({ table }) => table.relations.length > 0)

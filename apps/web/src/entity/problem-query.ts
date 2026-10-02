@@ -1,5 +1,18 @@
+import type { DataCheckOf, ScoredEntity } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ProblemKey } from "@cubby/schemas/problems";
+
+type RowQualityCheck = {
+  [E in ScoredEntity]: { entity: E; check: DataCheckOf<E> };
+}[ScoredEntity];
+
+/** Diagnostic presentation is unscored; hard defects cannot accept exemptions. */
+export type ProblemQualityPolicy = {
+  scoring: "unscored";
+  exceptions: "forbidden" | "inherit";
+  /** Row predicates reused by richer group/edge presenters. */
+  rowChecks: readonly RowQualityCheck[];
+};
 
 /**
  * A dependency-light description of how a Problem gets its population.
@@ -126,11 +139,16 @@ export interface ProblemQuery {
   actions: readonly ProblemAction[];
   freshness: ProblemFreshness;
   presenter: ProblemPresenter;
+  quality: ProblemQualityPolicy;
 }
 
-type ProblemDefinitionInput = Omit<ProblemQuery, "actions" | "presenter"> & {
+type ProblemDefinitionInput = Omit<
+  ProblemQuery,
+  "actions" | "presenter" | "quality"
+> & {
   actions?: readonly ProblemAction[];
   presenter?: ProblemPresenter;
+  quality?: Pick<ProblemQualityPolicy, "rowChecks">;
 };
 
 /**
@@ -140,7 +158,7 @@ type ProblemDefinitionInput = Omit<ProblemQuery, "actions" | "presenter"> & {
  */
 export const defineProblem = <T extends ProblemDefinitionInput>(
   definition: T,
-): T & Pick<ProblemQuery, "actions" | "presenter"> => {
+): T & Pick<ProblemQuery, "actions" | "presenter" | "quality"> => {
   if (
     definition.source.kind === "entity" &&
     definition.source.filters == null
@@ -158,6 +176,15 @@ export const defineProblem = <T extends ProblemDefinitionInput>(
   return {
     ...definition,
     actions: definition.actions ?? [],
+    quality: {
+      scoring: "unscored",
+      exceptions:
+        definition.source.kind === "derived" ||
+        definition.problemClass === "defect"
+          ? "forbidden"
+          : "inherit",
+      rowChecks: definition.quality?.rowChecks ?? [],
+    },
     presenter: definition.presenter ?? {
       key: definition.key,
       detailRouting:

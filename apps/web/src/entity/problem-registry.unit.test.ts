@@ -1,7 +1,10 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { describe, expect, it } from "vitest";
 
-import { diagnosticAdapters } from "~/server/services/problem-diagnostics.service";
+import {
+  diagnosticAdapters,
+  diagnosticModules,
+} from "~/server/services/problem-diagnostics.service";
 
 import { getEntityFilters } from "./filter-manifest";
 import {
@@ -86,6 +89,16 @@ describe("Problem Query registry", () => {
       diagnostics.add(definition.source.diagnostic);
       expect(definition.source.grain).toBeTruthy();
       expect(definition.source.operations.length).toBeGreaterThan(0);
+      const module = diagnosticModules.get(definition.source.diagnostic);
+      expect(module?.definition).toMatchObject({
+        key: definition.key,
+        source: definition.source,
+        freshness: definition.freshness,
+        quality: { scoring: "unscored", exceptions: "forbidden" },
+      });
+      expect(module?.definition.actions).toEqual(
+        problemActionsFor(definition.key),
+      );
     }
     expect(new Set(Object.keys(diagnosticAdapters))).toEqual(diagnostics);
   });

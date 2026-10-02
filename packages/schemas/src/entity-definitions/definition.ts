@@ -4,6 +4,7 @@ import {
   dataQualityFacetName,
 } from "../data-quality-facets";
 import { photoCategoryKeys } from "../photo-categories";
+import { childTableMetadataSchema } from "./child-definition";
 
 /** The scalar shapes the entity compiler can persist and project. */
 export const entityFieldKinds = [
@@ -1659,6 +1660,11 @@ const buildMetadataSchemas = () => {
       facet: dataQualityFacetName,
       kind: dataQualityCheckKind.optional().default("missing"),
       weight: z.number().int().positive().optional().default(1),
+      scoring: z.enum(["weighted", "unscored"]).optional().default("weighted"),
+      exceptions: z
+        .enum(["inherit", "forbidden"])
+        .optional()
+        .default("inherit"),
       /** Filter-option label. */
       label: nonEmptyString(),
       /** `gap.message` shown beside the check. */
@@ -2141,6 +2147,7 @@ const buildMetadataSchemas = () => {
       fields: entityContractMetadataSchema.nullable(),
       model: entityFieldModelMetadataSchema.optional(),
       storage: entityTableStorageMetadataSchema.optional(),
+      children: z.array(childTableMetadataSchema).optional().default([]),
       filters: z
         .object({
           audit: z.boolean({ error: "must be a boolean" }).optional(),

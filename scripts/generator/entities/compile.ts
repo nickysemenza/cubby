@@ -1858,6 +1858,7 @@ export const compileEntity = (
     operationOwners,
     fieldModel,
     table,
+    children: declaration.children,
     dataQuality,
   };
 };

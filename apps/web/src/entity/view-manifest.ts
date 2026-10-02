@@ -231,6 +231,14 @@ const standaloneEntityProblems = [
   }),
   defineProblem({
     key: "financialTransactionAllocationDefects",
+    quality: {
+      rowChecks: [
+        {
+          entity: "financialTransaction",
+          check: "financial_transaction_allocation_integrity",
+        },
+      ],
+    },
     problemClass: PROBLEM_CLASS.financialTransactionAllocationDefects,
     executionLane: "fast",
     continuation: { kind: "entity-list" as const },
@@ -242,7 +250,12 @@ const standaloneEntityProblems = [
     source: {
       kind: "entity" as const,
       entity: "financialTransaction" as const,
-      filters: [{ id: "allocationIntegrity", value: "defect" }],
+      filters: [
+        {
+          id: "dataGaps",
+          value: ["financial_transaction_allocation_integrity"],
+        },
+      ],
       sort: [{ id: "postedDate", desc: true }],
     },
   }),
@@ -418,6 +431,9 @@ const standaloneEntityProblems = [
   }),
   defineProblem({
     key: "unknownParkedItems",
+    quality: {
+      rowChecks: [{ entity: "inventory", check: "inventory_unknown_location" }],
+    },
     problemClass: PROBLEM_CLASS.unknownParkedItems,
     executionLane: "fast",
     continuation: { kind: "entity-list" as const },
@@ -459,6 +475,9 @@ const standaloneEntityProblems = [
   }),
   defineProblem({
     key: "understatedCostMeals",
+    quality: {
+      rowChecks: [{ entity: "meal", check: "meal_recipe_cost_incomplete" }],
+    },
     problemClass: PROBLEM_CLASS.understatedCostMeals,
     executionLane: "fast",
     continuation: { kind: "entity-list" as const },

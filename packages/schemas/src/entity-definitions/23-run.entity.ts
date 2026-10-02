@@ -1,3 +1,4 @@
+import { runChildren } from "../child-tables/run.js";
 import { z } from "zod";
 
 import {
@@ -39,6 +40,7 @@ export default defineEntity({
     },
   },
   table: "Run",
+  children: runChildren,
   identifiers: { brand: "RunId", shortcode: "RUN-" },
   presentation: {
     titleField: "displayName",

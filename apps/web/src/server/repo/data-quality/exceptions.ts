@@ -6,6 +6,7 @@ import {
   type DataExceptionReason,
   type DataQuality,
   dataCheckEntity,
+  dataCheckExemptible,
   dataException,
   dataExceptionEntity,
   type SetDataExceptionInput,
@@ -70,7 +71,10 @@ const EXCEPTION_REASONS = {
 } satisfies Partial<Record<DataCheck, readonly DataExceptionReason[]>>;
 
 const reasonsFor = (check: DataCheck): readonly DataExceptionReason[] =>
-  Object.entries(EXCEPTION_REASONS).find(([key]) => key === check)?.[1] ?? [];
+  dataCheckExemptible[check]
+    ? (Object.entries(EXCEPTION_REASONS).find(([key]) => key === check)?.[1] ??
+      [])
+    : [];
 
 const probeRow = z.object({
   fingerprint: z.string(),

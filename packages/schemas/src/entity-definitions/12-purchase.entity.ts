@@ -1,3 +1,4 @@
+import { purchaseChildren } from "../child-tables/purchase.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
 import { optionalFieldResolutionsSchema } from "../field-resolution";
 import { purchaseEvidenceCoverage } from "../purchase-evidence-policy";
@@ -26,6 +27,7 @@ export default defineEntity({
   names: { singular: "Purchase", plural: "Purchases" },
   route: { basePath: "purchases" },
   table: "Purchase",
+  children: purchaseChildren,
   identifiers: { brand: "PurchaseId", shortcode: "PUR-" },
   presentation: {
     titleField: "displayName",

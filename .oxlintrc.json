@@ -258,6 +258,7 @@
     {
       "files": [
         "packages/schemas/src/entity-definitions/**/*.ts",
+        "packages/schemas/src/child-tables/**/*.ts",
         "packages/schemas/src/*-fields.ts",
         "packages/schemas/src/base-entity.ts",
         "packages/schemas/src/codec.ts",

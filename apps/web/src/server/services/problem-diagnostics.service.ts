@@ -13,6 +13,7 @@ import { UpcEnrichmentFreshness, ProblemItem } from "@cubby/schemas/problems";
 import type { ProjectAttentionItem } from "@cubby/schemas/project";
 
 import type { DiagnosticKey } from "~/entity/problem-query";
+import { completeProblemQueryDeclarations } from "~/entity/problem-registry-validation";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { proposeSizeFromTitle } from "~/lib/title-unit-size";
 import type { Database } from "~/server/db";
@@ -400,6 +401,23 @@ export const diagnosticAdapters = {
   },
 } as const satisfies Record<DiagnosticKey, DiagnosticAdapter>;
 
+/** Membership, grain, freshness and remediation policy share one registered declaration. */
+export const diagnosticModules = new Map(
+  completeProblemQueryDeclarations().flatMap((definition) =>
+    definition.source.kind === "derived"
+      ? [
+          [
+            definition.source.diagnostic,
+            {
+              definition,
+              adapter: diagnosticAdapters[definition.source.diagnostic],
+            },
+          ] as const,
+        ]
+      : [],
+  ),
+);
+
 export function runDiagnostic(
   db: Database,
   key: DiagnosticKey,
@@ -421,7 +439,10 @@ export async function runDiagnostic(
     limit: 12,
   },
 ): Promise<DiagnosticResult> {
+  const module = diagnosticModules.get(key);
+  if (!module)
+    throw new Error(`Diagnostic ${key} has no registered module check.`);
   return intent.kind === "count"
-    ? diagnosticAdapters[key].count(db, options)
-    : diagnosticAdapters[key].sample(db, options, intent.limit);
+    ? module.adapter.count(db, options)
+    : module.adapter.sample(db, options, intent.limit);
 }

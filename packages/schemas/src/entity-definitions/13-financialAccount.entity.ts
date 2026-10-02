@@ -754,6 +754,15 @@ export default defineEntity({
           message: "No ledger party is linked to this account.",
         },
         {
+          id: "financial_account_unclaimed",
+          facet: "identity",
+          kind: "defect",
+          scoring: "unscored",
+          exceptions: "forbidden",
+          label: "Unclaimed account",
+          message: "This provisional account has no provider evidence.",
+        },
+        {
           id: "financial_account_confirmed",
           facet: "identity",
           weight: 1,

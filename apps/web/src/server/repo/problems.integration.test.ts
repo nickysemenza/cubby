@@ -36,6 +36,7 @@ import { findViewProblems } from "../services/problem-views.service";
 import { findFastProblems } from "../services/problems.service";
 import { createTestRequestContext } from "../testing/request-context";
 import { setDataException } from "./data-quality/exceptions";
+import { loadDataQualities } from "./data-quality/hydrate";
 import { getDb } from "./database-helpers";
 import { updateExpense } from "./expense/crud";
 import { updateFinancialTransaction } from "./financial-transaction";
@@ -347,21 +348,30 @@ describe("problems — understated meal cost", () => {
         })
         .where(eq(recipe.id, complete.entityId)),
     ]);
-    const meal = (
-      await createMealWithEntityId(
-        ctx.db,
-        buildEntity("meal", {
-          date: "2026-09-01",
-          name: "Coverage dinner",
-          recipes: [{ recipeId: incomplete.id }, { recipeId: complete.id }],
-        }),
-        ctx.actor,
-      )
-    ).output;
+    const createdMeal = await createMealWithEntityId(
+      ctx.db,
+      buildEntity("meal", {
+        date: "2026-09-01",
+        name: "Coverage dinner",
+        recipes: [{ recipeId: incomplete.id }, { recipeId: complete.id }],
+      }),
+      ctx.actor,
+    );
+    const meal = createdMeal.output;
 
     const row = (await findFastProblems(ctx.db)).understatedCostMeals.find(
       (candidate) => candidate.id === meal.id,
     );
+
+    const mealEntityId = createdMeal.entityId;
+    const quality = (
+      await loadDataQualities(ctx.db, "meal", [mealEntityId])
+    ).get(mealEntityId);
+    expect(quality).toMatchObject({
+      status: "defect",
+      score: 100,
+      gaps: [{ check: "meal_recipe_cost_incomplete", kind: "defect" }],
+    });
 
     expect(row).toMatchObject({
       id: meal.id,

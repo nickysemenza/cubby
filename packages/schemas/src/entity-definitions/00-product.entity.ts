@@ -1,3 +1,4 @@
+import { productChildren } from "../child-tables/product.js";
 import { defineEntity } from "./definition.js";
 import { PRODUCT_UNCLASSIFIED_GROUP_KEY } from "../group-keys";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
@@ -33,6 +34,7 @@ export default defineEntity({
   names: { singular: "Product", plural: "Products" },
   route: { basePath: "products" },
   table: "Product",
+  children: productChildren,
   identifiers: { brand: "ProductId", shortcode: "PRD-" },
   presentation: {
     titleField: "name",
@@ -2967,6 +2969,16 @@ export default defineEntity({
       exceptions: true,
       listOrder: 7,
       checks: [
+        {
+          id: "product_orphaned",
+          facet: "integrity",
+          kind: "defect",
+          scoring: "unscored",
+          exceptions: "forbidden",
+          label: "Unused product",
+          message:
+            "No live inventory, ingredient, composition, or other retaining evidence uses this Product.",
+        },
         {
           id: "product_manufacturer",
           facet: "identity",

@@ -1,3 +1,4 @@
+import { mealChildren } from "../child-tables/meal.js";
 import { defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { imageShortcode, mealShortcode } from "../identifier-fields.js";
@@ -18,6 +19,7 @@ export default defineEntity({
   names: { singular: "Meal", plural: "Meals" },
   route: { basePath: "meals" },
   table: "Meal",
+  children: mealChildren,
   identifiers: { brand: "MealId", shortcode: "MEL-" },
   presentation: {
     titleField: "displayName",
@@ -874,6 +876,17 @@ export default defineEntity({
     mcp: ["get", "list", "search", "create", "update", "delete"],
     dataQuality: {
       checks: [
+        {
+          id: "meal_recipe_cost_incomplete",
+          facet: "integrity",
+          kind: "defect",
+          weight: 1,
+          scoring: "unscored",
+          exceptions: "forbidden",
+          label: "Incomplete recipe cost",
+          message:
+            "A live linked recipe has incomplete priced ingredient coverage.",
+        },
         {
           id: "meal_contents",
           facet: "content",

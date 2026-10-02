@@ -7,6 +7,7 @@ import {
   dataCheckKind,
   dataCheckMessage,
   dataCheckWeight,
+  dataCheckExemptible,
   dataException,
   dataQualityExceptionEntities,
   dataQualityFacets,
@@ -170,6 +171,7 @@ const evaluateRow = (
         targetType: entity,
         targetId,
         state:
+          dataCheckExemptible[exception.check] &&
           fingerprint !== undefined &&
           rawByCheck.get(exception.check)?.fingerprint === fingerprint
             ? "active"

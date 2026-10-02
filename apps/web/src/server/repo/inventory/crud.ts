@@ -34,6 +34,7 @@ import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   dataQualityFilterPredicates,
   dataQualitySortResolver,
+  gapCondition,
 } from "~/server/repo/data-quality/sql";
 import {
   amountFromColumns,
@@ -55,7 +56,6 @@ import {
   wantsListGroup,
   type ListProjection,
 } from "~/server/repo/list-projection";
-import { isGlobalUnknownLocation } from "~/server/repo/location/crud";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import {
   effectiveProductPriceSql,
@@ -336,7 +336,7 @@ export const buildInventoryWhere = async (
         ? undefined
         : sql`${product.categoryId} IN ${categoryDescendantsSql(categoryIds)}`,
       filters.locationRole === "global_unknown"
-        ? isGlobalUnknownLocation()
+        ? gapCondition("inventory", "inventory_unknown_location")
         : undefined,
       filters.verifiedPresenceFilter === "has"
         ? sql`${inventoryEntry.verifiedAt} IS NOT NULL`

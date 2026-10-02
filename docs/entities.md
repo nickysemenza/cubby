@@ -719,6 +719,29 @@ projection and its fan-out projections inside the write transaction; a change
 to projection SQL itself does not rewrite persisted rows — run the streaming
 "Repair index" maintenance action after such a change.
 
+## Child storage
+
+An entity's `children` declares its physical child tables using
+`defineChildTable` (`entity-definitions/child-definition.ts`). Family modules
+in `packages/schemas/src/child-tables` own the columns, branded TypeScript
+types, SQL defaults, update callbacks, indexes, checks, foreign-key actions,
+and Drizzle relations. Child storage does not acquire an entity identity,
+shortcode, client manifest, or automatic indexes. SQL constraint expressions
+use `{columnKey}` placeholders validated against that child's columns.
+
+Mail, statement-import, and image-processing storage belongs to the explicit
+module registry (`child-tables/modules.ts`) because those rows are not owned
+by one entity. Both registries generate the same `entity-tables.gen.ts`
+artifact, imported through `server/db/schema.ts`; the existing
+`image-processing-schema.ts` import boundary remains a re-export.
+
+Shared infrastructure remains handwritten only where
+`child-tables/retained.ts` records an ownership reason. Generation checks the
+schema's AST against that shrink-only baseline: removing an exception is
+allowed, while a new handwritten `pgTable` requires declaration storage.
+Moving existing storage into declarations must preserve the Drizzle catalog
+and emit no migration.
+
 ## Data quality
 
 `capabilities.dataQuality` on an entity definition

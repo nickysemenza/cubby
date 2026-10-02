@@ -20,6 +20,21 @@ export const mealChecks = defineEntityChecks({
   entity: "meal",
   table: meal,
   checks: {
+    meal_recipe_cost_incomplete: {
+      // Unavailable costs count only with recorded contributors; legacy totals
+      // lacking coverage stay out until recomputation or repair-on-read.
+      missing: (t) => sql`EXISTS (
+        SELECT 1 FROM "MealRecipe" dq_meal_cost
+        JOIN "Recipe" dq_recipe_cost ON dq_recipe_cost."id" = dq_meal_cost."recipeId"
+        WHERE dq_meal_cost."mealId" = ${t.id}
+          AND dq_meal_cost."deletedAt" IS NULL AND dq_recipe_cost."deletedAt" IS NULL
+          AND (
+            dq_recipe_cost."totals" -> 'cost' ->> 'status' = 'partial'
+            OR (dq_recipe_cost."totals" -> 'cost' ->> 'status' = 'unavailable'
+              AND COALESCE((dq_recipe_cost."totals" #>> '{cost,coverage,total}')::int, 0) > 0)
+          )
+      )`,
+    },
     meal_contents: {
       // `eating_out`/`takeout`/etc. are deliberately content-free placeholders
       // (see the `mealKind` manifest description) — only a cooked meal is

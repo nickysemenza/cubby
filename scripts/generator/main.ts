@@ -1,3 +1,7 @@
+import { modulesChildren } from "../../packages/schemas/src/child-tables/modules.ts";
+import { retainedTableExports } from "../../packages/schemas/src/child-tables/retained.ts";
+import { readFile } from "node:fs/promises";
+import { validateRetainedTableBoundary } from "./entities/child-table-boundary.ts";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -104,12 +108,16 @@ const main = async () => {
   };
 
   validateEntityDeclarationImportBoundary();
+  validateRetainedTableBoundary(
+    await readFile(resolve(ROOT, "apps/web/src/server/db/schema.ts"), "utf8"),
+    new Set(retainedTableExports),
+  );
   await settle(await renderShortcodeRegistryArtifacts());
   const { entities, declarations } = await loadEntityDeclarationBundle();
   validateConnectedViews(entities);
   await settle([await renderAgentPromptArtifact(ROOT)]);
   await settle([
-    ...renderEntityArtifacts(entities),
+    ...renderEntityArtifacts(entities, modulesChildren),
     renderOverrideComparisonArtifact(declarations, entities),
     ...renderRelationArtifacts(entities),
     ...renderKernelBindingsArtifacts(entities),

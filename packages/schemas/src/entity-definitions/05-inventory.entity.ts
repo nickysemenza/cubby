@@ -751,6 +751,16 @@ export default defineEntity({
     dataQuality: {
       checks: [
         {
+          id: "inventory_unknown_location",
+          facet: "integrity",
+          kind: "defect",
+          weight: 1,
+          scoring: "unscored",
+          exceptions: "forbidden",
+          label: "Unknown location",
+          message: "This entry is still parked in the global Unknown location.",
+        },
+        {
           id: "inventory_verified",
           facet: "provenance",
           weight: 1,

@@ -3,6 +3,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { getDb } from "~/server/repo/database-helpers";
 import { replaceSettlementRefs } from "~/server/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -98,5 +99,30 @@ describe("provisional financial accounts", () => {
     expect(byId.has(aliased.shortcode)).toBe(false);
     expect(byId.has(confirmed.shortcode)).toBe(false);
     expect(byId.has(retired.shortcode)).toBe(false);
+  });
+  it("exposes an unclaimed-account diagnostic without changing completeness weight", async () => {
+    const unclaimed = await account(ctx.db);
+    const claimed = await account(ctx.db, {
+      sourceAliases: [
+        {
+          source: "synthetic-bank",
+          alias: "Synthetic card",
+          externalAccountId: "card-1",
+        },
+      ],
+    });
+    const quality = await loadDataQualities(ctx.db, "financialAccount", [
+      unclaimed.id,
+      claimed.id,
+    ]);
+    expect(quality.get(unclaimed.id)?.gaps.map((gap) => gap.check)).toContain(
+      "financial_account_unclaimed",
+    );
+    expect(quality.get(claimed.id)?.gaps.map((gap) => gap.check)).not.toContain(
+      "financial_account_unclaimed",
+    );
+    expect(quality.get(unclaimed.id)?.score).toBe(
+      quality.get(claimed.id)?.score,
+    );
   });
 });

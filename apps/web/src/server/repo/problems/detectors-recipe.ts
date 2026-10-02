@@ -15,17 +15,14 @@
  * means a removal path skipped staleness propagation.
  */
 
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ProblemItem } from "@cubby/schemas/problems";
-import { sql } from "drizzle-orm";
+import { and } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import {
-  ingredient,
-  recipe,
-  recipeSection,
-  recipeSectionIngredient,
-} from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { recipe } from "~/server/db/schema";
+import { gapCondition } from "~/server/repo/data-quality/sql";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 /**
  * Live parent recipes whose persisted totals are marked fresh
@@ -38,22 +35,17 @@ import { getDb } from "~/server/repo/database-helpers";
 export const findParentRecipesWithDeletedSubRecipes = async (
   db: Database,
 ): Promise<ProblemItem<"staleParentRecipes">[]> => {
-  const res = await getDb(db).execute<ProblemItem<"staleParentRecipes">>(sql`
-    SELECT DISTINCT parent.shortcode AS id, parent.name AS name
-    FROM ${recipe} parent
-    INNER JOIN ${recipeSection} rs
-      ON rs."recipeId" = parent.id AND rs."deletedAt" IS NULL
-    INNER JOIN ${recipeSectionIngredient} rsi
-      ON rsi."recipeSectionId" = rs.id AND rsi."deletedAt" IS NULL
-    INNER JOIN ${ingredient} i
-      ON i.id = rsi."ingredientId"
-      AND i."deletedAt" IS NULL
-      AND i."recipeId" IS NOT NULL
-    INNER JOIN ${recipe} sub
-      ON sub.id = i."recipeId"
-    WHERE parent."deletedAt" IS NULL
-      AND parent."totalsComputedAt" IS NOT NULL
-      AND sub."deletedAt" IS NOT NULL
-  `);
-  return res.rows;
+  const res = await getDb(db)
+    .select({ id: recipe.shortcode, name: recipe.name })
+    .from(recipe)
+    .where(
+      and(
+        notDeleted(recipe),
+        gapCondition("recipe", "recipe_deleted_dependency", recipe),
+      ),
+    );
+  return res.map((row) => ({
+    ...row,
+    id: parseShortcodeFor("recipe", row.id),
+  }));
 };

@@ -1,3 +1,4 @@
+import { imageChildren } from "../child-tables/image.js";
 import {
   imageCaptureAttribution,
   imageCaptureLocation,
@@ -46,6 +47,7 @@ export default defineEntity({
     },
   },
   table: "Image",
+  children: imageChildren,
   identifiers: { brand: "ImageId", shortcode: "IMG-" },
   presentation: {
     titleField: "filename",

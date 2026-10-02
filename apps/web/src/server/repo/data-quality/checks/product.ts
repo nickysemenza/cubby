@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { product } from "~/server/db/schema";
 import { displayableImageRawSql } from "~/server/repo/image-displayability";
 import { categoryFeatureSql } from "~/server/repo/product-category-sql";
+import { orphanedProductCondition } from "~/server/repo/product/orphan-condition";
 import { derivedPriceFilterSql } from "~/server/repo/product/pricing";
 
 import { defineEntityChecks } from "../registry";
@@ -115,6 +116,7 @@ export const productChecks = defineEntityChecks({
   entity: "product",
   table: product,
   checks: {
+    product_orphaned: { missing: orphanedProductCondition },
     product_manufacturer: {
       expected: inScope,
       missing: (t) =>

@@ -6,7 +6,8 @@
  * not pull the richer filter runtime (including ts-pattern) into the
  * application shell.
  */
-import type { Entity } from "@cubby/schemas/entity";
+import { scoredEntities } from "@cubby/schemas/data-quality";
+import { entitySchema, type Entity } from "@cubby/schemas/entity";
 
 import { problemFilterSemantics } from "./filter-search-fields";
 import {
@@ -18,10 +19,29 @@ import {
 import { entityFilterUrlKeys } from "./generated/entity-search.gen";
 import type { FilterAssembly } from "./problem-query";
 
-export const problemFilterSpecs = problemFilterSemantics;
-type ProblemFilterEntity = keyof typeof problemFilterSemantics;
-const isProblemFilterEntity = (entity: Entity): entity is ProblemFilterEntity =>
-  Object.hasOwn(problemFilterSemantics, entity);
+/** Every scored entity with a list surface exposes the generated quality-gap filter. */
+export const problemFilterSpecs = Object.fromEntries(
+  entitySchema.options.map((entity) => {
+    const declared =
+      Object.entries(problemFilterSemantics).find(
+        ([key]) => key === entity,
+      )?.[1] ?? [];
+    const hasQuality =
+      scoredEntities.some((key) => key === entity) &&
+      entityFilterUrlKeys(entity).includes("dataGaps");
+    const quality: FilterSpecCore = {
+      columnId: "dataGaps",
+      field: "dataGap",
+      kind: "multiselect",
+    };
+    return [
+      entity,
+      hasQuality
+        ? [...declared.filter((spec) => spec.columnId !== "dataGaps"), quality]
+        : declared,
+    ] satisfies [Entity, readonly FilterSpecCore[]];
+  }),
+);
 
 /**
  * The first declared range filter whose preset expands to an empty patch, or
@@ -62,9 +82,7 @@ export function compileProblemFilters(
   entity: Entity,
   assembly: FilterAssembly,
 ): FilterPatch {
-  const specs: readonly FilterSpecCore[] = isProblemFilterEntity(entity)
-    ? problemFilterSemantics[entity]
-    : [];
+  const specs = problemFilterSpecs[entity] ?? [];
   const values = new Map(assembly.map(({ id, value }) => [id, value]));
   const byColumn = new Map(specs.map((spec) => [spec.columnId, spec]));
   const unknown = assembly.find(({ id }) => !byColumn.has(id));
