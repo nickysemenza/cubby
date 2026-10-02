@@ -10,6 +10,7 @@
  * the pass only remembers where you were.
  */
 import type {
+  ProductCategoryShortcode,
   PurchaseShortcode,
   RunShortcode,
 } from "@cubby/schemas/identifiers";
@@ -48,6 +49,7 @@ import { cn } from "~/lib/utils";
 import { runHref } from "../../purchases/purchase-import-links";
 import { useProductViewSnapshot } from "../worklist/useProductViewSnapshot";
 import type { TriageProduct } from "./triage-types";
+import { TriageBounds, type TriageBoundsValue } from "./TriageBounds";
 import { TriageStopCard } from "./TriageStopCard";
 
 const TRIAGE_PERSISTENCE: QueuePassPersistence<undefined> = {
@@ -59,12 +61,46 @@ const TRIAGE_PERSISTENCE: QueuePassPersistence<undefined> = {
 /** The saved view this pass works through. */
 const TRIAGE_VIEW_ID = "unlocated";
 
-export function ShelfTriageWorkbench({ run }: { run?: RunShortcode }) {
-  return run ? (
-    <RunScopedTriage run={run} />
-  ) : (
-    <TriagePass scopeKey="unlocated" purchaseIds={undefined} />
+interface Bounds {
+  minSpend?: number;
+  categoryId?: ProductCategoryShortcode;
+}
+
+export function ShelfTriageWorkbench({
+  run,
+  minSpend,
+  categoryId,
+  onBoundsChange,
+}: Bounds & {
+  run?: RunShortcode;
+  onBoundsChange: (next: TriageBoundsValue) => void;
+}) {
+  const bounds = { minSpend, categoryId };
+  return (
+    <Stack gap="md" className="min-w-0">
+      <TriageBounds {...bounds} onChange={onBoundsChange} />
+      {run ? (
+        <RunScopedTriage run={run} bounds={bounds} />
+      ) : (
+        <TriagePass
+          scopeKey={boundedScopeKey("unlocated", bounds)}
+          purchaseIds={undefined}
+          bounds={bounds}
+        />
+      )}
+    </Stack>
   );
+}
+
+/** Distinct bounds are distinct passes: a resume key never crosses them. */
+function boundedScopeKey(base: string, { minSpend, categoryId }: Bounds) {
+  return [
+    base,
+    minSpend === undefined ? null : `min:${minSpend}`,
+    categoryId ? `cat:${categoryId}` : null,
+  ]
+    .filter(Boolean)
+    .join("|");
 }
 
 /**
@@ -72,7 +108,13 @@ export function ShelfTriageWorkbench({ run }: { run?: RunShortcode }) {
  * run touched. A run that touched none (a photo import, say) yields an empty
  * queue, never the unfiltered one — see `useProductViewSnapshot`.
  */
-function RunScopedTriage({ run }: { run: RunShortcode }) {
+function RunScopedTriage({
+  run,
+  bounds,
+}: {
+  run: RunShortcode;
+  bounds: Bounds;
+}) {
   const runQuery = useQuery(runOperations.work.queryOptions({ runId: run }));
   const purchaseIds = useMemo(
     () =>
@@ -94,22 +136,31 @@ function RunScopedTriage({ run }: { run: RunShortcode }) {
   }
   if (!purchaseIds) return <TriageSpinner />;
   return (
-    <TriagePass scopeKey={`run:${run}`} purchaseIds={purchaseIds} run={run} />
+    <TriagePass
+      scopeKey={boundedScopeKey(`run:${run}`, bounds)}
+      purchaseIds={purchaseIds}
+      bounds={bounds}
+      run={run}
+    />
   );
 }
 
 function TriagePass({
   scopeKey,
   purchaseIds,
+  bounds,
   run,
 }: {
   scopeKey: string;
   purchaseIds: readonly PurchaseShortcode[] | undefined;
+  bounds: Bounds;
   run?: RunShortcode;
 }) {
   const snapshot = useProductViewSnapshot({
     viewId: TRIAGE_VIEW_ID,
     purchaseIds,
+    minSpend: bounds.minSpend,
+    categoryId: bounds.categoryId,
   });
   const rows = snapshot.data;
 

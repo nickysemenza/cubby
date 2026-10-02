@@ -1,4 +1,7 @@
-import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
+import type {
+  ProductCategoryShortcode,
+  PurchaseShortcode,
+} from "@cubby/schemas/identifiers";
 import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { useQuery } from "@tanstack/react-query";
 
@@ -43,16 +46,28 @@ function productViewFilters(viewId: string): FilterPatch {
 export function useProductViewSnapshot({
   viewId,
   purchaseIds,
+  minSpend,
+  categoryId,
   enabled = true,
 }: {
   viewId: string;
   /** Narrow to products bought on these purchases (an import run's scope). */
   purchaseIds?: readonly PurchaseShortcode[];
+  /** Net-basis floor (`SUM(Expense.cost)`), the server's `expenseTotalMin`. */
+  minSpend?: number;
+  /** Narrow to one product category, as the list's `categoryFilter` does. */
+  categoryId?: ProductCategoryShortcode;
   enabled?: boolean;
 }) {
   const list = entityListFor("product");
   return useQuery({
-    queryKey: ["product-view-snapshot", viewId, purchaseIds ?? null],
+    queryKey: [
+      "product-view-snapshot",
+      viewId,
+      purchaseIds ?? null,
+      minSpend ?? null,
+      categoryId ?? null,
+    ],
     enabled,
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: 0,
@@ -64,6 +79,8 @@ export function useProductViewSnapshot({
       if (purchaseIds?.length === 0) return [];
       const filters = productViewFilters(viewId);
       if (purchaseIds) filters.purchaseId = [...purchaseIds];
+      if (minSpend !== undefined) filters.expenseTotalMin = minSpend;
+      if (categoryId) filters.categoryFilter = [categoryId];
       const sort = viewsForEntity("product")
         .find((v) => v.id === viewId)
         ?.sort?.map((term) => ({
