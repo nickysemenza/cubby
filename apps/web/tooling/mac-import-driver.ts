@@ -818,15 +818,9 @@ export class MacImportDriver {
     );
     this.record(["settings-shortcut"], 0, this.observe());
     await this.wait('label="Settings" role=window');
-    this.guardForeground();
-    execFileSync(
-      "osascript",
-      [
-        "-e",
-        'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set value of scroll bar 1 of scroll area 1 of group 1 of window "Settings" of ownedProcess to 1\n end tell\nend run',
-        String(this.pid),
-      ],
-      { timeout: 10000 },
+    await this.scrollTo(
+      "id=settings.purchaseImport.reconnect",
+      "com_apple_SwiftUI_Settings_window",
     );
     await this.wait("id=settings.purchaseImport.syncNow");
   }
