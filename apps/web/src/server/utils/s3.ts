@@ -100,6 +100,8 @@ export const contentTypeToExtension = (contentType: string): string => {
       return "gif";
     case "image/webp":
       return "webp";
+    case "image/avif":
+      return "avif";
     case "image/heic":
       return "heic";
     case "image/heif":

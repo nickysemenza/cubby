@@ -790,7 +790,7 @@ export const MCP_TOOLS = defineMcpTools({
         op: imageUploadContract.ops.createFileUpload,
         batch: { resultDetail: "full", reference: (item) => item.uploadId },
         description:
-          "Stage up to 50 LOCAL files (`items`) and get one presigned PUT URL per successful item — how files on disk reach Cubby, since the server is remote and `url` cannot name a local path. Three steps: call this, upload each successful item with `curl -X PUT -H 'Content-Type: <contentType>' --upload-file <path> '<uploadUrl>'`, then image.attach_files with the returned uploadIds. A failed item does not roll back successful presigns; results keep input indexes for retrying only failures. Each staged object is discarded once attached. Supported types: image/jpeg, image/png, image/gif, image/webp, image/heic, image/heif, application/pdf.",
+          "Stage up to 50 LOCAL files (`items`) and get one presigned PUT URL per successful item — how files on disk reach Cubby, since the server is remote and `url` cannot name a local path. Three steps: call this, upload each successful item with `curl -X PUT -H 'Content-Type: <contentType>' --upload-file <path> '<uploadUrl>'`, then image.attach_files with the returned uploadIds. A failed item does not roll back successful presigns; results keep input indexes for retrying only failures. Each staged object is discarded once attached. Supported types: image/jpeg, image/png, image/gif, image/webp, image/avif, image/heic, image/heif, application/pdf.",
       }),
       attach_files: mcpAction({
         op: imageUploadContract.ops.attachFile,

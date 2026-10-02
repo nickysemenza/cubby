@@ -127,6 +127,7 @@ export const imageProcessingSource = z.object({
     "image/jpeg",
     "image/png",
     "image/webp",
+    "image/avif",
     "image/heic",
     "image/heif",
   ]),

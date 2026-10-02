@@ -14,6 +14,8 @@ const dimensionMimeType = (dimensionType: string): string | undefined => {
       return "image/gif";
     case "webp":
       return "image/webp";
+    case "avif":
+      return "image/avif";
     case "heic":
       return "image/heic";
     default:
@@ -30,6 +32,12 @@ const asciiAt = (bytes: Uint8Array, start: number, length: number): string =>
 const isoBaseMediaContentType = (bytes: Uint8Array): string | undefined => {
   if (bytes.length < 12 || asciiAt(bytes, 4, 4) !== "ftyp") return undefined;
   const brand = asciiAt(bytes, 8, 4).toLowerCase();
+  if (
+    ["avif", "avis", "avio"].includes(brand) ||
+    imageDimensionsFromData(bytes)?.type === "avif"
+  ) {
+    return "image/avif";
+  }
   if (["heic", "heix", "hevc", "heim", "heis"].includes(brand)) {
     return "image/heic";
   }

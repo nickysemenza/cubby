@@ -17,6 +17,10 @@ import {
 const PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
+// Synthetic 2 × 3 white image encoded as AVIF.
+const AVIF_BASE64 =
+  "AAAAHGZ0eXBhdmlmAAAAAG1pZjFhdmlmbWlhZgAAANZtZXRhAAAAAAAAACFoZGxyAAAAAAAAAABwaWN0AAAAAAAAAAAAAAAAAAAAACJpbG9jAAAAAERAAAEAAQAAAAAA+gABAAAAAAAAACEAAAAjaWluZgAAAAAAAQAAABVpbmZlAgAAAAABAABhdjAxAAAAAA5waXRtAAAAAAABAAAAVmlwcnAAAAA4aXBjbwAAAAxhdjFDgUBsAAAAABRpc3BlAAAAAAAAAAIAAAADAAAAEHBpeGkAAAAAAwwMDAAAABZpcG1hAAAAAAAAAAEAAQOBAgMAAAApbWRhdBIACghYAHNaAhoNwjITGUeHhiGJpppmgAAAkD+bDGCKZg==";
+
 type TestDatabase = { readonly scope: "image-storage" };
 const database: TestDatabase = { scope: "image-storage" };
 const stagedImageId = testEntityId("image", "staged-upload");
@@ -99,6 +103,11 @@ class MemoryImageStorage {
     contentType: string;
     idempotencyKey: string | null;
   } | null = null;
+  readonly attachments: Array<
+    Parameters<
+      ImageStoragePorts<TestDatabase>["repository"]["createOrReuseAttachedImage"]
+    >[1]
+  > = [];
   reuseAttachment = false;
   deletedImageIds: string[] = [];
   publishedMetadataExtractions: { imageId: string; contentType: string }[] = [];
@@ -110,6 +119,7 @@ class MemoryImageStorage {
       },
       createOrReuseAttachedImage: async (_database, params) => {
         if (this.createAttachmentError) throw this.createAttachmentError;
+        this.attachments.push(params);
         const row = this.existingAttachment ?? {
           shortcode: "IMG-9999",
           key: params.key,
@@ -395,6 +405,52 @@ describe("attachFileToEntity", () => {
         contentType: "image/png",
       }),
     ]);
+  });
+
+  it("attaches an AVIF catalog URL with verified dimensions and original bytes", async () => {
+    const bytes = Buffer.from(AVIF_BASE64, "base64");
+    storage.fetchedResponse = new Response(bytes, {
+      headers: { "content-type": "image/avif" },
+    });
+    const result = await service.attachFileToEntity(database, {
+      ...attachmentTarget,
+      url: "https://example.com/catalog.avif",
+      filename: "catalog.avif",
+      source: "catalog",
+    });
+    expect(result).toMatchObject({ contentType: "image/avif", reused: false });
+    expect(storage.attachments).toEqual([
+      expect.objectContaining({
+        contentType: "image/avif",
+        width: 2,
+        height: 3,
+      }),
+    ]);
+    expect(storage.uploaded).toEqual([
+      expect.objectContaining({
+        contentType: "image/avif",
+        size: bytes.length,
+      }),
+    ]);
+  });
+
+  it("rejects mislabeled and truncated AVIF attachments before storage", async () => {
+    for (const bytes of [
+      Buffer.from(PNG_BASE64, "base64"),
+      Buffer.from(AVIF_BASE64, "base64").subarray(0, 28),
+    ]) {
+      await expect(
+        service.attachFileToEntity(database, {
+          ...attachmentTarget,
+          data: bytes.toString("base64"),
+          contentType: "image/avif",
+        }),
+      ).rejects.toThrow(
+        /conflicts with file bytes|dimensions could not be read/,
+      );
+    }
+    expect(storage.createdPending).toEqual([]);
+    expect(storage.uploaded).toEqual([]);
   });
 
   it("registers a pending row before upload so interrupted work is sweepable", async () => {
