@@ -10,7 +10,8 @@ import { buildQualityBreakdown, calculateDataQualityScore } from "./hydrate";
 // active exceptions satisfy a check, stale exceptions do not, and unrelated
 // gaps must never reduce this record's score.
 describe("quality explanation calculation", () => {
-  const [first, second] = dataChecksByEntity.product.options;
+  const first = dataChecksByEntity.product.enum.product_category;
+  const second = dataChecksByEntity.product.enum.product_image;
 
   it("reconciles the displayed weights with the canonical score", () => {
     const result = buildQualityBreakdown([first, second], [second], []);
