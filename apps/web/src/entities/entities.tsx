@@ -3,7 +3,6 @@ import type {
   BrowserRoutedEntity,
   ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { displayGtin } from "@cubby/schemas/external-id";
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
@@ -40,6 +39,7 @@ import { purchaseLabel } from "~/lib/purchase-label";
 import { cn, formatCurrency } from "~/lib/utils";
 
 import { generatedBrowserRoutes } from "./generated/entity-routes.gen";
+import { generatedSortRoster } from "./sortable-fields";
 import {
   defineMergeableConfig,
   type EntityColor,
@@ -515,18 +515,6 @@ export const isBrowserRoutedEntity = (
 export const browserEntityDefinition = (
   entity: BrowserRoutedEntity,
 ): EntityDefinition => entities[entity];
-
-type GeneratedSortRoster =
-  (typeof generatedEntitySort)[keyof typeof generatedEntitySort];
-
-/**
- * The generated `model.sort` roster for an entity, or `undefined` for the few
- * that declare none.
- */
-const generatedSortRoster = (entity: Entity): GeneratedSortRoster | undefined =>
-  // SAFETY: `generatedEntitySort` is `satisfies Partial<Record<Entity, …>>`,
-  // so indexing by any entity is either a roster or absent.
-  (generatedEntitySort as Partial<Record<Entity, GeneratedSortRoster>>)[entity];
 
 /**
  * Every entity now carries a browser route (`ledgerParty`/`ledgerTransfer`

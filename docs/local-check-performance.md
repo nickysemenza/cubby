@@ -58,6 +58,17 @@ make the invalidated set large:
   out of three `.ts` files alone measured no change, because the same
   closures already reach this file.
 
+Server modules no longer type-import client modules. The generated kernel
+bindings carried the port-existence check (`EntityPortExportChecks`, now in
+the unimported `entity-port-checks.gen.ts`), and the problem-registry
+validator read `getSortableFields` from `entities.tsx` (the roster lookup is
+now the leaf `entities/sortable-fields.ts`). Those two edges let 476 of 669
+server files reach the route tree; four do now (`cf-server.ts` and three
+`@tanstack/react-start` middleware files). With a fresh build per probe and
+one body edit, the same 10 files went from 51.5–61.8 s CPU (mean 54.3 s) to
+39.6–57.9 s (mean 43.9 s): about −24% for the eight client files, and no clear
+change for the two server files, which still escalate through `cf-server.ts`.
+
 Emitting declarations to a cache directory would record real signatures from
 the start, but it reports 482 new declaration errors (mostly TS4023 and
 TS2883), and the fresh build took 68 s of CPU and 9.6 GB.
