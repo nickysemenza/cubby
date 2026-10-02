@@ -22,6 +22,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import { homedir } from "node:os";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { request } from "@playwright/test";
@@ -30,6 +31,7 @@ import { Pool } from "pg";
 import { z } from "zod";
 
 import { writeE2ERunBundle } from "./e2e-run-bundle";
+import { collectNativeDriverDiagnostics } from "./native-driver-diagnostics";
 import { assertSimulatorAdminUrl } from "./sim-db-guard";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
 
@@ -1568,7 +1570,13 @@ async function main(): Promise<void> {
         repoRoot,
         "apps/apple/DerivedData/Build/Products/Debug-iphonesimulator/Cubby.app",
       );
-      const common = ["--platform", "ios", "--udid", device.udid];
+      const common = [
+        "--platform",
+        "ios",
+        "--udid",
+        device.udid,
+        ...(process.env.GITHUB_ACTIONS === "true" ? ["--debug"] : []),
+      ];
       const session = `cubby-sim-${simName}`;
       let simulatorReady = false;
       let driverPrepared = false;
@@ -1861,6 +1869,19 @@ async function main(): Promise<void> {
         failure === undefined ? cleanupErrors : [failure, ...cleanupErrors],
         `${lane} failed with cleanup errors for ${simName}`,
       );
+    }
+  }
+  if (process.env.GITHUB_ACTIONS === "true") {
+    try {
+      const diagnostics = await collectNativeDriverDiagnostics(
+        path.join(homedir(), ".agent-device"),
+        new Date(performance.timeOrigin + runStartedAt).toISOString(),
+      );
+      const output = path.join(artifacts, "native-driver-diagnostics.json");
+      writeFileSync(output, `${JSON.stringify(diagnostics, null, 2)}\n`);
+      scenarioEvidence.push(output);
+    } catch {
+      console.warn(`[${lane}] Native driver diagnostics unavailable`);
     }
   }
   failure = finishE2ERun(failure);

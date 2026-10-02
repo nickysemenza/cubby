@@ -121,6 +121,10 @@ be absent when the SDK does not report it. Telemetry is disabled.
 Deterministic native replays print validated step counters, command names, and
 elapsed milliseconds for timeout diagnosis. Selector values and session paths
 are excluded from those progress messages.
+Hosted native bundles also include `native-driver-diagnostics.json`: fixed SDK
+startup phase names, cache outcomes, and numeric timings from this run. SDK
+traces remain local to the runner; their arguments, responses, identifiers,
+paths, and raw error text are excluded from the uploaded summary.
 
 This trial establishes only the synthetic rename journey on Chromium and an
 iOS simulator. It does not establish broader agent reliability or physical
