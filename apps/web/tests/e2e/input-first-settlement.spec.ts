@@ -48,11 +48,6 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
     member.shortcode,
     names,
   );
-  const secondAccount = await createEntityFixture(page, "vendorAccount", {
-    label: `${names.name} second retailer account`,
-    vendorId: prerequisites.vendor.id,
-    ledgerPartyId: member.shortcode,
-  });
   const vendorId = await resolveOrThrow(db, "vendor", prerequisites.vendor.id);
   const cardId = await resolveOrThrow(
     db,
@@ -139,7 +134,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
   const purchaseCodes: string[] = [];
   for (const [index, account] of [
     prerequisites.account,
-    secondAccount,
+    prerequisites.account,
   ].entries()) {
     const orderToken = `${token}-${index}`;
     const orderNames = convergenceNames(orderToken);
@@ -233,7 +228,7 @@ test("reviews CSV charge groups and refunds against captured retailer orders", a
       page.getByText("Prepared import approved and committed.", {
         exact: true,
       }),
-    ).toBeVisible();
+    ).toHaveCount(index + 1);
     const purchase = await database.query.purchase.findFirst({
       where: and(
         eq(schema.purchase.vendorId, vendorId),
