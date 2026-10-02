@@ -10,6 +10,9 @@ import { runTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import {
   proposedImportFix,
   confirmMerchantVendorRuleInput,
+  commitPurchaseImportInput,
+  commitPurchaseImportOut,
+  preparePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
 import {
   runBrowserListInput,
@@ -134,11 +137,14 @@ const runDetail = z.object({
   preparedOrders: z.array(
     z.object({
       stableOrderId: z.string().min(1),
+      prepareOperationId: commitPurchaseImportInput.shape.prepareOperationId,
       itemOperationId: z.string().min(1),
       sourceKind: z.string().min(1),
       externalKey: z.string().nullable(),
       preparedAt: z.iso.datetime(),
       lineCount: z.number().int().nonnegative(),
+      committed: z.boolean(),
+      lines: preparePurchaseImportOut.shape.orders.element.shape.lines,
     }),
   ),
   targets: z.array(
@@ -393,6 +399,15 @@ export const runContract = defineContract("run", {
     input: z.object({ runId: runShortcode }),
     output: runDetail,
     cache: { tags: [["run"]] },
+  }),
+  commitPrepared: mutation({
+    input: commitPurchaseImportInput.omit({ _runExecution: true }).extend({
+      runId: runShortcode,
+      operationId:
+        commitPurchaseImportInput.shape._runExecution.shape.operationId,
+    }),
+    output: commitPurchaseImportOut,
+    invalidates: ["runOnly", "purchase", "product"],
   }),
   control: mutation({
     input: z.object({

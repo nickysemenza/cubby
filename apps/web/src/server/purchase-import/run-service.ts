@@ -24,7 +24,12 @@ import {
   type AgentProgressEvent,
   agentProgressEvent,
 } from "@cubby/schemas/purchase-agent-rpc";
-import { proposedImportFix } from "@cubby/schemas/purchase-import";
+import {
+  proposedImportFix,
+  extractedPurchaseLine,
+  preparePurchaseImportOut,
+  commitPurchaseImportOut,
+} from "@cubby/schemas/purchase-import";
 import {
   browserBridgeOperation,
   browserBridgeRequest,
@@ -2758,6 +2763,92 @@ export async function markRunFailed(
 
 const iso = (value: Date | null) => value?.toISOString() ?? null;
 
+async function loadPreparedReviewRows(db: Database, runId: string) {
+  const database = getDb(db);
+  return database
+    .select({
+      orderId: importPreparedOrder.id,
+      stableOrderId: importPreparedOrder.stableOrderId,
+      prepareOperationId: importPreparedOrder.prepareOperationId,
+      itemOperationId: importPreparedOrder.itemOperationId,
+      sourceKind: importPreparedOrder.sourceKind,
+      externalKey: importPreparedOrder.sourceExternalKey,
+      preparedAt: importPreparedOrder.createdAt,
+      stableLineId: importPreparedLine.stableLineId,
+      line: importPreparedLine.line,
+      identifiers: importPreparedLine.identifiers,
+      candidates: importPreparedLine.candidates,
+    })
+    .from(importPreparedOrder)
+    .leftJoin(
+      importPreparedLine,
+      eq(importPreparedLine.preparedOrderId, importPreparedOrder.id),
+    )
+    .where(eq(importPreparedOrder.runId, runId))
+    .orderBy(
+      asc(importPreparedOrder.createdAt),
+      asc(importPreparedOrder.id),
+      asc(importPreparedLine.position),
+    );
+}
+
+function projectPreparedOrders(
+  rows: Awaited<ReturnType<typeof loadPreparedReviewRows>>,
+  operations: Pick<
+    typeof runOperation.$inferSelect,
+    "kind" | "state" | "result"
+  >[],
+): RunDetail["preparedOrders"] {
+  const committedOrders = new Set<string>();
+  for (const operation of operations) {
+    if (
+      operation.kind !== "commit_purchase_import" ||
+      operation.state !== "completed"
+    )
+      continue;
+    const result = commitPurchaseImportOut.safeParse(operation.result);
+    if (result.success) {
+      for (const item of result.data.items)
+        committedOrders.add(item.stableOrderId);
+    }
+  }
+  const reviewOrders = new Map<string, RunDetail["preparedOrders"][number]>();
+  for (const row of rows) {
+    let order = reviewOrders.get(row.orderId);
+    if (!order) {
+      order = {
+        stableOrderId: row.stableOrderId,
+        prepareOperationId: row.prepareOperationId,
+        itemOperationId: row.itemOperationId,
+        sourceKind: row.sourceKind,
+        externalKey: row.externalKey,
+        preparedAt: row.preparedAt.toISOString(),
+        committed: committedOrders.has(row.stableOrderId),
+        lineCount: 0,
+        lines: [],
+      };
+      reviewOrders.set(row.orderId, order);
+    }
+    if (row.stableLineId !== null) {
+      const line = extractedPurchaseLine.parse(row.line);
+      order.lines.push(
+        preparePurchaseImportOut.shape.orders.element.shape.lines.element.parse(
+          {
+            stableLineId: row.stableLineId,
+            title: line.title,
+            amount: line.amount,
+            identifiers: row.identifiers,
+            candidates: row.candidates,
+            requiresProductResolution: line.lineKind === "principal",
+          },
+        ),
+      );
+      order.lineCount++;
+    }
+  }
+  return [...reviewOrders.values()];
+}
+
 /**
  * The run detail every browser and native surface reads: the kernel
  * `run` row plus its child collections, projected once. Private UUIDs
@@ -2812,6 +2903,7 @@ export async function loadRunDetail(
         error: runOperation.error,
         startedAt: runOperation.startedAt,
         completedAt: runOperation.completedAt,
+        result: runOperation.result,
       })
       .from(runOperation)
       .where(eq(runOperation.runId, run.id))
@@ -2831,23 +2923,7 @@ export async function loadRunDetail(
       .from(runApproval)
       .where(eq(runApproval.runId, run.id))
       .orderBy(asc(runApproval.createdAt)),
-    database
-      .select({
-        stableOrderId: importPreparedOrder.stableOrderId,
-        itemOperationId: importPreparedOrder.itemOperationId,
-        sourceKind: importPreparedOrder.sourceKind,
-        externalKey: importPreparedOrder.sourceExternalKey,
-        preparedAt: importPreparedOrder.createdAt,
-        lineCount: count(importPreparedLine.id),
-      })
-      .from(importPreparedOrder)
-      .leftJoin(
-        importPreparedLine,
-        eq(importPreparedLine.preparedOrderId, importPreparedOrder.id),
-      )
-      .where(eq(importPreparedOrder.runId, run.id))
-      .groupBy(importPreparedOrder.id)
-      .orderBy(asc(importPreparedOrder.createdAt)),
+    loadPreparedReviewRows(db, run.id),
     database
       .select({
         eventId: runProgress.eventId,
@@ -3023,15 +3099,12 @@ export async function loadRunDetail(
     skillRevision: header.skillRevision,
     runtimeRevision: header.runtimeRevision,
     agentModelMs: Number(agentModelUsage[0]?.durationMs ?? 0),
-    operations: operations.map((operation) => ({
+    operations: operations.map(({ result: _result, ...operation }) => ({
       ...operation,
       startedAt: operation.startedAt.toISOString(),
       completedAt: iso(operation.completedAt),
     })),
-    preparedOrders: preparedOrders.map((order) => ({
-      ...order,
-      preparedAt: order.preparedAt.toISOString(),
-    })),
+    preparedOrders: projectPreparedOrders(preparedOrders, operations),
     targets: targets.map((target) => ({
       id: target.id,
       targetType: target.entityKind,

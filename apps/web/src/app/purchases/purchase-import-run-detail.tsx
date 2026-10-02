@@ -65,6 +65,7 @@ import {
   summarizePhotoDescriptions,
   type AgentWorkItem,
 } from "./agent-work-summary";
+import { PreparedPurchaseReview } from "./prepared-purchase-review";
 import { RunFindingActions } from "./run-finding-actions";
 
 const ACTIVE_RUN_STATUSES = new Set([
@@ -1613,32 +1614,11 @@ export function RunImportEvidence({ record }: { record: RunOut }) {
   );
 }
 
-/** Run detail slot: orders the agent prepared for import. */
+/** Run detail slot: immutable prepared lines and their explicit review decisions. */
 export function RunImportPreparedOrders({ record }: { record: RunOut }) {
   return (
     <ImportRunSlot record={record}>
-      {(run) => (
-        <RunRecordList
-          items={run.preparedOrders}
-          empty="No orders were prepared."
-          render={(order) => ({
-            key: order.stableOrderId,
-            body: (
-              <Row wrap gap="sm" align="baseline" justify="between">
-                <span>
-                  {order.sourceKind} ·{" "}
-                  <code className="text-xs">
-                    {order.externalKey ?? order.stableOrderId}
-                  </code>
-                </span>
-                <span className="font-mono text-xs text-muted-foreground tabular-nums">
-                  {order.lineCount} lines · {formatMoment(order.preparedAt)}
-                </span>
-              </Row>
-            ),
-          })}
-        />
-      )}
+      {(run) => <PreparedPurchaseReview run={run} />}
     </ImportRunSlot>
   );
 }
