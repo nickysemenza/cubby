@@ -182,6 +182,7 @@ targets:
       properties:
         BGTaskSchedulerPermittedIdentifiers:
           - com.nickysemenza.cubby.photo-matching
+          - com.nickysemenza.cubby.library-sync
         NSSupportsLiveActivities: true
         UIBackgroundModes:
           - processing
