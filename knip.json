@@ -22,6 +22,7 @@
         "scripts/ci-flakes.ts!",
         "scripts/dev-db.ts!",
         "scripts/stamp-source-mtimes.ts!",
+        "scripts/apple-simulator-build-cache.ts!",
         "scripts/generator/ensure.ts!"
       ],
       "project": ["neon.ts!", "scripts/**/*.ts!"],

@@ -6,6 +6,11 @@ import { execFileSync, spawn } from "node:child_process";
 import { pollUntil } from "@cubby/shared/retry";
 import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
 import { spawnToExit } from "../../../scripts/lib/run.ts";
+import {
+  hasMatchingSimulatorBuild,
+  simulatorBuildFingerprint,
+  stampSimulatorBuild,
+} from "../../../scripts/apple-simulator-build-cache.ts";
 import { createHash, randomBytes } from "node:crypto";
 import {
   appendFileSync,
@@ -1507,12 +1512,11 @@ async function main(): Promise<void> {
           state: "Shutdown",
         };
       }
-      xcodebuildVersion = execFileSync("xcodebuild", ["-version"], {
+      const nativeToolchain = execFileSync("xcodebuild", ["-version"], {
         cwd: repoRoot,
         encoding: "utf8",
-      })
-        .trim()
-        .replaceAll("\n", "; ");
+      }).trim();
+      xcodebuildVersion = nativeToolchain.replaceAll("\n", "; ");
       simulatorName = device.name;
       simulatorRuntime = device.runtime;
       const appPath = path.join(
@@ -1530,7 +1534,7 @@ async function main(): Promise<void> {
           await run("node", ["scripts/stamp-source-mtimes.ts", "apps/apple"]);
         nativeBuildSourceVersion = nativeSourceFingerprint(true);
         currentNativeSourceVersion = () => nativeSourceFingerprint(true);
-        await run("xcodebuild", [
+        const buildArgs = [
           "-project",
           "apps/apple/Cubby.xcodeproj",
           "-scheme",
@@ -1558,8 +1562,31 @@ async function main(): Promise<void> {
             : []),
           "CODE_SIGNING_ALLOWED=NO",
           "COMPILER_INDEX_STORE_ENABLE=NO",
-          "build",
-        ]);
+        ];
+        let certifiedInput: string | undefined;
+        if (hosted) {
+          await run("xcodebuild", [
+            ...buildArgs,
+            "-resolvePackageDependencies",
+          ]);
+          try {
+            certifiedInput = simulatorBuildFingerprint(
+              repoRoot,
+              nativeToolchain,
+            );
+          } catch (error) {
+            console.warn(
+              `[${lane}] Simulator cache unavailable: ${String(error)}`,
+            );
+          }
+        }
+        if (hosted && hasMatchingSimulatorBuild(repoRoot, nativeToolchain)) {
+          console.log(`[${lane}] Reusing the verified simulator app bundle`);
+        } else {
+          await run("xcodebuild", [...buildArgs, "build"]);
+          if (certifiedInput)
+            stampSimulatorBuild(repoRoot, nativeToolchain, certifiedInput);
+        }
         nativeBuildBinary = path.join(appPath, "Cubby");
         nativeBuildReady = true;
         phases.push({
