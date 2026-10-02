@@ -3,7 +3,6 @@ import { capitalize } from "@cubby/shared";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { plainDateDaysBetween } from "~/lib/household-date";
-import { parsePlainDate } from "~/lib/plain-date";
 
 export { capitalize } from "@cubby/shared";
 
@@ -15,26 +14,6 @@ export function monthLabel(key: string): string {
     new Date(Number(year), Number(month) - 1, 1),
     "monthYearCompact",
   );
-}
-
-// NOTE: shared across the app (task due-date ranges, project date ranges,
-// trade activity, etc) — see grep for `formatDateRange` before changing its
-// output shape further.
-export function formatDateRange(
-  start: string | null,
-  end: string | null,
-): string {
-  if (!start) return "No date";
-  if (!end) return formatCalendarDay(start, "monthDay");
-  // Most callers are short same-year ranges (a task's due window), where the
-  // year would just be noise. But a project can span years (e.g. Dec 2025 →
-  // Jul 2027) and "Dec 1 — Jul 1" silently drops which December/July —
-  // include the year on both ends whenever the range crosses one.
-  const crossesYear =
-    parsePlainDate(start).getFullYear() !== parsePlainDate(end).getFullYear();
-  return crossesYear
-    ? `${formatCalendarDay(start, "dateShort")} — ${formatCalendarDay(end, "dateShort")}`
-    : `${formatCalendarDay(start, "monthDay")} — ${formatCalendarDay(end, "monthDay")}`;
 }
 
 /**

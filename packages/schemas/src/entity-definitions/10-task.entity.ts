@@ -34,6 +34,7 @@ export default defineEntity({
       actionLabel: "New Task",
     },
     icons: { phosphor: "ListChecks", sfSymbol: "checklist", emoji: "✅" },
+    spans: [{ start: "dueDate", end: "dueEndDate", label: "Due" }],
     detail: {
       relationFilterOverrides: {
         subtasks: { descriptor: "parentTaskId" },
@@ -56,7 +57,6 @@ export default defineEntity({
         },
       ],
     },
-    edit: { dateRanges: [{ start: "dueDate", end: "dueEndDate" }] },
     list: {
       savedViews: [
         {
@@ -327,6 +327,7 @@ export default defineEntity({
           list: true,
           detail: true,
           listHidden: true,
+          format: "plainDate",
         },
         validation: {
           read: plainDate.describe("End of a due-date range").nullable(),

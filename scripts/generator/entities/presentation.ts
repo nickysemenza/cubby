@@ -313,7 +313,40 @@ const checkEditSectionCoverage = (
     );
 };
 
-// oxlint-disable-next-line eslint/complexity -- Edit checks enumerate each declared rule family in one pass.
+const checkSpans = (
+  spans: EntityPresentation["spans"],
+  detailFields: readonly string[],
+  lookup: FieldLookup,
+) => {
+  const { context } = lookup;
+  const claimed = new Set<string>();
+  for (const [index, span] of spans.entries()) {
+    const where = `spans[${index}]`;
+    for (const key of [span.start, span.end]) {
+      const field = lookup.edit(key, where);
+      if (field.kind !== "date")
+        throw new EntityDeclarationError(
+          `${context}.${where} names ${key}, which is not a date field.`,
+        );
+      if (claimed.has(key))
+        throw new EntityDeclarationError(
+          `${context}.${where} names ${key}, which another span already claims.`,
+        );
+      claimed.add(key);
+    }
+    if (span.start === span.end)
+      throw new EntityDeclarationError(
+        `${context}.${where} names ${span.start} as both start and end.`,
+      );
+    for (const key of [span.start, span.end]) {
+      if (!detailFields.includes(key))
+        throw new EntityDeclarationError(
+          `${context}.${where} names ${key}, which is not a display.detail field.`,
+        );
+    }
+  }
+};
+
 const checkEdit = (
   edit: EntityPresentation["edit"],
   fieldModel: EntityFieldModel,
@@ -326,16 +359,6 @@ const checkEdit = (
   }
   if (edit.sections !== null && edit.sections !== undefined)
     checkEditSectionCoverage(edit.sections, fieldModel, context);
-  for (const [index, range] of edit.dateRanges.entries()) {
-    const where = `edit.dateRanges[${index}]`;
-    for (const key of [range.start, range.end]) {
-      const field = lookup.edit(key, where);
-      if (field.kind !== "date")
-        throw new EntityDeclarationError(
-          `${context}.${where} names ${key}, which is not a date field.`,
-        );
-    }
-  }
   for (const key of edit.readOnlyOnUpdate)
     lookup.edit(key, "edit.readOnlyOnUpdate");
   for (const [index, rule] of edit.readOnlyWhen.entries()) {
@@ -382,7 +405,7 @@ export const compilePresentation = (
 ): CompiledPresentation => {
   const { fieldModel, relations, capabilities, ports } = facts;
   const lookup = fieldLookup(fieldModel, context);
-  const { detail, list, edit } = presentation;
+  const { detail, list, edit, spans } = presentation;
   const detailFields = fieldModel.fields
     .filter((field) => field.display.detail)
     .map((field) => field.key);
@@ -435,6 +458,7 @@ export const compilePresentation = (
       `${context}.capabilities.timeline "custom" and extensions.ports.timeline must be declared together.`,
     );
   checkEdit(edit, fieldModel, lookup);
+  checkSpans(spans, detailFields, lookup);
   const mobileSubtitle = fieldModel.fields
     .filter(
       (field) =>

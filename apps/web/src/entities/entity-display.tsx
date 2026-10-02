@@ -57,6 +57,7 @@ import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { ShortcodeProse } from "~/components/shortcode-prose";
 import { Checkbox } from "~/components/ui/checkbox";
 import { NoneValue } from "~/components/ui/none-value";
+import { formatDateSpan } from "~/lib/date-span";
 import { formatCurrency } from "~/lib/utils";
 
 import { compactFieldRendererFor } from "./compact-field-renderers";
@@ -74,6 +75,7 @@ import { listRendererColumns } from "./list-field-renderers";
 import { readPathValue } from "./read-path";
 
 type DisplayField = EntityFieldModel["fields"][number];
+type SpanDeclaration = Readonly<{ start: string; end: string; label: string }>;
 type DisplaySurface = "list" | "detail";
 const proseFieldKeys = new Set([
   "notes",
@@ -665,6 +667,48 @@ const entityDetailFields = (
 };
 
 /**
+ * The declared `presentation.spans` that fold into one value: those whose
+ * start is among `fields`. The start field renders the span's own row and its
+ * end field is hidden; a span whose start is absent leaves its end alone.
+ */
+const foldedSpans = (entity: Entity, fields: readonly DisplayField[]) => {
+  const present = new Set(fields.map((field) => field.key));
+  const declared: readonly SpanDeclaration[] = entitySummary[entity].spans;
+  const active = declared.filter((span) => present.has(span.start));
+  return {
+    byStart: new Map(active.map((span) => [span.start, span])),
+    ends: new Set(active.map((span) => span.end)),
+  };
+};
+
+const spanDateOf = <TRecord extends object>(
+  entity: Entity,
+  record: TRecord,
+  key: string,
+): string | null => {
+  const field = entityFieldModels[entity].fields.find(
+    (candidate) => candidate.key === key,
+  );
+  if (field === undefined) return null;
+  const value = readScalarField(entity, record, field);
+  return value.kind === "date" ? value.raw : null;
+};
+
+const renderSpanValue = <TRecord extends object>(
+  entity: Entity,
+  record: TRecord,
+  span: SpanDeclaration,
+): ReactNode => {
+  const start = spanDateOf(entity, record, span.start);
+  const end = spanDateOf(entity, record, span.end);
+  return start === null && end === null ? (
+    <NoneValue />
+  ) : (
+    <span className="tabular-nums">{formatDateSpan(start, end)}</span>
+  );
+};
+
+/**
  * The compact facts a record's preview shows: its declared hero stats, then
  * the first detail `fields` section in order, skipping the title, the hero
  * chip and breadcrumb (the card header carries those), structured values,
@@ -759,6 +803,7 @@ export function EntityBasicInfo<TRecord extends object>({
   footer?: ReactNode;
 }) {
   const fields = entityDetailFields(entity, fieldKeys);
+  const spans = foldedSpans(entity, fields);
   const explainedRecord = explainedRecordSchema.safeParse(record);
   for (const key of [...Object.keys(overrides), ...Object.keys(afterFields)]) {
     if (!fields.some((field) => field.key === key)) {
@@ -774,6 +819,12 @@ export function EntityBasicInfo<TRecord extends object>({
       header={header}
       footer={footer}
       fields={fields.flatMap((field) => {
+        if (spans.ends.has(field.key)) return [];
+        const span = spans.byStart.get(field.key);
+        if (span !== undefined)
+          return [
+            { label: span.label, value: renderSpanValue(entity, record, span) },
+          ];
         const rendered = overrides[field.key]?.(record) ?? {
           value: renderDetailFieldValue(entity, record, field),
         };
@@ -924,6 +975,8 @@ function renderEditableField<TRecord extends object>(
   save: (next: EditableFieldValue) => Promise<void>,
   record: TRecord,
   surface: DisplaySurface,
+  /** A date field folded into a span shows the span text but edits its own value. */
+  spanValue?: ReactNode,
 ): ReactNode {
   const { key, control } = field;
   const format = field.display.format;
@@ -1020,11 +1073,16 @@ function renderEditableField<TRecord extends object>(
           onSave={save}
           renderValue={(v) =>
             displayed(
-              v ? (
-                renderFormattedScalar(format, { kind: "date", raw: v }, surface)
-              ) : (
-                <NoneValue />
-              ),
+              spanValue ??
+                (v ? (
+                  renderFormattedScalar(
+                    format,
+                    { kind: "date", raw: v },
+                    surface,
+                  )
+                ) : (
+                  <NoneValue />
+                )),
             )
           }
         />
@@ -1224,6 +1282,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
             throw new Error(`${entity}.${id} is not a list column`);
           return [field];
         });
+  const spans = foldedSpans(entity, selected);
   // oxlint-disable-next-line complexity -- one exhaustive manifest control dispatcher preserves column metadata and clipboard ownership together.
   return createCubbyColumnCollection<TRecord>((addColumn) => {
     const usedOverrides = new Set<string>();
@@ -1248,6 +1307,52 @@ export function createEntityDisplayColumns<TRecord extends object>(
             ("accessorKey" in column ? String(column.accessorKey) : null);
           if (id === columnId) usedOverrides.add(columnId);
         });
+        continue;
+      }
+      // A declared span is one column in its start field's place. The start
+      // keeps its inline editor; the end is edited in the edit sheet.
+      if (spans.ends.has(field.key)) continue;
+      const span = spans.byStart.get(field.key);
+      if (span !== undefined) {
+        const startOf = (row: TRecord) => spanDateOf(entity, row, span.start);
+        const startControl = field.control;
+        const startEditable =
+          onSaveField !== undefined &&
+          startControl !== null &&
+          startControl.kind === "date" &&
+          updateFields.includes(field.key);
+        const saveStart = (
+          row: TRecord,
+          value: string | number | boolean | null,
+        ) => onSaveField?.(row, field.key, value) ?? Promise.resolve();
+        add(
+          helper.accessor(startOf, {
+            id: columnId,
+            header: span.label,
+            enableSorting: sortableColumnIds.includes(columnId),
+            meta: attachCubbyColumnMeta({
+              entityColumnRole: "fact",
+              className: widthClassName("md"),
+              mobile: toMobileColumnMeta(field.display.mobile),
+              cellData: dateCellData<TRecord>(
+                startOf,
+                startEditable ? saveStart : undefined,
+              ),
+            }),
+            cell: ({ row }) =>
+              startEditable && startControl !== null
+                ? renderEditableField(
+                    entity,
+                    { ...field, control: startControl },
+                    startOf(row.original),
+                    (next) => saveStart(row.original, next),
+                    row.original,
+                    "list",
+                    renderSpanValue(entity, row.original, span),
+                  )
+                : renderSpanValue(entity, row.original, span),
+          }),
+        );
         continue;
       }
       // A standard column belongs to the shared table's pipeline, unless the

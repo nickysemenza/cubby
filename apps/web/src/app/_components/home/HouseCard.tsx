@@ -11,11 +11,11 @@ import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/app/_components/entity-media/entity-display-images";
-import { formatDateRange } from "~/app/projects/project-formatting";
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatDateSpan } from "~/lib/date-span";
 import { getErrorMessage } from "~/lib/error-utils";
 
 export const TODAY_ENTITY_LINK_CLASS = "min-h-11 items-center sm:min-h-0";
@@ -96,7 +96,7 @@ function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
         truncate
       />
       <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-        {formatDateRange(item.dueDate, item.dueEndDate)}
+        {formatDateSpan(item.dueDate, item.dueEndDate)}
       </span>
       {item.projectId && item.projectName ? (
         <EntityRefLink

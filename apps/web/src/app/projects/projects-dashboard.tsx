@@ -58,6 +58,7 @@ import {
   project,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay } from "~/lib/date-format";
+import { formatDateSpan } from "~/lib/date-span";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn, formatCurrency } from "~/lib/utils";
 
@@ -71,12 +72,7 @@ import {
 } from "./dashboard-filter-state";
 import { ActiveScopeSummary, DashboardFilters } from "./dashboard-filters";
 import { NeedsAttention } from "./needs-attention";
-import {
-  capitalize,
-  formatDateRange,
-  PROJECT_STATUS_LABELS,
-  StatusIcon,
-} from "./shared";
+import { capitalize, PROJECT_STATUS_LABELS, StatusIcon } from "./shared";
 
 // Portfolio analytics is one optional interaction: keep all of its Nivo/d3
 // charts in one lazy module so selecting Analytics has one predictable fetch.
@@ -671,7 +667,7 @@ export function ProjectCard({
             {(project.dates.effectiveStart || project.dates.effectiveEnd) && (
               <Badge variant="outline">
                 <CalendarIcon className="size-3" />
-                {formatDateRange(
+                {formatDateSpan(
                   project.dates.effectiveStart,
                   project.dates.effectiveEnd,
                 )}

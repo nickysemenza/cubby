@@ -1,6 +1,6 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { testShortcode } from "@cubby/schemas/testing";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { itemSpanLabel } from "./calendar-span";
 
@@ -31,6 +31,17 @@ const plantingMilestone: CalendarItem = {
 };
 
 describe("itemSpanLabel", () => {
+  // The span format omits the year only for the household's current year.
+  beforeEach(() => {
+    vi.useFakeTimers({
+      toFake: ["Date"],
+      now: new Date("2026-10-01T19:00:00Z"),
+    });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("returns null for a single-day item", () => {
     expect(itemSpanLabel(projectSpan("2026-10-03", "2026-10-04"))).toBeNull();
   });
@@ -44,13 +55,13 @@ describe("itemSpanLabel", () => {
   it("renders the INCLUSIVE end, one day back from endDateExclusive", () => {
     // The off-by-one that matters: exclusive 2026-11-13 is an inclusive Nov 12.
     expect(itemSpanLabel(projectSpan("2026-10-03", "2026-11-13"))).toBe(
-      "Oct 3 — Nov 12",
+      "Oct 3 – Nov 12",
     );
   });
 
   it("qualifies both ends with the year when the span crosses one", () => {
     expect(itemSpanLabel(projectSpan("2025-12-01", "2027-07-02"))).toBe(
-      "Dec 1, 2025 — Jul 1, 2027",
+      "Dec 1, 2025 – Jul 1, 2027",
     );
   });
 

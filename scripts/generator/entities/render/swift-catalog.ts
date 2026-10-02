@@ -573,7 +573,10 @@ const presentationJSON = (
             fields: [...section.fields],
             collapsed: section.collapsed,
           })),
-    editDateRanges: edit.dateRanges.map(({ start, end }) => ({ start, end })),
+    editDateRanges: presentation.spans.map(({ start, end }) => ({
+      start,
+      end,
+    })),
     savedViews: list.savedViews.map((view) => ({
       id: view.id,
       label: view.label,

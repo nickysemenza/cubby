@@ -8,7 +8,6 @@ import { useNavigate } from "@tanstack/react-router";
 
 import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
 import { useEntityDisplayImage } from "~/app/_components/entity-media/entity-display-images";
-import { formatDateRange } from "~/app/projects/project-formatting";
 import { TradeBadge } from "~/app/projects/shared";
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
@@ -30,6 +29,7 @@ import {
 } from "~/components/ui/tooltip";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { formatCalendarDay } from "~/lib/date-format";
+import { formatDateSpan } from "~/lib/date-span";
 import { householdLocalDate } from "~/lib/household-date";
 import { statusTone } from "~/lib/status-tone";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
@@ -262,7 +262,7 @@ export function TaskCard({
               )}
             >
               {task.dueEndDate
-                ? formatDateRange(task.dueDate, task.dueEndDate)
+                ? formatDateSpan(task.dueDate, task.dueEndDate)
                 : formatCalendarDay(task.dueDate, "monthDay")}
             </span>
           )}

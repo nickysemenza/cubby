@@ -30,6 +30,7 @@ export default defineEntity({
       actionLabel: "New Planting",
     },
     icons: { phosphor: "Plant", sfSymbol: "leaf", emoji: "🌱" },
+    spans: [{ start: "sowedOn", end: "finishedOn", label: "Season" }],
     detail: {
       variantOverride: "journal",
       hero: {

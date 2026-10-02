@@ -273,7 +273,11 @@ compiler requires a declaring entity to place every controlled field of its
 create/update rosters and edit intents exactly once — the image-block keys
 (`pendingImageIds`, `pendingImagePurposes`, `removeImageIds`, `imageOrder`)
 are excluded, since the editors' image block owns them on both platforms.
-`edit.readOnlyOnUpdate` and
+`presentation.spans` (`[{ start, end, label }]`, date fields only) declares a
+start/optional-end pair: detail and list render one row in the start field's
+place through `formatDateSpan` ("Sep 22", "Sep 22 – 25"), hide the end field,
+and the editor rejects an end before its start; the native catalog's
+`editDateRanges` is generated from it. `edit.readOnlyOnUpdate` and
 `edit.readOnlyWhen` lock fields in the update editor. `capabilities.timeline`
 (`"default"`: audit log plus the declared date fields; `"custom"`: the
 `extensions.ports.timeline` implementation) publishes

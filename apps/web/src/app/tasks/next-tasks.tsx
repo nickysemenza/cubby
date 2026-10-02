@@ -15,7 +15,6 @@ import {
   type EntityDisplayImageMap,
   useEntityDisplayImages,
 } from "~/app/_components/entity-media/entity-display-images";
-import { formatDateRange } from "~/app/projects/shared";
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Section, Stack } from "~/components/layout";
@@ -39,6 +38,7 @@ import {
 } from "~/components/ui/table";
 import { fieldEnumOptions } from "~/entities/enum-field-display";
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatDateSpan } from "~/lib/date-span";
 import { getErrorMessage } from "~/lib/error-utils";
 
 /** A single chain node (task or project) as a linked breadcrumb chip. */
@@ -176,7 +176,7 @@ function TaskRows({
                 <span className="text-muted-foreground">—</span>
               )}
             </TableCell>
-            <TableCell>{formatDateRange(t.dueDate, t.dueEndDate)}</TableCell>
+            <TableCell>{formatDateSpan(t.dueDate, t.dueEndDate)}</TableCell>
           </TableRow>
         ))}
       </TableBody>
