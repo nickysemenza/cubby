@@ -26,18 +26,8 @@ history is the archive. Permanent product constraints live in the
 
 ## Images & photos
 
-- 🟢 **Stop recording attempts while a job waits for a device.** The
-  "retry storm" (production: 4,804 `ImageProcessingAttempt` and 9,629
-  `ImageProcessingEvent` rows across 68 jobs; the worst three at 784 attempts
-  each) is the dispatcher re-checking `subject_lift` jobs roughly every 20
-  minutes while no companion device is connected: every row is `state:
-waiting`, no executor, ~0.4 s. Record an attempt only when a device actually
-  leases the job, then prune the executor-less `waiting` attempts and their
-  events. Prerequisite for automatic description and background companion
-  work below.
-
-- 🟢 **Turn on automatic image description.** Decided: yes, once the attempt
-  fix lands. Image-processing settings still ship `enabled: false, paused:
+- 🟢 **Turn on automatic image description.** Decided: yes; attempts are now
+  recorded only when an executor takes the job. Image-processing settings still ship `enabled: false, paused:
 true` (`repo/image-processing-maintenance.ts`), so new uploads stay
   undescribed and category suggestions see only text. Measured about $1.10 per
   1,000 images at ~7 s each; `backfillImageProcessing` with `kinds:
@@ -73,7 +63,7 @@ true` (`repo/image-processing-maintenance.ts`), so new uploads stay
   50-item pages, keyed on `modificationDate`. Phase 2: run companion jobs
   (subject lift, on-device description) in the same window; today they are
   pushed over a live websocket, so the background path needs to pull leased
-  work and finish or release it before expiry. Depends on the attempt fix.
+  work and finish or release it before expiry.
 
 - 🟢 **Identify what is in a photo.** Photo import stops at the entity type,
   and web location detection matches by name only. In order:
