@@ -1,9 +1,12 @@
 # Quality and local diagnostics
 
-`pnpm typecheck:web` is useful for web-only work. Run it rather than a raw
-`tsc`: its wrapper discards a stale incremental cache and holds one of two
-machine-wide slots, since each web check keeps 5–7 GB resident
-([measurements](../local-check-performance.md#typechecking)). `pnpm check` runs the root
+`pnpm typecheck:web` checks web app code for web-only work; it leaves out
+tests and test tooling, about 20% faster. After editing tests or test tooling,
+run `pnpm typecheck:web:tests`, the full program that `pnpm check` and CI run.
+Use these rather than a raw `tsc`: the wrapper discards a stale incremental
+cache and holds one of two machine-wide slots, since each web check keeps
+5–7 GB resident ([measurements](../local-check-performance.md#typechecking)).
+`pnpm check` runs the root
 static checks, type checking, entity freshness, Knip, and script types.
 `pnpm check:all` adds bindings, OpenAPI, orchestration tests, security checks,
 and calendar Worker tests. CI runs `pnpm dedupe:check` when code validation is
