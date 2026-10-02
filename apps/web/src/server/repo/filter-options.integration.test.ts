@@ -147,7 +147,12 @@ describe("entity reference filter options", () => {
       include: ["icon"],
     });
     expect(roster.items).toEqual([
-      { id: hammer.output.id, label: "Deck rebuild", icon: "hammer" },
+      {
+        id: hammer.output.id,
+        label: "Deck rebuild",
+        icon: "hammer",
+        emoji: "hammer",
+      },
     ]);
 
     await expect(

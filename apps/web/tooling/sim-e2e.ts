@@ -220,7 +220,7 @@ function nativeSourceFingerprint(includeApp: boolean): string {
 async function assertNativeEdit(
   productId: string,
   expectedName?: string,
-  expectedEmoji?: string,
+  expectedEmoji?: string | null,
 ): Promise<void> {
   const checkPool = new Pool({ connectionString: databaseURL });
   try {
@@ -1276,7 +1276,7 @@ async function runNativeJourney(
     await stopRecording?.();
   }
   if (!layout && !productClarity)
-    await assertNativeEdit(productId, undefined, "👩🏽‍🍳");
+    await assertNativeEdit(productId, undefined, null);
 }
 
 // eslint-disable-next-line complexity -- All disposable native lanes share one exception, artifact and cleanup boundary.

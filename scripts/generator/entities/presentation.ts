@@ -429,7 +429,14 @@ function recordEmojiEdit(
         ...presentation.edit,
         sections: editSections.map((section, index) =>
           index === 0
-            ? { ...section, fields: [...section.fields, emojiField] }
+            ? {
+                ...section,
+                fields: [
+                  section.fields[0]!,
+                  emojiField,
+                  ...section.fields.slice(1),
+                ],
+              }
             : section,
         ),
       }

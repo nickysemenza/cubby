@@ -40,6 +40,18 @@ struct EntityFieldSuggestionSection: View {
                                         value: Route.entityDetail(.productCategory, id: category.id))
                                 }
                             }
+                            if !proposal.alternatives.isEmpty {
+                                DisclosureGroup("Alternatives") {
+                                    ForEach(proposal.alternatives, id: \.value) { alternative in
+                                        VStack(alignment: .leading) {
+                                            Text(alternative.label)
+                                            if let detail = alternative.detail {
+                                                Text(detail).font(.caption).foregroundStyle(.secondary)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             Text(proposal.reasoning).font(.caption).foregroundStyle(.secondary)
                             Text(
                                 proposal.financeReview == nil
