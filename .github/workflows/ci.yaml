@@ -604,7 +604,7 @@ jobs:
           wasm: restore
       - run: pnpm test:e2e:agent:preflight
       - uses: ./.github/actions/start-test-services
-      - run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium --with-deps
+      - run: pnpm --dir apps/web exec playwright install --with-deps chromium
       - run: pnpm test:e2e:agent:web
       - name: Save sanitized web run bundle
         if: always()

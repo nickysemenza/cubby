@@ -46,7 +46,7 @@ The web lane builds the Worker and owns a disposable authenticated database,
 object storage, and Worker runtime. The iOS lane reuses the existing simulator
 harness, synthetic fixture, local server, native build, and cleanup. Each run
 uses fresh fixture state. Install the Chromium browser with
-`pnpm --filter @cubby/web run test:e2e:install-browser -- chromium` if needed.
+`pnpm --dir apps/web exec playwright install chromium` if needed.
 The iOS prerequisites are the same as `pnpm test:e2e:sim`.
 
 Dispatch **CI** manually with `tester_army` set to `web`, `ios`, or `both` and
