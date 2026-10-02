@@ -168,7 +168,7 @@ export async function connectRetailerBrowserPeer(input: {
               result.state === "completed" &&
               result.result.outcome.status === "completed"
             )
-              capture = result.result.outcome.capture;
+              capture = result.result.outcome.capture ?? undefined;
             return Boolean(capture);
           },
           { timeout: 30_000 },
