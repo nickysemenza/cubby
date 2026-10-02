@@ -7,10 +7,10 @@ import { getTaskTodayBriefing } from "./today-briefing";
 describe("task today briefing", () => {
   const ctx = withTestDb();
 
-  it("carries the joined project icon so the home row needs no project roster lookup", async () => {
+  it("carries the joined project emoji so the home row needs no project roster lookup", async () => {
     const project = await createRepoEntity(ctx, "project", {
       name: "Workshop",
-      icon: "🔧",
+      emoji: "🔧",
     });
     const task = await createRepoEntity(ctx, "task", {
       name: "Check the workbench",
