@@ -9,10 +9,10 @@ import { useCallback, useEffect, useMemo } from "react";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { EntityShelf } from "~/entity/entity-list/entity-shelf";
 import {
-  resolveListView,
   useEntityListCardDensity,
   useListSearch,
 } from "~/entity/entity-list/generic-entity-list";
+import { resolveListView } from "~/entity/entity-list/resolve-list-view";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import {
   buildFiltersFromManifest,
