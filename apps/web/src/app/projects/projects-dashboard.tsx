@@ -17,9 +17,9 @@ import {
   useMemo,
 } from "react";
 
-import { ProjectMark } from "~/app/projects/project-mark";
 import type { ProjectPortfolioAnalyticsViewProps } from "~/app/projects/project-portfolio-analytics-view";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { RecordMark } from "~/entity/components/record-mark";
 import { entities, entityDetailParams } from "~/entity/entities";
 import {
   entityDisplayImageKey,
@@ -620,7 +620,7 @@ export function ProjectCard({
               className="inline-flex min-w-0 items-center gap-2"
               onClick={(event) => event.stopPropagation()}
             >
-              <ProjectMark icon={project.icon} size={20} />
+              <RecordMark entity="project" emoji={project.emoji} size={20} />
               <span className="truncate">{project.name}</span>
             </Link>
           </CardTitle>

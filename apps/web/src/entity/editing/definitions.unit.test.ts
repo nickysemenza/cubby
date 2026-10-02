@@ -172,7 +172,7 @@ describe("entity edit definitions", () => {
         "project",
         [
           "costEstimate",
-          "icon",
+          "emoji",
           "locations",
           "googleDriveFolderUrl",
           "notionPageUrl",

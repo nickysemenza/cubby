@@ -228,6 +228,10 @@ function renderPrimitiveField({
         description={description}
         placeholder={placeholder ?? presentation.label}
         nullable={field.nullable}
+        suggestField={suggestFieldFor(
+          Boolean(field.control?.suggest),
+          field.key,
+        )}
         focusOnMount={fieldOptions.focusOnMount}
       />
     );

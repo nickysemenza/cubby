@@ -46,6 +46,7 @@ import { compileTraversal } from "~/server/repo/relatedness/traversal";
 import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
+import { withRecordEmoji } from "./entity-emoji";
 import {
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
   loadImageRepresentations,
@@ -630,7 +631,11 @@ export async function withUniversalEntityMedia<
     }
   >
 > {
-  const publicRows = rows.map((row) => publicEntityRowSchema.parse(row));
+  const publicRows = await withRecordEmoji(
+    db,
+    entityKind,
+    rows.map((row) => publicEntityRowSchema.parse(row)),
+  );
   const resolved = await resolveLiveShortcodes(
     db,
     publicRows.map((row) => row.id),
@@ -692,7 +697,7 @@ export async function withListEntityMedia<
   rows: Row[],
 ): Promise<Row[] | Awaited<ReturnType<typeof withUniversalEntityMedia>>> {
   if (rows.every((row) => resolvedListMediaSchema.safeParse(row).success)) {
-    return rows;
+    return withRecordEmoji(db, entityKind, rows);
   }
   return withUniversalEntityMedia(db, entityKind, rows, false);
 }

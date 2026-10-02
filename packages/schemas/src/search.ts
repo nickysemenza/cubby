@@ -140,6 +140,7 @@ export const searchHitSchema = z.object({
   entityKind: searchableEntitySchema,
   title: z.string(),
   subtitle: z.string().nullable(),
+  emoji: z.string().nullable().optional(),
   typeHint: z.string().nullable(),
   imageUrl: z.string().nullable(),
   locationPath: z
@@ -160,6 +161,7 @@ export const searchDestinationSchema = searchHitSchema.pick({
   entityKind: true,
   title: true,
   subtitle: true,
+  emoji: true,
   typeHint: true,
   imageUrl: true,
 });

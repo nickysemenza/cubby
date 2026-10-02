@@ -123,6 +123,7 @@ describe('control.suggest.mode: "prune" compiles only onto a text-array target',
       (field) => field.key === "tags",
     );
     expect(tags?.control?.suggest).toEqual({
+      reviewRequired: false,
       basis: ["subject"],
       mode: "prune",
     });

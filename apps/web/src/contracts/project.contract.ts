@@ -9,12 +9,11 @@ import { defineContract, mutation, query } from "~/contracts/define";
 // objects strip unknown keys), so a new field on the underlying schema flows
 // through without an MCP-side edit.
 
-/** Project row minus the notes, icon, id arrays and timestamps an entity get returns in full. */
+/** Project row minus the notes, id arrays and timestamps an entity get returns in full. */
 const houseStatusProject = schemas.projectOut.omit({
   notes: true,
   googleDriveFolderUrl: true,
   notionPageUrl: true,
-  icon: true,
   childProjectIds: true,
   blockedByIds: true,
   blockingIds: true,

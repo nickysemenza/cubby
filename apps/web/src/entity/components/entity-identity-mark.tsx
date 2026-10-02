@@ -3,8 +3,9 @@ import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { ReactNode } from "react";
 
 import { EntityCover } from "~/entity/components/entity-cover";
-import { EntityIcon } from "~/entity/entities";
 import { cn } from "~/lib/utils";
+
+import { RecordEmoji } from "./record-emoji";
 
 export type EntityIdentityMarkSize = "inline" | "row" | "card";
 
@@ -25,19 +26,25 @@ const containedEntities = new Set<Entity>(["product", "vendor", "cookbook"]);
 export function EntityIdentityMark({
   entity,
   displayImage,
+  emoji,
   size = "inline",
   fallback,
   className,
 }: {
   entity: Entity;
   displayImage: ImageUrlSummary | null;
+  emoji?: string | null;
   size?: EntityIdentityMarkSize;
   fallback?: ReactNode;
   className?: string;
 }) {
   const pixels = MARK_SIZE[size];
   const fallbackMark = fallback ?? (
-    <EntityIcon entity={entity} colored size={size === "inline" ? 12 : 16} />
+    <RecordEmoji
+      entity={entity}
+      emoji={emoji}
+      size={size === "inline" ? 12 : 16}
+    />
   );
 
   if (!displayImage) {

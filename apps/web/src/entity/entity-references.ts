@@ -9,11 +9,13 @@ type ReferenceField = Pick<
 const referenceObject = z.object({
   id: z.string(),
   name: z.string().nullish(),
+  emoji: z.string().nullish(),
 });
 
 export interface ReferenceItem {
   id: string;
   name: string | null;
+  emoji?: string | null;
 }
 
 export interface ReferenceFieldValue {
@@ -46,6 +48,7 @@ const multipleItems = (raw: unknown, nested: unknown): ReferenceItem[] => {
     return nestedItems.data.map((item) => ({
       id: item.id,
       name: item.name ?? null,
+      emoji: item.emoji ?? null,
     }));
   return ids.map((id) => ({ id, name: null }));
 };
@@ -61,7 +64,13 @@ const singleItem = (
   const itemId = id ?? resolved?.id ?? null;
   return itemId === null
     ? []
-    : [{ id: itemId, name: nestedName ?? resolved?.name ?? null }];
+    : [
+        {
+          id: itemId,
+          name: nestedName ?? resolved?.name ?? null,
+          emoji: resolved?.emoji,
+        },
+      ];
 };
 
 /**
@@ -112,6 +121,11 @@ export function readReferenceField<TRecord extends object>(
     entity: reference.entity,
     items: reference.multiple
       ? multipleItems(normalizedRaw, normalizedNested)
-      : singleItem(normalizedRaw, normalizedNested, nestedName),
+      : singleItem(normalizedRaw, normalizedNested, nestedName).map((item) => ({
+          ...item,
+          emoji:
+            item.emoji ??
+            readRecordField(record, `${base}Emoji`, z.string().nullish()),
+        })),
   };
 }

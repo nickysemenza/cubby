@@ -58,6 +58,16 @@ export async function seedSimulatorScenario(
   return product.id;
 }
 
+/** A category exercises the opt-in shared emoji editor without altering product identity. */
+export async function seedSimulatorEmojiCategory(pool: Pool, userId: string) {
+  const db = buildScenarioDatabase(pool);
+  const context = buildKernelContext(db, testUserId(userId));
+  const category = await createEntity(context, "productCategory", {
+    name: "Synthetic Emoji Category",
+  });
+  return category.id;
+}
+
 /** Mixed evidence exercises both inverse relation presentations without client classification. */
 export async function seedSimulatorProductClarity(
   pool: Pool,

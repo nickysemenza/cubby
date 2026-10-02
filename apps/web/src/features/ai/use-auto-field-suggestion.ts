@@ -80,6 +80,16 @@ type SuggestionWriteValue = string | ComboboxItem | null;
 
 const comboboxItemIdSchema = z.object({ id: z.string() });
 
+function requiresSuggestionReview(
+  entity: FieldSuggestionContextValue["entity"],
+  field: string,
+) {
+  return Boolean(
+    entityFieldModels[entity].fields.find((item) => item.key === field)?.control
+      ?.suggest?.reviewRequired,
+  );
+}
+
 function explicitModeField(entity: string | undefined, field: string) {
   if (entity !== "task") return null;
   if (field === "projectId") return "projectMode";
@@ -242,6 +252,7 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       !context ||
       disabled ||
       context.mode !== "create" ||
+      requiresSuggestionReview(context.entity, field) ||
       suggestion?.financeReview ||
       isDirty ||
       context.isFetching ||
@@ -303,6 +314,7 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       !context ||
       disabled ||
       context.mode !== "create" ||
+      requiresSuggestionReview(context.entity, field) ||
       suggestion?.financeReview ||
       isDirty ||
       context.isFetching ||
@@ -346,7 +358,12 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       // as local suggestion application; the server confirms the category ID.
       form.resetField(name, {
         defaultValue: suggestionValueFor(
-          { ...suggestion, value: saved.spendingCategoryId },
+          {
+            ...suggestion,
+            value:
+              saved[suggestion.financeReview?.field ?? "spendingCategoryId"] ??
+              null,
+          },
           valueKind,
         ) as PathValue<TFieldValues, Path<TFieldValues>>,
       });

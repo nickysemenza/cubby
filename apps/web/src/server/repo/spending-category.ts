@@ -11,10 +11,12 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { productCategory } from "~/server/db/schema";
 import { spendingCategory } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 
 import { logAuditEntry } from "./audit-log";
+import { loadCategoryConnections } from "./category-connections";
 import {
   buildPartialUpdateValues,
   notDeleted,
@@ -44,15 +46,39 @@ const hydrate = (
 ) =>
   hydrateListRead(db, "spendingCategory", rows, projection, {
     load: () =>
-      lookupEntityReferences(
-        db,
-        "spendingCategory",
-        rows.map((row) => row.parentId),
-      ),
-    mapRow: (row, { loaded: parents }) => ({
+      Promise.all([
+        loadCategoryConnections(db),
+        unwrapDb(db)
+          .select({
+            id: productCategory.id,
+            code: productCategory.shortcode,
+            emoji: productCategory.emoji,
+          })
+          .from(productCategory)
+          .where(notDeleted(productCategory)),
+        lookupEntityReferences(
+          db,
+          "spendingCategory",
+          rows.map((row) => row.parentId),
+        ),
+      ]),
+    mapRow: (row, { loaded: [mappings, categories, parents] }) => ({
       ...row,
       id: parseShortcodeFor("spendingCategory", row.shortcode),
       parentId: row.parentId ? (parents.get(row.parentId)?.id ?? null) : null,
+      productCategories: categories.flatMap((category) => {
+        const mapping = mappings.get(category.id);
+        return mapping?.category?.id === row.shortcode
+          ? [
+              {
+                id: parseShortcodeFor("productCategory", category.code),
+                name: `${mapping.path}${mapping.state === "inherited" ? " (inherited)" : ""}`,
+                emoji: category.emoji,
+                inherited: mapping.state === "inherited",
+              },
+            ]
+          : [];
+      }),
     }),
   });
 const listRead = (

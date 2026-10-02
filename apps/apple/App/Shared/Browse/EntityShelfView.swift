@@ -77,6 +77,7 @@ struct EntityShelfView: View {
             identifier: row.id,
             imageURL: row.imageURL,
             symbol: descriptor.sfSymbol,
+            emoji: descriptor.recordEmoji(in: row),
             density: density,
             selected: isSelected(row),
             loadingDetails: !row.pendingFields.isEmpty,
@@ -135,6 +136,7 @@ struct EntityCard: View {
     let identifier: String
     let imageURL: URL?
     let symbol: String
+    var emoji: String? = nil
     let density: ListPresentationChoice
     var selected = false
     var loadingDetails = false
@@ -148,7 +150,7 @@ struct EntityCard: View {
                 Thumb(
                     url: imageURL,
                     size: min(geometry.size.width, geometry.size.height),
-                    symbol: symbol)
+                    symbol: symbol, emoji: emoji)
             }
             .aspectRatio(1, contentMode: .fit)
 

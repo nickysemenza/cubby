@@ -1,3 +1,4 @@
+import { financeCategoryReviewSchema } from "@cubby/schemas/ai";
 import type {
   FieldSuggestion,
   FieldSuggestionAlternative,
@@ -26,6 +27,7 @@ import {
   type FieldResolution,
   type FieldResolutions,
 } from "@cubby/schemas/field-resolution";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
@@ -33,7 +35,6 @@ import { classifyWithJev } from "~/server/ai/classify";
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/features";
 import { placeByBranch } from "~/server/ai/field-suggest/branch-confidence";
 import {
-  FIELD_SUGGEST_REGISTRY,
   fieldSuggestSpecFor,
   type FieldSuggestSpec,
   type RawBasis,
@@ -64,6 +65,7 @@ import {
   resolveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { resolveDraftTaskFields } from "~/server/repo/task-project-inheritance";
+import { loadVendorSuggestionContext } from "~/server/repo/vendor-suggestion-context";
 
 /** A client-supplied basis value beyond this length is truncated, not rejected. */
 const MAX_BASIS_VALUE_LENGTH = 500;
@@ -187,10 +189,7 @@ function resolveTargetSpecs(
   for (const target of input.targets) {
     const key = `${input.entity}.${target}`;
     const spec =
-      ports?.registry?.[key] ??
-      (Object.hasOwn(FIELD_SUGGEST_REGISTRY, key)
-        ? fieldSuggestSpecFor(input.entity, target)
-        : undefined);
+      ports?.registry?.[key] ?? fieldSuggestSpecFor(input.entity, target);
     if (!spec) {
       throw createAppError(
         "SUGGEST_FIELD_UNKNOWN",
@@ -745,22 +744,73 @@ function basisValueLimitFor(entity: string, key: string): number {
     : MAX_BASIS_VALUE_LENGTH;
 }
 
+async function savedSuggestionContext(
+  db: Database,
+  input: FieldSuggestionsInput,
+) {
+  return input.entityId &&
+    isFinanceCategoryEntity(input.entity) &&
+    input.targets.includes("spendingCategoryId")
+    ? await loadFinanceSuggestionContext(db, input.entity, input.entityId)
+    : input.entity === "vendor" &&
+        input.entityId &&
+        input.targets.some(
+          (target) =>
+            target === "defaultSpendingCategoryId" ||
+            target === "spendingProfile",
+        )
+      ? await loadVendorSuggestionContext(db, input.entityId)
+      : null;
+}
+
+type SavedSuggestionContext = Awaited<
+  ReturnType<typeof savedSuggestionContext>
+>;
+function reviewedSuggestion(
+  input: FieldSuggestionsInput,
+  target: string,
+  context: SavedSuggestionContext,
+  suggestion: FieldSuggestion | null,
+): FieldSuggestion | null {
+  if (
+    !suggestion ||
+    !context ||
+    !input.entityId ||
+    !(isFinanceCategoryEntity(input.entity) || input.entity === "vendor")
+  )
+    return suggestion;
+  const review = financeCategoryReviewSchema.parse({
+    entity: input.entity,
+    entityId: input.entityId,
+    fingerprint: context.fingerprint,
+    field: target,
+  });
+  if ("groups" in context)
+    review.evidence = {
+      principalLineCount: context.lines.length,
+      distinctPurchaseCount: new Set(context.lines.map((line) => line.purchase))
+        .size,
+      unknownCategoryLineCount: context.unknownLineCount,
+      truncated: context.truncated,
+      categories: context.groups.map((group) => ({
+        ...group,
+        id: parseShortcodeFor("productCategory", group.id),
+      })),
+    };
+  return {
+    ...suggestion,
+    reasoning: `Based on saved record and linked items. ${suggestion.reasoning}`,
+    financeReview: review,
+  };
+}
+
 export async function suggestFields(
   db: Database,
   runId: RunId,
   rawInput: FieldSuggestionsInput,
   ports?: SuggestFieldsPorts,
 ): Promise<FieldSuggestionsOut> {
-  const financeContext =
-    rawInput.entityId &&
-    isFinanceCategoryEntity(rawInput.entity) &&
-    rawInput.targets.includes("spendingCategoryId")
-      ? await loadFinanceSuggestionContext(
-          db,
-          rawInput.entity,
-          rawInput.entityId,
-        )
-      : null;
+  const financeContext = await savedSuggestionContext(db, rawInput);
   const input =
     rawInput.entity === "expense"
       ? {
@@ -863,8 +913,13 @@ export async function suggestFields(
       const spec = targetSpecs.get(target)!;
       const basisKeys = targetBasisKeys.get(target) ?? [];
 
-      const linkedContext =
-        target === "spendingCategoryId" ? financeContext : null;
+      const linkedContext = [
+        "spendingCategoryId",
+        "defaultSpendingCategoryId",
+        "spendingProfile",
+      ].includes(target)
+        ? financeContext
+        : null;
       const rawBasis = effectiveRawBasis(
         basisKeys,
         linkedContext
@@ -885,7 +940,7 @@ export async function suggestFields(
       const hasSignal =
         linkedContext?.hasSignal ||
         basisKeys.some((key) => resolvedBasis[key] != null);
-      if (!hasSignal) {
+      if (!hasSignal || linkedContext?.truncated) {
         suggestions[target] = null;
         outcomes[target] = { kind: "skipped", reason: "no_signal" };
         resolvedRawByTarget.set(target, null);
@@ -908,21 +963,12 @@ export async function suggestFields(
         ports?.jev,
         linkedContext?.subject,
       );
-      suggestions[target] =
-        suggestion &&
-        linkedContext &&
-        isFinanceCategoryEntity(input.entity) &&
-        input.entityId
-          ? {
-              ...suggestion,
-              reasoning: `Based on saved record and linked items. ${suggestion.reasoning}`,
-              financeReview: {
-                entity: input.entity,
-                entityId: input.entityId,
-                fingerprint: linkedContext.fingerprint,
-              },
-            }
-          : suggestion;
+      suggestions[target] = reviewedSuggestion(
+        input,
+        target,
+        linkedContext,
+        suggestion,
+      );
       outcomes[target] = outcome;
       resolvedRawByTarget.set(target, rawValue);
     });

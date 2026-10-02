@@ -218,7 +218,7 @@ export const createProject = async (
       parentProjectId,
       startDate: data.startDate,
       endDate: data.endDate,
-      icon: data.icon,
+      emoji: data.emoji,
       notes: data.notes,
     });
     await setProjectExternalUrls(tx, created.id, {
@@ -349,7 +349,7 @@ export const updateProject = async (
       parentProjectId,
       startDate: data.startDate,
       endDate: data.endDate,
-      icon: data.icon,
+      emoji: data.emoji,
       notes: data.notes,
     });
     const [beforeWithUrls] = await withProjectExternalUrls(tx, [before]);

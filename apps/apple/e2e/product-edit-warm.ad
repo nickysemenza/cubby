@@ -7,7 +7,6 @@ wait "role=Button id=detail.product.edit" 30000
 wait text "${PRODUCT_NAME}" 30000
 click "role=Button id=detail.product.edit"
 wait "label=Name editable=true" 30000
-fill "label=Name editable=true" ""
 fill "label=Name editable=true" "${UPDATED_NAME}"
 click "role=Button label=Save"
 wait "role=Button id=detail.product.edit" 30000

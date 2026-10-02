@@ -20,7 +20,7 @@ import {
   parseShortcodeFor,
   type ShortcodeFor,
 } from "@cubby/shared";
-import { and, eq, getTableColumns, inArray } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
@@ -469,11 +469,16 @@ export async function lookupEntityReferences<E extends ShortcodeEntity>(
   entity: E,
   ids: readonly (string | null | undefined)[],
   opts: { includeDeleted?: boolean } = {},
-): Promise<Map<string, { id: ShortcodeFor<E>; name: string | null }>> {
+): Promise<
+  Map<
+    string,
+    { id: ShortcodeFor<E>; name: string | null; emoji?: string | null }
+  >
+> {
   const wanted = uniq(ids.filter((id): id is string => typeof id === "string"));
   const result = new Map<
     string,
-    { id: ShortcodeFor<E>; name: string | null }
+    { id: ShortcodeFor<E>; name: string | null; emoji?: string | null }
   >();
   if (wanted.length === 0) return result;
   const table: ShortcodeTable = SHORTCODE_TABLE[entity];
@@ -483,6 +488,7 @@ export async function lookupEntityReferences<E extends ShortcodeEntity>(
       id: table.id,
       shortcode: table.shortcode,
       name: nameColumn ?? table.shortcode,
+      emoji: getTableColumns(table).emoji ?? sql<null>`NULL::text`,
     })
     .from(table)
     .where(
@@ -496,6 +502,7 @@ export async function lookupEntityReferences<E extends ShortcodeEntity>(
     result.set(String(row.id), {
       id: parseShortcodeFor(entity, String(row.shortcode)),
       name: name.success ? name.data : null,
+      emoji: z.string().nullable().parse(row.emoji),
     });
   }
   return result;

@@ -18,6 +18,7 @@ import { Link } from "@tanstack/react-router";
 import { Suspense, useMemo, useState } from "react";
 import { z } from "zod";
 
+import { RecordEmoji } from "~/entity/components/record-emoji";
 import { detailFieldRenderersFor } from "~/entity/detail-field-renderers";
 import { detailEditRequest } from "~/entity/editing/editor-requests";
 import {
@@ -650,7 +651,18 @@ export function GenericEntityDetail<E extends GenericDetailEntity>({
       variant="detail"
       entity={entity}
       wayfinding={detailWayfinding(entity, record)}
-      title={title}
+      title={
+        <span className="inline-flex items-baseline gap-2">
+          <RecordEmoji
+            entity={entity}
+            emoji={
+              z.looseObject({ emoji: z.string().nullish() }).parse(record).emoji
+            }
+            size={20}
+          />
+          {title}
+        </span>
+      }
       rawData={record}
       heroImages={heroImages}
       heroNo={bag.id}

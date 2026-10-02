@@ -2,13 +2,13 @@ import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 import { CurrencyDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
 import { useMemo } from "react";
 
+import {
+  RecordChartLabel,
+  RecordChartTick,
+  useRecordEmojiById,
+} from "~/entity/components/record-mark";
 import { formatCurrency } from "~/lib/utils";
 
-import {
-  ProjectChartLabel,
-  ProjectChartTick,
-  useProjectIconById,
-} from "../project-mark";
 import { nivoBarChrome, nivoChartTheme } from "../shared";
 import { ChartEmpty } from "./chart-empty";
 import { ChartTooltip } from "./ChartTooltip";
@@ -44,7 +44,7 @@ export function CostVsEstimate({
 }: {
   data: ProjectPortfolioAnalyticsOut["costVsEstimate"];
 }) {
-  const { iconById } = useProjectIconById();
+  const { emojiById } = useRecordEmojiById("project");
   const data = useMemo(() => {
     return (
       rows
@@ -80,10 +80,10 @@ export function CostVsEstimate({
       new Map(
         data.map((row) => [
           row.id,
-          { name: row.name, icon: iconById.get(row.id) ?? null },
+          { name: row.name, emoji: emojiById.get(row.id) ?? null },
         ]),
       ),
-    [data, iconById],
+    [data, emojiById],
   );
 
   if (data.length === 0) {
@@ -115,7 +115,11 @@ export function CostVsEstimate({
         tickSize: 0,
         tickPadding: 8,
         renderTick: (tick) => (
-          <ProjectChartTick {...tick} identityById={identityById} />
+          <RecordChartTick
+            entity="project"
+            {...tick}
+            identityById={identityById}
+          />
         ),
       }}
       label={(d) => `${Math.round(d.value ?? 0)}%`}
@@ -140,11 +144,12 @@ export function CostVsEstimate({
       tooltip={({ data: d }) => (
         <ChartTooltip>
           <strong>
-            <ProjectChartLabel
+            <RecordChartLabel
+              entity="project"
               identity={
                 identityById.get(String(d.id)) ?? {
                   name: String(d.name),
-                  icon: null,
+                  emoji: null,
                 }
               }
             />

@@ -398,6 +398,49 @@ const checkEdit = (
  * the target) are checked by `validateRelationSections` once every entity is
  * compiled.
  */
+function recordEmojiEdit(
+  presentation: EntityPresentation,
+  facts: PresentationFacts,
+  context: string,
+) {
+  const lookup = fieldLookup(facts.fieldModel, context);
+  const emojiField = presentation.recordEmojiField;
+  if (emojiField) {
+    const field = lookup.edit(emojiField, "recordEmojiField");
+    if (
+      !facts.hasUpdate ||
+      field.kind !== "text" ||
+      !field.nullable ||
+      field.validation.update === null
+    )
+      throw new EntityDeclarationError(
+        `${context}.recordEmojiField requires a nullable, editable text field on a mutable entity.`,
+      );
+    lookup.read(emojiField, "recordEmojiField");
+  }
+  const editSections = presentation.edit.sections;
+  return emojiField &&
+    editSections &&
+    editSections.length > 0 &&
+    !editSections.some((section) => section.fields.includes(emojiField))
+    ? {
+        ...presentation.edit,
+        sections: editSections.map((section, index) =>
+          index === 0
+            ? {
+                ...section,
+                fields: [
+                  ...section.fields.slice(0, 1),
+                  emojiField,
+                  ...section.fields.slice(1),
+                ],
+              }
+            : section,
+        ),
+      }
+    : presentation.edit;
+}
+
 export const compilePresentation = (
   presentation: EntityPresentation,
   facts: PresentationFacts,
@@ -405,7 +448,9 @@ export const compilePresentation = (
 ): CompiledPresentation => {
   const { fieldModel, relations, capabilities, ports } = facts;
   const lookup = fieldLookup(fieldModel, context);
-  const { detail, list, edit, spans } = presentation;
+  const { detail, list, spans } = presentation;
+  const emojiField = presentation.recordEmojiField;
+  const edit = recordEmojiEdit(presentation, facts, context);
   const detailFields = fieldModel.fields
     .filter((field) => field.display.detail)
     .map((field) => field.key);
@@ -417,7 +462,7 @@ export const compilePresentation = (
   const overviewFields = detailFields.filter(
     (key) => !additionalFields.has(key),
   );
-  const sections = detail.sections ?? [
+  const declaredSections = detail.sections ?? [
     ...(overviewFields.length === 0
       ? []
       : [
@@ -434,6 +479,24 @@ export const compilePresentation = (
         ]),
     ...detail.additionalSections,
   ];
+  const sections =
+    emojiField &&
+    !declaredSections.some(
+      (section) =>
+        section.kind === "fields" && section.fields.includes(emojiField),
+    )
+      ? [
+          ...declaredSections,
+          {
+            kind: "fields" as const,
+            id: "record-identity",
+            title: "Identity",
+            placement: "supporting" as const,
+            collapsed: false,
+            fields: [emojiField],
+          },
+        ]
+      : declaredSections;
   checkHero(detail.hero, lookup);
   const readable = readableFields(fieldModel);
   const preview = fieldModel.fields
@@ -473,6 +536,7 @@ export const compilePresentation = (
   const shelfSubtitle = list.shelf?.subtitle ?? mobileSubtitle;
   return {
     ...presentation,
+    edit,
     detail: {
       variant: detail.variant,
       hero: {

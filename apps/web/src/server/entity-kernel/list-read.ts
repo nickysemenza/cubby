@@ -5,6 +5,7 @@ import type { ListEntity } from "~/entity/generated/entity-lists.gen";
 import { listReadRowSchema } from "~/entity/list-read-fields";
 import { listReadFields, projectListRows } from "~/entity/list-read-schema";
 import { withListEntityMedia } from "~/server/repo/entity-display-image";
+import { withRecordEmoji } from "~/server/repo/entity-emoji";
 import { expandListGroups } from "~/server/repo/list-projection";
 import { withListReadTracing } from "~/server/repo/list-read-tracing";
 import { normalizeStartOperationError } from "~/server/start-operation.server";
@@ -84,7 +85,7 @@ export function defineProgressiveListOperations<
       );
       return {
         entity: binding.entity,
-        data: result.data,
+        data: await withRecordEmoji(context.db, binding.entity, result.data),
         meta: buildPaginatedResponse(
           pagination,
           [],

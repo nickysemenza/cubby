@@ -1,3 +1,4 @@
+import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -25,6 +26,7 @@ export default defineEntity({
   table: "Project",
   identifiers: { brand: "ProjectId", shortcode: "PRJ-" },
   presentation: {
+    recordEmojiField: "emoji",
     titleField: "name",
     domain: "house",
     description: "Household work grouped into durable projects.",
@@ -167,6 +169,16 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: {
+            ...recordEmojiField.control.suggest,
+            basis: ["name", "notes", "kind"],
+          },
+        },
+      },
       {
         key: "fieldResolutions",
         kind: "json",
@@ -393,21 +405,7 @@ export default defineEntity({
           update: plainDate.nullable().optional(),
         },
       },
-      {
-        key: "icon",
-        kind: "text",
-        nullable: true,
-        control: { kind: "text", sectionOverride: "details" },
-        display: {
-          list: true,
-          detail: true,
-        },
-        validation: {
-          read: z.string().describe("Emoji shown next to the name").nullable(),
-          create: z.string().nullable().default(null),
-          update: z.string().nullable().optional(),
-        },
-      },
+
       {
         key: "notes",
         kind: "text",
@@ -599,6 +597,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      "emoji",
       {
         key: "id",
         specialized: "primary-key:ProjectId",
@@ -626,13 +625,13 @@ export default defineEntity({
       { key: "parentProjectId", reference: "project" },
       "startDate",
       "endDate",
-      "icon",
       "notes",
       { key: "createdAt" },
       { key: "updatedAt", specialized: "updated-at" },
       "deletedAt",
     ],
     create: [
+      "emoji",
       "name",
       "status",
       "kind",
@@ -643,12 +642,12 @@ export default defineEntity({
       "parentProjectId",
       "startDate",
       "endDate",
-      "icon",
       "notes",
       "googleDriveFolderUrl",
       "notionPageUrl",
     ],
     update: [
+      "emoji",
       "name",
       "status",
       "kind",
@@ -659,7 +658,6 @@ export default defineEntity({
       "parentProjectId",
       "startDate",
       "endDate",
-      "icon",
       "notes",
       "googleDriveFolderUrl",
       "notionPageUrl",
@@ -677,7 +675,6 @@ export default defineEntity({
       "parentProjectId",
       "startDate",
       "endDate",
-      "icon",
       "notes",
       "googleDriveFolderUrl",
       "notionPageUrl",
@@ -696,6 +693,7 @@ export default defineEntity({
     intents: {
       fields: {
         capture: [
+          "emoji",
           "name",
           "status",
           "kind",
@@ -707,8 +705,8 @@ export default defineEntity({
           "startDate",
         ],
         full: [
+          "emoji",
           "name",
-          "icon",
           "status",
           "kind",
           "parentProjectId",
@@ -723,15 +721,16 @@ export default defineEntity({
           "blockedByIds",
           "notes",
         ],
-        status: ["status"],
-        kind: ["kind"],
-        dates: ["startDate", "endDate"],
-        parent: ["parentProjectId"],
+        status: ["emoji", "status"],
+        kind: ["emoji", "kind"],
+        dates: ["emoji", "startDate", "endDate"],
+        parent: ["emoji", "parentProjectId"],
       },
       create: ["capture", "full"],
       update: ["full", "status", "kind", "dates", "parent"],
     },
     output: [
+      "emoji",
       "fieldResolutions",
       "id",
       "name",
@@ -743,7 +742,6 @@ export default defineEntity({
       "parentProjectId",
       "startDate",
       "endDate",
-      "icon",
       "notes",
       "googleDriveFolderUrl",
       "notionPageUrl",

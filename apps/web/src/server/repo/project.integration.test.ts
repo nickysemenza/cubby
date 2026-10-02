@@ -1,13 +1,17 @@
 import { createProjectFromTasksInput } from "@cubby/schemas/project";
+import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityLink } from "~/server/db/schema";
+import { entityLink, project as projectTable } from "~/server/db/schema";
+import { executeEntity } from "~/server/entity-kernel";
 import { projectCreateFromTasksWorkflow } from "~/server/operations/project.server";
 import { linkValues } from "~/server/repo/entity-links";
+import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { insertAndReturn } from "./database-helpers";
+import { getDb, insertAndReturn } from "./database-helpers";
 import { deleteProjects, getProjectByID, updateProject } from "./project/crud";
 import { getProjectDependencyGraph } from "./project/dependency-graph";
 import { projectTreePage } from "./project/tree";
@@ -25,14 +29,39 @@ describe("project repository", () => {
       ctx.db,
       createProjectFromTasksInput.parse({
         taskIds: [task.output.id],
-        project: { name: "Workflow promotion project" },
+        project: { name: "Workflow promotion project", emoji: "👩🏽‍🍳" },
       }),
       ctx.actor,
     );
     expect(result.project.name).toBe("Workflow promotion project");
+    expect(result.project.emoji).toBe("👩🏽‍🍳");
     expect(result.tasks.map(({ id }) => id)).toEqual([task.output.id]);
     const saved = await getTaskByShortcode(ctx.db, task.output.id);
     expect(saved?.projectId).toBe(result.project.id);
+  });
+
+  it("preserves an unchanged legacy project mark through a canonical full-record edit", async () => {
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Synthetic legacy project",
+    });
+    await getDb(ctx.db)
+      .update(projectTable)
+      .set({ emoji: "Legacy mark" })
+      .where(eq(projectTable.id, project.entityId));
+    const kernel = requireActor(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    await executeEntity(kernel, {
+      action: "update",
+      entity: "project",
+      id: project.output.id,
+      data: { name: "Synthetic updated project", emoji: "Legacy mark" },
+    });
+    const saved = await getProjectByID(ctx.db, project.entityId);
+    expect(saved).toMatchObject({
+      name: "Synthetic updated project",
+      emoji: "Legacy mark",
+    });
   });
 
   it("rolls up spend (including future expenses) and task counts", async () => {

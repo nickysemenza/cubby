@@ -79,6 +79,7 @@ export const taxonomyRootFixtures = taxonomyFeatures.map(
   (feature, sortOrder) => ({
     id: taxonomyId(feature),
     shortcode: taxonomyShortcode(feature),
+    emoji: null,
     name: categoryNames[feature],
     aliases: [],
     description: null,
@@ -97,6 +98,7 @@ const ROW_UPDATED_AT = new Date("2024-01-02T00:00:00.000Z");
  */
 const productRowDefaults = {
   shortcode: "PRD-TEST",
+  emoji: null,
   name: "Flour",
   manufacturer: "Generic",
   tags: [],

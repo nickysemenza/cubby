@@ -63,7 +63,7 @@ import {
 const projectScaffold = listScaffold("project", project);
 
 /**
- * Lightweight `{id, name, icon}` options for pickers/filter selects — no
+ * Lightweight `{id, name, emoji}` options for pickers/filter selects — no
  * rollup/dependency joins. Feeds the `dates` projection of
  * `getFilterOptions`'s `entity: "project"` roster (see `useEntityOptions`),
  * and the direct callers below that need the excludable window without going
@@ -88,7 +88,7 @@ export const projectNameOptions = async (
         id: project.id,
         shortcode: project.shortcode,
         name: project.name,
-        icon: project.icon,
+        emoji: project.emoji,
         parentProjectId: project.parentProjectId,
         startDate: project.startDate,
         endDate: project.endDate,
@@ -105,7 +105,7 @@ export const projectNameOptions = async (
     return {
       id: parseShortcodeFor("project", row.shortcode),
       name: row.name,
-      icon: row.icon,
+      emoji: row.emoji,
       effectiveStart: window.effectiveStart,
       effectiveEnd: window.effectiveEnd,
     };

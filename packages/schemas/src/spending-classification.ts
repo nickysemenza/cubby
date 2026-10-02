@@ -69,3 +69,16 @@ export type SpendingCategoryMappingMode = z.infer<
   typeof spendingCategoryMappingMode
 >;
 export type VendorSpendingProfile = z.infer<typeof vendorSpendingProfile>;
+
+export const categoryMappingSchema = z.object({
+  state: z.enum(["direct", "inherited", "blocked", "unmapped"]),
+  category: z
+    .object({
+      id: spendingCategoryShortcode,
+      name: z.string(),
+      emoji: z.string().nullable(),
+    })
+    .nullable(),
+  source: z.object({ id: z.string(), name: z.string() }).nullable(),
+  path: z.string(),
+});

@@ -104,7 +104,7 @@ function TodayTaskRow({ task: item }: { task: TaskTodayBriefingItemOut }) {
           data={{
             id: item.projectId,
             name: item.projectName,
-            icon: item.projectIcon,
+            emoji: item.projectEmoji,
           }}
           displayImage={projectImage}
           className={TODAY_ENTITY_LINK_CLASS}

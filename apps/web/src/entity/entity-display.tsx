@@ -16,6 +16,7 @@ import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { ReferencePreview } from "~/entity/components/reference-preview";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { RecordFieldSuggestion } from "~/features/ai/record-suggestions";
 import { tryFormatAmount } from "~/features/inventory/format-amount";
@@ -448,6 +449,42 @@ function referenceMediaRefs<TRecord extends object>(
   return reference.items.map((item) => ({ entityKind, entityId: item.id }));
 }
 
+function referenceBrowse<TRecord extends object>(
+  record: TRecord,
+  field: DisplayField,
+): ReactNode {
+  const target = field.reference
+    ? referenceMediaEntity(field.reference.entity)
+    : null;
+  if (
+    !target ||
+    !isBrowserRoutedEntity(target) ||
+    field.control ||
+    !field.reference?.multiple ||
+    !field.reference.scope.length
+  )
+    return null;
+  const data = z.record(z.string(), z.unknown()).parse(record);
+  const search = new URLSearchParams();
+  for (const binding of field.reference.scope) {
+    const descriptor = entityInspectorMetadata[target].filterDescriptors.find(
+      (item) =>
+        item.field === binding.targetField ||
+        item.columnId === binding.targetField,
+    );
+    const value = z.string().safeParse(data[binding.sourceField]);
+    if (descriptor && value.success) search.set(descriptor.urlKey, value.data);
+  }
+  return search.size ? (
+    <a
+      className="text-primary underline"
+      href={`/${entities[target].basePath}?${search}`}
+    >
+      View all
+    </a>
+  ) : null;
+}
+
 function referenceLink(entity: string, item: ReferenceItem): ReactNode {
   const routed = referenceMediaEntity(entity);
   if (routed === null)
@@ -458,6 +495,7 @@ function referenceLink(entity: string, item: ReferenceItem): ReactNode {
       entity={routed}
       id={item.id}
       name={item.name}
+      emoji={item.emoji}
     />
   );
 }
@@ -473,13 +511,14 @@ export function renderDetailFieldValue<TRecord extends object>(
   if (reference !== null) {
     if (reference.items.length === 0) return <NoneValue />;
     return (
-      <span className="flex max-w-full min-w-0 flex-wrap gap-x-2 gap-y-0.5">
-        {reference.items.map((item) => (
-          <span key={item.id} className="flex max-w-full min-w-0">
-            {referenceLink(reference.entity, item)}
-          </span>
-        ))}
-      </span>
+      <>
+        {referenceBrowse(record, field)}
+        <ReferencePreview
+          items={reference.items}
+          limit={field.display.referencePreviewLimit}
+          renderItem={(item) => referenceLink(reference.entity, item)}
+        />
+      </>
     );
   }
   if (isProseField(field.key, field.control) && field.display.format === null)
@@ -505,13 +544,14 @@ export function renderCompactFieldValue<TRecord extends object>(
   if (reference !== null) {
     if (reference.items.length === 0) return <NoneValue />;
     return (
-      <span className="flex max-w-full min-w-0 flex-wrap gap-x-2 gap-y-0.5">
-        {reference.items.map((item) => (
-          <span key={item.id} className="flex max-w-full min-w-0">
-            {referenceLink(reference.entity, item)}
-          </span>
-        ))}
-      </span>
+      <>
+        {referenceBrowse(record, field)}
+        <ReferencePreview
+          items={reference.items}
+          limit={field.display.referencePreviewLimit}
+          renderItem={(item) => referenceLink(reference.entity, item)}
+        />
+      </>
     );
   }
   const value = readScalarField(entity, record, field);

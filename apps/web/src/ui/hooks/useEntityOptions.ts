@@ -13,7 +13,7 @@ const NO_ITEMS: FilterOptionItem[] = [];
 
 /**
  * The whole (small, personal-household) roster for a shortcode entity, with
- * optional per-row projections (`count`, `logo`, `kind`, `icon`, `dates`) —
+ * optional per-row projections (`count`, `logo`, `kind`, `emoji`, `dates`) —
  * the one client integration point over `getFilterOptions` for a
  * picker/chart that wants every row up front, unlike the search-as-you-type
  * combobox path (`useEntityListSource`). Replaces the former

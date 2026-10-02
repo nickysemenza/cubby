@@ -51,10 +51,13 @@ const watch = flags.includes("--watch");
 const video = flags.includes("--video");
 const layout = flags.includes("--layout");
 const productClarity = flags.includes("--product-clarity");
+const emojiReview = flags.includes("--emoji-review");
 const testerArmy = flags.includes("--tester-army");
 const testerArmyReplay = flags.includes("--replay");
 const wrongName = flags.includes("--wrong-name");
 if (
+  (emojiReview &&
+    flags.some((flag) => flag !== "--emoji-review" && flag !== "--video")) ||
   (inputJourney &&
     (testerArmy ||
       headless ||
@@ -86,6 +89,7 @@ if (
   flags.some(
     (argument) =>
       ![
+        "--emoji-review",
         "--input-journey",
         "--headless",
         "--watch",
@@ -102,27 +106,29 @@ if (
   )
 )
   throw new Error(
-    "Usage: sim-e2e.ts [--input-journey [--video] | --tester-army [--replay] [--wrong-name] | --video | --layout [--video] | --product-clarity [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
+    "Usage: sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --tester-army [--replay] [--wrong-name] | --video | --layout [--video] | --product-clarity [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
   );
-const lane = inputJourney
-  ? "sim-input-journey-e2e"
-  : testerArmy
-    ? "sim-tester-army-e2e"
-    : productClarity
-      ? "sim-product-clarity-e2e"
-      : statementCsv
-        ? "headless-statement-csv-e2e"
-        : layout
-          ? "sim-layout-e2e"
-          : purchase
-            ? "headless-wardrobe-e2e"
-            : photo
-              ? "headless-photo-e2e"
-              : headless
-                ? "headless-e2e"
-                : watch
-                  ? "sim-dev"
-                  : "sim-e2e";
+const lane = emojiReview
+  ? "sim-emoji-review-e2e"
+  : inputJourney
+    ? "sim-input-journey-e2e"
+    : testerArmy
+      ? "sim-tester-army-e2e"
+      : productClarity
+        ? "sim-product-clarity-e2e"
+        : statementCsv
+          ? "headless-statement-csv-e2e"
+          : layout
+            ? "sim-layout-e2e"
+            : purchase
+              ? "headless-wardrobe-e2e"
+              : photo
+                ? "headless-photo-e2e"
+                : headless
+                  ? "headless-e2e"
+                  : watch
+                    ? "sim-dev"
+                    : "sim-e2e";
 // Database bootstrap validates the caller's environment before simulation-only overrides.
 const bootstrapEnvironment = { ...process.env };
 for (const [key, value] of Object.entries({
@@ -225,17 +231,30 @@ function nativeSourceFingerprint(includeApp: boolean): string {
 async function assertNativeEdit(
   productId: string,
   expectedName?: string,
+  expectedEmoji?: string | null,
 ): Promise<void> {
   const checkPool = new Pool({ connectionString: databaseURL });
   try {
     const { SIM_PRODUCT_UPDATED_NAME } = await import("./scenarios/simulator");
-    const targetName = expectedName ?? SIM_PRODUCT_UPDATED_NAME;
+    const targetName =
+      expectedName ??
+      (emojiReview
+        ? "Synthetic Emoji Category Updated"
+        : SIM_PRODUCT_UPDATED_NAME);
     const readName = async () => {
-      const result = await checkPool.query<{ name: string }>(
-        'SELECT name FROM "Product" WHERE shortcode = $1',
+      const result = await checkPool.query<{
+        name: string;
+        emoji: string | null;
+      }>(
+        emojiReview
+          ? 'SELECT name, emoji FROM "ProductCategory" WHERE shortcode = $1'
+          : 'SELECT name, NULL::text AS emoji FROM "Product" WHERE shortcode = $1',
         [productId],
       );
-      return result.rows[0]?.name;
+      const row = result.rows[0];
+      return expectedEmoji === undefined || row?.emoji === expectedEmoji
+        ? row?.name
+        : undefined;
     };
     try {
       await pollUntil(
@@ -1193,12 +1212,15 @@ async function seedNativeScenario(userId: string): Promise<{
     const {
       seedSimulatorPhotoActor,
       seedSimulatorScenario,
+      seedSimulatorEmojiCategory,
       seedSimulatorLayoutRun,
       seedSimulatorProductClarity,
     } = await import("./scenarios/simulator");
     await seedSimulatorPhotoActor(seedPool, userId);
     if (productClarity)
       return await seedSimulatorProductClarity(seedPool, userId);
+    if (emojiReview)
+      return { productId: await seedSimulatorEmojiCategory(seedPool, userId) };
     return {
       productId:
         photo || statementCsv || inputJourney
@@ -1255,11 +1277,13 @@ async function runNativeJourney(
       "exec",
       "agent-device",
       "test",
-      productClarity
-        ? "apps/apple/e2e/product-clarity.yaml"
-        : layout
-          ? "apps/apple/e2e/native-layout.ad"
-          : "apps/apple/e2e/product-edit.ad",
+      emojiReview
+        ? "apps/apple/e2e/emoji-review.ad"
+        : productClarity
+          ? "apps/apple/e2e/product-clarity.yaml"
+          : layout
+            ? "apps/apple/e2e/native-layout.ad"
+            : "apps/apple/e2e/product-edit.ad",
       ...common,
       ...(productClarity ? ["--maestro"] : []),
       "--artifacts-dir",
@@ -1278,7 +1302,8 @@ async function runNativeJourney(
   } finally {
     await stopRecording?.();
   }
-  if (!layout && !productClarity) await assertNativeEdit(productId);
+  if (!layout && !productClarity)
+    await assertNativeEdit(productId, undefined, null);
 }
 
 // eslint-disable-next-line complexity -- All disposable native lanes share one exception, artifact and cleanup boundary.
@@ -1300,12 +1325,24 @@ async function main(): Promise<void> {
         >
       >
     | undefined;
+  let suggestionPeer:
+    | Awaited<
+        ReturnType<
+          (typeof import("./native-emoji-review-peer"))["createNativeEmojiReviewPeer"]
+        >
+      >
+    | undefined;
   let restoreEnvironment = () => {};
   let productId = "";
   let disposableSimulatorID: string | undefined;
   let failure: Error | undefined;
   const cleanup = async (): Promise<Error[]> => {
     const errors: Error[] = [];
+    try {
+      await suggestionPeer?.close();
+    } catch (error) {
+      errors.push(error instanceof Error ? error : new Error(String(error)));
+    }
     try {
       await harness?.close();
     } catch (error) {
@@ -1456,6 +1493,12 @@ async function main(): Promise<void> {
     }
     const seeded = await seedNativeScenario(userId);
     productId = seeded.productId;
+    if (emojiReview) {
+      const { createNativeEmojiReviewPeer } =
+        await import("./native-emoji-review-peer");
+      suggestionPeer = await createNativeEmojiReviewPeer(url, productId);
+    }
+    const nativeOrigin = suggestionPeer?.url.origin ?? url.origin;
     const layoutRunID = seeded.layoutRunID;
     console.log(
       `[${lane}] Workerd at ${url.origin}${productId ? `; seeded product ${productId}` : ""}`,
@@ -1654,7 +1697,7 @@ async function main(): Promise<void> {
           device.udid,
           "com.nickysemenza.cubby",
           "--cubby-e2e-server",
-          url.origin,
+          nativeOrigin,
         ]);
       };
       try {

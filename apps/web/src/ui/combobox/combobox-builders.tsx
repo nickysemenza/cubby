@@ -21,7 +21,7 @@ import {
 } from "@cubby/shared";
 import { z } from "zod";
 
-import { ProjectMark } from "~/app/projects/project-mark";
+import { RecordEmoji } from "~/entity/components/record-emoji";
 import { VendorMark } from "~/entity/components/vendor-cell";
 import { EntityIcon } from "~/entity/entities";
 import { locationToSegments } from "~/features/locations/location-breadcrumb";
@@ -43,18 +43,18 @@ const pickerTitle = z.string();
 function SearchPickerIcon({
   entity,
   imageUrl,
-  typeHint,
+  emoji,
 }: {
   entity: SearchableEntity;
   imageUrl: string | null;
+  emoji?: string | null;
   typeHint: string | null;
 }) {
-  const fallback =
-    entity === "project" ? (
-      <ProjectMark icon={typeHint} />
-    ) : (
-      <EntityIcon entity={entity} size={14} colored />
-    );
+  const fallback = emoji ? (
+    <RecordEmoji entity={entity} emoji={emoji} />
+  ) : (
+    <EntityIcon entity={entity} size={14} colored />
+  );
   return imageUrl ? (
     <Image
       src={imageUrl}
@@ -111,6 +111,7 @@ export function buildSearchHitComboboxItem<E extends SearchableEntity>(
         entity={entity}
         imageUrl={hit.imageUrl}
         typeHint={hit.typeHint}
+        emoji={hit.emoji}
       />
     );
 
@@ -401,7 +402,13 @@ export function buildRecordComboboxItem<E extends ShortcodeType>(
     shortcode,
     name: pickerTitle.safeParse(title).data ?? shortcode,
     ...(aliases && { aliases }),
-    icon: <EntityIcon entity={entity} size={14} colored />,
+    icon: (
+      <RecordEmoji
+        entity={entity}
+        emoji={z.string().nullable().optional().parse(record.emoji)}
+        size={14}
+      />
+    ),
   };
 }
 
