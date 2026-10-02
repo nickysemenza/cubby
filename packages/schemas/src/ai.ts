@@ -6,6 +6,7 @@ import { moneyNullable } from "./money";
 import {
   runShortcode,
   ingredientShortcode,
+  imageShortcode,
   inventoryShortcode,
   locationShortcode,
   productShortcode,
@@ -36,6 +37,17 @@ export type AiSelectionResult = z.infer<typeof aiSelectionResultSchema>;
 
 export const aiLocationIdInput = z.object({
   locationId: locationShortcode,
+});
+
+export const MAX_DETECTION_IMAGE_IDS = 5;
+
+export const detectInventoryItemsInput = aiLocationIdInput.extend({
+  /** Analyze only these attached images (a native photo just committed); omitted means the location's first images. */
+  imageIds: z
+    .array(imageShortcode)
+    .min(1)
+    .max(MAX_DETECTION_IMAGE_IDS)
+    .optional(),
 });
 
 export const locationDescriptionSchema = z.object({

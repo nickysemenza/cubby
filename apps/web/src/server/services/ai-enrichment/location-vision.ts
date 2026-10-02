@@ -81,6 +81,22 @@ const productionLocationVisionAiPort: LocationVisionAiPort = {
     getAiClient().detectInventoryItems(...args),
 };
 
+/**
+ * The images a detection reads. `imageIds` narrows to those attached images
+ * (shortcodes, as `LocationOut.images[].id` returns them); an id the location
+ * does not hold is ignored, so a stale id reads as "no images" rather than
+ * analyzing someone else's photo.
+ */
+export function selectDetectionImages<T extends { id: string }>(
+  images: readonly T[],
+  imageIds?: readonly string[],
+): T[] {
+  const chosen = imageIds
+    ? images.filter((image) => imageIds.includes(image.id))
+    : images;
+  return chosen.slice(0, MAX_ANALYSIS_IMAGES);
+}
+
 class LocationHasNoImagesToAnalyzeError extends Error {
   constructor() {
     super(LOCATION_NO_IMAGES_MESSAGE);
@@ -467,11 +483,12 @@ export async function detectInventoryItems(
   db: Database,
   locationId: LocationId,
   runId: RunId,
+  imageIds?: readonly string[],
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
 ): Promise<DetectedInventoryResult> {
   const location = await getLocationById(db, locationId);
 
-  const images = (location.images ?? []).slice(0, MAX_ANALYSIS_IMAGES);
+  const images = selectDetectionImages(location.images ?? [], imageIds);
   if (images.length === 0) {
     throw new LocationHasNoImagesToAnalyzeError();
   }
