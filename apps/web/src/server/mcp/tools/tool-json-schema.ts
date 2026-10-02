@@ -56,6 +56,14 @@ export function safeToJsonSchema(
       target: "draft-7",
       io,
       unrepresentable: "any",
+      override: ({ jsonSchema }) => {
+        // Draft-7 requires a nonempty tuple prefix. Zod emits items: [] for
+        // empty tuples; the rest schema (or false) preserves their contract.
+        if (Array.isArray(jsonSchema.items) && jsonSchema.items.length === 0) {
+          jsonSchema.items = jsonSchema.additionalItems ?? true;
+          delete jsonSchema.additionalItems;
+        }
+      },
     });
     const parsed = z.json().parse(converted);
     if (!isJsonObject(parsed)) {
