@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 
-import type { DetailRecordOf } from "~/app/_components/entity-detail/detail-record";
-import { Button } from "~/components/ui/button";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import { Button } from "~/ui/primitives/button";
 
 export function WardrobeLink({
   record,

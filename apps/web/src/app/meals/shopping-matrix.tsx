@@ -3,15 +3,15 @@ import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import { Row } from "~/components/layout";
-import { CrossTabTable } from "~/components/matrix/cross-tab-table";
-import type { CrossTabColumn } from "~/components/matrix/group-columns";
-import { HEAT_CLASSES, heatBucket } from "~/components/matrix/heat-scale";
-import { totalCell } from "~/components/matrix/matrix-chrome";
-import { Checkbox } from "~/components/ui/checkbox";
-import { entityDetailLink } from "~/entities/entities";
+import { entityDetailLink } from "~/entity/entities";
 import { formatCalendarDay } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
+import { Row } from "~/ui/layout";
+import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
+import type { CrossTabColumn } from "~/ui/matrix/group-columns";
+import { HEAT_CLASSES, heatBucket } from "~/ui/matrix/heat-scale";
+import { totalCell } from "~/ui/matrix/matrix-chrome";
+import { Checkbox } from "~/ui/primitives/checkbox";
 
 import {
   formatAmount,

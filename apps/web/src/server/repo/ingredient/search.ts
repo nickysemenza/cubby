@@ -29,8 +29,8 @@ import {
   sql,
 } from "drizzle-orm";
 
-import { listReadRowSchema } from "~/entities/list-read-fields";
-import { projectListRows } from "~/entities/list-read-schema";
+import { listReadRowSchema } from "~/entity/list-read-fields";
+import { projectListRows } from "~/entity/list-read-schema";
 import type { Database } from "~/server/db";
 import {
   ingredient,

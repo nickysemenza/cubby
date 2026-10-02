@@ -37,7 +37,13 @@ describe("recipe import workflow graphs", () => {
       inspectWorkflow(upsertCookbookWorkflow.definition).steps.map(
         (step) => step.type,
       ),
-    ).toEqual(["call", "committedCall", "committedEffect", "committedEffect"]);
+    ).toEqual([
+      "call",
+      "call",
+      "committedCall",
+      "committedEffect",
+      "committedEffect",
+    ]);
     expect(
       inspectWorkflow(deleteCookbookWorkflow.definition).steps.map(
         (step) => step.type,

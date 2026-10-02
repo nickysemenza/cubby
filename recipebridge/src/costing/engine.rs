@@ -137,6 +137,8 @@ struct Trio {
     price: MeasureRes,
     gram: MeasureRes,
     nutrients: NutrientsRes,
+    inferred_nutrient_codes: HashSet<String>,
+    opted_out_nutrient_codes: HashSet<String>,
 }
 
 impl Trio {
@@ -146,6 +148,8 @@ impl Trio {
             price: Err(e.clone()),
             gram: Err(e.clone()),
             nutrients: Err(e),
+            inferred_nutrient_codes: HashSet::new(),
+            opted_out_nutrient_codes: HashSet::new(),
         }
     }
 }
@@ -283,16 +287,36 @@ struct IngredientCtx {
     shared_pairs: Vec<(Measure, Measure)>,
     priced: Vec<PricedProduct>,
     graph: OnceCell<MeasureGraph>,
+    inferred_units: HashSet<String>,
+    opted_out_nutrient_codes: HashSet<String>,
+}
+
+fn nutrient_units(pair: &(Measure, Measure)) -> impl Iterator<Item = String> + '_ {
+    [&pair.0, &pair.1]
+        .into_iter()
+        .filter(|measure| {
+            matches!(
+                measure.kind(),
+                MeasureKind::Nutrient(_) | MeasureKind::Calories
+            )
+        })
+        .map(|measure| measure.unit().to_str().into_owned())
 }
 
 impl IngredientCtx {
     fn new(products: &[WProductInput]) -> Self {
         let mut shared_pairs = Vec::new();
+        let mut inferred_pairs = Vec::new();
         let mut package_pairs = Vec::new();
         let mut priced = Vec::new();
         for product in products {
-            let ProductPairs { package, shared } = product_non_price_mapping_pairs(product);
+            let ProductPairs {
+                package,
+                shared,
+                inferred,
+            } = product_non_price_mapping_pairs(product);
             shared_pairs.extend(shared);
+            inferred_pairs.extend(inferred);
             if let Some(price) = product.price {
                 priced.push(PricedProduct {
                     price,
@@ -307,6 +331,12 @@ impl IngredientCtx {
         // shared edge never define the same unit pair, so `make_graph`'s
         // last-mapping-wins only ever arbitrates within one class, whose
         // relative order is preserved.
+        let measured_units: HashSet<String> =
+            shared_pairs.iter().flat_map(nutrient_units).collect();
+        inferred_pairs
+            .retain(|pair| !nutrient_units(pair).any(|unit| measured_units.contains(&unit)));
+        let inferred_units = inferred_pairs.iter().flat_map(nutrient_units).collect();
+        shared_pairs.splice(0..0, inferred_pairs);
         let mut pairs = shared_pairs.clone();
         pairs.extend(package_pairs);
         Self {
@@ -314,6 +344,8 @@ impl IngredientCtx {
             shared_pairs,
             priced,
             graph: OnceCell::new(),
+            inferred_units,
+            opted_out_nutrient_codes: HashSet::new(),
         }
     }
 
@@ -377,9 +409,13 @@ struct SubTotals {
     nutrients: Vec<(String, f64, Option<f64>)>,
     missing: WRowMissing,
     missing_nutrient_codes: HashSet<String>,
+    inferred_nutrient_codes: HashSet<String>,
+    opted_out_nutrient_codes: HashSet<String>,
 }
 
 struct SubRecipePairs {
+    inferred_nutrient_codes: HashSet<String>,
+    opted_out_nutrient_codes: HashSet<String>,
     pairs: Vec<(Measure, Measure)>,
     missing: WRowMissing,
     missing_nutrient_codes: HashSet<String>,
@@ -413,7 +449,12 @@ impl<'a> Engine<'a> {
                 // food). Synthetic price edges stay out, and each product's own
                 // package edges are re-isolated for its price leg — see
                 // `IngredientCtx::cheapest_price`.
-                .map(|i| (i.id.as_str(), IngredientCtx::new(&i.products)))
+                .map(|i| {
+                    let mut ctx = IngredientCtx::new(&i.products);
+                    ctx.opted_out_nutrient_codes
+                        .extend(i.nutrient_opt_out_codes.iter().cloned());
+                    (i.id.as_str(), ctx)
+                })
                 .collect(),
             targets: targets_from(&input.nutrient_targets),
             empty_ctx: IngredientCtx::new(&[]),
@@ -490,17 +531,27 @@ impl<'a> Engine<'a> {
                         .find(|(code, value, _)| code == &target.code && value.is_finite()),
                     Err(_) => None,
                 };
-                let estimate = match resolved {
-                    Some((_, lower, upper)) => WMeasureEstimate::known(
-                        *lower,
-                        upper.and_then(finite),
-                        !missing_nutrient_codes.contains(&target.code),
-                        1,
-                    ),
-                    None => WMeasureEstimate::Unavailable {
-                        reason: unavailable_reason,
+                let estimate = if trio.opted_out_nutrient_codes.contains(&target.code) {
+                    WMeasureEstimate::Unavailable {
+                        reason: WUnavailableReason::NotApplicable,
                         coverage: None,
-                    },
+                    }
+                } else {
+                    match resolved {
+                        Some((_, lower, upper)) => WMeasureEstimate::known(
+                            *lower,
+                            upper.and_then(finite),
+                            !missing_nutrient_codes.contains(&target.code),
+                            1,
+                        )
+                        .with_inferred_zero(u32::from(
+                            trio.inferred_nutrient_codes.contains(&target.code),
+                        )),
+                        None => WMeasureEstimate::Unavailable {
+                            reason: unavailable_reason,
+                            coverage: None,
+                        },
+                    }
                 };
                 WNamedEstimate {
                     code: target.code.clone(),
@@ -564,12 +615,29 @@ impl<'a> Engine<'a> {
             gram: weight
                 .map(MeasureVal::from)
                 .ok_or_else(|| "Error converting to weight".to_string()),
+            inferred_nutrient_codes: HashSet::new(),
+            opted_out_nutrient_codes: HashSet::new(),
             nutrients: if entries.is_empty() {
                 Err("No nutrient conversions succeeded".to_string())
             } else {
                 Ok(entries)
             },
         }
+    }
+
+    fn ingredient_measures(&self, amounts: &[Measure], ctx: &IngredientCtx) -> Trio {
+        let mut trio = self.measures(amounts, ctx.graph(), ctx.cheapest_price(amounts));
+        trio.inferred_nutrient_codes = self
+            .targets
+            .iter()
+            .filter(|target| ctx.inferred_units.contains(&target.unit))
+            .map(|target| target.code.clone())
+            .collect();
+        trio.opted_out_nutrient_codes = ctx.opted_out_nutrient_codes.clone();
+        if let Ok(entries) = &mut trio.nutrients {
+            entries.retain(|(code, ..)| !trio.opted_out_nutrient_codes.contains(code));
+        }
+        trio
     }
 
     /// The row's own-amount trio (the old `getIngredientMeasures`): sub-recipe
@@ -600,11 +668,12 @@ impl<'a> Engine<'a> {
         let measures: Vec<Measure> = row.amounts.iter().map(|a| a.to_measure()).collect();
         let (trio, propagated, propagated_nutrient_codes) = match row.kind {
             WRowKind::Recipe => match self.sub_recipe_pairs(&row.target_id, visited, taint) {
-                Some(sub) => (
-                    self.measures(&measures, &make_graph(&sub.pairs), None),
-                    sub.missing,
-                    sub.missing_nutrient_codes,
-                ),
+                Some(sub) => {
+                    let mut trio = self.measures(&measures, &make_graph(&sub.pairs), None);
+                    trio.inferred_nutrient_codes = sub.inferred_nutrient_codes;
+                    trio.opted_out_nutrient_codes = sub.opted_out_nutrient_codes;
+                    (trio, sub.missing, sub.missing_nutrient_codes)
+                }
                 None => (
                     Trio::all_err(format!("sub-recipe {} could not be costed", row.target_id)),
                     WRowMissing {
@@ -621,7 +690,7 @@ impl<'a> Engine<'a> {
             WRowKind::Ingredient => {
                 let ctx = self.ctx_for(&row.target_id);
                 (
-                    self.measures(&measures, ctx.graph(), ctx.cheapest_price(&measures)),
+                    self.ingredient_measures(&measures, ctx),
                     WRowMissing::default(),
                     HashSet::new(),
                 )
@@ -673,7 +742,31 @@ impl<'a> Engine<'a> {
                     out.estimates.cost,
                     WMeasureEstimate::Complete { .. } | WMeasureEstimate::Partial { .. }
                 );
+                let inferred_nutrient_codes = out
+                    .estimates
+                    .nutrition
+                    .iter()
+                    .filter(|entry| entry.estimate.inferred_zero_count() > 0)
+                    .map(|entry| entry.code.clone())
+                    .collect();
+                let opted_out_nutrient_codes = out
+                    .estimates
+                    .nutrition
+                    .iter()
+                    .filter(|entry| {
+                        matches!(
+                            entry.estimate,
+                            WMeasureEstimate::Unavailable {
+                                reason: WUnavailableReason::NotApplicable,
+                                ..
+                            }
+                        )
+                    })
+                    .map(|entry| entry.code.clone())
+                    .collect();
                 let t = SubTotals {
+                    inferred_nutrient_codes,
+                    opted_out_nutrient_codes,
                     price: out.price,
                     price_upper: out.price_upper,
                     price_has_known,
@@ -693,10 +786,23 @@ impl<'a> Engine<'a> {
                         .targets
                         .iter()
                         .filter(|target| {
-                            out.nutrient_coverage
+                            out.estimates
+                                .nutrition
                                 .iter()
-                                .find(|coverage| coverage.code == target.code)
-                                .is_none_or(|coverage| coverage.covered < out.total_ingredients)
+                                .find(|entry| entry.code == target.code)
+                                .is_none_or(|entry| {
+                                    matches!(
+                                        entry.estimate,
+                                        WMeasureEstimate::Partial { .. }
+                                            | WMeasureEstimate::Pending { .. }
+                                            | WMeasureEstimate::Unavailable {
+                                                reason: WUnavailableReason::NoData
+                                                    | WUnavailableReason::YieldMissing
+                                                    | WUnavailableReason::Empty,
+                                                ..
+                                            }
+                                    )
+                                })
                         })
                         .map(|target| target.code.clone())
                         .collect(),
@@ -756,6 +862,8 @@ impl<'a> Engine<'a> {
             }
         }
         Some(SubRecipePairs {
+            inferred_nutrient_codes: totals.inferred_nutrient_codes,
+            opted_out_nutrient_codes: totals.opted_out_nutrient_codes,
             pairs,
             missing: totals.missing,
             missing_nutrient_codes: totals.missing_nutrient_codes,
@@ -774,7 +882,7 @@ impl<'a> Engine<'a> {
         }
         let amounts = [Measure::new("g", grams)];
         let ctx = self.ctx_for(&row.target_id);
-        self.measures(&amounts, ctx.graph(), ctx.cheapest_price(&amounts))
+        self.ingredient_measures(&amounts, ctx)
     }
 
     /// Resolve a row's three measures per its plan. Returns the resolved trio
@@ -847,11 +955,31 @@ impl<'a> Engine<'a> {
             }
         };
 
-        let trio = Trio {
+        let nutrition_source = match plan.nutrients {
+            OwnFull | OwnFraction { .. } => own_ref(),
+            BasisFraction { fraction } => est_for(fraction * basis_grams),
+            FlatGrams { grams } => est_for(grams),
+            Missing => None,
+        };
+        let mut trio = Trio {
+            inferred_nutrient_codes: nutrition_source
+                .map(|trio| trio.inferred_nutrient_codes.clone())
+                .unwrap_or_default(),
+            opted_out_nutrient_codes: nutrition_source
+                .map(|trio| trio.opted_out_nutrient_codes.clone())
+                .unwrap_or_default(),
             price: amount_for(plan.cost, |t| &t.price),
             gram: amount_for(plan.weight, |t| &t.gram),
             nutrients: nutrients_for(plan.nutrients),
         };
+        if row.kind == WRowKind::Ingredient {
+            trio.opted_out_nutrient_codes.extend(
+                self.ctx_for(&row.target_id)
+                    .opted_out_nutrient_codes
+                    .iter()
+                    .cloned(),
+            );
+        }
         let own_missing = own.as_ref().map(|o| o.missing).unwrap_or_default();
         let own_missing_nutrient_codes = own
             .as_ref()
@@ -1233,6 +1361,7 @@ pub(crate) fn resolve_mapped_food(
     amount: &WAmount,
     products: &[WProductInput],
     nutrient_targets: &[WNutrientTarget],
+    nutrient_opt_out_codes: &[String],
 ) -> (WNutritionTotals, WMeasureEstimate) {
     let engine = Engine {
         recipes: HashMap::new(),
@@ -1241,9 +1370,11 @@ pub(crate) fn resolve_mapped_food(
         empty_ctx: IngredientCtx::new(&[]),
         sub_totals: RefCell::new(HashMap::new()),
     };
-    let ctx = IngredientCtx::new(products);
+    let mut ctx = IngredientCtx::new(products);
+    ctx.opted_out_nutrient_codes
+        .extend(nutrient_opt_out_codes.iter().cloned());
     let amounts = [amount.to_measure()];
-    let trio = engine.measures(&amounts, ctx.graph(), ctx.cheapest_price(&amounts));
+    let trio = engine.ingredient_measures(&amounts, &ctx);
     let missing_nutrient_codes = engine.missing_nutrient_codes(&trio.nutrients);
     let totals = WNutritionTotals {
         cost: engine.estimate_for_measure(
@@ -1292,6 +1423,7 @@ mod tests {
     #[test]
     fn multi_priced_ingredients_select_the_cheapest_price() {
         let input = input_with(vec![WCostingIngredient {
+            nutrient_opt_out_codes: vec![],
             id: "ingredient".to_string(),
             products: vec![product("premium", Some(5.0)), product("value", Some(2.0))],
         }]);
@@ -1300,5 +1432,102 @@ mod tests {
         let amounts = [Measure::new("each", 3.0)];
         let price = ctx.cheapest_price(&amounts).expect("priced each amount");
         assert_eq!(price.value(), 6.0);
+    }
+    #[test]
+    fn mapped_label_inferred_zero_retains_provenance() {
+        let products: Vec<WProductInput> = serde_json::from_value(serde_json::json!([{
+            "id": "synthetic-product", "price": null, "food": null,
+            "unit_mappings": [{
+                "a": { "value": 100.0, "unit": "g" },
+                "b": { "value": 0.0, "unit": "g fat" },
+                "sourceMetadata": { "type": "product", "productId": "synthetic-product", "inferredZero": true }
+            }]
+        }])).unwrap();
+        let (totals, _) = resolve_mapped_food(
+            &crate::WAmount {
+                value: 40.0,
+                upper_value: None,
+                unit: "g".to_string(),
+            },
+            &products,
+            &[WNutrientTarget {
+                code: "204".to_string(),
+                unit: "g fat".to_string(),
+            }],
+            &[],
+        );
+        let value = serde_json::to_value(&totals.nutrition[0].estimate).unwrap();
+        assert_eq!(value["coverage"]["inferredZero"], 1);
+        assert_eq!(value["lower"], 0.0);
+    }
+
+    #[test]
+    fn inferred_zero_measured_override_and_nested_opt_out() {
+        let inferred = serde_json::json!({
+            "id":"synthetic-product", "price":null,"food":null,"unit_mappings":[{
+              "a":{"value":100,"unit":"g"},"b":{"value":0,"unit":"g fat"},
+              "sourceMetadata":{"type":"product","productId":"synthetic-product","inferredZero":true}
+            }]
+        });
+        let measured = serde_json::json!({
+            "id":"synthetic-measured", "price":null,"food":null,"unit_mappings":[{
+              "a":{"value":100,"unit":"g"},"b":{"value":10,"unit":"g fat"},
+              "sourceMetadata":{"type":"product","productId":"synthetic-measured"}
+            }]
+        });
+        let targets = [WNutrientTarget {
+            code: "204".into(),
+            unit: "g fat".into(),
+        }];
+        for products in [
+            vec![inferred.clone(), measured.clone()],
+            vec![measured, inferred.clone()],
+        ] {
+            let products: Vec<WProductInput> =
+                serde_json::from_value(serde_json::json!(products)).unwrap();
+            let (totals, _) = resolve_mapped_food(
+                &crate::WAmount {
+                    value: 40.0,
+                    upper_value: None,
+                    unit: "g".into(),
+                },
+                &products,
+                &targets,
+                &[],
+            );
+            let value = serde_json::to_value(&totals.nutrition[0].estimate).unwrap();
+            assert_eq!(value["lower"], 4.0);
+            assert!(value["coverage"]["inferredZero"].is_null());
+        }
+        let input: WCostingInput = serde_json::from_value(serde_json::json!({
+            "root_ids":["parent"],"explain":false,"nutrient_targets":[{"code":"204","unit":"g fat"}],
+            "ingredients":[
+              {"id":"known","products":[inferred]},
+              {"id":"optout","products":[],"nutrient_opt_out_codes":["204"]}
+            ],
+            "recipes":[
+              {"id":"sub","recipe_yield":{"value":1,"unit":"batch"},"rows":[
+                {"id":"first","kind":"ingredient","target_id":"known","name":"synthetic food","amounts":[{"value":100,"unit":"g"}]},
+                {"id":"second","kind":"ingredient","target_id":"optout","name":"synthetic optout","amounts":[{"value":10,"unit":"g"}]}
+              ]},
+              {"id":"parent","rows":[{"id":"third","kind":"recipe","target_id":"sub","name":"synthetic subrecipe","amounts":[{"value":0.5,"unit":"batch"}]}]}
+            ]
+        })).unwrap();
+        let engine = Engine::new(&input);
+        let sub = engine.cost_recipe(
+            engine.recipe("sub").unwrap(),
+            &HashSet::from(["sub".into()]),
+            false,
+        );
+        let opt_out = serde_json::to_value(&sub.rows[1].nutrition[0].estimate).unwrap();
+        assert_eq!(opt_out["reason"], "not_applicable");
+        let result = engine.cost_recipe(
+            engine.recipe("parent").unwrap(),
+            &HashSet::from(["parent".into()]),
+            false,
+        );
+        let value = serde_json::to_value(&result.estimates.nutrition[0].estimate).unwrap();
+        assert_eq!(value["status"], "complete");
+        assert_eq!(value["coverage"]["inferredZero"], 1);
     }
 }

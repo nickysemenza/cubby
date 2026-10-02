@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-import { Button } from "~/components/ui/button";
-import { Spinner } from "~/components/ui/spinner";
+import { Button } from "~/ui/primitives/button";
+import { Spinner } from "~/ui/primitives/spinner";
 
 /**
  * The header "fix all" button shared across Problems sections: a small button

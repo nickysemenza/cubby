@@ -13,18 +13,18 @@ import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 
-import { Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "~/components/ui/collapsible";
-import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
-import { Skeleton } from "~/components/ui/skeleton";
-import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+} from "~/ui/primitives/collapsible";
+import { Input } from "~/ui/primitives/input";
+import { NativeSelect } from "~/ui/primitives/native-select";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 import { CollectionProductsTable } from "./collection-detail-page";
 import {

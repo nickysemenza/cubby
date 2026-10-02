@@ -2,11 +2,11 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
 import { ProjectExpenseAnalytics } from "~/app/expenses/expense-analytics-view";
-import { Description } from "~/components/ui/description";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { splitExpenseSpend } from "~/lib/spend";
+import { Description } from "~/ui/primitives/description";
 
 import { BudgetStrip } from "./BudgetStrip";
 import { ProjectContributionSection } from "./project-contribution-section";

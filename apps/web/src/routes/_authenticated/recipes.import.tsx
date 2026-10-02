@@ -2,12 +2,12 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
 
-import { CookbookImport } from "~/app/_components/recipe/cookbook-import";
-import { NotionImport } from "~/app/_components/recipe/notion-import";
-import { Page } from "~/components/page/Page";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { useTabParam } from "~/hooks/useTabParam";
+import { CookbookImport } from "~/features/recipes/cookbook-import";
+import { NotionImport } from "~/features/recipes/notion-import";
 import { pageTitle } from "~/lib/page-title";
+import { useTabParam } from "~/ui/hooks/useTabParam";
+import { Page } from "~/ui/page/Page";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 const tabSchema = z.enum(["cookbook", "notion"]);
 const searchSchema = z.object({

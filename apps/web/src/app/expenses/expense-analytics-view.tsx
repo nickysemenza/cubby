@@ -9,15 +9,15 @@ import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
-import { Grid, Section, Stack } from "~/components/layout";
-import { Skeleton } from "~/components/ui/skeleton";
-import { getEntityFilters } from "~/entities/filter-manifest";
+import { getEntityFilters } from "~/entity/filter-manifest";
 import {
   buildFiltersFromManifest,
   filterGetterFromSearch,
   soleValue,
-} from "~/entities/filters";
+} from "~/entity/filters";
 import { formatCurrency } from "~/lib/utils";
+import { Grid, Section, Stack } from "~/ui/layout";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 import { CostTypeDonut } from "./charts/cost-type-donut";
 import { CumulativeSpend } from "./charts/cumulative-spend";

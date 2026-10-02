@@ -1,14 +1,14 @@
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { useState } from "react";
 
-import { ChipsInput } from "~/app/_components/forms/chips-input";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { DialogFormActions } from "~/components/ui/dialog-form-actions";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { cookbook as cookbookOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
+import { ChipsInput } from "~/ui/forms/chips-input";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
+import { Input } from "~/ui/primitives/input";
+import { Label } from "~/ui/primitives/label";
+import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 /**
  * A cookbook is born from an import, so its Edit action is title, authors and

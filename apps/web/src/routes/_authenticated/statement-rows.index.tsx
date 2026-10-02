@@ -6,11 +6,11 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { listChromePage } from "~/app/_components/routing/entity-routes";
-import { StatementRowList } from "~/app/_components/statement-rows/statement-row-list";
-import { Button } from "~/components/ui/button";
+import { listChromePage } from "~/entity/routing/entity-routes";
+import { StatementRowList } from "~/features/statement-rows/statement-row-list";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
+import { Button } from "~/ui/primitives/button";
 
 // `"all"` is a client-only sentinel (never reaches the server filter — see
 // buildFilters in statement-row-list.tsx): the worklist default is

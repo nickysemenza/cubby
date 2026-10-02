@@ -1,0 +1,99 @@
+import {
+  getNutrientDisplayName,
+  getNutrientUnit,
+  KEY_NUTRIENT_KEYS,
+  type NutrientsPer100,
+  TIER1_NUTRIENTS,
+} from "@cubby/usda";
+
+import { trimAmount } from "~/lib/nutrition-format";
+import { cn } from "~/lib/utils";
+import { Row } from "~/ui/layout";
+
+// Short table headers — the one per-surface override of the long displayName.
+// The ordered key membership is canonical in `@cubby/usda`
+// (`KEY_NUTRIENT_KEYS`), shared with the unit-mapping macro chips so they can't
+// drift; only these presentation labels live here.
+const SHORT_LABEL = {
+  kcal: "Cal",
+  protein: "Protein",
+  fat: "Fat",
+  carbs: "Carbs",
+  fiber: "Fiber",
+  sodium: "Sodium",
+} satisfies Record<(typeof KEY_NUTRIENT_KEYS)[number], string>;
+
+export const KEY_NUTRIENTS = KEY_NUTRIENT_KEYS.map((key) => ({
+  code: TIER1_NUTRIENTS[key].code,
+  label: SHORT_LABEL[key],
+  // Lowercased display unit ("kcal" / "g" / "mg") for the table column subhead.
+  unit: TIER1_NUTRIENTS[key].unit.toLowerCase(),
+}));
+
+const KEY_NUTRIENT_CODES = KEY_NUTRIENTS.map((n) => n.code);
+const KEY_NUTRIENT_LABELS = new Map(
+  KEY_NUTRIENTS.map((n) => [n.code, n.label]),
+);
+
+// Compact view shows kcal + protein only — derived, not raw code literals.
+const COMPACT_CODES: readonly string[] = [
+  TIER1_NUTRIENTS.kcal.code,
+  TIER1_NUTRIENTS.protein.code,
+];
+
+// Trim trailing-zero decimals: 450.0 → "450", 11.7 → "11.7".
+export function NutrientsSummary({
+  nutrients,
+  compact = false,
+  dense = false,
+}: {
+  nutrients: NutrientsPer100;
+  compact?: boolean;
+  /** Tighter chips with short labels + trimmed decimals, for space-tight rows. */
+  dense?: boolean;
+}) {
+  // Show only the key nutrients that are present in the data, in priority order.
+  const presentNutrients = KEY_NUTRIENT_CODES.filter(
+    (code) => nutrients[code] !== undefined && nutrients[code] > 0,
+  );
+
+  // In compact mode, only show kcal and protein
+  const displayNutrients = compact
+    ? presentNutrients.filter((code) => COMPACT_CODES.includes(code))
+    : presentNutrients;
+
+  if (displayNutrients.length === 0) {
+    return null;
+  }
+
+  return (
+    <Row
+      wrap
+      className={cn(dense ? "gap-0.5 text-2xs" /* tight */ : "gap-1 text-xs")}
+    >
+      {displayNutrients.map((code) => {
+        const value = nutrients[code] ?? 0;
+        const unit = getNutrientUnit(code).toLowerCase();
+        const displayName = dense
+          ? (KEY_NUTRIENT_LABELS.get(code) ?? code).toUpperCase()
+          : getNutrientDisplayName(code).toUpperCase();
+
+        return (
+          <span
+            key={code}
+            className={cn(
+              "inline-flex items-baseline gap-1 rounded-sm bg-muted whitespace-nowrap",
+              dense ? "px-1 py-0" : "px-1.5 py-0.5" /* tight: nutrient chip */,
+            )}
+          >
+            <span className="font-medium text-slate">{displayName}</span>
+            <span className="text-highlight">
+              {dense ? trimAmount(value) : value.toFixed(1)}
+            </span>
+            <span className="text-muted-foreground">{unit}</span>
+          </span>
+        );
+      })}
+    </Row>
+  );
+}

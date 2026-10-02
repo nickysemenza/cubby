@@ -1,12 +1,86 @@
+import {
+  dataCheckKind,
+  dataCheckMessage,
+  dataChecksByEntity,
+} from "@cubby/schemas/data-quality";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { buildQualityBreakdown } from "~/server/repo/data-quality/hydrate";
+
 import {
   boundExplanationSources,
+  explainInterpretation,
   explainProjectionSources,
   readExplanationPath,
 } from "./field-explanation.server";
+
+it.each([
+  {
+    check: dataChecksByEntity.financialAccount.enum.financial_account_unclaimed,
+    summary: "does not reduce this record's score",
+    score: 100,
+    noWeightedChecks: true,
+  },
+  {
+    check: dataChecksByEntity.financialAccount.enum.financial_account_confirmed,
+    summary: "reduces this record's score",
+    score: 0,
+    noWeightedChecks: false,
+  },
+])(
+  "explains the scoring policy of $check without hiding its gap",
+  ({ check, summary, score, noWeightedChecks }) => {
+    const field = entityFieldModels.financialAccount.fields.find(
+      (entry) => entry.key === "dataQuality",
+    );
+    if (!field) throw new Error("Declared quality field is missing");
+    const breakdown = buildQualityBreakdown([check], [check], []);
+    const status = dataCheckKind[check] === "defect" ? "defect" : "needs_data";
+    const result = explainInterpretation(
+      field,
+      status,
+      {
+        dataQuality: {
+          status,
+          score: breakdown.score,
+          facets: [],
+          gaps: [
+            {
+              check,
+              facet: "identity",
+              kind: dataCheckKind[check],
+              targetType: "financialAccount",
+              targetId: testShortcode("financialAccount", "unclaimed-account"),
+              message: dataCheckMessage[check],
+            },
+          ],
+          exceptions: [],
+          relatedGaps: [],
+          relatedExceptions: [],
+        },
+      },
+      [],
+      false,
+      null,
+      breakdown,
+      false,
+    );
+    expect(result.interpretation.nextSteps).toContain(dataCheckMessage[check]);
+    expect(result.interpretation.summary).toContain(summary);
+    expect(result.interpretation.caveats.join(" ")).not.toContain(
+      "No checks apply",
+    );
+    expect(
+      result.interpretation.caveats
+        .join(" ")
+        .includes("No weighted checks apply"),
+    ).toBe(noWeightedChecks);
+    expect(breakdown.score).toBe(score);
+  },
+);
 
 describe("field explanation projection", () => {
   it("treats a nullable computed parent as a real null value", () => {

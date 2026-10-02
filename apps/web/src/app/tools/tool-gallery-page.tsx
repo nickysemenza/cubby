@@ -20,37 +20,37 @@ import {
 } from "react";
 import { z } from "zod";
 
+import { EntityWorkbenchInspector } from "~/entity/entity-detail/entity-workbench-inspector";
+import { tryFormatAmount } from "~/features/inventory/format-amount";
+import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { cn, formatCurrency } from "~/lib/utils";
 import {
   GroupedFlow,
   type GroupedFlowGroup,
   groupedFlowSectionId,
   shelfGridClass,
-} from "~/app/_components/data-table/shelf";
-import { EntityWorkbenchInspector } from "~/app/_components/entity-workbench-inspector";
+} from "~/ui/data-table/shelf";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
 import {
   type EntityPreviewRendererProps,
   useEntityPreview,
-} from "~/app/_components/hooks/useEntityPreview";
-import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { FilterableCombobox } from "~/components/ui/combobox";
+} from "~/ui/hooks/useEntityPreview";
+import { useHydrated } from "~/ui/hooks/useHydrated";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { FilterableCombobox } from "~/ui/primitives/combobox";
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyIcon,
   EmptyTitle,
-} from "~/components/ui/empty";
-import { Image } from "~/components/ui/image";
-import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
-import { Skeleton } from "~/components/ui/skeleton";
-import { Spinner } from "~/components/ui/spinner";
-import { useHydrated } from "~/hooks/useHydrated";
-import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { cn, formatCurrency } from "~/lib/utils";
+} from "~/ui/primitives/empty";
+import { Image } from "~/ui/primitives/image";
+import { Input } from "~/ui/primitives/input";
+import { NativeSelect } from "~/ui/primitives/native-select";
+import { Skeleton } from "~/ui/primitives/skeleton";
+import { Spinner } from "~/ui/primitives/spinner";
 
 const PAGE_SIZE = 60;
 const DIRECT_GROUP_JUMP_LIMIT = 10;

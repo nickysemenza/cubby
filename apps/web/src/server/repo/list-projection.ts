@@ -7,8 +7,8 @@ import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
 
-import type { ListEntity } from "~/entities/generated/entity-lists.gen";
-import { projectListRows } from "~/entities/list-read-schema";
+import type { ListEntity } from "~/entity/generated/entity-lists.gen";
+import { projectListRows } from "~/entity/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 
 import { loadDataQualities } from "./data-quality/hydrate";

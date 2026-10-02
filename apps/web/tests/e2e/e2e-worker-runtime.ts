@@ -1,5 +1,6 @@
 import { request, type APIRequestContext } from "@playwright/test";
 import { type TestHarness } from "wrangler";
+import type { PurchaseImportNamespace } from "~/server/purchase-import/run-service";
 
 import {
   closeE2EWorkerResources,
@@ -12,6 +13,10 @@ import {
 import { createE2EDatabase } from "./e2e-database";
 import { createE2EObjectStorage } from "../../tooling/local-object-storage";
 import {
+  createLocalGoogleProvider,
+  type LocalGoogleProvider,
+} from "../../tooling/local-google-provider";
+import {
   harnessExplorerUrl,
   sanitizeWorkerdLogs,
   type WorkerdLog,
@@ -23,6 +28,8 @@ export interface E2EWorkerRuntime {
   baseURL: string;
   databaseUrl: string;
   objectStorageUrl: string;
+  googleProvider?: LocalGoogleProvider;
+  browserNamespace(): Promise<PurchaseImportNamespace>;
   storageState: E2EStorageState;
   /** Bindings, Durable Object, queue and R2 explorer of this live harness. */
   explorerUrl: string;
@@ -73,9 +80,11 @@ async function authenticate(baseURL: string): Promise<E2EStorageState> {
 export async function createE2EWorkerRuntime({
   authenticated,
   parallelIndex,
+  gmailJourney = false,
 }: {
   authenticated: boolean;
   parallelIndex: number;
+  gmailJourney?: boolean;
 }): Promise<E2EWorkerRuntime> {
   const resources: E2EWorkerResources = {};
   let restoreEnvironment = () => {};
@@ -99,9 +108,16 @@ export async function createE2EWorkerRuntime({
     resources.objectStorage = objectStorage;
     logPhase("object storage");
 
+    const googleProvider = gmailJourney
+      ? await createLocalGoogleProvider()
+      : undefined;
+    resources.googleProvider = googleProvider;
+
     harness = createLocalWorkerdHarness(
       database.databaseUrl,
       objectStorage.url,
+      false,
+      googleProvider?.url,
     );
     resources.harness = harness;
     const { url } = await harness.listen();
@@ -122,6 +138,15 @@ export async function createE2EWorkerRuntime({
       baseURL,
       databaseUrl: database.databaseUrl,
       objectStorageUrl: objectStorage.url,
+      googleProvider,
+      async browserNamespace() {
+        if (!harness) throw new Error("Browser harness is closed");
+        return (
+          await harness
+            .getWorker<{ PURCHASE_IMPORT: PurchaseImportNamespace }>()
+            .getEnv()
+        ).PURCHASE_IMPORT;
+      },
       storageState,
       explorerUrl,
       getLogs: () => sanitizeWorkerdLogs(harness?.getLogs() ?? []),

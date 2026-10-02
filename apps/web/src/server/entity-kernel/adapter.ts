@@ -4,7 +4,7 @@ import type { EntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { type output as ZodOutput, type ZodSchema, z } from "zod";
 
-import type { ListReadRow } from "~/entities/list-read-fields";
+import type { ListReadRow } from "~/entity/list-read-fields";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import {

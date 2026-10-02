@@ -3,12 +3,12 @@ import type { EntityRef } from "@cubby/schemas/entity";
 import { plantingGuides } from "@cubby/schemas/garden-guides";
 import { useCallback, useMemo } from "react";
 
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
-} from "~/app/_components/entity-media/entity-display-images";
-import type { ScheduleRow } from "~/app/_components/schedule/schedule-grid";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
+} from "~/entity/entity-media/entity-display-images";
+import type { ScheduleRow } from "~/features/schedule/schedule-grid";
 
 export function usePlantingScheduleLabel(
   rows: readonly ScheduleRow[],

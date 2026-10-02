@@ -1,0 +1,83 @@
+import type { ReactNode } from "react";
+import type {
+  FieldPathByValue,
+  FieldValues,
+  UseFormReturn,
+} from "react-hook-form";
+
+import { cn } from "~/lib/utils";
+
+import {
+  NullableNumericField,
+  SideBySideFields,
+  UnifiedTextField,
+} from "../../ui/form-utils";
+import { getHoverableMeasureUnitIcon } from "./format-amount";
+
+/**
+ * The unit every new inventory row starts with.
+ *
+ * Not a guess: 663 of the ledger's 664 live entries are "each". Seeding the
+ * field empty instead is a guaranteed round-trip through a validation error,
+ * because `amount` requires `unit: z.string().min(1)`.
+ */
+export const DEFAULT_AMOUNT_UNIT = "each";
+
+interface AmountFieldGroupProps<
+  TFieldValues extends FieldValues,
+  TValuePath extends FieldPathByValue<TFieldValues, number | null | undefined>,
+  TUnitPath extends FieldPathByValue<TFieldValues, string | null | undefined>,
+> {
+  form: UseFormReturn<TFieldValues>;
+  valuePath: TValuePath;
+  unitPath: TUnitPath;
+  step?: string;
+  /** Compact mode for dense rows: shorter labels ("Qty"/"Unit") + tighter width. */
+  compact?: boolean;
+}
+
+export function AmountFieldGroup<
+  TFieldValues extends FieldValues,
+  TValuePath extends FieldPathByValue<TFieldValues, number | null | undefined>,
+  TUnitPath extends FieldPathByValue<TFieldValues, string | null | undefined>,
+>({
+  form,
+  valuePath,
+  unitPath,
+  step = "1",
+  compact = false,
+}: AmountFieldGroupProps<TFieldValues, TValuePath, TUnitPath>): ReactNode {
+  // Function to get unit icon if enabled
+  const getIcon = (x: string | null): ReactNode | undefined => {
+    if (!x) return undefined;
+    return getHoverableMeasureUnitIcon(x);
+  };
+
+  return (
+    <SideBySideFields
+      narrowFirst={compact}
+      className={cn(
+        compact
+          ? "w-full min-w-0 flex-row space-y-0 space-x-2"
+          : "min-w-[13rem] space-x-2",
+      )}
+    >
+      <NullableNumericField
+        form={form}
+        name={valuePath}
+        label={compact ? "Qty" : "Amount Value"}
+        placeholder={compact ? "1" : "Enter amount"}
+        step={step}
+        fraction
+      />
+      <UnifiedTextField
+        form={form}
+        name={unitPath}
+        label={compact ? "Unit" : "Amount Unit"}
+        placeholder={compact ? "each" : "Enter unit"}
+        nullable={false}
+        getIcon={getIcon}
+      />
+    </SideBySideFields>
+  );
+}

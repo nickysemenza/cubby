@@ -2,12 +2,12 @@ import type { ExpenseProjectAggregate } from "@cubby/schemas/project";
 import { BuildingsIcon } from "@phosphor-icons/react/dist/csr/Buildings";
 import { useMemo } from "react";
 
-import { RankedBarBreakdown } from "~/app/_components/charts/kit";
 import {
   ProjectChartLabel,
   ProjectChartTick,
   useProjectIconById,
 } from "~/app/projects/project-mark";
+import { RankedBarBreakdown } from "~/ui/charts/kit";
 
 /**
  * Net spend by project — sourced from `expense.analytics`'s `byProject`

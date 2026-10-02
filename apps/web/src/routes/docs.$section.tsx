@@ -2,9 +2,9 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { Suspense, useId } from "react";
 
 import { DEFAULT_DOC_SLUG, getDocSection } from "~/app/docs/docs-registry";
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { Button } from "~/components/ui/button";
 import { pageTitle } from "~/lib/page-title";
+import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
+import { Button } from "~/ui/primitives/button";
 
 export const Route = createFileRoute("/docs/$section")({
   // The registry's own title, not the raw slug — the section is already

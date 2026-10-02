@@ -7,20 +7,17 @@ import {
 } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { GenericEntityDetail } from "~/app/_components/entity-detail/generic-entity-detail";
-import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
-import { ensureDetailRecord } from "~/app/_components/routing/detail-loader";
-import {
-  detailPage,
-  notFoundPage,
-} from "~/app/_components/routing/entity-routes";
-import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { Page } from "~/components/page/Page";
-import { DetailPagePending } from "~/components/route-pending";
-import { Button } from "~/components/ui/button";
-import { entityDetailFor } from "~/entities/entity-detail";
-import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
+import { entityDetailFor } from "~/entity/entity-detail";
+import { GenericEntityDetail } from "~/entity/entity-detail/generic-entity-detail";
+import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
+import { ensureDetailRecord } from "~/entity/routing/detail-loader";
+import { detailPage, notFoundPage } from "~/entity/routing/entity-routes";
+import EditRecipeForm from "~/features/recipes/edit-recipe";
 import { shortcodeHead } from "~/lib/page-title";
+import { RouteErrorComponent } from "~/ui/lazy-route-error";
+import { Page } from "~/ui/page/Page";
+import { Button } from "~/ui/primitives/button";
+import { DetailPagePending } from "~/ui/route-pending";
 
 /**
  * Hand-written because the workflow slot's state (`view`, `scale`,

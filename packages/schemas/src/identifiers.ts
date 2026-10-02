@@ -51,7 +51,7 @@ const sentenceCaseEntityLabel = (entity: ShortcodeEntity): string =>
  * a second, hand-typed copy out of sync.
  *
  * The client UI casts the same canonical string the other way, into Title Case
- * UI chrome (`titleCaseEntityLabel` in `apps/web/src/entities/entities.tsx`).
+ * UI chrome (`titleCaseEntityLabel` in `apps/web/src/entity/entities.tsx`).
  * `inventory` reads `"Inventory item"`, not `"Inventory entry"`: the manifest's
  * own `names.singular`, the entity's nav/registry label, and its route-level
  * not-found copy all already said "item" — "entry" survives only in row-scoped

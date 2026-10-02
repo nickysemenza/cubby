@@ -10,11 +10,11 @@ existing block. Extend the generic path when it almost fits. See
   schema in `definition.ts`, compiled by `scripts/generator/entities/*`.
 - List columns: field `display` (`standard`, `format`, `readPath`,
   `renderer.list`) compiled by `createEntityDisplayColumns`
-  (`apps/web/src/entities/entity-display.tsx`); named renderers in
-  `apps/web/src/entities/list-field-renderers.tsx`. Hand overrides in
-  `entities/list-columns/` are only for mutation-bound cells.
+  (`apps/web/src/entity/entity-display.tsx`); named renderers in
+  `apps/web/src/entity/list-field-renderers.tsx`. Hand overrides in
+  `entity/list-columns/` are only for mutation-bound cells.
 - Edit forms: generated intents plus the typed `editHooks` map in
-  `apps/web/src/entities/editing/`.
+  `apps/web/src/entity/editing/`.
 - Saved views: `presentation.list.views` on the declaration.
 - Detail pages: generic detail with declared slots (`app/*/slots.tsx`).
 - Swift: generated OpenAPI client, `entity-manifest.json`, and the generic list

@@ -123,7 +123,7 @@ export const missingBrowserRouteFiles = (
     (relativePath) => !exists(resolve(ROOT, relativePath)),
   );
 
-const LIST_OVERRIDE_REGISTRY = "apps/web/src/entities/list-columns/index.ts";
+const LIST_OVERRIDE_REGISTRY = "apps/web/src/entity/list-columns/index.ts";
 
 /**
  * Generated index routes with no kernel list read: the entity lacks a

@@ -6,7 +6,7 @@ import {
   type EntityTimelineInputByEntity,
   type TimelineEntity,
   timelineEntities,
-} from "~/entities/generated/entity-timelines.gen";
+} from "~/entity/generated/entity-timelines.gen";
 
 export const entityTimelineContract = defineContract("entity", {
   timeline: query({

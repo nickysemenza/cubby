@@ -4,8 +4,11 @@ import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { Row } from "~/components/layout";
-import { Checkbox } from "~/components/ui/checkbox";
+import { entityDetailLink } from "~/entity/entities";
+import { formatCalendarDay } from "~/lib/date-format";
+import { cn } from "~/lib/utils";
+import { Row } from "~/ui/layout";
+import { Checkbox } from "~/ui/primitives/checkbox";
 import {
   Table,
   TableBody,
@@ -13,10 +16,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "~/components/ui/table";
-import { entityDetailLink } from "~/entities/entities";
-import { formatCalendarDay } from "~/lib/date-format";
-import { cn } from "~/lib/utils";
+} from "~/ui/primitives/table";
 
 import {
   formatAmount,

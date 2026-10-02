@@ -6,16 +6,16 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
-import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
-import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
-import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
-import { Row, Stack } from "~/components/layout";
-import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { IngredientUsagePanel } from "~/features/ingredients/ingredient-usage-panel";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { recipeStreams } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { useBulkStream } from "~/ui/hooks/useBulkStream";
+import { Row, Stack } from "~/ui/layout";
+import { BulkProgressBar } from "~/ui/primitives/bulk-progress-bar";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
 
 import { CookbookRunReportPanel } from "./cookbook-run-report";
 

@@ -613,6 +613,16 @@ final class AppModel {
         Task { await companionImageWorker?.setForeground(active) }
     }
 
+    func runCompanionJobsInBackground() async -> Bool {
+        guard phase == .signedIn, participation.automaticWork else { return false }
+        return await companionImageWorker?.runInBackground(client: client) ?? false
+    }
+
+    func endCompanionBackgroundRun() {
+        let worker = companionImageWorker
+        Task { await worker?.endBackgroundRun() }
+    }
+
     private func configureCompanionImageWorker() {
         let previous = companionImageWorker
         let generation = UUID()

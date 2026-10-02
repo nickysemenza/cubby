@@ -197,7 +197,7 @@ export const renderOverrideComparisonArtifact = (
   }
   return {
     relativePath:
-      "apps/web/src/entities/generated/entity-override-comparisons.gen.ts",
+      "apps/web/src/entity/generated/entity-override-comparisons.gen.ts",
     source:
       generatedHeader +
       'import type { Entity } from "@cubby/schemas/entity";\n\n' +

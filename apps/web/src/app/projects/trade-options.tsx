@@ -20,8 +20,8 @@ import { TruckIcon } from "@phosphor-icons/react/dist/csr/Truck";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
 
-import { Badge } from "~/components/ui/badge";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import { Badge } from "~/ui/primitives/badge";
+import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 
 import { TRADE_LABELS } from "./project-formatting";
 

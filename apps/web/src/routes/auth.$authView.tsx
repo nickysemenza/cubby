@@ -3,10 +3,10 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { AuthEntryFrame } from "~/app/auth/auth-entry-frame";
-import { buttonVariants } from "~/components/ui/button";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 import { cn } from "~/lib/utils";
+import { buttonVariants } from "~/ui/primitives/button";
 
 // Deliberately NOT loose. The OAuth server appends a signed authorize query
 // here (`sig` + repeated `ba_param` names, whose signature covers the exact

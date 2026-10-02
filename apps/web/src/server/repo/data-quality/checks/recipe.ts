@@ -38,6 +38,18 @@ export const recipeChecks = defineEntityChecks({
   entity: "recipe",
   table: recipe,
   checks: {
+    recipe_deleted_dependency: {
+      // includes-deleted: the defect is a live parent still referencing a deleted sub-recipe.
+      missing: (
+        t: Recipe,
+      ) => sql`(${t.totalsComputedAt} IS NOT NULL AND EXISTS (
+        SELECT 1 FROM "RecipeSection" rs
+        JOIN "RecipeSectionIngredient" rsi ON rsi."recipeSectionId" = rs.id AND rsi."deletedAt" IS NULL
+        JOIN "Ingredient" i ON i.id = rsi."ingredientId" AND i."deletedAt" IS NULL
+        JOIN "Recipe" sub ON sub.id = i."recipeId" AND sub."deletedAt" IS NOT NULL
+        WHERE rs."recipeId" = ${t.id} AND rs."deletedAt" IS NULL
+      ))`,
+    },
     recipe_ingredients: {
       expected: isOwnRecipe,
       missing: (t) => sql`NOT ${hasIngredientLines(t)}`,

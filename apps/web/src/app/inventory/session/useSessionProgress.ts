@@ -7,7 +7,7 @@ import {
   clearStoredQueuePass,
   type QueuePassPersistence,
   useQueuePass,
-} from "~/app/_components/queue-pass/useQueuePass";
+} from "~/features/queue-pass/useQueuePass";
 
 import type { ItemResolution } from "./_components/types";
 import type { SessionLocation } from "./session-utils";

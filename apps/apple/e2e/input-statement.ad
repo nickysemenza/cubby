@@ -1,0 +1,29 @@
+context platform=ios timeout=240000
+
+open com.nickysemenza.cubby
+wait "label=Library" 60000
+click "label=Library"
+wait text "Browse catalog" 30000
+click "label=\"Browse catalog\""
+wait "id=browse.importStatement" 30000
+click "id=browse.importStatement"
+wait "id=statement.csv.chooseFile" 30000
+click "id=statement.csv.chooseFile"
+wait "id=DOC.browsingModeTabBar" 30000
+click "label=Browse"
+wait text "On My iPhone" 30000
+click "label=\"On My iPhone\""
+wait "id=\"Cubby, Container\"" 30000
+click "id=\"Cubby, Container\""
+wait text "synthetic-input-statement" 30000
+click "label=synthetic-input-statement"
+wait text "Synthetic Input Card" 30000
+wait "label=\"Record transaction\"" 30000
+click "label=\"Record transaction\""
+wait "label=Kind" 30000
+click "label=Kind"
+wait "label=Purchase" 30000
+click "label=Purchase"
+wait "id=statement.csv.confirm" 30000
+click "id=statement.csv.confirm"
+wait text "Transactions recorded" 30000

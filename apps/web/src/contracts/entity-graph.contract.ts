@@ -20,7 +20,7 @@ import { defineContract, query } from "~/contracts/define";
 import {
   generatedEntityRelationListInputSchema,
   generatedEntityRelationListOutputSchema,
-} from "~/entities/generated/entity-relation-lists.gen";
+} from "~/entity/generated/entity-relation-lists.gen";
 
 import {
   entityRecordsInputSchema,

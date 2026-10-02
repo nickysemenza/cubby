@@ -27,6 +27,7 @@ export const env = createEnv({
     // suite, so Better Auth's production request limit would reject healthy
     // parallel browser traffic. Never enable this in a deployed Worker.
     E2E_AUTH_TEST_MODE: z.enum(["true", "false"]).default("false"),
+    E2E_GOOGLE_PROVIDER_URL: z.url().optional(),
     AI_GATEWAY_API_KEY: z.string().min(1).optional(),
     NOTION_API_KEY: z.string().min(1).optional(),
     GOOGLE_CLIENT_ID: z.string().min(1).optional(),
@@ -55,6 +56,7 @@ export const env = createEnv({
     ALLOW_SIGNUP: process.env.ALLOW_SIGNUP,
     INSECURE_AUTH_COOKIES: process.env.INSECURE_AUTH_COOKIES,
     E2E_AUTH_TEST_MODE: process.env.E2E_AUTH_TEST_MODE,
+    E2E_GOOGLE_PROVIDER_URL: process.env.E2E_GOOGLE_PROVIDER_URL,
     AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY,
     NOTION_API_KEY: process.env.NOTION_API_KEY,
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,

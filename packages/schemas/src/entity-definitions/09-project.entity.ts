@@ -892,7 +892,7 @@ export default defineEntity({
           { value: "1y", label: "Last 12 months" },
         ],
         expandRef: {
-          module: "~/entities/filter-behavior",
+          module: "~/entity/filter-behavior",
           export: "resolveDateRange",
         },
         urlOnly: true,

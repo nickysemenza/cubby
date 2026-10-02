@@ -22,6 +22,7 @@ import {
 import {
   fromNamedEstimates,
   fromWMeasureEstimate,
+  nutrientOptOutCodes,
 } from "./nutrition-estimates";
 import {
   nutrientTargets,
@@ -73,8 +74,10 @@ const fromWTotals = (totals: WNutritionTotals): NutritionTotals =>
 
 const mappedSource = (
   products: ProductWithMappingsAndFoodOut[],
+  optOuts: readonly string[] = [],
 ): WFoodAmountInput["source"] => ({
   kind: "mapped",
+  nutrient_opt_out_codes: nutrientOptOutCodes(optOuts),
   products: products.map((product) => {
     const input = toWProductInput(product);
     return product.labelNutrition
@@ -106,7 +109,10 @@ const toWSource = (source: FoodAmountSource): WFoodAmountInput["source"] => {
     case "product":
       return mappedSource([source.product]);
     case "ingredient":
-      return mappedSource(source.ingredient.product);
+      return mappedSource(
+        source.ingredient.product,
+        source.ingredient.naKinds ?? [],
+      );
     case "recipe":
       return {
         kind: "recipe",

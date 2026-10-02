@@ -1,3 +1,4 @@
+import { expenseChildren } from "../child-tables/expense.js";
 import { spendingCategoryAllocationsSchema } from "@cubby/schemas/spending-classification";
 import { financialTransactionShortcode } from "../identifier-fields";
 import { spendingCategoryShortcode } from "../identifier-fields";
@@ -39,6 +40,7 @@ export default defineEntity({
   names: { singular: "Expense", plural: "Expenses" },
   route: { basePath: "expenses" },
   table: "Expense",
+  children: expenseChildren,
   identifiers: { brand: "ExpenseId", shortcode: "EXP-" },
   presentation: {
     titleField: "name",
@@ -1254,7 +1256,7 @@ export default defineEntity({
           { value: "1y", label: "Last 12 months" },
         ],
         expandRef: {
-          module: "~/entities/filter-behavior",
+          module: "~/entity/filter-behavior",
           export: "resolveDateRange",
         },
       },

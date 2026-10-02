@@ -30,7 +30,7 @@ type RoutedEntity = CompiledEntity & {
 };
 
 const GENERIC_DETAIL = {
-  module: "~/app/_components/entity-detail/generic-entity-detail",
+  module: "~/entity/entity-detail/generic-entity-detail",
   export: "GenericEntityDetail",
 } as const satisfies SourceRef;
 
@@ -60,20 +60,20 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
     "",
     ...(entity.route.create === "dialog"
       ? [
-          'import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";',
+          'import { CreateDialogAction } from "~/ui/forms/create-dialog-action";',
         ]
       : []),
-    'import { listPage } from "~/app/_components/routing/entity-routes";',
+    'import { listPage } from "~/entity/routing/entity-routes";',
     ...(entity.route.create === "page"
-      ? ['import { Button } from "~/components/ui/button";']
+      ? ['import { Button } from "~/ui/primitives/button";']
       : []),
     ...(entity.route.create === "dialog"
-      ? ['import { captureRequest } from "~/entities/editing/editor-requests";']
+      ? ['import { captureRequest } from "~/entity/editing/editor-requests";']
       : []),
     ...(listed
-      ? ['import { entityListLoader } from "~/entities/entity-list-ssr";']
+      ? ['import { entityListLoader } from "~/entity/entity-list-ssr";']
       : []),
-    'import { entitySearch } from "~/entities/generated/entity-search.gen";',
+    'import { entitySearch } from "~/entity/generated/entity-search.gen";',
     'import { pageTitle } from "~/lib/page-title";',
   ];
   return (
@@ -132,12 +132,12 @@ const renderDetailRoute = (
     'import { createFileRoute } from "@tanstack/react-router";',
     "",
     importLine(GENERIC_DETAIL),
-    'import { ensureDetailRecord } from "~/app/_components/routing/detail-loader";',
-    'import { detailPage, notFoundPage } from "~/app/_components/routing/entity-routes";',
-    'import { RouteErrorComponent } from "~/components/lazy-route-error";',
-    'import { DetailPagePending } from "~/components/route-pending";',
+    'import { ensureDetailRecord } from "~/entity/routing/detail-loader";',
+    'import { detailPage, notFoundPage } from "~/entity/routing/entity-routes";',
+    'import { RouteErrorComponent } from "~/ui/lazy-route-error";',
+    'import { DetailPagePending } from "~/ui/route-pending";',
     queryRef === undefined
-      ? 'import { entityDetailFor } from "~/entities/entity-detail";'
+      ? 'import { entityDetailFor } from "~/entity/entity-detail";'
       : importLine(queryRef),
     'import { shortcodeHead } from "~/lib/page-title";',
   ];

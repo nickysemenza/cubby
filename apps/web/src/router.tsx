@@ -4,9 +4,6 @@ import * as Sentry from "@sentry/tanstackstart-react";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 
-import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { RouteNotFound } from "~/components/lazy-route-not-found";
-import { RoutePending } from "~/components/route-pending";
 import { installPreloadErrorRecovery } from "~/lib/deploy-recovery";
 import { isSupersededViewTransitionError } from "~/lib/error-utils";
 import { installJsProfiler } from "~/lib/perf/js-self-profile";
@@ -14,6 +11,9 @@ import { installNavigationTracker } from "~/lib/perf/navigation-tracker";
 import { sentryEnvironment } from "~/lib/sentry-environment";
 import { SENTRY_IGNORED_ERRORS } from "~/lib/sentry-noise";
 import { scrubSentryEvent } from "~/lib/sentry-scrub";
+import { RouteErrorComponent } from "~/ui/lazy-route-error";
+import { RouteNotFound } from "~/ui/lazy-route-not-found";
+import { RoutePending } from "~/ui/route-pending";
 
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 import { routeTree } from "./routeTree.gen";

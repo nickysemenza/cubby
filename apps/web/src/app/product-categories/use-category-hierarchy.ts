@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { useProductCategories } from "~/app/_components/hooks/useProductCategories";
-import { getFeatureColor } from "~/app/_components/products/category-theme";
+import { getFeatureColor } from "~/features/products/category-theme";
 import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { useProductCategories } from "~/ui/hooks/useProductCategories";
 
 import {
   buildCategoryHierarchy,

@@ -33,7 +33,7 @@ export const renderTimelineArtifacts = (
   );
   return [
     {
-      relativePath: "apps/web/src/entities/generated/entity-timelines.gen.ts",
+      relativePath: "apps/web/src/entity/generated/entity-timelines.gen.ts",
       source:
         generatedHeader +
         `${filterImports}\n` +

@@ -32,7 +32,6 @@ import { Link } from "@tanstack/react-router";
 import { groupBy } from "es-toolkit";
 import type { ReactNode } from "react";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { mealDateLabel } from "~/app/meals/meal-format";
 import { attentionEvidence } from "~/app/projects/attention-presentation";
 import {
@@ -40,10 +39,7 @@ import {
   reconciliationDelta,
 } from "~/app/purchases/purchase-reconciliation";
 import { RunFindingActions } from "~/app/purchases/run-finding-actions";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { Row } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
   EntityIcon,
   entities,
@@ -51,10 +47,10 @@ import {
   entityLabel,
   entityPluralLabel,
   isBrowserRoutedEntity,
-} from "~/entities/entities";
-import { humanize } from "~/entities/filters";
-import type { ProblemQuery } from "~/entities/problem-query";
-import { problemQuery } from "~/entities/problem-registry";
+} from "~/entity/entities";
+import { humanize } from "~/entity/filters";
+import type { ProblemQuery } from "~/entity/problem-query";
+import { problemQuery } from "~/entity/problem-registry";
 import {
   product as productOperations,
   maintenance,
@@ -63,6 +59,10 @@ import { formatCalendarDay, formatInstant } from "~/lib/date-format";
 import { countLabel } from "~/lib/pluralize";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { formatCurrency } from "~/lib/utils";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
 
 import { BACKFILL } from "./backfill-registry";
 import { EmptyLocationsList } from "./empty-locations-list";

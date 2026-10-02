@@ -3,7 +3,7 @@ import { taskOut } from "@cubby/schemas/project";
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { ScheduleGrid } from "~/app/_components/schedule/schedule-grid";
+import { ScheduleGrid } from "~/features/schedule/schedule-grid";
 import { mock } from "~/lib/test/mock-schema";
 
 import { calendarScheduleRows } from "./calendar-schedule";

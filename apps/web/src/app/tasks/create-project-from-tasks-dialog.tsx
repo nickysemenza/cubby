@@ -5,19 +5,19 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
+import { fieldEnumOptions } from "~/entity/enum-field-display";
+import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
+import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { getErrorMessage } from "~/lib/error-utils";
 import {
   FormWrapper,
   NullableNumericField,
   PlainDateField,
   SelectField,
   UnifiedTextField,
-} from "~/app/_components/form-utils";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { fieldEnumOptions } from "~/entities/enum-field-display";
-import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
+} from "~/ui/form-utils";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 const quickAddSchema = z.object({
   name: z.string().min(1, "Name is required"),

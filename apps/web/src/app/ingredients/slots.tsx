@@ -1,15 +1,15 @@
 import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product";
 
-import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
-import { FullNutrientBreakdown } from "~/app/_components/nutrition/FullNutrientBreakdown";
-import { NutrientDensityStats } from "~/app/_components/nutrition/NutrientDensityStats";
-import { ProductNutritionLabel } from "~/app/_components/nutrition/ProductNutritionLabel";
-import { RecipeUsagesTable } from "~/app/_components/recipe/recipe-usages-table";
-import { useReparseUsage } from "~/app/_components/recipe/use-reparse-usage";
-import { Stack } from "~/components/layout";
-import { Description } from "~/components/ui/description";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { FullNutrientBreakdown } from "~/features/nutrition/FullNutrientBreakdown";
+import { NutrientDensityStats } from "~/features/nutrition/NutrientDensityStats";
+import { ProductNutritionLabel } from "~/features/nutrition/ProductNutritionLabel";
+import { RecipeUsagesTable } from "~/features/recipes/recipe-usages-table";
+import { useReparseUsage } from "~/features/recipes/use-reparse-usage";
 import { labelNutrientsPer100 } from "~/lib/label-nutrition";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+import { Stack } from "~/ui/layout";
+import { Description } from "~/ui/primitives/description";
 
 /**
  * Nutrition and cost-per-nutrient must share one product's basis — pricing

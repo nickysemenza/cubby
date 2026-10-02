@@ -7,35 +7,32 @@ import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Link } from "@tanstack/react-router";
 import { z } from "zod";
 
-import {
-  type VendorName,
-  WithVendorSearch,
-} from "~/app/_components/combobox/with-vendor-search";
-import {
-  entityCellData,
-  specFromCellData,
-} from "~/app/_components/data-table/cell-data";
-import {
-  createTextColumn,
-  type MobileColumnMeta,
-} from "~/app/_components/data-table/columnHelpers";
-import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
-import {
-  type CubbyColumnHelper as ColumnHelper,
-  type CubbyFilterFn as FilterFn,
-} from "~/app/_components/data-table/table-features";
-import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { VendorCell } from "~/components/entity/vendor-cell";
-import { badgeVariantColor } from "~/components/ui/badge";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { NoneValue } from "~/components/ui/none-value";
-import { entities, entityDetailParams } from "~/entities/entities";
-import { manifestFilterConfig } from "~/entities/filter-manifest";
-import { multiSelectFilterFnBy, type FilterValue } from "~/entities/filters";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { VendorCell } from "~/entity/components/vendor-cell";
+import { entities, entityDetailParams } from "~/entity/entities";
+import { manifestFilterConfig } from "~/entity/filter-manifest";
+import { multiSelectFilterFnBy, type FilterValue } from "~/entity/filters";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { persistedVendorId } from "~/lib/vendor-logo";
+import {
+  type VendorName,
+  WithVendorSearch,
+} from "~/ui/combobox/with-vendor-search";
+import { entityCellData, specFromCellData } from "~/ui/data-table/cell-data";
+import {
+  createTextColumn,
+  type MobileColumnMeta,
+} from "~/ui/data-table/columnHelpers";
+import { EditableEntityCell } from "~/ui/data-table/editable-entity-cell";
+import {
+  type CubbyColumnHelper as ColumnHelper,
+  type CubbyFilterFn as FilterFn,
+} from "~/ui/data-table/table-features";
+import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
+import { badgeVariantColor } from "~/ui/primitives/badge";
+import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
+import { NoneValue } from "~/ui/primitives/none-value";
 
 export { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
 export {

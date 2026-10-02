@@ -36,3 +36,9 @@ declare module "cloudflare:workers" {
 
   export const env: Env;
 }
+
+/** Local provider seam is absent from deployed Worker bindings. */
+interface Env {
+  E2E_GOOGLE_PROVIDER_URL?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+}

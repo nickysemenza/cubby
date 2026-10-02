@@ -1,12 +1,12 @@
 import { useState } from "react";
 
-import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
-import { AttachExistingImageDialog } from "~/app/_components/images/attach-existing-image-dialog";
-import { ImageAssociationLinks } from "~/app/_components/images/image-associations";
-import { ImageDetailMedia } from "~/app/_components/images/image-detail";
-import { Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { AttachExistingImageDialog } from "~/features/images/attach-existing-image-dialog";
+import { ImageAssociationLinks } from "~/features/images/image-associations";
+import { ImageDetailMedia } from "~/features/images/image-detail";
+import { Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
 
 import { ImageProcessingPanel } from "./image-processing-panel";
 

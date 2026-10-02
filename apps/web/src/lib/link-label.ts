@@ -1,6 +1,6 @@
 // Pure, alias-free so the vitest `unit` project can import it (it can't import
 // `~/...` .tsx). Mirrors the www-stripping / try-catch shape of `sourceHost` in
-// app/_components/recipe/recipe-source.tsx.
+// features/recipes/recipe-source.tsx.
 
 /** Normalize for self-link comparison: drop scheme, `www.`, and a trailing `/`. */
 function normalizeForCompare(url: string): string {

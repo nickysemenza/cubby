@@ -7,14 +7,14 @@ import type { ShortcodeFor } from "@cubby/schemas/identifiers";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
-import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { NativeSelect } from "~/components/ui/native-select";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
+import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { NativeSelect } from "~/ui/primitives/native-select";
 
 export function FinancialBookingCorrectionReview({
   transaction,

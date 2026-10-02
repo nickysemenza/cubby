@@ -1,3 +1,4 @@
+import type { ChildTableDeclaration } from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
 import {
   entityFieldControlKinds as fieldControlKinds,
   entityFieldKinds as fieldKinds,
@@ -326,6 +327,7 @@ export const entityOutputsFor = (
 
 export const renderEntityArtifacts = (
   entities: readonly CompiledEntity[],
+  moduleChildren: readonly ChildTableDeclaration[] = [],
 ): EntityArtifacts[] => {
   const projections = entityProjectionMaps(entities);
   const imports = new Map<string, Set<string>>();
@@ -1272,7 +1274,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
     },
     {
       relativePath: "apps/web/src/server/db/generated/entity-tables.gen.ts",
-      source: renderEntityTablesArtifact(entities),
+      source: renderEntityTablesArtifact(entities, moduleChildren),
     },
     ...fieldSchemaArtifacts,
     {
@@ -1329,7 +1331,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         }),
     },
     {
-      relativePath: "apps/web/src/entities/generated/entity-overrides.gen.ts",
+      relativePath: "apps/web/src/entity/generated/entity-overrides.gen.ts",
       source:
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n\n' +
@@ -1345,7 +1347,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         }),
     },
     {
-      relativePath: "apps/web/src/entities/generated/entity-details.gen.ts",
+      relativePath: "apps/web/src/entity/generated/entity-details.gen.ts",
       source:
         generatedHeader +
         `${detailRuntimeImportSource}\n\n` +
@@ -1376,7 +1378,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "}\n",
     },
     {
-      relativePath: "apps/web/src/entities/generated/entity-lists.gen.ts",
+      relativePath: "apps/web/src/entity/generated/entity-lists.gen.ts",
       source:
         generatedHeader +
         "// Generated schema aliases retain deterministic import order.\n" +
@@ -1440,7 +1442,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
     },
     {
       relativePath:
-        "apps/web/src/entities/generated/entity-mutation-results.gen.ts",
+        "apps/web/src/entity/generated/entity-mutation-results.gen.ts",
       source:
         generatedHeader +
         `${mutationOutputImports}\n` +
@@ -1460,8 +1462,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "}\n",
     },
     {
-      relativePath:
-        "apps/web/src/entities/generated/entity-filter-fields.gen.ts",
+      relativePath: "apps/web/src/entity/generated/entity-filter-fields.gen.ts",
       source:
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n' +
@@ -1568,7 +1569,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         `export const generatedMcpEntityMergeResultSchema = z.discriminatedUnion("entity", [\n  ${mcpMergeResultVariants}\n]);\n`,
     },
     {
-      relativePath: "apps/web/src/entities/generated/entity-routes.gen.ts",
+      relativePath: "apps/web/src/entity/generated/entity-routes.gen.ts",
       source:
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n\n' +

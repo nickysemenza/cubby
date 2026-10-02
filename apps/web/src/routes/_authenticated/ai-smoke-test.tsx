@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { AiSmokeTest } from "~/app/_components/dev/ai-smoke-test";
-import { Page } from "~/components/page/Page";
+import { AiSmokeTest } from "~/features/developer/ai-smoke-test";
 import { pageTitle } from "~/lib/page-title";
+import { Page } from "~/ui/page/Page";
 
 export const Route = createFileRoute("/_authenticated/ai-smoke-test")({
   component: AiSmokeTestPage,

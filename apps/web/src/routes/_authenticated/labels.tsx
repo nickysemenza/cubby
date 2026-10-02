@@ -11,31 +11,28 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { z } from "zod";
 
-import { AddLabelsPopover } from "~/app/_components/labels/add-labels-popover";
-import { FormatToggle } from "~/app/_components/labels/format-toggle";
+import { AddLabelsPopover } from "~/features/labels/add-labels-popover";
+import { FormatToggle } from "~/features/labels/format-toggle";
 import {
   canExportLabels,
   shouldMountLabelPrintPortal,
-} from "~/app/_components/labels/label-export-state";
-import { LabelSheet } from "~/app/_components/labels/label-sheet";
-import { LabelSummary } from "~/app/_components/labels/label-summary";
-import { PrintStyles } from "~/app/_components/labels/print-styles";
-import { PtouchPreview } from "~/app/_components/labels/ptouch-preview";
-import {
-  isSheetFormat,
-  SHEET_LAYOUTS,
-} from "~/app/_components/labels/sheet-layouts";
-import { useQrUrls } from "~/app/_components/labels/use-qr-urls";
-import { useShortcodeLookups } from "~/app/_components/labels/use-shortcode-lookups";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Page } from "~/components/page/Page";
-import { Button } from "~/components/ui/button";
-import { Card, CardContent } from "~/components/ui/card";
-import { Description } from "~/components/ui/description";
-import { StatusText } from "~/components/ui/status-text";
+} from "~/features/labels/label-export-state";
+import { LabelSheet } from "~/features/labels/label-sheet";
+import { LabelSummary } from "~/features/labels/label-summary";
+import { PrintStyles } from "~/features/labels/print-styles";
+import { PtouchPreview } from "~/features/labels/ptouch-preview";
+import { isSheetFormat, SHEET_LAYOUTS } from "~/features/labels/sheet-layouts";
+import { useQrUrls } from "~/features/labels/use-qr-urls";
+import { useShortcodeLookups } from "~/features/labels/use-shortcode-lookups";
 import { generateLabelCsv } from "~/lib/label-generator";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Page } from "~/ui/page/Page";
+import { Button } from "~/ui/primitives/button";
+import { Card, CardContent } from "~/ui/primitives/card";
+import { Description } from "~/ui/primitives/description";
+import { StatusText } from "~/ui/primitives/status-text";
 
 const searchParamsSchema = z.object({
   codes: urlStringParam,

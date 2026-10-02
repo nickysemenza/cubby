@@ -37,7 +37,6 @@ import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
 import {
   entityAttachment,
-  entityExternalId,
   expense,
   image,
   importHunt,
@@ -61,6 +60,12 @@ import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { deleteImages } from "~/server/repo/image";
 import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
 import { assertProductCategoryChange } from "~/server/repo/product/classification";
+import {
+  externalIdKey,
+  findProductsByExternalIds,
+  type ProductHit,
+  type ExternalIdPair,
+} from "~/server/repo/product/find-by-external-ids";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { sha256Hex } from "~/server/semantic/hash";
 import { scheduleImageProcessingJobs } from "~/server/services/image-processing.service";
@@ -132,62 +137,46 @@ const amazonAsin = (url: string | undefined): string | null => {
   );
 };
 
+const lineIdentifierRequests = (
+  vendorId: VendorId,
+  line: z.infer<typeof extractedPurchaseLine>,
+): ExternalIdPair[] => {
+  const source = externalSource(line.productUrl, vendorId);
+  const ids = [
+    ...new Set(
+      [line.sku, amazonAsin(line.productUrl)].filter((id): id is string =>
+        Boolean(id),
+      ),
+    ),
+  ];
+  return [
+    ...ids.flatMap((externalId) => [
+      { source, externalId, kind: "retailer_sku" as const },
+      { source, externalId, kind: "asin" as const },
+    ]),
+    ...ids.flatMap<ExternalIdPair>((id) => {
+      const gtin = wasm.scan_code_gtin14(id);
+      return gtin
+        ? [{ source: GTIN_SOURCE, externalId: gtin, kind: GTIN_KIND }]
+        : [];
+    }),
+  ];
+};
+
 async function productCandidates(
   db: Database,
-  vendorId: VendorId,
+  requests: readonly ExternalIdPair[],
+  exactHits: ReadonlyMap<string, ProductHit[]>,
   line: z.infer<typeof extractedPurchaseLine>,
 ) {
   const database = getDb(db);
-  const source = externalSource(line.productUrl, vendorId);
-  const asin = amazonAsin(line.productUrl);
-  const exactIds = [
-    ...new Set([line.sku, asin].filter((id): id is string => Boolean(id))),
+  const exact = [
+    ...new Map(
+      requests
+        .flatMap((request) => exactHits.get(externalIdKey(request)) ?? [])
+        .map((hit) => [hit.id, hit]),
+    ).values(),
   ];
-  // A barcode read off a photographed tag is stored under the vendor-neutral
-  // GTIN source, so a numeric line SKU must also be tried as a GTIN or a
-  // photo-first Product never becomes an exact match for its later order line.
-  const gtins = [
-    ...new Set(
-      exactIds
-        .map((id) => wasm.scan_code_gtin14(id))
-        .filter((id): id is string => Boolean(id)),
-    ),
-  ];
-  const exact = exactIds.length
-    ? await database
-        .select({
-          id: product.id,
-          shortcode: product.shortcode,
-          name: product.name,
-          manufacturer: product.manufacturer,
-          model: product.model,
-        })
-        .from(entityExternalId)
-        .innerJoin(
-          product,
-          and(eq(product.id, entityExternalId.entityId), notDeleted(product)),
-        )
-        .where(
-          and(
-            notDeleted(entityExternalId),
-            or(
-              and(
-                eq(entityExternalId.source, source),
-                inArray(entityExternalId.kind, ["retailer_sku", "asin"]),
-                inArray(entityExternalId.externalId, exactIds),
-              ),
-              gtins.length
-                ? and(
-                    eq(entityExternalId.source, GTIN_SOURCE),
-                    eq(entityExternalId.kind, GTIN_KIND),
-                    inArray(entityExternalId.externalId, gtins),
-                  )
-                : undefined,
-            ),
-          ),
-        )
-        .limit(1)
-    : [];
   const patterns = productSearchPatterns(line.title);
   const fuzzy = patterns.length
     ? await database
@@ -486,12 +475,20 @@ export async function preparePurchaseImport(
       if (!storedOrder) throw new Error("Prepared order was not persisted");
 
       const outputLines = [];
+      const exactRequests = candidate.lines.map((line) =>
+        lineIdentifierRequests(vendorId, line),
+      );
+      const exactHits = await findProductsByExternalIds(
+        transactionDb,
+        exactRequests.flat(),
+      );
       for (const [position, line] of candidate.lines.entries()) {
         const stableLineId = order.lineIds[position];
         if (!stableLineId) throw new Error("Prepared line id is missing");
         const candidates = await productCandidates(
           transactionDb,
-          vendorId,
+          exactRequests[position] ?? [],
+          exactHits,
           line,
         );
         const identifiers = Object.fromEntries(

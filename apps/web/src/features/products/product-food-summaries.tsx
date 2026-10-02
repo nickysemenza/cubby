@@ -1,0 +1,55 @@
+import type { FoodSummary } from "@cubby/usda";
+import { createContext, type ReactNode, useContext } from "react";
+
+import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { useChunkedRecordQuery } from "~/ui/hooks/useChunkedRecordQuery";
+
+type ProductFoodMap = Record<string, FoodSummary | null>;
+
+const ProductFoodSummariesContext = createContext<ProductFoodMap>({});
+const EMPTY_PRODUCT_FOOD_MAP: ProductFoodMap = {};
+type ProductSummaries = Awaited<
+  ReturnType<typeof productOperations.summaries.call>
+>;
+
+export function useProductFoodSummaries(productIds: readonly string[]) {
+  return useChunkedRecordQuery({
+    ids: productIds,
+    empty: EMPTY_PRODUCT_FOOD_MAP,
+    queryOptions: (chunkIds) => ({
+      ...productOperations.summaries.queryOptions({
+        ids: chunkIds,
+        include: ["food"],
+      }),
+      enabled: chunkIds.length > 0,
+      select: (data: ProductSummaries) => data.food ?? EMPTY_PRODUCT_FOOD_MAP,
+    }),
+  });
+}
+
+export function ProductFoodSummariesProvider({
+  productIds,
+  summaries,
+  children,
+}: {
+  productIds: readonly string[];
+  summaries?: ProductFoodMap;
+  children: ReactNode;
+}) {
+  const fetchedSummaries = useProductFoodSummaries(summaries ? [] : productIds);
+  const value = summaries ?? fetchedSummaries;
+
+  return (
+    <ProductFoodSummariesContext.Provider value={value}>
+      {children}
+    </ProductFoodSummariesContext.Provider>
+  );
+}
+
+export function useHydratedProductFood(product: {
+  id: string;
+  food?: FoodSummary | null;
+}) {
+  const foodByProductId = useContext(ProductFoodSummariesContext);
+  return foodByProductId[product.id] ?? product.food ?? null;
+}

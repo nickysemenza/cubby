@@ -19,15 +19,7 @@ import {
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { DialogFormActions } from "~/components/ui/dialog-form-actions";
-import { Input } from "~/components/ui/input";
-import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { entityDetailFor } from "~/entities/entity-detail";
+import { entityDetailFor } from "~/entity/entity-detail";
 import {
   entityFilterOptions,
   meal,
@@ -38,6 +30,14 @@ import {
   getAllUnitMappingsFromProduct,
   getIngredientMappings,
 } from "~/lib/unit-mapping-utils";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
+import { EntityPicker } from "~/ui/combobox/entity-picker";
+import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
+import { Input } from "~/ui/primitives/input";
+import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import { FoodAmountEditor } from "./food-amount-editor";
 

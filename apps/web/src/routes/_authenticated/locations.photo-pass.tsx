@@ -2,11 +2,11 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 
 import { photoPassSearchSchema } from "~/app/locations/photo-pass/photo-pass-search";
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { Page } from "~/components/page/Page";
-import { DetailPagePending } from "~/components/route-pending";
 import { pageTitle } from "~/lib/page-title";
+import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
+import { RouteErrorComponent } from "~/ui/lazy-route-error";
+import { Page } from "~/ui/page/Page";
+import { DetailPagePending } from "~/ui/route-pending";
 
 /**
  * Lazy on purpose. TanStack's generated route tree statically imports every

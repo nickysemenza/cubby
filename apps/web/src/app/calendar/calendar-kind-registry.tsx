@@ -11,21 +11,18 @@ import {
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import type { Icon } from "@phosphor-icons/react/lib";
 
-import type { BadgeVariant } from "~/components/ui/badge";
 import {
   expenseCaptureRequest,
   mealCaptureRequest,
   projectCaptureRequest,
   taskCaptureRequest,
-} from "~/entities/editing/editor-requests";
-import type { EntityEditDialogRequest } from "~/entities/editing/entity-edit-dialog";
-import type { EntityEditIntent } from "~/entities/editing/intent-types";
-import type {
-  EditableEntity,
-  EntityEditRecord,
-} from "~/entities/editing/types";
-import { entities } from "~/entities/entities";
+} from "~/entity/editing/editor-requests";
+import type { EntityEditDialogRequest } from "~/entity/editing/entity-edit-dialog";
+import type { EntityEditIntent } from "~/entity/editing/intent-types";
+import type { EditableEntity, EntityEditRecord } from "~/entity/editing/types";
+import { entities } from "~/entity/entities";
 import { statusTone } from "~/lib/status-tone";
+import type { BadgeVariant } from "~/ui/primitives/badge";
 
 import {
   mealKindBadgeVariant,

@@ -29,8 +29,8 @@ const EXCLUDED_SUBPATHS = new Set(["./testing", "./contract"]);
 const WEB_SCHEMA_MODULES = [
   "server/entity-kernel/contracts.ts",
   "server/generated/entity-bindings.gen.ts",
-  "entities/generated/entity-lists.gen.ts",
-  "entities/generated/entity-details.gen.ts",
+  "entity/generated/entity-lists.gen.ts",
+  "entity/generated/entity-details.gen.ts",
 ] as const;
 
 const packageExports = z.object({

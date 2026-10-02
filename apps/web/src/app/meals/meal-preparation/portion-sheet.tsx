@@ -6,16 +6,16 @@ import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { StaticPicker } from "~/app/_components/combobox/static-picker";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
-import { DialogFormActions } from "~/components/ui/dialog-form-actions";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { formatCalendarDay } from "~/lib/date-format";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
+import { StaticPicker } from "~/ui/combobox/static-picker";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
+import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
+import { Input } from "~/ui/primitives/input";
+import { Label } from "~/ui/primitives/label";
+import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import { FoodAmountEditor, formatFoodAmount } from "../food-amount-editor";
 import { MealNutritionEstimates } from "../meal-nutrition";

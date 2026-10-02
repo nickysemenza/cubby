@@ -41,6 +41,7 @@ const headless = flags.includes("--headless");
 const photo = flags.includes("--photo");
 const purchase = flags.includes("--purchase");
 const statementCsv = flags.includes("--statement-csv");
+const inputJourney = flags.includes("--input-journey");
 const watch = flags.includes("--watch");
 const video = flags.includes("--video");
 const layout = flags.includes("--layout");
@@ -49,8 +50,18 @@ const testerArmy = flags.includes("--tester-army");
 const testerArmyReplay = flags.includes("--replay");
 const wrongName = flags.includes("--wrong-name");
 if (
+  (inputJourney &&
+    (testerArmy ||
+      headless ||
+      photo ||
+      purchase ||
+      statementCsv ||
+      watch ||
+      layout ||
+      productClarity)) ||
   (testerArmy &&
-    (headless ||
+    (inputJourney ||
+      headless ||
       photo ||
       purchase ||
       statementCsv ||
@@ -70,6 +81,7 @@ if (
   flags.some(
     (argument) =>
       ![
+        "--input-journey",
         "--headless",
         "--watch",
         "--video",
@@ -85,25 +97,27 @@ if (
   )
 )
   throw new Error(
-    "Usage: sim-e2e.ts [--tester-army [--replay] [--wrong-name] | --video | --layout [--video] | --product-clarity [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
+    "Usage: sim-e2e.ts [--input-journey [--video] | --tester-army [--replay] [--wrong-name] | --video | --layout [--video] | --product-clarity [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
   );
-const lane = testerArmy
-  ? "sim-tester-army-e2e"
-  : productClarity
-    ? "sim-product-clarity-e2e"
-    : statementCsv
-      ? "headless-statement-csv-e2e"
-      : layout
-        ? "sim-layout-e2e"
-        : purchase
-          ? "headless-wardrobe-e2e"
-          : photo
-            ? "headless-photo-e2e"
-            : headless
-              ? "headless-e2e"
-              : watch
-                ? "sim-dev"
-                : "sim-e2e";
+const lane = inputJourney
+  ? "sim-input-journey-e2e"
+  : testerArmy
+    ? "sim-tester-army-e2e"
+    : productClarity
+      ? "sim-product-clarity-e2e"
+      : statementCsv
+        ? "headless-statement-csv-e2e"
+        : layout
+          ? "sim-layout-e2e"
+          : purchase
+            ? "headless-wardrobe-e2e"
+            : photo
+              ? "headless-photo-e2e"
+              : headless
+                ? "headless-e2e"
+                : watch
+                  ? "sim-dev"
+                  : "sim-e2e";
 // Database bootstrap validates the caller's environment before simulation-only overrides.
 const bootstrapEnvironment = { ...process.env };
 for (const [key, value] of Object.entries({
@@ -460,6 +474,7 @@ async function simulator(): Promise<{
   name: string;
   state: string;
   runtime: string;
+  deviceTypeIdentifier: string;
 }> {
   const deviceType = "com.apple.CoreSimulator.SimDeviceType.iPhone-17";
   const raw = await new Promise<string>((resolve, reject) => {
@@ -1181,7 +1196,7 @@ async function seedNativeScenario(userId: string): Promise<{
       return await seedSimulatorProductClarity(seedPool, userId);
     return {
       productId:
-        photo || statementCsv
+        photo || statementCsv || inputJourney
           ? ""
           : await seedSimulatorScenario(seedPool, userId),
       layoutRunID: layout
@@ -1259,6 +1274,7 @@ async function runNativeJourney(
   if (!layout && !productClarity) await assertNativeEdit(productId);
 }
 
+// eslint-disable-next-line complexity -- All disposable native lanes share one exception, artifact and cleanup boundary.
 async function main(): Promise<void> {
   assertSimulatorAdminUrl(adminURL);
   const admin = new Pool({ connectionString: adminURL });
@@ -1279,6 +1295,7 @@ async function main(): Promise<void> {
     | undefined;
   let restoreEnvironment = () => {};
   let productId = "";
+  let disposableSimulatorID: string | undefined;
   let failure: Error | undefined;
   const cleanup = async (): Promise<Error[]> => {
     const errors: Error[] = [];
@@ -1291,6 +1308,26 @@ async function main(): Promise<void> {
       await objectStorage?.close();
     } catch (error) {
       errors.push(error instanceof Error ? error : new Error(String(error)));
+    }
+    if (disposableSimulatorID) {
+      await run(
+        "xcrun",
+        ["simctl", "shutdown", disposableSimulatorID],
+        repoRoot,
+        undefined,
+        true,
+      ).catch(() => {});
+      try {
+        await run(
+          "xcrun",
+          ["simctl", "delete", disposableSimulatorID],
+          repoRoot,
+          undefined,
+          true,
+        );
+      } catch (error) {
+        errors.push(error instanceof Error ? error : new Error(String(error)));
+      }
     }
     restoreEnvironment();
     if (created) {
@@ -1444,7 +1481,32 @@ async function main(): Promise<void> {
         }
       } else await runHeadlessProductScenario(url, productId, userId);
     } else {
-      const device = await simulator();
+      let device = await simulator();
+      if (inputJourney) {
+        const creation = path.join(artifacts, "disposable-simulator.txt");
+        const name = `Synthetic Input ${simName}`;
+        await run(
+          "xcrun",
+          [
+            "simctl",
+            "create",
+            name,
+            device.deviceTypeIdentifier,
+            device.runtime,
+          ],
+          repoRoot,
+          creation,
+        );
+        disposableSimulatorID = z
+          .uuid()
+          .parse(readFileSync(creation, "utf8").trim());
+        device = {
+          ...device,
+          udid: disposableSimulatorID,
+          name,
+          state: "Shutdown",
+        };
+      }
       xcodebuildVersion = execFileSync("xcodebuild", ["-version"], {
         cwd: repoRoot,
         encoding: "utf8",
@@ -1517,14 +1579,39 @@ async function main(): Promise<void> {
           });
         }
         const installStarted = performance.now();
-        // App replacement does not need XCTest or an agent-device daemon.
-        await run("xcrun", [
-          "simctl",
-          "uninstall",
-          device.udid,
-          "com.nickysemenza.cubby",
-        ]);
-        await run("xcrun", ["simctl", "install", device.udid, appPath]);
+        const plist = path.join(appPath, "Info.plist");
+        const originalPlist = inputJourney ? readFileSync(plist) : undefined;
+        try {
+          if (inputJourney) {
+            await run("python3", [
+              "-c",
+              "import plistlib,sys; p=sys.argv[1]; d=plistlib.load(open(p,'rb')); d.update(UIFileSharingEnabled=True,LSSupportsOpeningDocumentsInPlace=True); plistlib.dump(d,open(p,'wb'))",
+              plist,
+            ]);
+            writeFileSync(
+              path.join(artifacts, "fixture-app-settings.json"),
+              JSON.stringify(
+                {
+                  UIFileSharingEnabled: true,
+                  LSSupportsOpeningDocumentsInPlace: true,
+                  scope: "installed disposable simulator fixture only",
+                },
+                null,
+                2,
+              ),
+            );
+          }
+          // App replacement does not need XCTest or an agent-device daemon.
+          await run("xcrun", [
+            "simctl",
+            "uninstall",
+            device.udid,
+            "com.nickysemenza.cubby",
+          ]);
+          await run("xcrun", ["simctl", "install", device.udid, appPath]);
+        } finally {
+          if (originalPlist) writeFileSync(plist, originalPlist);
+        }
         phases.push({
           name: "native-install",
           durationMs: Math.round(performance.now() - installStarted),
@@ -1557,8 +1644,58 @@ async function main(): Promise<void> {
           name: "native-driver-prepare",
           durationMs: Math.round(performance.now() - driverStarted),
         });
+        let journey:
+          | Awaited<
+              ReturnType<
+                (typeof import("./scenarios/simulator-input-journey"))["createSimulatorInputJourney"]
+              >
+            >
+          | undefined;
+        let journeyPool: Pool | undefined;
+        if (inputJourney) {
+          journeyPool = new Pool({ connectionString: databaseURL });
+          const { createSimulatorInputJourney } =
+            await import("./scenarios/simulator-input-journey");
+          try {
+            journey = await createSimulatorInputJourney({
+              pool: journeyPool,
+              userId,
+              repoRoot,
+              artifacts,
+              deviceID: device.udid,
+              common,
+              run: (command, args, stdoutFile) =>
+                run(command, args, repoRoot, stdoutFile),
+            });
+            const container = execFileSync(
+              "xcrun",
+              [
+                "simctl",
+                "get_app_container",
+                device.udid,
+                "com.nickysemenza.cubby",
+                "data",
+              ],
+              { encoding: "utf8" },
+            ).trim();
+            await journey.installInputs(path.join(container, "Documents"));
+            scenarioEvidence.push(
+              ...journey.inputs,
+              path.join(artifacts, "fixture-app-settings.json"),
+            );
+          } catch (error) {
+            await journeyPool.end();
+            throw error;
+          }
+        }
         await launch();
-        if (watch) {
+        if (journey && journeyPool) {
+          try {
+            scenarioEvidence.push(await journey.execute());
+          } finally {
+            await journeyPool.end();
+          }
+        } else if (watch) {
           await runWarmSimulator({
             deviceID: device.udid,
             common,

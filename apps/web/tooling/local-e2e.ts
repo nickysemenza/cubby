@@ -12,13 +12,27 @@ const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const lanes: { name: string; args: string[] }[] = [
+const simulatorLanes = [
   { name: "headless", args: ["--headless"] },
   { name: "headless:photo", args: ["--headless", "--photo"] },
   { name: "headless:statement-csv", args: ["--headless", "--statement-csv"] },
   { name: "headless:wardrobe", args: ["--headless", "--photo", "--purchase"] },
   { name: "sim", args: ["--video"] },
   { name: "sim:layout", args: ["--layout", "--video"] },
+  { name: "sim:input", args: ["--input-journey"] },
+];
+const lanes = [
+  ...simulatorLanes.map((lane) => ({ ...lane, script: "sim-e2e.ts" })),
+  {
+    name: "mac:csv-first",
+    script: "mac-import-e2e.ts",
+    args: ["--order", "csv,photo,receipt"],
+  },
+  {
+    name: "mac:receipt-first",
+    script: "mac-import-e2e.ts",
+    args: ["--order", "receipt,photo,csv"],
+  },
 ];
 const only = process.argv.slice(2);
 const selected = only.length
@@ -69,11 +83,15 @@ for (const lane of selected) {
     name: lane.name,
     ...time(
       () =>
-        spawnSync("pnpm", ["exec", "tsx", "tooling/sim-e2e.ts", ...lane.args], {
-          cwd: webRoot,
-          stdio: "inherit",
-          env: { ...process.env, CUBBY_E2E_PREBUILT_WEB: "1" },
-        }).status ?? 1,
+        spawnSync(
+          "pnpm",
+          ["exec", "tsx", `tooling/${lane.script}`, ...lane.args],
+          {
+            cwd: webRoot,
+            stdio: "inherit",
+            env: { ...process.env, CUBBY_E2E_PREBUILT_WEB: "1" },
+          },
+        ).status ?? 1,
     ),
   });
 }

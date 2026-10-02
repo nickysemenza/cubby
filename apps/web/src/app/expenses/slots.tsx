@@ -1,9 +1,9 @@
 import { useState } from "react";
 
-import { VerbButton } from "~/app/_components/actions/action-verb-ui";
-import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
-import { Row, Stack } from "~/components/layout";
-import { Description } from "~/components/ui/description";
+import { VerbButton } from "~/entity/actions/action-verb-ui";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { Row, Stack } from "~/ui/layout";
+import { Description } from "~/ui/primitives/description";
 
 import { ExpensePurchaseSection } from "./expense-purchase-section";
 import { ReceiveExpenseDialog } from "./receive-expense-dialog";

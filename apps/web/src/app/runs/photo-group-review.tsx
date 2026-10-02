@@ -24,43 +24,9 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
-import { referenceEntitySearch } from "~/app/_components/combobox/reference-entity-search";
-import { PhotoGrid } from "~/app/_components/photos/photo-grid";
-import { ProductVariantEvidence } from "~/app/_components/product-variant-evidence";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { showErrorToast } from "~/components/feedback/error-details";
-import { Row, Section, Stack } from "~/components/layout";
-import { ShortcodeProse } from "~/components/shortcode-prose";
-import { Badge, type BadgeVariant } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
-import { Image } from "~/components/ui/image";
-import { Input } from "~/components/ui/input";
-import { StatusText } from "~/components/ui/status-text";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { PhotoGrid } from "~/features/photos/photo-grid";
+import { ProductVariantEvidence } from "~/features/products/product-variant-evidence";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
@@ -69,6 +35,40 @@ import {
   RUN_TARGET_STATE_VARIANT,
 } from "~/lib/run-target-state";
 import { formatCurrency } from "~/lib/utils";
+import { EntityPicker } from "~/ui/combobox/entity-picker";
+import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+import { showErrorToast } from "~/ui/feedback/error-details";
+import { Row, Section, Stack } from "~/ui/layout";
+import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/ui/primitives/dropdown-menu";
+import { Image } from "~/ui/primitives/image";
+import { Input } from "~/ui/primitives/input";
+import { StatusText } from "~/ui/primitives/status-text";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/ui/primitives/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
+import { ShortcodeProse } from "~/ui/shortcode-prose";
 
 import {
   LIVE_RUN_STATUSES,

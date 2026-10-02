@@ -2,12 +2,12 @@ import type { CalendarItemKind } from "@cubby/schemas/calendar";
 import type { ListSlotId } from "@cubby/schemas/entity-manifest";
 import { z } from "zod";
 
+import { calendarPeriodParam } from "~/app/calendar/calendar-search";
+import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
 import type {
   ListSlotComponent,
   ListSlotProps,
-} from "~/app/_components/entity-list/list-slot-types";
-import { calendarPeriodParam } from "~/app/calendar/calendar-search";
-import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
+} from "~/entity/entity-list/list-slot-types";
 import { householdLocalDate } from "~/lib/household-date";
 
 import { CopyLastWeekButton } from "./copy-meals";

@@ -11,6 +11,7 @@ import {
   mealRecipe,
   mealRecipePortion,
 } from "~/server/db/schema";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   getDb,
   insertAndReturn,
@@ -205,6 +206,10 @@ describe("meal food entry lifecycle", () => {
       .update(mealFoodEntry)
       .set({ deletedAt: new Date() })
       .where(eq(mealFoodEntry.id, entry.id));
+    const quality = await loadDataQualities(ctx.db, "product", [product.id]);
+    expect(quality.get(product.id)?.gaps.map((gap) => gap.check)).toContain(
+      "product_orphaned",
+    );
     await expect(
       deleteProducts(ctx.db, [product.id], ctx.actor),
     ).resolves.toMatchObject({ deleted: 1 });

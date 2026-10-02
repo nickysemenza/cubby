@@ -1,5 +1,7 @@
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
+  IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
+  IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
   imageProcessingCommand,
 } from "@cubby/schemas/image-processing";
@@ -106,8 +108,8 @@ export async function dispatchImageProcessingWakeup(
         cloudAnalysis: {
           provider: providerFor(IMAGE_DESCRIPTION_FEATURE.model),
           model: IMAGE_DESCRIPTION_FEATURE.model,
-          promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
-          resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+          promptRevision: IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
+          resultSchemaRevision: IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
           inputFingerprint: fingerprint,
         },
         runtime: {
@@ -127,96 +129,16 @@ export async function dispatchImageProcessingWakeup(
       return "completed";
     }
 
-    if (claimed.kind === "describe_image") {
-      const namespace = getImageProcessingNamespace();
-      if (!namespace) {
-        await markImageProcessingWaitingForDevice(db, {
-          jobId: claimed.id,
-          attemptId: claimed.attemptId,
-        });
-        return "waiting";
-      }
-      const command = imageProcessingCommand.parse({
-        kind: "describe_image",
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-        deadline: claimed.leaseExpiresAt.toISOString(),
-        source: {
-          url: await generatePresignedDownloadUrl({ key: claimed.originalKey }),
-          sha256: claimed.sourceContentHash,
-          contentType: claimed.originalContentType,
-        },
-        promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
-        resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
-      });
-      const dispatched = await companionRpc(
-        namespace.getByName("household"),
-      ).dispatch(command);
-      if (!dispatched) {
-        await markImageProcessingWaitingForDevice(db, {
-          jobId: claimed.id,
-          attemptId: claimed.attemptId,
-        });
-        return "waiting";
-      }
-      return "dispatched";
-    }
-
-    const eligibility = await getCurrentImageCutoutEligibility(
-      db,
-      claimed.imageId,
-      claimed.sourceContentHash,
-    );
-    if (eligibility === null) {
-      await markImageProcessingWaitingForDevice(db, {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-      });
-      return "waiting";
-    }
-    if (eligibility !== "eligible") {
-      await completeImageProcessingJob(db, {
-        result: {
-          jobId: claimed.id,
-          attemptId: claimed.attemptId,
-          completedAt: new Date().toISOString(),
-          outcome: {
-            kind: "subject_lift",
-            status: "skipped",
-            reason: "not_suitable",
-          },
-        },
-      });
-      return "skipped";
-    }
-
     const namespace = getImageProcessingNamespace();
-    if (!namespace || !claimed.derivativeKey) {
+    if (!namespace) {
       await markImageProcessingWaitingForDevice(db, {
         jobId: claimed.id,
         attemptId: claimed.attemptId,
       });
       return "waiting";
     }
-    const command = imageProcessingCommand.parse({
-      kind: "subject_lift",
-      jobId: claimed.id,
-      attemptId: claimed.attemptId,
-      deadline: claimed.leaseExpiresAt.toISOString(),
-      source: {
-        url: await generatePresignedDownloadUrl({ key: claimed.originalKey }),
-        sha256: claimed.sourceContentHash,
-        contentType: claimed.originalContentType,
-      },
-      output: {
-        key: claimed.derivativeKey,
-        uploadUrl: await generatePresignedUploadUrl({
-          key: claimed.derivativeKey,
-          contentType: "image/png",
-        }),
-        contentType: "image/png",
-      },
-    });
+    const command = await prepareCompanionImageCommand(db, claimed);
+    if (!command) return "skipped";
     const dispatched = await companionRpc(
       namespace.getByName("household"),
     ).dispatch(command);
@@ -247,4 +169,79 @@ export async function dispatchImageProcessingWakeup(
     // it; never leave a leased row hidden after a provider/storage failure.
     return "waiting";
   }
+}
+
+/** Both transports mint exactly the same source/output capabilities and eligibility decisions. */
+export async function prepareCompanionImageCommand(
+  db: Database,
+  claimed: NonNullable<Awaited<ReturnType<typeof claimImageProcessingJob>>>,
+) {
+  if (claimed.kind === "describe_image")
+    return imageProcessingCommand.parse({
+      kind: "describe_image",
+      jobId: claimed.id,
+      attemptId: claimed.attemptId,
+      deadline: claimed.leaseExpiresAt.toISOString(),
+      source: {
+        url: await generatePresignedDownloadUrl({ key: claimed.originalKey }),
+        sha256: claimed.sourceContentHash,
+        contentType: claimed.originalContentType,
+      },
+      promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
+      resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+    });
+  const eligibility = await getCurrentImageCutoutEligibility(
+    db,
+    claimed.imageId,
+    claimed.sourceContentHash,
+  );
+  if (eligibility === null) {
+    await markImageProcessingWaitingForDevice(db, {
+      jobId: claimed.id,
+      attemptId: claimed.attemptId,
+    });
+    return null;
+  }
+  if (eligibility !== "eligible") {
+    await completeImageProcessingJob(db, {
+      result: {
+        jobId: claimed.id,
+        attemptId: claimed.attemptId,
+        completedAt: new Date().toISOString(),
+        outcome: {
+          kind: "subject_lift",
+          status: "skipped",
+          reason: "not_suitable",
+        },
+      },
+    });
+    return null;
+  }
+
+  if (!claimed.derivativeKey) {
+    await markImageProcessingWaitingForDevice(db, {
+      jobId: claimed.id,
+      attemptId: claimed.attemptId,
+    });
+    return null;
+  }
+  return imageProcessingCommand.parse({
+    kind: "subject_lift",
+    jobId: claimed.id,
+    attemptId: claimed.attemptId,
+    deadline: claimed.leaseExpiresAt.toISOString(),
+    source: {
+      url: await generatePresignedDownloadUrl({ key: claimed.originalKey }),
+      sha256: claimed.sourceContentHash,
+      contentType: claimed.originalContentType,
+    },
+    output: {
+      key: claimed.derivativeKey,
+      uploadUrl: await generatePresignedUploadUrl({
+        key: claimed.derivativeKey,
+        contentType: "image/png",
+      }),
+      contentType: "image/png",
+    },
+  });
 }

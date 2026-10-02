@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 
-import { useEntityOptions } from "~/app/_components/hooks/useEntityOptions";
-import { EntityIcon } from "~/entities/entities";
+import { EntityIcon } from "~/entity/entities";
 import { cn } from "~/lib/utils";
+import { useEntityOptions } from "~/ui/hooks/useEntityOptions";
 
 const markClasses = {
   12: "size-3 text-xs",

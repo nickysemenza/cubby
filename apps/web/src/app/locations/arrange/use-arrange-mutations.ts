@@ -5,13 +5,13 @@ import {
 import type { InfLocation } from "@cubby/schemas/location";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { showErrorToast } from "~/components/feedback/error-details";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   inventory,
   location,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { showErrorToast } from "~/ui/feedback/error-details";
 
 import { applyItemMove, applyLocationMove } from "./arrange-tree-utils";
 import type { ItemDragData } from "./arrange-types";

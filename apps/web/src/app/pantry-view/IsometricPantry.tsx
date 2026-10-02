@@ -9,10 +9,10 @@ import { ArrowsOutSimpleIcon } from "@phosphor-icons/react/dist/csr/ArrowsOutSim
 import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
 import { Link } from "@tanstack/react-router";
 
-import { createActionFor } from "~/app/_components/actions/action-items";
-import { Button } from "~/components/ui/button";
-import { NativeSelect } from "~/components/ui/native-select";
-import { useHydratedLoading } from "~/hooks/useHydrated";
+import { createActionFor } from "~/entity/actions/action-items";
+import { useHydratedLoading } from "~/ui/hooks/useHydrated";
+import { Button } from "~/ui/primitives/button";
+import { NativeSelect } from "~/ui/primitives/native-select";
 
 import { useIsometricPantry } from "./use-isometric-pantry";
 

@@ -5,16 +5,16 @@ import { CrosshairIcon } from "@phosphor-icons/react/dist/csr/Crosshair";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 import { useEffect, useRef } from "react";
 
-import { LocationIcon } from "~/app/_components/locations/location-icons";
-import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
-import { resolveLocationPrimaryVisual } from "~/app/_components/locations/location-visual-resolver";
-import { Row } from "~/components/layout";
+import { LocationIcon } from "~/features/locations/location-icons";
+import { LocationTreeRow } from "~/features/locations/location-tree-row";
+import { resolveLocationPrimaryVisual } from "~/features/locations/location-visual-resolver";
+import { cn } from "~/lib/utils";
+import { Row } from "~/ui/layout";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "~/components/ui/tooltip";
-import { cn } from "~/lib/utils";
+} from "~/ui/primitives/tooltip";
 
 import { parentIdOf } from "./arrange-tree-utils";
 import type { LocationDragData } from "./arrange-types";

@@ -8,40 +8,40 @@ import { sumBy } from "es-toolkit";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
 
-import {
-  createCurrencyColumn,
-  createNameColumn,
-} from "~/app/_components/data-table/columnHelpers";
-import {
-  ListWorkbench,
-  useBoundedListWorkbench,
-} from "~/app/_components/data-table/ListWorkbench";
-import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
-import {
-  createCubbyColumnCollection,
-  createCubbyColumnHelper,
-} from "~/app/_components/data-table/table-features";
+import { TradeBadge } from "~/app/projects/trade-options";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { entityListFor } from "~/entity/entity-list";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
-} from "~/app/_components/entity-media/entity-display-images";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { TradeBadge } from "~/app/projects/trade-options";
-import { WorkflowDialog } from "~/components/dialogs/workflow-dialog";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { Row, Stack } from "~/components/layout";
-import {
-  FilterableCombobox,
-  type FilterableComboboxItem,
-} from "~/components/ui/combobox";
-import { Description } from "~/components/ui/description";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { Input } from "~/components/ui/input";
-import { NoneValue } from "~/components/ui/none-value";
-import { entityListFor } from "~/entities/entity-list";
+} from "~/entity/entity-media/entity-display-images";
 import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
+import {
+  createCurrencyColumn,
+  createNameColumn,
+} from "~/ui/data-table/columnHelpers";
+import {
+  ListWorkbench,
+  useBoundedListWorkbench,
+} from "~/ui/data-table/ListWorkbench";
+import { buildSelectColumn } from "~/ui/data-table/row-selection";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/ui/data-table/table-features";
+import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import {
+  FilterableCombobox,
+  type FilterableComboboxItem,
+} from "~/ui/primitives/combobox";
+import { Description } from "~/ui/primitives/description";
+import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
+import { Input } from "~/ui/primitives/input";
+import { NoneValue } from "~/ui/primitives/none-value";
 
 const NO_CANDIDATES: ExpenseOut[] = [];
 const CANDIDATE_PAGE_SIZE = 100;

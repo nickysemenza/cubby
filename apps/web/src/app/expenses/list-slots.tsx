@@ -1,8 +1,8 @@
 import type { ListSlotId } from "@cubby/schemas/entity-manifest";
 import { lazy, Suspense } from "react";
 
-import type { ListSlotComponent } from "~/app/_components/entity-list/list-slot-types";
-import { Skeleton } from "~/components/ui/skeleton";
+import type { ListSlotComponent } from "~/entity/entity-list/list-slot-types";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 // The analytics view is entirely Nivo charts and its tab is unmounted until
 // selected — lazy so the chart stack stays out of the default Ledger view.

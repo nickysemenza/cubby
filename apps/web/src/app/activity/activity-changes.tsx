@@ -6,11 +6,11 @@ import {
 } from "@cubby/schemas/context";
 import { auditableEntities } from "@cubby/schemas/entity-manifest";
 
-import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { NativeSelect } from "~/components/ui/native-select";
-import { entityPluralLabel } from "~/entities/entities";
+import { entityPluralLabel } from "~/entity/entities";
+import { AuditLogList } from "~/features/audit-log/audit-log-list";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { NativeSelect } from "~/ui/primitives/native-select";
 
 export function ActivityChanges({
   entityKind,

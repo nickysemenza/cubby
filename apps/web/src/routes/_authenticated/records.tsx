@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { ApplicationDirectory } from "~/app/_components/navigation/application-directory";
 import { pageTitle } from "~/lib/page-title";
+import { ApplicationDirectory } from "~/ui/navigation/application-directory";
 
 export const Route = createFileRoute("/_authenticated/records")({
   validateSearch: z.object({ q: z.string().optional() }),

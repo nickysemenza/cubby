@@ -12,7 +12,7 @@ import { cva, type VariantProps } from "class-variance-authority";
  * one-off sub-scale classes across pages.
  *
  * Consumed by the Row / Grid / Stack / Section primitives in
- * ~/components/layout. Pages should reach for those, not raw flex/grid/space-y.
+ * ~/ui/layout. Pages should reach for those, not raw flex/grid/space-y.
  */
 
 /** Shared `gap-*` scale used by Row and Grid. */

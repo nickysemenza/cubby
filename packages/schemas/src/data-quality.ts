@@ -20,6 +20,7 @@ export {
   dataCheckMessage,
   dataChecksByEntity,
   dataCheckWeight,
+  dataCheckExemptible,
   dataQualityExceptionEntities,
   dataQualityFacets,
   relatedDataQualityEntities,

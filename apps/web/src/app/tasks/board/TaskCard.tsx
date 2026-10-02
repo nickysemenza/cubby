@@ -6,13 +6,21 @@ import { DotsThreeVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsThreeV
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
 import { useNavigate } from "@tanstack/react-router";
 
-import { VerbMenuItem } from "~/app/_components/actions/action-verb-ui";
-import { useEntityDisplayImage } from "~/app/_components/entity-media/entity-display-images";
 import { TradeBadge } from "~/app/projects/shared";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+import { VerbMenuItem } from "~/entity/actions/action-verb-ui";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { EntityQualityFact } from "~/entity/data-quality-value";
+import { entities, entityDetailParams } from "~/entity/entities";
+import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
+import { formatCalendarDay } from "~/lib/date-format";
+import { formatDateSpan } from "~/lib/date-span";
+import { householdLocalDate } from "~/lib/household-date";
+import { statusTone } from "~/lib/status-tone";
+import { effectiveTaskDueDate } from "~/lib/task-dates";
+import { cn } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,20 +29,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
+} from "~/ui/primitives/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "~/components/ui/tooltip";
-import { EntityQualityFact } from "~/entities/data-quality-value";
-import { entities, entityDetailParams } from "~/entities/entities";
-import { formatCalendarDay } from "~/lib/date-format";
-import { formatDateSpan } from "~/lib/date-span";
-import { householdLocalDate } from "~/lib/household-date";
-import { statusTone } from "~/lib/status-tone";
-import { effectiveTaskDueDate } from "~/lib/task-dates";
-import { cn } from "~/lib/utils";
+} from "~/ui/primitives/tooltip";
 
 import { TASK_STATUS_LABELS } from "../task-options";
 import type {

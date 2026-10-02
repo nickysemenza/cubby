@@ -11,6 +11,8 @@ import type { ModelMessage } from "@tanstack/ai";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { env } from "~/env";
+import { localGoogleProviderOrigin } from "~/lib/e2e-google-provider";
 import { recordAiUsage } from "~/server/ai-usage";
 import {
   PURCHASE_IMPORT_AUDIT_FEATURE,
@@ -62,15 +64,18 @@ const validateExtraction = (output: ImportExtractionOutcome) => {
 };
 
 /** Loaded lazily by the purchase-import service to keep its bootstrap small. */
-export const extractPurchaseCapture = async (args: {
-  db: Database;
-  runId: string;
-  capture: BrowserCapture;
-  screenshotImageId?: string | null;
-}) => {
+export const extractPurchaseCapture = async (
+  args: {
+    db: Database;
+    runId: string;
+    capture: BrowserCapture;
+    screenshotImageId?: string | null;
+  },
+  ports = { runStructured: runStructuredFeature },
+) => {
   const request = purchaseExtractionPrompt(browserCapture.parse(args.capture));
   const first = normalizeImportExtractionModelOutput(
-    await runStructuredFeature(PURCHASE_IMPORT_EXTRACTION_FEATURE, request, {
+    await ports.runStructured(PURCHASE_IMPORT_EXTRACTION_FEATURE, request, {
       db: args.db,
       operation: "purchaseImport.extract",
       runId: runEntityId.parse(args.runId),
@@ -95,7 +100,7 @@ export const extractPurchaseCapture = async (args: {
     screenshot ? getR2PublicUrl(screenshot.key) : null,
   );
   const repaired = normalizeImportExtractionModelOutput(
-    await runStructuredFeature(
+    await ports.runStructured(
       PURCHASE_IMPORT_REPAIR_FEATURE,
       { systemPrompts: request.systemPrompts, messages: repairMessages },
       {
@@ -374,6 +379,27 @@ export const classifyOrderMail = async (args: {
   receivedAt: string;
   content: unknown;
 }) => {
+  const localProvider = localGoogleProviderOrigin(
+    env.E2E_AUTH_TEST_MODE,
+    env.E2E_GOOGLE_PROVIDER_URL,
+  );
+  if (localProvider) {
+    const response = await fetch(`${localProvider}/model/classify-mail`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sender: args.sender,
+        subject: args.subject,
+        receivedAt: args.receivedAt,
+        content: args.content,
+      }),
+    });
+    if (!response.ok)
+      throw new Error(
+        `Local mail classifier provider: HTTP ${response.status}`,
+      );
+    return PURCHASE_IMPORT_MAIL_FEATURE.schema.parse(await response.json());
+  }
   // No purchase-import run exists yet at this point — an inbound mail poll
   // has no user behind it, so this books under the system actor.
   const runId =

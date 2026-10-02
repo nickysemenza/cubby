@@ -84,7 +84,7 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
     const detectors = await problemDetectors();
     if (input.type !== undefined) {
       const { expectedProblemKeys, problemQuery } =
-        await import("~/entities/problem-registry");
+        await import("~/entity/problem-registry");
       const key = z.enum(expectedProblemKeys).safeParse(input.type);
       if (!key.success)
         return {

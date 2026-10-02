@@ -10,15 +10,15 @@ import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { FoodSummary } from "@cubby/usda";
 
-import { getHoverableMeasureUnitIcon } from "~/app/_components/inventory/format-amount";
-import { isDisplayMapping } from "~/app/_components/units/unit-mapping-graph";
-import { Input } from "~/components/ui/input";
+import { getHoverableMeasureUnitIcon } from "~/features/inventory/format-amount";
+import { isDisplayMapping } from "~/features/units/unit-mapping-graph";
 import type { BaseKind } from "~/lib/conversion-coverage";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
 import {
   getIngredientMappings,
   unitMappingsFromFood,
 } from "~/lib/unit-mapping-utils";
+import { Input } from "~/ui/primitives/input";
 
 // Shared core for the two enrichment surfaces — the dense Browse table editor
 // (`WorkbenchEditor`) and the focused Review-queue card — so price parsing,

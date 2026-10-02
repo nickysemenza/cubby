@@ -7,20 +7,20 @@ import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useCallback, useMemo } from "react";
 
-import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
+import { createEntityDisplayColumns } from "~/entity/entity-display";
+import { entityListFor } from "~/entity/entity-list";
+import { formatCurrency } from "~/lib/utils";
+import { ListWorkbench } from "~/ui/data-table/ListWorkbench";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
-} from "~/app/_components/data-table/table-features";
-import { useEntityList } from "~/app/_components/hooks/useEntityList";
-import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTableCore";
-import { useEntityFieldSave } from "~/app/_components/hooks/useUpdateMutation";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { createEntityDisplayColumns } from "~/entities/entity-display";
-import { entityListFor } from "~/entities/entity-list";
-import { formatCurrency } from "~/lib/utils";
+} from "~/ui/data-table/table-features";
+import { useEntityList } from "~/ui/hooks/useEntityList";
+import type { ListQueryOptionsFn } from "~/ui/hooks/usePaginatedTableCore";
+import { useEntityFieldSave } from "~/ui/hooks/useUpdateMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 
 const EMBEDDED_TABLE_STATE = {
   initialSort: "postedDate",

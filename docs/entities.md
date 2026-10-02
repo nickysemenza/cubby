@@ -146,14 +146,14 @@ export default defineEntity({
         export: "exampleRepository",
       },
       references: {
-        label: { module: "~/entities/entities", export: "entityLabel" },
+        label: { module: "~/entity/entities", export: "entityLabel" },
         resolver: {
           module: "~/server/repo/shortcode-resolver",
           export: "resolveLiveShortcode",
         },
       },
       filters: {
-        module: "~/entities/filter-manifest",
+        module: "~/entity/filter-manifest",
         export: "getEntityFilters",
       },
       search: {
@@ -305,7 +305,7 @@ from explicitly declared read-RPC adapters; it does not expand `httpActions`.
 `capabilities.bulkUpdate` (`{ fields: [...] } | null`) is the only thing an
 entity declares for bulk editing — there is no per-entity bulk-edit verb to
 write. The web list registers one generic `bulkEdit` action
-(`apps/web/src/app/_components/actions/bulk-edit-entity-action.tsx`) for every
+(`apps/web/src/entity/actions/bulk-edit-entity-action.tsx`) for every
 entity whose manifest declares it, and its dialog renders exactly those
 fields through the same reference/select/date rendering `EntityIntentFields`
 uses. The mutation payload is the form's dirty-field subset: an untouched
@@ -602,7 +602,7 @@ Generated artifacts provide the exhaustive entity keys and traits, public
 shortcode contracts (the inbound-only `P-`/`L-` label aliases live only in
 `packages/shared/src/shortcode.ts`, never in the manifest), schema bindings,
 client-safe inspector metadata, browser route roster, the typed list search
-schema per entity (`entities/generated/entity-search.gen.ts`: manifest filter
+schema per entity (`entity/generated/entity-search.gen.ts`: manifest filter
 keys, table keys and `create`, with `defaults` naming every key for
 `stripSearchParams`), kernel and MCP action capabilities, relation-specific
 command schemas, repository/relation-adapter assembly, and contract cases.
@@ -718,6 +718,29 @@ aggregates, and workflow-specific text. The kernel refreshes an entity's own
 projection and its fan-out projections inside the write transaction; a change
 to projection SQL itself does not rewrite persisted rows — run the streaming
 "Repair index" maintenance action after such a change.
+
+## Child storage
+
+An entity's `children` declares its physical child tables using
+`defineChildTable` (`entity-definitions/child-definition.ts`). Family modules
+in `packages/schemas/src/child-tables` own the columns, branded TypeScript
+types, SQL defaults, update callbacks, indexes, checks, foreign-key actions,
+and Drizzle relations. Child storage does not acquire an entity identity,
+shortcode, client manifest, or automatic indexes. SQL constraint expressions
+use `{columnKey}` placeholders validated against that child's columns.
+
+Mail, statement-import, and image-processing storage belongs to the explicit
+module registry (`child-tables/modules.ts`) because those rows are not owned
+by one entity. Both registries generate the same `entity-tables.gen.ts`
+artifact, imported through `server/db/schema.ts`; the existing
+`image-processing-schema.ts` import boundary remains a re-export.
+
+Shared infrastructure remains handwritten only where
+`child-tables/retained.ts` records an ownership reason. Generation checks the
+schema's AST against that shrink-only baseline: removing an exception is
+allowed, while a new handwritten `pgTable` requires declaration storage.
+Moving existing storage into declarations must preserve the Drizzle catalog
+and emit no migration.
 
 ## Data quality
 

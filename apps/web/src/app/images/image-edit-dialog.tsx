@@ -1,13 +1,13 @@
 import type { ImageWithEntity } from "@cubby/schemas/image";
 import { useState } from "react";
 
-import { useImageUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { DialogFormActions } from "~/components/ui/dialog-form-actions";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { NativeSelect } from "~/components/ui/native-select";
-import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { image as imageOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { useImageUpdateMutation } from "~/ui/hooks/useUpdateMutation";
+import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
+import { Input } from "~/ui/primitives/input";
+import { Label } from "~/ui/primitives/label";
+import { NativeSelect } from "~/ui/primitives/native-select";
+import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 /**
  * Image has no kernel update contract, so its Edit action renames through

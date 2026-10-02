@@ -3,11 +3,100 @@ import { MAX_EXTERNAL_HTML_BYTES } from "@cubby/shared";
 import { amount } from "./codec";
 import {
   cookbookShortcode,
+  imageShortcode,
   productShortcode,
   recipeShortcode,
 } from "./identifier-fields";
 import { cookbookExtractionSchema, cookbookRunReportSchema } from "./cookbook";
 import { cookbookSummary } from "./recipe";
+import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_UPLOAD_BYTES } from "./image";
+
+const bundlePath = z
+  .string()
+  .min(1)
+  .max(1024)
+  .refine(
+    (value) =>
+      !value.startsWith("/") &&
+      !value.includes("\\") &&
+      !value.includes("\0") &&
+      !value
+        .split("/")
+        .some((part) => part === ".." || part === "." || part === ""),
+    "Unsafe bundle path",
+  );
+const bundleDigest = z.string().regex(/^[a-f0-9]{64}$/);
+export const cookbookBundleImageSchema = z.object({
+  source_path: bundlePath,
+  path: bundlePath,
+  mime: z.enum(ALLOWED_IMAGE_TYPES),
+  sha256: bundleDigest,
+  bytes: z.int().positive().max(MAX_IMAGE_UPLOAD_BYTES),
+});
+export const cookbookBundleManifestSchema = z.object({
+  format: z.literal("cookbook-bundle"),
+  version: z.literal(1),
+  extraction: bundlePath,
+  preview: bundlePath,
+  source_sha256: bundleDigest,
+  run_id: z.string().min(1),
+  incomplete: z.boolean(),
+  images: z.array(cookbookBundleImageSchema).max(10_000),
+});
+export type CookbookBundleManifest = z.infer<
+  typeof cookbookBundleManifestSchema
+>;
+export const cookbookBundleMetadataSchema = z
+  .object({
+    manifest: cookbookBundleManifestSchema,
+    cookbook: cookbookExtractionSchema,
+    report: cookbookRunReportSchema,
+  })
+  .superRefine(({ manifest, cookbook, report }, ctx) => {
+    const problem = (message: string) =>
+      ctx.addIssue({ code: "custom", message });
+    if (manifest.source_sha256 !== cookbook.source.sha256)
+      problem("Bundle source hash differs from its extraction");
+    if (manifest.run_id !== report.run_id)
+      problem("Bundle run differs from its report");
+    if (manifest.incomplete !== (report.incomplete || report.cancelled))
+      problem("Bundle incomplete status differs from its report");
+    const bySource = new Map<
+      string,
+      z.infer<typeof cookbookBundleImageSchema>
+    >();
+    const byPath = new Map<string, z.infer<typeof cookbookBundleImageSchema>>();
+    for (const asset of manifest.images) {
+      if (bySource.has(asset.source_path))
+        problem(`Duplicate bundle source path: ${asset.source_path}`);
+      const prior = byPath.get(asset.path);
+      if (
+        prior &&
+        (prior.sha256 !== asset.sha256 ||
+          prior.mime !== asset.mime ||
+          prior.bytes !== asset.bytes)
+      )
+        problem(`Contradictory bundle asset alias: ${asset.path}`);
+      if (!asset.path.startsWith(`images/${asset.sha256}.`))
+        problem(`Bundle asset path does not match its hash: ${asset.path}`);
+      bySource.set(asset.source_path, asset);
+      byPath.set(asset.path, asset);
+    }
+    const photos = [
+      ...(cookbook.cover ? [cookbook.cover] : []),
+      ...cookbook.chapters.flatMap((chapter) =>
+        chapter.items.flatMap((item) => item.photos),
+      ),
+    ];
+    for (const photo of photos) {
+      const asset = bySource.get(photo.path);
+      if (!asset || asset.mime !== photo.mime)
+        problem(`Bundle is missing matching image evidence for ${photo.path}`);
+    }
+  });
+export type CookbookBundleMetadata = z.infer<
+  typeof cookbookBundleMetadataSchema
+>;
 
 // Times arrive twice over: the prose string is verbatim what the source printed,
 // the `*_minutes` count is the same duration as a number. A present string does
@@ -193,12 +282,16 @@ export const upsertCookbookInput = z.object({
   name: z.string().min(1),
   // The whole extracted book tree, verbatim from the `cookbook` crate.
   rawJson: cookbookExtractionSchema,
+  /** Explicit reviewed target when a different extraction replaces saved source. */
+  cookbookId: cookbookShortcode.optional(),
+  bundleManifest: cookbookBundleManifestSchema.optional(),
   // The run's diagnostics: every call, chunk, cost. Absent for the JSON path.
   report: cookbookRunReportSchema.nullable().optional(),
   author: z.array(z.string()).optional(),
   subjects: z.array(z.string()).optional(),
   sourceLabel: z.string(),
   coverImageId: z.uuid().optional(),
+  coverUploadId: imageShortcode.optional(),
   /**
    * The book's ISBN as a canonical GTIN-14, picked out of the EPUB's OPF
    * `<dc:identifier>` values by `wasm.isbn_from_epub_identifiers`. Absent when the book
@@ -214,6 +307,7 @@ export const upsertCookbookInput = z.object({
 
 export const cookbookIdOut = z.object({
   id: cookbookShortcode,
+  name: z.string().optional(),
 });
 
 export const cookbookIdInput = z.object({
@@ -352,17 +446,21 @@ export const deleteCookbookOut = z.object({
   deletedRecipes: z.number().int().nonnegative(),
 });
 
-export const attachCookbookRecipePhotoInput = z.object({
+const cookbookPhotoTarget = {
   cookbookId: cookbookShortcode,
   recipeId: recipeShortcode,
   /** The tree item id of the source recipe whose first photo this is. */
   sourceRecipeId: z.string().min(1),
-  data: z.string().min(1),
-});
+};
+export const attachCookbookRecipePhotoInput = z.union([
+  z.strictObject({ ...cookbookPhotoTarget, data: z.string().min(1) }),
+  z.strictObject({ ...cookbookPhotoTarget, uploadId: imageShortcode }),
+]);
 
 export const attachCookbookRecipePhotoOut = z.object({
   status: z.enum(["attached", "reused", "skipped-existing"]),
   cleanupWarning: z.string().optional(),
+  photoUrl: z.url().optional(),
 });
 
 // Input for `recipe.forwardGatewayRequest`: a complete Cloudflare AI Gateway

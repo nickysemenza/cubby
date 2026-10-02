@@ -1,0 +1,310 @@
+import { defineChildTable } from "../entity-definitions/child-definition.js";
+
+export const mealChildren = [
+  defineChildTable({
+    name: "MealRecipe",
+    exportName: "mealRecipe",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+        type: "MealRecipeId",
+      },
+      {
+        key: "mealId",
+        kind: "uuid",
+        notNull: true,
+        type: "MealId",
+        reference: { table: "meal", column: "id" },
+      },
+      {
+        key: "recipeId",
+        kind: "uuid",
+        notNull: true,
+        type: "RecipeId",
+        reference: { table: "recipe", column: "id" },
+      },
+      { key: "scale", kind: "real", notNull: true, default: 1 },
+      { key: "sortOrder", kind: "integer" },
+      { key: "estimatedYieldGrams", kind: "integer" },
+      { key: "actualYieldGrams", kind: "integer" },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+        onUpdateNow: true,
+      },
+      { key: "deletedAt", kind: "timestamp" },
+    ],
+    types: [
+      {
+        module: "@cubby/schemas/identifiers",
+        exports: ["MealRecipeId", "MealId", "RecipeId"],
+      },
+    ],
+    indexes: [
+      { name: "MealRecipe_mealId_idx", on: ["mealId"] },
+      { name: "MealRecipe_recipeId_idx", on: ["recipeId"] },
+    ],
+    checks: [
+      {
+        name: "MealRecipe_estimatedYieldGrams_check",
+        sql: "{estimatedYieldGrams} IS NULL OR {estimatedYieldGrams} > 0",
+      },
+      {
+        name: "MealRecipe_actualYieldGrams_check",
+        sql: "{actualYieldGrams} IS NULL OR {actualYieldGrams} > 0",
+      },
+    ],
+    relations: [
+      {
+        name: "meal",
+        kind: "one",
+        table: "meal",
+        fields: ["mealId"],
+        references: ["id"],
+      },
+      {
+        name: "recipe",
+        kind: "one",
+        table: "recipe",
+        fields: ["recipeId"],
+        references: ["id"],
+      },
+      { name: "portions", kind: "many", table: "mealRecipePortion" },
+    ],
+  }),
+  defineChildTable({
+    name: "MealRecipePortion",
+    exportName: "mealRecipePortion",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+        type: "MealRecipePortionId",
+      },
+      {
+        key: "mealRecipeId",
+        kind: "uuid",
+        notNull: true,
+        type: "MealRecipeId",
+        reference: { table: "mealRecipe", column: "id", onDelete: "cascade" },
+      },
+      {
+        key: "mealId",
+        kind: "uuid",
+        notNull: true,
+        type: "MealId",
+        reference: { table: "meal", column: "id" },
+      },
+      {
+        key: "ledgerPartyId",
+        kind: "uuid",
+        notNull: true,
+        type: "LedgerPartyId",
+        reference: { table: "ledgerParty", column: "id" },
+      },
+      { key: "amountValue", kind: "doublePrecision", notNull: true },
+      { key: "amountUnit", kind: "text", notNull: true },
+      { key: "confirmedAt", kind: "timestamp" },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+        onUpdateNow: true,
+      },
+      { key: "deletedAt", kind: "timestamp" },
+    ],
+    types: [
+      {
+        module: "@cubby/schemas/identifiers",
+        exports: [
+          "MealRecipePortionId",
+          "MealRecipeId",
+          "MealId",
+          "LedgerPartyId",
+        ],
+      },
+    ],
+    indexes: [
+      {
+        name: "MealRecipePortion_live_source_target_eater_key",
+        unique: true,
+        on: ["mealRecipeId", "mealId", "ledgerPartyId"],
+        where: "{deletedAt} IS NULL",
+      },
+      { name: "MealRecipePortion_mealRecipeId_idx", on: ["mealRecipeId"] },
+      { name: "MealRecipePortion_mealId_idx", on: ["mealId"] },
+      { name: "MealRecipePortion_ledgerPartyId_idx", on: ["ledgerPartyId"] },
+    ],
+    checks: [
+      {
+        name: "MealRecipePortion_amount_check",
+        sql: "\n  ({amountValue} IS NULL AND {amountUnit} IS NULL) OR (\n    {amountValue} IS NOT NULL AND {amountUnit} IS NOT NULL\n    AND {amountValue} > 0 AND {amountValue} < 'Infinity'::double precision\n    AND length(trim({amountUnit})) > 0 AND {amountUnit} = trim({amountUnit})\n  )\n",
+      },
+    ],
+    relations: [
+      {
+        name: "mealRecipe",
+        kind: "one",
+        table: "mealRecipe",
+        fields: ["mealRecipeId"],
+        references: ["id"],
+      },
+      {
+        name: "meal",
+        kind: "one",
+        table: "meal",
+        fields: ["mealId"],
+        references: ["id"],
+      },
+      {
+        name: "ledgerParty",
+        kind: "one",
+        table: "ledgerParty",
+        fields: ["ledgerPartyId"],
+        references: ["id"],
+      },
+    ],
+  }),
+  defineChildTable({
+    name: "MealFoodEntry",
+    exportName: "mealFoodEntry",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+        type: "MealFoodEntryId",
+      },
+      {
+        key: "mealId",
+        kind: "uuid",
+        notNull: true,
+        type: "MealId",
+        reference: { table: "meal", column: "id" },
+      },
+      {
+        key: "ledgerPartyId",
+        kind: "uuid",
+        notNull: true,
+        type: "LedgerPartyId",
+        reference: { table: "ledgerParty", column: "id" },
+      },
+      {
+        key: "sourceKind",
+        kind: "text",
+        notNull: true,
+        type: '"ingredient" | "product" | "manual"',
+      },
+      {
+        key: "ingredientId",
+        kind: "uuid",
+        type: "IngredientId",
+        reference: { table: "ingredient", column: "id" },
+      },
+      {
+        key: "productId",
+        kind: "uuid",
+        type: "ProductId",
+        reference: { table: "product", column: "id" },
+      },
+      { key: "amountValue", kind: "doublePrecision" },
+      { key: "amountUnit", kind: "text" },
+      { key: "name", kind: "text" },
+      { key: "nutrients", kind: "jsonb", type: "MealFoodNutrients" },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+        onUpdateNow: true,
+      },
+      { key: "deletedAt", kind: "timestamp" },
+    ],
+    types: [
+      {
+        module: "@cubby/schemas/identifiers",
+        exports: [
+          "MealFoodEntryId",
+          "MealId",
+          "LedgerPartyId",
+          "IngredientId",
+          "ProductId",
+        ],
+      },
+      { module: "@cubby/schemas/meal", exports: ["MealFoodNutrients"] },
+    ],
+    indexes: [
+      { name: "MealFoodEntry_mealId_idx", on: ["mealId"] },
+      { name: "MealFoodEntry_ledgerPartyId_idx", on: ["ledgerPartyId"] },
+      { name: "MealFoodEntry_ingredientId_idx", on: ["ingredientId"] },
+      { name: "MealFoodEntry_productId_idx", on: ["productId"] },
+    ],
+    checks: [
+      {
+        name: "MealFoodEntry_amount_check",
+        sql: "\n  ({amountValue} IS NULL AND {amountUnit} IS NULL) OR (\n    {amountValue} IS NOT NULL AND {amountUnit} IS NOT NULL\n    AND {amountValue} > 0 AND {amountValue} < 'Infinity'::double precision\n    AND length(trim({amountUnit})) > 0 AND {amountUnit} = trim({amountUnit})\n  )\n",
+      },
+      {
+        name: "MealFoodEntry_source_check",
+        sql: "({sourceKind} = 'ingredient' AND {ingredientId} IS NOT NULL AND {productId} IS NULL AND {amountValue} IS NOT NULL AND {name} IS NULL AND {nutrients} IS NULL) OR ({sourceKind} = 'product' AND {ingredientId} IS NULL AND {productId} IS NOT NULL AND {amountValue} IS NOT NULL AND {name} IS NULL AND {nutrients} IS NULL) OR ({sourceKind} = 'manual' AND {ingredientId} IS NULL AND {productId} IS NULL AND length(trim({name})) > 0 AND {name} IS NOT NULL AND {nutrients} IS NOT NULL AND jsonb_typeof({nutrients}) = 'object' AND {nutrients} <> '{}'::jsonb)",
+      },
+    ],
+    relations: [
+      {
+        name: "meal",
+        kind: "one",
+        table: "meal",
+        fields: ["mealId"],
+        references: ["id"],
+      },
+      {
+        name: "ledgerParty",
+        kind: "one",
+        table: "ledgerParty",
+        fields: ["ledgerPartyId"],
+        references: ["id"],
+      },
+      {
+        name: "ingredient",
+        kind: "one",
+        table: "ingredient",
+        fields: ["ingredientId"],
+        references: ["id"],
+      },
+      {
+        name: "product",
+        kind: "one",
+        table: "product",
+        fields: ["productId"],
+        references: ["id"],
+      },
+    ],
+  }),
+];

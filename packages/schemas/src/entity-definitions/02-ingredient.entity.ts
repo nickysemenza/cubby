@@ -1,6 +1,6 @@
 import { defineEntity } from "./definition.js";
 import { ingredientShortcode } from "../identifier-fields.js";
-import { baseKind } from "../codec.js";
+import { ingredientApplicabilityKey } from "../codec.js";
 import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 
@@ -161,12 +161,15 @@ export default defineEntity({
       },
       {
         key: "naKinds",
+        labelOverride: "Not applicable",
+        description:
+          "Measurement kinds or nutrient keys intentionally excluded from enrichment. Nutrient opt-outs remain unavailable rather than zero.",
         kind: "text-array",
         control: { kind: "specialized", renderer: "tag-list" },
         validation: {
-          read: z.array(baseKind),
-          create: z.array(baseKind).optional().default([]),
-          update: z.array(baseKind).optional(),
+          read: z.array(ingredientApplicabilityKey),
+          create: z.array(ingredientApplicabilityKey).optional().default([]),
+          update: z.array(ingredientApplicabilityKey).optional(),
         },
       },
       {

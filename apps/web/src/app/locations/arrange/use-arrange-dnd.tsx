@@ -24,13 +24,13 @@ import {
 import {
   createDndAnnouncements,
   cubbyDndScreenReaderInstructions,
-} from "~/components/dnd/accessibility";
-import { createDndAutoScroller } from "~/components/dnd/auto-scroll";
-import { DragPreviewFrame } from "~/components/dnd/DragPreviewFrame";
+} from "~/ui/dnd/accessibility";
+import { createDndAutoScroller } from "~/ui/dnd/auto-scroll";
+import { DragPreviewFrame } from "~/ui/dnd/DragPreviewFrame";
 import {
   createValidTargetKeyboardCoordinates,
   useCubbyDndSensors,
-} from "~/components/dnd/sensors";
+} from "~/ui/dnd/sensors";
 
 import { canDropOnArrangeTarget } from "./arrange-drop-policy";
 import {

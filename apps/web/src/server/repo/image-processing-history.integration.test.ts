@@ -27,6 +27,7 @@ import {
   completeImageProcessingJob,
   findImageProcessingDispatchRepairs,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   markImageProcessingWaitingForDevice,
   reclaimExpiredImageProcessingLeases,
   retryFailedImageProcessingJobs,
@@ -425,6 +426,91 @@ describe("image execution history conservation", () => {
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.imageId, sourceId));
     expect(obsolete.filter((row) => row.state === "skipped")).toHaveLength(100);
+  });
+  it("retires obsolete processor wakeups without executing them or changing completed history", async () => {
+    const { source, jobId } = await setup();
+    const sourceId = parseEntityId("image", source.id);
+    const revisions = Array.from(
+      { length: 104 },
+      (_, index) => index + 1,
+    ).filter(
+      (revision) =>
+        ![
+          IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+          IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+        ].includes(revision),
+    );
+    const obsolete = await getDb(ctx.db)
+      .insert(imageProcessingJob)
+      .values(
+        revisions.slice(0, 101).map((processorRevision) => ({
+          imageId: sourceId,
+          kind: "describe_image" as const,
+          state: "pending" as const,
+          sourceContentHash: "a".repeat(64),
+          processorRevision,
+          nextAttemptAt: new Date(0),
+        })),
+      )
+      .returning({ id: imageProcessingJob.id });
+    const historyResult = {
+      kind: "describe_image",
+      status: "completed",
+      description: {
+        description: "Synthetic old analysis",
+        claims: [],
+        cutoutEligibility: "review",
+      },
+    };
+    const [history] = await getDb(ctx.db)
+      .insert(imageProcessingJob)
+      .values({
+        imageId: sourceId,
+        kind: "describe_image",
+        state: "ready",
+        sourceContentHash: "a".repeat(64),
+        processorRevision: revisions[101]!,
+        result: historyResult,
+        completedAt: new Date("2026-01-01T00:00:00Z"),
+      })
+      .returning();
+    expect(
+      await claimImageProcessingJob(ctx.db, {
+        jobId: obsolete[0]!.id,
+        kinds: ["describe_image"],
+        leaseMs: 60_000,
+      }),
+    ).toBeNull();
+    expect(await findImageProcessingDispatchRepairs(ctx.db, 100)).toEqual([
+      jobId,
+    ]);
+    const retired = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.imageId, sourceId));
+    const obsoleteRows = retired.filter((row) =>
+      obsolete.some((entry) => entry.id === row.id),
+    );
+    expect(obsoleteRows.filter((row) => row.state === "skipped")).toHaveLength(
+      100,
+    );
+    expect(
+      obsoleteRows.filter(
+        (row) =>
+          row.lastError === "Image processor revision is no longer current",
+      ),
+    ).toHaveLength(100);
+    expect(obsoleteRows.every((row) => row.attempts === 0)).toBe(true);
+    expect(retired.find((row) => row.id === history!.id)).toEqual(history);
+    expect(
+      await claimImageProcessingJob(ctx.db, {
+        jobId,
+        kinds: ["describe_image"],
+        leaseMs: 60_000,
+      }),
+    ).toMatchObject({
+      processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+    });
   });
   it("adopts cloud analysis only with its live lease and keeps rejected output in attempt history", async () => {
     const { source, jobId } = await setup();

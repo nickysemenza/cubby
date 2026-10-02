@@ -45,7 +45,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import { sum, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
 
-import { problemQueryDeclarations } from "~/entities/problem-registry";
+import { problemQueryDeclarations } from "~/entity/problem-registry";
 import {
   BASE_KINDS,
   conversionCoverage,

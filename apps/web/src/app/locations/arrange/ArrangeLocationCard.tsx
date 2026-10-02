@@ -3,10 +3,10 @@ import { useDraggable } from "@dnd-kit/core";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 
-import { LocationIcon } from "~/app/_components/locations/location-icons";
-import { resolveLocationPrimaryVisual } from "~/app/_components/locations/location-visual-resolver";
-import { Row } from "~/components/layout";
+import { LocationIcon } from "~/features/locations/location-icons";
+import { resolveLocationPrimaryVisual } from "~/features/locations/location-visual-resolver";
 import { cn } from "~/lib/utils";
+import { Row } from "~/ui/layout";
 
 import { locationItemCount, parentIdOf } from "./arrange-tree-utils";
 import type { LocationDragData } from "./arrange-types";

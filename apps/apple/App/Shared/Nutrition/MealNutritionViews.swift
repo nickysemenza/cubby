@@ -174,9 +174,16 @@ private struct MacroGrid: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            if amount.inferredZeroCount > 0 {
+                Text("\(amount.inferredZeroCount) inferred from label")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label): \(amount.accessibilityValue(calories: calories)) \(unit)")
+        .accessibilityLabel(
+            "\(label): \(amount.accessibilityValue(calories: calories)) \(unit)\(amount.inferredZeroCount > 0 ? ", \(amount.inferredZeroCount) contributors inferred from label" : "")"
+        )
     }
 }
 
@@ -186,7 +193,8 @@ private extension MeasureEstimate {
         case .complete(let estimate): format(lower: estimate.lower, upper: estimate.upper, calories: calories)
         case .partial(let estimate):
             "\(format(lower: estimate.lower, upper: estimate.upper, calories: calories))+"
-        case .unavailable, .pending: "—"
+        case .unavailable: isNotApplicable ? "N/A" : "—"
+        case .pending: "—"
         }
     }
 
@@ -195,7 +203,7 @@ private extension MeasureEstimate {
         case .complete(let estimate): format(lower: estimate.lower, upper: estimate.upper, calories: calories)
         case .partial(let estimate):
             "\(format(lower: estimate.lower, upper: estimate.upper, calories: calories)), known subtotal"
-        case .unavailable: "unavailable"
+        case .unavailable: isNotApplicable ? "not applicable" : "unavailable"
         case .pending: "pending"
         }
     }

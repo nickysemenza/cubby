@@ -12,9 +12,9 @@ import { z } from "zod";
 
 import { SmartCollectionPage } from "~/app/collections/smart-collection-page";
 import { useSmartCollections } from "~/app/collections/smart-collection-state";
-import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
+import { Page } from "~/ui/page/Page";
 
 const searchSchema = z.object({
   q: urlStringParam,

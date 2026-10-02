@@ -42,9 +42,9 @@ Verified on `main` at `537d853c6`. Do not rebuild any of this.
   audit; the single-record path audits around it via `auditNestedChanges` in
   `apps/web/src/server/repo/expense/crud.ts`.
 - **Editors.** Web: `LedgerAttributionsField`
-  (`apps/web/src/entities/editing/ledger-attributions-field.tsx`), registered as
+  (`apps/web/src/entity/editing/ledger-attributions-field.tsx`), registered as
   the `ledger-attributions` specialized renderer in
-  `apps/web/src/entities/editing/entity-primitive-fields.tsx`. Native:
+  `apps/web/src/entity/editing/entity-primitive-fields.tsx`. Native:
   `apps/apple/App/Shared/Editors/LedgerAttributionsControl.swift`, listed as
   implemented in `NativePresentationCoverage.swift`.
 - **Fallbacks.** In `apps/web/src/server/repo/household-contribution/allocation.ts`,
@@ -59,7 +59,7 @@ Verified on `main` at `537d853c6`. Do not rebuild any of this.
   and `funder_not_yet_paid` are **aggregated**: a count with empty `targetIds`,
   because assumed-household can cover most of the ledger.
 - **Per-target links.** `ContributionGapTargets`
-  (`apps/web/src/app/_components/household-contribution-format.tsx`) already
+  (`apps/web/src/features/finance/household-contribution-format.tsx/`) already
   links each `EXP-` target to its detail page, on both the project section and
   the household ledger page.
 - **Filter pattern.** The expense list's `ledgerPartyId` filter (either role) is
@@ -76,7 +76,7 @@ Verified on `main` at `537d853c6`. Do not rebuild any of this.
   (`apps/web/src/server/repo/expense/entity-adapter.ts`), which calls
   `updateExpensesInBulk` in `crud.ts`. That function is typed to the four
   scalars and writes them with one `.set()`. The web surface is
-  `apps/web/src/app/_components/actions/bulk-edit-entity-action.tsx`.
+  `apps/web/src/entity/actions/bulk-edit-entity-action.tsx`.
 - **Import pipeline.** The Flue agent imports only
   `.claude/skills/purchase-import/SKILL.md`
   (`apps/purchase-agent/src/purchase-import-run.ts`), **not** its `references/`.

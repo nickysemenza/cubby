@@ -3,22 +3,22 @@ import { useQueries } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { kernelMerge } from "~/app/_components/actions/merge-entity-actions";
-import {
-  useActionMutation,
-  useEntityActionMutation,
-} from "~/app/_components/hooks/useActionMutation";
-import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
-import { Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityDetailFor } from "~/entities/entity-detail";
+import { kernelMerge } from "~/entity/actions/merge-entity-actions";
+import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import { entityDetailFor } from "~/entity/entity-detail";
 import {
   type EntityMergeResult,
   entityMergeMutationOptions,
-} from "~/entities/entity-mutation";
+} from "~/entity/entity-mutation";
+import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import { vendor } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
+import {
+  useActionMutation,
+  useEntityActionMutation,
+} from "~/ui/hooks/useActionMutation";
+import { Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 
 import { withoutSourceAlias, withoutSourceRef } from "./duplicate-claims";
 

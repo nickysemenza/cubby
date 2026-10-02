@@ -1,5 +1,7 @@
 import {
   dataExceptionReason,
+  dataCheck,
+  dataCheckExemptible,
   dataQualityExceptionEntities,
   dataQualityStatus,
   relatedDataQualityEntities,
@@ -120,7 +122,9 @@ describe("data-quality registry", () => {
     const entry = entryFor(entity);
     expect(
       Object.entries(entry.checks).flatMap(([check, binding]) =>
-        binding.fingerprint ? [] : [check],
+        binding.fingerprint || !dataCheckExemptible[dataCheck.parse(check)]
+          ? []
+          : [check],
       ),
     ).toEqual([]);
   });

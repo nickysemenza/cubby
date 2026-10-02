@@ -672,7 +672,29 @@ function explanationActions(
   });
 }
 
-function explainInterpretation(
+function qualityGapSummary(
+  breakdown: z.infer<typeof fieldExplanationOutput>["qualityBreakdown"],
+): string {
+  const weightedGaps = breakdown?.checks.filter(
+    (check) => check.state === "gap" && check.weight > 0,
+  ).length;
+  const unscoredGaps = breakdown?.checks.filter(
+    (check) => check.state === "gap" && check.weight === 0,
+  ).length;
+  return [
+    weightedGaps
+      ? `${weightedGaps} unresolved ${weightedGaps === 1 ? "check reduces" : "checks reduce"} this record's score.`
+      : null,
+    unscoredGaps
+      ? `${unscoredGaps} unresolved ${unscoredGaps === 1 ? "diagnostic does" : "diagnostics do"} not reduce this record's score.`
+      : null,
+    "Missing information and detected defects are shown separately below.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function explainInterpretation(
   field: (typeof entityFieldModels)[Entity]["fields"][number],
   value: Json,
   projection: JsonRecord,
@@ -699,13 +721,13 @@ function explainInterpretation(
     summary =
       q.gaps.length === 0
         ? "All applicable checks are satisfied, including any accepted exceptions. This score describes the checks defined for this record; it does not guarantee that every possible detail is correct."
-        : `${q.gaps.length} unresolved ${q.gaps.length === 1 ? "check reduces" : "checks reduce"} this record's score. Missing information and detected defects are shown separately below.`;
+        : qualityGapSummary(qualityBreakdown);
     if (qualityBreakdown?.expectedWeight === 0)
       caveats.push(
-        "No checks apply to this record. The scoring rule returns 100 when the expected weight is zero.",
+        "No weighted checks apply to this record. The scoring rule returns 100 when the expected weight is zero; unscored diagnostics remain visible.",
       );
     caveats.push(
-      "Only this record's applicable checks affect its score. Related records' gaps are reported separately.",
+      "Only this record's applicable weighted checks affect its score. Related records' gaps are reported separately.",
     );
     if (q.exceptions.length > 0)
       caveats.push(

@@ -3,17 +3,18 @@ import { FloppyDiskIcon } from "@phosphor-icons/react/dist/csr/FloppyDisk";
 import { createFileRoute } from "@tanstack/react-router";
 import { useId, useState } from "react";
 
-import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
-import { Row, Stack } from "~/components/layout";
-import { Page } from "~/components/page/Page";
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Checkbox } from "~/components/ui/checkbox";
-import { FilterableCombobox } from "~/components/ui/combobox";
+import { pageTitle } from "~/lib/page-title";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
+import { EntityPicker } from "~/ui/combobox/entity-picker";
+import { FormFieldGroup } from "~/ui/forms/form-field-group";
+import { Row, Stack } from "~/ui/layout";
+import { Page } from "~/ui/page/Page";
+import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { FilterableCombobox } from "~/ui/primitives/combobox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,18 +23,18 @@ import {
   DropdownMenuSubmenuContent,
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
+} from "~/ui/primitives/dropdown-menu";
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyTitle,
-} from "~/components/ui/empty";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { NativeSelect } from "~/components/ui/native-select";
-import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { Skeleton } from "~/components/ui/skeleton";
+} from "~/ui/primitives/empty";
+import { Input } from "~/ui/primitives/input";
+import { Label } from "~/ui/primitives/label";
+import { NativeSelect } from "~/ui/primitives/native-select";
+import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
+import { Skeleton } from "~/ui/primitives/skeleton";
 import {
   Table,
   TableBody,
@@ -41,9 +42,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "~/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { pageTitle } from "~/lib/page-title";
+} from "~/ui/primitives/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 export const Route = createFileRoute("/_authenticated/design")({
   head: () => ({ meta: [{ title: pageTitle("Design smoke test") }] }),

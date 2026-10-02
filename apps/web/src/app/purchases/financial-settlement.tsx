@@ -5,36 +5,36 @@ import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { TableCellWorkbench } from "~/app/_components/data-table/table-cell-workbench";
-import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
+import {
+  captureRequest,
+  financialTransactionEditRequest,
+} from "~/entity/editing/editor-requests";
+import {
+  EntityEditDialog,
+  type EntityEditDialogRequest,
+} from "~/entity/editing/entity-edit-dialog";
+import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import { fieldEnumOptions } from "~/entity/enum-field-display";
+import { formatFieldProvenance } from "~/entity/field-provenance";
+import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
+import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { formatCurrency } from "~/lib/utils";
+import { TableCellWorkbench } from "~/ui/data-table/table-cell-workbench";
+import { useUpdateMutation } from "~/ui/hooks/useUpdateMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "~/components/ui/dialog";
-import { DialogFormActions } from "~/components/ui/dialog-form-actions";
-import { EnumPill } from "~/components/ui/enum-pill";
-import { Input } from "~/components/ui/input";
-import {
-  captureRequest,
-  financialTransactionEditRequest,
-} from "~/entities/editing/editor-requests";
-import {
-  EntityEditDialog,
-  type EntityEditDialogRequest,
-} from "~/entities/editing/entity-edit-dialog";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { fieldEnumOptions } from "~/entities/enum-field-display";
-import { formatFieldProvenance } from "~/entities/field-provenance";
-import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
-import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { formatCurrency } from "~/lib/utils";
+} from "~/ui/primitives/dialog";
+import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
+import { EnumPill } from "~/ui/primitives/enum-pill";
+import { Input } from "~/ui/primitives/input";
 
 import { LinkedTransactions } from "../finance/linked-transactions";
 

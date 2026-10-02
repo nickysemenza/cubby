@@ -5,7 +5,7 @@ import {
   EmptyHeader,
   EmptyIcon,
   EmptyTitle,
-} from "~/components/ui/empty";
+} from "~/ui/primitives/empty";
 
 /**
  * Compact empty state for chart cards. Uses Empty's minimal variant so it

@@ -1,3 +1,4 @@
+import type { ChildTableMetadata } from "../../../packages/schemas/src/entity-definitions/child-definition.ts";
 import { readdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -387,6 +388,7 @@ export type CompiledEntity = Readonly<{
   fieldModel: EntityFieldModel;
   /** The entity's own table, or null for a table-less entity (usda-food). */
   table: CompiledEntityTable | null;
+  children: readonly ChildTableMetadata[];
   /** `capabilities.dataQuality`, or null for an unscored entity. */
   dataQuality: Readonly<{
     checks: readonly Readonly<{
@@ -394,6 +396,8 @@ export type CompiledEntity = Readonly<{
       facet: string;
       kind: "missing" | "defect";
       weight: number;
+      scoring: "weighted" | "unscored";
+      exceptions: "inherit" | "forbidden";
       label: string;
       message: string;
       coverage?: string;

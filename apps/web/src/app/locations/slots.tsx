@@ -1,18 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
-import { AiDescriptionSection } from "~/app/_components/locations/ai-description-section";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { entityListFor } from "~/entity/entity-list";
+import { AiDescriptionSection } from "~/features/locations/ai-description-section";
 import {
   calculateInventoryValuation,
   formatPricingCountsSummary,
-} from "~/app/_components/locations/calculate-inventory-valuation";
-import { locationChildGroupLabel } from "~/app/_components/locations/location-visual-resolver";
-import { Row, Stack } from "~/components/layout";
-import { Description } from "~/components/ui/description";
-import { Eyebrow } from "~/components/ui/eyebrow";
-import { entityListFor } from "~/entities/entity-list";
+} from "~/features/locations/calculate-inventory-valuation";
+import { locationChildGroupLabel } from "~/features/locations/location-visual-resolver";
 import { formatCurrency } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { Description } from "~/ui/primitives/description";
+import { Eyebrow } from "~/ui/primitives/eyebrow";
 
 /**
  * Rolled-up total (direct + descendants, from the persisted

@@ -4,10 +4,10 @@ import {
   type UseFormReturn,
 } from "react-hook-form";
 
-import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
-import { ArrayFieldManager } from "~/components/forms/array-field-manager";
-import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { ArrayFieldManager } from "~/ui/forms/array-field-manager";
+import { FormFieldGroup } from "~/ui/forms/form-field-group";
+import { Input } from "~/ui/primitives/input";
+import { NativeSelect } from "~/ui/primitives/native-select";
 
 /** Small structured editors for finance evidence.  These deliberately expose
  * source-owned fields rather than a JSON textarea: array updates replace the

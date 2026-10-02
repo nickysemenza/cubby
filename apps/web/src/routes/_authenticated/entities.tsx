@@ -10,32 +10,32 @@ import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useMemo, useCallback } from "react";
 import { z } from "zod";
 
-import { EntityIntegrityTab } from "~/app/_components/entities/EntityIntegrityTab";
-import { EntityManifestGrid } from "~/app/_components/entities/EntityManifestGrid";
-import { EntityRecordsTab } from "~/app/_components/entities/EntityRecordsTab";
-import { CookbookSelect } from "~/app/_components/recipe/cookbook-select";
-import { EntityGraphPicker } from "~/app/_components/relationships/entity-graph-picker";
-import { EntityRelations } from "~/app/_components/relationships/entity-relations";
-import type { GraphFilters } from "~/app/_components/visualizations/dependency-graph-model";
 import {
   entityRecordsInputSchema,
   type EntityRecordsInput,
 } from "~/contracts/entity-records.schema";
+import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
+import { EntityRelations } from "~/entity/relationships/entity-relations";
+import { EntityIntegrityTab } from "~/features/entity-platform/EntityIntegrityTab";
+import { EntityManifestGrid } from "~/features/entity-platform/EntityManifestGrid";
+import { EntityRecordsTab } from "~/features/entity-platform/EntityRecordsTab";
+import { CookbookSelect } from "~/features/recipes/cookbook-select";
+import type { GraphFilters } from "~/ui/visualizations/dependency-graph-model";
 const RecipeDependencyGraph = lazy(() =>
-  import("~/app/_components/visualizations/recipe-dependency-graph").then(
-    (module) => ({ default: module.RecipeDependencyGraph }),
-  ),
+  import("~/ui/visualizations/recipe-dependency-graph").then((module) => ({
+    default: module.RecipeDependencyGraph,
+  })),
 );
 const WorkDependencyGraph = lazy(() =>
-  import("~/app/_components/visualizations/work-dependency-graph").then(
-    (module) => ({ default: module.WorkDependencyGraph }),
-  ),
+  import("~/ui/visualizations/work-dependency-graph").then((module) => ({
+    default: module.WorkDependencyGraph,
+  })),
 );
-import { Stack } from "~/components/layout";
-import { Page } from "~/components/page/Page";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { useTabParam } from "~/hooks/useTabParam";
 import { pageTitle } from "~/lib/page-title";
+import { useTabParam } from "~/ui/hooks/useTabParam";
+import { Stack } from "~/ui/layout";
+import { Page } from "~/ui/page/Page";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 const tabSchema = z.enum([
   "records",

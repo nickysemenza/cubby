@@ -5,18 +5,18 @@ import type {
 import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { useQuery } from "@tanstack/react-query";
 
-import { entityListFor } from "~/entities/entity-list";
-import { getEntityFilters } from "~/entities/filter-manifest";
+import { entityListFor } from "~/entity/entity-list";
+import { getEntityFilters } from "~/entity/filter-manifest";
 import {
   buildFiltersFromManifest,
   type FilterPatch,
   type FilterValue,
-} from "~/entities/filters";
+} from "~/entity/filters";
 import {
   entityListParamsFromParsed,
   parseEntityListInput,
-} from "~/entities/generated/entity-lists.gen";
-import { viewsForEntity } from "~/entities/view-manifest";
+} from "~/entity/generated/entity-lists.gen";
+import { viewsForEntity } from "~/entity/view-manifest";
 
 /**
  * The product filter patch a saved view selects, exactly as the list page would

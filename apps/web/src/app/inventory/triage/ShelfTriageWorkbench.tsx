@@ -25,26 +25,26 @@ import { z } from "zod";
 import {
   QueuePassProgress,
   QueuePassResumePrompt,
-} from "~/app/_components/queue-pass/QueuePassProgress";
+} from "~/features/queue-pass/QueuePassProgress";
 import {
   type QueuePassPersistence,
   useQueuePass,
-} from "~/app/_components/queue-pass/useQueuePass";
-import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button, buttonVariants } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Description } from "~/components/ui/description";
+} from "~/features/queue-pass/useQueuePass";
+import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { getErrorMessage } from "~/lib/error-utils";
+import { cn } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button, buttonVariants } from "~/ui/primitives/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
+import { Description } from "~/ui/primitives/description";
 import {
   Empty,
   EmptyActions,
   EmptyDescription,
   EmptyTitle,
-} from "~/components/ui/empty";
-import { Spinner } from "~/components/ui/spinner";
-import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
-import { cn } from "~/lib/utils";
+} from "~/ui/primitives/empty";
+import { Spinner } from "~/ui/primitives/spinner";
 
 import { runHref } from "../../purchases/purchase-import-links";
 import { useProductViewSnapshot } from "../worklist/useProductViewSnapshot";

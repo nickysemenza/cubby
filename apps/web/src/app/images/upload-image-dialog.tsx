@@ -5,10 +5,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { FileDropField } from "~/components/file-upload/FileDropField";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { FileDropField } from "~/ui/file-upload/FileDropField";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 import {
   Dialog,
   DialogContent,
@@ -17,15 +20,12 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "~/components/ui/dialog";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+} from "~/ui/primitives/dialog";
+import { Input } from "~/ui/primitives/input";
+import { Label } from "~/ui/primitives/label";
 
-import { PhotoGrid } from "../_components/photos/photo-grid";
-import { PhotoViewer } from "../_components/photos/photo-viewer";
+import { PhotoGrid } from "../../features/photos/photo-grid";
+import { PhotoViewer } from "../../features/photos/photo-viewer";
 import { type UploadedImage, useImageUpload } from "./use-image-upload";
 
 /**

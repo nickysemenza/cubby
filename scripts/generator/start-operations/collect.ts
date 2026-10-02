@@ -166,7 +166,7 @@ const CONTRACT_IMPORT_ALLOWLIST = [
   /^zod$/u,
   /^@cubby\//u,
   /^~\/contracts\//u,
-  /^~\/entities\/generated\//u,
+  /^~\/entity\/generated\//u,
   /^\.\/[^/]+$/u,
 ];
 

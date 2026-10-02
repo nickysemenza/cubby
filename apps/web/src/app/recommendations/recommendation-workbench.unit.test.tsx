@@ -2,7 +2,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import {
   entityMedia,
   recommendations,

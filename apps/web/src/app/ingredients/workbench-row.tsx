@@ -4,12 +4,12 @@ import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { useQuery } from "@tanstack/react-query";
 
-import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
-import { RecipeUsagesTable } from "~/app/_components/recipe/recipe-usages-table";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
+import { RecipeUsagesTable } from "~/features/recipes/recipe-usages-table";
 import { ingredient } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { UsdaFoodSearchField } from "~/ui/combobox/with-usda-food-search";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
 
 import { EnrichmentEditor } from "./enrichment-editor";
 import type { EquivalenceDraft } from "./equivalence-workbench-link";

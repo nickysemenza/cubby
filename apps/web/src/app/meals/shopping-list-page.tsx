@@ -5,17 +5,17 @@ import { useId } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 
-import { DatePickerInput } from "~/app/_components/date-picker-input";
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { useHydratedLoading } from "~/hooks/useHydrated";
 import { copyText } from "~/lib/clipboard";
 import { formatCalendarDay } from "~/lib/date-format";
 import { cn, formatCurrency } from "~/lib/utils";
+import { DatePickerInput } from "~/ui/date-picker-input";
+import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
+import { useHydratedLoading } from "~/ui/hooks/useHydrated";
+import { Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
+import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 
 import type { ShoppingListView } from "./meal-search";
 import { ShoppingCard } from "./shopping-card";

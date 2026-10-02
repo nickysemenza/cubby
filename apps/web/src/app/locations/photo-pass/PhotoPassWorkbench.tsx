@@ -33,33 +33,33 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
-import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
-import { useLocationPhotoCapture } from "~/app/_components/locations/use-location-photo-capture";
+import { entityDetailFor } from "~/entity/entity-detail";
+import { LocationScanButton } from "~/features/locations/location-scan-button";
+import { useLocationPhotoCapture } from "~/features/locations/use-location-photo-capture";
 import {
   QueuePassProgress,
   QueuePassResumePrompt,
-} from "~/app/_components/queue-pass/QueuePassProgress";
+} from "~/features/queue-pass/QueuePassProgress";
 import {
   type QueuePassPersistence,
   useQueuePass,
-} from "~/app/_components/queue-pass/useQueuePass";
-import { showErrorToast } from "~/components/feedback/error-details";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Card, CardContent } from "~/components/ui/card";
-import { Description } from "~/components/ui/description";
+} from "~/features/queue-pass/useQueuePass";
+import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { getErrorMessage } from "~/lib/error-utils";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
+import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { showErrorToast } from "~/ui/feedback/error-details";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Card, CardContent } from "~/ui/primitives/card";
+import { Description } from "~/ui/primitives/description";
 import {
   Empty,
   EmptyActions,
   EmptyDescription,
   EmptyTitle,
-} from "~/components/ui/empty";
-import { Spinner } from "~/components/ui/spinner";
-import { entityDetailFor } from "~/entities/entity-detail";
-import { location } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
+} from "~/ui/primitives/empty";
+import { Spinner } from "~/ui/primitives/spinner";
 
 import type { PhotoPassSearch } from "./photo-pass-search";
 import { flattenPhotoStops, type PhotoStop } from "./photo-pass-utils";

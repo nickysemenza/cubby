@@ -3,7 +3,7 @@ import type { EntityTimelineOut } from "@cubby/schemas/entity-timeline";
 import type {
   ParsedEntityTimelineInputByEntity,
   TimelineEntity,
-} from "~/entities/generated/entity-timelines.gen";
+} from "~/entity/generated/entity-timelines.gen";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 
 /**

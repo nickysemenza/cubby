@@ -4,13 +4,13 @@ import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
 
-import { EntityDisplayImagesProvider } from "~/app/_components/entity-media/entity-display-images";
 import { ProjectMarkById } from "~/app/projects/project-mark";
 import { getTradeColor } from "~/app/projects/trade-colors";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
+import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { getStatusChartColor } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 
 import { TASK_STATUS_LABELS } from "../task-options";
 import { cellTasks, DONE_COLUMN_CAP } from "./board-model";

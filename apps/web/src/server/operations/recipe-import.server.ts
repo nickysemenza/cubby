@@ -4,8 +4,10 @@ import {
   parseShortcodeFor,
   type RecipeId,
 } from "@cubby/schemas/identifiers";
+import { cookbookBundleMetadataSchema } from "@cubby/schemas/import-recipe";
 import type {
   attachCookbookRecipePhotoInput,
+  attachCookbookRecipePhotoOut,
   cookbookDiffInput,
   cookbookIdInput,
   gatewayForwardInput,
@@ -75,6 +77,7 @@ import {
   attachFileToEntity,
   deleteStoredObjects,
   importImageFromUrl as importStoredImageFromUrl,
+  validateStagedImageUpload,
 } from "~/server/services/image-storage.service";
 import {
   mutationEvents,
@@ -190,8 +193,34 @@ export const upsertCookbookWorkflow = bindWorkflow(
         cookbookRunInput(input.name),
       ),
     )
-    .commit("upserted", ({ context }, { input, actor }) =>
-      upsertCookbook(context.db, input, actor),
+    .call("coverImageId", async ({ context }, { input }) => {
+      if (!input.coverUploadId) return input.coverImageId;
+      const manifest = input.bundleManifest ?? input.rawJson.bundleManifest;
+      const asset =
+        manifest && input.rawJson.cover
+          ? cookbookBundleMetadataSchema
+              .parse({
+                manifest,
+                cookbook: input.rawJson,
+                report: input.report,
+              })
+              .manifest.images.find(
+                (image) => image.source_path === input.rawJson.cover?.path,
+              )
+          : undefined;
+      if (manifest && !asset)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Bundle has no matching cover evidence",
+        );
+      return validateStagedImageUpload(context.db, input.coverUploadId, {
+        contentType: input.rawJson.cover?.mime,
+        expectedBytes: asset?.bytes,
+        expectedSha256: asset?.sha256,
+      });
+    })
+    .commit("upserted", ({ context }, { input, actor, coverImageId }) =>
+      upsertCookbook(context.db, { ...input, coverImageId }, actor),
     )
     .effect("sideEffects", ({ context }, { upserted }) =>
       runMutationSideEffects(context.db, {
@@ -296,8 +325,14 @@ const attachCookbookRecipePhoto = bindWorkflow(
             return {
               entityKind: "recipe" as const,
               entityId: input.recipeId,
-              data: input.data,
+              ...("uploadId" in input
+                ? { uploadId: input.uploadId }
+                : { data: input.data }),
               contentType: source.mime,
+              expectedSha256:
+                "expectedSha256" in source ? source.expectedSha256 : undefined,
+              expectedBytes:
+                "expectedBytes" in source ? source.expectedBytes : undefined,
               filename,
               idempotencyKey: `epub-photo:${input.recipeId}:${pathDigest}`,
               expectedImageCount: 0,
@@ -309,18 +344,13 @@ const attachCookbookRecipePhoto = bindWorkflow(
                 context.db,
                 request,
               );
-              return attached.cleanupWarning
-                ? {
-                    status: attached.reused
-                      ? ("reused" as const)
-                      : ("attached" as const),
-                    cleanupWarning: attached.cleanupWarning,
-                  }
-                : {
-                    status: attached.reused
-                      ? ("reused" as const)
-                      : ("attached" as const),
-                  };
+              const result: z.output<typeof attachCookbookRecipePhotoOut> = {
+                status: attached.reused ? "reused" : "attached",
+              };
+              if (attached.cleanupWarning)
+                result.cleanupWarning = attached.cleanupWarning;
+              if ("uploadId" in request) result.photoUrl = attached.url;
+              return result;
             } catch (error) {
               const appError = appErrorFromUnknown(error);
               if (appError?.reason === "IMAGE_PRECONDITION_FAILED")

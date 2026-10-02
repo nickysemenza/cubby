@@ -59,9 +59,9 @@
         "src/lib/generated/http-resources.gen.ts!",
         // The `<entity>ListItem` exports name the OpenAPI components; the
         // generator reads them, nothing in the web app does.
-        "src/entities/generated/entity-lists.gen.ts!",
+        "src/entity/generated/entity-lists.gen.ts!",
         // Type-only port existence checks; nothing imports them by design.
-        "src/entities/generated/entity-port-checks.gen.ts!",
+        "src/entity/generated/entity-port-checks.gen.ts!",
         // Read only through `import()` types in the global worker-configuration.d.ts.
         "src/server/worker-bindings.ts!",
         // Opt-in `live-eval` vitest project (billed model evals).
@@ -186,7 +186,7 @@
     "**/dist/**",
     "**/.wrangler/**",
     "apps/apple/**",
-    "apps/web/src/components/ui/context-menu.tsx"
+    "apps/web/src/ui/primitives/context-menu.tsx"
   ],
   "ignoreDependencies": ["zod"],
   "ignoreBinaries": ["wasm-pack", "vitest"],

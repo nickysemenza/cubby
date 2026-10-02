@@ -1,10 +1,10 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { capitalize } from "@cubby/shared";
 
-import { EntityCover } from "~/components/entity/entity-cover";
-import { Badge } from "~/components/ui/badge";
+import { EntityCover } from "~/entity/components/entity-cover";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { cn, formatCurrency } from "~/lib/utils";
+import { Badge } from "~/ui/primitives/badge";
 
 import { calendarItemPresentation } from "./calendar-kind-registry";
 import { itemSpanLabel } from "./calendar-span";

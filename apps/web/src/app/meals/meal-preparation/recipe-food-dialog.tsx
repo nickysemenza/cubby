@@ -6,10 +6,10 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect, useEffectEvent, useRef } from "react";
 import { toast } from "sonner";
 
-import { showErrorToast } from "~/components/feedback/error-details";
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { meal as mealOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { showErrorToast } from "~/ui/feedback/error-details";
+import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
+import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import { useInvalidateMeals } from "../use-meal-mutations";
 import { PortionSheet } from "./portion-sheet";

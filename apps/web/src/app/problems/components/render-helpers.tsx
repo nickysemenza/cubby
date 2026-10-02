@@ -1,8 +1,8 @@
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import type { ReactNode } from "react";
 
-import { Row } from "~/components/layout";
 import { formatRelative } from "~/lib/date-format";
+import { Row } from "~/ui/layout";
 
 /** `by {manufacturer}` — the standard product-card subtitle. */
 export function byManufacturer(manufacturer: string): string {

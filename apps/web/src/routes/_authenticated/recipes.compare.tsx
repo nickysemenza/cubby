@@ -10,24 +10,24 @@ import { uniq } from "es-toolkit";
 import { useMemo } from "react";
 import { z } from "zod";
 
-import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
-import { useRecipeCostingData } from "~/app/_components/hooks/useRecipeCostingData";
+import { entityDetailFor } from "~/entity/entity-detail";
+import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
 import {
   type ComparedRecipe,
   RecipeCompareGrid,
-} from "~/app/_components/recipe/compare/RecipeCompareGrid";
+} from "~/features/recipes/compare/RecipeCompareGrid";
 import {
   getEffectiveServings,
   getIngredientName,
-} from "~/app/_components/recipe/recipe-utils";
-import { Page } from "~/components/page/Page";
-import { Button } from "~/components/ui/button";
-import { Card, CardContent } from "~/components/ui/card";
-import { entityDetailFor } from "~/entities/entity-detail";
-import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
+} from "~/features/recipes/recipe-utils";
 import { pageTitle } from "~/lib/page-title";
 import { computeRecipeCosting } from "~/lib/recipe-costing";
 import { urlStringParam } from "~/lib/search-params";
+import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { useRecipeCostingData } from "~/ui/hooks/useRecipeCostingData";
+import { Page } from "~/ui/page/Page";
+import { Button } from "~/ui/primitives/button";
+import { Card, CardContent } from "~/ui/primitives/card";
 
 const searchParamsSchema = z.object({
   ids: urlStringParam,

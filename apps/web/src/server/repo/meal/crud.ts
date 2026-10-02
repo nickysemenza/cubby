@@ -13,19 +13,15 @@ import type {
 } from "@cubby/schemas/meal";
 import { mealTypeValues } from "@cubby/schemas/meal-classification";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, gte, inArray, lte, or, type SQL, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, type SQL, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import {
-  meal,
-  mealRecipe,
-  mealRecipePortion,
-  recipe,
-} from "~/server/db/schema";
+import { meal, mealRecipe, mealRecipePortion } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
+import { gapCondition } from "~/server/repo/data-quality/sql";
 import {
   associatePendingImages,
   getDb,
@@ -208,33 +204,9 @@ const mealScaffold = listScaffold("meal", meal);
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildMealWhere = (
-  db: Database,
+  _db: Database,
   filters: MealFilters,
 ): SQL | undefined => {
-  const dbClient = getDb(db);
-  const mealsWithUnderstatedRecipeCost = dbClient
-    .select({ mealId: mealRecipe.mealId })
-    .from(mealRecipe)
-    .innerJoin(
-      recipe,
-      and(eq(recipe.id, mealRecipe.recipeId), notDeleted(recipe)),
-    )
-    .where(
-      and(
-        notDeleted(mealRecipe),
-        // Unavailable costs count only when the engine recorded contributors
-        // (`coverage.total`, 0 of N priced). Legacy rows lacking the key stay
-        // out until "Recompute all recipe totals" or repair-on-read rewrites them.
-        or(
-          sql`${recipe.totals} -> 'cost' ->> 'status' = 'partial'`,
-          and(
-            sql`${recipe.totals} -> 'cost' ->> 'status' = 'unavailable'`,
-            sql`COALESCE((${recipe.totals} #>> '{cost,coverage,total}')::int, 0) > 0`,
-          ),
-        ),
-      ),
-    );
-
   // `mealType` (OR-ed with its presence filter — "unslotted" is a value of the
   // same picker, so selecting it alongside `dinner` means "dinner or
   // unslotted") and `mealKind` are declared stored filters — applied by
@@ -246,7 +218,7 @@ export const buildMealWhere = (
     filters.from ? gte(meal.date, filters.from) : undefined,
     filters.to ? lte(meal.date, filters.to) : undefined,
     filters.recipeCostCoverage === "understated"
-      ? inArray(meal.id, mealsWithUnderstatedRecipeCost)
+      ? gapCondition("meal", "meal_recipe_cost_incomplete")
       : undefined,
   ]);
 };

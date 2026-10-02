@@ -578,7 +578,7 @@ export default defineEntity({
           { value: "1y", label: "Last 12 months" },
         ],
         expandRef: {
-          module: "~/entities/filter-behavior",
+          module: "~/entity/filter-behavior",
           export: "resolveVerifiedDate",
         },
       },
@@ -750,6 +750,16 @@ export default defineEntity({
     mcp: ["get", "list", "search", "create", "update", "delete"],
     dataQuality: {
       checks: [
+        {
+          id: "inventory_unknown_location",
+          facet: "integrity",
+          kind: "defect",
+          weight: 1,
+          scoring: "unscored",
+          exceptions: "forbidden",
+          label: "Unknown location",
+          message: "This entry is still parked in the global Unknown location.",
+        },
         {
           id: "inventory_verified",
           facet: "provenance",

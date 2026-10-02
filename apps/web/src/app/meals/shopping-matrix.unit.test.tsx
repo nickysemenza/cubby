@@ -10,8 +10,8 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { EMPTY_MARK } from "~/components/matrix/matrix-chrome";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { EMPTY_MARK } from "~/ui/matrix/matrix-chrome";
 
 import { ShoppingMatrix } from "./shopping-matrix";
 import { buildShoppingColumns, buildShoppingRows } from "./shopping-model";

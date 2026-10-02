@@ -3,19 +3,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
 import { AuthEntryFrame } from "~/app/auth/auth-entry-frame";
-import { Button } from "~/components/ui/button";
+import { authClient } from "~/lib/auth-client";
+import { getAppErrorDetails } from "~/lib/error-utils";
+import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
+import { pageTitle } from "~/lib/page-title";
+import { urlStringParam } from "~/lib/search-params";
+import { Button } from "~/ui/primitives/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "~/components/ui/card";
-import { authClient } from "~/lib/auth-client";
-import { getAppErrorDetails } from "~/lib/error-utils";
-import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
-import { pageTitle } from "~/lib/page-title";
-import { urlStringParam } from "~/lib/search-params";
+} from "~/ui/primitives/card";
 
 const nativeAuthSearch = z.object({
   state: urlStringParam,

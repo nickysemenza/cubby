@@ -1,3 +1,4 @@
+import { runChildren } from "../child-tables/run.js";
 import { z } from "zod";
 
 import {
@@ -33,12 +34,13 @@ export default defineEntity({
     // generic page reads the run through its own query.
     detailOverride: {
       query: {
-        module: "~/entities/run-queries",
+        module: "~/entity/run-queries",
         export: "runDetailQuery",
       },
     },
   },
   table: "Run",
+  children: runChildren,
   identifiers: { brand: "RunId", shortcode: "RUN-" },
   presentation: {
     titleField: "displayName",

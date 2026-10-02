@@ -1,4 +1,5 @@
 import {
+  dataCheckExemptible,
   type DataCheck,
   type DataQualityStatus,
   dataCheckEntity,
@@ -65,6 +66,7 @@ export const fingerprintSql = (
   t: ScoredTable = entryFor(entity).table,
 ): SQL => {
   const binding = bindingFor(entity, check);
+  if (!dataCheckExemptible[check]) return sql`NULL::text`;
   if (!binding.fingerprint)
     throw new Error(`${check} declares no fingerprint inputs.`);
   return sql`${check} || ':' || concat_ws('|', ${sql.join(
@@ -78,7 +80,7 @@ const activeExceptionSql = (
   check: DataCheck,
   t: ScoredTable,
 ): SQL | null => {
-  if (!hasExceptions(entity)) return null;
+  if (!hasExceptions(entity) || !dataCheckExemptible[check]) return null;
   return sql`EXISTS (
   SELECT 1 FROM "DataException" dq_exception
   WHERE dq_exception."entityId" = ${t.id}

@@ -206,6 +206,17 @@ const handler = {
           process.env.BETTER_AUTH_SECRET ??= env.BETTER_AUTH_SECRET;
           process.env.ALLOW_SIGNUP ??= env.ALLOW_SIGNUP;
           process.env.E2E_AUTH_TEST_MODE = env.E2E_AUTH_TEST_MODE;
+          if (env.E2E_GOOGLE_PROVIDER_URL)
+            process.env.E2E_GOOGLE_PROVIDER_URL = env.E2E_GOOGLE_PROVIDER_URL;
+          else delete process.env.E2E_GOOGLE_PROVIDER_URL;
+          if (
+            env.E2E_AUTH_TEST_MODE === "true" &&
+            env.E2E_GOOGLE_PROVIDER_URL
+          ) {
+            process.env.GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID;
+            if (env.GOOGLE_CLIENT_SECRET)
+              process.env.GOOGLE_CLIENT_SECRET = env.GOOGLE_CLIENT_SECRET;
+          }
 
           // Expose service bindings to server code (clients pick binding fetch
           // over public URLs when present).

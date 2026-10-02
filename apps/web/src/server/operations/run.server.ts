@@ -13,6 +13,7 @@ import {
   confirmMerchantVendorRule,
   listMerchantVendorRules,
 } from "~/server/purchase-import/hunts";
+import { commitPurchaseImport } from "~/server/purchase-import/import-orders";
 import {
   controlRun,
   loadRunDetail,
@@ -118,6 +119,20 @@ export const runHandlers = implementOperationDomain(runContract, {
   work: async (context, input) => {
     await memberParty(context);
     return loadRunDetail(context.db, input.runId);
+  },
+  commitPrepared: async (context, { runId, operationId, ...input }) => {
+    await memberParty(context);
+    return commitPurchaseImport(
+      context.db,
+      {
+        ...input,
+        _runExecution: {
+          runId: await resolveOrThrow(context.db, "run", runId),
+          operationId,
+        },
+      },
+      context.actorContext,
+    );
   },
   control: async (context, { runId, ...input }) => {
     await memberParty(context);

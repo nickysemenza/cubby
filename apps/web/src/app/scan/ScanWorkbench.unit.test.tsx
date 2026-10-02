@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type {
   PersistentScannerPort,
   PersistentScannerProps,
-} from "~/app/_components/inventory/persistent-scanner";
+} from "~/features/inventory/persistent-scanner";
 import type { ResolvedScanCode } from "~/lib/scan-code";
 
 import { ScanWorkbench } from "./ScanWorkbench";

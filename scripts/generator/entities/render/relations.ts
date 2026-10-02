@@ -187,7 +187,7 @@ export const renderRelationArtifacts = (
     {
       // Client-safe: the `entity.relation` operation contract imports it.
       relativePath:
-        "apps/web/src/entities/generated/entity-relation-lists.gen.ts",
+        "apps/web/src/entity/generated/entity-relation-lists.gen.ts",
       source:
         generatedHeader +
         'import { anyShortcodeSchema, shortcodeSchema } from "@cubby/schemas/identifiers";\n' +
@@ -232,7 +232,7 @@ export const renderRelationArtifacts = (
         generatedHeader +
         'import type { EntityKernelContext } from "~/server/entity-kernel/adapter";\n' +
         'import type { Database } from "~/server/db";\n' +
-        'import type { GeneratedEntityRelationListCommand, generatedEntityRelationListResultSchema } from "~/entities/generated/entity-relation-lists.gen";\n' +
+        'import type { GeneratedEntityRelationListCommand, generatedEntityRelationListResultSchema } from "~/entity/generated/entity-relation-lists.gen";\n' +
         'import type { GeneratedEntityRelationCommand } from "~/server/generated/entity-relation-contracts.gen";\n' +
         'import type { RelationPlan } from "~/server/repo/relation-preflight";\n' +
         'import type { z } from "zod";\n' +

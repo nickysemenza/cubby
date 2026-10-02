@@ -345,7 +345,7 @@ export default defineEntity({
     ports: {
       repository: null,
       references: {
-        label: { module: "~/entities/entities", export: "entityLabel" },
+        label: { module: "~/entity/entities", export: "entityLabel" },
         resolver: null,
       },
     },

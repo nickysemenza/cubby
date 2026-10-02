@@ -5,23 +5,23 @@ import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { ProductBulkAddToInventoryDialog } from "~/app/_components/products/product-bulk-add-to-inventory-dialog";
-import { ProductDiscardDialog } from "~/app/_components/products/product-discard-dialog";
-import { defaultStockAmount } from "~/app/_components/products/product-hero-presence";
-import { QueuePassPosition } from "~/app/_components/queue-pass/QueuePassProgress";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { showErrorToast } from "~/components/feedback/error-details";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Card, CardContent } from "~/components/ui/card";
-import { Description } from "~/components/ui/description";
-import { Image } from "~/components/ui/image";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { ProductBulkAddToInventoryDialog } from "~/features/products/product-bulk-add-to-inventory-dialog";
+import { ProductDiscardDialog } from "~/features/products/product-discard-dialog";
+import { defaultStockAmount } from "~/features/products/product-hero-presence";
+import { QueuePassPosition } from "~/features/queue-pass/QueuePassProgress";
 import {
   inventory,
   location,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
+import { showErrorToast } from "~/ui/feedback/error-details";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Card, CardContent } from "~/ui/primitives/card";
+import { Description } from "~/ui/primitives/description";
+import { Image } from "~/ui/primitives/image";
 
 import type { TriageProduct } from "./triage-types";
 

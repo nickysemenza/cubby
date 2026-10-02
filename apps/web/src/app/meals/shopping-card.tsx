@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
 
-import { Row, Stack } from "~/components/layout";
-import { Checkbox } from "~/components/ui/checkbox";
-import { entityDetailLink } from "~/entities/entities";
+import { entityDetailLink } from "~/entity/entities";
 import { cn } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { Checkbox } from "~/ui/primitives/checkbox";
 
 import { formatAmount, needText, shortClass, shortText } from "./meal-format";
 import type { ShoppingRow } from "./shopping-model";

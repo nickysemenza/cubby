@@ -6,7 +6,7 @@ import {
   SHORTCODE_TYPES,
 } from "@cubby/shared";
 
-import { generatedBrowserRoutes } from "~/entities/generated/entity-routes.gen";
+import { generatedBrowserRoutes } from "~/entity/generated/entity-routes.gen";
 
 /**
  * Apple's team/bundle pair for universal links and shared web credentials. Kept as one named

@@ -7,16 +7,16 @@ import pluralize from "pluralize";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
-import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
-import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Description } from "~/components/ui/description";
-import { Input } from "~/components/ui/input";
+import { LocationScanButton } from "~/features/locations/location-scan-button";
+import { LocationTreeRow } from "~/features/locations/location-tree-row";
 import { formatRelative } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
+import { Description } from "~/ui/primitives/description";
+import { Input } from "~/ui/primitives/input";
 
 import {
   RECOUNT_WORKLISTS,

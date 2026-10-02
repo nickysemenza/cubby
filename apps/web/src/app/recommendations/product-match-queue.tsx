@@ -11,21 +11,21 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { EntityIcon } from "~/entity/entities";
 import {
   type EntityDisplayImagesQueryOptions,
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
-} from "~/app/_components/entity-media/entity-display-images";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
-import { ProductVariantEvidence } from "~/app/_components/product-variant-evidence";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Image } from "~/components/ui/image";
-import { EntityIcon } from "~/entities/entities";
+} from "~/entity/entity-media/entity-display-images";
+import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
+import { ProductVariantEvidence } from "~/features/products/product-variant-evidence";
 import type { recommendations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Image } from "~/ui/primitives/image";
 
 export interface ProductMatchQueueOperations {
   readonly productMatches: typeof recommendations.productMatches;

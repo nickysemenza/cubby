@@ -4,7 +4,7 @@ import {
   entityTimelineModes,
   type ParsedEntityTimelineInputByEntity,
   type TimelineEntity,
-} from "~/entities/generated/entity-timelines.gen";
+} from "~/entity/generated/entity-timelines.gen";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { ENTITY_TIMELINE_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 

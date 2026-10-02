@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
 import { financialTransactionAllocation } from "~/server/db/schema";
+import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
 import { listFinancialTransactions } from "~/server/repo/financial-transaction";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -123,6 +124,12 @@ describe("findFinancialTransactionAllocationDefects", () => {
     );
     expect(rest).toEqual([]);
     expect(defect?.reasons).toContain("sum-mismatch");
+    const quality = await loadDataQualities(ctx.db, "financialTransaction", [
+      txn.id,
+    ]);
+    expect(quality.get(txn.id)?.gaps.map((gap) => gap.check)).toContain(
+      "financial_transaction_allocation_integrity",
+    );
     expect(defect?.allocationCount).toBe(2);
     expect(defect?.allocatedTotal).toBeCloseTo(-15.96, 2);
     expect(defect?.purchaseIds).toHaveLength(2);

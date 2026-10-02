@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
-import { entityDetailFor } from "~/entities/entity-detail";
+import { entityDetailFor } from "~/entity/entity-detail";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   calendar,

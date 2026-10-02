@@ -14,6 +14,14 @@ const complete = (
 });
 
 describe("formatEstimate", () => {
+  it("identifies inferred zero coverage without relabeling a measured zero", () => {
+    expect(
+      formatEstimate(
+        { ...complete(0), coverage: { covered: 1, total: 1, inferredZero: 1 } },
+        String,
+      ),
+    ).toBe("0 · includes inferred zero");
+  });
   it("keeps a partial known subtotal explicit, including ranges", () => {
     expect(
       formatEstimate(

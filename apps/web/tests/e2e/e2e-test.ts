@@ -10,15 +10,16 @@ import {
 } from "./e2e-worker-runtime";
 
 type TestFixtures = { e2eFailureDiagnostics: void };
-type WorkerFixtures = { e2eRuntime: E2EWorkerRuntime };
+type WorkerFixtures = { e2eRuntime: E2EWorkerRuntime; gmailJourney: boolean };
 
 const test = base.extend<TestFixtures, WorkerFixtures>({
+  gmailJourney: [false, { scope: "worker", option: true }],
   e2eRuntime: [
-    // oxlint-disable-next-line no-empty-pattern -- Playwright requires object destructuring to declare fixture dependencies.
-    async ({}, provide, workerInfo) => {
+    async ({ gmailJourney }, provide, workerInfo) => {
       const runtime = await createE2EWorkerRuntime({
         authenticated: workerInfo.project.metadata.authenticated === true,
         parallelIndex: workerInfo.parallelIndex,
+        gmailJourney,
       });
       try {
         await provide(runtime);

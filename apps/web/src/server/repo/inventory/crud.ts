@@ -24,7 +24,7 @@ import {
 } from "@cubby/schemas/pagination";
 import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
 
-import { projectListRows } from "~/entities/list-read-schema";
+import { projectListRows } from "~/entity/list-read-schema";
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { inventoryEntry, location, product } from "~/server/db/schema";
@@ -34,6 +34,7 @@ import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   dataQualityFilterPredicates,
   dataQualitySortResolver,
+  gapCondition,
 } from "~/server/repo/data-quality/sql";
 import {
   amountFromColumns,
@@ -55,7 +56,6 @@ import {
   wantsListGroup,
   type ListProjection,
 } from "~/server/repo/list-projection";
-import { isGlobalUnknownLocation } from "~/server/repo/location/crud";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import {
   effectiveProductPriceSql,
@@ -336,7 +336,7 @@ export const buildInventoryWhere = async (
         ? undefined
         : sql`${product.categoryId} IN ${categoryDescendantsSql(categoryIds)}`,
       filters.locationRole === "global_unknown"
-        ? isGlobalUnknownLocation()
+        ? gapCondition("inventory", "inventory_unknown_location")
         : undefined,
       filters.verifiedPresenceFilter === "has"
         ? sql`${inventoryEntry.verifiedAt} IS NOT NULL`

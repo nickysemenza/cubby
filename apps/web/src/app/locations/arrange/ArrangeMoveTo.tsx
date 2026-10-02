@@ -4,13 +4,13 @@ import { FolderSimplePlusIcon } from "@phosphor-icons/react/dist/csr/FolderSimpl
 import { useState } from "react";
 import { match } from "ts-pattern";
 
-import { LocationMoveDialog } from "~/app/_components/locations/location-move-dialog";
-import { Button } from "~/components/ui/button";
+import { LocationMoveDialog } from "~/features/locations/location-move-dialog";
+import { Button } from "~/ui/primitives/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "~/components/ui/tooltip";
+} from "~/ui/primitives/tooltip";
 
 import { isValidItemDrop, isValidLocationDrop } from "./arrange-tree-utils";
 import type { ItemDragData } from "./arrange-types";

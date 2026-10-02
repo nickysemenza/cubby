@@ -1,13 +1,13 @@
 import type { ListSlotId } from "@cubby/schemas/entity-manifest";
 import { Suspense } from "react";
 
-import type { ListSlotComponent } from "~/app/_components/entity-list/list-slot-types";
-import LocationTreeView from "~/app/_components/inventory/location-tree-view";
-import { LocationGallery } from "~/app/_components/locations/location-gallery";
-import { HierarchyView } from "~/app/_components/visualizations/hierarchy-view";
-import { VisualizationPanel } from "~/app/_components/visualizations/visualization-panel";
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { Stack } from "~/components/layout";
+import type { ListSlotComponent } from "~/entity/entity-list/list-slot-types";
+import LocationTreeView from "~/features/inventory/location-tree-view";
+import { LocationGallery } from "~/features/locations/location-gallery";
+import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
+import { Stack } from "~/ui/layout";
+import { HierarchyView } from "~/ui/visualizations/hierarchy-view";
+import { VisualizationPanel } from "~/ui/visualizations/visualization-panel";
 
 const LocationGallerySlot: ListSlotComponent = () => (
   <Suspense fallback={<SimpleLoading text="Loading gallery..." />}>

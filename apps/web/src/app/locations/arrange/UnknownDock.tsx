@@ -1,9 +1,9 @@
 import type { InfLocation } from "@cubby/schemas/location";
 import { QuestionIcon } from "@phosphor-icons/react/dist/csr/Question";
 
-import { Row, Stack } from "~/components/layout";
-import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { Description } from "~/ui/primitives/description";
 
 import { ArrangeItemChip } from "./ArrangeItemChip";
 import { ArrangeLocationRow } from "./ArrangeLocationRow";

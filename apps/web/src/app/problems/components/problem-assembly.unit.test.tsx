@@ -1,8 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import type { ProblemQuery } from "~/entities/problem-query";
-import { problemQuery } from "~/entities/problem-registry";
+import { defineProblem } from "~/entity/problem-query";
+import { problemQuery } from "~/entity/problem-registry";
 
 import { ProblemAssembly, problemListLocation } from "./problem-assembly";
 
@@ -22,7 +22,7 @@ describe("problemListLocation", () => {
   });
 
   it("does not create a fake list continuation for derived results", () => {
-    const derived: ProblemQuery = {
+    const derived = defineProblem({
       key: "duplicateProductIdentities",
       problemClass: "defect",
       executionLane: "fast",
@@ -42,7 +42,7 @@ describe("problemListLocation", () => {
         grain: "group" as const,
         operations: [{ label: "Group" }],
       },
-    };
+    });
     expect(problemListLocation(derived)).toBeUndefined();
   });
 

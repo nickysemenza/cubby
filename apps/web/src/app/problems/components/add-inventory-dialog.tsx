@@ -1,9 +1,9 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 
-import { QuickInventoryAdd } from "~/app/_components/inventory/quick-inventory-add";
-import { Row } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
+import { QuickInventoryAdd } from "~/features/inventory/quick-inventory-add";
+import { Row } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 interface AddInventoryDialogProps {
   open: boolean;

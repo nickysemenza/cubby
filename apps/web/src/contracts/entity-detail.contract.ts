@@ -6,7 +6,7 @@ import {
   type DetailEntity,
   type EntityDetailByEntity,
   type EntityDetailInputByEntity,
-} from "~/entities/generated/entity-details.gen";
+} from "~/entity/generated/entity-details.gen";
 
 export const entityDetailContract = defineContract("entity", {
   detail: query({

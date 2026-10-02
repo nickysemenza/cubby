@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
+import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 import {
   Table,
   TableBody,
@@ -11,8 +12,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "~/components/ui/table";
-import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
+} from "~/ui/primitives/table";
 
 const STATES = [
   ["current", "Current"],

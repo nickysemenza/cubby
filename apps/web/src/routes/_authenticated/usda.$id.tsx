@@ -1,14 +1,14 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 
-import { USDAFoodDetail } from "~/app/_components/usda/USDAFoodDetail";
-import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { Page } from "~/components/page/Page";
-import { DetailPagePending } from "~/components/route-pending";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { USDAFoodDetail } from "~/features/usda/USDAFoodDetail";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
+import { useDocumentTitle } from "~/ui/hooks/useDocumentTitle";
+import { RouteErrorComponent } from "~/ui/lazy-route-error";
+import { Page } from "~/ui/page/Page";
+import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
+import { DetailPagePending } from "~/ui/route-pending";
 
 export const Route = createFileRoute("/_authenticated/usda/$id")({
   // Client-only for latency: this is the one de-flagged route whose loader

@@ -2,7 +2,7 @@ import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import { groupBy } from "es-toolkit";
 import { useEffect, useState } from "react";
 
-import { Stack } from "~/components/layout";
+import { Stack } from "~/ui/layout";
 
 import { docSections } from "./docs-registry";
 

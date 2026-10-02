@@ -3,14 +3,14 @@ import type { ListSlotId } from "@cubby/schemas/entity-manifest";
 import type {
   ListSlotComponent,
   ListSlotProps,
-} from "~/app/_components/entity-list/list-slot-types";
-import { Stack } from "~/components/layout";
-import { getEntityFilters } from "~/entities/filter-manifest";
+} from "~/entity/entity-list/list-slot-types";
+import { getEntityFilters } from "~/entity/filter-manifest";
 import {
   buildFiltersFromManifest,
   filterGetterFromSearch,
   type FilterSearch,
-} from "~/entities/filters";
+} from "~/entity/filters";
+import { Stack } from "~/ui/layout";
 
 import { TasksBoardView } from "./board/TasksBoardView";
 import { NextTasks } from "./next-tasks";

@@ -11,10 +11,10 @@ import {
   startOfWeek,
 } from "date-fns";
 
-import type { CalendarPeriod } from "~/components/reui/event-calendar/event-calendar-types";
 import { formatCalendarDay } from "~/lib/date-format";
 import { HOUSEHOLD_TIMEZONE } from "~/lib/household-date";
 import { parsePlainDate } from "~/lib/plain-date";
+import type { CalendarPeriod } from "~/ui/reui/event-calendar/event-calendar-types";
 
 export type CalendarViewPeriod = CalendarPeriod | "schedule";
 

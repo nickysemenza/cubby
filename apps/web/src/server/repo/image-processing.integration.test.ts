@@ -1,6 +1,8 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
+  IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
+  IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-processing";
 import { and, eq, sql } from "drizzle-orm";
@@ -310,8 +312,8 @@ describe("durable image representations", () => {
       imageId,
       provider,
       model: IMAGE_DESCRIPTION_FEATURE.model,
-      promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
-      resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+      promptRevision: IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
+      resultSchemaRevision: IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
       inputFingerprint,
       result: {
         description: "A dark woven garment",
@@ -369,8 +371,8 @@ describe("durable image representations", () => {
           feature: IMAGE_DESCRIPTION_FEATURE.feature,
           provider: "evaluation",
           model: `evaluation-${index}`,
-          promptVersion: String(IMAGE_DESCRIPTION_PROMPT_REVISION),
-          resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+          promptVersion: String(IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION),
+          resultSchemaRevision: IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
           inputFingerprint: `evaluation-${index}`,
           result: { ...analysis.result, description: `Evaluation ${index}` },
         })),

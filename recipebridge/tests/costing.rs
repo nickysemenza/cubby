@@ -36,6 +36,7 @@ fn mapping(a: (f64, &str), b: (f64, &str)) -> WUnitMapping {
 /// the TS tests' nutrient edges are stored mappings too).
 fn ingredient(id: &str, mappings: Vec<WUnitMapping>) -> WCostingIngredient {
     WCostingIngredient {
+        nutrient_opt_out_codes: vec![],
         id: id.to_string(),
         products: vec![WProductInput {
             id: format!("prod-{id}"),
@@ -53,6 +54,7 @@ fn ingredient(id: &str, mappings: Vec<WUnitMapping>) -> WCostingIngredient {
 /// exactly why the route below went unexercised.
 fn priced_ingredient(id: &str, price: f64, mappings: Vec<WUnitMapping>) -> WCostingIngredient {
     WCostingIngredient {
+        nutrient_opt_out_codes: vec![],
         id: id.to_string(),
         products: vec![WProductInput {
             id: format!("prod-{id}"),
@@ -66,6 +68,7 @@ fn priced_ingredient(id: &str, price: f64, mappings: Vec<WUnitMapping>) -> WCost
 /// An ingredient with no product at all (forces missing price/weight/nutrients).
 fn empty_ingredient(id: &str) -> WCostingIngredient {
     WCostingIngredient {
+        nutrient_opt_out_codes: vec![],
         id: id.to_string(),
         products: vec![],
     }
@@ -845,6 +848,7 @@ fn scalar_priced_product_still_costs_whole_packages_exactly() {
 #[test]
 fn stored_money_edge_wins_when_cheaper_than_the_scalar_price() {
     let olive_oil = WCostingIngredient {
+        nutrient_opt_out_codes: vec![],
         id: "olive-oil".to_string(),
         products: vec![
             // 750 ml bottle @ $15.29 → $0.0204/ml
@@ -884,6 +888,7 @@ fn scalar_price_wins_when_cheaper_than_the_stored_money_edge() {
     // One product, both routes: $1/bag of 1000 g, and a stored edge at ten times
     // that. The bag works out to $0.10 for 100 g, the edge to $1.00.
     let both = WCostingIngredient {
+        nutrient_opt_out_codes: vec![],
         id: "both".to_string(),
         products: vec![WProductInput {
             id: "prod-both".to_string(),
@@ -917,6 +922,7 @@ fn packaged(id: &str, price: Option<f64>, mappings: Vec<WUnitMapping>) -> WProdu
 
 fn multi_product(id: &str, products: Vec<WProductInput>) -> WCostingIngredient {
     WCostingIngredient {
+        nutrient_opt_out_codes: vec![],
         id: id.to_string(),
         products,
     }

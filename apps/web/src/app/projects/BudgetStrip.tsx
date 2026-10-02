@@ -1,6 +1,6 @@
-import { Row, Stack } from "~/components/layout";
 import { budgetRemaining, type SpendSplit } from "~/lib/spend";
 import { cn, formatCurrency } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
 
 /**
  * Reconciles the four money quantities a single "Spent" figure hides — estimate,

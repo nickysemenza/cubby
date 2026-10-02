@@ -5,6 +5,12 @@ import {
   retryImageProcessingOutput,
 } from "@cubby/schemas/activity";
 import {
+  pullCompanionImageProcessingInput,
+  pullCompanionImageProcessingOutput,
+  completeCompanionImageProcessingInput,
+  completeCompanionImageProcessingOutput,
+  releaseCompanionImageProcessingInput,
+  releaseCompanionImageProcessingOutput,
   imageDescriptionCorrectionInput,
   imageDescriptionCorrectionOutput,
   evaluateAppleImageDescriptionInput,
@@ -25,6 +31,22 @@ import { defineContract, mutation, query } from "~/contracts/define";
  * the same durable job state to every supported client.
  */
 export const imageProcessingContract = defineContract("imageProcessing", {
+  pull: mutation({
+    native: "Pull leased companion work in a background window",
+    input: pullCompanionImageProcessingInput,
+    output: pullCompanionImageProcessingOutput,
+  }),
+  complete: mutation({
+    native: "Finish leased companion work",
+    input: completeCompanionImageProcessingInput,
+    output: completeCompanionImageProcessingOutput,
+    invalidates: ["image", "product"],
+  }),
+  release: mutation({
+    native: "Release interrupted companion work",
+    input: releaseCompanionImageProcessingInput,
+    output: releaseCompanionImageProcessingOutput,
+  }),
   analyses: query({
     native: "Image analysis history",
     input: imageAnalysisHistoryInput,

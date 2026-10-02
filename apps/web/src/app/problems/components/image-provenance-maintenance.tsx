@@ -2,10 +2,10 @@ import type { ClassifyImageProvenanceOut } from "@cubby/schemas/maintenance";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
 import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { countLabel } from "~/lib/pluralize";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 
 const STOPPED_LABEL = {
   complete: "no more candidates",

@@ -16,27 +16,27 @@ import { useNavigate } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 import { useRef, useState } from "react";
 
-import { FieldSuggestionApply } from "~/app/_components/ai/field-suggestion-apply";
-import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { StaticPicker } from "~/app/_components/combobox/static-picker";
-import { useEntityListSource } from "~/app/_components/combobox/with-search-hook";
 import { tradeOptions } from "~/app/projects/trade-options";
-import { WorkflowDialog } from "~/components/dialogs/workflow-dialog";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
-import { Description } from "~/components/ui/description";
-import { Eyebrow } from "~/components/ui/eyebrow";
-import { Input } from "~/components/ui/input";
-import { NoneValue } from "~/components/ui/none-value";
-import { StatusText } from "~/components/ui/status-text";
-import { entityDetailLink } from "~/entities/entities";
-import { fieldEnumOptions } from "~/entities/enum-field-display";
+import { entityDetailLink } from "~/entity/entities";
+import { fieldEnumOptions } from "~/entity/enum-field-display";
+import { FieldSuggestionApply } from "~/features/ai/field-suggestion-apply";
 import { purchase } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
+import { EntityPicker } from "~/ui/combobox/entity-picker";
+import { StaticPicker } from "~/ui/combobox/static-picker";
+import { useEntityListSource } from "~/ui/combobox/with-search-hook";
+import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { Description } from "~/ui/primitives/description";
+import { Eyebrow } from "~/ui/primitives/eyebrow";
+import { Input } from "~/ui/primitives/input";
+import { NoneValue } from "~/ui/primitives/none-value";
+import { StatusText } from "~/ui/primitives/status-text";
 
-import { useActionMutation } from "../_components/hooks/useActionMutation";
+import { useActionMutation } from "../../ui/hooks/useActionMutation";
 
 /**
  * One part being drafted. `cost` stays a string so a half-typed or cleared

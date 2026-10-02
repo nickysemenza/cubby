@@ -316,9 +316,9 @@ export const LOCATION_DESCRIPTION_FEATURE = defineFeature({
 export const IMAGE_DESCRIPTION_FEATURE = defineFeature({
   feature: "image-description",
   tier: "visionBatch",
-  maxTokens: 1_500,
+  maxTokens: 2_500,
   cache: true,
-  promptVersion: "1",
+  promptVersion: "2",
   schema: imageDescriptionResult,
   analysisSchema: imageDescriptionResult,
 }) satisfies AiStructuredFeature<ImageDescriptionResult> &

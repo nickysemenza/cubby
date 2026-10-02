@@ -153,14 +153,14 @@ export const renderSearchArtifacts = (
     .join("\n");
   return [
     {
-      relativePath: "apps/web/src/entities/generated/entity-search.gen.ts",
+      relativePath: "apps/web/src/entity/generated/entity-search.gen.ts",
       source:
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n' +
         `${imports}\n` +
         'import { z } from "zod";\n\n' +
-        'import { tableSearchFields } from "~/app/_components/data-table/table-search";\n' +
-        'import { FILTER_ANY, FILTER_NONE } from "~/entities/filters";\n' +
+        'import { tableSearchFields } from "~/ui/data-table/table-search";\n' +
+        'import { FILTER_ANY, FILTER_NONE } from "~/entity/filters";\n' +
         'import { urlEnumListParam, urlPlainDateParam, urlShortcodeListParam, urlShortcodeParam, urlStringParam } from "~/lib/search-params";\n\n' +
         renderRecord({
           name: "entityFilterUrlKeyRoster",

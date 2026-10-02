@@ -4,8 +4,8 @@ import {
   type RunId,
 } from "@cubby/schemas/identifiers";
 import {
-  IMAGE_DESCRIPTION_PROMPT_REVISION,
-  IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+  IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
+  IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
   type ImageDescriptionResult,
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
@@ -14,6 +14,7 @@ import {
   readResponseWithLimit,
   MAX_EXTERNAL_IMAGE_BYTES,
 } from "@cubby/shared/external-fetch";
+import { TIER1_NUTRIENTS } from "@cubby/usda";
 import type { ImagePart } from "@tanstack/ai";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
@@ -75,6 +76,8 @@ export function imageDescriptionInputFingerprint(input: {
   model: string;
   provider: string;
   renditionHash?: string;
+  promptRevision?: number;
+  resultSchemaRevision?: number;
 }): string {
   return JSON.stringify({
     renditionHash: input.renditionHash,
@@ -83,8 +86,11 @@ export function imageDescriptionInputFingerprint(input: {
     contentType: input.contentType,
     provider: input.provider,
     model: input.model,
-    promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
-    resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+    promptRevision:
+      input.promptRevision ?? IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
+    resultSchemaRevision:
+      input.resultSchemaRevision ??
+      IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
     normalizationRevision: IMAGE_ANALYSIS_NORMALIZATION_REVISION,
   });
 }
@@ -96,7 +102,7 @@ export function descriptionRequest(imageUrl: string) {
   };
   return {
     systemPrompts: [
-      "Describe this one image accurately for a household catalog. Return only what visual evidence supports. Claims must distinguish visible labels/OCR from visual inference. Never infer material composition from appearance. Mark cutout eligibility eligible only for one clearly isolated object; labels, documents, people, room scenes, and ambiguous groups are ineligible or review.",
+      "Describe this one image accurately for a household catalog. Return only what visual evidence supports. Claims must distinguish visible labels/OCR from visual inference. Never infer material composition from appearance. When a Nutrition Facts panel is legible, return nutritionFacts with its printed serving grams and per-serving nutrient amounts in the declared units (kcal for energy, g for macronutrients, mg or micrograms as declared for micronutrients). Use only numeric amounts printed on this panel; do not use percent daily values as amounts. Preserve omitted nutrients as unknown. An exception is a printed footnote explicitly naming a nutrient as not a significant source: include only those named nutrients in inferredZeroNutrients, quote the exact printed footnote verbatim in inferenceEvidence and in an OCR or label claim, and leave their numeric amounts absent. Never infer zero from an otherwise sparse panel, an omitted nutrient, USDA data, or appearance. If there is no such explicit footnote, leave inferredZeroNutrients empty and inferenceEvidence null. If the panel or serving grams are unreadable, return nutritionFacts null. Mark cutout eligibility eligible only for one clearly isolated object; labels, documents, people, room scenes, and ambiguous groups are ineligible or review.",
     ],
     messages: [
       {
@@ -144,8 +150,8 @@ export async function describeOriginalImage(
     fingerprint,
     provider,
     model: IMAGE_DESCRIPTION_FEATURE.model,
-    promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
-    schemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+    promptRevision: IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
+    schemaRevision: IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
     normalizationRevision: IMAGE_ANALYSIS_NORMALIZATION_REVISION,
     request: descriptionRequest(
       imageAnalysisRenditionUrl(getR2PublicUrl(source.key)),
@@ -179,8 +185,8 @@ export async function describeOriginalImage(
     imageId: source.id,
     provider,
     model: IMAGE_DESCRIPTION_FEATURE.model,
-    promptVersion: String(IMAGE_DESCRIPTION_PROMPT_REVISION),
-    resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+    promptVersion: String(IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION),
+    resultSchemaRevision: IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
     inputFingerprint: fingerprint,
   });
   await recordImageDescriptionInput(db, {
@@ -190,8 +196,8 @@ export async function describeOriginalImage(
     fingerprint,
     provider,
     model: IMAGE_DESCRIPTION_FEATURE.model,
-    promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
-    schemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+    promptRevision: IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
+    schemaRevision: IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
     normalizationRevision: IMAGE_ANALYSIS_NORMALIZATION_REVISION,
     request: descriptionRequest(analysisUrl),
     cached: Boolean(exactCached),
@@ -216,14 +222,51 @@ export async function describeOriginalImage(
       entity: { entityKind: "image", entityId: source.id },
     },
   );
-  const result = imageDescriptionResult.parse({
-    ...raw,
-    claims: raw.claims.map((claim) => ({
-      ...claim,
-      // Claims are evidence about this source image only. Do not accept a
-      // model-supplied reference to another household image.
-      imageId: parseShortcodeFor("image", source.shortcode),
-    })),
-  });
+  const result = normalizeImageDescriptionResult(raw, source.shortcode);
   return { result, cached: false, fingerprint };
+}
+
+/** Proposed zeros require a quoted, explicitly named label footnote before human review. */
+export function normalizeImageDescriptionResult(
+  raw: unknown,
+  sourceShortcode: string,
+): ImageDescriptionResult {
+  const parsed = imageDescriptionResult.parse(raw);
+  const evidence = parsed.nutritionFacts?.inferenceEvidence ?? null;
+  const quoted =
+    evidence &&
+    parsed.claims.some(
+      (claim) =>
+        claim.evidenceKind !== "visual" && claim.text.includes(evidence),
+    );
+  const footnoteClauses = quoted
+    ? [
+        ...evidence.matchAll(
+          /\bnot\s+(?:a\s+)?significant\s+source\s+of\s+([^.!?;\r\n]+)/gi,
+        ),
+      ].map((match) => match[1] ?? "")
+    : [];
+  const inferredZeroNutrients = footnoteClauses.length
+    ? (parsed.nutritionFacts?.inferredZeroNutrients ?? []).filter((key) => {
+        const name = TIER1_NUTRIENTS[key].displayName.toLowerCase();
+        const named = name.endsWith("s") ? `${name.slice(0, -1)}s?` : name;
+        return footnoteClauses.some((clause) =>
+          new RegExp(`\\b${named}\\b`, "i").test(clause),
+        );
+      })
+    : [];
+  return imageDescriptionResult.parse({
+    ...parsed,
+    claims: parsed.claims.map((claim) => ({
+      ...claim,
+      imageId: parseShortcodeFor("image", sourceShortcode),
+    })),
+    nutritionFacts: parsed.nutritionFacts
+      ? {
+          ...parsed.nutritionFacts,
+          inferredZeroNutrients,
+          inferenceEvidence: inferredZeroNutrients.length ? evidence : null,
+        }
+      : null,
+  });
 }

@@ -1,6 +1,7 @@
 import { imageRepresentations } from "./image-summary";
 import { imageShortcode } from "./identifier-fields";
 import { z } from "zod";
+import { productLabelNutrition } from "./nutrition";
 
 /**
  * A derivative belongs to an Image; it is never another gallery attachment.
@@ -52,6 +53,17 @@ export type ImageDescriptionClaim = z.infer<typeof imageDescriptionClaim>;
 export const imageDescriptionResult = z.object({
   description: z.string().trim().min(1).max(4_000),
   cutoutEligibility: imageCutoutEligibility,
+  /** Printed Nutrition Facts only; absent on legacy/on-device descriptions. */
+  nutritionFacts: z
+    .object(productLabelNutrition.shape)
+    .omit({ source: true })
+    .refine(
+      (value) =>
+        productLabelNutrition.safeParse({ ...value, source: null }).success,
+      "Invalid printed nutrition facts",
+    )
+    .nullable()
+    .optional(),
   claims: z.array(imageDescriptionClaim).max(40),
 });
 export type ImageDescriptionResult = z.infer<typeof imageDescriptionResult>;
@@ -59,6 +71,10 @@ export type ImageDescriptionResult = z.infer<typeof imageDescriptionResult>;
 export const IMAGE_DESCRIPTION_PROMPT_REVISION = 1;
 export const IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION = 1;
 export const IMAGE_PROCESSING_PROTOCOL_VERSION = 1;
+
+// Cloud extraction evolves independently of the installed companion command protocol.
+export const IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION = 2;
+export const IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION = 2;
 
 const isoDateTime = z.iso.datetime({ offset: true });
 const positiveInt = z.int().positive();
@@ -298,4 +314,29 @@ export const imageDescriptionCorrectionInput = z.object({
 });
 export const imageDescriptionCorrectionOutput = z.object({
   saved: z.literal(true),
+});
+
+/** A finite background window pulls the same capabilities as a socket hello. */
+export const pullCompanionImageProcessingInput = z.object({
+  hello: imageProcessingHello,
+  leaseSeconds: z.int().min(20).max(120).default(90),
+});
+export const pullCompanionImageProcessingOutput = z.object({
+  command: imageProcessingCommand.nullable(),
+  remotePaused: z.boolean(),
+});
+export const completeCompanionImageProcessingInput = z.object({
+  deviceId: z.uuid(),
+  result: imageProcessingResult,
+});
+export const completeCompanionImageProcessingOutput = z.object({
+  adopted: z.boolean(),
+});
+export const releaseCompanionImageProcessingInput = z.object({
+  deviceId: z.uuid(),
+  jobId: z.uuid(),
+  attemptId: z.uuid(),
+});
+export const releaseCompanionImageProcessingOutput = z.object({
+  released: z.boolean(),
 });

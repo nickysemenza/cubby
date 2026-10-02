@@ -8,15 +8,15 @@ import {
 import { lazy, Suspense } from "react";
 import { z } from "zod";
 
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { Stack } from "~/components/layout";
-import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { Page } from "~/components/page/Page";
-import { RoutePending } from "~/components/route-pending";
-import { Button } from "~/components/ui/button";
 import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
+import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
+import { Stack } from "~/ui/layout";
+import { RouteErrorComponent } from "~/ui/lazy-route-error";
+import { Page } from "~/ui/page/Page";
+import { Button } from "~/ui/primitives/button";
+import { RoutePending } from "~/ui/route-pending";
 
 // The overview pulls in all five independently loaded Problems lanes plus the
 // declarative assembly UI. It is only useful on this dedicated route, so keep

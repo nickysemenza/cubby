@@ -10,8 +10,11 @@ import {
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ProblemItem } from "@cubby/schemas/problems";
 import { sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
+import { financialTransaction, financialAccount } from "~/server/db/schema";
+import { gapCondition } from "~/server/repo/data-quality/sql";
 import { getDb } from "~/server/repo/database-helpers";
 
 /** Finance JSON is evidence received from imports/MCP; one malformed legacy row
@@ -158,11 +161,8 @@ async function queryAllocationDefects(
         sql`, `,
       )})`
     : sql``;
-  const having = options.defectsOnly
-    ? sql`HAVING ${sumMismatch}
-      OR ${nonSettlementKind}
-      OR ${kindSignViolation}
-      OR ${allocationSignMismatch}`
+  const diagnosticWhere = options.defectsOnly
+    ? sql` AND ${gapCondition("financialTransaction", "financial_transaction_allocation_integrity", alias(financialTransaction, "ft"))}`
     : sql``;
   const result = await getDb(db).execute<AllocationDefectRow>(sql`
     SELECT
@@ -183,9 +183,8 @@ async function queryAllocationDefects(
     LEFT JOIN "FinancialTransactionAllocation" a
       ON a."transactionId" = ft.id AND a."deletedAt" IS NULL
     LEFT JOIN "Purchase" p ON p.id = a."purchaseId"
-    WHERE ft."deletedAt" IS NULL${shortcodeWhere}
+    WHERE ft."deletedAt" IS NULL${shortcodeWhere}${diagnosticWhere}
     GROUP BY ft.id
-    ${having}
     ORDER BY ft."postedDate" DESC NULLS LAST, ft.shortcode
   `);
   return result.rows;
@@ -257,15 +256,7 @@ export async function findProvisionalFinancialAccounts(
         WHERE ft."accountId" = fa.id AND ft."deletedAt" IS NULL) AS "transactionCount"
     FROM "FinancialAccount" fa
     WHERE fa."deletedAt" IS NULL
-      AND fa."provisional" = true
-      AND CASE WHEN jsonb_typeof(fa."sourceAliases") = 'array'
-            THEN jsonb_array_length(fa."sourceAliases") ELSE 0 END = 0
-      AND NOT EXISTS (
-        SELECT 1 FROM "FinancialTransaction" ft2
-        JOIN "EntityExternalId" fx
-          ON fx."entityId" = ft2."id" AND fx."kind" = 'settlement_ref' AND fx."deletedAt" IS NULL
-        WHERE ft2."accountId" = fa.id AND ft2."deletedAt" IS NULL
-      )
+      AND ${gapCondition("financialAccount", "financial_account_unclaimed", alias(financialAccount, "fa"))}
     ORDER BY fa.name, fa.shortcode
   `);
   return result.rows.map((row) => ({

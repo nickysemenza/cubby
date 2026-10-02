@@ -83,7 +83,15 @@ export const renderDataQualityArtifacts = (
     record(
       "dataCheckWeight",
       "Record<DataCheck, number>",
-      byCheck((check) => String(check.weight)),
+      byCheck((check) =>
+        String(check.scoring === "unscored" ? 0 : check.weight),
+      ),
+    ) +
+    "\n" +
+    record(
+      "dataCheckExemptible",
+      "Record<DataCheck, boolean>",
+      byCheck((check) => String(check.exceptions !== "forbidden")),
     ) +
     "\n" +
     record(

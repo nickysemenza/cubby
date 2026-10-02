@@ -5,7 +5,10 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { upsertCookbook } from "~/server/repo/cookbook";
-import { updateLocationAiDescription } from "~/server/repo/location/crud";
+import {
+  ensureGlobalUnknownLocation,
+  updateLocationAiDescription,
+} from "~/server/repo/location/crud";
 import { createMealWithEntityId } from "~/server/repo/meal/crud";
 import {
   createProductCategory,
@@ -243,11 +246,7 @@ describe("data quality: pantry and garden entities", () => {
   it("inventory: verified stock", async () => {
     // Two locations: `InventoryEntry_productId_locationId_key` forbids two
     // live stock rows for the same product/location/placement/ownership.
-    const gapLocation = await createLocationFixture(
-      ctx.db,
-      makeLocationInput({ name: "DQ inventory shelf gap" }),
-      TEST_ACTOR,
-    );
+    const gapLocation = await ensureGlobalUnknownLocation(ctx.db, TEST_ACTOR);
     const completeLocation = await createLocationFixture(
       ctx.db,
       makeLocationInput({ name: "DQ inventory shelf complete" }),
@@ -262,7 +261,7 @@ describe("data quality: pantry and garden entities", () => {
       ctx.db,
       {
         productId: product.entityId,
-        locationId: gapLocation.entityId,
+        locationId: gapLocation.id,
         amount: { value: 1, unit: "each" },
         placement: "stock",
       },
@@ -286,6 +285,9 @@ describe("data quality: pantry and garden entities", () => {
     ]);
     expect(hydrated.get(gap.entityId)?.gaps.map((g) => g.check)).toContain(
       "inventory_verified",
+    );
+    expect(hydrated.get(gap.entityId)?.gaps.map((g) => g.check)).toContain(
+      "inventory_unknown_location",
     );
     expect(hydrated.get(complete.entityId)).toMatchObject({
       status: "complete",

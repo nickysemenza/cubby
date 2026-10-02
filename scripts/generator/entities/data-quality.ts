@@ -13,6 +13,8 @@ type CompiledDataQualityCheck = Readonly<{
   facet: string;
   kind: "missing" | "defect";
   weight: number;
+  scoring: "weighted" | "unscored";
+  exceptions: "inherit" | "forbidden";
   label: string;
   message: string;
   coverage?: string;
@@ -109,6 +111,8 @@ export const compileDataQuality = (
       facet: string;
       kind: "missing" | "defect";
       weight: number;
+      scoring: "weighted" | "unscored";
+      exceptions: "inherit" | "forbidden";
       label: string;
       message: string;
       coverage?: string;

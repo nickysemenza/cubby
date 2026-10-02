@@ -1,11 +1,11 @@
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 
-import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { roundTo } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
 
 import {
   formatFoodAmount,

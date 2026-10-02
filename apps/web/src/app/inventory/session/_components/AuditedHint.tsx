@@ -1,6 +1,6 @@
-import { formatCompactRelative } from "~/app/_components/HoverableTimestamp";
 import { formatInstant } from "~/lib/date-format";
 import { cn } from "~/lib/utils";
+import { formatCompactRelative } from "~/ui/HoverableTimestamp";
 
 /**
  * How long a count is allowed to speak in the present tense.

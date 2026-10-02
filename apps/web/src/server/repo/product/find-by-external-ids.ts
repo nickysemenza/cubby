@@ -1,29 +1,26 @@
-import type { ProductId } from "@cubby/schemas/identifiers";
+import type { ExternalIdInput } from "@cubby/schemas/external-id";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { entityExternalId, product } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 
-export interface ExternalIdPair {
-  source: string;
-  externalId: string;
-}
+export type ExternalIdPair = Pick<ExternalIdInput, "source" | "externalId"> &
+  Partial<Pick<ExternalIdInput, "kind">>;
 
-export interface ProductHit {
-  id: ProductId;
-  shortcode: string;
-}
+export type ProductHit = Pick<
+  typeof product.$inferSelect,
+  "id" | "shortcode" | "name" | "manufacturer" | "model"
+>;
 
-/** The map key for a pair; NUL cannot occur in either part. */
-export const externalIdKey = ({ source, externalId }: ExternalIdPair) =>
-  `${source}\0${externalId}`;
+/** A kindless request intentionally matches every kind; typed requests have distinct keys. */
+export const externalIdKey = ({ source, externalId, kind }: ExternalIdPair) =>
+  `${source}\0${externalId}\0${kind ?? ""}`;
 
 /**
  * Live Products holding each `(source, externalId)` pair, in one statement
- * whatever the kind (ASIN, retailer SKU, ...). The unique index lets a pair
- * name at most one live Product; the value is a list only so a caller never
- * has to assume that.
+ * Optional kinds retain caller-specific identity rules. Several identifiers
+ * may point to different Products; callers must review that ambiguity.
  */
 export const findProductsByExternalIds = async (
   db: Database | DrizzleTransaction,
@@ -37,6 +34,10 @@ export const findProductsByExternalIds = async (
       externalId: entityExternalId.externalId,
       id: product.id,
       shortcode: product.shortcode,
+      kind: entityExternalId.kind,
+      name: product.name,
+      manufacturer: product.manufacturer,
+      model: product.model,
     })
     .from(entityExternalId)
     .innerJoin(
@@ -52,12 +53,20 @@ export const findProductsByExternalIds = async (
         )})`,
       ),
     );
-  for (const row of rows) {
-    const key = externalIdKey(row);
-    byPair.set(key, [
-      ...(byPair.get(key) ?? []),
-      { id: row.id, shortcode: row.shortcode },
-    ]);
+  for (const pair of pairs) {
+    const matching = rows.filter(
+      (row) =>
+        row.source === pair.source &&
+        row.externalId === pair.externalId &&
+        (pair.kind === undefined || pair.kind === row.kind),
+    );
+    const unique = new Map(
+      matching.map(({ id, shortcode, name, manufacturer, model }) => [
+        id,
+        { id, shortcode, name, manufacturer, model },
+      ]),
+    );
+    byPair.set(externalIdKey(pair), [...unique.values()]);
   }
   return byPair;
 };

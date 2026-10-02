@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { entityListInputSchema } from "../../../apps/web/src/entities/generated/entity-lists.gen.ts";
+import { entityListInputSchema } from "../../../apps/web/src/entity/generated/entity-lists.gen.ts";
 import { generatedEntityFieldModels } from "../../../packages/schemas/src/generated/entity-field-model.gen.ts";
 import { entityInspectorMetadata } from "../../../packages/schemas/src/generated/entity-inspector.gen.ts";
 import { entityKeys } from "../../../packages/schemas/src/generated/entity-summary.gen.ts";
@@ -789,6 +789,15 @@ const CLIENT_PASSTHROUGH_METHODS = {
   "image.detail": { method: "imageDetail", doc: null },
   "imageProcessing.analyses": { method: "imageAnalyses", doc: null },
   "imageProcessing.status": { method: "imageProcessingStatus", doc: null },
+  "imageProcessing.pull": { method: "pullCompanionImageProcessing", doc: null },
+  "imageProcessing.complete": {
+    method: "completeCompanionImageProcessing",
+    doc: null,
+  },
+  "imageProcessing.release": {
+    method: "releaseCompanionImageProcessing",
+    doc: null,
+  },
   "photoImport.candidates": { method: "photoProductCandidates", doc: null },
   "photoImport.chooseExisting": {
     method: "choosePhotoGroupProduct",

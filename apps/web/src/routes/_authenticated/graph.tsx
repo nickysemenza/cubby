@@ -4,11 +4,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { z } from "zod";
 
-import { EntityGraphPicker } from "~/app/_components/relationships/entity-graph-picker";
-import { GraphExplorer } from "~/app/_components/relationships/graph-explorer";
-import { Stack } from "~/components/layout";
-import { Page } from "~/components/page/Page";
+import { EntityGraphPicker } from "~/entity/relationships/entity-graph-picker";
+import { GraphExplorer } from "~/entity/relationships/graph-explorer";
 import { pageTitle } from "~/lib/page-title";
+import { Stack } from "~/ui/layout";
+import { Page } from "~/ui/page/Page";
 
 export const Route = createFileRoute("/_authenticated/graph")({
   validateSearch: z.object({

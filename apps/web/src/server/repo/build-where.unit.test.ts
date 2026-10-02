@@ -394,7 +394,7 @@ describe("buildMealWhere", () => {
     expect(rendered).toContain("{cost,coverage,total}");
     // The subselect joins two tables, so the JSON column must stay qualified.
     expect(rendered).toMatch(
-      /"Recipe"\."totals" #>> '\{cost,coverage,total\}'/,
+      /dq_recipe_cost\."totals" #>> '\{cost,coverage,total\}'/,
     );
   });
 });

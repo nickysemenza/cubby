@@ -4,15 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Progress } from "~/components/ui/progress";
-import { Spinner } from "~/components/ui/spinner";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
 import {
   combineRippleTags,
   ripple,
@@ -21,6 +12,15 @@ import {
 import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { getErrorMessage } from "~/lib/error-utils";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Progress } from "~/ui/primitives/progress";
+import { Spinner } from "~/ui/primitives/spinner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 import { type AutoFixTask, buildAutoFixPlan } from "./auto-fix-registry";
 

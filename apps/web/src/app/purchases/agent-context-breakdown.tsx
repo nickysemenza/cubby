@@ -2,18 +2,18 @@ import type { FlueConversationMessage } from "@flue/sdk";
 import { useId, useMemo } from "react";
 
 import {
+  contextCallsFromMessages,
+  summarizeContextCalls,
+} from "~/lib/agent-context-breakdown";
+import { formatCompactCount, formatCount } from "~/lib/utils";
+import {
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
-} from "~/components/ui/table";
-import {
-  contextCallsFromMessages,
-  summarizeContextCalls,
-} from "~/lib/agent-context-breakdown";
-import { formatCompactCount, formatCount } from "~/lib/utils";
+} from "~/ui/primitives/table";
 
 // Fixed sections first, then the largest tool results, then the grouped rest.
 // Neighbouring segments never share a hue family.

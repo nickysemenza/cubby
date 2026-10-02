@@ -11,7 +11,7 @@ import {
   entityListEnrichmentOutputSchema,
   entityListSummaryOutputSchema,
   type ListEntity,
-} from "~/entities/generated/entity-lists.gen";
+} from "~/entity/generated/entity-lists.gen";
 
 export const entityListContract = defineContract("entity", {
   listBase: query({

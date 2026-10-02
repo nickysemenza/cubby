@@ -9,28 +9,28 @@ import { Link } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
-import type { ListSlotProps } from "~/app/_components/entity-list/list-slot-types";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { entityDetailParams, entities } from "~/entity/entities";
+import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
+import type { ListSlotProps } from "~/entity/entity-list/list-slot-types";
 import {
   entityDisplayImageKey,
   type EntityDisplayImageMap,
   useEntityDisplayImages,
-} from "~/app/_components/entity-media/entity-display-images";
-import { flattenUniquePageItems } from "~/app/_components/hooks/infinite-page-utils";
-import { useLoadAllPages } from "~/app/_components/hooks/useAllEntityRecords";
+} from "~/entity/entity-media/entity-display-images";
+import type { FilterPatch } from "~/entity/filters";
 import {
   ScheduleGrid,
   type ScheduleRow,
-} from "~/app/_components/schedule/schedule-grid";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { Button } from "~/components/ui/button";
-import { entityDetailParams, entities } from "~/entities/entities";
-import { compileEntityListInput, entityListFor } from "~/entities/entity-list";
-import type { FilterPatch } from "~/entities/filters";
+} from "~/features/schedule/schedule-grid";
 import {
   task,
   project,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
+import { flattenUniquePageItems } from "~/ui/hooks/infinite-page-utils";
+import { useLoadAllPages } from "~/ui/hooks/useAllEntityRecords";
+import { Button } from "~/ui/primitives/button";
 
 import {
   projectScheduleSubtreeQueryParams,

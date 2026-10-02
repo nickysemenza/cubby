@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { SearchDebugPage } from "~/app/_components/search/search-debug-page";
-import { Page } from "~/components/page/Page";
+import { SearchDebugPage } from "~/features/search/search-debug-page";
 import { pageTitle } from "~/lib/page-title";
+import { Page } from "~/ui/page/Page";
 
 export const Route = createFileRoute("/_authenticated/search/debug")({
   component: SearchDebugRoute,

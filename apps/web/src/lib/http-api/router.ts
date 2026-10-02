@@ -10,15 +10,15 @@ import type { MutationContract, QueryContract } from "~/contracts/define";
 import {
   type DetailEntity,
   getEntityDetailOutputSchema,
-} from "~/entities/generated/entity-details.gen";
+} from "~/entity/generated/entity-details.gen";
 import {
   getEntityListOutputSchema,
   type ListEntity,
-} from "~/entities/generated/entity-lists.gen";
+} from "~/entity/generated/entity-lists.gen";
 import {
   getEntityTimelineOutputSchema,
   type TimelineEntity,
-} from "~/entities/generated/entity-timelines.gen";
+} from "~/entity/generated/entity-timelines.gen";
 import { entityDeleteResultSchema } from "~/server/entity-kernel/contracts";
 import {
   ENTITY_SCHEMA_BINDINGS,

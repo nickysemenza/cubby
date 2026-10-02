@@ -8,9 +8,9 @@ import {
 import { z } from "zod";
 
 import { CollectionDetailPage } from "~/app/collections/collection-detail-page";
-import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
+import { Page } from "~/ui/page/Page";
 
 const searchSchema = z.object({
   q: urlStringParam,

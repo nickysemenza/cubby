@@ -18,22 +18,22 @@ import {
   redirect,
 } from "@tanstack/react-router";
 
-import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { Page } from "~/components/page/Page";
-import { DetailPagePending } from "~/components/route-pending";
-import { Button } from "~/components/ui/button";
+import {
+  entities,
+  entityDetailParams,
+  isBrowserRoutedEntity,
+} from "~/entity/entities";
+import { shortcodeHead } from "~/lib/page-title";
+import { RouteErrorComponent } from "~/ui/lazy-route-error";
+import { Page } from "~/ui/page/Page";
+import { Button } from "~/ui/primitives/button";
 import {
   Empty,
   EmptyActions,
   EmptyDescription,
   EmptyTitle,
-} from "~/components/ui/empty";
-import {
-  entities,
-  entityDetailParams,
-  isBrowserRoutedEntity,
-} from "~/entities/entities";
-import { shortcodeHead } from "~/lib/page-title";
+} from "~/ui/primitives/empty";
+import { DetailPagePending } from "~/ui/route-pending";
 
 export const Route = createFileRoute("/_authenticated/$shortcode")({
   loader: ({ params }) => {

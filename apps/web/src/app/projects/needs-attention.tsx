@@ -12,9 +12,9 @@ import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
 
-import { Row, Stack } from "~/components/layout";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
 
 import { attentionEvidence } from "./attention-presentation";
 

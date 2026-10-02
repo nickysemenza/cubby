@@ -12,12 +12,12 @@ import { entityTimelineContract } from "~/contracts/entity-timeline.contract";
 import {
   entityDetailInputSchema,
   getEntityDetailOutputSchema,
-} from "~/entities/generated/entity-details.gen";
-import { generatedEntityRelationListCommandSchema } from "~/entities/generated/entity-relation-lists.gen";
+} from "~/entity/generated/entity-details.gen";
+import { generatedEntityRelationListCommandSchema } from "~/entity/generated/entity-relation-lists.gen";
 import {
   entityTimelineInputSchema,
   getEntityTimelineOutputSchema,
-} from "~/entities/generated/entity-timelines.gen";
+} from "~/entity/generated/entity-timelines.gen";
 import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import {
   entityBrowserMutationCommandSchema,

@@ -1,3 +1,4 @@
+import { recipeChildren } from "../child-tables/recipe.js";
 import { defineEntity } from "./definition.js";
 import {
   cookbookShortcode,
@@ -23,6 +24,7 @@ export default defineEntity({
   names: { singular: "Recipe", plural: "Recipes" },
   route: { basePath: "recipes", createOverride: "page", detailOverride: null },
   table: "Recipe",
+  children: recipeChildren,
   identifiers: { brand: "RecipeId", shortcode: "RCP-" },
   presentation: {
     titleField: "name",
@@ -1206,6 +1208,15 @@ export default defineEntity({
     mcp: ["get", "list", "search", "create", "update", "delete"],
     dataQuality: {
       checks: [
+        {
+          id: "recipe_deleted_dependency",
+          facet: "integrity",
+          kind: "defect",
+          scoring: "unscored",
+          exceptions: "forbidden",
+          label: "Deleted dependency",
+          message: "Fresh totals still reference a deleted sub-recipe.",
+        },
         {
           id: "recipe_ingredients",
           facet: "content",

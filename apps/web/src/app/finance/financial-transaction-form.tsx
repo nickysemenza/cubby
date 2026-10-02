@@ -10,19 +10,19 @@ import { useId, useState } from "react";
 import { FormProvider, type UseFormReturn, useWatch } from "react-hook-form";
 import { z } from "zod";
 
-import { referenceEntitySearch } from "~/app/_components/combobox/reference-entity-search";
-import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import type { EditMode } from "~/entities/editing/entity-field-presentation";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import type { EditMode } from "~/entity/editing/entity-field-presentation";
 import {
   EntityPrimitiveFields,
   renderIntentField,
   requiredFieldModel,
-} from "~/entities/editing/entity-primitive-fields";
-import { entities, entityDetailParams } from "~/entities/entities";
+} from "~/entity/editing/entity-primitive-fields";
+import { entities, entityDetailParams } from "~/entity/entities";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+import { EntityValueField } from "~/ui/form-utils/entity-value-field";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 
 const AccountSearch = referenceEntitySearch("financialAccount");
 const PurchaseSearch = referenceEntitySearch("purchase");

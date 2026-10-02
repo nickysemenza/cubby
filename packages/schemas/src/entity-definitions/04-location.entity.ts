@@ -724,7 +724,7 @@ export default defineEntity({
           { value: "90", label: "Not counted in 90 days" },
         ],
         expandRef: {
-          module: "~/entities/filter-behavior",
+          module: "~/entity/filter-behavior",
           export: "resolveRecountAge",
         },
       },
@@ -769,7 +769,7 @@ export default defineEntity({
           export: "locationType",
         },
         optionsRef: {
-          module: "~/app/_components/locations/location-icons",
+          module: "~/features/locations/location-icons",
           export: "locationTypeOptionsWithTheme",
         },
       },
@@ -807,7 +807,7 @@ export default defineEntity({
           { value: "5", label: "5+ items" },
         ],
         expandRef: {
-          module: "~/entities/filter-behavior",
+          module: "~/entity/filter-behavior",
           export: "resolveLocationItems",
         },
       },

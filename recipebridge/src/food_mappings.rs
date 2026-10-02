@@ -95,12 +95,30 @@ pub enum WSourceMetadata {
     Product {
         #[serde(rename = "productId")]
         product_id: String,
+        #[serde(
+            rename = "inferredZero",
+            default,
+            skip_serializing_if = "is_false",
+            deserialize_with = "deserialize_inferred_zero"
+        )]
+        #[tsify(optional)]
+        inferred_zero: bool,
     },
     Food {
         #[serde(rename = "fdcId")]
         fdc_id: u32,
     },
     Manual,
+}
+
+fn deserialize_inferred_zero<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<bool, D::Error> {
+    Option::<bool>::deserialize(deserializer).map(|value| value.unwrap_or(false))
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 fn amount(value: f64, unit: impl Into<String>) -> WAmount {
@@ -256,6 +274,7 @@ fn price_mapping(price: Option<f64>, product_id: &str) -> Option<WUnitMapping> {
         source: Some("price".to_string()),
         source_metadata: Some(WSourceMetadata::Product {
             product_id: product_id.to_string(),
+            inferred_zero: false,
         }),
     })
 }
@@ -319,6 +338,7 @@ pub(crate) struct ProductPairs {
     /// Everything else: density, `cup = 120 g`, stored money edges, food
     /// portions, and nutrition.
     pub shared: Vec<(Measure, Measure)>,
+    pub inferred: Vec<(Measure, Measure)>,
 }
 
 fn mentions_count(pair: &(Measure, Measure)) -> bool {
@@ -326,9 +346,19 @@ fn mentions_count(pair: &(Measure, Measure)) -> bool {
 }
 
 pub(crate) fn product_non_price_mapping_pairs(product: &WProductInput) -> ProductPairs {
-    let (package, mut shared): (Vec<_>, Vec<_>) = product
-        .unit_mappings
-        .iter()
+    let (inferred, measured): (Vec<_>, Vec<_>) =
+        product.unit_mappings.iter().partition(|mapping| {
+            matches!(
+                mapping.source_metadata,
+                Some(WSourceMetadata::Product {
+                    inferred_zero: true,
+                    ..
+                })
+            )
+        });
+    let inferred = inferred.into_iter().map(WUnitMapping::to_pair).collect();
+    let (package, mut shared): (Vec<_>, Vec<_>) = measured
+        .into_iter()
         .map(WUnitMapping::to_pair)
         .partition(mentions_count);
     if let Some(food) = product.food.as_ref() {
@@ -345,7 +375,11 @@ pub(crate) fn product_non_price_mapping_pairs(product: &WProductInput) -> Produc
             .filter(|mapping| mapping.source.as_deref() == Some("label serving"))
             .map(WUnitMapping::to_pair),
     );
-    ProductPairs { package, shared }
+    ProductPairs {
+        package,
+        shared,
+        inferred,
+    }
 }
 
 /// All unit mappings derivable from one USDA food: portion edges, the
@@ -584,7 +618,8 @@ mod tests {
         assert_eq!(
             mappings[3].source_metadata,
             Some(WSourceMetadata::Product {
-                product_id: "prod-1".to_string()
+                product_id: "prod-1".to_string(),
+                inferred_zero: false,
             })
         );
     }
@@ -710,9 +745,21 @@ mod tests {
     #[test]
     fn source_metadata_serde_matches_the_ts_contract() {
         // The zod discriminated union: {type:"product",productId} | {type:"food",fdcId} | {type:"manual"}
+        let legacy: WSourceMetadata = serde_json::from_value(
+            serde_json::json!({"type":"product", "productId":"synthetic", "inferredZero":null}),
+        )
+        .unwrap();
+        assert!(matches!(
+            legacy,
+            WSourceMetadata::Product {
+                inferred_zero: false,
+                ..
+            }
+        ));
         assert_eq!(
             serde_json::to_value(WSourceMetadata::Product {
-                product_id: "p1".to_string()
+                product_id: "p1".to_string(),
+                inferred_zero: false,
             })
             .unwrap(),
             serde_json::json!({"type": "product", "productId": "p1"})

@@ -8,21 +8,21 @@ import {
   type PublicClientLookupState,
   verifyPublicClient,
 } from "~/app/auth/oauth-consent-client";
-import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+import { authClient } from "~/lib/auth-client";
+import { getErrorMessage } from "~/lib/error-utils";
+import { pageTitle } from "~/lib/page-title";
+import { urlStringParam } from "~/lib/search-params";
+import { useHydrated } from "~/ui/hooks/useHydrated";
+import { Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "~/components/ui/card";
-import { useHydrated } from "~/hooks/useHydrated";
-import { authClient } from "~/lib/auth-client";
-import { getErrorMessage } from "~/lib/error-utils";
-import { pageTitle } from "~/lib/page-title";
-import { urlStringParam } from "~/lib/search-params";
+} from "~/ui/primitives/card";
 
 // Only the two params this screen renders from. The rest of the signed
 // authorize query stays in the address bar untouched — the oauthProviderClient

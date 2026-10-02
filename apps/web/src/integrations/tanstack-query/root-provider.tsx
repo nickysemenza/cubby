@@ -12,10 +12,10 @@ import { toast } from "sonner";
 import superjson from "superjson";
 import { z } from "zod";
 
-import { showErrorToast } from "~/components/feedback/error-details";
 import { authClient } from "~/lib/auth-client";
 import { scheduleDeferredInvalidation } from "~/lib/deferred-invalidation";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
+import { showErrorToast } from "~/ui/feedback/error-details";
 
 import {
   EMPTY_INVALIDATION_TAG_SET,

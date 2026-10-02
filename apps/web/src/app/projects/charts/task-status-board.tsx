@@ -8,9 +8,9 @@ import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import { NoneValue } from "~/components/ui/none-value";
-import { entities, entityDetailParams } from "~/entities/entities";
+import { entities, entityDetailParams } from "~/entity/entities";
 import { getStatusChartColor } from "~/lib/status-colors";
+import { NoneValue } from "~/ui/primitives/none-value";
 
 import { ProjectMark } from "../project-mark";
 import { TASK_STATUS_LABELS } from "../shared";

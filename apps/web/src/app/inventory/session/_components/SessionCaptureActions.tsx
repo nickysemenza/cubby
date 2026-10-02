@@ -18,40 +18,17 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { VerbButton } from "~/app/_components/actions/action-verb-ui";
-import { AiProvenance } from "~/app/_components/ai/ai-proposal-card";
-import { AiProposalList } from "~/app/_components/ai/ai-proposal-list";
-import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { useEntityListSource } from "~/app/_components/combobox/with-search-hook";
-import {
-  getProductShortcode,
-  requiredProductField,
-} from "~/app/_components/form-fields";
-import { ComboboxField } from "~/app/_components/form-utils";
-import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { VerbButton } from "~/entity/actions/action-verb-ui";
+import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import { AiProvenance } from "~/features/ai/ai-proposal-card";
+import { AiProposalList } from "~/features/ai/ai-proposal-list";
 import {
   AmountFieldGroup,
   DEFAULT_AMOUNT_UNIT,
-} from "~/app/_components/inventory/amount-field-group";
-import { LocationSweep } from "~/app/_components/inventory/location-sweep/LocationSweepSheet";
-import { useLocationPhotoCapture } from "~/app/_components/locations/use-location-photo-capture";
-import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-create";
-import { showErrorToast } from "~/components/feedback/error-details";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
-import { Input } from "~/components/ui/input";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "~/components/ui/sheet";
-import { Spinner } from "~/components/ui/spinner";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { focusOnMount } from "~/hooks/focus-on-mount";
+} from "~/features/inventory/amount-field-group";
+import { LocationSweep } from "~/features/inventory/location-sweep/LocationSweepSheet";
+import { useLocationPhotoCapture } from "~/features/locations/use-location-photo-capture";
+import { useUpcAwareCreate } from "~/features/products/use-upc-aware-create";
 import {
   product,
   ai,
@@ -59,6 +36,26 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { putPresignedObject } from "~/lib/presigned-upload";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
+import { EntityPicker } from "~/ui/combobox/entity-picker";
+import { useEntityListSource } from "~/ui/combobox/with-search-hook";
+import { showErrorToast } from "~/ui/feedback/error-details";
+import { getProductShortcode, requiredProductField } from "~/ui/form-fields";
+import { ComboboxField } from "~/ui/form-utils";
+import { focusOnMount } from "~/ui/hooks/focus-on-mount";
+import { useEntityActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
+import { Input } from "~/ui/primitives/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "~/ui/primitives/sheet";
+import { Spinner } from "~/ui/primitives/spinner";
 
 import type { SessionLocation } from "../session-utils";
 import { useSessionMutations } from "../useSessionMutations";

@@ -2,9 +2,9 @@ import { foodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { EntityListCardDensityProvider } from "~/app/_components/entity-list/generic-entity-list";
-import { listChromePage } from "~/app/_components/routing/entity-routes";
-import { entitySearch } from "~/entities/generated/entity-search.gen";
+import { EntityListCardDensityProvider } from "~/entity/entity-list/generic-entity-list";
+import { entitySearch } from "~/entity/generated/entity-search.gen";
+import { listChromePage } from "~/entity/routing/entity-routes";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 

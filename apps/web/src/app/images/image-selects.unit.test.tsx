@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AttachExistingImageDialog } from "~/app/_components/images/attach-existing-image-dialog";
+import { AttachExistingImageDialog } from "~/features/images/attach-existing-image-dialog";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { ImageEditDialog } from "./image-edit-dialog";

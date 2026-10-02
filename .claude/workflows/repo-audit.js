@@ -145,7 +145,7 @@ Look for: transaction boundaries that leave data inconsistent on partial failure
     codexEffort: "high",
     prompt: `${COMMON}
 LANE: Client/React correctness.
-Scope: apps/web/src/app (413 files — prioritize _components, inventory, recipes, products), src/hooks, src/components.
+Scope: apps/web/src/app (413 files — prioritize _components, inventory, recipes, products), src/ui/hooks, src/ui.
 Look for: hook-dependency bugs (stale closures, missing deps that cause real staleness, inline object/array literals passed to hooks with deps — the AGENTS.md infinite-loop pattern); useQueries without combine; effects that set state from unstable deps; race conditions in async handlers (setState after unmount, double-submit); optimistic-update rollback bugs; SSR/hydration branching on session or non-deterministic values (Date, locale) — the hydration-gate rule; forms that lose user input. Skip pure style issues.`,
   },
   {

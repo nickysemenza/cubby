@@ -10,31 +10,31 @@ import { useQuery } from "@tanstack/react-query";
 import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 
+import { entityRelationMutationOptions } from "~/entity/entity-mutation";
+import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { purchaseLabel } from "~/lib/purchase-label";
 import {
   createCurrencyColumn,
   createImageColumn,
   createNameColumn,
   rowImages,
-} from "~/app/_components/data-table/columnHelpers";
+} from "~/ui/data-table/columnHelpers";
 import {
   ListWorkbench,
   useBoundedListWorkbench,
-} from "~/app/_components/data-table/ListWorkbench";
-import { buildSelectColumn } from "~/app/_components/data-table/row-selection";
+} from "~/ui/data-table/ListWorkbench";
+import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
-} from "~/app/_components/data-table/table-features";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { WorkflowDialog } from "~/components/dialogs/workflow-dialog";
-import { Row } from "~/components/layout";
-import { Description } from "~/components/ui/description";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { Input } from "~/components/ui/input";
-import { entityRelationMutationOptions } from "~/entities/entity-mutation";
-import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { purchaseLabel } from "~/lib/purchase-label";
+} from "~/ui/data-table/table-features";
+import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row } from "~/ui/layout";
+import { Description } from "~/ui/primitives/description";
+import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
+import { Input } from "~/ui/primitives/input";
 
 const isRowSelectionUpdater = (
   value: Updater<RowSelectionState>,

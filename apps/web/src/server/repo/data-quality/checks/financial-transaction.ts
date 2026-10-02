@@ -1,6 +1,7 @@
 import { getTableName, sql } from "drizzle-orm";
 
 import { financialTransaction } from "~/server/db/schema";
+import { allocationIntegrityDefectSql } from "~/server/repo/financial-allocation-integrity";
 import {
   financialTransactionBookingSql,
   financialTransactionCoverageAxisSql,
@@ -34,6 +35,9 @@ export const financialTransactionChecks = defineEntityChecks({
   entity: "financialTransaction",
   table: financialTransaction,
   checks: {
+    financial_transaction_allocation_integrity: {
+      missing: (t) => allocationIntegrityDefectSql(`"${getTableName(t)}"`),
+    },
     financial_transaction_classification: {
       expected: (t) => sql`${t.status} <> 'void'`,
       missing: (t) => sql`${t.kind} = 'other'`,

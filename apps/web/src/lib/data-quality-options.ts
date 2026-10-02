@@ -1,8 +1,8 @@
 import { dataQualityStatus } from "@cubby/schemas/data-quality";
 
-import type { BadgeVariant } from "~/components/ui/badge";
-import { badgeVariantColor } from "~/components/ui/badge";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import type { BadgeVariant } from "~/ui/primitives/badge";
+import { badgeVariantColor } from "~/ui/primitives/badge";
+import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 
 type DataQualityStatus = (typeof dataQualityStatus.options)[number];
 

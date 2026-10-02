@@ -2,11 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { OrphanedClientMaintenance } from "~/app/account/orphaned-client-maintenance";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Row, Stack } from "~/components/layout";
-import { Page } from "~/components/page/Page";
+import { oauth } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
+import { pageTitle } from "~/lib/page-title";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Page } from "~/ui/page/Page";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,9 +19,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+} from "~/ui/primitives/alert-dialog";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
 import {
   Table,
   TableBody,
@@ -26,10 +29,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "~/components/ui/table";
-import { oauth } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatInstant } from "~/lib/date-format";
-import { pageTitle } from "~/lib/page-title";
+} from "~/ui/primitives/table";
 
 // A static sibling of /account/$accountView: TanStack ranks literal segments
 // above dynamic ones, so this wins over the better-auth-ui catch-all rather

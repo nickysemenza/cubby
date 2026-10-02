@@ -4,8 +4,13 @@ import { imageAnalysisHistory } from "~/server/repo/activity";
 import {
   getImageProcessingReadProjection,
   saveImageDescriptionCorrection,
+  releaseAssignedImageProcessingJob,
 } from "~/server/repo/image-processing";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
+import {
+  pullCompanionImageProcessing,
+  completeAssignedCompanionImageProcessing,
+} from "~/server/services/image-processing.service";
 import { retryImageProcessingFailures } from "~/server/services/image-processing.service";
 import {
   scheduleAppleImageDescriptionEvaluation,
@@ -18,6 +23,24 @@ export const imageProcessingHandlers = implementOperationDomain(
     // The WebSocket route performs the same parsed-message admission. Returning
     // null is intentional: a command is leased only after a capable device is
     // selected, never as a side effect of a validation probe.
+    pull: async (context, input) =>
+      pullCompanionImageProcessing(
+        context.db,
+        input,
+        context.actorContext.userId,
+      ),
+    complete: async (context, input) =>
+      completeAssignedCompanionImageProcessing(
+        context.db,
+        input,
+        context.actorContext.userId,
+      ),
+    release: async (context, input) => ({
+      released: await releaseAssignedImageProcessingJob(context.db, {
+        ...input,
+        userId: context.actorContext.userId,
+      }),
+    }),
     validateCompanionMessage: async () => ({ message: null }),
     status: async (context, input) =>
       getImageProcessingReadProjection(

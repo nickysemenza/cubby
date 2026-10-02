@@ -10,17 +10,17 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
-import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { NativeSelect } from "~/components/ui/native-select";
-import { StatusText } from "~/components/ui/status-text";
-import { TechnicalError } from "~/components/ui/technical-error";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { vendor } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { NativeSelect } from "~/ui/primitives/native-select";
+import { StatusText } from "~/ui/primitives/status-text";
+import { TechnicalError } from "~/ui/primitives/technical-error";
 
 type MailEvent = VendorOrderMailOut["items"][number]["events"][number];
 type MailCandidate = MailEvent["candidates"][number];

@@ -1,7 +1,7 @@
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { listReadFields } from "~/entities/list-read-schema";
+import { listReadFields } from "~/entity/list-read-schema";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {

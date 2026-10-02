@@ -7,9 +7,9 @@ import { ArrowBendDownRightIcon } from "@phosphor-icons/react/dist/csr/ArrowBend
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { useRef } from "react";
 
-import { Row, Stack } from "~/components/layout";
-import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { Description } from "~/ui/primitives/description";
 
 import { pathToNode } from "./arrange-tree-utils";
 import { ArrangeItemChip } from "./ArrangeItemChip";

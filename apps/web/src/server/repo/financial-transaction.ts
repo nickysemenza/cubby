@@ -25,7 +25,7 @@ import type { SpendingCategorySummary } from "@cubby/schemas/spending-classifica
 import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { capitalize, sortBy, uniq } from "es-toolkit";
 
-import { projectListRows } from "~/entities/list-read-schema";
+import { projectListRows } from "~/entity/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -35,6 +35,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
+import { gapCondition } from "~/server/repo/data-quality/sql";
 import { touchDataQualityTargets } from "~/server/repo/data-quality/touch";
 import {
   buildPartialUpdateValues,
@@ -52,7 +53,6 @@ import {
   type SettlementRef,
   settlementRefsFor,
 } from "~/server/repo/entity-external-ids";
-import { allocationIntegrityDefectSql } from "~/server/repo/financial-allocation-integrity";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { financialTransactionItemizationSql } from "~/server/repo/financial-reconciliation";
 import {
@@ -473,7 +473,11 @@ export async function buildFinancialTransactionWhere(
       ? sql`${sql.raw(financialTransactionItemizationSql('"FinancialTransaction"."id"'))} = ${filters.itemization}`
       : undefined,
     filters.allocationIntegrity === "defect"
-      ? allocationIntegrityDefectSql('"FinancialTransaction"')
+      ? gapCondition(
+          "financialTransaction",
+          "financial_transaction_allocation_integrity",
+          financialTransaction,
+        )
       : undefined,
     refsCondition(
       filters.source ? [filters.source].flat() : undefined,
