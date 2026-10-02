@@ -23,6 +23,7 @@ import {
   productCategoryFeature,
   productCategorySummary,
 } from "@cubby/schemas/product-category-fields";
+import type { categoryMappingSchema } from "@cubby/schemas/spending-classification";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -57,6 +58,8 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { categoryMappingSql } from "./category-connections";
+import { loadCategoryConnections } from "./category-connections";
 import { completeListReader } from "./list-read-adapters";
 import { categoryDescendantsSql } from "./product-category-sql";
 import { assertReviewedSpendingClassification } from "./spending-classification-review-authorization";
@@ -256,6 +259,7 @@ const hydrateRead = async (
   return hydrateListRead(db, "productCategory", rows, projection, {
     load: () =>
       Promise.all([
+        loadCategoryConnections(db, ids),
         loadListGroup(projection, ["relations", "derived"], () =>
           pathsFor(db, ids),
         ),
@@ -275,17 +279,22 @@ const hydrateRead = async (
       ]),
     mapRow: (
       row,
-      { loaded: [paths, productCounts, spendingCategories, parents] },
+      { loaded: [mappings, paths, productCounts, spendingCategories, parents] },
     ) => {
       const path = paths?.get(row.id) ?? [];
       const parent = row.parentId ? parents?.get(row.parentId) : undefined;
+      const spendingCategory = row.spendingCategoryId
+        ? spendingCategories.get(row.spendingCategoryId)
+        : undefined;
       const result = {
         ...row,
         id: parseShortcodeFor("productCategory", row.shortcode),
         feature: parseFeature(row.feature),
-        spendingCategoryId: row.spendingCategoryId
-          ? (spendingCategories.get(row.spendingCategoryId)?.id ?? null)
-          : null,
+        spendingCategoryMapping: mappings.get(row.id),
+        effectiveSpendingCategory: mappedCategoryIdentity(mappings.get(row.id)),
+        spendingCategoryName: spendingCategory?.name ?? null,
+        spendingCategoryEmoji: spendingCategory?.emoji ?? null,
+        spendingCategoryId: spendingCategory?.id ?? null,
       };
       if (wantsListGroup(projection, "relations"))
         Object.assign(result, {
@@ -305,6 +314,17 @@ const hydrateRead = async (
     },
   });
 };
+function mappedCategoryIdentity(
+  mapping: z.infer<typeof categoryMappingSchema> | undefined,
+) {
+  if (!mapping?.category) return null;
+  const suffix =
+    mapping.state === "inherited"
+      ? ` (inherited from ${mapping.source?.name})`
+      : "";
+  return { ...mapping.category, name: `${mapping.category.name}${suffix}` };
+}
+
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: CategoryRow[],
@@ -314,7 +334,20 @@ const hydrate = async (
   );
 
 export const buildProductCategoryWhere = (filters: ProductCategoryFilters) =>
-  scaffold.where(filters);
+  scaffold.where(filters, [
+    filters.needsClassification === undefined
+      ? undefined
+      : sql`(${categoryMappingSql(sql.raw('"ProductCategory"."id"'))}->>'state' = 'unmapped') = ${filters.needsClassification}`,
+    filters.effectiveSpendingCategoryId?.length
+      ? sql`(${categoryMappingSql(sql.raw('"ProductCategory"."id"'))}->'category'->>'id') IN (${sql.join(
+          (Array.isArray(filters.effectiveSpendingCategoryId)
+            ? filters.effectiveSpendingCategoryId
+            : [filters.effectiveSpendingCategoryId]
+          ).map((code) => sql`${code}`),
+          sql`, `,
+        )})`
+      : undefined,
+  ]);
 
 export const listProductCategoriesRead = (
   db: Database,
@@ -326,7 +359,10 @@ export const listProductCategoriesRead = (
   scaffold.list(
     db,
     { filters, sorts, pagination, projection },
-    { hydrate: (rows, selected) => hydrateRead(db, rows, selected) },
+    {
+      where: buildProductCategoryWhere(filters),
+      hydrate: (rows, selected) => hydrateRead(db, rows, selected),
+    },
   );
 
 export const listProductCategories = completeListReader(

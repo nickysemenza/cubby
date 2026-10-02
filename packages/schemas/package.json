@@ -152,7 +152,8 @@
     "./spending-category": "./src/spending-category.ts",
     "./spending-classification": "./src/spending-classification.ts",
     "./spending-classification-review": "./src/spending-classification-review.ts",
-    "./purchase-evidence-policy": "./src/purchase-evidence-policy.ts"
+    "./purchase-evidence-policy": "./src/purchase-evidence-policy.ts",
+    "./emoji": "./src/emoji.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/generator/ensure.ts && tsc --noEmit",

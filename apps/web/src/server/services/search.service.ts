@@ -16,6 +16,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { findSemanticEntityCandidates } from "~/server/repo/entity-embedding-search";
+import { loadRecordEmojiReferences } from "~/server/repo/entity-emoji";
 import { loadLocationAncestors } from "~/server/repo/location/tree";
 import { executeSearchDocumentSql } from "~/server/repo/search-document";
 import {
@@ -94,7 +95,8 @@ const withThumbnails = async (
   db: Database,
   candidates: InternalSearchCandidate[],
 ): Promise<SearchHit[]> => {
-  const [images, paths] = await Promise.all([
+  const [emojis, images, paths] = await Promise.all([
+    loadRecordEmojiReferences(db, candidates),
     hydrateThumbnails(db, candidates),
     loadLocationAncestors(
       db,
@@ -105,6 +107,7 @@ const withThumbnails = async (
   ]);
   return candidates.map(({ entityId, ...candidate }) => ({
     ...candidate,
+    emoji: emojis.get(entityRefKey(candidate.entityKind, entityId)) ?? null,
     imageUrl: images.get(entityRefKey(candidate.entityKind, entityId)) ?? null,
     ...(candidate.entityKind === "location" && {
       locationPath:
@@ -341,9 +344,13 @@ export async function hydrateSearchHitRefs(
       ORDER BY refs.ordinal
     `,
   );
-  const images = await hydrateThumbnails(db, rows);
+  const [images, emojis] = await Promise.all([
+    hydrateThumbnails(db, rows),
+    loadRecordEmojiReferences(db, rows),
+  ]);
   return rows.map((row) => ({
     ...row,
+    emoji: emojis.get(entityRefKey(row.entityKind, row.entityId)) ?? null,
     imageUrl: images.get(`${row.entityKind}:${row.entityId}`) ?? null,
   }));
 }

@@ -30,16 +30,26 @@ struct EntityFieldSuggestionSection: View {
                             Text("Current: \(currentText(field))").foregroundStyle(.secondary)
                             Text(proposal.label ?? proposal.value ?? "")
                             if let detail = proposal.detail { Text(detail).foregroundStyle(.secondary) }
+                            if let evidence = proposal.financeReview?.evidence {
+                                Text(
+                                    "\(evidence.principalLineCount) lines across \(evidence.distinctPurchaseCount) purchases; \(evidence.unknownCategoryLineCount) without a product category"
+                                ).font(.caption)
+                                ForEach(evidence.categories, id: \.id) { category in
+                                    NavigationLink(
+                                        category.name,
+                                        value: Route.entityDetail(.productCategory, id: category.id))
+                                }
+                            }
                             Text(proposal.reasoning).font(.caption).foregroundStyle(.secondary)
                             Text(
                                 proposal.financeReview == nil
                                     ? "Use in draft changes this editor. Save commits the choice."
-                                    : "Based on saved record and linked items. Apply saves the category immediately."
+                                    : "Based on saved record and linked items. Apply saves the reviewed field immediately."
                             )
                             .font(.caption).foregroundStyle(.secondary)
                             HStack {
                                 Button(
-                                    proposal.financeReview == nil ? "Use in draft" : "Apply and save category"
+                                    proposal.financeReview == nil ? "Use in draft" : "Apply and save"
                                 ) {
                                     perform {
                                         if case .saved(let key, let value) = try await review.apply(field.key)
@@ -62,12 +72,23 @@ struct EntityFieldSuggestionSection: View {
                         }
                     }
                 }
+                if review.reviewedFinanceFields.count > 1 {
+                    Button("Apply all reviewed suggestions") {
+                        perform {
+                            for acceptance in try await review.applyReviewedFields() {
+                                if case .saved(let key, let value) = acceptance {
+                                    onSavedCategory(key, value, nil)
+                                }
+                            }
+                        }
+                    }.disabled(review.isApplying || review.isLoading)
+                }
                 if !review.fields.contains(where: { review.proposal($0.key) != nil }) {
                     Text("No current suggestion to review. Edit the fields or request fresh suggestions.")
                         .foregroundStyle(.secondary)
                 }
             }
-            if review.isApplying { LoadingIndicator(label: "Saving reviewed category") }
+            if review.isApplying { LoadingIndicator(label: "Saving reviewed fields") }
         }
         .onDisappear { actionTask?.cancel() }
     }

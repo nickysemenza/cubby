@@ -3,14 +3,14 @@ import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 
+import {
+  RecordChartLabel,
+  RecordChartTick,
+  useRecordEmojiById,
+} from "~/entity/components/record-mark";
 import { entityDetailLink } from "~/entity/entities";
 import { RankedBarBreakdown } from "~/ui/charts/kit";
 
-import {
-  ProjectChartLabel,
-  ProjectChartTick,
-  useProjectIconById,
-} from "../project-mark";
 import { ChartTooltip } from "./ChartTooltip";
 
 /**
@@ -29,7 +29,7 @@ export function OpenTasksByProject({
   data: ProjectPortfolioAnalyticsOut["taskHeatmap"];
 }) {
   const navigate = useNavigate();
-  const { iconById } = useProjectIconById();
+  const { emojiById } = useRecordEmojiById("project");
 
   const openRows = useMemo(
     () => rows.filter((r) => r.openTaskCount > 0),
@@ -37,13 +37,16 @@ export function OpenTasksByProject({
   );
   const identityById = useMemo(
     () =>
-      new Map<string, { name: string; icon: string | null }>(
+      new Map<string, { name: string; emoji: string | null }>(
         openRows.map((row) => [
           row.projectId,
-          { name: row.projectName, icon: iconById.get(row.projectId) ?? null },
+          {
+            name: row.projectName,
+            emoji: emojiById.get(row.projectId) ?? null,
+          },
         ]),
       ),
-    [openRows, iconById],
+    [openRows, emojiById],
   );
 
   return (
@@ -61,16 +64,21 @@ export function OpenTasksByProject({
       formatValue={(v) => `${v}`}
       axisBottomFormat={(v) => `${v}`}
       renderTick={(tick) => (
-        <ProjectChartTick {...tick} identityById={identityById} />
+        <RecordChartTick
+          entity="project"
+          {...tick}
+          identityById={identityById}
+        />
       )}
       tooltip={(row) => (
         <ChartTooltip>
           <strong>
-            <ProjectChartLabel
+            <RecordChartLabel
+              entity="project"
               identity={
                 identityById.get(row.projectId) ?? {
                   name: row.projectName,
-                  icon: null,
+                  emoji: null,
                 }
               }
             />

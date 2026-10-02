@@ -50,6 +50,20 @@
       "when": 1790885858726,
       "tag": "0006_upc_cache_product_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790964201520,
+      "tag": "0007_generic_record_emoji",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790964202736,
+      "tag": "0008_derived_ddl",
+      "breakpoints": true
     }
   ]
 }

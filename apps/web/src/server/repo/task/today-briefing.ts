@@ -29,7 +29,7 @@ type BriefingRow = {
   dueEndDate: string | null;
   projectId: string | null;
   projectName: string | null;
-  projectIcon: string | null;
+  projectEmoji: string | null;
 };
 
 export async function getTaskTodayBriefing(
@@ -47,7 +47,7 @@ export async function getTaskTodayBriefing(
         t."dueEndDate",
         live_project."shortcode" AS "projectId",
         live_project."name" AS "projectName",
-        live_project."icon" AS "projectIcon",
+        live_project."emoji" AS "projectEmoji",
         bt."id" IS NOT NULL AS "isBlocked"
       FROM "Task" t
       LEFT JOIN blocked_tasks bt ON bt."id" = t."id"
@@ -76,7 +76,7 @@ export async function getTaskTodayBriefing(
       FROM briefing_tasks
     ), ranked_next AS (
       SELECT
-        "id", "name", "status", "dueDate", "dueEndDate", "projectId", "projectName", "projectIcon",
+        "id", "name", "status", "dueDate", "dueEndDate", "projectId", "projectName", "projectEmoji",
         ROW_NUMBER() OVER (
           ORDER BY
             CASE
@@ -105,7 +105,7 @@ export async function getTaskTodayBriefing(
       ranked_next."dueEndDate",
       ranked_next."projectId",
       ranked_next."projectName",
-      ranked_next."projectIcon"
+      ranked_next."projectEmoji"
     FROM summary
     LEFT JOIN ranked_next ON ranked_next."rank" <= 4
     ORDER BY ranked_next."rank" ASC NULLS LAST
@@ -126,7 +126,7 @@ export async function getTaskTodayBriefing(
                 ? parseShortcodeFor("project", row.projectId)
                 : null,
               projectName: row.projectName,
-              projectIcon: row.projectIcon,
+              projectEmoji: row.projectEmoji,
             },
           ]
         : [],

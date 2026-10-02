@@ -10,12 +10,13 @@ import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import type { DataType } from "@cubby/usda";
 import type { ReactNode } from "react";
 import { match } from "ts-pattern";
+import { z } from "zod";
 
 import {
   capitalize,
   PROJECT_STATUS_LABELS,
 } from "~/app/projects/project-formatting";
-import { ProjectMarkById } from "~/app/projects/project-mark";
+import { RecordMarkByReference } from "~/entity/components/record-mark";
 import { EntityIcon } from "~/entity/entities";
 import { usdaRouteId } from "~/entity/entity-query";
 import { LocationIcon } from "~/features/locations/location-icons";
@@ -26,7 +27,7 @@ import { cn, formatCurrency } from "~/lib/utils";
 import { PreviewRefLink } from "./leaf";
 
 // Minimal data shape - just id and name
-type MinimalEntityData = { id: string; name: string };
+type MinimalEntityData = { id: string; name: string; emoji?: string | null };
 
 // Discriminated union for entity-specific data shapes
 export type InlineRefLinkProps = {
@@ -75,7 +76,7 @@ export type InlineRefLinkProps = {
   | {
       entity: "project";
       data: MinimalEntityData & {
-        icon?: string | null;
+        emoji?: string | null;
         status?: ProjectStatus;
         kind?: ProjectKind | null;
       };
@@ -201,7 +202,6 @@ const inlineSpec = (props: InlineRefLinkProps): InlineSpec =>
         : data.status
           ? PROJECT_STATUS_LABELS[data.status]
           : undefined,
-      mark: <ProjectMarkById projectId={data.id} icon={data.icon} size={12} />,
     }))
     .with({ entity: "task" }, ({ data }) => ({
       id: data.id,
@@ -257,7 +257,17 @@ export function InlineRefLink(props: InlineRefLinkProps) {
       entity={entity}
       id={id}
       displayImage={displayImage}
-      fallbackMark={mark ?? <EntityIcon entity={entity} size={12} colored />}
+      fallbackMark={
+        <RecordMarkByReference
+          entity={entity}
+          recordId={id}
+          emoji={
+            z.object({ emoji: z.string().nullish() }).parse(props.data).emoji
+          }
+          size={12}
+          fallback={mark}
+        />
+      }
       showIdentityMark={showIdentityMark}
       openInNewTab={openInNewTab}
       className={cn(linkClass, truncate && "min-w-0", className)}

@@ -93,6 +93,7 @@ import {
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { assertReviewedSpendingClassification } from "./spending-classification-review-authorization";
+import { loadVendorCategoryEvidence } from "./vendor-suggestion-context";
 
 export const VENDOR_DELETE_EDGE_POLICY = {
   "FinancialAccount.providerVendorId": {
@@ -295,6 +296,13 @@ const vendorColumns = {
   website: vendor.website,
   orderUrlTemplate: vendor.orderUrlTemplate,
   spendingProfile: vendor.spendingProfile,
+  emoji: vendor.emoji,
+  defaultSpendingCategoryName: sql<
+    string | null
+  >`(SELECT sc.name FROM "SpendingCategory" sc WHERE sc.id = ${vendor.defaultSpendingCategoryId} AND sc."deletedAt" IS NULL)`,
+  defaultSpendingCategoryEmoji: sql<
+    string | null
+  >`(SELECT sc.emoji FROM "SpendingCategory" sc WHERE sc.id = ${vendor.defaultSpendingCategoryId} AND sc."deletedAt" IS NULL)`,
   defaultSpendingCategoryId: sql<SpendingCategoryShortcode | null>`(SELECT sc.shortcode FROM "SpendingCategory" sc WHERE sc.id = ${vendor.defaultSpendingCategoryId} AND sc."deletedAt" IS NULL)`,
   evidenceExpectation: vendor.evidenceExpectation,
   orderEvidence: vendor.orderEvidence,
@@ -348,6 +356,9 @@ type VendorRow = {
   orderUrlTemplate: string | null;
   spendingProfile: string;
   defaultSpendingCategoryId: SpendingCategoryShortcode | null;
+  defaultSpendingCategoryName: string | null;
+  defaultSpendingCategoryEmoji: string | null;
+  emoji: string | null;
   evidenceExpectation: VendorOut["evidenceExpectation"];
   orderEvidence: string | null;
   orderEmailSenders: string[];
@@ -431,6 +442,9 @@ const dbVendorToAPI = (
 ): VendorOut => ({
   id: parseShortcodeFor("vendor", row.shortcode),
   name: row.name,
+  emoji: row.emoji,
+  defaultSpendingCategoryName: row.defaultSpendingCategoryName,
+  defaultSpendingCategoryEmoji: row.defaultSpendingCategoryEmoji,
   website: row.website,
   orderUrlTemplate: row.orderUrlTemplate,
   spendingProfile: vendorSpendingProfile.parse(row.spendingProfile),
@@ -456,6 +470,9 @@ const vendorScaffold = listScaffold("vendor", vendor);
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildVendorWhereClause = (filters: VendorFilters) =>
   vendorScaffold.where(filters, [
+    filters.needsClassification === undefined
+      ? undefined
+      : sql`(${vendor.defaultSpendingCategoryId} IS NULL) = ${filters.needsClassification}`,
     ...rangeConditions(vendorPurchaseCount, filters, "purchaseCount"),
     ...rangeConditions(vendorSpend, filters, "spend"),
     filters.latestPurchaseDatePresenceFilter === "has"
@@ -613,7 +630,10 @@ export const getVendorByID = async (
   }
   const dataQualities = await loadDataQualities(db, "vendor", [row.id]);
   // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
-  return dbVendorToAPI(row, dataQualities.get(row.id)!);
+  return {
+    ...dbVendorToAPI(row, dataQualities.get(row.id)!),
+    ...(await loadVendorCategoryEvidence(db, row.shortcode)),
+  };
 };
 
 export const getVendorByShortcode = async (

@@ -1,3 +1,4 @@
+import { recordEmojiField } from "../emoji";
 import { z } from "zod";
 
 import {
@@ -21,6 +22,7 @@ export default defineEntity({
   table: "VendorAccount",
   identifiers: { brand: "VendorAccountId", shortcode: "VACCT-" },
   presentation: {
+    recordEmojiField: "emoji",
     list: {
       read: {
         derived: ["lastRunAt", "lastSuccessAt"],
@@ -50,6 +52,14 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: { ...recordEmojiField.control.suggest, basis: ["label"] },
+        },
+      },
+
       {
         key: "label",
         kind: "text",
@@ -224,6 +234,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      "emoji",
       {
         key: "id",
         specialized: "primary-key:VendorAccountId",
@@ -258,6 +269,7 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "emoji",
       "label",
       "vendorId",
       "ledgerPartyId",
@@ -266,6 +278,7 @@ export default defineEntity({
       "browser",
     ],
     update: [
+      "emoji",
       "label",
       "vendorId",
       "ledgerPartyId",
@@ -287,8 +300,9 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["label", "vendorId", "ledgerPartyId", "browser"],
+        capture: ["emoji", "label", "vendorId", "ledgerPartyId", "browser"],
         full: [
+          "emoji",
           "label",
           "vendorId",
           "ledgerPartyId",
@@ -296,12 +310,13 @@ export default defineEntity({
           "status",
           "browser",
         ],
-        identity: ["label", "vendorId", "ledgerPartyId"],
+        identity: ["emoji", "label", "vendorId", "ledgerPartyId"],
       },
       create: ["capture", "full"],
       update: ["full", "identity"],
     },
     output: [
+      "emoji",
       "id",
       "label",
       "vendorId",

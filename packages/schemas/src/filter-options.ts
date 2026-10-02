@@ -35,6 +35,7 @@ const kindFilterOptionsInput = filterOptionRequest.extend({
   kind: filterOptionKind,
 });
 const filterOptionProjection = z.enum([
+  "emoji",
   "count",
   "logo",
   "kind",
@@ -94,6 +95,7 @@ export const filterOptionItem = z.object({
   kind: ledgerPartyKind.optional(),
   /** Present when requested through `include` (an entity's own icon, e.g. `project`). */
   icon: z.string().nullable().optional(),
+  emoji: z.string().nullable().optional(),
   /**
    * Present when requested through `include` (`project`'s effective content
    * window — see `projectNameOptions`).

@@ -609,7 +609,7 @@ function BoundRecordSuggestions({
       source: FieldSuggestionSource,
       expectedCurrent: string | null,
     ) => {
-      if (field === "spendingCategoryId" && suggestion.financeReview) {
+      if (suggestion.financeReview) {
         try {
           await financeApply.apply(suggestion);
         } catch (error) {

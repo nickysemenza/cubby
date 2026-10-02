@@ -102,7 +102,13 @@ export const aiContract = defineContract("ai", {
   applyFinanceCategorySuggestion: mutation({
     input: financeCategoryApplyInput,
     output: financeCategoryApplyOut,
-    invalidates: ["financialTransaction", "purchase", "expense"],
+    invalidates: [
+      "financialTransaction",
+      "purchase",
+      "expense",
+      "vendor",
+      "product",
+    ],
     native: "Reviewed saved finance category suggestions",
   }),
   suggestFields: query({

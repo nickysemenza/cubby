@@ -1,3 +1,4 @@
+import { vendorSpendingProfile } from "./spending-classification";
 import { z } from "zod";
 import { fieldResolutionsSchema } from "./field-resolution";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
@@ -10,6 +11,7 @@ import {
   inventoryShortcode,
   locationShortcode,
   productShortcode,
+  productCategoryShortcode,
   spendingCategoryShortcode,
 } from "./identifiers";
 import { productCategory } from "./product-fields";
@@ -376,14 +378,41 @@ export type AiUsageSummaryRow = z.infer<typeof aiUsageSummaryRowSchema>;
  * are shortcodes for reference fields and plain text otherwise, `null` when
  * unset/unknown. `provided` mode never uses another target's proposal as evidence.
  */
+export const suggestionPurchaseEvidenceSchema = z.object({
+  principalLineCount: z.number().int(),
+  distinctPurchaseCount: z.number().int(),
+  unknownCategoryLineCount: z.number().int(),
+  truncated: z.boolean(),
+  categories: z.array(
+    z.object({
+      id: productCategoryShortcode,
+      name: z.string(),
+      emoji: z.string().nullable(),
+      principalLineCount: z.number().int(),
+      distinctPurchaseCount: z.number().int(),
+    }),
+  ),
+});
 export const financeCategoryReviewSchema = z.object({
-  entity: z.enum(["financialTransaction", "purchase", "expense"]),
+  evidence: suggestionPurchaseEvidenceSchema.optional(),
+  entity: z.enum(["financialTransaction", "purchase", "expense", "vendor"]),
   entityId: z.string().min(1),
   fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  field: z
+    .enum([
+      "spendingCategoryId",
+      "defaultSpendingCategoryId",
+      "spendingProfile",
+    ])
+    .optional(),
 });
-export const financeCategoryApplyInput = financeCategoryReviewSchema.extend({
-  spendingCategoryId: spendingCategoryShortcode,
-});
+export const financeCategoryApplyInput = financeCategoryReviewSchema
+  .omit({ evidence: true })
+  .extend({
+    spendingCategoryId: spendingCategoryShortcode.optional(),
+    defaultSpendingCategoryId: spendingCategoryShortcode.optional(),
+    spendingProfile: vendorSpendingProfile.optional(),
+  });
 export const financeCategoryApplyOut = financeCategoryApplyInput
   .omit({ fingerprint: true })
   .extend({

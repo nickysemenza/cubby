@@ -521,6 +521,7 @@ const compileFieldModel = (
         list: field.display.list,
         detail: field.display.detail,
         listHidden: field.display.listHidden ?? false,
+        referencePreviewLimit: field.display.referencePreviewLimit ?? null,
         valueOptions: field.display.valueOptions ?? null,
         preview: field.display.preview ?? false,
       },

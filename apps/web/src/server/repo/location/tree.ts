@@ -50,6 +50,7 @@ import { computeLocationValuations } from "./valuation";
 const MAX_TREE_DEPTH = 10;
 
 const locationTreeRowSchema = z.object({
+  emoji: z.string().nullable(),
   id: locationIdSchema,
   shortcode: z.string(),
   name: z.string(),

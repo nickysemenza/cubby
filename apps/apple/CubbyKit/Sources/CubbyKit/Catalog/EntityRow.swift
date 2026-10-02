@@ -44,6 +44,10 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
 }
 
 extension EntityDescriptor {
+    public func recordEmoji(in row: EntityRow) -> String? {
+        recordEmojiField.flatMap { row.raw[$0]?.stringValue }
+    }
+
     /// Projects a raw list/detail row into an `EntityRow`. `nil` when the object carries no `id` —
     /// the one field every entity is guaranteed to have.
     public func row(from object: JSONValue) -> EntityRow? {

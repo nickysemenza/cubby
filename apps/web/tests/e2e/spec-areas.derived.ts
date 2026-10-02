@@ -296,6 +296,12 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/recipes.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/recipes.new.tsx",
   ],
+  "record-emoji-categories.spec.ts": [
+    "apps/web/src/routes/_authenticated/spending-categories.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/vendors.$shortcode.tsx",
+    "apps/web/src/routes/api/v1/$resource.ts",
+    "apps/web/src/routes/api/v1/$resource/$operation.ts",
+  ],
   "relationship-discovery.spec.ts": [
     "apps/web/src/routes/_authenticated/entities.tsx",
     "apps/web/src/routes/_authenticated/expenses.$shortcode.tsx",

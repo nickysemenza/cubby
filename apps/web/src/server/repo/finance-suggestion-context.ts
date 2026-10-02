@@ -23,6 +23,8 @@ import {
 } from "./expense-category-resolution";
 import { loadExpenseSpendingAllocations } from "./expense-spending-allocation";
 import { resolveOrThrow } from "./shortcode-resolver";
+import { withReviewedSpendingClassification } from "./spending-classification-review-authorization";
+import { loadVendorSuggestionContext } from "./vendor-suggestion-context";
 
 const evidenceRow = z.record(z.string(), z.json());
 const rowsSchema = z.array(evidenceRow);
@@ -236,17 +238,71 @@ export async function applyFinanceCategorySuggestion(
   input: FinanceCategoryApplyInput,
 ) {
   const review = financeCategoryReviewSchema.parse(input);
+  if (review.entity === "vendor") {
+    return withTransactionDatabase(
+      context.db,
+      async (db) => {
+        const current = await loadVendorSuggestionContext(db, review.entityId);
+        if (current.truncated || current.fingerprint !== review.fingerprint)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Vendor purchase evidence or saved defaults changed; request a fresh suggestion before applying.",
+          );
+        const patch = Object.fromEntries(
+          ["defaultSpendingCategoryId", "spendingProfile"]
+            .filter((key) => Object.hasOwn(input, key))
+            .map((key) => [
+              key,
+              z.record(z.string(), z.unknown()).parse(input)[key],
+            ]),
+        );
+        if (
+          Object.keys(patch).length === 0 ||
+          input.spendingCategoryId !== undefined
+        )
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Review a vendor default category or spending profile.",
+          );
+        const result = await withReviewedSpendingClassification(db, () =>
+          executeEntityAs(
+            { ...context, db },
+            "update",
+            generatedEntityUpdateCommandSchema.parse({
+              action: "update",
+              entity: "vendor",
+              id: review.entityId,
+              data: patch,
+            }),
+          ),
+        );
+        return { ...input, sideEffects: result.sideEffects };
+      },
+      { isolationLevel: "repeatable read" },
+    );
+  }
+  if (
+    !input.spendingCategoryId ||
+    input.spendingProfile !== undefined ||
+    input.defaultSpendingCategoryId !== undefined
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Review an Expense category or Purchase fallback.",
+    );
   if (!isFinanceCategoryEntity(review.entity))
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "Classify Expense lines or review the Purchase fallback; transactions carry source evidence only.",
     );
+  const financeEntity = review.entity;
+  const spendingCategoryId = input.spendingCategoryId;
   return withTransactionDatabase(
     context.db,
     async (db) => {
       const current = await loadFinanceSuggestionContext(
         db,
-        review.entity,
+        financeEntity,
         review.entityId,
       );
       if (current.truncated)
@@ -259,21 +315,21 @@ export async function applyFinanceCategorySuggestion(
           "CONSTRAINT_VIOLATION",
           "The saved finance record or linked evidence changed; review again before applying the category.",
         );
-      await resolveOrThrow(db, "spendingCategory", input.spendingCategoryId);
+      await resolveOrThrow(db, "spendingCategory", spendingCategoryId);
       const result = await executeEntityAs(
         { ...context, db },
         "update",
         generatedEntityUpdateCommandSchema.parse({
           action: "update",
-          entity: review.entity,
-          id: parseShortcodeFor(review.entity, review.entityId),
-          data: { spendingCategoryId: input.spendingCategoryId },
+          entity: financeEntity,
+          id: parseShortcodeFor(financeEntity, review.entityId),
+          data: { spendingCategoryId: spendingCategoryId },
         }),
       );
       return {
-        entity: review.entity,
+        entity: financeEntity,
         entityId: review.entityId,
-        spendingCategoryId: input.spendingCategoryId,
+        spendingCategoryId: spendingCategoryId,
         sideEffects: result.sideEffects,
       };
     },

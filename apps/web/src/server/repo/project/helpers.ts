@@ -24,6 +24,7 @@ export type ProjectRow = {
   startDate: string | null;
   endDate: string | null;
   icon: string | null;
+  emoji?: string | null;
   notes: string | null;
   googleDriveFolderUrl: string | null;
   notionPageUrl: string | null;
@@ -245,6 +246,7 @@ const dbProjectToAPI = <Q extends DataQuality | undefined>({
     startDate: row.startDate,
     endDate: row.endDate,
     icon: row.icon,
+    emoji: row.emoji ?? row.icon,
     notes: row.notes,
     googleDriveFolderUrl: row.googleDriveFolderUrl,
     notionPageUrl: row.notionPageUrl,

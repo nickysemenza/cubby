@@ -257,6 +257,7 @@ public struct FieldExplanation: Codable, Sendable {
 }
 
 public struct FieldSuggestionDescriptor: Codable, Sendable {
+    public let reviewRequired: Bool?
     public let basis: [String]
     public let mode: String?
 }
@@ -307,6 +308,7 @@ public struct FieldDescriptor: Codable, Sendable {
     public let showInDetail: Bool
     public let detailOrder: Int?
     public let listOrder: Int?
+    public let referencePreviewLimit: Int?
     public let listHidden: Bool
     public let width: String?
     /// Cell formatter (`currency`, `signedCurrency`, `plainDate`, `timestamp`, `external-link`, `amount`,
@@ -633,6 +635,7 @@ public struct EntityDescriptor: Codable, Sendable {
     /// Text fallback from `presentation.icons.emoji` where an SF Symbol can't render: CLI output,
     /// notifications, share text.
     public let emoji: String
+    public let recordEmojiField: String?
     /// Indexed by `search.find`; the intent surface is `searchable` ∧ `nativeActions.contains(.get)`.
     public let searchable: Bool
     /// Search transport metadata; nil for lists without a text-search parameter.

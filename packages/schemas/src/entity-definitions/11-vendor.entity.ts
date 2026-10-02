@@ -1,4 +1,6 @@
+import { recordEmojiField } from "../emoji";
 import { vendorSpendingProfile } from "../spending-classification.js";
+import { productCategoryShortcode } from "../identifier-fields";
 import { spendingCategoryShortcode } from "../identifier-fields.js";
 import { defineEntity } from "./definition.js";
 import { vendorShortcode } from "../identifier-fields.js";
@@ -19,6 +21,7 @@ export default defineEntity({
   table: "Vendor",
   identifiers: { brand: "VendorId", shortcode: "VEN-" },
   presentation: {
+    recordEmojiField: "emoji",
     titleField: "name",
     domain: "finance",
     description: "Sources for purchases and expense evidence.",
@@ -48,7 +51,19 @@ export default defineEntity({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "needs-classification",
+          label: "Needs classification",
+          description: "Records missing an effective spending category",
+          filters: [{ id: "needsClassification", value: "true" }],
+        },
+      ],
       read: {
+        relations: [
+          "defaultSpendingCategoryName",
+          "defaultSpendingCategoryEmoji",
+        ],
         media: ["logo", "displayImages"],
         derived: ["purchaseCount", "spend", "latestPurchaseDate"],
         quality: ["dataQuality"],
@@ -68,10 +83,91 @@ export default defineEntity({
   model: {
     fields: [
       {
+        key: "purchasedCategories",
+        kind: "identifier",
+        reference: { entity: "productCategory", multiple: true },
+        display: { detail: true, referencePreviewLimit: 2 },
+        validation: {
+          read: z
+            .array(
+              z.object({
+                id: productCategoryShortcode,
+                name: z.string(),
+                emoji: z.string().nullable(),
+                principalLineCount: z.number().int(),
+                distinctPurchaseCount: z.number().int(),
+              }),
+            )
+            .optional(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "principalLineCount",
+        provenance: { kind: "derived", sources: [{ entity: "expense" }] },
+        kind: "number",
+        display: { detail: true },
+        validation: {
+          read: z.number().int().optional(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "unknownCategoryLineCount",
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "expense" }, { entity: "product" }],
+        },
+        kind: "number",
+        display: { detail: true },
+        validation: {
+          read: z.number().int().optional(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "defaultSpendingCategoryName",
+        kind: "text",
+        nullable: true,
+        validation: {
+          read: z.string().nullable().optional(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "defaultSpendingCategoryEmoji",
+        kind: "text",
+        nullable: true,
+        validation: {
+          read: z.string().nullable().optional(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: {
+            ...recordEmojiField.control.suggest,
+            basis: ["name", "notes"],
+          },
+        },
+      },
+
+      {
         key: "spendingProfile",
         kind: "enum",
         control: {
           kind: "select",
+          suggest: {
+            basis: ["name", "website", "notes"],
+            reviewRequired: true,
+          },
           options: [
             { value: "unspecified", label: "Unspecified" },
             { value: "mixed_retail", label: "Mixed retailer" },
@@ -92,7 +188,14 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "spendingCategory" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: {
+            basis: ["name", "website", "notes", "spendingProfile"],
+            reviewRequired: true,
+          },
+        },
         display: { list: true, detail: true },
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
@@ -420,6 +523,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      "emoji",
       {
         key: "spendingProfile",
         specialized: "enum:spendingProfile",
@@ -459,6 +563,7 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "emoji",
       "spendingProfile",
       "defaultSpendingCategoryId",
       "evidenceExpectation",
@@ -473,6 +578,7 @@ export default defineEntity({
       "notes",
     ],
     update: [
+      "emoji",
       "spendingProfile",
       "defaultSpendingCategoryId",
       "evidenceExpectation",
@@ -517,8 +623,9 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["name", "website", "notes"],
+        capture: ["emoji", "name", "website", "notes"],
         full: [
+          "emoji",
           "spendingProfile",
           "defaultSpendingCategoryId",
           "evidenceExpectation",
@@ -531,12 +638,18 @@ export default defineEntity({
           "returnWindowDays",
           "notes",
         ],
-        identity: ["name"],
+        identity: ["emoji", "name"],
       },
       create: ["capture", "full"],
       update: ["full", "identity"],
     },
     output: [
+      "purchasedCategories",
+      "principalLineCount",
+      "unknownCategoryLineCount",
+      "defaultSpendingCategoryName",
+      "defaultSpendingCategoryEmoji",
+      "emoji",
       "spendingProfile",
       "defaultSpendingCategoryId",
       "evidenceExpectation",
@@ -582,6 +695,14 @@ export default defineEntity({
     audit: true,
     schema: { module: "@cubby/schemas/vendor", export: "vendorFilterFields" },
     descriptors: [
+      {
+        columnId: "needsClassification",
+        field: "needsClassification",
+        urlKey: "needsClassification",
+        kind: "boolean",
+        placeholder: "Needs classification",
+        deriveSchema: true,
+      },
       {
         columnId: "name",
         field: "search",

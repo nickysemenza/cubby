@@ -271,6 +271,7 @@
         "packages/schemas/src/spending-classification.ts",
         "packages/schemas/src/financial-reconciliation.ts",
         "packages/schemas/src/purchase-evidence-policy.ts",
+        "packages/schemas/src/emoji.ts",
         "packages/schemas/src/garden-guide.ts",
         "packages/schemas/src/garden-guides.ts",
         "packages/schemas/src/garden-practice.ts",

@@ -76,6 +76,10 @@ describe("related search candidates", () => {
     // instead of matching each call's SQL text.
     let executeCalls = 0;
     const fakeClient = fromPartial<DrizzleClient>({
+      select: () =>
+        fromPartial<ReturnType<DrizzleClient["select"]>>({
+          from: () => fromPartial({ where: async () => [] }),
+        }),
       execute: async () => {
         executeCalls += 1;
         if (executeCalls > 1) return { rows: [] };

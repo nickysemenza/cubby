@@ -1,4 +1,5 @@
 import { purchaseChildren } from "../child-tables/purchase.js";
+import { recordEmojiField } from "../emoji";
 import { spendingCategorySummarySchema } from "../spending-classification";
 import { optionalFieldResolutionsSchema } from "../field-resolution";
 import { purchaseEvidenceCoverage } from "../purchase-evidence-policy";
@@ -30,6 +31,7 @@ export default defineEntity({
   children: purchaseChildren,
   identifiers: { brand: "PurchaseId", shortcode: "PUR-" },
   presentation: {
+    recordEmojiField: "emoji",
     titleField: "displayName",
     domain: "finance",
     description: "Orders and their itemized expense lines.",
@@ -161,6 +163,17 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: {
+            ...recordEmojiField.control.suggest,
+            basis: ["displayName", "displayLabel", "notes"],
+          },
+        },
+      },
+
       {
         key: "bookingCoverage",
         kind: "enum",
@@ -940,6 +953,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      "emoji",
       { key: "spendingCategoryId", reference: "spendingCategory" },
       {
         key: "spendingCategoryOrigin",
@@ -967,6 +981,7 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "emoji",
       "spendingCategoryId",
       "evidenceExpectation",
       "itemizationEvidence",
@@ -982,6 +997,7 @@ export default defineEntity({
       "pendingImageIds",
     ],
     update: [
+      "emoji",
       "spendingCategoryId",
       "evidenceExpectation",
       "itemizationEvidence",
@@ -1033,6 +1049,7 @@ export default defineEntity({
     intents: {
       fields: {
         capture: [
+          "emoji",
           "vendorId",
           "vendorAccountId",
           "defaultProjectId",
@@ -1044,6 +1061,7 @@ export default defineEntity({
           "notes",
         ],
         full: [
+          "emoji",
           "spendingCategoryId",
           "evidenceExpectation",
           "itemizationEvidence",
@@ -1057,13 +1075,14 @@ export default defineEntity({
           "statedTotal",
           "notes",
         ],
-        vendor: ["vendorId"],
-        identity: ["date", "orderId", "notes"],
+        vendor: ["emoji", "vendorId"],
+        identity: ["emoji", "date", "orderId", "notes"],
       },
       create: ["capture", "full"],
       update: ["full", "vendor", "identity"],
     },
     output: [
+      "emoji",
       "bookingCoverage",
       "documentCoverage",
       "itemizationCoverage",

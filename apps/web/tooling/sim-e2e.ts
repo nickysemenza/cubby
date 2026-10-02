@@ -220,17 +220,21 @@ function nativeSourceFingerprint(includeApp: boolean): string {
 async function assertNativeEdit(
   productId: string,
   expectedName?: string,
+  expectedEmoji?: string,
 ): Promise<void> {
   const checkPool = new Pool({ connectionString: databaseURL });
   try {
     const { SIM_PRODUCT_UPDATED_NAME } = await import("./scenarios/simulator");
     const targetName = expectedName ?? SIM_PRODUCT_UPDATED_NAME;
     const readName = async () => {
-      const result = await checkPool.query<{ name: string }>(
-        'SELECT name FROM "Product" WHERE shortcode = $1',
-        [productId],
-      );
-      return result.rows[0]?.name;
+      const result = await checkPool.query<{
+        name: string;
+        emoji: string | null;
+      }>('SELECT name, emoji FROM "Product" WHERE shortcode = $1', [productId]);
+      const row = result.rows[0];
+      return expectedEmoji === undefined || row?.emoji === expectedEmoji
+        ? row?.name
+        : undefined;
     };
     try {
       await pollUntil(
@@ -1271,7 +1275,8 @@ async function runNativeJourney(
   } finally {
     await stopRecording?.();
   }
-  if (!layout && !productClarity) await assertNativeEdit(productId);
+  if (!layout && !productClarity)
+    await assertNativeEdit(productId, undefined, "👩🏽‍🍳");
 }
 
 // eslint-disable-next-line complexity -- All disposable native lanes share one exception, artifact and cleanup boundary.

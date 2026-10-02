@@ -1,4 +1,5 @@
 import { expenseChildren } from "../child-tables/expense.js";
+import { recordEmojiField } from "../emoji";
 import { spendingCategoryAllocationsSchema } from "@cubby/schemas/spending-classification";
 import { financialTransactionShortcode } from "../identifier-fields";
 import { spendingCategoryShortcode } from "../identifier-fields";
@@ -43,6 +44,7 @@ export default defineEntity({
   children: expenseChildren,
   identifiers: { brand: "ExpenseId", shortcode: "EXP-" },
   presentation: {
+    recordEmojiField: "emoji",
     titleField: "name",
     domain: "finance",
     description: "The authoritative record of household spend.",
@@ -253,6 +255,16 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: {
+            ...recordEmojiField.control.suggest,
+            basis: ["name", "notes"],
+          },
+        },
+      },
       {
         key: "bookingTransactionCode",
         kind: "text",
@@ -940,6 +952,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      "emoji",
       "bookingTransactionCode",
       { key: "spendingCategoryId", reference: "spendingCategory" },
       {
@@ -979,6 +992,7 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "emoji",
       "spendingCategoryId",
       "economicRole",
       "name",
@@ -1002,6 +1016,7 @@ export default defineEntity({
       "sourceClaims",
     ],
     update: [
+      "emoji",
       "spendingCategoryId",
       "economicRole",
       "name",
@@ -1066,6 +1081,7 @@ export default defineEntity({
     intents: {
       fields: {
         capture: [
+          "emoji",
           "name",
           "lineKind",
           "cost",
@@ -1082,6 +1098,7 @@ export default defineEntity({
           "funders",
         ],
         full: [
+          "emoji",
           "spendingCategoryId",
           "economicRole",
           "name",
@@ -1102,17 +1119,18 @@ export default defineEntity({
           "url",
           "notes",
         ],
-        planned: ["name", "cost", "date"],
-        cost: ["cost"],
-        date: ["date"],
-        project: ["projectId"],
-        product: ["productId"],
+        planned: ["emoji", "name", "cost", "date"],
+        cost: ["emoji", "cost"],
+        date: ["emoji", "date"],
+        project: ["emoji", "projectId"],
+        product: ["emoji", "productId"],
         // "Mark purchased" — settles a planned expense in one write: final
         // cost, actual date (defaults to today), and a chance to correct the
         // project/cost type/trade/notes/vendor now that it actually
         // happened. `future: false` is fixed in the editing registry's
         // `buildData`, not listed here, because it's never user-edited.
         settle: [
+          "emoji",
           "cost",
           "date",
           "projectId",
@@ -1135,6 +1153,7 @@ export default defineEntity({
       ],
     },
     output: [
+      "emoji",
       "bookingTransactionCode",
       "spendingCategoryId",
       "economicRole",

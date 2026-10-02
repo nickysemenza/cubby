@@ -1,3 +1,4 @@
+import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { amount, positiveAmount } from "@cubby/schemas/codec";
 import {
@@ -28,6 +29,7 @@ export default defineEntity({
   // only `inventoryListItemOut`/`inventoryWithLocationAndProductOut` (see
   // `inventoryDisplayName` in packages/schemas/src/inventory.ts) carry it.
   presentation: {
+    recordEmojiField: "emoji",
     titleField: "displayName",
     domain: "pantry",
     description: "Approximate quantities at physical locations.",
@@ -87,6 +89,17 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: {
+            ...recordEmojiField.control.suggest,
+            basis: ["displayName"],
+          },
+        },
+      },
+
       {
         key: "productId",
         kind: "identifier",
@@ -342,6 +355,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      "emoji",
       {
         key: "id",
         specialized: "primary-key:InventoryItemId",
@@ -368,6 +382,7 @@ export default defineEntity({
       { key: "ownerLedgerPartyId", reference: "ledgerParty" },
     ],
     create: [
+      "emoji",
       "productId",
       "locationId",
       "amount",
@@ -376,6 +391,7 @@ export default defineEntity({
       "ownerLedgerPartyId",
     ],
     update: [
+      "emoji",
       "amount",
       "productId",
       "locationId",
@@ -408,6 +424,7 @@ export default defineEntity({
     intents: {
       fields: {
         capture: [
+          "emoji",
           "productId",
           "locationId",
           "amount",
@@ -416,6 +433,7 @@ export default defineEntity({
           "ownerLedgerPartyId",
         ],
         full: [
+          "emoji",
           "amount",
           "productId",
           "locationId",
@@ -423,11 +441,11 @@ export default defineEntity({
           "ownershipMode",
           "ownerLedgerPartyId",
         ],
-        amount: ["amount"],
-        product: ["productId"],
-        location: ["locationId"],
-        placement: ["placement"],
-        ownership: ["ownershipMode", "ownerLedgerPartyId"],
+        amount: ["emoji", "amount"],
+        product: ["emoji", "productId"],
+        location: ["emoji", "locationId"],
+        placement: ["emoji", "placement"],
+        ownership: ["emoji", "ownershipMode", "ownerLedgerPartyId"],
       },
       create: ["capture", "full"],
       update: [
@@ -440,6 +458,7 @@ export default defineEntity({
       ],
     },
     output: [
+      "emoji",
       "id",
       "amount",
       "valuation",

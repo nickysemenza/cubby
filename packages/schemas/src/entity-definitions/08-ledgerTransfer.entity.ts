@@ -1,3 +1,4 @@
+import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
@@ -23,6 +24,7 @@ export default defineEntity({
   // Ledger transfers have no name field; `fromPartyName` is the most
   // identifying human-readable value a transfer carries.
   presentation: {
+    recordEmojiField: "emoji",
     list: {
       read: {
         relations: [
@@ -63,6 +65,13 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: { ...recordEmojiField.control.suggest, basis: ["notes"] },
+        },
+      },
       {
         key: "fromPartyId",
         kind: "identifier",
@@ -279,6 +288,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      "emoji",
       {
         key: "id",
         specialized: "primary-key:LedgerTransferId",
@@ -294,6 +304,7 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "emoji",
       "fromPartyId",
       "toPartyId",
       "amount",
@@ -303,6 +314,7 @@ export default defineEntity({
       "evidenceTransactionIds",
     ],
     update: [
+      "emoji",
       "fromPartyId",
       "toPartyId",
       "amount",
@@ -326,12 +338,13 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        full: ["fromPartyId", "toPartyId", "amount", "date", "notes"],
+        full: ["emoji", "fromPartyId", "toPartyId", "amount", "date", "notes"],
       },
       create: ["full"],
       update: ["full"],
     },
     output: [
+      "emoji",
       "id",
       "fromPartyId",
       "toPartyId",

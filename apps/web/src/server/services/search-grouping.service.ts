@@ -51,6 +51,7 @@ const destinationFromHit = (hit: SearchHit): SearchDestination => ({
   entityKind: hit.entityKind,
   title: hit.title,
   subtitle: hit.subtitle,
+  emoji: hit.emoji,
   typeHint: hit.typeHint,
   imageUrl: hit.imageUrl,
 });

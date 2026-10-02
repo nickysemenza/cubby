@@ -158,7 +158,7 @@ export const MAX_PROJECT_TREE_DEPTH = 100;
 export const projectOptionsOut = z.object({
   id: projectShortcode,
   name: z.string(),
-  icon: z.string().nullable(),
+  emoji: z.string().nullable(),
   effectiveStart: plainDate.nullable(),
   effectiveEnd: plainDate.nullable(),
 });
@@ -403,7 +403,7 @@ export const taskTodayBriefingItemOut = z.object({
   dueEndDate: z.string().nullable(),
   projectId: projectShortcode.nullable(),
   projectName: z.string().nullable(),
-  projectIcon: z.string().nullable(),
+  projectEmoji: z.string().nullable(),
 });
 export type TaskTodayBriefingItemOut = z.infer<typeof taskTodayBriefingItemOut>;
 
@@ -1376,7 +1376,7 @@ export type ProjectToolMatrixFilters = z.infer<typeof projectToolMatrixInput>;
 export const projectToolMatrixColumnOut = z.object({
   projectId: projectShortcode,
   projectName: z.string(),
-  icon: z.string().nullable(),
+  emoji: z.string().nullable(),
   status: projectStatusSchema,
   kind: projectKindSchema.nullable(),
   startDate: plainDate.nullable(),

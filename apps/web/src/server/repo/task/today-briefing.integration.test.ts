@@ -25,7 +25,7 @@ describe("task today briefing", () => {
           id: task.output.id,
           projectId: project.output.id,
           projectName: "Workshop",
-          projectIcon: "🔧",
+          projectEmoji: "🔧",
         }),
       ]),
     );

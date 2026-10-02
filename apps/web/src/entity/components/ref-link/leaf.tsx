@@ -10,6 +10,7 @@ import { Suspense } from "react";
 
 import { EntityIdentityMark } from "~/entity/components/entity-identity-mark";
 import type { EntityPreviewContent as EntityPreviewContentComponent } from "~/entity/components/EntityPreviewContent";
+import { RecordMarkByReference } from "~/entity/components/record-mark";
 import {
   entities,
   entityDetailParams,
@@ -240,6 +241,7 @@ const isHoverPreviewEntity = (
   hoverPreviewEntities.some((candidate) => candidate === entity);
 
 export type ChipRefLinkProps = {
+  emoji?: string | null;
   variant: "chip";
   entity: BrowserRoutedEntity;
   id: string;
@@ -262,6 +264,7 @@ export function ChipRefLink({
   id,
   name,
   displayImage,
+  emoji,
 }: Leaf<ChipRefLinkProps>) {
   const label = name ?? id;
   const providedImage = useEntityDisplayImage({
@@ -275,6 +278,14 @@ export function ChipRefLink({
         entity={entity}
         id={id}
         displayImage={image}
+        fallbackMark={
+          <RecordMarkByReference
+            entity={entity}
+            recordId={id}
+            emoji={emoji}
+            size={12}
+          />
+        }
         className={tableLinkVariants({ className: "max-w-full min-w-0" })}
       >
         <span className="min-w-0 truncate">{label}</span>
@@ -287,7 +298,19 @@ export function ChipRefLink({
       title={label}
       className="inline-flex max-w-full min-w-0 items-center gap-1"
     >
-      <EntityIdentityMark entity={entity} displayImage={image} />
+      <EntityIdentityMark
+        entity={entity}
+        displayImage={image}
+        emoji={emoji}
+        fallback={
+          <RecordMarkByReference
+            entity={entity}
+            recordId={id}
+            emoji={emoji}
+            size={12}
+          />
+        }
+      />
       <span className="min-w-0 truncate">{label}</span>
     </TableRefLink>
   );

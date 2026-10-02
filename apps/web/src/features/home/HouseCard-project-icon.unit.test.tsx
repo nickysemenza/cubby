@@ -2,6 +2,7 @@ import { taskTodayBriefingOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
@@ -20,7 +21,7 @@ describe("home task project identity", () => {
     harness.dispose();
   });
 
-  it("uses the briefing icon without requesting the project roster", async () => {
+  it("uses the briefing emoji without requesting the project roster", async () => {
     const taskId = testShortcode("task", "home-briefing-task");
     const projectId = testShortcode("project", "home-briefing-project");
     harness.queryClient.setQueryData(
@@ -35,7 +36,7 @@ describe("home task project identity", () => {
             dueEndDate: null,
             projectId,
             projectName: "Workshop",
-            projectIcon: "🔧",
+            projectEmoji: "🔧",
           },
         ],
         nextCount: 1,
@@ -46,7 +47,13 @@ describe("home task project identity", () => {
       }),
     );
     const requests: string[] = [];
-    restoreDispatch = overrideStartDispatch(async (operation) => {
+    restoreDispatch = overrideStartDispatch(async (operation, input) => {
+      if (operation === "entity.filterOptions") {
+        requests.push(
+          `${operation}:${z.object({ entity: z.string() }).parse(input).entity}`,
+        );
+        return { ok: true, data: { items: [], hasMore: false } };
+      }
       requests.push(operation);
       if (operation === "entityMedia.displayImages")
         return { ok: true, data: {} };
@@ -59,6 +66,6 @@ describe("home task project identity", () => {
     await waitFor(() =>
       expect(requests).toContain("entityMedia.displayImages"),
     );
-    expect(requests).not.toContain("entity.filterOptions");
+    expect(requests).not.toContain("entity.filterOptions:project");
   });
 });

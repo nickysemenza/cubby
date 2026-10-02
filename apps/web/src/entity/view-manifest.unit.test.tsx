@@ -53,7 +53,7 @@ describe("view manifest", () => {
   });
 
   it("returns no views for an entity that declares none", () => {
-    expect(viewsForEntity("vendor")).toEqual([]);
+    expect(viewsForEntity("device")).toEqual([]);
     expect(viewsForEntity(undefined)).toEqual([]);
   });
 });

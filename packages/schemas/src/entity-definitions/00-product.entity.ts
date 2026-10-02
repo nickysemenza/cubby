@@ -1,4 +1,5 @@
 import { productChildren } from "../child-tables/product.js";
+import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { PRODUCT_UNCLASSIFIED_GROUP_KEY } from "../group-keys";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
@@ -37,6 +38,7 @@ export default defineEntity({
   children: productChildren,
   identifiers: { brand: "ProductId", shortcode: "PRD-" },
   presentation: {
+    recordEmojiField: "emoji",
     titleField: "name",
     // Pantry/Inventory wayfinding, not a Product status colour; USDA data
     // follows the product catalog onto the same line.
@@ -592,6 +594,16 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: {
+            ...recordEmojiField.control.suggest,
+            basis: ["name", "notes", "categoryId"],
+          },
+        },
+      },
       {
         key: "acquisitionOrigin",
         kind: "enum",
@@ -1626,6 +1638,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      "emoji",
       {
         key: "acquisitionOrigin",
         specialized: "enum:acquisitionOrigin",
@@ -1664,6 +1677,7 @@ export default defineEntity({
       { key: "labelNutrition", specialized: "json:labelNutrition" },
     ],
     create: [
+      "emoji",
       "acquisitionOrigin",
       "name",
       "aliases",
@@ -1688,6 +1702,7 @@ export default defineEntity({
       "pendingImagePurposes",
     ],
     update: [
+      "emoji",
       "acquisitionOrigin",
       "name",
       "aliases",
@@ -1782,6 +1797,7 @@ export default defineEntity({
         // create page was), so classification, ingredient links, and unit
         // conversions can be set at creation instead of a second edit.
         capture: [
+          "emoji",
           "name",
           "aliases",
           "tags",
@@ -1807,6 +1823,7 @@ export default defineEntity({
           "imageOrder",
         ],
         full: [
+          "emoji",
           "acquisitionOrigin",
           "name",
           "aliases",
@@ -1837,6 +1854,7 @@ export default defineEntity({
         // `full` covers except identity (name/manufacturer render outside
         // this panel) and the fields owned by the shell's own image block.
         quickDetails: [
+          "emoji",
           "model",
           "notes",
           "categoryId",
@@ -1847,14 +1865,22 @@ export default defineEntity({
           "ingredientId",
           "unitMappings",
         ],
-        identity: ["name", "aliases", "manufacturer", "model", "categoryId"],
-        price: ["price"],
-        stock: ["stockTracked"],
+        identity: [
+          "emoji",
+          "name",
+          "aliases",
+          "manufacturer",
+          "model",
+          "categoryId",
+        ],
+        price: ["emoji", "price"],
+        stock: ["emoji", "stockTracked"],
       },
       create: ["capture", "full"],
       update: ["full", "identity", "price", "stock"],
     },
     output: [
+      "emoji",
       "acquisitionOrigin",
       "id",
       "name",

@@ -3,10 +3,10 @@ import { BuildingsIcon } from "@phosphor-icons/react/dist/csr/Buildings";
 import { useMemo } from "react";
 
 import {
-  ProjectChartLabel,
-  ProjectChartTick,
-  useProjectIconById,
-} from "~/app/projects/project-mark";
+  RecordChartLabel,
+  RecordChartTick,
+  useRecordEmojiById,
+} from "~/entity/components/record-mark";
 import { RankedBarBreakdown } from "~/ui/charts/kit";
 
 /**
@@ -21,16 +21,19 @@ export function ProjectBreakdown({
 }: {
   byProject: ExpenseProjectAggregate[];
 }) {
-  const { iconById } = useProjectIconById();
+  const { emojiById } = useRecordEmojiById("project");
   const identityById = useMemo(
     () =>
-      new Map<string, { name: string; icon: string | null }>(
+      new Map<string, { name: string; emoji: string | null }>(
         byProject.map((row) => [
           row.projectId,
-          { name: row.projectName, icon: iconById.get(row.projectId) ?? null },
+          {
+            name: row.projectName,
+            emoji: emojiById.get(row.projectId) ?? null,
+          },
         ]),
       ),
-    [byProject, iconById],
+    [byProject, emojiById],
   );
 
   return (
@@ -41,14 +44,19 @@ export function ProjectBreakdown({
       idKey="projectId"
       margin={{ top: 10, right: 40, bottom: 40, left: 180 }}
       renderTick={(tick) => (
-        <ProjectChartTick {...tick} identityById={identityById} />
+        <RecordChartTick
+          entity="project"
+          {...tick}
+          identityById={identityById}
+        />
       )}
       renderLabel={(row) => (
-        <ProjectChartLabel
+        <RecordChartLabel
+          entity="project"
           identity={
             identityById.get(row.projectId) ?? {
               name: row.projectName,
-              icon: null,
+              emoji: null,
             }
           }
         />

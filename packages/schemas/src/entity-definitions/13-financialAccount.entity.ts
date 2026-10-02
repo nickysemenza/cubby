@@ -1,3 +1,4 @@
+import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import {
   financialAccountCardNumbers,
@@ -19,6 +20,7 @@ export default defineEntity({
   table: "FinancialAccount",
   identifiers: { brand: "FinancialAccountId", shortcode: "FAC-" },
   presentation: {
+    recordEmojiField: "emoji",
     list: {
       read: {
         relations: [
@@ -57,6 +59,17 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: {
+            ...recordEmojiField.control.suggest,
+            basis: ["name", "notes"],
+          },
+        },
+      },
+
       {
         key: "name",
         kind: "text",
@@ -287,6 +300,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      "emoji",
       {
         key: "id",
         specialized: "primary-key:FinancialAccountId",
@@ -317,6 +331,7 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "emoji",
       "name",
       "identity",
       "provisional",
@@ -328,6 +343,7 @@ export default defineEntity({
       "notes",
     ],
     update: [
+      "emoji",
       "name",
       "identity",
       "provisional",
@@ -364,6 +380,7 @@ export default defineEntity({
     intents: {
       fields: {
         capture: [
+          "emoji",
           "name",
           "kind",
           "issuer",
@@ -378,6 +395,7 @@ export default defineEntity({
           "notes",
         ],
         full: [
+          "emoji",
           "name",
           "providerVendorId",
           "provisional",
@@ -385,7 +403,7 @@ export default defineEntity({
           "inventoryOwnerDefaultEnabled",
           "notes",
         ],
-        identity: ["name", "provisional", "sourceAliases", "notes"],
+        identity: ["emoji", "name", "provisional", "sourceAliases", "notes"],
       },
       create: ["capture", "full"],
       update: ["full", "identity"],
@@ -400,6 +418,7 @@ export default defineEntity({
       ],
     },
     output: [
+      "emoji",
       "id",
       "name",
       "identity",

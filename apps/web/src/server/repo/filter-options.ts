@@ -7,6 +7,7 @@ import type {
 import { type LocationId, parseEntityId } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import {
+  getTableColumns,
   type AnyColumn,
   and,
   asc,
@@ -286,6 +287,7 @@ async function loadEntityRows(
   const iconColumn = input.include.includes("icon")
     ? optionIconFor(entity)
     : null;
+  const emojiColumn = getTableColumns(table).emoji;
   const withDates = input.include.includes("dates");
   if (withDates && entity !== "project")
     throw new Error(`Filter option dates are not defined for ${entity}`);
@@ -298,6 +300,7 @@ async function loadEntityRows(
       logoKey: withLogo ? image.key : sql<null>`NULL::text`,
       kind: kindColumn ?? sql<null>`NULL::text`,
       icon: iconColumn ?? sql<null>`NULL::text`,
+      emoji: emojiColumn ?? sql<null>`NULL::text`,
     })
     .from(table)
     .$dynamic();
@@ -342,6 +345,7 @@ async function loadEntityRows(
       option.logo = row.logoKey ? { url: getR2PublicUrl(row.logoKey) } : null;
     if (kindColumn) option.kind = ledgerPartyKind.parse(row.kind);
     if (iconColumn) option.icon = z.string().nullable().parse(row.icon);
+    if (emojiColumn) option.emoji = z.string().nullable().parse(row.emoji);
     return option;
   });
 }
@@ -349,7 +353,7 @@ async function loadEntityRows(
 type EntityOptionRow = OptionRow &
   Pick<
     FilterOptionsOut["items"][number],
-    "count" | "logo" | "kind" | "icon" | "dates"
+    "count" | "logo" | "kind" | "icon" | "emoji" | "dates"
   >;
 
 /**

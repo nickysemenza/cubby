@@ -1,3 +1,4 @@
+import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { cookbookProductSummary } from "@cubby/schemas/cookbook-fields";
 import { cookbookShortcode } from "../identifier-fields.js";
@@ -19,6 +20,7 @@ export default defineEntity({
   table: "Cookbook",
   identifiers: { brand: "CookbookId", shortcode: "CKB-" },
   presentation: {
+    recordEmojiField: "emoji",
     titleField: "book",
     domain: "cook",
     description: "Imported and maintained recipe collections.",
@@ -49,6 +51,13 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: { ...recordEmojiField.control.suggest, basis: ["name"] },
+        },
+      },
       { key: "id", kind: "identifier" },
       {
         key: "shortcode",
@@ -223,6 +232,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      "emoji",
       {
         key: "id",
         specialized: "primary-key:CookbookId",
@@ -249,7 +259,7 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [],
-    update: ["name", "author", "subjects"],
+    update: ["emoji", "name", "author", "subjects"],
     bulk: [],
     audit: ["name", "author", "subjects"],
     sort: {
@@ -259,6 +269,7 @@ export default defineEntity({
       defaultOverride: "name",
     },
     output: [
+      "emoji",
       "shortcode",
       "name",
       "author",

@@ -362,6 +362,7 @@ const fieldDisplayJSON = (
   showInDetail: display.detail,
   detailOrder: display.detailOrder ?? null,
   listOrder: display.listOrder ?? null,
+  referencePreviewLimit: display.referencePreviewLimit ?? null,
   listHidden: display.listHidden,
   width: display.width ?? null,
   format: display.format ?? null,
@@ -655,6 +656,7 @@ const entityJSON = (
           ),
     sfSymbol: entity.inspector.icons.sfSymbol,
     emoji: entity.inspector.icons.emoji,
+    recordEmojiField: entity.inspector.recordEmojiField,
     searchable,
     primarySearch,
     timeline:

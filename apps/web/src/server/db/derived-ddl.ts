@@ -1,3 +1,4 @@
+import { entityEmojiAliasTriggerSql } from "./entity-emoji-schema";
 import { entityIdentityTriggerSql } from "./entity-identity-schema";
 import { entityLinkLivenessTriggerSql } from "./entity-link-schema";
 
@@ -12,5 +13,5 @@ import { entityLinkLivenessTriggerSql } from "./entity-link-schema";
  * migrations already contain.
  */
 export function renderDerivedDdl(): string {
-  return `${entityIdentityTriggerSql()}\n\n${entityLinkLivenessTriggerSql()}\n`;
+  return `${entityIdentityTriggerSql()}\n\n${entityLinkLivenessTriggerSql()}\n\n${entityEmojiAliasTriggerSql()}\n`;
 }

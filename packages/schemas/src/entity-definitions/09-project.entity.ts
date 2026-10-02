@@ -1,3 +1,4 @@
+import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -25,6 +26,8 @@ export default defineEntity({
   table: "Project",
   identifiers: { brand: "ProjectId", shortcode: "PRJ-" },
   presentation: {
+    recordEmojiField: "emoji",
+    recordEmojiAliases: ["icon"],
     titleField: "name",
     domain: "house",
     description: "Household work grouped into durable projects.",
@@ -167,6 +170,16 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: {
+            ...recordEmojiField.control.suggest,
+            basis: ["name", "notes", "kind"],
+          },
+        },
+      },
       {
         key: "fieldResolutions",
         kind: "json",
@@ -397,11 +410,7 @@ export default defineEntity({
         key: "icon",
         kind: "text",
         nullable: true,
-        control: { kind: "text", sectionOverride: "details" },
-        display: {
-          list: true,
-          detail: true,
-        },
+        display: {},
         validation: {
           read: z.string().describe("Emoji shown next to the name").nullable(),
           create: z.string().nullable().default(null),
@@ -599,6 +608,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      "emoji",
       {
         key: "id",
         specialized: "primary-key:ProjectId",
@@ -633,6 +643,7 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
+      "emoji",
       "name",
       "status",
       "kind",
@@ -649,6 +660,7 @@ export default defineEntity({
       "notionPageUrl",
     ],
     update: [
+      "emoji",
       "name",
       "status",
       "kind",
@@ -696,6 +708,7 @@ export default defineEntity({
     intents: {
       fields: {
         capture: [
+          "emoji",
           "name",
           "status",
           "kind",
@@ -707,6 +720,7 @@ export default defineEntity({
           "startDate",
         ],
         full: [
+          "emoji",
           "name",
           "icon",
           "status",
@@ -723,15 +737,16 @@ export default defineEntity({
           "blockedByIds",
           "notes",
         ],
-        status: ["status"],
-        kind: ["kind"],
-        dates: ["startDate", "endDate"],
-        parent: ["parentProjectId"],
+        status: ["emoji", "status"],
+        kind: ["emoji", "kind"],
+        dates: ["emoji", "startDate", "endDate"],
+        parent: ["emoji", "parentProjectId"],
       },
       create: ["capture", "full"],
       update: ["full", "status", "kind", "dates", "parent"],
     },
     output: [
+      "emoji",
       "fieldResolutions",
       "id",
       "name",

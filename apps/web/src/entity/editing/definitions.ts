@@ -6,6 +6,7 @@ import {
   entityFieldModels,
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
+import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
 import {
   canClearExpenseDate,
@@ -90,6 +91,22 @@ const changed = (input: {
     return false;
   return !isEqual(input.baseline, input.value);
 };
+
+/** Compatibility projections may omit the optional record identity field. */
+function absentRecordIdentity(
+  entity: Entity,
+  id: string,
+  record: EntityEditRecord | undefined,
+  baseline: EntityEditValue,
+  value: EntityEditValue,
+) {
+  return (
+    Boolean(record) &&
+    entityInspectorMetadata[entity].recordEmojiField === id &&
+    baseline === undefined &&
+    value === null
+  );
+}
 
 /**
  * The gallery pseudo-fields have no stored twin on the record: `images` is
@@ -453,6 +470,8 @@ const builderFor = <E extends EditableEntity>(
         options?.initial && record
           ? options.initial(input)
           : valueFor(record, id);
+      if (absentRecordIdentity(entity, id, record, baseline, value))
+        return undefined;
       return changed({
         record,
         writeOnly: fieldModelByKey.get(id)?.readKey === null,

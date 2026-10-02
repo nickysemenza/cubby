@@ -52,7 +52,7 @@ describe("SavedViewChips", () => {
   });
 
   it("renders a dash when an entity declares no saved views", () => {
-    render(<SavedViewChips entity="vendor" />);
+    render(<SavedViewChips entity="device" />);
 
     expect(screen.getByText("—")).toBeInTheDocument();
   });

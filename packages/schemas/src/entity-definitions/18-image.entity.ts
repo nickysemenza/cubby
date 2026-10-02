@@ -1,4 +1,5 @@
 import { imageChildren } from "../child-tables/image.js";
+import { recordEmojiField } from "../emoji";
 import {
   imageCaptureAttribution,
   imageCaptureLocation,
@@ -50,6 +51,7 @@ export default defineEntity({
   children: imageChildren,
   identifiers: { brand: "ImageId", shortcode: "IMG-" },
   presentation: {
+    recordEmojiField: "emoji",
     titleField: "filename",
     domain: null,
     description: "Images attached to household records.",
@@ -67,6 +69,14 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: { ...recordEmojiField.control.suggest, basis: ["filename"] },
+        },
+      },
+
       {
         key: "filename",
         kind: "text",
@@ -537,6 +547,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      "emoji",
       {
         key: "id",
         specialized: "primary-key:ImageId",
@@ -592,6 +603,7 @@ export default defineEntity({
     ],
     create: [],
     update: [
+      "emoji",
       "filename",
       "source",
       "sourcePageUrl",
@@ -607,6 +619,7 @@ export default defineEntity({
       fields: ["createdAt", "updatedAt", "filename", "size", "status"],
     },
     output: [
+      "emoji",
       "representations",
       "id",
       "url",

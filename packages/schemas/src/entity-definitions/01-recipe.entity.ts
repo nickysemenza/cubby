@@ -1,4 +1,5 @@
 import { recipeChildren } from "../child-tables/recipe.js";
+import { recordEmojiField } from "../emoji";
 import { defineEntity } from "./definition.js";
 import {
   cookbookShortcode,
@@ -27,6 +28,7 @@ export default defineEntity({
   children: recipeChildren,
   identifiers: { brand: "RecipeId", shortcode: "RCP-" },
   presentation: {
+    recordEmojiField: "emoji",
     titleField: "name",
     domain: "cook",
     description: "Recipes, their sections, and composition.",
@@ -97,6 +99,16 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        ...recordEmojiField,
+        control: {
+          ...recordEmojiField.control,
+          suggest: {
+            ...recordEmojiField.control.suggest,
+            basis: ["name", "notes"],
+          },
+        },
+      },
       {
         key: "fieldResolutions",
         kind: "json",
@@ -623,6 +635,7 @@ export default defineEntity({
       },
     ],
     storage: [
+      "emoji",
       {
         key: "id",
         specialized: "primary-key:RecipeId",
@@ -653,6 +666,7 @@ export default defineEntity({
       { key: "meta", specialized: "json:meta" },
     ],
     create: [
+      "emoji",
       "name",
       "meta",
       "yield",
@@ -664,6 +678,7 @@ export default defineEntity({
       "forkedFromRecipeId",
     ],
     update: [
+      "emoji",
       "name",
       "meta",
       "yield",
@@ -697,8 +712,9 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["name"],
+        capture: ["emoji", "name"],
         full: [
+          "emoji",
           "name",
           "cookbookId",
           "tags",
@@ -706,12 +722,13 @@ export default defineEntity({
           "sections",
           "forkedFromRecipeId",
         ],
-        identity: ["name", "cookbookId", "tags"],
+        identity: ["emoji", "name", "cookbookId", "tags"],
       },
       create: ["capture", "full"],
       update: ["full", "identity"],
     },
     output: [
+      "emoji",
       "id",
       "name",
       "createdAt",

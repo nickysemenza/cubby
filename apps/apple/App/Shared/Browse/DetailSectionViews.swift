@@ -57,6 +57,9 @@ struct EntityHeroView<Actions: View>: View {
                 .buttonStyle(.plain)
             }
             HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
+                if let emoji = descriptor.recordEmoji(in: row) {
+                    Text(emoji).font(.fieldGuideDisplay).accessibilityHidden(true)
+                }
                 Text(row.title)
                     .font(.fieldGuideDisplay)
                     .tracking(-0.4)
@@ -220,7 +223,9 @@ struct FieldsSectionView<Inline: View>: View {
 
     @ViewBuilder
     private func fieldRow(_ field: FieldDescriptor) -> some View {
-        if field.detailRenderer == .spendingCategorySummary {
+        if field.reference?.multiple == true {
+            RecordReferenceList(field: field, row: row)
+        } else if field.detailRenderer == .spendingCategorySummary {
             if let value = row.raw[field.key],
                 let summary = try? JSONDecoder.cubby().decode(
                     SpendingCategorySummary.self, from: JSONEncoder.cubby().encode(value))
@@ -238,7 +243,10 @@ struct FieldsSectionView<Inline: View>: View {
             let value = reference.name ?? reference.id
             NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
                 LabeledContent {
-                    Text(value)
+                    HStack {
+                        if let emoji = reference.emoji { Text(emoji).accessibilityHidden(true) }
+                        Text(value)
+                    }
                 } label: {
                     FieldExplanationLabel(
                         field: field,
@@ -1113,5 +1121,57 @@ struct RawRecordDisclosure: View {
             return "{}"
         }
         return string
+    }
+}
+
+/// Bounded reference presentation and its scoped browse link share the declaration.
+private struct RecordReferenceList: View {
+    let field: FieldDescriptor
+    let row: EntityRow
+    @State private var expanded = false
+    private var items: [JSONValue] { row.raw[field.readKey ?? field.key]?.arrayValue ?? [] }
+    private var target: EntityKey? { field.reference?.entity }
+    private var filters: EntityFilterState {
+        var result = EntityFilterState()
+        guard let target else { return result }
+        for binding in field.reference?.scope ?? [] {
+            if let descriptor = EntityCatalog[target].filters.first(where: {
+                $0.wire.names.contains(binding.targetField) || $0.columnId == binding.targetField
+            }),
+                let value = row.raw[binding.sourceField]?.stringValue, let name = descriptor.wire.names.first
+            {
+                result.set(.single(value), for: name)
+            }
+        }
+        return result
+    }
+    var body: some View {
+        if let target {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                Text(field.label).font(.fieldGuideLabel)
+                ForEach(
+                    Array(
+                        (expanded ? items : Array(items.prefix(field.referencePreviewLimit ?? items.count)))
+                            .enumerated()), id: \.offset
+                ) { _, item in
+                    if let id = item["id"]?.stringValue ?? item.stringValue {
+                        NavigationLink(value: Route.entityDetail(target, id: id)) {
+                            HStack {
+                                if let emoji = item["emoji"]?.stringValue {
+                                    Text(emoji).accessibilityHidden(true)
+                                }
+                                Text(item["name"]?.stringValue ?? id)
+                            }
+                        }
+                    }
+                }
+                if let limit = field.referencePreviewLimit, items.count > limit {
+                    Button(expanded ? "Show less" : "+\(items.count - limit) more") { expanded.toggle() }
+                }
+                if !filters.isEmpty {
+                    NavigationLink("View all", value: Route.entityList(target, filters: filters))
+                }
+            }
+        }
     }
 }

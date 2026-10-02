@@ -10,6 +10,7 @@ import { useEffect } from "react";
 import { z } from "zod";
 
 import type { EntityActionRow } from "~/entity/actions/entity-actions";
+import { RecordEmoji } from "~/entity/components/record-emoji";
 import {
   EntityIcon,
   entities,
@@ -127,7 +128,13 @@ export function manifestPreviewCard<E extends ManifestPreviewEntity>(
   return {
     entity,
     routeParam: id,
-    icon: <EntityIcon entity={entity} size={14} colored />,
+    icon: (
+      <RecordEmoji
+        entity={entity}
+        emoji={z.looseObject({ emoji: z.string().nullish() }).parse(data).emoji}
+        size={14}
+      />
+    ),
     name: readRecordField(data, presentation.titleField, titleValue) ?? id,
     tag: entity,
     identity: chipField

@@ -21,6 +21,7 @@ import {
   type EntityActionSubject,
 } from "~/entity/actions/entity-actions";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { RecordEmoji } from "~/entity/components/record-emoji";
 import type { EntityDetailParams, EntityDetailRoute } from "~/entity/entities";
 import {
   entities,
@@ -256,7 +257,14 @@ export function createNameColumn<T extends BaseRow>(
         options?.emptyLabel,
       );
       const suffix = options?.nameSuffix?.(info.row.original);
-      const prefix = options?.namePrefix?.(info.row.original);
+      const recordEmoji = z
+        .object({ emoji: z.string().nullable().optional() })
+        .parse(info.row.original).emoji;
+      const prefix = recordEmoji ? (
+        <RecordEmoji entity={entity} emoji={recordEmoji} />
+      ) : (
+        options?.namePrefix?.(info.row.original)
+      );
       const link = rowLink(info.row.original);
       // A row that names nothing openable still has to be readable, so the
       // unlinked branch keeps the truncation and the full-name tooltip.

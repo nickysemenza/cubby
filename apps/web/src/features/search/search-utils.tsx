@@ -6,8 +6,8 @@ import type {
 } from "@cubby/schemas/search";
 import { locationTypeValues } from "@cubby/shared";
 
-import { ProjectMark } from "~/app/projects/project-mark";
 import { EntityCover } from "~/entity/components/entity-cover";
+import { RecordEmoji } from "~/entity/components/record-emoji";
 import { EntityIcon, entities, entityDetailParams } from "~/entity/entities";
 import { cn } from "~/lib/utils";
 import { IconTile } from "~/ui/primitives/icon-tile";
@@ -88,8 +88,14 @@ function SearchHitIcon({
   className?: string;
 }) {
   const entity = entityKindMap[item.entityKind];
-  if (item.entityKind === "project")
-    return <ProjectMark icon={item.typeHint} className={className} />;
+  if (item.emoji)
+    return (
+      <RecordEmoji
+        entity={item.entityKind}
+        emoji={item.emoji}
+        className={className}
+      />
+    );
   const locationType =
     item.entityKind === "location" ? asLocationType(item.typeHint) : undefined;
   if (locationType) {
