@@ -28,10 +28,7 @@ const REPORT_PATH =
   DEFAULT_REPORT_PATH;
 const ROOT_GATES = {
   owner: "root",
-  commands: [
-    "pnpm check",
-    "cargo fmt --all -- --check",
-  ],
+  commands: ["pnpm check", "cargo fmt --all -- --check"],
   result:
     "array of { command, status: pass|fail, output } with compact evidence",
 };

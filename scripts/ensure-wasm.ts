@@ -53,10 +53,7 @@ const WASM_RELEASE_PROFILE = {
 const fingerprint = () => {
   // Match pnpm wasm's build environment before hashing. Otherwise its stamp
   // includes the default target directory but every startup computes another key.
-  process.env.CARGO_TARGET_DIR ??= join(
-    homedir(),
-    ".cache/cubby/cargo-target",
-  );
+  process.env.CARGO_TARGET_DIR ??= join(homedir(), ".cache/cubby/cargo-target");
   // The `wasm` script sets the release profile through CARGO_PROFILE_RELEASE_*
   // (member profiles are ignored in the workspace, and wasm-pack only takes
   // --release). Mirror it here so the key tracks the profile. Keep in sync with
