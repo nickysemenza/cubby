@@ -18,19 +18,7 @@ import type {
   ImageProcessingResult,
 } from "@cubby/schemas/image-processing";
 import type { ImageRepresentations } from "@cubby/schemas/image-summary";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  lte,
-  ne,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -104,6 +92,18 @@ export const IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION =
       "actual-image-description-v1",
     ].join("/"),
   );
+
+const currentImageProcessingProcessor = () => sql<boolean>`(
+  (${imageProcessingJob.kind} = 'subject_lift'
+    AND ${imageProcessingJob.processorRevision} = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION})
+  OR (${imageProcessingJob.kind} = 'describe_image'
+    AND ${imageProcessingJob.processorRevision} IN (${IMAGE_DESCRIPTION_PROCESSOR_REVISION}, ${IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION}))
+)`;
+
+const obsoleteImageProcessingSource = () => sql<boolean>`(
+  ${image.deletedAt} IS NOT NULL OR ${image.status} <> 'UPLOADED'
+  OR ${image.sha256} IS NULL OR ${image.sha256} <> ${imageProcessingJob.sourceContentHash}
+)`;
 
 type JobIdentity = {
   imageId: ImageId;
@@ -470,6 +470,7 @@ export async function claimImageProcessingJob(
         and(
           input.jobId ? eq(imageProcessingJob.id, input.jobId) : undefined,
           inArray(imageProcessingJob.kind, [...input.kinds]),
+          currentImageProcessingProcessor(),
           input.processorRevisions
             ? inArray(imageProcessingJob.processorRevision, [
                 ...input.processorRevisions,
@@ -700,9 +701,9 @@ export async function getCurrentImageCutoutEligibility(
 }
 
 /**
- * Retire a bounded page of jobs whose immutable source is gone before looking
- * for repair wakeups. Otherwise old pending rows sort ahead of every live job,
- * while the claim's source fence rejects them one at a time forever.
+ * Retire a bounded page of obsolete sources and processors before repairing
+ * wakeups. Current claim/repair fences also exclude the remainder of the page
+ * so stale work cannot starve a live job or execute under a different processor.
  */
 async function skipObsoleteImageProcessingDispatchJobs(
   db: Database,
@@ -713,6 +714,7 @@ async function skipObsoleteImageProcessingDispatchJobs(
       .select({
         id: imageProcessingJob.id,
         attempts: imageProcessingJob.attempts,
+        obsoleteSource: obsoleteImageProcessingSource(),
       })
       .from(imageProcessingJob)
       .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
@@ -720,10 +722,8 @@ async function skipObsoleteImageProcessingDispatchJobs(
         and(
           inArray(imageProcessingJob.state, ["pending", "waiting_for_device"]),
           or(
-            isNotNull(image.deletedAt),
-            ne(image.status, "UPLOADED"),
-            isNull(image.sha256),
-            ne(image.sha256, imageProcessingJob.sourceContentHash),
+            obsoleteImageProcessingSource(),
+            sql`NOT ${currentImageProcessingProcessor()}`,
           ),
         ),
       )
@@ -736,6 +736,11 @@ async function skipObsoleteImageProcessingDispatchJobs(
     if (!obsolete.length) return;
 
     const ids = obsolete.map((job) => job.id);
+    const sourceIds = obsolete
+      .filter((job) => job.obsoleteSource)
+      .map((job) => job.id);
+    const sourceReason = "Original image is no longer current";
+    const processorReason = "Image processor revision is no longer current";
     await tx
       .update(imageProcessingJob)
       .set({
@@ -743,7 +748,8 @@ async function skipObsoleteImageProcessingDispatchJobs(
         attemptId: null,
         leaseExpiresAt: null,
         completedAt: sql`now()`,
-        lastError: "Original image is no longer current",
+        lastError: sql`CASE WHEN ${sourceIds.length ? inArray(imageProcessingJob.id, sourceIds) : sql`false`}
+          THEN ${sourceReason} ELSE ${processorReason} END`,
       })
       .where(
         and(
@@ -754,11 +760,15 @@ async function skipObsoleteImageProcessingDispatchJobs(
     for (const job of obsolete) {
       await recordImageProcessingEvent(tx, {
         jobId: job.id,
-        eventKey: "source-obsolete",
-        event: "dispatch.skipped_obsolete_source",
+        eventKey: job.obsoleteSource ? "source-obsolete" : "processor-obsolete",
+        event: job.obsoleteSource
+          ? "dispatch.skipped_obsolete_source"
+          : "dispatch.skipped_obsolete_processor",
         attempt: job.attempts,
         level: "info",
-        details: { reason: "Original image is no longer current" },
+        details: {
+          reason: job.obsoleteSource ? sourceReason : processorReason,
+        },
       });
     }
   });
@@ -783,9 +793,12 @@ export async function findImageProcessingDispatchRepairs(
       ),
     )
     .where(
-      or(
-        eq(imageProcessingJob.state, "pending"),
-        eq(imageProcessingJob.state, "waiting_for_device"),
+      and(
+        currentImageProcessingProcessor(),
+        or(
+          eq(imageProcessingJob.state, "pending"),
+          eq(imageProcessingJob.state, "waiting_for_device"),
+        ),
       ),
     )
     .orderBy(asc(imageProcessingJob.nextAttemptAt), asc(imageProcessingJob.id))
@@ -827,22 +840,7 @@ export async function retryFailedImageProcessingJobs(
           options?.kinds
             ? inArray(imageProcessingJob.kind, [...options.kinds])
             : undefined,
-          or(
-            and(
-              eq(imageProcessingJob.kind, "subject_lift"),
-              eq(
-                imageProcessingJob.processorRevision,
-                IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-              ),
-            ),
-            and(
-              eq(imageProcessingJob.kind, "describe_image"),
-              inArray(imageProcessingJob.processorRevision, [
-                IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-                IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-              ]),
-            ),
-          ),
+          currentImageProcessingProcessor(),
         ),
       )
       .orderBy(asc(imageProcessingJob.completedAt), asc(imageProcessingJob.id))
