@@ -93,15 +93,10 @@ true` (`repo/image-processing-maintenance.ts`), so new uploads stay
      `PhotoEvidenceScorer` as an identity score) when deterministic evidence
      still leaves the chooser in default order often enough to matter.
 
-- 🟢 **Photo-flow leftovers from #1084/#1086.**
-  - The classification sweep (2 concurrent) and the review sheet's
-    `LocalPhotoAnalyzer` (4) share no Vision gate; if a review-sheet analysis
-    measurably slows while the sweep runs, add a `PhotoVisionGate` actor both
-    acquire, with the sheet yielding the sweep.
-  - The `createSelf` compile check (`scripts/generator/entities/compile.ts`)
-    verifies creatability via `contract.create !== null`, not the runtime
-    binding's `createInput`; if they disagree the route fails at commit time
-    with `CONSTRAINT_VIOLATION` instead of at generation.
+- ⏳ **Shared Vision gate for photo analysis.** The classification sweep (2 concurrent) and the review sheet's
+  `LocalPhotoAnalyzer` (4) share no Vision gate. Promote if a review-sheet
+  analysis measurably slows while the sweep runs: add a `PhotoVisionGate`
+  actor both acquire, with the sheet yielding the sweep.
 
 - 🤔 **Receiving an already-photographed purchase.** Purchase import raises a
   receive finding for every order; receiving an item already stocked from
