@@ -54,7 +54,6 @@
     "@better-auth/api-key": "1.7.7",
     "@better-auth/electron": "1.7.7",
     "@better-auth/oauth-provider": "1.7.7",
-    "@cfworker/json-schema": "^4.1.1",
     "@cubby/design-tokens": "workspace:*",
     "@cubby/mcp-apps": "workspace:*",
     "@cubby/recipebridge": "workspace:*",
