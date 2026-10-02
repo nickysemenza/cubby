@@ -63,7 +63,9 @@ Both manual simulator lanes restore the same Xcode-versioned DerivedData cache
 as the regular Apple build gate. Hosted builds use its SPM clone directory,
 content-based source mtimes, native arm64 slice, and batch compilation. They
 still run an incremental build against the current generated inputs before
-installing the app. Simulator boot follows compilation to avoid CPU contention.
+installing the app. Simulator boot follows compilation to avoid CPU contention. App replacement
+uses `simctl` directly, before preparing the driver, so installation does not
+start XCTest or inherit the SDK's short command timeout.
 Both lanes also cache agent-device's compiled Apple test runner, keyed by its
 package and Xcode toolchain. The SDK verifies source, SDK, and build settings
 before reuse. Session state and logs are excluded from that cache.

@@ -1517,14 +1517,14 @@ async function main(): Promise<void> {
           });
         }
         const installStarted = performance.now();
-        await run("pnpm", [
-          "exec",
-          "agent-device",
-          "reinstall",
+        // App replacement does not need XCTest or an agent-device daemon.
+        await run("xcrun", [
+          "simctl",
+          "uninstall",
+          device.udid,
           "com.nickysemenza.cubby",
-          appPath,
-          ...common,
         ]);
+        await run("xcrun", ["simctl", "install", device.udid, appPath]);
         phases.push({
           name: "native-install",
           durationMs: Math.round(performance.now() - installStarted),

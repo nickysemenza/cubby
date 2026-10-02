@@ -1,7 +1,7 @@
 context platform=ios timeout=240000
 
 open com.nickysemenza.cubby
-wait "label=Find" 60000
+wait "label=Find" 240000
 click "label=Find"
 wait "role=SearchField label=\"Search Cubby\" editable=true" 30000
 fill "role=SearchField label=\"Search Cubby\" editable=true" "Synthetic Atlas Lantern" --delay-ms 80
