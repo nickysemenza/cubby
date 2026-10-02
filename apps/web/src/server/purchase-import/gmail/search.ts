@@ -1,6 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { env } from "~/env";
+import { localGoogleProviderOrigin } from "~/lib/e2e-google-provider";
 import { getGmailOAuthCredentials } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { orderMail } from "~/server/db/schema";
@@ -22,6 +24,17 @@ export type VendorMailSearchProgress = (
   detail: string,
   counts?: { searched?: number; skipped?: number },
 ) => Promise<void>;
+
+const localGmailEndpoints = () => {
+  const origin = localGoogleProviderOrigin(
+    env.E2E_AUTH_TEST_MODE,
+    env.E2E_GOOGLE_PROVIDER_URL,
+  );
+  return {
+    gmailBaseUrl: origin ? `${origin}/gmail/v1` : undefined,
+    tokenEndpoint: origin ? `${origin}/token` : undefined,
+  };
+};
 
 export async function searchVendorOrderMail(
   db: Database,
@@ -47,6 +60,7 @@ export async function searchVendorOrderMail(
     store: createBetterAuthGmailAccountStore(db),
     clientId,
     clientSecret,
+    ...localGmailEndpoints(),
   })(target.userId);
   const after =
     input.after ??

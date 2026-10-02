@@ -1,0 +1,21 @@
+context platform=ios timeout=240000
+
+open com.nickysemenza.cubby
+back
+back
+wait text "All photos" 30000
+click "label=\"All photos\""
+wait "id=photo.source.systemPicker" 30000
+click "id=photo.source.systemPicker"
+wait "label=Photos" 30000
+# The disposable simulator contains exactly one synthetic photo. This fixed
+# OS-picker tile is outside Cubby's accessibility identifier ownership.
+press 80 210
+wait "label=Add" 30000
+click "label=Add"
+wait "label=\"Add to import run…\"" 30000
+click "label=\"Add to import run…\""
+wait "id=photos.run.startNew" 30000
+wait text "You (signed-in member)" 30000
+click "id=photos.run.startNew"
+wait text "Uploaded 1 of 1" 60000

@@ -8,9 +8,14 @@ import {
   cookbookRunReportSchema,
 } from "@cubby/schemas/cookbook";
 import {
+  cookbookShortcode,
+  type ImageShortcode,
+} from "@cubby/schemas/identifiers";
+import {
   ALLOWED_IMAGE_TYPES,
   type AllowedImageType,
 } from "@cubby/schemas/image";
+import { cookbookBundleManifestSchema } from "@cubby/schemas/import-recipe";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQueries } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
@@ -51,6 +56,8 @@ import {
 import { Description } from "~/ui/primitives/description";
 
 import { BookGroupCard } from "./book-group-card";
+import { runTwoAtATime } from "./bundle";
+import { CookbookBundleWorker } from "./bundle-worker";
 import { CookbookDropzone } from "./cookbook-dropzone";
 import { asStoredExtraction, toBookEstimate } from "./extraction-result";
 import { createGatewaySend } from "./gateway-transport";
@@ -143,6 +150,8 @@ export function CookbookImport({
   );
   const previewUrlsRef = useRef<Map<string, Map<string, string>>>(new Map());
   const coverUrlsRef = useRef<Map<string, string>>(new Map());
+  const bundleWorkersRef = useRef(new Map<string, CookbookBundleWorker>());
+  const bundleUploadsRef = useRef(new Map<string, AbortController>());
 
   // Extraction (minutes of concurrent LLM calls) and import both live entirely in
   // this component's state — there's no server-side record to resume from. Warn
@@ -179,6 +188,10 @@ export function CookbookImport({
   );
 
   const discardBookResources = useCallback((source: string) => {
+    bundleUploadsRef.current.get(source)?.abort();
+    bundleUploadsRef.current.delete(source);
+    bundleWorkersRef.current.get(source)?.close();
+    bundleWorkersRef.current.delete(source);
     bookHandlesRef.current.get(source)?.free();
     bookHandlesRef.current.delete(source);
     epubBytesRef.current.delete(source);
@@ -198,6 +211,8 @@ export function CookbookImport({
   // megabytes of wasm memory alive for the rest of the session.
   useEffect(
     () => () => {
+      for (const abort of bundleUploadsRef.current.values()) abort.abort();
+      for (const worker of bundleWorkersRef.current.values()) worker.close();
       for (const handle of bookHandlesRef.current.values()) handle.free();
       bookHandlesRef.current.clear();
       for (const previews of previewUrlsRef.current.values()) {
@@ -215,7 +230,8 @@ export function CookbookImport({
       bytes: Uint8Array,
       mime: AllowedImageType,
       filename: string,
-    ): Promise<string> => {
+      signal?: AbortSignal,
+    ): Promise<ImageShortcode> => {
       const init = await uploadImageMut.mutateAsync({
         filename,
         contentType: mime,
@@ -227,7 +243,7 @@ export function CookbookImport({
       const buf = new ArrayBuffer(bytes.byteLength);
       new Uint8Array(buf).set(bytes);
       try {
-        await putPresignedObject(init.uploadUrl, buf, mime);
+        await putPresignedObject(init.uploadUrl, buf, mime, { signal });
       } catch (error) {
         throw new Error(
           `Storage error (${error instanceof PresignedUploadError ? error.status : "unknown"})`,
@@ -261,6 +277,9 @@ export function CookbookImport({
               cookbookId: id,
               extraction: cookbook,
               report,
+              bundleManifest: cookbookBundleManifestSchema.safeParse(
+                cookbook.bundleManifest,
+              ).data,
               selected: new Set<string>(),
               results: new Map<string, ImportResult>(),
               photos: new Map<string, PhotoResult>(),
@@ -540,9 +559,83 @@ export function CookbookImport({
     [extractBook, openBook],
   );
 
-  const cancelExtraction = useCallback((source: string) => {
-    bookHandlesRef.current.get(source)?.cancel();
-  }, []);
+  const cancelExtraction = useCallback(
+    (source: string) => {
+      bookHandlesRef.current.get(source)?.cancel();
+      bundleUploadsRef.current.get(source)?.abort();
+      bundleWorkersRef.current.get(source)?.close();
+      bundleWorkersRef.current.delete(source);
+      updateBook(source, (book) => ({
+        ...book,
+        hasArchiveBytes: book.bundleManifest ? false : book.hasArchiveBytes,
+      }));
+    },
+    [updateBook],
+  );
+
+  const loadBundle = useCallback(
+    async (file: File, bindSource?: string) => {
+      const worker = new CookbookBundleWorker();
+      try {
+        const metadata = await worker.open(file);
+        const prior = bindSource
+          ? books.find((book) => book.source === bindSource)
+          : books.find(
+              (book) =>
+                book.extraction?.source.sha256 ===
+                metadata.manifest.source_sha256,
+            );
+        if (
+          bindSource &&
+          (!prior ||
+            prior.extraction?.source.sha256 !== metadata.manifest.source_sha256)
+        )
+          throw new Error(
+            "This .cookbook belongs to a different source; choose the matching archive or add it as a separate book.",
+          );
+        const source =
+          prior?.source ?? `bundle:${metadata.manifest.source_sha256}`;
+        bundleWorkersRef.current.get(source)?.close();
+        bundleWorkersRef.current.set(source, worker);
+        const recipes = flattenRecipes(metadata.cookbook);
+        setBooks((current) => {
+          const existing = current.find((book) => book.source === source);
+          const book: Book = {
+            ...(existing ?? {
+              source,
+              name: metadata.cookbook.source.title || deriveBookName(file.name),
+              selected: new Set(recipes.map((entry) => entry.recipe.id)),
+              results: new Map(),
+              photos: new Map(),
+              photoPreviewUrls: new Map(),
+              expanded: true,
+            }),
+            extraction: metadata.cookbook,
+            report: metadata.report,
+            bundleManifest: metadata.manifest,
+            hasArchiveBytes: true,
+            extract: { status: "ready" },
+            needsCookbookUpsert:
+              !existing?.cookbookId ||
+              existing.report?.run_id !== metadata.report.run_id,
+          };
+          return existing
+            ? current.map((candidate) =>
+                candidate.source === source ? book : candidate,
+              )
+            : [...current, book];
+        });
+        if (prior)
+          toast.message(
+            "Bundle ready; imported recipes and photos are preserved.",
+          );
+      } catch (error) {
+        worker.close();
+        showErrorToast(error, "Could not open cookbook bundle");
+      }
+    },
+    [books],
+  );
 
   // Power-user path: a book tree exported by `food-cli cookbook extract`, or a
   // whole run result. No EPUB, so no photos and no re-extraction.
@@ -598,6 +691,7 @@ export function CookbookImport({
 
   const getArchivePhotoBytes = useCallback(
     (book: Book, id: string): Uint8Array | null => {
+      if (book.bundleManifest) return null;
       const photo = heroPhoto(recipesOf(book).get(id));
       if (!photo) return null;
       const handle = bookHandlesRef.current.get(book.source);
@@ -673,7 +767,7 @@ export function CookbookImport({
 
   useEffect(() => {
     for (const book of books) {
-      if (!book.hasArchiveBytes) continue;
+      if (!book.hasArchiveBytes || book.bundleManifest) continue;
       const unprepared = selectedPhotoItemIds(recipesOf(book), [
         ...book.selected,
       ]).filter((id) => shouldPreparePhoto(book.photos.get(id)));
@@ -685,6 +779,10 @@ export function CookbookImport({
   // JSON: the tree carries archive PATHS, and only the file has the bytes.
   const bindOriginalEpub = useCallback(
     async (source: string, file: File) => {
+      if (/\.cookbook$/i.test(file.name)) {
+        await loadBundle(file, source);
+        return;
+      }
       if (!/\.epub$/i.test(file.name)) {
         toast.error("Choose the original .epub file");
         return;
@@ -713,11 +811,68 @@ export function CookbookImport({
       if (book) prepareSelectedPhotos(book, [...book.selected]);
       toast.message(`Original EPUB ready for ${file.name}`);
     },
-    [books, clearBookPhotoPreviews, prepareSelectedPhotos, updateBook],
+    [
+      books,
+      clearBookPhotoPreviews,
+      prepareSelectedPhotos,
+      updateBook,
+      loadBundle,
+    ],
   );
 
   const attachPhoto = useCallback(
     async (book: Book, cookbookId: string, id: string, recipeId: string) => {
+      if (book.bundleManifest) {
+        const worker = bundleWorkersRef.current.get(book.source);
+        const photo = heroPhoto(recipesOf(book).get(id));
+        if (!worker || !photo) {
+          setPhotoResult(book.source, id, {
+            status: "missing-bytes",
+            message: "Choose the original .cookbook file to add this photo.",
+          });
+          return;
+        }
+        setPhotoResult(book.source, id, { status: "pending" });
+        try {
+          const signal = bundleUploadsRef.current.get(book.source)?.signal;
+          signal?.throwIfAborted();
+          const bytes = await worker.readImage(photo.path);
+          if (!isAllowedImageType(photo.mime))
+            throw new Error(`Unsupported bundle image type: ${photo.mime}`);
+          const uploadId = await uploadImageBytes(
+            bytes,
+            photo.mime,
+            book.bundleManifest.images
+              .find((asset) => asset.source_path === photo.path)
+              ?.path.split("/")
+              .at(-1) ?? "recipe-photo",
+            signal,
+          );
+          signal?.throwIfAborted();
+          const result = await attachCookbookRecipePhoto.mutateAsync({
+            cookbookId,
+            recipeId,
+            sourceRecipeId: id,
+            uploadId,
+          });
+          const photoUrl = result.photoUrl;
+          if (photoUrl)
+            updateBook(book.source, (current) => ({
+              ...current,
+              photoPreviewUrls: new Map(current.photoPreviewUrls).set(
+                id,
+                photoUrl,
+              ),
+            }));
+          setPhotoResult(book.source, id, result);
+        } catch (error) {
+          setPhotoResult(book.source, id, {
+            status: "error",
+            message: getErrorMessage(error),
+          });
+        }
+        return;
+      }
       const bytes = getArchivePhotoBytes(book, id);
       if (!bytes) return;
       setPhotoPreview(book.source, id, bytes, photoMime(book, id));
@@ -743,6 +898,9 @@ export function CookbookImport({
       photoMime,
       setPhotoPreview,
       setPhotoResult,
+      recipesOf,
+      uploadImageBytes,
+      updateBook,
     ],
   );
 
@@ -761,7 +919,7 @@ export function CookbookImport({
         photoProgress: { done: 0, total: ids.length },
       }));
       let done = 0;
-      for (const id of ids) {
+      const process = async (id: string) => {
         const imported = recipeIds.get(id);
         if (imported) await attachPhoto(book, cookbookId, id, imported.id);
         done++;
@@ -769,7 +927,9 @@ export function CookbookImport({
           ...current,
           photoProgress: { done, total: ids.length },
         }));
-      }
+      };
+      if (book.bundleManifest) await runTwoAtATime(ids, process);
+      else for (const id of ids) await process(id);
       updateBook(book.source, (current) => ({
         ...current,
         photoProgress: undefined,
@@ -783,6 +943,8 @@ export function CookbookImport({
       const book = books.find((candidate) => candidate.source === source);
       const recipeResult = book?.results.get(id);
       if (!book?.cookbookId || recipeResult?.status !== "done") return;
+      if (bundleUploadsRef.current.size) return;
+      bundleUploadsRef.current.set(source, new AbortController());
       updateBook(source, (current) => ({
         ...current,
         photoProgress: { done: 0, total: 1 },
@@ -790,6 +952,7 @@ export function CookbookImport({
       try {
         await attachPhoto(book, book.cookbookId, id, recipeResult.id);
       } finally {
+        bundleUploadsRef.current.delete(source);
         updateBook(source, (current) => ({
           ...current,
           photoProgress: undefined,
@@ -797,6 +960,57 @@ export function CookbookImport({
       }
     },
     [attachPhoto, books, updateBook],
+  );
+
+  const stageCover = useCallback(
+    async (
+      book: Book,
+      extraction: NonNullable<Book["extraction"]>,
+      bookName: string,
+      controller: AbortController,
+    ) => {
+      const source = book.source;
+      let coverUploadId: ImageShortcode | undefined;
+      let coverFailed = false;
+      if (
+        book.bundleManifest &&
+        extraction.cover &&
+        isAllowedImageType(extraction.cover.mime)
+      ) {
+        const worker = bundleWorkersRef.current.get(source);
+        if (worker) {
+          try {
+            const bytes = await worker.readImage(extraction.cover.path);
+            coverUploadId = await uploadImageBytes(
+              bytes,
+              extraction.cover.mime,
+              `${bookName}-cover`,
+              controller.signal,
+            );
+          } catch (error) {
+            coverFailed = true;
+            showErrorToast(
+              error,
+              "Cover upload failed; retry the import to add it",
+            );
+          }
+        } else coverFailed = true;
+      }
+      if (book.cover && isAllowedImageType(book.cover.mime)) {
+        try {
+          coverUploadId = await uploadImageBytes(
+            book.cover.bytes,
+            book.cover.mime,
+            `${bookName}-cover.${book.cover.mime.split("/")[1] ?? "jpg"}`,
+          );
+        } catch (error) {
+          coverFailed = true;
+          showErrorToast(error, "Cover upload failed");
+        }
+      }
+      return { coverUploadId, coverFailed };
+    },
+    [uploadImageBytes],
   );
 
   /**
@@ -820,118 +1034,146 @@ export function CookbookImport({
       }
       const orderedIds = topoOrder(extraction, [...book.selected]);
       if (orderedIds.length === 0) return;
-
-      // Resolve the cookbook id. When re-opened from stored source the cookbook
-      // already exists — use its id and skip the upsert (don't rewrite the tree
-      // or the cover). Otherwise persist it now, cover included (best-effort).
-      let cookbookId: string;
-      if (book.cookbookId && !book.needsCookbookUpsert) {
-        cookbookId = book.cookbookId;
-      } else {
-        let coverImageId: string | undefined;
-        if (book.cover && isAllowedImageType(book.cover.mime)) {
-          try {
-            coverImageId = await uploadImageBytes(
-              book.cover.bytes,
-              book.cover.mime,
-              `${bookName}-cover.${book.cover.mime.split("/")[1] ?? "jpg"}`,
-            );
-          } catch (error) {
-            showErrorToast(error, "Cover upload failed");
-          }
-        }
-        try {
-          const cookbookInput: Parameters<
-            typeof upsertCookbook.mutateAsync
-          >[0] = {
-            name: bookName,
-            rawJson: extraction,
-            report: book.report ?? null,
-            author: extraction.source.authors,
-            subjects: extraction.source.subjects,
-            sourceLabel: source,
-            coverImageId,
-          };
-          // Transient — the server resolves it to a Product and stores only the
-          // link. Omitted, not nulled, when the EPUB declares no ISBN.
-          const isbn = wasm.isbn_from_epub_identifiers(
-            extraction.source.identifiers,
-          );
-          if (isbn) cookbookInput.isbn = isbn;
-          const cookbook = await upsertCookbook.mutateAsync(cookbookInput);
-          cookbookId = cookbook.id;
-          updateBook(source, (current) => ({
-            ...current,
-            cookbookId,
-            needsCookbookUpsert: false,
-            cover: undefined,
-          }));
-        } catch (error) {
-          showErrorToast(error, "Couldn't save cookbook");
-          return;
-        }
-      }
-
-      // Read selected archive images only after the cookbook identity is known,
-      // but before recipe persistence so the review shows the exact photo queued
-      // for each selected recipe. This is in-memory extraction, never an upload.
-      prepareSelectedPhotos(book, orderedIds);
-
-      const setResult = (id: string, result: ImportResult) =>
-        updateBook(source, (b) => ({
-          ...b,
-          results: new Map(b.results).set(id, result),
-        }));
-
-      // Optimistically mark every selected recipe importing + seed the bar, so the
-      // button disables and a card spinner shows the instant the request fires.
-      for (const id of orderedIds) setResult(id, { status: "importing" });
-      updateBook(source, (b) => ({
-        ...b,
+      if (bundleUploadsRef.current.size) return;
+      const controller = new AbortController();
+      bundleUploadsRef.current.set(source, controller);
+      updateBook(source, (current) => ({
+        ...current,
         importProgress: { done: 0, total: orderedIds.length },
       }));
-
-      const persistedRecipeIds = new Map<
-        string,
-        { id: string; hasImage: boolean }
-      >();
-      await startCookbookImport(
-        (signal) =>
-          recipeStreams.importCookbookStream.open(
-            { cookbookId, recipeIds: orderedIds },
-            { signal },
-          ),
-        {
-          onItem: (item) => {
-            if (item.ok) {
-              persistedRecipeIds.set(item.sourceRecipeId, {
-                id: item.id,
-                hasImage: item.hasImage,
-              });
-              if (item.hasImage) {
-                setPhotoResult(source, item.sourceRecipeId, {
-                  status: "skipped-existing",
-                });
-              }
-            }
-            setResult(
-              item.sourceRecipeId,
-              item.ok
-                ? { status: "done", id: item.id, hasImage: item.hasImage }
-                : { status: "error", message: item.error },
+      try {
+        // Resolve the cookbook id. When re-opened from stored source the cookbook
+        // already exists — use its id and skip the upsert (don't rewrite the tree
+        // or the cover). Otherwise persist it now, cover included (best-effort).
+        let cookbookId: string;
+        if (book.cookbookId && !book.needsCookbookUpsert) {
+          cookbookId = book.cookbookId;
+        } else {
+          const { coverUploadId, coverFailed } = await stageCover(
+            book,
+            extraction,
+            bookName,
+            controller,
+          );
+          try {
+            if (controller.signal.aborted) return;
+            const cookbookInput: Parameters<
+              typeof upsertCookbook.mutateAsync
+            >[0] = {
+              name: bookName,
+              rawJson: extraction,
+              report: book.report ?? null,
+              author: extraction.source.authors,
+              subjects: extraction.source.subjects,
+              sourceLabel: source,
+              coverUploadId,
+              bundleManifest: book.bundleManifest,
+              cookbookId: book.targetCookbookId
+                ? cookbookShortcode.parse(book.targetCookbookId)
+                : undefined,
+            };
+            // Transient — the server resolves it to a Product and stores only the
+            // link. Omitted, not nulled, when the EPUB declares no ISBN.
+            const isbn = wasm.isbn_from_epub_identifiers(
+              extraction.source.identifiers,
             );
+            if (isbn) cookbookInput.isbn = isbn;
+            const cookbook = await upsertCookbook.mutateAsync(cookbookInput);
+            cookbookId = cookbook.id;
+            updateBook(source, (current) => ({
+              ...current,
+              cookbookId,
+              name: cookbook.name ?? current.name,
+              needsCookbookUpsert: coverFailed,
+              cover: coverFailed ? current.cover : undefined,
+            }));
+          } catch (error) {
+            showErrorToast(error, "Couldn't save cookbook");
+            return;
+          }
+        }
+
+        // Read selected archive images only after the cookbook identity is known,
+        // but before recipe persistence so the review shows the exact photo queued
+        // for each selected recipe. This is in-memory extraction, never an upload.
+        prepareSelectedPhotos(book, orderedIds);
+
+        const setResult = (id: string, result: ImportResult) =>
+          updateBook(source, (b) => ({
+            ...b,
+            results: new Map(b.results).set(id, result),
+          }));
+
+        // Optimistically mark every selected recipe importing + seed the bar, so the
+        // button disables and a card spinner shows the instant the request fires.
+        for (const id of orderedIds) setResult(id, { status: "importing" });
+        updateBook(source, (b) => ({
+          ...b,
+          importProgress: { done: 0, total: orderedIds.length },
+        }));
+
+        const persistedRecipeIds = new Map<
+          string,
+          { id: string; hasImage: boolean }
+        >();
+        await startCookbookImport(
+          (signal) =>
+            recipeStreams.importCookbookStream.open(
+              { cookbookId, recipeIds: orderedIds },
+              { signal: AbortSignal.any([signal, controller.signal]) },
+            ),
+          {
+            onItem: (item) => {
+              if (item.ok) {
+                persistedRecipeIds.set(item.sourceRecipeId, {
+                  id: item.id,
+                  hasImage: item.hasImage,
+                });
+                if (item.hasImage) {
+                  setPhotoResult(source, item.sourceRecipeId, {
+                    status: "skipped-existing",
+                  });
+                }
+              }
+              setResult(
+                item.sourceRecipeId,
+                item.ok
+                  ? { status: "done", id: item.id, hasImage: item.hasImage }
+                  : { status: "error", message: item.error },
+              );
+            },
+            onProgress: (done, total) =>
+              updateBook(source, (b) => ({
+                ...b,
+                importProgress: { done, total },
+              })),
+            onDone: () =>
+              updateBook(source, (b) => ({ ...b, importProgress: undefined })),
+            successToast: (r) => `Imported ${r.succeeded} from ${bookName}`,
           },
-          onProgress: (done, total) =>
-            updateBook(source, (b) => ({
-              ...b,
-              importProgress: { done, total },
-            })),
-          onDone: () =>
-            updateBook(source, (b) => ({ ...b, importProgress: undefined })),
-          successToast: (r) => `Imported ${r.succeeded} from ${bookName}`,
-        },
-      );
-      await attachImportedPhotos(book, cookbookId, persistedRecipeIds);
+        );
+        if (!controller.signal.aborted)
+          await attachImportedPhotos(book, cookbookId, persistedRecipeIds);
+      } finally {
+        bundleUploadsRef.current.delete(source);
+        updateBook(source, (current) => {
+          const results = new Map(current.results);
+          for (const [id, result] of results)
+            if (result.status === "importing")
+              results.set(id, {
+                status: "error",
+                message: controller.signal.aborted
+                  ? "Import cancelled; saved recipes are preserved. Import again to continue."
+                  : "Recipe import did not complete; import again to retry.",
+              });
+          return {
+            ...current,
+            importProgress: undefined,
+            photoProgress: undefined,
+            results,
+          };
+        });
+      }
     },
     [
       attachImportedPhotos,
@@ -941,7 +1183,7 @@ export function CookbookImport({
       startCookbookImport,
       updateBook,
       upsertCookbook,
-      uploadImageBytes,
+      stageCover,
     ],
   );
 
@@ -989,6 +1231,12 @@ export function CookbookImport({
   const handlers = {
     rename: (source: string, name: string) =>
       updateBook(source, (b) => ({ ...b, name })),
+    target: (source: string, targetCookbookId: string) =>
+      updateBook(source, (book) => ({
+        ...book,
+        targetCookbookId,
+        needsCookbookUpsert: true,
+      })),
     toggleRecipe,
     toggleAll,
     toggleExpanded: (source: string) =>
@@ -1011,8 +1259,8 @@ export function CookbookImport({
         <h1 className="text-xl font-semibold">Import cookbook</h1>
         <Description>
           Drag <code className="rounded bg-muted px-1 py-1 text-xs">.epub</code>{" "}
-          cookbooks here — Cubby reads the book, shows you what extracting it
-          will cost, then you review and import.
+          cookbooks here to extract, or choose a .cookbook bundle that is
+          already extracted. Review the recipes, then import.
         </Description>
       </div>
 
@@ -1042,6 +1290,7 @@ export function CookbookImport({
       <CookbookDropzone
         onEpubFiles={(files) => void addEpubFiles(files)}
         onJsonFile={(file) => void loadJson(file)}
+        onBundleFile={(file) => void loadBundle(file)}
       />
 
       {books.map((book) => (
@@ -1049,7 +1298,7 @@ export function CookbookImport({
           key={book.source}
           book={book}
           handlers={handlers}
-          importing={book.importProgress !== undefined}
+          importing={busy}
         />
       ))}
 

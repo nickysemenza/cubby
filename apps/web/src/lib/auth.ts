@@ -14,6 +14,10 @@ import * as schema from "~/server/db/auth.schema";
 
 import { MCP_RESOURCE, OAUTH_ISSUER, OAUTH_SCOPES } from "./auth-constants";
 import {
+  localGoogleProviderOrigin,
+  localGoogleProviderPlugin,
+} from "./e2e-google-provider";
+import {
   authorizeGoogleUserInfo,
   isGoogleIdTokenOnlyRequest,
 } from "./google-auth";
@@ -60,6 +64,7 @@ function oauthProviderWithRequestScopedResourceSeed(
 async function getAuthorizedGoogleUserInfo(
   tokens: Parameters<typeof authorizeGoogleUserInfo>[0],
   clientId: string,
+  verifier?: Parameters<typeof authorizeGoogleUserInfo>[4],
 ) {
   return authorizeGoogleUserInfo(
     tokens,
@@ -95,6 +100,7 @@ async function getAuthorizedGoogleUserInfo(
         .set({ scope: scopes.join(",") })
         .where(eq(schema.account.id, id));
     },
+    verifier,
   );
 }
 
@@ -181,6 +187,25 @@ export const auth = betterAuth({
   // session-JWT one, so don't expose it.
   disabledPaths: ["/token"],
   plugins: [
+    ...(localGoogleProviderOrigin(
+      env.E2E_AUTH_TEST_MODE,
+      env.E2E_GOOGLE_PROVIDER_URL,
+    )
+      ? [
+          localGoogleProviderPlugin(
+            localGoogleProviderOrigin(
+              env.E2E_AUTH_TEST_MODE,
+              env.E2E_GOOGLE_PROVIDER_URL,
+            )!,
+            (tokens, verifier) =>
+              getAuthorizedGoogleUserInfo(
+                tokens,
+                env.GOOGLE_CLIENT_ID!,
+                verifier,
+              ),
+          ),
+        ]
+      : []),
     apiKey({
       configId: "http-api",
       references: "user",

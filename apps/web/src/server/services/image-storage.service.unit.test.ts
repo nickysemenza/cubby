@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { imageShortcode } from "@cubby/schemas/identifiers";
 import {
   createFileUploadResponse,
@@ -516,6 +518,38 @@ describe("attachFileToEntity", () => {
     expect(result.kind).toBe("image");
     expect(storage.deletedImageIds).toEqual([stagedImageId]);
     expect(storage.deletedKeys).toContain("cubby/images/staged.png");
+  });
+
+  // A bundle's bytes must match its saved evidence before staging is consumed;
+  // retaining a failed staged object makes a corrected request safely retryable.
+  it("refuses staged size/hash mismatches before writes, then accepts the verified retry", async () => {
+    const bytes = Buffer.from(PNG_BASE64, "base64");
+    const expectedSha256 = createHash("sha256").update(bytes).digest("hex");
+    for (const guard of [
+      { expectedBytes: bytes.length + 1 },
+      { expectedSha256: "0".repeat(64) },
+    ]) {
+      storage.stagedObject = new Response(bytes);
+      await expect(
+        service.attachFileToEntity(database, {
+          ...attachmentTarget,
+          uploadId: stagedUploadCode,
+          ...guard,
+        }),
+      ).rejects.toThrow(/size|hash/i);
+      expect(storage.uploaded).toEqual([]);
+      expect(storage.deletedImageIds).toEqual([]);
+    }
+    storage.stagedObject = new Response(bytes);
+    await expect(
+      service.attachFileToEntity(database, {
+        ...attachmentTarget,
+        uploadId: stagedUploadCode,
+        expectedSha256,
+        expectedBytes: bytes.length,
+      }),
+    ).resolves.toMatchObject({ reused: false });
+    expect(storage.deletedImageIds).toEqual([stagedImageId]);
   });
 
   it("reports when a consumed staged upload object cannot be removed", async () => {

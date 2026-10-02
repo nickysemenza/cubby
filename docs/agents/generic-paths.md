@@ -12,7 +12,7 @@ existing block. Extend the generic path when it almost fits. See
   `renderer.list`) compiled by `createEntityDisplayColumns`
   (`apps/web/src/entity/entity-display.tsx`); named renderers in
   `apps/web/src/entity/list-field-renderers.tsx`. Hand overrides in
-  `entities/list-columns/` are only for mutation-bound cells.
+  `entity/list-columns/` are only for mutation-bound cells.
 - Edit forms: generated intents plus the typed `editHooks` map in
   `apps/web/src/entity/editing/`.
 - Saved views: `presentation.list.views` on the declaration.

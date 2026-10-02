@@ -30,12 +30,18 @@ import {
   parseShortcodeFor,
   type RecipeId,
 } from "@cubby/schemas/identifiers";
+import {
+  cookbookBundleMetadataSchema,
+  cookbookBundleManifestSchema,
+  upsertCookbookInput,
+} from "@cubby/schemas/import-recipe";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   CookbookSummary,
   CookbookUpdateInput,
 } from "@cubby/schemas/recipe";
 import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
+import type { z } from "zod";
 
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -53,6 +59,7 @@ import { cookbookSourceRecipeCountSql } from "~/server/repo/cookbook-source-coun
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
   buildPartialUpdateValues,
+  databaseForTransaction,
   getDb,
   notDeleted,
   unwrapDb,
@@ -100,20 +107,12 @@ export const COOKBOOK_DELETE_EDGE_POLICY = {
 // Everything an import knows about a cookbook before its recipes are written: the
 // book name plus the full extraction and OPF metadata. `author`/`subjects` default
 // to empty (the power-user JSON path has no EPUB to read metadata from).
-type CookbookUpsertInput = {
-  name: string;
-  rawJson: CookbookExtraction;
-  report?: CookbookRunReport | null;
-  author?: string[];
-  subjects?: string[];
-  sourceLabel: string;
-  // The uploaded cover Image id. Only set when provided — a metadata-only / re-open
-  // upsert (no cover) must never clear an existing cover.
-  coverImageId?: string;
-};
+type CookbookUpsertInput = z.output<typeof upsertCookbookInput>;
 
 /**
- * Create or update a cookbook by name (the unique key). Called **once at the
+ * Source hashes preserve identity across renamed archives; an explicit target
+ * authorizes replacement. Legacy sources without a hash retain name matching.
+ * Called **once at the
  * start of an import**, before any recipe insert, so the FK target exists; a
  * re-import refreshes `rawJson` + metadata in place. A `Cookbook` only ever
  * exists fully-formed — there is no lazy, metadata-less creation.
@@ -122,10 +121,64 @@ export const upsertCookbook = async (
   db: Database,
   input: CookbookUpsertInput,
   actor: ActorContext,
-): Promise<{ output: { id: CookbookShortcode }; entityId: CookbookId }> => {
+): Promise<{
+  output: { id: CookbookShortcode; name: string };
+  entityId: CookbookId;
+}> => {
+  const manifest = input.bundleManifest ?? input.rawJson.bundleManifest;
+  const rawJson =
+    manifest === undefined
+      ? input.rawJson
+      : {
+          ...input.rawJson,
+          bundleManifest: cookbookBundleMetadataSchema.parse({
+            manifest,
+            cookbook: input.rawJson,
+            report: input.report,
+          }).manifest,
+        };
+  const sourceHash = manifest !== undefined ? rawJson.source.sha256 : undefined;
+  const resolveTarget = async (database: Database) => {
+    if (input.cookbookId)
+      return getCookbookById(
+        database,
+        await resolveOrThrow(database, "cookbook", input.cookbookId),
+      );
+    if (sourceHash) {
+      const matches = await getDb(database).query.cookbook.findMany({
+        where: and(
+          sql`${cookbook.rawJson}->'source'->>'sha256' = ${sourceHash}`,
+          notDeleted(cookbook),
+        ),
+        limit: 2,
+      });
+      if (matches.length > 1)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "This source matches several cookbooks; choose an explicit reviewed cookbook target.",
+        );
+      if (matches[0]) return matches[0];
+    }
+    const named = await getCookbookByName(database, input.name);
+    if (named && sourceHash) {
+      const previous = cookbookExtractionSchema.safeParse(named.rawJson);
+      if (!previous.success || previous.data.source.sha256 !== sourceHash)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `Cookbook "${input.name}" contains a different source. Choose a distinct name or enter its cookbook code as an explicit reviewed target.`,
+        );
+    }
+    return named;
+  };
+  const target = await resolveTarget(db);
+  if (input.cookbookId && !target)
+    throw createAppError(
+      "COOKBOOK_NOT_FOUND",
+      "Reviewed cookbook target does not exist",
+    );
   const values: Omit<typeof cookbook.$inferInsert, "shortcode"> = {
-    name: input.name,
-    rawJson: input.rawJson,
+    name: target?.name ?? input.name,
+    rawJson,
     report: input.report ?? null,
     author: input.author ?? [],
     subjects: input.subjects ?? [],
@@ -133,14 +186,22 @@ export const upsertCookbook = async (
     importedAt: new Date(),
   };
 
-  const matchWhere = and(eq(cookbook.name, input.name), notDeleted(cookbook));
-
   // Insert (existingId === null) or update one cookbook row, then associate the
   // cover image and log the audit entry — all in one transaction.
   const commit = (
     existingId: CookbookId | null,
-  ): Promise<{ output: { id: CookbookShortcode }; entityId: CookbookId }> =>
+  ): Promise<{
+    output: { id: CookbookShortcode; name: string };
+    entityId: CookbookId;
+  }> =>
     withTransaction(db, async (tx) => {
+      // Repeat source checks in the writer, including the name-conflict retry.
+      const current = await resolveTarget(databaseForTransaction(tx));
+      if (current && current.id !== existingId)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Cookbook import target changed; review and retry the import.",
+        );
       // A metadata-only re-open upsert (no cover) must never clear a cover,
       // and a re-import never replaces one already chosen.
       const hasCover = existingId
@@ -177,17 +238,16 @@ export const upsertCookbook = async (
         action: existingId ? "update" : "create",
       });
       return {
-        output: { id: parseShortcodeFor("cookbook", row.shortcode) },
+        output: {
+          id: parseShortcodeFor("cookbook", row.shortcode),
+          name: row.name,
+        },
         entityId: id,
       };
     });
 
-  const existing = await getDb(db).query.cookbook.findFirst({
-    where: matchWhere,
-    columns: { id: true },
-  });
-  if (existing) {
-    return commit(existing.id);
+  if (target) {
+    return commit(target.id);
   }
 
   // No match: insert. `commit(null)` runs the INSERT in its own transaction, so a
@@ -197,10 +257,7 @@ export const upsertCookbook = async (
   return runWithConflictRecovery(
     () => commit(null),
     async (error) => {
-      const winner = await getDb(db).query.cookbook.findFirst({
-        where: matchWhere,
-        columns: { id: true },
-      });
+      const winner = await resolveTarget(db);
       if (!winner) throw error;
       return commit(winner.id);
     },
@@ -565,6 +622,28 @@ export const getCookbookRecipePhotoSource = async (
     );
   }
 
+  const parsed = cookbookExtractionSchema.parse(cb.rawJson);
+  if (parsed.bundleManifest !== undefined) {
+    const manifest = cookbookBundleManifestSchema.parse(parsed.bundleManifest);
+    const asset = manifest.images.find(
+      (candidate) => candidate.source_path === photo.path,
+    );
+    if (
+      !asset ||
+      asset.mime !== photo.mime ||
+      manifest.source_sha256 !== parsed.source.sha256
+    )
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Saved bundle image evidence differs from cookbook source",
+      );
+    return {
+      path: photo.path,
+      mime: photo.mime,
+      expectedSha256: asset.sha256,
+      expectedBytes: asset.bytes,
+    };
+  }
   return { path: photo.path, mime: photo.mime };
 };
 

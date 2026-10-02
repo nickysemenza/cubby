@@ -412,6 +412,11 @@ export const attachFileFields = {
     .describe(
       "Optional current attachment count for Products (including labels and documents), or displayable-image count for other records; attachment fails if it has changed.",
     ),
+  expectedSha256: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
+  expectedBytes: z.int().positive().max(MAX_IMAGE_UPLOAD_BYTES).optional(),
   purpose: productImagePurpose
     .optional()
     .describe(

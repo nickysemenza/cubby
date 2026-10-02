@@ -4,7 +4,7 @@ import pRetry from "p-retry";
 // into a clean, editable book label that stays stable across re-imports.
 export const deriveBookName = (source: string): string => {
   const base = source.split(/[/\\]/).pop() ?? source;
-  return base.replace(/\.(epub|json)$/i, "");
+  return base.replace(/\.(epub|json|cookbook)$/i, "");
 };
 
 /**

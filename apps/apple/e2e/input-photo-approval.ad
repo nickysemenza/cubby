@@ -1,0 +1,11 @@
+context platform=ios timeout=240000
+
+open com.nickysemenza.cubby
+wait "label=\"Review item groups\"" 60000
+click "label=\"Review item groups\""
+wait "id=review.workspace" 30000
+wait text "Synthetic Input Crew Shirt" 30000
+click "label=\"Approve all\""
+wait "label=\"Approve 1 items\"" 30000
+click "label=\"Approve 1 items\""
+wait text "Settled items" 30000

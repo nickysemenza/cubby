@@ -94,6 +94,33 @@ export interface SpecAreaEntry {
 
 /** Hand-written globs per spec; see the header for what belongs here. */
 export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
+  "label-nutrition-review.spec.ts": [
+    `${WEB}/src/app/products/**`,
+    `${WEB}/src/features/nutrition/**`,
+    `${WEB}/src/lib/label-nutrition.ts`,
+    `${WEB}/src/server/image-processing/**`,
+    `${WEB}/src/server/repo/image-processing*.ts`,
+    `${WEB}/src/server/services/image-description.service.ts`,
+    `${WEB}/src/contracts/image-processing.contract.ts`,
+  ],
+  "cookbook-bundle.spec.ts": [
+    `${WEB}/src/features/recipes/cookbook-import/**`,
+    `${WEB}/src/server/operations/recipe-import.server.ts`,
+    `${WEB}/src/server/repo/cookbook.ts`,
+    `${WEB}/src/server/services/image-storage.service.ts`,
+  ],
+  "input-first-import.spec.ts": [
+    `${WEB}/tests/e2e/retailer-browser-peer.ts`,
+    `${WEB}/src/lib/auth.ts`,
+    `${WEB}/src/lib/e2e-google-provider.ts`,
+    `${WEB}/src/server/agents/purchase-import/**`,
+    `${WEB}/src/server/purchase-import/**`,
+    `${WEB}/src/server/statement-csv-import.ts`,
+    `${WEB}/src/server/repo/financial-*.ts`,
+    `${WEB}/src/server/repo/product/**`,
+    `${WEB}/src/contracts/run.contract.ts`,
+    `${WEB}/src/server/operations/run.server.ts`,
+  ],
   "activity.spec.ts": [
     `${WEB}/src/routes/_authenticated/activities.tsx`,
     `${WEB}/src/app/runs/**`,

@@ -58,6 +58,9 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/-recipe-export-search.ts",
     "apps/web/src/routes/index.tsx",
   ],
+  "cookbook-bundle.spec.ts": [
+    "apps/web/src/routes/_authenticated/recipes.import.tsx",
+  ],
   "cookbook-edit.spec.ts": [
     "apps/web/src/routes/_authenticated/cookbooks.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/recipes.$shortcode.tsx",
@@ -174,6 +177,22 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/projects.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/purchases.$shortcode.tsx",
   ],
+  "input-first-import.spec.ts": [
+    "apps/web/src/app/activity/**",
+    "apps/web/src/app/calendar/**",
+    "apps/web/src/app/finance/**",
+    "apps/web/src/app/problems/**",
+    "apps/web/src/routes/_authenticated/financial-transactions.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/products.index.tsx",
+    "apps/web/src/routes/_authenticated/purchases.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/runs.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/settings.tsx",
+    "apps/web/src/routes/_authenticated/statement-rows.import.tsx",
+    "apps/web/src/routes/_authenticated/vendors.$shortcode.tsx",
+    "apps/web/src/routes/api/auth/$.ts",
+    "apps/web/src/routes/api/import/agent/socket.ts",
+    "apps/web/src/routes/api/v1/$resource/$operation.ts",
+  ],
   "inspect-contract.spec.ts": [
     "apps/web/src/routes/_authenticated/products.index.tsx",
   ],
@@ -187,6 +206,9 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/app/inventory/**",
     "apps/web/src/routes/_authenticated/inventory.session.tsx",
     "apps/web/src/routes/_authenticated/inventory.triage.tsx",
+    "apps/web/src/routes/_authenticated/products.index.tsx",
+  ],
+  "label-nutrition-review.spec.ts": [
     "apps/web/src/routes/_authenticated/products.index.tsx",
   ],
   "list-delete.spec.ts": [

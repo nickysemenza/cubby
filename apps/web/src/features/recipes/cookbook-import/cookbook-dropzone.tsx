@@ -13,20 +13,29 @@ import { Label } from "~/ui/primitives/label";
 export function CookbookDropzone({
   onEpubFiles,
   onJsonFile,
+  onBundleFile,
 }: {
   onEpubFiles: (files: File[]) => void;
   onJsonFile: (file: File) => void;
+  onBundleFile: (file: File) => void;
 }) {
   const jsonInputId = useId();
 
   return (
     <div>
       <FileDropField
-        accept=".epub,application/epub+zip"
-        label="Drop .epub cookbooks here"
+        accept=".epub,.cookbook,application/epub+zip"
+        label="Drop .epub or .cookbook files here"
         description="or choose files"
         multiple
-        onFilesAdded={onEpubFiles}
+        onFilesAdded={(files) => {
+          for (const file of files.filter((file) =>
+            /\.cookbook$/i.test(file.name),
+          ))
+            onBundleFile(file);
+          const epubs = files.filter((file) => /\.epub$/i.test(file.name));
+          if (epubs.length) onEpubFiles(epubs);
+        }}
       />
       <Row align="center" justify="center" wrap gap="sm">
         <Label

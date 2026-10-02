@@ -6,6 +6,7 @@ export interface E2EWorkerResources {
   harness?: Closeable;
   database?: Closeable;
   objectStorage?: Closeable;
+  googleProvider?: Closeable;
 }
 
 /** Close every acquired resource even when an earlier close fails. */
@@ -17,6 +18,7 @@ export async function closeE2EWorkerResources(
     ["harness", resources.harness],
     ["database", resources.database],
     ["object storage", resources.objectStorage],
+    ["Google provider", resources.googleProvider],
   ] as const) {
     if (!resource) continue;
     try {

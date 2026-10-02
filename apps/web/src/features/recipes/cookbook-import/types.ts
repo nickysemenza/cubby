@@ -3,6 +3,7 @@ import type {
   CookbookExtraction,
   CookbookRunReport,
 } from "@cubby/schemas/cookbook";
+import type { CookbookBundleManifest } from "@cubby/schemas/import-recipe";
 
 /** Result of importing a single recipe into the DB. */
 export type ImportResult =
@@ -99,6 +100,8 @@ export type Book = {
   needsCookbookUpsert?: boolean;
   /** The original EPUB is open in this browser session, so photos can be read. */
   hasArchiveBytes?: boolean;
+  bundleManifest?: CookbookBundleManifest;
+  targetCookbookId?: string;
   /** Selected tree item ids (recipe items only). */
   selected: Set<string>;
   /** Per-recipe import status, by tree item id. */
@@ -118,6 +121,7 @@ export type Book = {
 /** Callbacks the parent passes to each {@link Book} card. */
 export type BookHandlers = {
   rename: (source: string, name: string) => void;
+  target: (source: string, id: string) => void;
   toggleRecipe: (source: string, id: string) => void;
   toggleAll: (source: string) => void;
   toggleExpanded: (source: string) => void;

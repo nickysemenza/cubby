@@ -775,8 +775,36 @@ const attachFileToEntityWithPorts = async <TDatabase>(
   }
 
   const source = await readAttachmentSource(ports, db, input);
+  if (
+    input.contentType &&
+    source.contentType &&
+    input.contentType.toLowerCase() !== source.contentType.toLowerCase()
+  ) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      "Staged file MIME type differs from saved evidence",
+    );
+  }
   const { contentType, isDocument, inspected } =
     await validateAttachmentSource(source);
+  if (
+    input.expectedBytes !== undefined &&
+    source.bytes.length !== input.expectedBytes
+  ) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      `File size differs from saved evidence: expected ${input.expectedBytes}, received ${source.bytes.length}`,
+    );
+  }
+  if (
+    input.expectedSha256 !== undefined &&
+    inspected.sha256 !== input.expectedSha256
+  ) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      `File hash differs from saved evidence: expected ${input.expectedSha256}, received ${inspected.sha256}`,
+    );
+  }
 
   // Allocate the final key, then register it before writing bytes.
   const extension = isDocument
@@ -958,6 +986,39 @@ export function createImageStorageService<TDatabase>(
   ports: ImageStoragePorts<TDatabase>,
 ) {
   return {
+    validateStagedImageUpload: async (
+      database: TDatabase,
+      uploadId: string,
+      expected: Pick<
+        McpAttachFileInput,
+        "expectedBytes" | "expectedSha256" | "contentType"
+      >,
+    ) => {
+      const source = await readStagedUpload(ports, database, uploadId);
+      const { inspected } = await validateAttachmentSource(source);
+      if (expected.contentType && source.contentType !== expected.contentType)
+        throw createAppError(
+          "IMAGE_ATTACH_FAILED",
+          "Staged cover MIME type differs from saved evidence",
+        );
+      if (
+        expected.expectedBytes !== undefined &&
+        source.bytes.length !== expected.expectedBytes
+      )
+        throw createAppError(
+          "IMAGE_ATTACH_FAILED",
+          "Staged cover size differs from saved evidence",
+        );
+      if (
+        expected.expectedSha256 !== undefined &&
+        inspected.sha256 !== expected.expectedSha256
+      )
+        throw createAppError(
+          "IMAGE_ATTACH_FAILED",
+          "Staged cover hash differs from saved evidence",
+        );
+      return source.stagedImageId;
+    },
     attachFileToEntity: (database: TDatabase, input: McpAttachFileInput) =>
       attachFileToEntityWithPorts(ports, database, input),
     cullPendingImageStorage: (database: TDatabase, olderThanHours: number) =>
@@ -986,6 +1047,8 @@ const productionImageStorage = createImageStorageService(
 );
 
 export const attachFileToEntity = productionImageStorage.attachFileToEntity;
+export const validateStagedImageUpload =
+  productionImageStorage.validateStagedImageUpload;
 export const cullPendingImageStorage =
   productionImageStorage.cullPendingImageStorage;
 export const createFileUpload = productionImageStorage.createFileUpload;

@@ -181,6 +181,7 @@ const baseBook = (overrides: Partial<Book> = {}): Book => ({
 
 const handlers = (overrides: Partial<BookHandlers> = {}): BookHandlers => ({
   rename: vi.fn(),
+  target: vi.fn(),
   toggleRecipe: vi.fn(),
   toggleAll: vi.fn(),
   toggleExpanded: vi.fn(),

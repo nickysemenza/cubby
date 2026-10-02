@@ -165,6 +165,16 @@ export function BookGroupCard({
           className="h-8 max-w-xs font-medium"
           aria-label="Book name"
         />
+        {(book.importProgress || book.photoProgress) && book.bundleManifest && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => handlers.cancel(book.source)}
+          >
+            Cancel import
+          </Button>
+        )}
         <Row align="center" justify="end" gap="sm" className="flex-1 text-sm">
           <ExtractStatusLine book={book} recipeCount={flat.length} />
           {ready && flat.length > 0 && (
@@ -224,6 +234,29 @@ function BookDetails({
   return (
     <CardContent className="space-y-2">
       <BookIdentity book={book} />
+      {book.bundleManifest && (
+        <Stack gap="xs">
+          {book.bundleManifest.incomplete && (
+            <Description className="text-warning-ink">
+              This extraction is incomplete. Review the available recipes and
+              the run report before importing.
+            </Description>
+          )}
+          <Input
+            aria-label="Existing cookbook code (optional)"
+            placeholder="Existing cookbook code (optional)"
+            value={book.targetCookbookId ?? ""}
+            onChange={(event) =>
+              handlers.target(book.source, event.target.value)
+            }
+          />
+          <Description size="xs">
+            Leave blank to reuse the matching source. To replace another
+            cookbook’s saved source, enter its code; choose a distinct book name
+            to keep this source separate.
+          </Description>
+        </Stack>
+      )}
 
       {ready && name.length === 0 && (
         <p className="text-xs text-warning-ink">
@@ -368,18 +401,19 @@ function PhotoImportControls({
           className="border border-warning/40 bg-warning/5 p-2"
         >
           <Description as="span" size="xs" className="text-warning-ink">
-            Recipe photos need the original EPUB.
+            Recipe photos need the original{" "}
+            {book.bundleManifest ? ".cookbook file" : "EPUB"}.
           </Description>
           <label
             htmlFor={originalEpubInputId}
             className="cursor-pointer text-xs font-medium text-primary hover:underline"
           >
-            Choose original EPUB
+            Choose original {book.bundleManifest ? ".cookbook" : "EPUB"}
           </label>
           <Input
             id={originalEpubInputId}
             type="file"
-            accept=".epub,application/epub+zip"
+            accept=".epub,.cookbook,application/epub+zip"
             className="hidden"
             aria-label={`Original EPUB for ${book.name}`}
             onChange={(event) => {

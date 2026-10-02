@@ -23,6 +23,7 @@ afterEach(() => {
 
 const handlers: BookHandlers = {
   rename: vi.fn(),
+  target: vi.fn(),
   toggleRecipe: vi.fn(),
   toggleAll: vi.fn(),
   toggleExpanded: vi.fn(),
@@ -52,7 +53,9 @@ const emptyExtraction: CookbookExtraction = {
 describe("cookbook import conditional queries", () => {
   it("opens the EPUB importer without a source cookbook", () => {
     render(<CookbookImport />, { wrapper: harness.wrapper });
-    expect(screen.getByText("Drop .epub cookbooks here")).toBeVisible();
+    expect(
+      screen.getByText("Drop .epub or .cookbook files here"),
+    ).toBeVisible();
     expect(harness.queryClient.isFetching()).toBe(0);
   });
 

@@ -602,7 +602,7 @@ Generated artifacts provide the exhaustive entity keys and traits, public
 shortcode contracts (the inbound-only `P-`/`L-` label aliases live only in
 `packages/shared/src/shortcode.ts`, never in the manifest), schema bindings,
 client-safe inspector metadata, browser route roster, the typed list search
-schema per entity (`entities/generated/entity-search.gen.ts`: manifest filter
+schema per entity (`entity/generated/entity-search.gen.ts`: manifest filter
 keys, table keys and `create`, with `defaults` naming every key for
 `stripSearchParams`), kernel and MCP action capabilities, relation-specific
 command schemas, repository/relation-adapter assembly, and contract cases.
