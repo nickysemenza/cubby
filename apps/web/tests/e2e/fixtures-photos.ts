@@ -224,7 +224,7 @@ export async function seedPhotoGroupReviewRun(
     const bytes = readFileSync(
       new URL(`./fixtures/synthetic-wardrobe-${label}.png`, import.meta.url),
     );
-    const key = `e2e-${name}-${label}-${crypto.randomUUID()}`;
+    const key = `e2e/photos/${name}-${label}-${crypto.randomUUID()}`;
     const upload = await fetch(
       `${objectStorageUrl}/e2e-bucket/${encodeURIComponent(key)}`,
       { method: "PUT", headers: { "Content-Type": "image/png" }, body: bytes },

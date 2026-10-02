@@ -7,7 +7,7 @@ type RowQualityCheck = {
 }[ScoredEntity];
 
 /** Diagnostic presentation is unscored; hard defects cannot accept exemptions. */
-export type ProblemQualityPolicy = {
+type ProblemQualityPolicy = {
   scoring: "unscored";
   exceptions: "forbidden" | "inherit";
   /** Row predicates reused by richer group/edge presenters. */

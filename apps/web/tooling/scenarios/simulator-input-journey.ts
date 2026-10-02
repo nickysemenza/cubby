@@ -5,7 +5,7 @@ import type { Pool } from "pg";
 import { and, eq } from "drizzle-orm";
 import { pollUntil } from "@cubby/shared/retry";
 import { testUserId } from "@cubby/schemas/testing";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { imageId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import * as schema from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
@@ -148,7 +148,7 @@ export async function createSimulatorInputJourney(input: {
       const jobs = await eventually(async () => {
         const found = await database.query.imageProcessingJob.findMany({
           where: and(
-            eq(schema.imageProcessingJob.imageId, stored.id),
+            eq(schema.imageProcessingJob.imageId, imageId.parse(stored.id)),
             eq(schema.imageProcessingJob.kind, "describe_image"),
           ),
         });
@@ -169,7 +169,6 @@ export async function createSimulatorInputJourney(input: {
               kind: "create",
               create: { name: "Synthetic Input Crew Shirt" },
             },
-            inventory: null,
             evidence:
               "Supplied external grouping response for the actual native-uploaded synthetic photo.",
           },

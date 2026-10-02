@@ -228,7 +228,11 @@ describe("purchase evidence policy", () => {
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "FinancialTransaction" SET kind = 'account_transfer' WHERE id = ${transaction.entityId}`,
     );
-    expect(await quality()).toMatchObject({ score: 100, gaps: [] });
+    const transferQuality = await quality();
+    expect(transferQuality).toMatchObject({ status: "defect", score: 100 });
+    expect(transferQuality?.gaps.map((gap) => gap.check)).toEqual([
+      "financial_transaction_allocation_integrity",
+    ]);
   });
 
   it.each(["reimbursement", "vendor", "mixed"] as const)(

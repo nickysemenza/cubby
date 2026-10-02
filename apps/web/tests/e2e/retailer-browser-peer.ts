@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
+import type { z } from "zod";
 import {
   browserBridgeResult,
   type BrowserBridgeResult,
   browserBridgeServerMessage,
-  type BrowserBridgeServerMessage,
   browserPageCapture,
 } from "@cubby/schemas/purchase-import";
 import type { Database } from "~/server/db";
@@ -14,6 +14,8 @@ import {
   type PurchaseImportNamespace,
 } from "~/server/purchase-import/run-service";
 import { expect } from "./e2e-test";
+
+type BrowserBridgeServerMessage = z.infer<typeof browserBridgeServerMessage>;
 
 declare global {
   interface Window {
@@ -153,7 +155,7 @@ export async function connectRetailerBrowserPeer(input: {
           enhancedEvidence: false,
         },
       });
-      let capture;
+      let capture: z.output<typeof browserPageCapture> | undefined;
       await expect
         .poll(
           async () => {

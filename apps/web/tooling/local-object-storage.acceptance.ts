@@ -144,9 +144,11 @@ try {
           bytes: value.length,
           sha256: sha256(value),
         })),
-        ...(failure && {
-          error: failure instanceof Error ? failure.message : String(failure),
-        }),
+        error: failure
+          ? failure instanceof Error
+            ? failure.message
+            : String(failure)
+          : undefined,
         limits: [
           "No browser, PostgreSQL, or deployed R2 exercised",
           "Dirty source is not exactly replayable from the recorded commit",

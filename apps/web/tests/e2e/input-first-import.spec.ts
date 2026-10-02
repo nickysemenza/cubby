@@ -43,6 +43,7 @@ for (const statementFirst of [true, false]) {
     test.setTimeout(180_000);
     const provider = e2eRuntime.googleProvider;
     if (!provider) throw new Error("Gmail journey requires its local provider");
+    const providerURL = provider.url;
     const token = `joined-${Date.now()}`;
     const names = convergenceNames(token);
     const { db, actor } = await createEvidenceHarnessContext(page);
@@ -300,6 +301,54 @@ for (const statementFirst of [true, false]) {
         })
         .toBeTruthy();
     }
+    const productId = await resolveOrThrow(db, "product", product.id);
+    const aliasId = await resolveOrThrow(db, "product", duplicate.id);
+    async function expectNoInventory() {
+      expect(
+        await database.query.inventoryEntry.findMany({
+          where: notDeleted(schema.inventoryEntry),
+        }),
+      ).toHaveLength(0);
+    }
+    async function mergeReviewedProducts() {
+      await expectNoInventory();
+      const mergePage = await page.context().newPage();
+      try {
+        await gotoAuthenticatedPage(mergePage, "/products");
+        for (const name of [names.productName, duplicateName]) {
+          const row = mergePage.getByRole("row").filter({
+            has: mergePage.getByRole("link", { name, exact: true }),
+          });
+          await row
+            .getByRole("checkbox", { name: "Select row", exact: true })
+            .check();
+        }
+        await mergePage
+          .locator("[data-bulk-action-bar]")
+          .getByRole("button", { name: "Merge", exact: true })
+          .click();
+        const dialog = mergePage.getByRole("dialog");
+        await dialog
+          .getByRole("button", {
+            name: new RegExp(`^${escapeRegExp(names.productName)}(?:$|\\s)`),
+          })
+          .filter({ hasNotText: duplicateName })
+          .click();
+        await expect(
+          dialog.getByRole("heading", {
+            name: "What the merged product will keep",
+            exact: true,
+          }),
+        ).toBeVisible();
+        await dialog
+          .getByRole("button", { name: "Merge", exact: true })
+          .click();
+        await expect(dialog).not.toBeVisible();
+        await expectNoInventory();
+      } finally {
+        await mergePage.close();
+      }
+    }
     async function retailer() {
       const url = `https://${names.host}/orders/${names.orderId}`;
       const productUrl = `https://www.amazon.com/dp/${asin}`;
@@ -366,7 +415,7 @@ for (const statementFirst of [true, false]) {
           {
             runStructured: async (feature) => {
               const response = await fetch(
-                `${provider.url}/model/extract-capture`,
+                `${providerURL}/model/extract-capture`,
                 {
                   method: "POST",
                   headers: { "content-type": "application/json" },
@@ -429,6 +478,7 @@ for (const statementFirst of [true, false]) {
         .getByRole("button", { name: `Use ${names.productName}`, exact: true })
         .click();
       await expect(approve).toBeEnabled();
+      await mergeReviewedProducts();
       await approve.click();
       if (statementFirst) {
         const apply = page.getByRole("button", {
@@ -480,36 +530,6 @@ for (const statementFirst of [true, false]) {
     await expect(
       page.getByRole("link", { name: names.productName, exact: true }).first(),
     ).toBeVisible();
-    const productId = await resolveOrThrow(db, "product", product.id);
-    const aliasId = await resolveOrThrow(db, "product", duplicate.id);
-    await gotoAuthenticatedPage(page, "/products");
-    for (const name of [names.productName, duplicateName]) {
-      const row = page
-        .getByRole("row")
-        .filter({ has: page.getByRole("link", { name, exact: true }) });
-      await row
-        .getByRole("checkbox", { name: "Select row", exact: true })
-        .check();
-    }
-    await page
-      .locator("[data-bulk-action-bar]")
-      .getByRole("button", { name: "Merge", exact: true })
-      .click();
-    const dialog = page.getByRole("dialog");
-    await dialog
-      .getByRole("button", {
-        name: new RegExp(`^${escapeRegExp(names.productName)}(?:$|\\s)`),
-      })
-      .filter({ hasNotText: duplicateName })
-      .click();
-    await expect(
-      dialog.getByRole("heading", {
-        name: "What the merged product will keep",
-        exact: true,
-      }),
-    ).toBeVisible();
-    await dialog.getByRole("button", { name: "Merge", exact: true }).click();
-    await expect(dialog).not.toBeVisible();
     const purchases = await database.query.purchase.findMany({
       where: and(
         eq(schema.purchase.vendorId, vendorId),
@@ -524,6 +544,7 @@ for (const statementFirst of [true, false]) {
       ),
     });
     expect(expenses).toMatchObject([{ productId, cost: 42.5 }]);
+    await expectNoInventory();
     expect(
       await database.query.product.findMany({
         where: and(

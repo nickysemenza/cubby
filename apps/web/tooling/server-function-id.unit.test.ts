@@ -11,7 +11,7 @@ describe("generateServerFunctionId", () => {
     const generateServerFunctionId = createServerFunctionIdGenerator();
     const id = generateServerFunctionId(detailFunction);
 
-    expect(id).toBe("entities-entity-detail-get-entity-detail");
+    expect(id).toBe("entity-entity-detail-get-entity-detail");
     expect(id).toMatch(/^[a-z\d-]+$/u);
     expect(id).not.toMatch(/^(?:[a-f\d]{40,}|[A-Za-z\d_-]{80,})$/u);
   });
@@ -31,7 +31,7 @@ describe("generateServerFunctionId", () => {
       generateServerFunctionId({
         ...detailFunction,
         filename:
-          "C:\\repo\\apps\\web\\src\\entities\\entity-detail.functions.ts",
+          "C:\\repo\\apps\\web\\src\\entity\\entity-detail.functions.ts",
       }),
     ).toBe(expected);
   });

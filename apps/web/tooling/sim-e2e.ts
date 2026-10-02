@@ -450,6 +450,7 @@ async function simulator(): Promise<{
   name: string;
   state: string;
   runtime: string;
+  deviceTypeIdentifier: string;
 }> {
   const deviceType = "com.apple.CoreSimulator.SimDeviceType.iPhone-17";
   const raw = await new Promise<string>((resolve, reject) => {

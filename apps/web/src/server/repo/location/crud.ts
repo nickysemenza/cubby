@@ -323,10 +323,8 @@ const createLocationTx = async (
  * uniquely named location a scan/import drops an item into when it has no home
  * yet. Unknown lives directly beneath Home, but name uniqueness means callers
  * do not need to know its current parent to find it.
- * Exported so every consumer (ensure-or-create below, the Problems
- * "parked in Unknown" detector) agrees on what "Unknown" means.
  */
-export const isGlobalUnknownLocation = () =>
+const isGlobalUnknownLocation = () =>
   and(eq(location.name, "Unknown"), notDeleted(location));
 
 export const ensureGlobalUnknownLocation = async (

@@ -64,20 +64,26 @@ describe("incremental cookbook bundle", () => {
     ).toBeLessThan(128 * 1024);
   });
 
-  it.each([
+  const invalidManifests: NonNullable<
+    Parameters<typeof syntheticCookbookArchive>[1]
+  >[] = [
     { version: 2 },
     { source_sha256: "b".repeat(64) },
     { extraction: "../extraction.json" },
     { images: [] },
-  ])("rejects invalid manifest %j before import", async (override) => {
-    await expect(
-      openCookbookBundle(
-        new Blob([syntheticCookbookArchive(undefined, override).bytes]),
-      ),
-    ).rejects.toThrow(
-      /Invalid input|Bundle source hash|Unsafe bundle path|missing matching image evidence/i,
-    );
-  });
+  ];
+  it.each(invalidManifests)(
+    "rejects invalid manifest %j before import",
+    async (override) => {
+      await expect(
+        openCookbookBundle(
+          new Blob([syntheticCookbookArchive(undefined, override).bytes]),
+        ),
+      ).rejects.toThrow(
+        /Invalid input|Bundle source hash|Unsafe bundle path|missing matching image evidence/i,
+      );
+    },
+  );
 
   it("rejects corrupt image hashes and contradictory ZIP sizes", async () => {
     const fixture = syntheticBundle();

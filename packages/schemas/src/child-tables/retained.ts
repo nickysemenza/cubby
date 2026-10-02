@@ -1,5 +1,5 @@
 /** Shrink-only exceptions to declared child storage; each table has a shared or infrastructure owner. */
-export const retainedTableReasons = {
+const retainedTableReasons = {
   upcLookupCache: "Vendor-neutral provider cache, not owned by one Product.",
   entityEmbedding: "Shared search infrastructure across entity kinds.",
   searchDocument: "Shared lexical projection across entity kinds.",

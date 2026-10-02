@@ -714,8 +714,6 @@ export async function startPhotoInventoryCoordinator(
 
 /**
  * Consumer-side fence: only the active event generation may admit Flue.
- * @lintignore Called through the `PurchaseImportService` RPC namespace in
- * cf-server.ts.
  */
 export async function acknowledgeRunCoordinator(
   db: Database,
@@ -742,8 +740,6 @@ export async function acknowledgeRunCoordinator(
 
 /**
  * Read-only consumer fence before Flue admission.
- * @lintignore Called through the `PurchaseImportService` RPC namespace in
- * cf-server.ts.
  */
 export async function canDispatchRunCoordinator(
   db: Database,
@@ -1000,7 +996,6 @@ export async function finalizePhotoRun(
   };
 }
 
-/** @lintignore Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function updateAgentProgress(
   db: Database,
   rawInput: AgentProgressEvent,
@@ -1021,7 +1016,6 @@ export async function updateAgentProgress(
   return { recorded: Boolean(inserted) };
 }
 
-/** @lintignore Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function pauseRunForAuthorization(db: Database, runId: string) {
   const [run] = await getDb(db)
     .update(runTable)
@@ -2188,7 +2182,6 @@ export async function importBrowserOrderEvidence(
   return { extraction, writeResult };
 }
 
-/** @lintignore Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function saveNavigationHints(
   db: Database,
   input: {
@@ -2219,7 +2212,6 @@ export async function saveNavigationHints(
   return next;
 }
 
-/** @lintignore Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function markHistoryExpired(
   db: Database,
   input: {
@@ -2297,7 +2289,6 @@ export async function markHistoryExpired(
   return { marked };
 }
 
-/** @lintignore Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
 export async function auditImportBatch(
   db: Database,
   input: { runId: string; operationId: string; offset: number },
