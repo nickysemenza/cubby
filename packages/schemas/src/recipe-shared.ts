@@ -1,3 +1,4 @@
+import { recordEmojiField } from "./emoji";
 import { timestampedFields } from "./base-entity";
 import { fdcId } from "@cubby/usda";
 import { z } from "zod";
@@ -243,6 +244,7 @@ export type RecipeSource = z.infer<typeof recipeSource>;
  * that same declaration, which therefore cannot read its own generated map.
  */
 export const recipeTopLevelFields = {
+  emoji: recordEmojiField.validation.read,
   id: recipeShortcode,
   name: z.string(),
   ...timestampedFields,
