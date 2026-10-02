@@ -43,6 +43,7 @@ import {
   selectedExpenseFacetValues,
   type ExpenseFacetId,
 } from "~/server/repo/expense/analyze";
+import { loadVendorAttributionDefaults } from "~/server/repo/expense/attribution-defaults";
 import { getExpenseByID } from "~/server/repo/expense/crud";
 import { expenseList } from "~/server/repo/expense/lookup";
 import {
@@ -463,6 +464,8 @@ export const expenseHandlers = implementOperationDomain(expenseContract, {
     expenseChargeContextWorkflow(context.db, input),
   inventoryOwnershipContext: (context, input) =>
     expenseInventoryOwnershipContext(context.db, input),
+  vendorAttributionDefaults: (context, input) =>
+    loadVendorAttributionDefaults(context.db, input.vendor),
   confirmInventoryBeneficiary: (context, input) =>
     confirmInventoryBeneficiary(context, input),
   match: (context, input) => matchExpenses(context.db, input),

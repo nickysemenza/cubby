@@ -584,8 +584,13 @@ export const controlRendererCoverage = {
   money: generic,
   url: generic,
   "tag-list": implemented(TagListField),
-  "ledger-attributions": implemented(({ field, form }) => (
-    <LedgerAttributionsField form={form} name={field.key} label={field.label} />
+  "ledger-attributions": implemented(({ entity, field, form, mode }) => (
+    <LedgerAttributionsField
+      form={form}
+      name={field.key}
+      label={field.label}
+      prefillFromVendor={entity === "expense" && mode === "create"}
+    />
   )),
   amount: implemented(AmountField),
   "entity-multi-select": implemented(EntityMultiSelectField),

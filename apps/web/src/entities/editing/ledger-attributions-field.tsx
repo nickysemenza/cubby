@@ -1,14 +1,21 @@
 import { ledgerAttributions } from "@cubby/schemas/ledger-party";
+import { useDebouncedValue } from "@tanstack/react-pacer";
+import { useQuery } from "@tanstack/react-query";
+import { isEqual } from "es-toolkit";
+import { useEffect, useRef } from "react";
 import {
   Controller,
   type FieldValues,
   type UseFormReturn,
+  useWatch,
 } from "react-hook-form";
+import { z } from "zod";
 
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { useEntityListSource } from "~/app/_components/combobox/with-search-hook";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
+import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
 
 type LedgerAttributionRow = ReturnType<typeof ledgerAttributions.parse>[number];
 
@@ -95,16 +102,56 @@ function LedgerAttributionRowFields({
   );
 }
 
+/**
+ * Create-mode expense prefill: fills this role from the last attributed charge
+ * with the same vendor. It only writes while the field is empty or still holds
+ * the value this hook last wrote, so anything the user entered is never
+ * overwritten and changing the vendor re-prefills an untouched field.
+ */
+function useVendorAttributionPrefill(
+  form: UseFormReturn<FieldValues>,
+  name: string,
+  enabled: boolean,
+) {
+  const vendor: unknown = useWatch({ control: form.control, name: "vendor" });
+  // The vendor field is typed into, so wait for it to settle before querying.
+  const [vendorName] = useDebouncedValue(
+    z.string().catch("").parse(vendor).trim(),
+    { wait: 400 },
+  );
+  const { data } = useQuery({
+    ...expense.vendorAttributionDefaults.queryOptions({ vendor: vendorName }),
+    enabled: enabled && vendorName.length > 0,
+  });
+  const lastWritten = useRef<unknown>(null);
+  useEffect(() => {
+    const suggested = name === "funders" ? data?.funders : data?.beneficiaries;
+    if (!suggested?.length) return;
+    const current: unknown = form.getValues(name);
+    const untouched =
+      !Array.isArray(current) ||
+      current.length === 0 ||
+      isEqual(current, lastWritten.current);
+    if (!untouched) return;
+    lastWritten.current = suggested;
+    form.setValue(name, suggested, { shouldDirty: true });
+  }, [data, form, name]);
+}
+
 /** Weights are relative shares; an explicit null party preserves an unattributed share. */
 export function LedgerAttributionsField({
   form,
   name,
   label,
+  prefillFromVendor = false,
 }: {
   form: UseFormReturn<FieldValues>;
   name: string;
   label: string;
+  /** Expense create only: default from the last set used with the form's `vendor`. */
+  prefillFromVendor?: boolean;
 }) {
+  useVendorAttributionPrefill(form, name, prefillFromVendor);
   return (
     <Controller
       control={form.control}
