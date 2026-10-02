@@ -208,6 +208,8 @@ describe("saved confirmation imports", () => {
                 },
               },
               lineIds: ["herb"],
+              primaryDocumentImageId: null,
+              screenshotImageId: null,
             },
           ],
         },
@@ -263,6 +265,8 @@ describe("saved confirmation imports", () => {
           },
         },
         lineIds: ["herb"],
+        primaryDocumentImageId: null,
+        screenshotImageId: null,
       },
     ];
     await preparePurchaseImport(
