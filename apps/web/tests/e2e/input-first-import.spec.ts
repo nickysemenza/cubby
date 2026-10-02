@@ -268,6 +268,7 @@ for (const statementFirst of [true, false]) {
             exact: true,
           }),
           purchaseCode,
+          { query: purchaseCode, code: purchaseCode },
         );
       } else {
         await selectComboboxItem(

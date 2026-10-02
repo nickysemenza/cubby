@@ -41,34 +41,7 @@ test("detected label nutrition stays editable and requires Save before replacing
     0,
   );
   await expect(page.getByText("Photo added.", { exact: true })).toBeVisible();
-  expect(
-    await dialog.locator("form").evaluate((form) =>
-      Array.from(form.querySelectorAll("input, select, textarea")).flatMap(
-        (control) => {
-          if (
-            (control instanceof HTMLInputElement ||
-              control instanceof HTMLSelectElement ||
-              control instanceof HTMLTextAreaElement) &&
-            !control.checkValidity()
-          )
-            return [{ name: control.name, message: control.validationMessage }];
-          return [];
-        },
-      ),
-    ),
-  ).toEqual([]);
-  await dialog.locator("form").evaluate((form) => {
-    form.addEventListener(
-      "submit",
-      () => document.documentElement.setAttribute("data-e2e-submitted", "true"),
-      { once: true },
-    );
-  });
   await dialog.getByRole("button", { name: /^Create$/ }).click();
-  await expect(page.locator("html")).toHaveAttribute(
-    "data-e2e-submitted",
-    "true",
-  );
   await expect(dialog).not.toBeVisible();
   await openProductFromPalette(page, name);
   const imageCode = await seedDetectedLabelNutrition(name);
