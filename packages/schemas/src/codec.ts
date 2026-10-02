@@ -1,3 +1,4 @@
+import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import { z } from "zod";
 
 export const amount = z
@@ -71,3 +72,11 @@ export const sanitizeSectionName = (
 
 export const baseKind = z.enum(["weight", "volume", "money", "calories"]);
 export type BaseKind = z.infer<typeof baseKind>;
+
+export const ingredientApplicabilityKey = z.enum([
+  ...baseKind.options,
+  ...TIER1_NUTRIENT_KEYS,
+]);
+export type IngredientApplicabilityKey = z.infer<
+  typeof ingredientApplicabilityKey
+>;

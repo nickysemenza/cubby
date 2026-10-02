@@ -7,6 +7,11 @@ struct ProductNutritionDetailSlot: View {
     private var label: JSONValue? { row.raw["labelNutrition"] }
     private var hasLabel: Bool { label?.objectValue != nil }
     private var nutrients: [String: JSONValue] { label?["nutrients"]?.objectValue ?? [:] }
+    private var inferredZeroNutrients: [String] {
+        (label?["inferredZeroNutrients"]?.arrayValue ?? []).compactMap(\.stringValue)
+            .filter { nutrients[$0]?.doubleValue == nil }
+            .sorted()
+    }
     private var usdaNutrients: [JSONValue] {
         row.raw["food"]?["nutritionInfo"]?["nutrientSummary"]?.arrayValue ?? []
     }
@@ -31,6 +36,13 @@ struct ProductNutritionDetailSlot: View {
                                 NutrientCatalog.labels[key] ?? key,
                                 value: value.formatted(.number.precision(.fractionLength(0...3))))
                         }
+                    }
+                    ForEach(inferredZeroNutrients, id: \.self) { key in
+                        LabeledContent(NutrientCatalog.labels[key] ?? key, value: "0 · inferred from label")
+                    }
+                    if !inferredZeroNutrients.isEmpty, let evidence = label?["inferenceEvidence"]?.stringValue
+                    {
+                        Text(evidence).font(.caption).foregroundStyle(.secondary)
                     }
                 } else {
                     ForEach(Array(usdaNutrients.enumerated()), id: \.offset) { indexed in

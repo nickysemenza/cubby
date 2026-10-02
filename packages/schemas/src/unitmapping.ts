@@ -7,6 +7,7 @@ const sourceMetadata = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("product"),
     productId: productShortcode,
+    inferredZero: z.boolean().optional(),
   }),
   z.object({
     type: z.literal("food"),

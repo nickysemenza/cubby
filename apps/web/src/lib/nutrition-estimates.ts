@@ -11,9 +11,17 @@ import {
   type StoredNutritionTotals,
   withMacros,
 } from "@cubby/schemas/nutrition";
-import { TIER1_NUTRIENT_KEYS, TIER1_NUTRIENTS } from "@cubby/usda";
+import {
+  isNutrientKey,
+  TIER1_NUTRIENT_KEYS,
+  TIER1_NUTRIENTS,
+} from "@cubby/usda";
 
 import { wasm } from "~/lib/wasm";
+
+/** Base measurement exclusions never become nutrient zeros. */
+export const nutrientOptOutCodes = (keys: readonly string[]) =>
+  keys.filter(isNutrientKey).map((key) => TIER1_NUTRIENTS[key].code);
 
 export const fromWMeasureEstimate = (
   estimate: WMeasureEstimate,

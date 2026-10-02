@@ -13,6 +13,7 @@ import {
 } from "@cubby/schemas/expense-fields";
 import { displayGtin, externalIdInput } from "@cubby/schemas/external-id";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+import { productLabelNutrition } from "@cubby/schemas/nutrition";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import {
   collectionSlugsFromTags,
@@ -969,11 +970,11 @@ const productLabelNutritionDraft = z.object({
   servingGrams: z.number().nullable().optional(),
   source: z.string().nullable().optional(),
   nutrients: z.record(z.string(), z.number().nullable().optional()).optional(),
+  inferredZeroNutrients: z.array(z.string()).optional(),
+  inferenceEvidence: z.string().nullable().optional(),
 });
 
-const productLabelNutritionFromDraft = (
-  value: EntityEditValue,
-): EntityEditValue => {
+const productLabelNutritionFromDraft = (value: unknown): EntityEditValue => {
   const parsed = productLabelNutritionDraft
     .nullable()
     .optional()
@@ -988,11 +989,17 @@ const productLabelNutritionFromDraft = (
   for (const [key, amount] of Object.entries(parsed.data.nutrients ?? {})) {
     if (amount != null && isNutrientKey(key)) nutrients[key] = amount;
   }
-  return {
+  const result: z.infer<typeof productLabelNutrition> = {
     servingGrams: parsed.data.servingGrams,
     nutrients,
     source: parsed.data.source ?? null,
+    inferenceEvidence: parsed.data.inferenceEvidence ?? null,
   };
+  if (parsed.data.inferredZeroNutrients)
+    result.inferredZeroNutrients = parsed.data.inferredZeroNutrients
+      .filter(isNutrientKey)
+      .filter((key) => nutrients[key] === undefined);
+  return result;
 };
 
 /** Surfaces the stored schema's own "serving set, no nutrients" refine
@@ -1010,18 +1017,16 @@ const productLabelNutritionValidate: NonNullable<
     parsed.data.servingGrams == null
   )
     return noIssues();
-  const hasNutrient = Object.values(parsed.data.nutrients ?? {}).some(
-    (amount) => amount != null,
+  const stored = productLabelNutrition.safeParse(
+    productLabelNutritionFromDraft(parsed.data),
   );
-  return hasNutrient
+  return stored.success
     ? noIssues()
-    : [
-        {
-          field: "labelNutrition",
-          message: "A label needs at least one nutrient",
-          source: "client",
-        },
-      ];
+    : stored.error.issues.map((issue) => ({
+        field: "labelNutrition",
+        message: issue.message,
+        source: "client" as const,
+      }));
 };
 
 /** Draft → stored transform, run only when `labelNutrition` actually

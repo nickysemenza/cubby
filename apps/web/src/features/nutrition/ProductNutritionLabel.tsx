@@ -1,5 +1,5 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import type { FoodPortion, NutrientsPer100 } from "@cubby/usda";
+import type { FoodPortion, NutrientsPer100, NutrientKey } from "@cubby/usda";
 import { useMemo, useState } from "react";
 
 import { sourceNutritionEstimate, trimAmount } from "~/lib/nutrition-format";
@@ -77,12 +77,14 @@ export function ProductNutritionLabel({
   mappings,
   portions,
   servingGrams,
+  inferredZeroNutrients = [],
 }: {
   nutrients: NutrientsPer100;
   mappings: UnitMapping[];
   portions: readonly FoodPortion[];
   /** A package label's stated serving grams — see `resolveServingBasis`. */
   servingGrams?: number;
+  inferredZeroNutrients?: readonly NutrientKey[];
 }) {
   const nutrientBasis = useMemo(() => usdaNutrientBasis(mappings), [mappings]);
   const basis = useMemo(
@@ -118,6 +120,7 @@ export function ProductNutritionLabel({
       <NutritionLabel
         estimates={sourceNutritionEstimate(
           showServing && basis ? scaled : nutrients,
+          inferredZeroNutrients,
         )}
         servingLabel={
           showServing && basis

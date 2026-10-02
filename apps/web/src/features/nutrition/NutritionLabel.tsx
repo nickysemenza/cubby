@@ -138,10 +138,14 @@ export function NutritionLabel({
   note?: string;
 }) {
   const kcalEstimate = estimates.kcal;
-  const rows = ROW_ORDER.filter(
-    (key) =>
-      MACRO_ORDER.includes(key) || estimates[key].status !== "unavailable",
-  );
+  const rows = ROW_ORDER.filter((key) => {
+    const estimate = estimates[key];
+    return (
+      MACRO_ORDER.includes(key) ||
+      estimate.status !== "unavailable" ||
+      estimate.reason === "not_applicable"
+    );
+  });
 
   return (
     <div className="max-w-sm border-4 border-foreground bg-background p-4 font-mono text-foreground">

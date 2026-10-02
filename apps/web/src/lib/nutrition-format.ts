@@ -3,8 +3,13 @@ import {
   hasKnownEstimate,
   type MeasureEstimate,
   type NutritionEstimate,
+  type MeasureEstimateCoverage,
 } from "@cubby/schemas/nutrition";
-import { TIER1_NUTRIENTS, type NutrientsPer100 } from "@cubby/usda";
+import {
+  TIER1_NUTRIENTS,
+  type NutrientsPer100,
+  type NutrientKey,
+} from "@cubby/usda";
 
 import { roundTo } from "~/lib/utils";
 
@@ -21,39 +26,49 @@ export function formatEstimate(
   formatNumber: (value: number) => string,
 ): string {
   if (!hasKnownEstimate(estimate)) {
-    return estimate.status === "pending" ? "Pending" : "—";
+    return estimate.status === "pending"
+      ? "Pending"
+      : estimate.reason === "not_applicable"
+        ? "N/A"
+        : "—";
   }
 
   const value =
     estimate.upper == null || estimate.upper === estimate.lower
       ? formatNumber(estimate.lower)
       : `${formatNumber(estimate.lower)}–${formatNumber(estimate.upper)}`;
-  return estimate.status === "partial" ? `${value} known · partial` : value;
+  const confidence =
+    estimate.status === "partial" ? `${value} known · partial` : value;
+  return (estimate.coverage.inferredZero ?? 0) > 0
+    ? `${confidence} · includes inferred zero`
+    : confidence;
 }
 
 /** Accessible detail for an otherwise compact unavailable/pending cell. */
 export function estimateStatusText(estimate: MeasureEstimate): string | null {
-  if (hasKnownEstimate(estimate)) return null;
+  if (hasKnownEstimate(estimate))
+    return (estimate.coverage.inferredZero ?? 0) > 0
+      ? `${estimate.coverage.inferredZero} evidence-backed inferred zero ${estimate.coverage.inferredZero === 1 ? "contribution" : "contributions"}`
+      : null;
   if (estimate.status === "pending") return "Nutrition calculation pending";
-  return estimate.reason === "yield_missing"
-    ? "Unavailable: recipe yield is missing"
-    : estimate.reason === "empty"
-      ? "No nutrition contributors"
-      : "Unavailable: no nutrition data";
+  return estimate.reason === "not_applicable"
+    ? "Nutrient marked not applicable"
+    : estimate.reason === "yield_missing"
+      ? "Unavailable: recipe yield is missing"
+      : estimate.reason === "empty"
+        ? "No nutrition contributors"
+        : "Unavailable: no nutrition data";
 }
 
 /** Adapt a USDA/product record at the display boundary into the canonical shape. */
 export const sourceNutritionEstimate = (
   nutrients: NutrientsPer100,
+  inferredZeroNutrients: readonly NutrientKey[] = [],
 ): NutritionEstimate =>
   buildNutrition((key) => {
     const value = nutrients[TIER1_NUTRIENTS[key].code];
-    return value == null
-      ? { status: "unavailable", reason: "no_data" }
-      : {
-          status: "complete",
-          lower: value,
-          upper: null,
-          coverage: { covered: 1, total: 1 },
-        };
+    if (value == null) return { status: "unavailable", reason: "no_data" };
+    const coverage: MeasureEstimateCoverage = { covered: 1, total: 1 };
+    if (inferredZeroNutrients.includes(key)) coverage.inferredZero = 1;
+    return { status: "complete", lower: value, upper: null, coverage };
   });

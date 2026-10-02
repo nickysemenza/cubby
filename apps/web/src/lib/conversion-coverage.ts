@@ -1,3 +1,4 @@
+import type { IngredientApplicabilityKey } from "@cubby/schemas/codec";
 import { baseKind } from "@cubby/schemas/problems";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 
@@ -41,7 +42,9 @@ export const USDA_KINDS = ["weight", "volume", "calories"] as const;
  * than a missing gap. Never reaches the conversion engine, so it can't corrupt
  * costing; a forgotten call site just falls back to grading all four kinds.
  */
-export function gradedKinds(naKinds?: readonly BaseKind[] | null): BaseKind[] {
+export function gradedKinds(
+  naKinds?: readonly IngredientApplicabilityKey[] | null,
+): BaseKind[] {
   if (!naKinds || naKinds.length === 0) return [...BASE_KINDS];
   const na = new Set(naKinds);
   return BASE_KINDS.filter((k) => !na.has(k));

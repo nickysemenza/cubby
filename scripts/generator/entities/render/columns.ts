@@ -37,7 +37,7 @@ const storageJsonTypes = {
   "financialAccount.cardNumbers": "FinancialAccountCardNumber[]",
   "financialAccount.identity": "FinancialAccountIdentity",
   "financialAccount.sourceAliases": "FinancialAccountSourceAlias[]",
-  "ingredient.naKinds": "BaseKind[]",
+  "ingredient.naKinds": "IngredientApplicabilityKey[]",
   "image.sourceFingerprint": "ImageSourceFingerprint | null",
   "image.captureLocation": "ImageCaptureLocation | null",
   "image.provenanceEvidence": "ImageProvenanceEvidence | null",
@@ -157,7 +157,7 @@ export const renderStorageColumn = (
   } else if (field.kind === "text-array") {
     expression = `text(${column}).array()`;
     if (entity.key === "ingredient" && field.key === "naKinds")
-      expression += ".$type<BaseKind[]>()";
+      expression += ".$type<IngredientApplicabilityKey[]>()";
   } else if (field.kind === "text") {
     expression = `text(${column})`;
   } else if (field.kind === "number") {
@@ -211,7 +211,7 @@ export const storageColumnImports =
   'import type { CookbookExtraction, CookbookRunReport } from "@cubby/schemas/cookbook";\n' +
   'import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";\n' +
   'import { mealKindValues, mealTypeValues } from "@cubby/schemas/meal-classification";\n' +
-  'import type { BaseKind } from "@cubby/schemas/problems";\n' +
+  'import type { IngredientApplicabilityKey } from "@cubby/schemas/codec";\n' +
   'import { productCategoryFeatureValues } from "@cubby/schemas/product-category-fields";\n' +
   'import { costTypeValues, projectKindValues, projectStatusValues, taskStatusValues, tradeValues } from "@cubby/schemas/project";\n' +
   'import { expenseLineBasisValues, expenseLineKindValues } from "@cubby/schemas/expense-line-kind";\n' +

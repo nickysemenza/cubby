@@ -282,6 +282,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   request,
   onSuccess,
   mutationPort,
+  evidence,
 }: EntityEditDialogProps<E>) {
   const sessionRequest: RuntimeEntityEditRequest<E> = {
     ...request,
@@ -388,6 +389,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
         submitButtonText={presentation.submitLabel ?? "Create"}
         footerMode="dialog"
       >
+        {evidence}
         <FieldSuggestionProvider
           entity={suggestionEntity}
           mode={request.operation === "create" ? "create" : "edit"}

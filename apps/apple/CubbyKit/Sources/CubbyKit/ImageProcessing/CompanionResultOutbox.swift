@@ -14,6 +14,14 @@ public actor CompanionResultOutbox<Result: Codable & Sendable> {
     public static func applicationSupport(namespace: String) throws -> Self {
         let fileURL = try AtomicCodableReplayFile.applicationSupportURL(
             directory: "ImageProcessing", namespace: namespace, fileName: "result-outbox.json")
+        #if os(iOS)
+            if FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) {
+                // Upgrade existing foreground-only outboxes before a charging window runs locked.
+                try FileManager.default.setAttributes(
+                    [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                    ofItemAtPath: fileURL.path(percentEncoded: false))
+            }
+        #endif
         return Self(fileURL: fileURL)
     }
 
@@ -58,7 +66,7 @@ public actor CompanionResultOutbox<Result: Codable & Sendable> {
 
     private func persist() throws {
         try AtomicCodableReplayFile.save(
-            results, to: fileURL, encoder: .companionImageProcessing)
+            results, to: fileURL, encoder: .companionImageProcessing, allowLockedDevice: true)
     }
 }
 

@@ -50,6 +50,9 @@ pub struct WFoodYieldBasis {
 pub enum WFoodAmountSource {
     Mapped {
         products: Vec<WProductInput>,
+        #[serde(default)]
+        #[tsify(optional)]
+        nutrient_opt_out_codes: Vec<String>,
     },
     Recipe {
         batch: WNutritionTotals,
@@ -101,6 +104,7 @@ fn known(lower: f64, upper: Option<f64>) -> WMeasureEstimate {
         lower,
         upper: upper.filter(|value| value.is_finite() && *value > lower),
         coverage: WEstimateCoverage {
+            inferred_zero: 0,
             covered: 1,
             total: 1,
         },
@@ -151,16 +155,24 @@ fn mapped_food(
     amount: Option<WAmount>,
     products: Vec<WProductInput>,
     targets: Vec<WNutrientTarget>,
+    nutrient_opt_out_codes: Vec<String>,
 ) -> Result<WFoodAmountResult, String> {
     let Some(amount) = amount else {
+        let mut totals = unavailable_totals(&targets, WUnavailableReason::NoData);
+        for nutrient in &mut totals.nutrition {
+            if nutrient_opt_out_codes.contains(&nutrient.code) {
+                nutrient.estimate = unavailable(WUnavailableReason::NotApplicable);
+            }
+        }
         return Ok(WFoodAmountResult {
-            totals: unavailable_totals(&targets, WUnavailableReason::NoData),
+            totals,
             grams: None,
             weight: unavailable(WUnavailableReason::NoData),
             batch_share: unavailable(WUnavailableReason::NoData),
         });
     };
-    let (totals, weight) = resolve_mapped_food(&amount, &products, &targets);
+    let (totals, weight) =
+        resolve_mapped_food(&amount, &products, &targets, &nutrient_opt_out_codes);
     Ok(WFoodAmountResult {
         totals,
         grams: grams_from_estimate(&weight),
@@ -379,7 +391,10 @@ pub fn calculate_food_amount_impl(input: WFoodAmountInput) -> Result<WFoodAmount
         nutrient_targets,
     } = input;
     match source {
-        WFoodAmountSource::Mapped { products } => mapped_food(amount, products, nutrient_targets),
+        WFoodAmountSource::Mapped {
+            products,
+            nutrient_opt_out_codes,
+        } => mapped_food(amount, products, nutrient_targets, nutrient_opt_out_codes),
         WFoodAmountSource::Recipe {
             batch,
             yield_basis,
@@ -462,10 +477,42 @@ mod tests {
     }
 
     #[test]
+    fn mapped_ingredient_nutrient_opt_out_survives_known_and_missing_amounts() {
+        for amount in [
+            serde_json::json!({"value": 40, "unit": "g"}),
+            serde_json::Value::Null,
+        ] {
+            let input: WFoodAmountInput = serde_json::from_value(serde_json::json!({
+                "amount": amount,
+                "source": {
+                    "kind": "mapped", "nutrient_opt_out_codes": ["208"],
+                    "products": [{
+                        "id": "synthetic-food", "price": null, "unit_mappings": [],
+                        "food": {"fdc_id": 1, "portions": [], "serving": null,
+                            "nutrients_per_100": [{"unit": "kcal", "amount": 300}]}
+                    }]
+                },
+                "nutrient_targets": [{"code": "208", "unit": "kcal"}]
+            }))
+            .unwrap();
+            let result = calculate_food_amount_impl(input).unwrap();
+            assert_eq!(
+                result.totals.nutrition[0].estimate,
+                unavailable(WUnavailableReason::NotApplicable)
+            );
+            assert_eq!(
+                result.grams,
+                if amount.is_null() { None } else { Some(40.0) }
+            );
+        }
+    }
+
+    #[test]
     fn mapped_food_uses_the_costing_engine_graph() {
         let result = calculate_food_amount_impl(WFoodAmountInput {
             amount: Some(amount(0.5, "cup")),
             source: WFoodAmountSource::Mapped {
+                nutrient_opt_out_codes: vec![],
                 products: vec![WProductInput {
                     id: "product".to_string(),
                     price: Some(4.0),
@@ -508,6 +555,7 @@ mod tests {
         let result = calculate_food_amount_impl(WFoodAmountInput {
             amount: Some(amount(1.0, "serving")),
             source: WFoodAmountSource::Mapped {
+                nutrient_opt_out_codes: vec![],
                 products: vec![WProductInput {
                     id: "product".to_string(),
                     price: None,

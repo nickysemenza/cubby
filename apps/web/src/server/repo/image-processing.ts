@@ -421,6 +421,8 @@ export async function claimImageProcessingJob(
     leaseMs: number;
     /** A queue wakeup must never lease an unrelated row. */
     jobId?: string;
+    /** Device pulls can execute only declared processor revisions, never cloud jobs. */
+    processorRevisions?: readonly number[];
   },
 ): Promise<ClaimedImageProcessingJob | null> {
   // Use the database clock for both eligibility and leases; worker clocks can drift.
@@ -468,6 +470,11 @@ export async function claimImageProcessingJob(
         and(
           input.jobId ? eq(imageProcessingJob.id, input.jobId) : undefined,
           inArray(imageProcessingJob.kind, [...input.kinds]),
+          input.processorRevisions
+            ? inArray(imageProcessingJob.processorRevision, [
+                ...input.processorRevisions,
+              ])
+            : undefined,
           or(
             eq(imageProcessingJob.state, "pending"),
             eq(imageProcessingJob.state, "waiting_for_device"),
@@ -1504,4 +1511,79 @@ export async function getImageProcessingReadProjection(
         }
       : null,
   };
+}
+
+/** Release only the assigned live attempt; process death is still repaired by lease expiry. */
+export async function releaseAssignedImageProcessingJob(
+  db: Database,
+  input: { jobId: string; attemptId: string; deviceId: string; userId: string },
+): Promise<boolean> {
+  return withTransaction(db, async (tx) => {
+    const [assignment] = await tx
+      .select({
+        executor: imageProcessingAttempt.executor,
+        derivativeId: imageProcessingJob.derivativeId,
+      })
+      .from(imageProcessingJob)
+      .innerJoin(
+        imageProcessingAttempt,
+        eq(imageProcessingAttempt.id, imageProcessingJob.attemptId),
+      )
+      .where(
+        and(
+          eq(imageProcessingJob.id, input.jobId),
+          eq(imageProcessingJob.attemptId, input.attemptId),
+          eq(imageProcessingJob.state, "leased"),
+          eq(imageProcessingAttempt.assignedUserId, input.userId),
+        ),
+      )
+      .limit(1)
+      .for("update", { of: [imageProcessingJob] });
+    if (
+      assignment?.executor?.kind !== "device" ||
+      assignment.executor.deviceId !== input.deviceId
+    )
+      return false;
+    if (assignment.derivativeId) {
+      const [output] = await tx
+        .select({ key: imageDerivative.key })
+        .from(imageDerivative)
+        .where(eq(imageDerivative.id, assignment.derivativeId));
+      if (output)
+        await tx
+          .insert(imageProcessingOrphan)
+          .values({
+            key: output.key,
+            attemptId: input.attemptId,
+            reason: "Background execution released",
+          })
+          .onConflictDoNothing();
+    }
+    await tx
+      .update(imageProcessingAttempt)
+      .set({
+        state: "failed",
+        completedAt: sql`now()`,
+        error: "Background execution released",
+      })
+      .where(eq(imageProcessingAttempt.id, input.attemptId));
+    await tx
+      .update(imageProcessingJob)
+      .set({
+        state: "pending",
+        attemptId: null,
+        leaseExpiresAt: null,
+        nextAttemptAt: sql`now() + interval '1 minute'`,
+        lastError: "Background execution released",
+      })
+      .where(eq(imageProcessingJob.id, input.jobId));
+    await recordImageProcessingEvent(tx, {
+      jobId: input.jobId,
+      eventKey: `${input.attemptId}:released`,
+      event: "execution.released",
+      level: "info",
+      source: "device",
+    });
+    return true;
+  });
 }

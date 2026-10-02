@@ -34,6 +34,11 @@ export const labelNutrientsPer100 = (
       scaled[key] = (value / label.servingGrams) * 100;
     }
   }
+  if (label.inferenceEvidence) {
+    for (const key of label.inferredZeroNutrients ?? []) {
+      if (label.nutrients[key] === undefined) scaled[key] = 0;
+    }
+  }
   return buildNutrients(scaled);
 };
 
@@ -53,12 +58,24 @@ export const labelNutritionMappings = (
     if (!Number.isFinite(value) || value < 0 || !isTier1Nutrient(code)) {
       continue;
     }
-    mappings.push({
+    const mapping: WUnitMapping = {
       a: { value: 100, unit: "g" },
       b: { value, unit: getNutrientUnitString(getNutrientKey(code)) },
       source: "label nutrition",
-      sourceMetadata: { type: "product", productId },
-    });
+      sourceMetadata: {
+        type: "product",
+        productId,
+      },
+    };
+    if (
+      label.inferenceEvidence &&
+      label.inferredZeroNutrients?.includes(getNutrientKey(code)) &&
+      label.nutrients[getNutrientKey(code)] === undefined &&
+      mapping.sourceMetadata?.type === "product"
+    ) {
+      mapping.sourceMetadata.inferredZero = true;
+    }
+    mappings.push(mapping);
   }
   return mappings;
 };

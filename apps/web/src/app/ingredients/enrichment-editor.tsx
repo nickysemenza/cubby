@@ -1,6 +1,8 @@
+import type { IngredientOut } from "@cubby/schemas/ingredient";
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
+import { TIER1_NUTRIENT_KEYS, TIER1_NUTRIENTS } from "@cubby/usda";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
@@ -18,7 +20,7 @@ import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { ConversionCapabilities } from "~/features/units/ConversionCapabilities";
 import { UnitMappingGraph } from "~/features/units/unit-mapping-graph";
 import { UnitMappingsTable } from "~/features/units/unitmappingstable";
-import { BASE_KINDS, type BaseKind } from "~/lib/conversion-coverage";
+import { BASE_KINDS } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
@@ -187,8 +189,8 @@ function NaKindsField({
   onToggle,
   disabled,
 }: {
-  naKinds: BaseKind[];
-  onToggle: (kind: BaseKind) => void;
+  naKinds: IngredientOut["naKinds"];
+  onToggle: (kind: IngredientOut["naKinds"][number]) => void;
   disabled: boolean;
 }) {
   return (
@@ -215,6 +217,35 @@ function NaKindsField({
           </button>
         );
       })}
+      <details className="w-full">
+        <summary className="cursor-pointer text-xs text-muted-foreground">
+          Nutrient opt-outs
+        </summary>
+        <div className="flex flex-wrap gap-2 py-2">
+          {TIER1_NUTRIENT_KEYS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              disabled={disabled}
+              aria-pressed={naKinds.includes(key)}
+              onClick={() => onToggle(key)}
+              className={cn(
+                "rounded-md border px-2 py-1 text-xs",
+                naKinds.includes(key)
+                  ? "bg-accent text-foreground"
+                  : "text-muted-foreground",
+              )}
+            >
+              {TIER1_NUTRIENTS[key].displayName}
+              {naKinds.includes(key) ? " · N/A" : ""}
+            </button>
+          ))}
+        </div>
+        <Description>
+          Opted-out nutrients stay unavailable; they are never counted as
+          measured zero.
+        </Description>
+      </details>
     </div>
   );
 }
@@ -233,8 +264,8 @@ function LivePanels({
   previewMappings: UnitMapping[];
   currentMappings: UnitMapping[];
   linkedFoods: { foodInfo: { description: string } }[];
-  naKinds: BaseKind[];
-  onToggleNa: (kind: BaseKind) => void;
+  naKinds: IngredientOut["naKinds"];
+  onToggleNa: (kind: IngredientOut["naKinds"][number]) => void;
   naDisabled: boolean;
   className?: string;
 }) {
@@ -481,7 +512,7 @@ export function EnrichmentEditor({
   });
 
   const naKinds = row.naKinds;
-  const toggleNaKind = (kind: BaseKind) => {
+  const toggleNaKind = (kind: IngredientOut["naKinds"][number]) => {
     const next = new Set(naKinds);
     if (next.has(kind)) next.delete(kind);
     else next.add(kind);

@@ -106,9 +106,17 @@ enum AtomicCodableReplayFile {
     }
 
     static func save<Value: Encodable>(
-        _ value: Value, to fileURL: URL, encoder: JSONEncoder
+        _ value: Value, to fileURL: URL, encoder: JSONEncoder, allowLockedDevice: Bool = false
     ) throws {
         let data = try encoder.encode(value)
-        try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
+        #if os(iOS)
+            let protection: Data.WritingOptions =
+                allowLockedDevice
+                ? .completeFileProtectionUntilFirstUserAuthentication : .completeFileProtection
+            try data.write(to: fileURL, options: [.atomic, protection])
+        #else
+            // macOS rejects iOS file-protection flags before an atomic temporary file is created.
+            try data.write(to: fileURL, options: .atomic)
+        #endif
     }
 }

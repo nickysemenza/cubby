@@ -789,6 +789,15 @@ const CLIENT_PASSTHROUGH_METHODS = {
   "image.detail": { method: "imageDetail", doc: null },
   "imageProcessing.analyses": { method: "imageAnalyses", doc: null },
   "imageProcessing.status": { method: "imageProcessingStatus", doc: null },
+  "imageProcessing.pull": { method: "pullCompanionImageProcessing", doc: null },
+  "imageProcessing.complete": {
+    method: "completeCompanionImageProcessing",
+    doc: null,
+  },
+  "imageProcessing.release": {
+    method: "releaseCompanionImageProcessing",
+    doc: null,
+  },
   "photoImport.candidates": { method: "photoProductCandidates", doc: null },
   "photoImport.chooseExisting": {
     method: "choosePhotoGroupProduct",

@@ -41,6 +41,7 @@ import { productNutritionSource } from "~/lib/label-nutrition";
 import {
   fromNamedEstimates,
   fromWMeasureEstimate,
+  nutrientOptOutCodes,
 } from "~/lib/nutrition-estimates";
 import type { Result } from "~/lib/result-types";
 import { productWasmInputs } from "~/lib/unit-mapping-utils";
@@ -470,6 +471,7 @@ export const computeRecipeCosting = (
     ingredients: Object.entries(ingMap).map(([id, ing]) => ({
       id,
       products: ing.product.map(toWProductInput),
+      nutrient_opt_out_codes: nutrientOptOutCodes(ing.naKinds ?? []),
     })),
     nutrient_targets: nutrientTargets(),
     explain: opts.explain ?? false,

@@ -7,9 +7,12 @@ const coverage = z
   .object({
     covered: z.number().int().nonnegative(),
     total: z.number().int().nonnegative(),
+    inferredZero: z.number().int().nonnegative().optional(),
   })
   .refine(
-    (value) => value.covered <= value.total,
+    (value) =>
+      value.covered <= value.total &&
+      (value.inferredZero ?? 0) <= value.covered,
     "Coverage exceeds the contributor count",
   )
   // A type-driven mock cannot satisfy `covered <= total`; pin one example.
@@ -30,7 +33,7 @@ export const measureEstimate = z
     z
       .object({
         status: z.literal("unavailable"),
-        reason: z.enum(["no_data", "yield_missing", "empty"]),
+        reason: z.enum(["no_data", "yield_missing", "empty", "not_applicable"]),
         // Present when the aggregate saw contributors but priced none of them
         // (`covered` is always 0); absent for `empty` and rows persisted
         // before the field existed.
@@ -186,11 +189,26 @@ export const productLabelNutrition = z
     servingGrams: z.number().positive(),
     /** Per-serving amounts exactly as printed, in each key's TIER1 unit. */
     nutrients: z.partialRecord(nutrientKey, z.number().nonnegative()),
+    inferredZeroNutrients: z.array(nutrientKey).optional(),
+    inferenceEvidence: z.string().trim().min(1).nullable().optional(),
     /** Provenance note, e.g. "Hero package label". */
     source: z.string().nullable(),
   })
   .refine(
     (v) => Object.keys(v.nutrients).length > 0,
     "A label needs at least one nutrient",
+  )
+  .refine(
+    (value) =>
+      (value.inferredZeroNutrients?.length ?? 0) === 0 ||
+      Boolean(value.inferenceEvidence),
+    "Inferred zero nutrients need explicit label evidence",
+  )
+  .refine(
+    (value) =>
+      (value.inferredZeroNutrients ?? []).every(
+        (key) => value.nutrients[key] === undefined,
+      ),
+    "A nutrient cannot be both measured and inferred zero",
   );
 export type ProductLabelNutrition = z.infer<typeof productLabelNutrition>;

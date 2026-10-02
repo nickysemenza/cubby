@@ -21,6 +21,8 @@ import { Row, Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 import { Image } from "~/ui/primitives/image";
 
+import { LabelNutritionReview } from "./label-nutrition-review";
+
 /**
  * Nutrition: a package-label override (`labelNutrition`) leads and takes
  * precedence over a linked USDA food's nutrients (matching costing precedence
@@ -53,6 +55,7 @@ export const ProductNutrition: DetailSlotComponent<"product"> = ({
         mappings={mappings}
         portions={product.food?.portionInfoRaw ?? []}
         servingGrams={labelNutrition?.servingGrams}
+        inferredZeroNutrients={labelNutrition?.inferredZeroNutrients}
       />
       {labelNutrition && (
         <Description size="xs">
@@ -206,14 +209,17 @@ export const ProductLabels: DetailSlotComponent<"product"> = ({
         // original, never that old transparent derivative.
         const originalUrl = label.representations?.original ?? label.url;
         return (
-          <a key={label.id} href={originalUrl} target="_blank" rel="noreferrer">
-            <Image
-              src={originalUrl}
-              alt={label.filename}
-              displayWidth={240}
-              className="aspect-[3/4] w-full rounded-md border border-border object-contain"
-            />
-          </a>
+          <Stack key={label.id} gap="sm">
+            <a href={originalUrl} target="_blank" rel="noreferrer">
+              <Image
+                src={originalUrl}
+                alt={label.filename}
+                displayWidth={240}
+                className="aspect-[3/4] w-full rounded-md border border-border object-contain"
+              />
+            </a>
+            <LabelNutritionReview product={product} label={label} />
+          </Stack>
         );
       })}
     </div>

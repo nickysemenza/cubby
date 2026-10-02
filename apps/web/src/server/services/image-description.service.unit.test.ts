@@ -31,3 +31,54 @@ describe("fetchAnalysisRendition", () => {
     expect([...bytes]).toEqual([1, 2, 3]);
   });
 });
+
+it("does not adopt model-invented zero nutrients or foreign image attribution", async () => {
+  const { normalizeImageDescriptionResult } =
+    await import("./image-description.service");
+  const result = normalizeImageDescriptionResult(
+    {
+      description: "A package nutrition panel",
+      cutoutEligibility: "ineligible",
+      claims: [
+        { text: "Nutrition Facts", evidenceKind: "ocr", imageId: "IMG-4K7M" },
+      ],
+      nutritionFacts: {
+        servingGrams: 40,
+        nutrients: { kcal: 120 },
+        inferredZeroNutrients: ["vitamin_c"],
+        inferenceEvidence: "Model guess",
+      },
+    },
+    "IMG-2345",
+  );
+  expect(result.claims[0]?.imageId).toBe("IMG-2345");
+  expect(result.nutritionFacts).toMatchObject({
+    nutrients: { kcal: 120 },
+    inferredZeroNutrients: [],
+    inferenceEvidence: null,
+  });
+});
+
+it("retains named inferred zeros only when the printed footnote is quoted as label evidence", async () => {
+  const { normalizeImageDescriptionResult } =
+    await import("./image-description.service");
+  const footnote = "Not a significant source of total fat.";
+  const result = normalizeImageDescriptionResult(
+    {
+      description: "A package nutrition panel",
+      cutoutEligibility: "ineligible",
+      claims: [{ text: footnote, evidenceKind: "ocr" }],
+      nutritionFacts: {
+        servingGrams: 40,
+        nutrients: { kcal: 120 },
+        inferredZeroNutrients: ["fat", "vitamin_c"],
+        inferenceEvidence: footnote,
+      },
+    },
+    "IMG-2345",
+  );
+  expect(result.nutritionFacts).toMatchObject({
+    inferredZeroNutrients: ["fat"],
+    inferenceEvidence: footnote,
+  });
+});

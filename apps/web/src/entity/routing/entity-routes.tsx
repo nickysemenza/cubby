@@ -27,10 +27,10 @@ import {
   EntityListCardDensityProvider,
   GenericEntityList,
   type GenericEntityListProps,
-  resolveListView,
   useEntityListCardDensity,
   useListSearch,
 } from "~/entity/entity-list/generic-entity-list";
+import { resolveListView } from "~/entity/entity-list/resolve-list-view";
 import { readRecordField } from "~/entity/entity-references";
 import { useDetailTitle } from "~/ui/hooks/useDocumentTitle";
 import type { PageLayout } from "~/ui/layout/page-wrapper";

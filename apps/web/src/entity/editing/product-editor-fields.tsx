@@ -43,6 +43,7 @@ import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { useProductCategories } from "~/ui/hooks/useProductCategories";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
 import {
   Collapsible,
   CollapsibleContent,
@@ -449,6 +450,11 @@ export function ProductLabelNutritionField({
   const [open, setOpen] = useState(() => form.getValues(servingPath) != null);
   const servingGrams = useWatch({ control: form.control, name: servingPath });
   const hasServing = servingGrams != null;
+  const inferredPath = `${field.key}.inferredZeroNutrients`;
+  const inferredZeroNutrients = z
+    .array(z.string())
+    .catch([])
+    .parse(useWatch({ control: form.control, name: inferredPath }));
   // SAFETY: `formState.errors[field.key]` is a plain `FieldError` for this
   // whole-object field (the kernel's `validate` attaches it to `field.key`
   // directly, see `productLabelNutritionValidate`), not a nested error tree.
@@ -497,17 +503,57 @@ export function ProductLabelNutritionField({
                 {LABEL_NUTRIENT_ORDER.map((key) => {
                   const info = TIER1_NUTRIENTS[key];
                   return (
-                    <NullableNumericField
-                      key={key}
-                      form={form}
-                      step="0.1"
-                      name={`${field.key}.nutrients.${key}`}
-                      label={`${info.displayName} (${info.unit.toLowerCase()})`}
-                      placeholder="0"
-                    />
+                    <Stack gap="xs" key={key}>
+                      <NullableNumericField
+                        form={form}
+                        step="0.1"
+                        name={`${field.key}.nutrients.${key}`}
+                        label={`${info.displayName} (${info.unit.toLowerCase()})`}
+                        placeholder="Unknown"
+                      />
+                      <label
+                        htmlFor={`${field.key}-inferred-${key}`}
+                        className="flex items-center gap-2 text-xs text-muted-foreground"
+                      >
+                        <Checkbox
+                          id={`${field.key}-inferred-${key}`}
+                          checked={inferredZeroNutrients.includes(key)}
+                          onCheckedChange={(checked) => {
+                            const next = inferredZeroNutrients.filter(
+                              (value) => value !== key,
+                            );
+                            form.setValue(
+                              inferredPath,
+                              checked ? [...next, key] : next,
+                              { shouldDirty: true },
+                            );
+                            if (checked)
+                              form.setValue(
+                                `${field.key}.nutrients.${key}`,
+                                null,
+                                { shouldDirty: true },
+                              );
+                          }}
+                        />
+                        Inferred zero from label evidence
+                      </label>
+                    </Stack>
                   );
                 })}
               </div>
+              {inferredZeroNutrients.length > 0 && (
+                <UnifiedTextField
+                  form={form}
+                  name={`${field.key}.inferenceEvidence`}
+                  label="Evidence for inferred zeros"
+                  placeholder="Transcribe the panel's explicit statement, or record your reviewed confirmation"
+                  nullable
+                />
+              )}
+              <Description>
+                Blank fields remain unknown. Enter printed numbers as measured
+                values; infer zero only from explicit evidence.
+              </Description>
             </>
           )}
           <FieldError errors={[labelNutritionError]} />

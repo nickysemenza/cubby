@@ -213,6 +213,21 @@ extension MealNutritionFood: Identifiable {
     }
 }
 
+extension MeasureEstimate {
+    public var inferredZeroCount: Int {
+        switch self {
+        case .complete(let value): value.coverage.inferredZero ?? 0
+        case .partial(let value): value.coverage.inferredZero ?? 0
+        case .unavailable, .pending: 0
+        }
+    }
+
+    public var isNotApplicable: Bool {
+        if case .unavailable(let value) = self { return value.reason == .notApplicable }
+        return false
+    }
+}
+
 extension MacroSummary {
     /// The server's `partial`: at least one of the four macros is a partial estimate.
     public var containsPartialEstimate: Bool { partial }

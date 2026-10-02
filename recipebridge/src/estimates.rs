@@ -8,11 +8,18 @@ use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 use wasm_bindgen::prelude::*;
 
+fn is_zero(value: &u32) -> bool {
+    *value == 0
+}
+
 #[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct WEstimateCoverage {
     pub covered: u32,
     pub total: u32,
+    #[serde(rename = "inferredZero", default, skip_serializing_if = "is_zero")]
+    #[tsify(optional)]
+    pub inferred_zero: u32,
 }
 
 #[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,6 +28,7 @@ pub enum WUnavailableReason {
     NoData,
     YieldMissing,
     Empty,
+    NotApplicable,
 }
 
 #[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -61,8 +69,27 @@ pub enum WMeasureEstimate {
 }
 
 impl WMeasureEstimate {
+    pub(crate) fn inferred_zero_count(&self) -> u32 {
+        match self {
+            Self::Complete { coverage, .. } | Self::Partial { coverage, .. } => {
+                coverage.inferred_zero
+            }
+            _ => 0,
+        }
+    }
+    pub(crate) fn with_inferred_zero(mut self, count: u32) -> Self {
+        match &mut self {
+            Self::Complete { coverage, .. } | Self::Partial { coverage, .. } => {
+                coverage.inferred_zero = count
+            }
+            _ => {}
+        }
+        self
+    }
+
     pub(crate) fn known(lower: f64, upper: Option<f64>, covered: bool, total: u32) -> Self {
         let coverage = WEstimateCoverage {
+            inferred_zero: 0,
             covered: u32::from(covered),
             total,
         };
@@ -171,6 +198,7 @@ pub(crate) fn aggregate_estimates_impl(entries: &[WMeasureEstimate]) -> WMeasure
     let mut upper = 0.0;
     let mut any_upper = false;
     let mut covered = 0_u32;
+    let mut inferred_zero = 0_u32;
     let mut total = 0_u32;
     let mut known_count = 0_u32;
     let mut incomplete = false;
@@ -189,6 +217,7 @@ pub(crate) fn aggregate_estimates_impl(entries: &[WMeasureEstimate]) -> WMeasure
                 upper += bound.unwrap_or(*value);
                 any_upper |= bound.is_some();
                 add_count(&mut covered, coverage.covered);
+                add_count(&mut inferred_zero, coverage.inferred_zero);
                 add_count(&mut total, coverage.total);
             }
             WMeasureEstimate::Partial {
@@ -202,6 +231,7 @@ pub(crate) fn aggregate_estimates_impl(entries: &[WMeasureEstimate]) -> WMeasure
                 upper += bound.unwrap_or(*value);
                 any_upper |= bound.is_some();
                 add_count(&mut covered, coverage.covered);
+                add_count(&mut inferred_zero, coverage.inferred_zero);
                 add_count(&mut total, coverage.total);
             }
             WMeasureEstimate::Pending { reason } => {
@@ -213,6 +243,10 @@ pub(crate) fn aggregate_estimates_impl(entries: &[WMeasureEstimate]) -> WMeasure
                     _ => WPendingReason::TotalsStale,
                 });
             }
+            WMeasureEstimate::Unavailable {
+                reason: WUnavailableReason::NotApplicable,
+                ..
+            } => {}
             WMeasureEstimate::Unavailable { reason, coverage } => {
                 incomplete = true;
                 add_count(&mut total, coverage.map_or(1, |c| c.total));
@@ -231,21 +265,33 @@ pub(crate) fn aggregate_estimates_impl(entries: &[WMeasureEstimate]) -> WMeasure
             WMeasureEstimate::Partial {
                 lower,
                 upper,
-                coverage: WEstimateCoverage { covered, total },
+                coverage: WEstimateCoverage {
+                    covered,
+                    total,
+                    inferred_zero,
+                },
             }
         } else {
             WMeasureEstimate::Complete {
                 lower,
                 upper,
-                coverage: WEstimateCoverage { covered, total },
+                coverage: WEstimateCoverage {
+                    covered,
+                    total,
+                    inferred_zero,
+                },
             }
         }
     } else if let Some(reason) = pending_reason {
         WMeasureEstimate::Pending { reason }
     } else {
         WMeasureEstimate::Unavailable {
-            reason: unavailable_reason.unwrap_or(WUnavailableReason::NoData),
-            coverage: (total > 0).then_some(WEstimateCoverage { covered: 0, total }),
+            reason: unavailable_reason.unwrap_or(WUnavailableReason::NotApplicable),
+            coverage: (total > 0).then_some(WEstimateCoverage {
+                covered: 0,
+                total,
+                inferred_zero: 0,
+            }),
         }
     }
 }
@@ -360,6 +406,7 @@ mod tests {
             lower,
             upper,
             coverage: WEstimateCoverage {
+                inferred_zero: 0,
                 covered: 1,
                 total: 1,
             },
@@ -374,6 +421,7 @@ mod tests {
                 lower: 20.0,
                 upper: Some(36.0),
                 coverage: WEstimateCoverage {
+                    inferred_zero: 0,
                     covered: 1,
                     total: 1
                 }
@@ -394,6 +442,7 @@ mod tests {
                 lower: 4.0,
                 upper: None,
                 coverage: WEstimateCoverage {
+                    inferred_zero: 0,
                     covered: 1,
                     total: 2
                 }
@@ -409,6 +458,7 @@ mod tests {
                     lower: 5.0,
                     upper: None,
                     coverage: WEstimateCoverage {
+                        inferred_zero: 0,
                         covered: 0,
                         total: 1,
                     },
@@ -421,6 +471,7 @@ mod tests {
                 lower: 5.0,
                 upper: None,
                 coverage: WEstimateCoverage {
+                    inferred_zero: 0,
                     covered: 0,
                     total: 2,
                 },
@@ -475,6 +526,7 @@ mod tests {
             WMeasureEstimate::Unavailable {
                 reason: WUnavailableReason::NoData,
                 coverage: Some(WEstimateCoverage {
+                    inferred_zero: 0,
                     covered: 0,
                     total: 3,
                 }),
@@ -492,6 +544,7 @@ mod tests {
             WMeasureEstimate::Unavailable {
                 reason: WUnavailableReason::NoData,
                 coverage: Some(WEstimateCoverage {
+                    inferred_zero: 0,
                     covered: 0,
                     total: 2,
                 }),
@@ -506,6 +559,7 @@ mod tests {
                 WMeasureEstimate::Unavailable {
                     reason: WUnavailableReason::NoData,
                     coverage: Some(WEstimateCoverage {
+                        inferred_zero: 0,
                         covered: 0,
                         total: 3,
                     }),
@@ -515,10 +569,40 @@ mod tests {
             WMeasureEstimate::Unavailable {
                 reason: WUnavailableReason::NoData,
                 coverage: Some(WEstimateCoverage {
+                    inferred_zero: 0,
                     covered: 0,
                     total: 4,
                 }),
             }
         );
+    }
+    #[test]
+    fn inferred_zero_coverage_survives_scaling_and_aggregation() {
+        let inferred: WMeasureEstimate = serde_json::from_value(serde_json::json!({
+            "status": "complete", "lower": 0.0, "upper": null,
+            "coverage": { "covered": 1, "total": 1, "inferredZero": 1 }
+        }))
+        .unwrap();
+        let scaled = scale_estimate_impl(&inferred, 2.0, None);
+        let aggregate =
+            aggregate_estimates_impl(&[scaled, WMeasureEstimate::known(5.0, None, true, 1)]);
+        let value = serde_json::to_value(aggregate).unwrap();
+        assert_eq!(value["coverage"]["inferredZero"], 1);
+        assert_eq!(value["coverage"]["covered"], 2);
+        assert_eq!(value["lower"], 5.0);
+    }
+
+    #[test]
+    fn nutrient_opt_out_does_not_reduce_coverage() {
+        let opt_out: WMeasureEstimate = serde_json::from_value(serde_json::json!({
+            "status":"unavailable", "reason":"not_applicable"
+        }))
+        .unwrap();
+        let total = aggregate_estimates_impl(&[
+            opt_out.clone(),
+            WMeasureEstimate::known(2.0, None, true, 1),
+        ]);
+        assert_eq!(total, WMeasureEstimate::known(2.0, None, true, 1));
+        assert_eq!(aggregate_estimates_impl(&[opt_out.clone()]), opt_out);
     }
 }

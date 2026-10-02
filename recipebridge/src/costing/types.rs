@@ -70,6 +70,9 @@ pub struct WCostingRecipe {
 pub struct WCostingIngredient {
     pub id: String,
     pub products: Vec<WProductInput>,
+    #[serde(default)]
+    #[tsify(optional)]
+    pub nutrient_opt_out_codes: Vec<String>,
 }
 
 /// One nutrient conversion target. TS stays the source of truth for the tier-1

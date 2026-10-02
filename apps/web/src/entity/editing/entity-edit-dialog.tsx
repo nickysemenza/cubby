@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { EntityEditDialogContent } from "./entity-edit-dialog-content";
 import type {
@@ -34,6 +34,8 @@ export type EntityEditDialogRequest<E extends EditableEntity = EditableEntity> =
   Extract<SupportedEntityEditDialogRequest, { entity: E }>;
 
 export interface EntityEditDialogProps<E extends EditableEntity> {
+  /** Optional source evidence shown beside the existing editor fields. */
+  evidence?: ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   request: EntityEditDialogRequest<E>;

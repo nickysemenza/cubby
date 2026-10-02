@@ -56,20 +56,29 @@ export const toWFoodInput = (food: FoodSummary): WFoodInput => ({
  * objects — the WASM proxy's cached results are shared/readonly. The metadata
  * fallback is defensive: every edge this boundary emits carries it.
  */
-const toUnitMapping = (m: ReadonlyDeep<WUnitMapping>): UnitMapping => ({
-  a: { value: m.a.value, unit: m.a.unit },
-  b: { value: m.b.value, unit: m.b.unit },
-  source: m.source ?? null,
-  sourceMetadata:
-    m.sourceMetadata?.type === "product"
-      ? {
-          type: "product",
-          productId: parseShortcodeFor("product", m.sourceMetadata.productId),
-        }
-      : m.sourceMetadata?.type === "food"
-        ? { type: "food", fdcId: m.sourceMetadata.fdcId }
-        : { type: "manual" },
-});
+const toUnitMapping = (m: ReadonlyDeep<WUnitMapping>): UnitMapping => {
+  const mapping: UnitMapping = {
+    a: { value: m.a.value, unit: m.a.unit },
+    b: { value: m.b.value, unit: m.b.unit },
+    source: m.source ?? null,
+    sourceMetadata:
+      m.sourceMetadata?.type === "product"
+        ? {
+            type: "product",
+            productId: parseShortcodeFor("product", m.sourceMetadata.productId),
+          }
+        : m.sourceMetadata?.type === "food"
+          ? { type: "food", fdcId: m.sourceMetadata.fdcId }
+          : { type: "manual" },
+  };
+  if (
+    mapping.sourceMetadata?.type === "product" &&
+    m.sourceMetadata?.type === "product" &&
+    m.sourceMetadata.inferredZero
+  )
+    mapping.sourceMetadata.inferredZero = true;
+  return mapping;
+};
 
 export const unitMappingsFromFood = (food: FoodSummary): UnitMapping[] =>
   wasm.unit_mappings_from_food(toWFoodInput(food)).map(toUnitMapping);

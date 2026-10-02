@@ -61,6 +61,8 @@ public actor CompanionImageWorker {
     private var connectionGeneration = 0
     private var connectionTask: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
+    private var backgroundTask: Task<Bool, Never>?
+    private let backgroundRunner: CompanionImageBackgroundRunner
     /// The server dispatches every queued job at once; executing each inline in the receive loop
     /// ran a photo run's describe and cutout jobs strictly one after another. Commands now run
     /// concurrently up to this bound, and each command's own deadline still applies while queued.
@@ -94,9 +96,13 @@ public actor CompanionImageWorker {
         self.executor = executor
         self.failureObserver = failureObserver
         self.activityObserver = activityObserver
+        self.backgroundRunner = CompanionImageBackgroundRunner(
+            outbox: outbox, execute: { command in await executor.execute(command) },
+            failureObserver: failureObserver)
     }
 
     deinit {
+        backgroundTask?.cancel()
         connectionTask?.cancel()
         socket?.cancel(with: .goingAway, reason: nil)
     }
@@ -108,6 +114,7 @@ public actor CompanionImageWorker {
     }
 
     public func stop() {
+        backgroundTask?.cancel()
         shouldRun = false
         connectionGeneration += 1
         connectionTask?.cancel()
@@ -121,7 +128,13 @@ public actor CompanionImageWorker {
     /// Signing out ends the authenticated principal that owns every pending attempt. Do not let
     /// another account subsequently signed in on the same host replay those results.
     public func stopAndDiscardPendingResults() async throws {
+        let background = backgroundTask
+        let connection = connectionTask
+        let commands = Array(commandTasks.values)
         stop()
+        _ = await background?.value
+        await connection?.value
+        for command in commands { await command.value }
         try await outbox.removeAll()
     }
 
@@ -135,7 +148,38 @@ public actor CompanionImageWorker {
     /// so a later flip back on reconnects without a fresh `start()`.
     public func setParticipating(_ participating: Bool) {
         isParticipating = participating
+        if !participating { backgroundTask?.cancel() }
         reconcileConnection()
+    }
+
+    /// The charging task owns this finite HTTP window; it does not reopen an iOS socket.
+    public func runInBackground(client: CubbyClient) async -> Bool {
+        guard
+            case .hello(let hello) = ImageProcessingClientMessage.companionHello(
+                deviceID: deviceID, deviceName: deviceName, foreground: false,
+                imageDescriptionAvailable: FoundationModelsImageDescriber().availability() == .available,
+                automaticWork: isParticipating)
+        else { return false }
+        return await runInBackground(transport: client, hello: hello)
+    }
+
+    func runInBackground(
+        transport: any CompanionImageBackgroundTransport, hello: ImageProcessingHello
+    ) async -> Bool {
+        guard shouldRun, isParticipating, backgroundTask == nil else { return false }
+        let task = Task { await backgroundRunner.run(transport: transport, hello: hello) }
+        backgroundTask = task
+        let resumable = await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+        backgroundTask = nil
+        return resumable
+    }
+
+    public func endBackgroundRun() {
+        backgroundTask?.cancel()
     }
 
     private var platformAllowsConnection: Bool {
@@ -262,6 +306,7 @@ public actor CompanionImageWorker {
                 CompanionImageProcessingProtocol.attemptKey(
                     jobID: envelope.jobId, attemptID: envelope.attemptId))
         case .command(let envelope):
+            guard shouldRun, self.socket === socket else { return }
             guard CompanionWorkAcceptance.acceptsCommand(remotePaused: remotePaused) else { return }
             let command = envelope.command
             let key = CompanionImageProcessingProtocol.attemptKey(

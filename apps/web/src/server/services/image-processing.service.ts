@@ -1,5 +1,6 @@
 import { parseShortcodeFor, type RunId } from "@cubby/schemas/identifiers";
 import {
+  pullCompanionImageProcessingInput,
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-processing";
@@ -7,10 +8,20 @@ import type {
   ImageProcessingJobKind,
   ImageProcessingResult,
 } from "@cubby/schemas/image-processing";
+import { z } from "zod";
 
 import { publishBackgroundTasks } from "~/server/background-tasks/publish";
 import type { Database } from "~/server/db";
+import { prepareCompanionImageCommand } from "~/server/image-processing/dispatch";
 import { safeImageProcessingError } from "~/server/image-processing/safe-error";
+import { upsertDeviceFromHello } from "~/server/repo/device-participation";
+import {
+  claimImageProcessingJob,
+  reclaimExpiredImageProcessingLeases,
+  markImageProcessingWaitingForDevice,
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+} from "~/server/repo/image-processing";
 import { retryFailedImageProcessingJobs } from "~/server/repo/image-processing";
 import {
   completeImageProcessingJob,
@@ -19,6 +30,10 @@ import {
   finalizeImageProcessingOrphans,
   getLeasedImageProcessingJobContext,
 } from "~/server/repo/image-processing";
+import {
+  assignImageProcessingExecutor,
+  isAssignedImageProcessingDevice,
+} from "~/server/repo/image-processing-history";
 import {
   recordImageProcessingEvent,
   createImageProcessingSubmission,
@@ -274,6 +289,8 @@ async function prepareAppleDescriptionCompletion(
           contentType: context.contentType,
           provider: "apple",
           model,
+          promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
+          resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
         }),
       },
     },
@@ -293,4 +310,103 @@ export async function retryImageProcessingFailures(
   });
   await publishImageProcessingWakeups(db, jobs);
   return { retried: jobs.length, submissionId: submission.publicId };
+}
+
+/** Pulling grants one bounded assignment; the socket's foreground gate stays truthful. */
+export async function pullCompanionImageProcessing(
+  db: Database,
+  input: z.infer<typeof pullCompanionImageProcessingInput>,
+  userId: string,
+) {
+  const hello = input.hello;
+  const participation = await upsertDeviceFromHello(db, {
+    installationId: hello.deviceId,
+    name: hello.deviceName ?? "Apple device",
+    platform: hello.platform,
+    appVersion: hello.appVersion,
+    osVersion: hello.osVersion ?? null,
+    automaticWork: hello.participation.automaticWork,
+  });
+  const empty = { command: null, remotePaused: participation.remotePaused };
+  if (
+    !participation.automaticWork ||
+    participation.remotePaused ||
+    (await readImageProcessingSettings(db)).paused
+  )
+    return empty;
+  const revisions: number[] = [];
+  const kinds: ImageProcessingJobKind[] = [];
+  if (
+    hello.capabilities.visionSubjectLift.available &&
+    hello.capabilities.visionSubjectLift.revision === 1
+  ) {
+    kinds.push("subject_lift");
+    revisions.push(IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION);
+  }
+  if (
+    hello.capabilities.actualImageDescription.available &&
+    hello.capabilities.actualImageDescription.revision === 1
+  ) {
+    kinds.push("describe_image");
+    revisions.push(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+  }
+  if (!kinds.length) return empty;
+  await reclaimExpiredImageProcessingLeases(db);
+  for (let skipped = 0; skipped < 8; skipped++) {
+    const claimed = await claimImageProcessingJob(db, {
+      kinds,
+      processorRevisions: revisions,
+      leaseMs: input.leaseSeconds * 1000,
+    });
+    if (!claimed) return empty;
+    try {
+      const command = await prepareCompanionImageCommand(db, claimed);
+      if (!command) continue;
+      const assigned = await assignImageProcessingExecutor(db, {
+        jobId: claimed.id,
+        attemptId: claimed.attemptId,
+        userId,
+        executor: {
+          kind: "device",
+          deviceId: hello.deviceId,
+          name: hello.deviceName ?? "Apple device",
+          platform: hello.platform,
+          appVersion: hello.appVersion,
+          osVersion: hello.osVersion ?? null,
+        },
+      });
+      if (!assigned) {
+        await markImageProcessingWaitingForDevice(db, {
+          jobId: claimed.id,
+          attemptId: claimed.attemptId,
+        });
+        return empty;
+      }
+      return { command, remotePaused: false };
+    } catch (error) {
+      await markImageProcessingWaitingForDevice(db, {
+        jobId: claimed.id,
+        attemptId: claimed.attemptId,
+      });
+      throw error;
+    }
+  }
+  return empty;
+}
+
+export async function completeAssignedCompanionImageProcessing(
+  db: Database,
+  input: { deviceId: string; result: ImageProcessingResult },
+  userId: string,
+) {
+  if (
+    !(await isAssignedImageProcessingDevice(db, {
+      jobId: input.result.jobId,
+      attemptId: input.result.attemptId,
+      deviceId: input.deviceId,
+      userId,
+    }))
+  )
+    return { adopted: false };
+  return completeCompanionImageProcessingResult(db, input.result);
 }

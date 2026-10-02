@@ -54,6 +54,20 @@ describe("labelNutrientsPer100", () => {
   });
 });
 
+describe("evidence-backed label zeroes", () => {
+  it("covers an explicitly insignificant nutrient but leaves absent nutrients unknown", () => {
+    const per100 = labelNutrientsPer100({
+      servingGrams: 40,
+      nutrients: { kcal: 100 },
+      inferredZeroNutrients: ["fat"],
+      inferenceEvidence: "Not a significant source of total fat",
+      source: "Synthetic package",
+    });
+    expect(per100["204"]).toBe(0);
+    expect(per100["203"]).toBeUndefined();
+  });
+});
+
 describe("labelNutritionMappings", () => {
   it("emits one 100 g = X <unit> edge per labelled nutrient, tagged to the product", () => {
     const mappings = labelNutritionMappings(productId, heroLabel);
