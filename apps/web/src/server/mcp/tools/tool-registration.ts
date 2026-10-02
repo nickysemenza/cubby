@@ -1,14 +1,12 @@
 import { mcpAppResourceUriForTool } from "@cubby/mcp-apps/metadata";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
-import type {
-  McpServer,
-  ToolCallback,
-} from "@modelcontextprotocol/sdk/server/mcp.js";
-import type {
-  CallToolResult,
-  ToolAnnotations,
-} from "@modelcontextprotocol/sdk/types.js";
+import {
+  type McpServer,
+  type ToolCallback,
+  type CallToolResult,
+  type ToolAnnotations,
+} from "@modelcontextprotocol/server";
 import { eq } from "drizzle-orm";
 import { type JSONType, z } from "zod";
 
@@ -248,7 +246,7 @@ const requestContextSchema = z.custom<McpRequestContext>(
 
 /** The policy-selected request context `prepareToolExtra` placed in the SDK's untyped authInfo bag. */
 function getRequestContext(extra: ToolExtra): McpRequestContext {
-  const candidate = extra.authInfo?.extra?.requestContext;
+  const candidate = extra.http?.authInfo?.extra?.requestContext;
   if (candidate === undefined)
     throw new Error("Authenticated request context is missing");
   return requestContextSchema.parse(candidate);
@@ -257,7 +255,7 @@ function getRequestContext(extra: ToolExtra): McpRequestContext {
 export function operationContextFromExtra(
   extra: ToolExtra,
 ): McpOperationContext | undefined {
-  const candidate = extra.authInfo?.extra?.operationContext;
+  const candidate = extra.http?.authInfo?.extra?.operationContext;
   return candidate instanceof McpOperationContext ? candidate : undefined;
 }
 
@@ -266,13 +264,16 @@ async function prepareToolExtra(
   policy: ReadPolicy,
 ): Promise<ToolExtra> {
   const operationContext = operationContextFromExtra(extra);
-  if (!operationContext || !extra.authInfo) return extra;
+  if (!operationContext || !extra.http?.authInfo) return extra;
   const prepared = await operationContext.prepare(policy);
   return {
     ...extra,
-    authInfo: {
-      ...extra.authInfo,
-      extra: { ...extra.authInfo?.extra, ...prepared },
+    http: {
+      ...extra.http,
+      authInfo: {
+        ...extra.http.authInfo,
+        extra: { ...extra.http.authInfo.extra, ...prepared },
+      },
     },
   };
 }
@@ -398,7 +399,7 @@ function compileAction(
   const runMember = async (input: ActionValue, extra: ToolExtra) => {
     const member = toMember(z.looseObject({}).parse(input ?? {}));
     const result = await operation.run(
-      { ...getRequestContext(extra), signal: extra.signal },
+      { ...getRequestContext(extra), signal: extra.mcpReq.signal },
       member,
     );
     return spec.project ? spec.project(result, member) : result;
@@ -767,7 +768,7 @@ function registerCompiledTool(
           error,
           {
             operation: operationName,
-            authenticated: extra.authInfo !== undefined,
+            authenticated: extra.http?.authInfo !== undefined,
             entity,
           },
           stage,

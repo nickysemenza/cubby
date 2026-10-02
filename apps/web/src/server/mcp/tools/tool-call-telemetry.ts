@@ -4,11 +4,11 @@ import {
   telemetryMessageV1Schema,
 } from "@cubby/schemas/telemetry";
 import { createLogger } from "@cubby/worker-tracing";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type {
-  CallToolRequest,
-  CallToolResult,
-} from "@modelcontextprotocol/sdk/types.js";
+import {
+  type McpServer,
+  type CallToolRequest,
+  type CallToolResult,
+} from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { TraceNames, withTrace } from "~/server/tracing";
@@ -46,15 +46,15 @@ export function toolCallResultTraceAttributes(result: CallToolResult) {
     // response into a transport failure; `serializedBytes` just stays
     // `undefined` and is omitted from the trace attributes below.
   }
-  const summary = batchSummarySchema.safeParse(
-    result.structuredContent?.summary,
-  );
+  const summary = z
+    .object({ summary: batchSummarySchema })
+    .safeParse(result.structuredContent).data?.summary;
   return {
     "mcp.result.is_error": result.isError === true,
     "mcp.result.serialized_bytes": serializedBytes,
-    "mcp.batch.requested": summary.success ? summary.data.requested : undefined,
-    "mcp.batch.succeeded": summary.success ? summary.data.succeeded : undefined,
-    "mcp.batch.failed": summary.success ? summary.data.failed : undefined,
+    "mcp.batch.requested": summary?.requested,
+    "mcp.batch.succeeded": summary?.succeeded,
+    "mcp.batch.failed": summary?.failed,
   };
 }
 
@@ -116,7 +116,7 @@ export function installToolCallTelemetryHandler(server: McpServer): void {
     return withTrace(spanName, async (span) => {
       const startedAt = performance.now();
       const telemetry = telemetryExtraSchema.safeParse(
-        extra.authInfo?.extra?.telemetry,
+        extra.http?.authInfo?.extra?.telemetry,
       );
       const registeredAtCall = toolName
         ? getRegisteredTool(server, toolName) !== undefined

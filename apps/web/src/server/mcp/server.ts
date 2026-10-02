@@ -1,9 +1,11 @@
 import { SHORTCODE_PREFIX } from "@cubby/shared";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { Client } from "@modelcontextprotocol/client";
+import {
+  InMemoryTransport,
+  type AuthInfo,
+  McpServer,
+  createMcpHandler,
+} from "@modelcontextprotocol/server";
 import { z } from "zod";
 
 import { MCP_TOOLS } from "~/contracts/mcp-tools";
@@ -204,20 +206,14 @@ export async function listMcpResourceCatalog() {
   return introspect((client) => client.listResources());
 }
 
-/**
- * Handle an authenticated MCP request.
- * Per-request server+transport: the SDK's McpServer.connect() can only be
- * called once per instance, and the transport can't be reused in stateless mode.
- */
-export async function handleMcpRequest(
+const httpHandler = createMcpHandler(createMcpServer, {
+  legacy: "stateless",
+});
+
+/** Both protocol eras get a fresh server with the authenticated caller context. */
+export function handleMcpRequest(
   request: Request,
   authInfo: AuthInfo,
 ): Promise<Response> {
-  const server = createMcpServer();
-  const transport = new WebStandardStreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-    enableJsonResponse: true,
-  });
-  await server.connect(transport);
-  return transport.handleRequest(request, { authInfo });
+  return httpHandler.fetch(request, { authInfo });
 }

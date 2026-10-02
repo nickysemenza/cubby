@@ -13,7 +13,11 @@ import {
 } from "@cubby/schemas/product";
 import { recipeTopLevel } from "@cubby/schemas/recipe-shared";
 import { foodSummary } from "@cubby/usda";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  Client,
+  StreamableHTTPClientTransport,
+} from "@modelcontextprotocol/client";
+import { McpServer } from "@modelcontextprotocol/server";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -27,11 +31,16 @@ import {
 
 import type { McpEntityExecutor } from "./kernel-actions";
 import { bindingsWithKernelExecutor, callMcpTool } from "./mcp-test-utils";
-import { listMcpResourceCatalog, listMcpToolCatalog } from "./server";
+import {
+  handleMcpRequest,
+  listMcpResourceCatalog,
+  listMcpToolCatalog,
+} from "./server";
 import {
   type McpToolRegistrationRuntime,
   registerMcpTools,
 } from "./tools/tool-registration";
+import { createMcpClientValidator } from "./validation";
 
 type ExecuteEntity = McpEntityExecutor;
 
@@ -54,6 +63,77 @@ function kernelServer(
 }
 
 describe("MCP protocol smoke", () => {
+  // ChatGPT's modern catalog refresh failed before dispatch; Flue still uses
+  // the legacy handshake. Exercise the actual HTTP client for both eras.
+  it.each(["2026-07-28", "2025-11-25"] as const)(
+    "serves catalog, tool calls, and authenticated telemetry over MCP %s HTTP",
+    async (version) => {
+      const emit = vi.fn(async () => undefined);
+      const client = new Client(
+        { name: "test", version: "1.0.0" },
+        {
+          versionNegotiation: {
+            mode: version === "2026-07-28" ? { pin: version } : "legacy",
+          },
+          jsonSchemaValidator: createMcpClientValidator(),
+        },
+      );
+      const transport = new StreamableHTTPClientTransport(
+        new URL("https://cubby.test/api/mcp"),
+        {
+          fetch: (input, init) =>
+            handleMcpRequest(new Request(input, init), {
+              token: "",
+              clientId: "test",
+              scopes: [],
+              extra: {
+                requestContext: { db: null, actorContext: null },
+                telemetry: {
+                  identity: {
+                    userId: "user_1",
+                    clientId: "test",
+                    surface: "external_mcp",
+                  },
+                  emit,
+                },
+              },
+            }),
+        },
+      );
+      try {
+        await client.connect(transport);
+        const { tools } = await client.listTools();
+        expect(tools.map((tool) => tool.name)).toEqual(
+          expect.arrayContaining([
+            "search",
+            "entity_read",
+            "purchase_import",
+            "product_enrichment",
+          ]),
+        );
+        // Unsupported problem types return before any database read.
+        const result = await client.callTool({
+          name: "activity",
+          arguments: { action: "problems", type: "notAProblemType" },
+        });
+        expect(result.isError).not.toBe(true);
+        expect(result.structuredContent).toBeDefined();
+        expect(emit).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId: "user_1",
+            clientId: "test",
+            surface: "external_mcp",
+            toolName: "activity",
+            outcome: "success",
+            registeredAtCall: true,
+          }),
+        );
+      } finally {
+        await client.close();
+      }
+    },
+  );
+
   it("publishes command and read-only entity capabilities with a discoverable catalog", async () => {
     const [{ tools }, { resources }] = await Promise.all([
       listMcpToolCatalog(),

@@ -119,7 +119,7 @@ export function trustedPurchaseAgent(
 ): TrustedPurchaseAgent | null {
   const parsed = z
     .object({ runId: z.uuid(), grantId: z.string().min(1) })
-    .safeParse(extra.authInfo?.extra?.purchaseAgent);
+    .safeParse(extra.http?.authInfo?.extra?.purchaseAgent);
   return parsed.success ? parsed.data : null;
 }
 
@@ -297,12 +297,15 @@ export async function executePurchaseAgentMutation<T>(input: {
     }
     const transactionalExtra: ToolExtra = {
       ...input.baseExtra,
-      authInfo: input.baseExtra.authInfo
-        ? {
-            ...input.baseExtra.authInfo,
-            extra: { ...input.baseExtra.authInfo.extra, ...prepared },
-          }
-        : undefined,
+      http: {
+        ...input.baseExtra.http,
+        authInfo: input.baseExtra.http?.authInfo
+          ? {
+              ...input.baseExtra.http.authInfo,
+              extra: { ...input.baseExtra.http.authInfo.extra, ...prepared },
+            }
+          : undefined,
+      },
     };
     const result = await input.run(transactionalExtra);
     const resultArguments = purchaseAgentArguments.parse(result);

@@ -520,6 +520,13 @@ See also the image operational passes at the end of this file.
 
 ## Entity platform & data model
 
+- 🟢 **Complete MCP SDK v2 adoption.** After restoring ChatGPT connectivity,
+  migrate remaining legacy transport/test helpers and retire obsolete v1
+  compatibility code. Preserve tool contracts, purchase-agent authorization,
+  MCP Apps, and Cloudflare-safe validation. Keep legacy protocol support until
+  Flue supports modern version negotiation; its current MCP client defaults
+  to legacy requests without exposing a negotiation option.
+
 - 🤔 **Remove duplicate record checks and expose useful exceptions.** Coverage
   Problems already consume declared checks. Identify demonstrated duplicate
   per-record predicates and move each onto its existing declaration/binding;
