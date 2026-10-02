@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   isSingularImageOwner,
   photoImportRelationTraversals,
@@ -200,6 +201,31 @@ describe("manifest photo import routes", () => {
     expect(() => assertPhotoImportSourceCardinality(route, source)).toThrow(
       /source/,
     );
+  });
+
+  // The generator only sees the manifest `contract.create`; `createDestination` needs the
+  // runtime binding's `createInput` and hand-written `repository.create`, so a route enabled
+  // against an entity whose repository lacks `create` would fail only at commit time.
+  it("binds a runtime create for every enabled creating route", () => {
+    const creating = Object.values(imageIngressRouteById).filter(
+      (route) =>
+        route.enabled &&
+        (route.kind === "createSelf" || route.kind === "createRelated"),
+    );
+    expect(creating.length).toBeGreaterThan(0);
+    const uncreatable = creating
+      .filter((route) => {
+        const binding = Object.entries(ENTITY_KERNEL_BINDINGS).find(
+          ([entity]) => entity === route.targetEntity,
+        )?.[1];
+        return (
+          !binding?.schemas.createInput ||
+          !("create" in binding.repository) ||
+          !binding.repository.create
+        );
+      })
+      .map((route) => route.routeId);
+    expect(uncreatable).toEqual([]);
   });
 
   it("rejects a disabled route, naming its manifest reason", () => {
