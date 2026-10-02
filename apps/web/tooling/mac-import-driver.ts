@@ -807,18 +807,27 @@ export class MacImportDriver {
     await this.click('label="Open" role=Button');
   }
   async openSettings(): Promise<void> {
-    this.guardForeground();
+    this.observe();
+    const existing = this.matching("id=com_apple_SwiftUI_Settings_window");
     // SwiftUI's Settings command can ignore AXPress on its menu item.
-    // Use the standard shortcut after verifying the owned fixture is frontmost.
+    // Raise an existing window; a shortcut while browser capture changes focus
+    // can otherwise open the browser's Settings instead.
     execFileSync(
       "osascript",
       [
         "-e",
-        'tell application "System Events" to keystroke "," using command down',
+        existing.length
+          ? 'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set settingsWindow to first window of ownedProcess whose value of attribute "AXIdentifier" is "com_apple_SwiftUI_Settings_window"\n perform action "AXRaise" of settingsWindow\n end tell\nend run'
+          : 'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set frontmost of ownedProcess to true\n tell ownedProcess to keystroke "," using command down\n end tell\nend run',
+        String(this.pid),
       ],
       { timeout: 10000 },
     );
-    this.record(["settings-shortcut"], 0, this.observe());
+    this.record(
+      [existing.length ? "raise-settings-window" : "settings-shortcut"],
+      0,
+      this.observe(),
+    );
     await this.wait('label="Settings" role=window');
     await this.wait("id=settings.purchaseImport.syncNow");
   }
