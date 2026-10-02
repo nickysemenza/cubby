@@ -418,11 +418,6 @@ See also the image operational passes at the end of this file.
   derivable before adding a second flag. Drives the import's default project,
   shelf worklist filters, project materials, and household maintenance.
 
-- 🟢 **Bounded shelf-triage worklists.** `/inventory/triage` walks the
-  `unlocated` view (optionally `?run=`). Accept a value- or category-bounded
-  worklist, and let the general "Add to inventory" action default its amount
-  from the quantity ledger as triage does.
-
 - ⏳ **Let the negative-expected-quantity worklist converge.** Survivors are
   mostly big-ticket items whose acquisition predates ledger coverage, with
   nowhere to record that. The operator chose (2026-08-18) to leave the
