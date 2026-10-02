@@ -499,8 +499,7 @@ export const backfillProductUpcImagesWorkflow = bindBulkWorkflow(
 export const productHandlers = implementOperationDomain(productContract, {
   createWithInventory: createProductWithInventory,
   search: searchProducts,
-  resolveNames: (context, input) =>
-    resolveProductNames(context.db, input.names),
+  resolveNames: (context, input) => resolveProductNames(context.db, input),
   summaries: getProductSummariesWorkflow,
   quantitySummaries: getProductQuantitySummaries,
   inventoryEntriesByIds: getProductInventoryEntriesWorkflow,

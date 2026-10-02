@@ -175,8 +175,27 @@ export const productCreateManyInput = z
  * name; a Product is identity plus cost basis, so the create stays a separate,
  * deliberate call after the agent has read the candidates.
  */
+export const productResolveLineInput = z.object({
+  name: z.string().trim().min(1),
+  externalIds: z
+    .array(
+      z.object({
+        source: externalIdSource.describe(
+          "Provider slug the id belongs to (e.g. 'amazon', 'amazon-fresh', 'whole-foods'); the same ASIN under another source is not a hit.",
+        ),
+        id: z.string().trim().min(1),
+      }),
+    )
+    .max(10)
+    .optional()
+    .describe("Identifiers of this line, matched exactly under their source."),
+});
+export type ProductResolveLineInput = z.infer<typeof productResolveLineInput>;
+
+/** `names` and `lines` together carry at least 1 and at most 200 entries. */
 export const productResolveNamesInput = z.object({
-  names: z.array(z.string().min(1)).min(1).max(200),
+  names: z.array(z.string().min(1)).max(200).optional(),
+  lines: z.array(productResolveLineInput).max(200).optional(),
 });
 export type ProductResolveNamesInput = z.infer<typeof productResolveNamesInput>;
 
@@ -203,6 +222,12 @@ export const productResolveNameOut = z.object({
    */
   exact: z.boolean(),
   candidates: z.array(productResolveCandidateOut),
+  /** Live Products holding any of the line's `(source, id)` pairs; empty for a bare name. */
+  exactIdHits: z.array(productResolveCandidateOut),
+  /** Ingredients whose name or alias equals the requested name, case-insensitively. */
+  ingredientHits: z.array(
+    z.object({ id: ingredientShortcode, name: z.string() }),
+  ),
 });
 export const productResolveNamesOut = z.array(productResolveNameOut);
 export type ProductResolveNamesOut = z.infer<typeof productResolveNamesOut>;

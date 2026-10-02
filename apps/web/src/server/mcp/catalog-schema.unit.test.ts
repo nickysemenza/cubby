@@ -428,6 +428,9 @@ describe("MCP catalog schemas", () => {
       // save_preparation its mealRecipeId: the row has no shortcode.
       "meal_recipe.id",
       "meal_recipe.mealRecipeId",
+      // Product resolve lines carry retailer/catalog identifiers (ASIN, SKU),
+      // not Cubby entity ids.
+      "entity_read.lines[].externalIds[].id",
       "recipe_import.lineId",
       "statement_rows.selector.externalIds",
       "statement_rows.data.supersededByExternalId",

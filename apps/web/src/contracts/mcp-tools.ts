@@ -92,7 +92,7 @@ const usdaFood = (output: {
 export const MCP_TOOLS = defineMcpTools({
   entity_read: {
     description:
-      "Read household entities: get one, list or search a kind, preview a create or a link change without writing, read an attachable relation or one-hop connections, and resolve Product names. Every action is read-only. Ingredient usuallyOnHand means assumed planning availability; recorded inventory remains separate. Recipe availability includes planning coverage and incomplete-quantity warnings. Consult entities://catalog only when the schema leaves a supported entity/action unclear.",
+      "Read household entities: get one, list or search a kind, preview a create or a link change without writing, read an attachable relation or one-hop connections, and resolve Product names or external ids. Every action is read-only. Ingredient usuallyOnHand means assumed planning availability; recorded inventory remains separate. Recipe availability includes planning coverage and incomplete-quantity warnings. Consult entities://catalog only when the schema leaves a supported entity/action unclear.",
     actions: {
       get: mcpAction({
         op: kernelAction("get", "query"),
@@ -129,7 +129,7 @@ export const MCP_TOOLS = defineMcpTools({
       resolve: mcpAction({
         op: kernelAction("resolve", "query"),
         description:
-          '`{entity: "product", names}`: which names already exist as Products, WITHOUT creating anything. Each name gets `exact: true` with the case-insensitive name/alias matches, or `exact: false` with up to 3 ranked candidates to read by hand (lexical search: the name contains the request, the request contains the name, any shared word, or a near spelling). The dedup pass before an import creates Products (a receipt\'s lines in one call); the create stays a deliberate entity.create or entity.commands call. Unlike entity.resolve this never mints a row, because a Product is identity plus cost basis, not just a name.',
+          '`{entity: "product", names?, lines?}`: which receipt lines already exist as Products, WITHOUT creating anything. `names` are bare strings; `lines` are `{name, externalIds?: [{source, id}]}` (up to 200 together) for lines that carry identifiers, e.g. one grocery ASIN under `amazon`, `amazon-fresh` and `whole-foods`: a pair hits only under the source that holds it. Each line gets `exactIdHits` (live Products holding any of its source/id pairs, the strongest evidence), `ingredientHits` (Ingredients whose name or alias equals the name, case-insensitively), and `candidates`: `exact: true` with the case-insensitive Product name/alias matches, or `exact: false` with up to 3 ranked candidates to read by hand (lexical search: the name contains the request, the request contains the name, any shared word, or a near spelling). `names` are deduplicated case-insensitively; `lines` each answer once, in order, after the names. The dedup pass before an import creates Products (a receipt\'s lines in one call); the create stays a deliberate entity.create or entity.commands call. Unlike entity.resolve this never mints a row, because a Product is identity plus cost basis, not just a name.',
       }),
     },
   },
