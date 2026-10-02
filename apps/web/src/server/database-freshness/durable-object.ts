@@ -10,7 +10,7 @@ import { DurableObject } from "cloudflare:workers";
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
 import type { findProblemCounts } from "~/server/services/problems.service";
 
-import { databaseFreshness } from "./state";
+import { databaseFreshness, type DatabaseFreshnessRpc } from "./state";
 
 const log = createLogger("problems.counts");
 
@@ -30,7 +30,10 @@ type SnapshotRow = {
 };
 
 /** One timestamp per database environment, shared by every household client. */
-export class DatabaseFreshnessDurableObject extends DurableObject<Env> {
+export class DatabaseFreshnessDurableObject
+  extends DurableObject<Env>
+  implements DatabaseFreshnessRpc
+{
   private refreshTail: Promise<void> = Promise.resolve();
 
   constructor(ctx: DurableObjectState, env: Env) {

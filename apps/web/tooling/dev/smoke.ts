@@ -33,12 +33,6 @@ import {
 import { DEV_USER_EMAIL, LOCAL_FIXTURE_VERSION } from "./state";
 import { writeE2ERunBundle } from "../e2e-run-bundle";
 
-declare global {
-  interface Window {
-    __cubbySmokeHmr?: string;
-  }
-}
-
 // Failure modes: inherited provider settings reach cloud services; readiness
 // identifies another database; a shortcut replaces real sessions; client
 // interaction or HMR fails under workerd; signed/public storage disagree;

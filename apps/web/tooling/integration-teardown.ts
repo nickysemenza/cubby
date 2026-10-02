@@ -2,12 +2,6 @@ import pg from "pg";
 import { afterAll, afterEach, vi } from "vitest";
 import { closeTestDb } from "./test-setup";
 
-declare global {
-  // Process-wide: `isolate: false` reruns this setup file per test file, but
-  // the pg prototype is patched once, so the list must outlive each run.
-  var cubbyPgConcurrentQueries: Error[] | undefined;
-}
-
 /**
  * pg 8 queues a query sent to a client that already has one waiting and warns
  * once per process; pg 9 rejects it. Production clients serialize their own
