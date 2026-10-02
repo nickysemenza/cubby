@@ -93,7 +93,14 @@ test("detected label nutrition stays editable and requires Save before replacing
     "Not a significant source of total fat.",
   );
   await page.getByRole("button", { name: "More details", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Nutrition", exact: true }).click();
   await expect(page.getByText(/inferred zero/).first()).toBeVisible();
+  await page.getByRole("tab", { name: "Overview", exact: true }).click();
   await page.reload();
+  await expect(
+    page
+      .locator("#labels")
+      .getByRole("img", { name: "synthetic-wardrobe-label.png" }),
+  ).toBeVisible();
   await expect(review).toHaveCount(0);
 });
