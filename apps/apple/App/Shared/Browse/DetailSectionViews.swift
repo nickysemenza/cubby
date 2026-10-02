@@ -303,6 +303,8 @@ struct FieldExplanationLabel: View {
     var body: some View {
         if field.explanation != nil {
             Button {
+                resolved = nil
+                loadError = nil
                 showingExplanation = true
             } label: {
                 HStack(spacing: FieldGuideTokens.Space.xs) {
@@ -321,7 +323,7 @@ struct FieldExplanationLabel: View {
             .accessibilityIdentifier(
                 "field.explanation.\(subject.entity.rawValue).\(subject.id).\(field.key)"
             )
-            .accessibilityLabel("About \(labelOverride ?? field.label)")
+            .accessibilityLabel(labelOverride.map { "\(field.label): \($0)" } ?? "About \(field.label)")
             .accessibilityHint("Shows the value, its source, and the rule used.")
             .onChange(of: subject) { _, _ in
                 showingExplanation = false
@@ -358,7 +360,49 @@ struct FieldExplanationLabel: View {
                     .accessibilityLabel("Close field explanation")
                     .accessibilityIdentifier("field.explanation.close")
                 }
-                if let resolved {
+                if field.key == "dataQuality", field.readKey == nil {
+                    explanationSectionLabel("What this means")
+                    Text("Not assessed").font(.title3.weight(.semibold))
+                    Text(
+                        "No quality checks are defined for this entity. Review its fields and supporting records directly."
+                    )
+                    if EntityCatalog.descriptor(forShortcode: subject.id)?.key == subject.entity {
+                        NavigationLink(
+                            "Open record", value: Route.entityDetail(subject.entity, id: subject.id))
+                    }
+                    Divider()
+                    explanationSectionLabel("Technical details")
+                    if let rule = field.explanation {
+                        Text("Rule: \(rule.ruleId) · r\(rule.version)").font(.caption.monospaced())
+                    }
+                    Text("Evaluation: not performed; no checks are defined.").font(.caption)
+                    Text(
+                        "There is no score, calculation, or check evaluation for this entity. Not assessed is not a score of zero or a guarantee of completeness."
+                    )
+                    .font(.callout)
+                } else if let resolved {
+                    explanationSectionLabel("What this means")
+                    if let interpretation = resolved.interpretation {
+                        Text(interpretation.result).font(.title3.weight(.semibold))
+                        Text(interpretation.summary).font(.body)
+                        ForEach(interpretation.caveats, id: \.self) { caveat in
+                            Text(caveat).font(.callout).foregroundStyle(.secondary)
+                        }
+                        if !interpretation.nextSteps.isEmpty {
+                            Text("Next steps").font(.headline)
+                            ForEach(interpretation.nextSteps, id: \.self) { step in
+                                Text(step).font(.callout)
+                            }
+                        }
+                    } else if let value = try? JSONValue(encoding: resolved.value) {
+                        if let code = value.stringValue,
+                            let option = field.valueOptions?.first(where: { $0.value == code })
+                        {
+                            Text(option.label).font(.title3.weight(.semibold))
+                        } else {
+                            ExplanationEvidenceValue(value: value)
+                        }
+                    }
                     if let resolution = resolved.resolution {
                         let hasFallback = display(resolution.fallbackValue) != nil
                         let state = FieldResolutionState(resolution, hasFallback: hasFallback)
@@ -401,6 +445,50 @@ struct FieldExplanationLabel: View {
                             }
                         }
                     }
+                    Divider()
+                    explanationSectionLabel("Technical details")
+                    Text(resolved.rule.description).font(.callout)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Rule: \(resolved.rule.id) · r\(resolved.rule.revision)")
+                        .font(.caption.monospaced()).textSelection(.enabled)
+                    Text("Evaluated: \(resolved.evaluatedAt.formatted())").font(.caption).foregroundStyle(
+                        .secondary)
+                    if resolved.resolution == nil, let value = try? JSONValue(encoding: resolved.value) {
+                        if value.objectValue != nil || value.arrayValue != nil {
+                            ExplanationEvidenceValue(value: value)
+                        } else if let code = value.stringValue, code != resolved.interpretation?.result {
+                            Text("Result code: \(code)").font(.caption.monospaced())
+                        }
+                    }
+                    ForEach(Array(resolved.actions.enumerated()), id: \.offset) { _, action in
+                        if action.kind.rawValue == "editSource",
+                            let entity = EntityKey(rawValue: action.target.entityKind.rawValue)
+                        {
+                            NavigationLink(
+                                action.label, value: Route.entityDetail(entity, id: action.target.entityId))
+                        }
+                    }
+                    if let breakdown = resolved.qualityBreakdown {
+                        Text("Score calculation").font(.headline)
+                        Text(
+                            breakdown.expectedWeight == 0
+                                ? "No applicable checks: the score is 100/100."
+                                : "\(breakdown.satisfiedWeight.formatted()) satisfied weight ÷ \(breakdown.expectedWeight.formatted()) applicable weight × 100 = \(breakdown.score.formatted())/100"
+                        )
+                        .font(.callout.monospacedDigit())
+                        ForEach(breakdown.checks, id: \.check) { check in
+                            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                                Text(check.label).font(.callout.weight(.semibold))
+                                Text(
+                                    "\(check.state.rawValue == "excepted" ? "Accepted exception" : check.state.rawValue == "gap" ? check.kind.rawValue == "defect" ? "Defect" : "Missing data" : "Satisfied") · weight \(check.weight.formatted())"
+                                )
+                                .font(.caption).foregroundStyle(.secondary)
+                                if check.state.rawValue == "gap" { Text(check.description).font(.callout) }
+                                Text("\(check.facet) · \(check.check)").font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                     if let evidence = resolved.resolutionEvidence, !evidence.hierarchy.isEmpty {
                         Divider()
                         explanationSectionLabel("Resolution order")
@@ -412,32 +500,24 @@ struct FieldExplanationLabel: View {
                     if !resolved.sources.isEmpty {
                         Divider()
                         explanationSectionLabel("Evidence")
-                        ForEach(Array(resolved.sources.enumerated()), id: \.offset) { _, source in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(source.label).font(.fieldGuideLabel)
-                                if let value = display(source.value), !value.isEmpty {
-                                    Text(value)
-                                        .font(.fieldGuideData)
-                                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                        ForEach(Array(resolved.sources.prefix(6).enumerated()), id: \.offset) { _, source in
+                            explanationSource(source)
+                        }
+                        if resolved.sources.count > 6 {
+                            DisclosureGroup("Show \(resolved.sources.count - 6) more evidence entries") {
+                                ForEach(Array(resolved.sources.dropFirst(6).enumerated()), id: \.offset) {
+                                    _, source in
+                                    explanationSource(source)
                                 }
                             }
                         }
                     }
                     if resolved.truncated {
-                        Text("Showing the most relevant evidence.")
+                        Text("Evidence is bounded; the displayed sources are not an exhaustive list.")
                             .font(.caption)
                             .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     }
-                    Divider()
-                    DisclosureGroup {
-                        Text(resolved.rule.description)
-                            .font(.caption)
-                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    } label: {
-                        Text("Rule · \(resolved.rule.id)").font(.caption.monospaced())
-                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                    }
+
                 } else if let loadError {
                     Text(loadError).font(.caption).foregroundStyle(.secondary)
                     Button("Retry explanation") { Task { await loadExplanation() } }
@@ -449,7 +529,10 @@ struct FieldExplanationLabel: View {
             .frame(idealWidth: 340, alignment: .leading)
         }
         #if os(macOS)
-            .frame(width: 340, height: 480)
+            .frame(
+                minWidth: 360, idealWidth: 480, maxWidth: 560, minHeight: 320, idealHeight: 620,
+                maxHeight: 760
+            )
             .accessibilityElement(children: .contain)
         #endif
         .accessibilityIdentifier("field.explanation.popover")
@@ -457,7 +540,10 @@ struct FieldExplanationLabel: View {
     }
 
     private func loadExplanation() async {
-        guard showingExplanation, resolved == nil else { return }
+        guard showingExplanation, resolved == nil,
+            !(field.key == "dataQuality" && field.readKey == nil)
+        else { return }
+        loadError = nil
         do {
             let result = try await appModel.client.fieldExplanation(
                 subject: subject, field: field.key, surface: surface)
@@ -542,6 +628,28 @@ struct FieldExplanationLabel: View {
             in: RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
     }
 
+    @ViewBuilder
+    private func explanationSource(_ source: FieldExplanationSource) -> some View {
+        let value = try? JSONValue(encoding: source.value)
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            Text(source.label).font(.caption).foregroundStyle(.secondary)
+            if let reference = source.entity, let entity = EntityKey(rawValue: reference.entityKind.rawValue)
+            {
+                NavigationLink(
+                    value?["name"]?.stringValue ?? reference.entityId,
+                    value: Route.entityDetail(entity, id: reference.entityId))
+            }
+            if let value {
+                ExplanationEvidenceValue(value: sourceFacts(value, reference: source.entity?.entityId))
+            }
+        }
+    }
+
+    private func sourceFacts(_ value: JSONValue, reference: String?) -> JSONValue {
+        guard let reference, let facts = value.objectValue else { return value }
+        return .object(facts.filter { $0.key != "name" && $0.value.stringValue != reference })
+    }
+
     private func display(_ value: JsonValue) -> String? {
         guard let value = try? JSONValue(encoding: value) else { return nil }
         return displayJSON(value)
@@ -563,6 +671,69 @@ struct FieldExplanationLabel: View {
             return String(data: data, encoding: .utf8)
         }
     }
+}
+
+/// Structured evidence remains readable at accessibility text sizes.
+private struct ExplanationEvidenceValue: View {
+    let value: JSONValue
+    var property: String? = nil
+
+    var body: some View { content(value) }
+
+    private func content(_ value: JSONValue) -> AnyView {
+        switch value {
+        case .null: return AnyView(Text("None").foregroundStyle(.secondary))
+        case .bool(let value): return AnyView(Text(value ? "Yes" : "No"))
+        case .number(let value):
+            return AnyView(
+                Text(property == "amount" ? value.formatted(.currency(code: "USD")) : value.formatted())
+                    .monospacedDigit())
+        case .string(let value):
+            if let entity = EntityCatalog.descriptor(forShortcode: value) {
+                return AnyView(NavigationLink(value, value: Route.entityDetail(entity.key, id: value)))
+            }
+            return AnyView(Text(value.replacingOccurrences(of: "_", with: " ")).textSelection(.enabled))
+        case .array(let values):
+            return AnyView(
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                    ForEach(Array(values.enumerated()), id: \.offset) { _, item in
+                        ExplanationEvidenceValue(value: item)
+                    }
+                })
+        case .object(let values):
+            let identifier = values["id"]?.stringValue
+            let entity = identifier.flatMap { EntityCatalog.descriptor(forShortcode: $0) }
+            return AnyView(
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                    if let identifier, let entity {
+                        NavigationLink(
+                            values["name"]?.stringValue ?? identifier,
+                            value: Route.entityDetail(entity.key, id: identifier))
+                    }
+                    ForEach(
+                        values.keys.filter { entity == nil || ($0 != "id" && $0 != "name") }.sorted(),
+                        id: \.self
+                    ) { key in
+                        if let item = values[key] {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(
+                                    key.replacingOccurrences(
+                                        of: "([a-z0-9])([A-Z])", with: "$1 $2", options: .regularExpression
+                                    ).replacingOccurrences(of: "_", with: " ").capitalized
+                                )
+                                .font(.caption).foregroundStyle(.secondary)
+                                ExplanationEvidenceValue(value: item, property: key).font(.callout)
+                            }
+                        }
+                    }
+                })
+        }
+    }
+
+}
+
+#Preview("Structured explanation evidence") {
+    ExplanationEvidenceValue(value: .object(["amount": .number(15), "complete": .bool(true)]))
 }
 
 // MARK: - Relation

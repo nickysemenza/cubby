@@ -87,7 +87,10 @@ struct EntityRowPresentation: Sendable, Hashable {
         columns: [String]? = nil,
         photoMode: Bool = false
     ) -> EntityRowPresentation {
-        let selectedKeys = columns ?? defaultKeys(descriptor: descriptor)
+        let declaredKeys = columns ?? defaultKeys(descriptor: descriptor)
+        let selectedKeys =
+            descriptor.fields.contains { $0.key == "dataQuality" }
+            ? ["dataQuality"] + declaredKeys.filter { $0 != "dataQuality" } : declaredKeys
         var facts: [Fact] = []
         var seen = Set<String>()
 
@@ -96,6 +99,22 @@ struct EntityRowPresentation: Sendable, Hashable {
                 let field = descriptor.fields.first(where: { $0.key == columnID || $0.columnId == columnID })
             else { return }
             let key = field.key
+            if field.listRenderer == .dataQuality {
+                let text: String
+                if field.readKey == nil {
+                    text = "Not assessed"
+                } else if let score = row.raw[key]?["score"]?.doubleValue,
+                    let status = row.raw[key]?["status"]?.stringValue
+                {
+                    let label =
+                        field.valueOptions?.first { $0.value == status }?.label ?? "Unavailable"
+                    text = "\(Int(score.rounded()))/100 · \(label)"
+                } else {
+                    text = row.pendingFields.contains(key) ? "Loading…" : "Unavailable"
+                }
+                facts.append(Fact(id: key, label: label ?? field.label, value: text))
+                return
+            }
             if field.listRenderer == .spendingCategorySummary,
                 let value = row.raw[key],
                 let summary = try? JSONDecoder.cubby().decode(

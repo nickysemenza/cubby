@@ -114,7 +114,7 @@ interface UseClientEntityListReturn<TData extends BaseListRow> {
  * Client-data sibling of `useEntityList`: renders a caller-provided `TData[]`
  * with everything client-side (pagination / sorting / filtering) and optional
  * TanStack expansion, reusing the same leaf hooks (standard columns, optimistic
- * delete, bulk actions, column persistence).
+ * delete, bulk actions, session column customization).
  *
  * Differences from `useEntityList`: no query, no server totals, no infinite
  * scroll, no timing, no grouping, no refresh controls. `useOptimisticDelete`'s

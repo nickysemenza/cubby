@@ -139,6 +139,7 @@ describe("recipe list display columns", () => {
   it("builds exactly the declared columns, in listOrder", () => {
     const ids = buildRecipeColumnMeta().map((d) => d.id);
     expect(ids).toEqual([
+      "dataQuality",
       "servings",
       "tags",
       "notes",
@@ -147,7 +148,6 @@ describe("recipe list display columns", () => {
       "meals",
       "source",
       "totalMinutes",
-      "dataQuality",
       "dataGaps",
     ]);
   });

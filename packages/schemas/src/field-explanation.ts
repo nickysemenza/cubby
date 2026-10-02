@@ -16,12 +16,38 @@ export const fieldExplanationSource = z.object({
   value: z.json(),
 });
 
+export const qualityBreakdown = z.object({
+  score: z.number(),
+  expectedWeight: z.number(),
+  satisfiedWeight: z.number(),
+  checks: z.array(
+    z.object({
+      check: z.string(),
+      label: z.string(),
+      facet: z.string(),
+      kind: z.enum(["missing", "defect"]),
+      weight: z.number(),
+      state: z.enum(["satisfied", "gap", "excepted"]),
+      description: z.string(),
+    }),
+  ),
+});
+
 export const fieldExplanationOutput = z.object({
   subject: entityRefSchema,
   field: z.string(),
   label: z.string(),
   value: z.json(),
   evaluatedAt: z.iso.datetime(),
+  interpretation: z
+    .object({
+      result: z.string(),
+      summary: z.string(),
+      caveats: z.array(z.string()),
+      nextSteps: z.array(z.string()),
+    })
+    .optional(),
+  qualityBreakdown: qualityBreakdown.optional(),
   rule: z.object({
     id: z.string(),
     revision: z.number().int(),

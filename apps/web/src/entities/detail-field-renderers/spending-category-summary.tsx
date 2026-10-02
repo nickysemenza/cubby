@@ -1,16 +1,11 @@
-import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
+import {
+  spendingCategorySummaryLabels,
+  type SpendingCategorySummary,
+} from "@cubby/schemas/spending-classification";
 
 import { EntityRefLink } from "~/components/entity/entity-ref-link";
 import { Row, Stack } from "~/components/layout";
 import { formatCurrency } from "~/lib/utils";
-
-const stateLabels = {
-  single: "Single category",
-  mixed: "Mixed categories",
-  partial: "Partially classified",
-  unclassified: "Unclassified",
-  not_applicable: "Not applicable",
-} satisfies Record<SpendingCategorySummary["state"], string>;
 
 export function SpendingCategorySummaryValue({
   summary,
@@ -23,7 +18,9 @@ export function SpendingCategorySummaryValue({
 }) {
   return (
     <Stack gap="xs">
-      <span className="text-sm font-medium">{stateLabels[summary.state]}</span>
+      <span className="text-sm font-medium">
+        {spendingCategorySummaryLabels[summary.state]}
+      </span>
       {!compact && summary.state !== "not_applicable" && (
         <p className="text-xs text-muted-foreground">
           {summary.lineCount === 0

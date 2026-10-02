@@ -87,14 +87,15 @@ describe("field explanation projection", () => {
     const bounded = boundExplanationSources(sources);
 
     expect(bounded.truncated).toBe(true);
-    expect(bounded.sources[1]?.entity).toEqual({
+    expect(bounded.sources[0]?.entity).toEqual({
       entityKind: "product",
       entityId: candidates[0]!.id,
     });
-    const boundedCandidates = z
-      .array(z.object({ history: z.array(z.number()) }))
+    const boundedCandidate = z
+      .object({ history: z.array(z.number()) })
       .parse(bounded.sources[0]?.value);
-    expect(boundedCandidates[0]?.history).toHaveLength(25);
+    expect(boundedCandidate.history).toHaveLength(25);
+    expect(sources).toHaveLength(candidates.length);
   });
 
   it("links the same images selected by the display projection", () => {
@@ -125,7 +126,6 @@ describe("field explanation projection", () => {
     );
 
     expect(sources.map((source) => source.entity)).toEqual([
-      null,
       { entityKind: "image", entityId: first },
       { entityKind: "image", entityId: second },
     ]);

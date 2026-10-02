@@ -394,6 +394,8 @@ const fieldJSON = (
   return {
     key: field.key,
     columnId: field.display.columnId ?? null,
+    readKey: field.readKey,
+    valueOptions: field.display.valueOptions ?? null,
     label: field.label,
     kind: vocabulary.member("EntityFieldKind", field.kind, `${where}.kind`),
     nullable: field.nullable,

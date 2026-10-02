@@ -8,7 +8,8 @@ import { dispatchesOperation, unbatchFor } from "./dispatch-wire";
 test("linked Expense categories display their readable label and transaction expectation", async ({
   page,
   baseURL,
-}) => {
+}, testInfo) => {
+  test.setTimeout(60_000);
   const tag = `Synthetic category display ${Date.now()}`;
   const categoryName = `${tag} dining`;
   const create = async (path: string, data: unknown) => {
@@ -36,20 +37,28 @@ test("linked Expense categories display their readable label and transaction exp
     date: "2026-09-10",
     evidenceExpectation: "not_expected",
   });
-  await create("expenses", {
-    name: `${tag} meal`,
-    purchaseId,
-    cost: 23,
-    date: "2026-09-10",
-    costType: "materials",
-    trade: "other",
-    spendingCategoryId: categoryId,
+  const productId = await create("products", {
+    name: `${tag} item`,
+    manufacturer: "Synthetic",
   });
+  for (let index = 0; index < 28; index += 1) {
+    await create("expenses", {
+      name: `${tag} meal`,
+      purchaseId,
+      cost: -2,
+      productId,
+      productQuantity: -1,
+      date: "2026-09-10",
+      costType: "materials",
+      trade: "other",
+      spendingCategoryId: categoryId,
+    });
+  }
   const transactionId = await create("financial-transactions", {
     accountId,
-    amount: 23,
+    amount: -56,
     merchant: tag,
-    kind: "purchase",
+    kind: "refund",
     status: "posted",
     postedDate: "2026-09-10",
     purchaseId,
@@ -115,6 +124,37 @@ test("linked Expense categories display their readable label and transaction exp
   await expect(row.getByRole("cell").nth(expectationIndex)).toContainText(
     "Not expected",
   );
+  await row
+    .getByRole("button", { name: "How expense categories is determined" })
+    .click();
+  const popover = page.locator('[data-slot="popover-content"]');
+  await expect(popover).toContainText("What this means");
+  await expect(popover).toContainText("Technical details");
+  await expect(popover).toContainText("28 of 28 linked expense lines");
+  await expect(popover).toContainText(
+    "Settlement allocations do not attribute",
+  );
+  await page.screenshot({
+    path: testInfo.outputPath("expense-categories-explanation.png"),
+  });
+  await page.keyboard.press("Escape");
+  await row
+    .getByRole("button", { name: "How itemization is determined" })
+    .click();
+  await expect(popover).toContainText("Technical details");
+  await expect(
+    popover.getByText("Confirmed allocations 1", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    popover.getByText("Confirmed allocations", { exact: true }),
+  ).toHaveCount(0);
+  await expect(popover).toContainText("Itemization compares the purchase");
+  await expect(popover).toContainText("Itemized, matches");
+  await expect(popover).toContainText("-$56.00");
+  await page.screenshot({
+    path: testInfo.outputPath("itemization-explanation.png"),
+  });
+  await page.keyboard.press("Escape");
   const unchanged = await page.request.get(
     `/api/v1/financial-transactions/${transactionId}`,
   );

@@ -27,6 +27,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { EntityQualityFact } from "~/entities/data-quality-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatDateSpan } from "~/lib/date-span";
@@ -253,6 +254,11 @@ export function TaskCard({
           </Row>
         </Row>
 
+        <EntityQualityFact
+          entity="task"
+          id={task.id}
+          quality={task.dataQuality}
+        />
         <Row wrap align="center" gap="tight" className="text-muted-foreground">
           {task.dueDate && (
             <span

@@ -637,6 +637,28 @@ struct EntityListView: View {
 /// Plain-data row rendering, shared by the real list and `#Preview`s so neither needs a network
 /// round trip to render. The trailing fact is the catalog's mobile `trailing` column, read
 /// straight off `raw` — never an extra request.
+/// Specialist rows use the same manifest renderer and lazy explanation as ordinary entity rows.
+struct EntityQualityFact: View {
+    let key: EntityKey
+    let id: String
+    let raw: JSONValue
+
+    var body: some View {
+        let descriptor = EntityCatalog[key]
+        let row = EntityRow(id: id, title: "", subtitle: nil, imageURL: nil, raw: raw)
+        let quality = EntityRowPresentation.resolve(
+            descriptor: descriptor, row: row, columns: ["dataQuality"]
+        ).facts.first
+        if let quality, let field = descriptor.field("dataQuality") {
+            FieldExplanationLabel(
+                field: field, subject: EntityRef(entity: key, id: id), labelOverride: quality.value,
+                surface: "list"
+            )
+            .font(.caption.weight(.medium))
+        }
+    }
+}
+
 struct EntityRowView: View {
     let key: EntityKey
     let row: EntityRow
@@ -660,7 +682,9 @@ struct EntityRowView: View {
     }
 
     private var explanationFacts: [EntityRowPresentation.Fact] {
-        presentation.facts.filter { EntityCatalog[key].field($0.id)?.explanation != nil }
+        presentation.facts.filter {
+            $0.id != "dataQuality" && EntityCatalog[key].field($0.id)?.explanation != nil
+        }
     }
 
     private var explanationControls: some View {
@@ -694,7 +718,20 @@ struct EntityRowView: View {
                     .font(.body.weight(.semibold))
                     .foregroundStyle(FieldGuideTokens.graphite)
                     .lineLimit(2)
-                if let factLine = presentation.factLine {
+                if let quality = presentation.facts.first(where: { $0.id == "dataQuality" }),
+                    let field = EntityCatalog[key].field("dataQuality")
+                {
+                    FieldExplanationLabel(
+                        field: field, subject: EntityRef(entity: key, id: row.id),
+                        labelOverride: quality.value, surface: "list"
+                    )
+                    .font(.caption.weight(.medium))
+                }
+                let factLine = presentation.facts.filter({ $0.id != "dataQuality" }).map({ fact in
+                    let value = fact.source.map { "\(fact.value) (\($0))" } ?? fact.value
+                    return fact.label.map { "\($0): \(value)" } ?? value
+                }).joined(separator: " · ")
+                if !factLine.isEmpty {
                     Text(factLine)
                         .font(.caption)
                         .foregroundStyle(FieldGuideTokens.graphiteSecondary)

@@ -6,6 +6,24 @@ import Testing
 
 @Suite("Entity row presentation")
 struct EntityRowPresentationTests {
+    @Test func qualityLeadsSupportingFactsAndDistinguishesUnassessed() {
+        let row = EntityRow(
+            id: "PRD-1001", title: "Synthetic skillet", subtitle: nil, imageURL: nil,
+            raw: [
+                "id": "PRD-1001", "name": "Synthetic skillet", "manufacturer": "Synthetic",
+                "dataQuality": ["score": 75, "status": "needs_data"],
+            ])
+        let presentation = EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row)
+        #expect(presentation.facts.first?.id == "dataQuality")
+        #expect(presentation.facts.first?.value == "75/100 · Needs data")
+        let category = EntityRow(
+            id: "SPC-1001", title: "Synthetic tools", subtitle: nil, imageURL: nil,
+            raw: ["id": "SPC-1001", "name": "Synthetic tools"])
+        let unassessed = EntityRowPresentation.resolve(
+            descriptor: EntityCatalog[.spendingCategory], row: category)
+        #expect(unassessed.facts.first?.value == "Not assessed")
+    }
+
     @Test func resolvesOnlyDeclaredFactsInMetadataOrder() throws {
         let descriptor = EntityCatalog[.product]
         let row = EntityRow(
@@ -20,7 +38,7 @@ struct EntityRowPresentationTests {
 
         #expect(presentation.title == "Cast Iron Skillet")
         #expect(presentation.shortcode == "PRD-1001")
-        #expect(presentation.facts.map(\.id) == ["tags", "manufacturer"])
+        #expect(presentation.facts.map(\.id) == ["dataQuality", "tags", "manufacturer"])
         #expect(presentation.facts.contains { $0.value == "Lodge" })
         #expect(presentation.facts.contains { $0.value == "kitchen, cast-iron" })
         #expect(presentation.factLine?.contains("Manufacturer: Lodge") == true)
@@ -87,7 +105,6 @@ struct EntityRowPresentationTests {
             #expect(NativePresentationCoverage.control(renderer).isUnsupported)
         }
         #expect(NativePresentationCoverage.list(.recipeSource) == .implemented)
-        #expect(NativePresentationCoverage.list(.dataQuality).isUnsupported)
         #expect(NativePresentationCoverage.detail(.recipeSource) == .implemented)
         #expect(NativePresentationCoverage.detail(.productExternalIds) == .generic)
         #expect(NativePresentationCoverage.detail(.recipeMeta).isUnsupported)
