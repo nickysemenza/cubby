@@ -5,9 +5,6 @@ wait "role=Button label=Library" 240000
 click "role=Button label=Library"
 wait text "Browse catalog" 30000
 click "label=\"Browse catalog\""
-scroll top
-wait "role=SearchField label=Search" 30000
-fill "role=SearchField label=Search" "Product Categories"
 wait "label=\"Product Categories\"" 30000
 click "label=\"Product Categories\""
 wait "id=browse.productCategory.row.${PRODUCT_ID}" 30000
