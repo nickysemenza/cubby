@@ -1268,6 +1268,13 @@ async function runNativeJourney(
     ? await recordSimulatorVideo(deviceID)
     : undefined;
   try {
+    if (emojiReview)
+      await run("xcrun", [
+        "simctl",
+        "openurl",
+        deviceID,
+        `cubby://entity/${productId}`,
+      ]);
     await run("pnpm", [
       "exec",
       "agent-device",
