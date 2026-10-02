@@ -4,8 +4,20 @@ import type {
 } from "@cubby/schemas/calendar";
 import type { UserId } from "@cubby/schemas/identifiers";
 
-import type { CalDavCollection } from "./caldav-types";
-import type { IcsFeed } from "./ics";
+import type {
+  CalDavCollection,
+  CalendarFeedReadResult,
+  CalendarRefreshResult,
+  IcsFeed,
+  StoredCalendarDocument,
+} from "./rpc";
+
+export type {
+  CalendarFeedDurableObjectRpc,
+  CalendarFeedReadResult,
+  CalendarRefreshResult,
+  StoredCalendarDocument,
+} from "./rpc";
 
 /**
  * Fixed UID namespace — deliberately NOT the serving origin.
@@ -48,32 +60,6 @@ const CALENDAR_FEED_FILENAMES = {
 
 const CALENDAR_FEED_PATH = /^\/api\/calendar\/([^/]+)\/([^/]+)\/?$/;
 
-export interface StoredCalendarDocument {
-  body: string;
-  etag: string;
-  generatedAt: string;
-  revision: number;
-  itemCount: number;
-}
-
-export type CalendarFeedReadResult =
-  | { result: "unavailable" }
-  | { result: "not_found" }
-  | {
-      result: "not_modified";
-      etag: string;
-      generatedAt: string;
-      revision: number;
-      itemCount: number;
-    }
-  | ({ result: "served" } & StoredCalendarDocument);
-
-export interface CalendarRefreshResult {
-  generatedAt: string;
-  revision: number;
-  counts: Record<IcsFeed, number>;
-}
-
 export interface CalendarFeedState {
   getToken(): Promise<string | null>;
   inspect(): Promise<CalendarFeedInspection>;
@@ -85,36 +71,6 @@ export interface CalendarFeedState {
   ): Promise<CalendarFeedReadResult>;
   markDirty(reason: string): Promise<void>;
   refreshNow(reason: string): Promise<CalendarRefreshResult | null>;
-}
-
-export interface CalendarFeedDurableObjectRpc {
-  clearUncertainWrite(
-    collection: CalDavCollection,
-    filename: string,
-  ): Promise<void>;
-  getCalendarCredential(owner: UserId): Promise<{
-    configured: boolean;
-    username: string;
-    createdAt: string | null;
-  }>;
-  rotateCalendarCredential(
-    owner: UserId,
-    origin: string,
-  ): Promise<{ username: string; password: string; createdAt: string }>;
-  revokeCalendarCredential(owner: UserId): Promise<void>;
-  getToken(): Promise<string | null>;
-  inspect(origin: string): Promise<CalendarFeedInspection>;
-  rotate(origin: string): Promise<string>;
-  read(
-    token: string,
-    feed: IcsFeed,
-    ifNoneMatch: string | null,
-  ): Promise<CalendarFeedReadResult>;
-  markDirty(reason: string, origin: string): Promise<void>;
-  refreshNow(
-    reason: string,
-    origin: string,
-  ): Promise<CalendarRefreshResult | null>;
 }
 
 export function inspectCalendarDocument(
