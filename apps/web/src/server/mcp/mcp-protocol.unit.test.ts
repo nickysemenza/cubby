@@ -83,7 +83,8 @@ describe("MCP protocol smoke", () => {
         new URL("https://cubby.test/api/mcp"),
         {
           fetch: async (input, init) => {
-            const response = await handleMcpRequest(new Request(input, init), {
+            const request = new Request(input, init);
+            const response = await handleMcpRequest(request, {
               token: "",
               clientId: "test",
               scopes: [],
@@ -99,9 +100,9 @@ describe("MCP protocol smoke", () => {
                 },
               },
             });
-            // Worker database I/O must finish before a service-binding response
-            // escapes its request; the legacy SSE default releases it early.
-            if (response.status === 200) {
+            // POST dispatch must finish before the Worker binding closes its
+            // database client. The client's GET notification stream is separate.
+            if (request.method === "POST" && response.status === 200) {
               responseTypes.push(response.headers.get("content-type"));
             }
             return response;
