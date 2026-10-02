@@ -1,10 +1,17 @@
+import { existsSync, readFileSync } from "node:fs";
+import { parseEnv } from "node:util";
+import { fileURLToPath } from "node:url";
+import { CF_ACCOUNT_ID } from "../../src/server/cf-env";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, tool } from "ai";
 import { z } from "zod";
 
 const configuration = z.object({
   TESTER_ARMY_CF_API_TOKEN: z.string().min(1),
-  TESTER_ARMY_CF_ACCOUNT_ID: z.string().regex(/^[a-f0-9]{32}$/),
+  TESTER_ARMY_CF_ACCOUNT_ID: z
+    .string()
+    .regex(/^[a-f0-9]{32}$/)
+    .default(CF_ACCOUNT_ID),
   TESTER_ARMY_CF_GATEWAY_ID: z
     .string()
     .regex(/^[a-z0-9-]+$/)
@@ -16,7 +23,20 @@ const configuration = z.object({
 });
 
 export function modelConfiguration() {
-  const result = configuration.safeParse(process.env);
+  const envFile =
+    process.env.TESTER_ARMY_ENV_FILE ??
+    fileURLToPath(new URL("../../.env", import.meta.url));
+  const local = existsSync(envFile)
+    ? parseEnv(readFileSync(envFile, "utf8"))
+    : {};
+  const result = configuration.safeParse({
+    ...process.env,
+    TESTER_ARMY_CF_API_TOKEN:
+      process.env.TESTER_ARMY_CF_API_TOKEN ??
+      process.env.AI_GATEWAY_API_KEY ??
+      local.TESTER_ARMY_CF_API_TOKEN ??
+      local.AI_GATEWAY_API_KEY,
+  });
   if (!result.success)
     throw new Error(
       `Tester Army configuration missing or invalid: ${result.error.issues.map((issue) => issue.path.join(".")).join(", ")}`,
@@ -42,7 +62,7 @@ export function testerArmyModel() {
 }
 
 export const testerArmyProviderOptions = {
-  openai: { reasoningEffort: "medium", store: false },
+  openai: { forceReasoning: true, reasoningEffort: "medium", store: false },
 };
 
 export async function preflightTesterArmyModel() {
@@ -61,8 +81,9 @@ export async function preflightTesterArmyModel() {
             text: "This is a synthetic testing preflight. Inspect the supplied image and call ready with supported=true.",
           },
           {
-            type: "image",
-            image: Buffer.from(
+            type: "file",
+            mediaType: "image/png",
+            data: Buffer.from(
               "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGNwaDhAEmIY1TCqYfhqAACldYAQpGTU2QAAAABJRU5ErkJggg==",
               "base64",
             ),

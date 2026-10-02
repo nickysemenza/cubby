@@ -22,8 +22,12 @@ journey must also pass after the agent-device upgrade.
 
 Use a Cloudflare API token authorized for inference through Unified Billing.
 Set it locally as `TESTER_ARMY_CF_API_TOKEN` or in the repository's Actions
-secrets with that name. Set `TESTER_ARMY_CF_ACCOUNT_ID` locally or as an Actions
-repository variable. The gateway defaults to `cubby-testing`; override it with
+secrets with that name. Local commands also accept `AI_GATEWAY_API_KEY` from the
+shell or `apps/web/.env`; set `TESTER_ARMY_ENV_FILE` to use a different `.env`
+path in a worktree. Only the inference token is read from that file, so app
+database and storage settings do not enter the synthetic harness. The account
+defaults to Cubby's configured Cloudflare account; `TESTER_ARMY_CF_ACCOUNT_ID`
+overrides it locally or as an Actions repository variable. The gateway defaults to `cubby-testing`; override it with
 `TESTER_ARMY_CF_GATEWAY_ID` locally. Do not reuse a deployment token.
 
 The default is `openai/gpt-6-luna` through the Responses API, medium reasoning,
