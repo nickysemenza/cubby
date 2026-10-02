@@ -92,6 +92,7 @@ test("detected label nutrition stays editable and requires Save before replacing
   expect(saved?.inferenceEvidence).toBe(
     "Not a significant source of total fat.",
   );
+  await page.getByRole("button", { name: "More details", exact: true }).click();
   await expect(page.getByText(/inferred zero/).first()).toBeVisible();
   await page.reload();
   await expect(review).toHaveCount(0);
