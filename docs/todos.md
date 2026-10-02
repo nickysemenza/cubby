@@ -303,16 +303,18 @@ See also the image operational passes at the end of this file.
   the commodity layer, but imports never fill `ingredientId`, so
   `Cauliflower` / `Organic Cauliflower, 1 Each` and three ground-beef 80/20s
   stand unconnected. In order:
-  1. 🟢 One-call resolve: `entity_read.resolve` takes `{name, externalIds[]}`
-     per line and returns exact-id hits, ingredient-alias hits, and lexical
-     candidates together (grocery ASINs split across Fresh / Whole Foods /
-     in-store). Today `entityResolveCommandSchema` takes only names.
-  2. 🧱 Piece units resolve on the ingredient: `whole/bunch/crown/clove` come
+  1. 🧱 Piece units resolve on the ingredient: `whole/bunch/crown/clove` come
      from USDA `portionInfo` or an ingredient-level mapping; product `each`
      prices the package and never satisfies a piece unit.
-  3. 🧱 A durable ingredient-level unit mapping store, which the harvested
+  2. 🧱 A durable ingredient-level unit mapping store, which the harvested
      equivalences report (`lib/harvest-equivalences.ts`) then writes accepted
      suggestions into.
+
+- 🟢 **One external-id product lookup.** `repo/product/find-by-external-ids.ts`
+  batches `(source, externalId)` lookups for `entity_read.resolve`; purchase
+  import (`purchase-import/writer.ts` `productsByExternalIdentity`,
+  `import-orders.ts`) and `repo/product-match.ts` still query per line. Move
+  them onto the batched helper, keeping the writer's in-run cache.
 
 - 🧱 **Inferred-zero nutrients for label data.** Decided: yes. Label-sourced
   records (USDA `branded_food`, `labelNutrition`) print only FDA-mandatory
