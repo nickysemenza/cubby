@@ -1571,6 +1571,7 @@ async function main(): Promise<void> {
       const common = ["--platform", "ios", "--udid", device.udid];
       const session = `cubby-sim-${simName}`;
       let simulatorReady = false;
+      let driverPrepared = false;
       const install = async () => {
         const buildStarted = performance.now();
         await run("pnpm", ["apple", "gen"]);
@@ -1703,19 +1704,23 @@ async function main(): Promise<void> {
       try {
         await install();
         const driverStarted = performance.now();
-        await run("pnpm", [
-          "exec",
-          "agent-device",
-          "prepare",
-          "ios-runner",
-          ...common,
-          "--timeout",
-          "240000",
-        ]);
-        phases.push({
-          name: "native-driver-prepare",
-          durationMs: Math.round(performance.now() - driverStarted),
-        });
+        try {
+          await run("pnpm", [
+            "exec",
+            "agent-device",
+            "prepare",
+            "ios-runner",
+            ...common,
+            "--timeout",
+            "240000",
+          ]);
+        } finally {
+          phases.push({
+            name: "native-driver-prepare",
+            durationMs: Math.round(performance.now() - driverStarted),
+          });
+        }
+        driverPrepared = true;
         let journey:
           | Awaited<
               ReturnType<
@@ -1794,6 +1799,8 @@ async function main(): Promise<void> {
           "screenshot",
           path.join(artifacts, "failure.png"),
         ]).catch(console.error);
+        // Snapshot would retry the failed XCTest startup and hide its original cost.
+        if (!driverPrepared) throw error;
         const diagnosticSession = `cubby-sim-diagnostic-${simName}`;
         try {
           await run("pnpm", [

@@ -84,6 +84,9 @@ before reuse. Only its derived build directory is cached. Device leases,
 per-session launch files, test results, logs, and lock files are excluded so
 a new runner cannot inherit another host's process state.
 Bundles record native build, boot, installation, and driver preparation durations separately.
+If driver preparation fails, diagnostics retain the simulator screenshot and
+original error without starting XCTest again for a UI snapshot. Failures after
+successful preparation still capture the UI tree.
 A cold cache still requires compilation; warm-cache performance must be
 measured from the full hosted job, not just the agent test duration.
 
