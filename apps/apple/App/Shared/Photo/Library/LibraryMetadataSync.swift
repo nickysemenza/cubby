@@ -72,6 +72,9 @@ final class LibraryMetadataSync {
     /// the very next thermal/power notification or scene-active toggle called `reconcile()` again
     /// and undid the cancellation within seconds of the user tapping Cancel on the Activity screen.
     @ObservationIgnored private var cancelledByUser = false
+    /// True only while a `BGProcessingTask` owns the process (`runInBackground()`): the scene is
+    /// inactive then, so the scene gate is bypassed. Every other gate still applies.
+    @ObservationIgnored private var isBackgroundExecution = false
     // `nonisolated(unsafe)`: same justification as `PhotoClassificationSweep` — `deinit` is not
     // main-actor-isolated, and these tokens are only ever unregistered there.
     @ObservationIgnored nonisolated(unsafe) private var systemConditionObservers: [NSObjectProtocol] = []
@@ -156,18 +159,37 @@ final class LibraryMetadataSync {
         startedAt = nil
     }
 
+    /// Runs the sync to completion inside a `BGProcessingTask`, bypassing the scene-active gate.
+    /// Progress persists per 50-item page (`markLibrarySightingSent`, keyed on `modificationDate`),
+    /// so ending the window mid-page resumes from the unsent candidates next time.
+    func runInBackground() async {
+        isBackgroundExecution = true
+        reconcile()
+        await runTask?.value
+        endBackgroundRun()
+    }
+
+    /// Leaves background mode — also the BGTask expiration path. Deliberately not `cancel()`: that
+    /// is sticky (`cancelledByUser`) and would stop foreground runs until the user re-enables sync.
+    func endBackgroundRun() {
+        isBackgroundExecution = false
+        reconcile()
+    }
+
     static func shouldRun(
         isSceneActive: Bool, isSignedIn: Bool, isParticipating: Bool,
-        thermalState: ProcessInfo.ThermalState, isLowPowerModeEnabled: Bool
+        thermalState: ProcessInfo.ThermalState, isLowPowerModeEnabled: Bool,
+        isBackgroundExecution: Bool = false
     ) -> Bool {
-        isSceneActive && isSignedIn && isParticipating && !isLowPowerModeEnabled
+        (isSceneActive || isBackgroundExecution) && isSignedIn && isParticipating && !isLowPowerModeEnabled
             && thermalState.rawValue < ProcessInfo.ThermalState.serious.rawValue
     }
 
     private var shouldRunNow: Bool {
         Self.shouldRun(
             isSceneActive: isSceneActive, isSignedIn: isSignedIn, isParticipating: isParticipating,
-            thermalState: thermal.thermalState, isLowPowerModeEnabled: power.isLowPowerModeEnabled)
+            thermalState: thermal.thermalState, isLowPowerModeEnabled: power.isLowPowerModeEnabled,
+            isBackgroundExecution: isBackgroundExecution)
     }
 
     /// Re-plans against the current candidate source and system conditions. Called by every

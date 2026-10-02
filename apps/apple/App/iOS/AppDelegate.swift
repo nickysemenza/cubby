@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         PhotoBackgroundProcessing.register()
+        LibrarySyncBackgroundProcessing.register()
         return true
     }
 

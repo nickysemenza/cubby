@@ -133,7 +133,10 @@ struct CubbyApp: App {
                 model.setCompanionSceneActive(phase == .active)
                 #if os(iOS)
                     DeviceWorkLiveActivityCoordinator.shared.setForeground(phase == .active)
-                    if phase == .background { PhotoBackgroundProcessing.scheduleIfNeeded(model: model) }
+                    if phase == .background {
+                        PhotoBackgroundProcessing.scheduleIfNeeded(model: model)
+                        LibrarySyncBackgroundProcessing.scheduleIfNeeded(model: model)
+                    }
                 #endif
             }
             .onOpenURL { url in

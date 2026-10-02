@@ -91,6 +91,50 @@ struct LibraryMetadataSyncTests {
                 isLowPowerModeEnabled: true))
     }
 
+    /// A BGProcessingTask runs with the scene inactive: only that gate is bypassed, never sign-in,
+    /// the Automatic work switch, or the thermal/low-power gates.
+    @Test func backgroundExecutionBypassesOnlySceneGate() {
+        func run(
+            scene: Bool = false, signedIn: Bool = true, participating: Bool = true,
+            thermal: ProcessInfo.ThermalState = .nominal, lowPower: Bool = false
+        ) -> Bool {
+            LibraryMetadataSync.shouldRun(
+                isSceneActive: scene, isSignedIn: signedIn, isParticipating: participating,
+                thermalState: thermal, isLowPowerModeEnabled: lowPower, isBackgroundExecution: true)
+        }
+        #expect(run())
+        #expect(!run(signedIn: false))
+        #expect(!run(participating: false))
+        #expect(!run(thermal: .serious))
+        #expect(!run(lowPower: true))
+    }
+
+    @Test func backgroundRunSendsWhileSceneInactive() async throws {
+        let store = try PhotoAnalysisStore.make(inMemory: true)
+        let sent = Mutex<Int>(0)
+        let sync = makeSync(
+            analysisStore: store, candidates: [candidate("a"), candidate("b")],
+            send: { _ in sent.withLock { $0 += 1 } })
+        sync.setSceneActive(false)
+        #expect(!sync.isRunning)
+        await sync.runInBackground()
+        #expect(sent.withLock { $0 } == 2)
+        #expect(!sync.isRunning)
+    }
+
+    @Test func endingBackgroundRunStopsAnInFlightRunWithoutUserCancel() async throws {
+        let store = try PhotoAnalysisStore.make(inMemory: true)
+        let sync = makeSync(
+            analysisStore: store, candidates: [candidate("a")],
+            send: { _ in try await Task.sleep(for: .seconds(30)) })
+        sync.setSceneActive(false)
+        let worker = Task { await sync.runInBackground() }
+        while !sync.isRunning { await Task.yield() }
+        sync.endBackgroundRun()
+        await worker.value
+        #expect(!sync.isRunning)
+    }
+
     /// Participation off means `reconcile()` never starts a run at all — no send is ever attempted,
     /// not merely throttled.
     @Test func participationOffNeverStartsARun() async throws {

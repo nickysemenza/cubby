@@ -56,13 +56,11 @@ true` (`repo/image-processing-maintenance.ts`), so new uploads stay
   dictionaries for uploads that still carry EXIF. Nothing reads shutter,
   aperture, or ISO yet; they are kept so the bytes never need refetching.
 
-- 🟢 **Background library sync and companion work.** Library scan and sighting
-  sync run only in the foreground with Automatic work on
-  (`LibraryMetadataSync.shouldRun`). Phase 1: a `BGProcessingTask` with
-  `requiresExternalPower` resumes the hash scan and sync from the existing
-  50-item pages, keyed on `modificationDate`. Phase 2: run companion jobs
-  (subject lift, on-device description) in the same window; today they are
-  pushed over a live websocket, so the background path needs to pull leased
+- 🟢 **Companion work in the background window.** Library scan and sighting
+  sync already resume in the `com.nickysemenza.cubby.library-sync`
+  `BGProcessingTask` (external power). Run companion jobs (subject lift,
+  on-device description) in the same window; today they are pushed over a live
+  websocket, so the background path needs a server endpoint to pull leased
   work and finish or release it before expiry.
 
 - 🤔 **Identify what is in a photo.** Photo import stops at the entity type,
