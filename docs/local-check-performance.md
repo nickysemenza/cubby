@@ -5,7 +5,7 @@ not a comparison with hosted x86 CI.
 
 ## Typechecking
 
-Measured October 1, 2026 on the 8-core, 24 GiB ARM Mac with TypeScript 7.0.2,
+Measured October 1–2, 2026 on the 8-core, 24 GiB ARM Mac with TypeScript 7.0.2,
 `/usr/bin/time -l`, load average 5–20. Wall time moves with load; CPU and peak
 RSS are the comparable figures.
 
@@ -14,15 +14,22 @@ RSS are the comparable figures.
 type graph: in September it halved CPU (50.4 → 21.5 s) and RSS (5.9 → 3.1 GB)
 without excluding files or changing diagnostics.
 
-| Run                                         |    Wall |     CPU | Peak RSS |
-| ------------------------------------------- | ------: | ------: | -------: |
-| Cold, no buildinfo                          | 20–22 s | 32–34 s |   6.2 GB |
-| Buildinfo copied from a days-old checkout   |    46 s |    71 s |   7.6 GB |
-| Warm, nothing changed                       |   1–2 s |   3–4 s |   1.5 GB |
-| Warm, body edit to a file already re-signed | 1.5–3 s |   4–7 s |   2.0 GB |
-| Warm, shape change: 3 of 10 sampled files   |     2 s |   4–5 s |   2.0 GB |
-| Warm, shape change: 3 of 10 sampled files   |    20 s | 28–32 s |   6.2 GB |
-| Warm, shape change: 4 of 10 sampled files   |    37 s | 50–54 s |   7.0 GB |
+Current layout (after the changes below), load 5–10:
+
+| Run                                         |   Wall |    CPU | Peak RSS |
+| ------------------------------------------- | -----: | -----: | -------: |
+| Cold, no buildinfo                          | 20.6 s | 29.2 s |   5.8 GB |
+| Warm, nothing changed                       |  1.2 s |  2.8 s |   1.5 GB |
+| Client file, first edit after a fresh build | 11.1 s | 15.4 s |   4.0 GB |
+| Client file, later body edit                |  1.4 s |  4.0 s |   1.8 GB |
+| Client file, export added                   | 11.0 s | 15.9 s |   3.9 GB |
+| Server file, first edit after a fresh build | 18.6 s | 26.9 s |   5.1 GB |
+| Server file, later body edit                |  2.4 s |  4.8 s |   2.1 GB |
+| Server file, export added                   | 18.1 s | 26.0 s |   5.5 GB |
+
+Before them, a first edit or export change cost 50–54 s of CPU and up to 7 GB
+for most files (a full re-check, more than a cold run), and a buildinfo copied
+from a days-old checkout cost 71 s of CPU and 7.6 GB.
 
 The program is about 9,100 files, 3.3M types and 19.3M instantiations (10.1M
 in September). Zod accounts for a quarter of all types. The cost is spread
@@ -50,12 +57,12 @@ make the invalidated set large:
 - `routeTree.gen.ts` augments `@tanstack/react-router` and
   `@tanstack/react-start`, so each of the ~330 files importing them references
   it, and it imports every route. About 1,930 of 3,450 source files
-  transitively import `router.tsx` (the 20 s row).
+  transitively import `router.tsx` (about 20 s of wall time per first edit before the fixes).
 - `worker-configuration.d.ts` is a global script, and `wrangler types` points
   its Durable Object and Workflow types at the Worker entry
   (`import("./src/cf-server")`), which reaches the route tree through the
   `@tanstack/react-start` server entry. A closure that reaches it re-checks
-  all 3,457 files (the 37 s row). `types:generate` now rewrites those imports
+  all 3,457 files (about 37 s of wall time before the fixes). `types:generate` now rewrites those imports
   to the type-only `src/server/worker-bindings.ts`
   (`scripts/worker-type-imports.ts`; Wrangler's `--check` compares only its
   hash header), where the heavy Durable Objects bind through the RPC
