@@ -1,18 +1,18 @@
 context platform=ios timeout=240000
 
 open com.nickysemenza.cubby
-wait "label=Find" 240000
-click "label=Find"
+wait "role=Button label=Find" 240000
+click "role=Button label=Find"
 wait "role=SearchField label=\"Search Cubby\" editable=true" 30000
 fill "role=SearchField label=\"Search Cubby\" editable=true" "Synthetic Atlas Lantern" --delay-ms 80
 wait "id=search.result.${PRODUCT_ID}" 30000
 click "id=search.result.${PRODUCT_ID}"
-wait "id=detail.product.edit" 30000
-click "id=detail.product.edit"
+wait "role=Button id=detail.product.edit" 30000
+click "role=Button id=detail.product.edit"
 wait "label=Name editable=true" 30000
 fill 300 300 "Synthetic Atlas Lantern Updated"
 press 350 100
-wait "id=detail.product.edit" 30000
+wait "role=Button id=detail.product.edit" 30000
 wait text "Synthetic Atlas Lantern Updated" 30000
 
 click "label=Library id=BackButton"
