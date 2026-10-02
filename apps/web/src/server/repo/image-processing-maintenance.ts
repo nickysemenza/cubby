@@ -187,12 +187,53 @@ export async function backfillImageProcessing(
   };
 }
 
+/**
+ * Delete one bounded batch of attempts that waited without ever having an
+ * executor (written by the old dispatcher on every idle cycle), with their
+ * claim/waiting events, and reset `attempts` on the touched jobs to the number
+ * of attempts that remain. Returns the number of attempts deleted.
+ */
+export async function pruneExecutorlessWaitingAttempts(
+  db: Database,
+  limit: number,
+): Promise<number> {
+  const result = await getDb(db).execute(sql`
+    WITH doomed AS (
+      SELECT id, "jobId" FROM "ImageProcessingAttempt"
+      WHERE state = 'waiting' AND executor IS NULL
+      ORDER BY "startedAt", id
+      LIMIT ${limit}
+      FOR UPDATE SKIP LOCKED
+    ), deleted_events AS (
+      DELETE FROM "ImageProcessingEvent" e USING doomed d
+      WHERE e."jobId" = d."jobId"
+        AND e."eventKey" IN (d.id::text || ':claimed', d.id::text || ':waiting')
+    ), deleted AS (
+      DELETE FROM "ImageProcessingAttempt" a USING doomed d
+      WHERE a.id = d.id
+      RETURNING a."jobId"
+    ), touched AS (
+      SELECT DISTINCT "jobId" FROM deleted
+    ), fixed AS (
+      UPDATE "ImageProcessingJob" j
+      SET attempts = (
+        SELECT count(*)::int FROM "ImageProcessingAttempt" a
+        WHERE a."jobId" = j.id AND a.id NOT IN (SELECT id FROM doomed)
+      )
+      FROM touched t WHERE j.id = t."jobId"
+    )
+    SELECT count(*)::int AS pruned FROM deleted`);
+  return z.array(z.object({ pruned: z.number() })).parse(result.rows)[0]!
+    .pruned;
+}
+
 export async function repairImageProcessingWork(db: Database) {
   const {
     cleanupExpiredImageProcessingOrphans,
     publishImageProcessingWakeups,
   } = await import("~/server/services/image-processing.service");
   await cleanupExpiredImageProcessingOrphans(db, 100);
+  await pruneExecutorlessWaitingAttempts(db, 500);
   if ((await readImageProcessingSettings(db)).paused) return;
   await reclaimExpiredImageProcessingLeases(db);
   await publishImageProcessingWakeups(

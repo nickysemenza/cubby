@@ -1,6 +1,7 @@
 import type { ActivityExecutor } from "@cubby/schemas/activity";
 import type { ImageId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -35,6 +36,59 @@ export async function recordImageProcessingEvent(
  FROM "ImageProcessingJob" WHERE id = ${input.jobId}::uuid ON CONFLICT DO NOTHING`);
 }
 
+/**
+ * An attempt exists only once something took the lease: an executor
+ * (`assignImageProcessingExecutor`) or a failure that bumps the retry count.
+ * The caller holds the job row lock, which serializes numbering. Returns the
+ * attempt number, or null when `attemptId` already has a row.
+ */
+export async function insertImageProcessingAttempt(
+  db: Database | DrizzleTransaction,
+  input: {
+    jobId: string;
+    attemptId: string;
+    state: "running" | "failed";
+    executor?: ActivityExecutor;
+    userId?: string;
+    connectionId?: string;
+    diagnostics?: unknown;
+    result?: unknown;
+    error?: string;
+  },
+): Promise<number | null> {
+  const dbc = unwrapDb(db);
+  const inserted = await dbc.execute(sql`
+    INSERT INTO "ImageProcessingAttempt"
+      (id, "jobId", number, "submissionId", state, executor, "assignedUserId",
+       "assignedConnectionId", diagnostics, result, error, "completedAt")
+    SELECT ${input.attemptId}::uuid, j.id,
+      coalesce((SELECT max(a.number) FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id), 0) + 1,
+      j."submissionId", ${input.state},
+      ${input.executor ? JSON.stringify(input.executor) : null}::jsonb,
+      ${input.userId ?? null}, ${input.connectionId ?? null},
+      jsonb_build_object(
+        'sourceContentHash', j."sourceContentHash",
+        'sourceKey', i.key,
+        'inputAvailability', 'recorded original',
+        'processorRevision', j."processorRevision",
+        'contentType', i."contentType"
+      ) || ${JSON.stringify(input.diagnostics ?? {})}::jsonb,
+      ${input.result === undefined ? null : JSON.stringify(input.result)}::jsonb,
+      ${input.error ?? null},
+      ${input.state === "running" ? null : sql`now()`}
+    FROM "ImageProcessingJob" j
+    LEFT JOIN "Image" i ON i.id = j."imageId"
+    WHERE j.id = ${input.jobId}::uuid
+    ON CONFLICT DO NOTHING
+    RETURNING number`);
+  const row = z.array(z.object({ number: z.number() })).parse(inserted.rows)[0];
+  if (!row) return null;
+  await dbc.execute(
+    sql`UPDATE "ImageProcessingJob" SET attempts = attempts + 1 WHERE id = ${input.jobId}::uuid`,
+  );
+  return row.number;
+}
+
 export async function assignImageProcessingExecutor(
   db: Database,
   input: {
@@ -48,7 +102,7 @@ export async function assignImageProcessingExecutor(
 ): Promise<boolean> {
   return withTransaction(db, async (tx) => {
     const [job] = await tx
-      .select({ attempts: imageProcessingJob.attempts })
+      .select({ id: imageProcessingJob.id })
       .from(imageProcessingJob)
       .where(
         and(
@@ -74,28 +128,22 @@ export async function assignImageProcessingExecutor(
         return false;
       if (participation) executor = { ...executor, name: participation.name };
     }
-    const assigned = await tx
-      .update(imageProcessingAttempt)
-      .set({
-        executor,
-        assignedUserId: input.userId ?? null,
-        assignedConnectionId: input.connectionId ?? null,
-        diagnostics: sql`coalesce(${imageProcessingAttempt.diagnostics}, '{}'::jsonb) || ${JSON.stringify(input.diagnostics ?? {})}::jsonb`,
-        state: "running",
-      })
-      .where(
-        and(
-          eq(imageProcessingAttempt.id, input.attemptId),
-          sql`${imageProcessingAttempt.executor} IS NULL`,
-        ),
-      )
-      .returning({ id: imageProcessingAttempt.id });
-    if (!assigned.length) return false;
+    // The conflict on the lease's attempt id makes a repeated call return false.
+    const number = await insertImageProcessingAttempt(tx, {
+      jobId: input.jobId,
+      attemptId: input.attemptId,
+      state: "running",
+      executor,
+      userId: input.userId,
+      connectionId: input.connectionId,
+      diagnostics: input.diagnostics,
+    });
+    if (number === null) return false;
     await recordImageProcessingEvent(tx, {
       jobId: input.jobId,
       eventKey: `${input.attemptId}:assigned`,
       event: "execution.assigned",
-      attempt: job.attempts,
+      attempt: number,
       source: executor.kind,
       details: executor,
     });

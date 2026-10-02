@@ -75,6 +75,19 @@ describe("image execution history conservation", () => {
     if (!lease) throw new Error("Missing test lease");
     return lease;
   }
+  const assignCloud = (jobId: string, attemptId: string) =>
+    assignImageProcessingExecutor(ctx.db, {
+      jobId,
+      attemptId,
+      executor: {
+        kind: "cloud",
+        deviceId: null,
+        name: "test",
+        platform: "cloud",
+        appVersion: null,
+        osVersion: null,
+      },
+    });
   it("preserves a device's edited name across hello and records it on new activity", async () => {
     const installationId = crypto.randomUUID();
     const created = await createDevice(
@@ -173,6 +186,7 @@ describe("image execution history conservation", () => {
       }),
     ).toEqual([]);
     const next = await claim(jobId);
+    expect(await assignCloud(jobId, next.attemptId)).toBe(true);
     const attempts = await getDb(ctx.db)
       .select()
       .from(imageProcessingAttempt)
@@ -191,12 +205,13 @@ describe("image execution history conservation", () => {
       jobId,
       attemptId: waiting.attemptId,
     });
-    const [waitAttempt] = await getDb(ctx.db)
-      .select()
-      .from(imageProcessingAttempt)
-      .where(eq(imageProcessingAttempt.id, waiting.attemptId));
-    expect(waitAttempt?.executor).toBeNull();
-    expect(waitAttempt?.state).toBe("waiting");
+    // A lease nobody executes is not an attempt.
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(imageProcessingAttempt)
+        .where(eq(imageProcessingAttempt.jobId, jobId)),
+    ).toHaveLength(0);
     await getDb(ctx.db)
       .update(imageProcessingJob)
       .set({ nextAttemptAt: sql`now()` })
@@ -336,6 +351,7 @@ describe("image execution history conservation", () => {
   it("retains immutable input cleanup across deletion and a late upload", async () => {
     const { source, jobId } = await setup();
     const lease = await claim(jobId);
+    expect(await assignCloud(jobId, lease.attemptId)).toBe(true);
     const key = `tests/input-${lease.attemptId}.jpg`;
     expect(await reserveImageAnalysisInput(ctx.db, lease.attemptId, key)).toBe(
       true,

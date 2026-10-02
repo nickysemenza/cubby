@@ -60,7 +60,10 @@ import {
   PRESIGNED_URL_DEFAULT_EXPIRY_SECONDS,
 } from "~/server/utils/s3";
 
-import { recordImageProcessingEvent } from "./image-processing-history";
+import {
+  insertImageProcessingAttempt,
+  recordImageProcessingEvent,
+} from "./image-processing-history";
 
 export const IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION = 1;
 /** A label-only attachment is the sole reversible terminal cutout decision. */
@@ -554,32 +557,11 @@ export async function claimImageProcessingJob(
         attemptId,
         leaseExpiresAt,
         dispatchedAt: now,
-        attempts: sql`${imageProcessingJob.attempts} + 1`,
       })
       .where(eq(imageProcessingJob.id, candidate.id))
       .returning({ leaseExpiresAt: imageProcessingJob.leaseExpiresAt });
     if (!leased?.leaseExpiresAt)
       throw new Error("Image-processing lease was not persisted");
-    await tx.insert(imageProcessingAttempt).values({
-      id: attemptId,
-      jobId: candidate.id,
-      number: candidate.attempts + 1,
-      submissionId: candidate.submissionId,
-      state: "leased",
-      diagnostics: {
-        sourceContentHash: candidate.sourceContentHash,
-        sourceKey: candidate.originalKey,
-        inputAvailability: "recorded original",
-        processorRevision: candidate.processorRevision,
-        contentType: candidate.originalContentType,
-      },
-    });
-    await recordImageProcessingEvent(tx, {
-      jobId: candidate.id,
-      eventKey: `${attemptId}:claimed`,
-      event: "attempt.claimed",
-      attempt: candidate.attempts + 1,
-    });
     const { previousAttemptId: _previousAttemptId, ...claimed } = candidate;
     return {
       ...claimed,
@@ -648,6 +630,11 @@ export async function getLeasedImageProcessingJobContext(
   return rows[0] ?? null;
 }
 
+/**
+ * A lease with no executor is not an attempt: the attempt row and
+ * `job.attempts` are written by `assignImageProcessingExecutor`. The waiting
+ * event uses a per-job key so idle retry cycles do not append history.
+ */
 export async function markImageProcessingWaitingForDevice(
   db: Database,
   input: { jobId: string; attemptId: string },
@@ -670,18 +657,9 @@ export async function markImageProcessingWaitingForDevice(
       )
       .returning({ id: imageProcessingJob.id });
     if (rows.length) {
-      await tx
-        .update(imageProcessingAttempt)
-        .set({ state: "waiting", completedAt: sql`now()` })
-        .where(
-          and(
-            eq(imageProcessingAttempt.id, input.attemptId),
-            eq(imageProcessingAttempt.state, "leased"),
-          ),
-        );
       await recordImageProcessingEvent(tx, {
         jobId: input.jobId,
-        eventKey: `${input.attemptId}:waiting`,
+        eventKey: "dispatch:waiting",
         event: "dispatch.waiting",
       });
     }
@@ -1174,7 +1152,7 @@ export async function completeImageProcessingJob(
       (await adoptSuccessfulCompletion(tx, job, input));
     if (!adopted) return { adopted: false, orphanKey: null };
     const outcome = input.result.outcome;
-    await tx
+    const recorded = await tx
       .update(imageProcessingAttempt)
       .set({
         state: outcome.status === "completed" ? "ready" : outcome.status,
@@ -1183,7 +1161,18 @@ export async function completeImageProcessingJob(
         diagnostics: sql`coalesce(${imageProcessingAttempt.diagnostics}, '{}'::jsonb) || ${JSON.stringify({ runtime: input.runtime ?? null, device: input.result.diagnostics ?? null, validation: input.verifiedDerivative ? { outcome: "validated transparent PNG", ...input.verifiedDerivative } : input.orphanOutputKey ? { outcome: "rejected output" } : null })}::jsonb`,
         error: outcome.status === "completed" ? null : outcome.reason,
       })
-      .where(eq(imageProcessingAttempt.id, input.result.attemptId));
+      .where(eq(imageProcessingAttempt.id, input.result.attemptId))
+      .returning({ id: imageProcessingAttempt.id });
+    // A failure before any executor took the lease has no attempt row yet; it
+    // still counts toward the retry limit and stays visible in history.
+    if (!recorded.length && outcome.status === "failed")
+      await insertImageProcessingAttempt(tx, {
+        jobId: job.id,
+        attemptId: input.result.attemptId,
+        state: "failed",
+        error: outcome.reason,
+        result: outcome,
+      });
     await recordImageProcessingEvent(tx, {
       jobId: job.id,
       eventKey: `${input.result.attemptId}:completed`,
