@@ -65,16 +65,12 @@ true` (`repo/image-processing-maintenance.ts`), so new uploads stay
   pushed over a live websocket, so the background path needs to pull leased
   work and finish or release it before expiry.
 
-- 🟢 **Identify what is in a photo.** Photo import stops at the entity type,
+- 🤔 **Identify what is in a photo.** Photo import stops at the entity type,
   and web location detection matches by name only. In order:
-  1. 🟢 Product declares `visualEvidence` (cover and inventory photos) so
-     `PhotoVisualEvidenceMatcher` — which already follows manifest
-     `visualEvidence` paths and takes the best of several references — works
-     for products, not only recipes and plantings.
-  2. 🤔 Compare detected items visually against Product covers and
+  1. 🤔 Compare detected items visually against Product covers and
      subject-lift cutouts, not only by exact name then semantic name
      similarity. Needs an eval set like `inventory-detection-evals.ts`.
-  3. ⏳ Server vision ranking of a single record (`photo-import.identify`, a
+  2. ⏳ Server vision ranking of a single record (`photo-import.identify`, a
      `defineFeature` sibling of `product-identification`, fed into
      `PhotoEvidenceScorer` as an identity score) when deterministic evidence
      still leaves the chooser in default order often enough to matter.
