@@ -4,10 +4,10 @@ import { JsonEditor, type JsonData } from "json-edit-react";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
-import { Row } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
+import { Row } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
 
 interface EditableComponentDemoProps<T> {
   title: string;

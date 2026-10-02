@@ -8,11 +8,17 @@ import {
 import { useEffect, useState } from "react";
 import type { z } from "zod";
 
-import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { StatusText } from "~/components/ui/status-text";
+import { AuditLogList } from "~/features/audit-log/audit-log-list";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { formatInstant } from "~/lib/date-format";
+import { formatDuration } from "~/lib/format-duration";
+import { formatCurrency } from "~/lib/utils";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { StatusText } from "~/ui/primitives/status-text";
 import {
   Table,
   TableBody,
@@ -20,14 +26,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "~/components/ui/table";
-import { TechnicalError } from "~/components/ui/technical-error";
-import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { formatInstant } from "~/lib/date-format";
-import { formatDuration } from "~/lib/format-duration";
-import { formatCurrency } from "~/lib/utils";
+} from "~/ui/primitives/table";
+import { TechnicalError } from "~/ui/primitives/technical-error";
 
 const phaseLabel = (phase: string) =>
   phase.replaceAll("_", " ").replace(/^./u, (letter) => letter.toUpperCase());

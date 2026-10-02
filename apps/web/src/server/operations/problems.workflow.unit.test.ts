@@ -1,7 +1,7 @@
 import { problemsCountSchema } from "@cubby/schemas/problems";
 import { describe, expect, it, vi } from "vitest";
 
-import { expectedProblemKeys } from "~/entities/problem-registry";
+import { expectedProblemKeys } from "~/entity/problem-registry";
 
 import { resolveProblemCounts } from "./problem-counts.server";
 

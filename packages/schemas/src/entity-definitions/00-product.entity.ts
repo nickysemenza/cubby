@@ -2096,7 +2096,7 @@ export default defineEntity({
           { value: "5", label: "5+ expenses" },
         ],
         expandRef: {
-          module: "~/entities/filter-behavior",
+          module: "~/entity/filter-behavior",
           export: "resolveExpenseCount",
         },
       },
@@ -2231,7 +2231,7 @@ export default defineEntity({
           { value: "1y", label: "Last 12 months" },
         ],
         expandRef: {
-          module: "~/entities/filter-behavior",
+          module: "~/entity/filter-behavior",
           export: "resolveProductPurchaseDateFilter",
         },
       },
@@ -2537,7 +2537,7 @@ export default defineEntity({
           { value: "30d", label: "Due in 30 days" },
         ],
         expandRef: {
-          module: "~/entities/filter-behavior",
+          module: "~/entity/filter-behavior",
           export: "resolveProductTaskFilter",
         },
       },

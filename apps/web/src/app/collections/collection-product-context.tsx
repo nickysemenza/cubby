@@ -10,17 +10,17 @@ import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { TradeBadge } from "~/app/projects/trade-options";
+import { copyShortcodes } from "~/lib/clipboard";
+import { formatCalendarDay } from "~/lib/date-format";
+import { purchaseLabel, purchaseLabelUsedVendor } from "~/lib/purchase-label";
+import { cn } from "~/lib/utils";
 import {
   Popover,
   PopoverContent,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
-} from "~/components/ui/popover";
-import { copyShortcodes } from "~/lib/clipboard";
-import { formatCalendarDay } from "~/lib/date-format";
-import { purchaseLabel, purchaseLabelUsedVendor } from "~/lib/purchase-label";
-import { cn } from "~/lib/utils";
+} from "~/ui/primitives/popover";
 
 export function CopyableShortcode({
   code,

@@ -6,29 +6,26 @@ import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 
-import { MobileCard } from "~/components/entity/mobile-card";
-import { Grid, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+import { MobileCard } from "~/entity/components/mobile-card";
+import type { EntityDetailParams, EntityDetailRoute } from "~/entity/entities";
+import { EntityIcon } from "~/entity/entities";
+import { cn } from "~/lib/utils";
+import { Grid, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "~/components/ui/card";
-import { Progress } from "~/components/ui/progress";
+} from "~/ui/primitives/card";
+import { Progress } from "~/ui/primitives/progress";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "~/components/ui/tooltip";
-import type {
-  EntityDetailParams,
-  EntityDetailRoute,
-} from "~/entities/entities";
-import { EntityIcon } from "~/entities/entities";
-import { cn } from "~/lib/utils";
+} from "~/ui/primitives/tooltip";
 
 import { useRecipeUsage } from "./recipe-usage-context";
 

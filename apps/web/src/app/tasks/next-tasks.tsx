@@ -9,17 +9,21 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { match } from "ts-pattern";
 
-import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
   entityDisplayImageKey,
   type EntityDisplayImageMap,
   useEntityDisplayImages,
-} from "~/app/_components/entity-media/entity-display-images";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { Row, Section, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+} from "~/entity/entity-media/entity-display-images";
+import { fieldEnumOptions } from "~/entity/enum-field-display";
+import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatDateSpan } from "~/lib/date-span";
+import { getErrorMessage } from "~/lib/error-utils";
+import { renderOptionCell } from "~/ui/data-table/columnHelpers";
+import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
+import { Row, Section, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
 import {
   Empty,
   EmptyActions,
@@ -27,7 +31,7 @@ import {
   EmptyHeader,
   EmptyIcon,
   EmptyTitle,
-} from "~/components/ui/empty";
+} from "~/ui/primitives/empty";
 import {
   Table,
   TableBody,
@@ -35,11 +39,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "~/components/ui/table";
-import { fieldEnumOptions } from "~/entities/enum-field-display";
-import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatDateSpan } from "~/lib/date-span";
-import { getErrorMessage } from "~/lib/error-utils";
+} from "~/ui/primitives/table";
 
 /** A single chain node (task or project) as a linked breadcrumb chip. */
 function ChainNodeLink({

@@ -15,19 +15,11 @@ import { format } from "date-fns";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { useEntitySuggestionsQuery } from "~/app/_components/ai/field-suggestion";
-import { FieldSuggestionHint } from "~/app/_components/ai/field-suggestion-hint";
-import { SuggestionVisitProvider } from "~/app/_components/ai/suggestion-review";
-import { StaticPicker } from "~/app/_components/combobox/static-picker";
-import { DatePickerInput } from "~/app/_components/date-picker-input";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
-import { DialogFormActions } from "~/components/ui/dialog-form-actions";
-import { Label } from "~/components/ui/label";
-import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { entities, entityDetailParams } from "~/entities/entities";
-import { fieldEnumOptions } from "~/entities/enum-field-display";
+import { entities, entityDetailParams } from "~/entity/entities";
+import { fieldEnumOptions } from "~/entity/enum-field-display";
+import { useEntitySuggestionsQuery } from "~/features/ai/field-suggestion";
+import { FieldSuggestionHint } from "~/features/ai/field-suggestion-hint";
+import { SuggestionVisitProvider } from "~/features/ai/suggestion-review";
 import {
   entityMutation,
   ai,
@@ -35,6 +27,14 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import type { EntityBrowserMutationResult } from "~/server/entity-kernel/contracts";
+import { StaticPicker } from "~/ui/combobox/static-picker";
+import { DatePickerInput } from "~/ui/date-picker-input";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
+import { Label } from "~/ui/primitives/label";
+import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import { mealListLabel } from "./meal-format";
 import { useInvalidateMeals } from "./use-meal-mutations";

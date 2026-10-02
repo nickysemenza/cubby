@@ -1,7 +1,7 @@
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { parseEntityTimelineInput } from "~/entities/generated/entity-timelines.gen";
+import { parseEntityTimelineInput } from "~/entity/generated/entity-timelines.gen";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { createLocation } from "~/server/repo/location/crud";
 import {

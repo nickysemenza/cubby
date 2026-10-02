@@ -6,7 +6,7 @@ import {
 import {
   buildFiltersFromManifest,
   filterGetterFromSearch,
-} from "~/entities/filters";
+} from "~/entity/filters";
 
 import { calendarFilterSpecs } from "./calendar-filter-specs";
 import { calendarSearchSchema } from "./calendar-search";

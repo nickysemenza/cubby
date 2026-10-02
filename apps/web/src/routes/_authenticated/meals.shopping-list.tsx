@@ -14,12 +14,12 @@ import {
   shoppingListSearchSchema,
 } from "~/app/meals/meal-search";
 import { ShoppingListPage } from "~/app/meals/shopping-list-page";
-import { Page } from "~/components/page/Page";
+import { pageTitle } from "~/lib/page-title";
+import { Page } from "~/ui/page/Page";
 import {
   ViewSwitcher,
   type ViewSwitcherOption,
-} from "~/components/ui/view-switcher";
-import { pageTitle } from "~/lib/page-title";
+} from "~/ui/primitives/view-switcher";
 
 const VIEW_OPTIONS: ViewSwitcherOption<ShoppingListView>[] = [
   { value: "list", label: "List", icon: ListIcon },

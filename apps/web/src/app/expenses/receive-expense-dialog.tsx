@@ -23,24 +23,21 @@ import { type FC } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
-import {
-  getOptionalLocationId,
-  optionalLocationField,
-} from "~/app/_components/form-fields";
-import { ComboboxFieldWithSearch } from "~/app/_components/form-utils/combobox-field-with-search";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
+import { entityDetailFor } from "~/entity/entity-detail";
+import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
 import {
   AmountFieldGroup,
   DEFAULT_AMOUNT_UNIT,
-} from "~/app/_components/inventory/amount-field-group";
-import { WorkflowDialog } from "~/components/dialogs/workflow-dialog";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
-import { Input } from "~/components/ui/input";
-import { entityDetailFor } from "~/entities/entity-detail";
+} from "~/features/inventory/amount-field-group";
 import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
+import { getOptionalLocationId, optionalLocationField } from "~/ui/form-fields";
+import { ComboboxFieldWithSearch } from "~/ui/form-utils/combobox-field-with-search";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
+import { Input } from "~/ui/primitives/input";
 
 const formSchema = z.object({
   location: optionalLocationField,

@@ -10,12 +10,12 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useId, useState } from "react";
 
-import { Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
-import { focusOnMount } from "~/hooks/focus-on-mount";
 import { collection } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { focusOnMount } from "~/ui/hooks/focus-on-mount";
+import { Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
+import { NativeSelect } from "~/ui/primitives/native-select";
 
 import { useSmartCollections } from "./smart-collection-state";
 

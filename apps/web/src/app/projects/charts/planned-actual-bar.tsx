@@ -1,5 +1,5 @@
-import { HorizontalBarChart } from "~/app/_components/charts/kit";
 import { formatCurrency } from "~/lib/utils";
+import { HorizontalBarChart } from "~/ui/charts/kit";
 
 import { nivoBarChrome, nivoChartTheme, nivoCurrencyAxis } from "../shared";
 import { ChartTooltip } from "./ChartTooltip";

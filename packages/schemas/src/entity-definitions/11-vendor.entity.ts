@@ -605,7 +605,7 @@ export default defineEntity({
           { value: "5", label: "5+ purchases" },
         ],
         expandRef: {
-          module: "~/entities/filter-behavior",
+          module: "~/entity/filter-behavior",
           export: "resolveVendorPurchases",
         },
       },
@@ -648,7 +648,7 @@ export default defineEntity({
           { value: "1y", label: "Last 12 months" },
         ],
         expandRef: {
-          module: "~/entities/filter-behavior",
+          module: "~/entity/filter-behavior",
           export: "resolveLatestPurchaseDate",
         },
       },

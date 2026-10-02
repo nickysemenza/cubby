@@ -2,12 +2,12 @@ import { ProblemItem } from "@cubby/schemas/problems";
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import { type ReactNode, useState } from "react";
 
-import { CardThumbnail } from "~/components/entity/card-thumbnail";
-import { Row } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { entityDetailLink } from "~/entities/entities";
+import { CardThumbnail } from "~/entity/components/card-thumbnail";
+import { entityDetailLink } from "~/entity/entities";
 import { formatRelative } from "~/lib/date-format";
+import { Row } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
 
 import { AddInventoryDialog } from "./add-inventory-dialog";
 import { ProblemSection, type ProblemSectionCoverage } from "./problem-section";

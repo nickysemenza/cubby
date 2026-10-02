@@ -19,22 +19,22 @@ import {
   loadCommandMenu,
   markCommandMenuOpen,
   preloadCommandMenu,
-} from "~/app/_components/command-menu-loader";
-import { AppFooter } from "~/app/_components/footer";
-import { MainNav } from "~/app/_components/MainNav";
-import { AuthenticatedAppShell } from "~/app/_components/navigation/authenticated-app-shell";
-import { BottomNav } from "~/app/_components/navigation/bottom-nav";
-import { ErrorDetailsDialogHost } from "~/components/feedback/error-details-dialog";
-import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { RouteNotFound } from "~/components/lazy-route-not-found";
-import { Toaster } from "~/components/ui/sonner";
-import { useDebug } from "~/hooks/useDebug";
-import { useNavAuthed } from "~/hooks/useNavAuthed";
+} from "~/features/command-menu/command-menu-loader";
 import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { buildMetadataQueryOptions } from "~/lib/build-metadata";
 import { FLAGS } from "~/lib/flags";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
+import { ErrorDetailsDialogHost } from "~/ui/feedback/error-details-dialog";
+import { AppFooter } from "~/ui/footer";
+import { useDebug } from "~/ui/hooks/useDebug";
+import { useNavAuthed } from "~/ui/hooks/useNavAuthed";
+import { RouteErrorComponent } from "~/ui/lazy-route-error";
+import { RouteNotFound } from "~/ui/lazy-route-not-found";
+import { MainNav } from "~/ui/MainNav";
+import { AuthenticatedAppShell } from "~/ui/navigation/authenticated-app-shell";
+import { BottomNav } from "~/ui/navigation/bottom-nav";
+import { Toaster } from "~/ui/primitives/sonner";
 
 import { Provider } from "../integrations/tanstack-query/root-provider";
 
@@ -58,7 +58,7 @@ const PerfOverlay = browserOnlyLazy<object>(
   import.meta.env.SSR
     ? null
     : () =>
-        import("~/app/_components/perf-overlay").then((m) => ({
+        import("~/features/performance").then((m) => ({
           default: m.PerfOverlay,
         })),
 );

@@ -21,7 +21,7 @@ import { z } from "zod";
 import {
   generatedEntityRelationListCommandSchema,
   generatedEntityRelationListResultSchema,
-} from "~/entities/generated/entity-relation-lists.gen";
+} from "~/entity/generated/entity-relation-lists.gen";
 import {
   generatedEntityBulkUpdateCommandSchema,
   generatedEntityCreateCommandSchema,

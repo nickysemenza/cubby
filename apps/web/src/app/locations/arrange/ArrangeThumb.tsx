@@ -3,10 +3,10 @@ import { Link } from "@tanstack/react-router";
 import type React from "react";
 import type { ReactNode } from "react";
 
-import { Image } from "~/components/ui/image";
-import { ImagePreviewPopup } from "~/components/ui/image-with-preview";
-import { Tooltip, TooltipTrigger } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
+import { Image } from "~/ui/primitives/image";
+import { ImagePreviewPopup } from "~/ui/primitives/image-with-preview";
+import { Tooltip, TooltipTrigger } from "~/ui/primitives/tooltip";
 
 interface ArrangeThumbProps {
   /** Candidate covers; the first displayable one wins. */

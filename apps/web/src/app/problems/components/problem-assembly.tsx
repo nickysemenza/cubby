@@ -4,27 +4,27 @@ import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Fragment } from "react";
 
-import { Button, buttonVariants } from "~/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/components/ui/collapsible";
 import {
   entities,
   entityPluralLabel,
   isBrowserRoutedEntity,
-} from "~/entities/entities";
-import { getEntityFilters } from "~/entities/filter-manifest";
+} from "~/entity/entities";
+import { getEntityFilters } from "~/entity/filter-manifest";
 import {
   encodeFilters,
   FILTER_ANY,
   FILTER_NONE,
   humanize,
   sortToParam,
-} from "~/entities/filters";
-import type { ProblemQuery } from "~/entities/problem-query";
+} from "~/entity/filters";
+import type { ProblemQuery } from "~/entity/problem-query";
 import { cn } from "~/lib/utils";
+import { Button, buttonVariants } from "~/ui/primitives/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "~/ui/primitives/collapsible";
 
 /**
  * A router-agnostic list continuation prepared by the Problem Query adapter.

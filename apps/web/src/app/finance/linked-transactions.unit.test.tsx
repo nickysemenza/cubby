@@ -3,7 +3,7 @@ import { testCompleteDataQuality } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { entityListFor } from "~/entities/entity-list";
+import { entityListFor } from "~/entity/entity-list";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import {

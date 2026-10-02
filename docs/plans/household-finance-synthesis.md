@@ -233,7 +233,7 @@ are already subtracted from envelope remaining, so they are never counted twice.
 Scenario rows live in the URL as a compact, zod-validated search param. The
 page edits them inline; bookmarking is how a scenario set is saved. Structural
 presets — horizon, the not-started toggle, category subsets — are declared
-views in `apps/web/src/entities/view-manifest.ts`. Scenario amounts and dates
+views in `apps/web/src/entity/view-manifest.ts`. Scenario amounts and dates
 are never committed to the repository.
 
 ### 5.6 Page

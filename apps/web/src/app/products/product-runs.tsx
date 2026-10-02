@@ -4,14 +4,14 @@ import { CircleDashedIcon } from "@phosphor-icons/react/dist/csr/CircleDashed";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
-import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
-import { Stack } from "~/components/layout";
-import { StatusText } from "~/components/ui/status-text";
 import type { RunSummary } from "~/contracts/run.contract";
-import { entityListFor } from "~/entities/entity-list";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { entityListFor } from "~/entity/entity-list";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
+import { Stack } from "~/ui/layout";
+import { StatusText } from "~/ui/primitives/status-text";
 
 import { runHref } from "../purchases/purchase-import-links";
 import { TargetedImportLaunchButton } from "../purchases/targeted-import-launch";

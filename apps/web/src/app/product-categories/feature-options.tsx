@@ -3,7 +3,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   getCategoryIcon,
   getFeatureColor,
-} from "~/app/_components/products/category-theme";
+} from "~/features/products/category-theme";
 
 /**
  * The manifest's feature roster (labels and descriptions) with each

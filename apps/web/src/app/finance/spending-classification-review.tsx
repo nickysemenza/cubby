@@ -12,14 +12,14 @@ import type { VendorOut } from "@cubby/schemas/vendor";
 import { useMutation } from "@tanstack/react-query";
 import { useId, useState } from "react";
 
-import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { EntityReferencePicker } from "~/app/_components/combobox/entity-reference-picker";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Button } from "~/components/ui/button";
-import { NativeSelect } from "~/components/ui/native-select";
-import { StaticTable } from "~/components/ui/static-table";
 import { spendingClassification } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
+import { EntityReferencePicker } from "~/ui/combobox/entity-reference-picker";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Button } from "~/ui/primitives/button";
+import { NativeSelect } from "~/ui/primitives/native-select";
+import { StaticTable } from "~/ui/primitives/static-table";
 
 function ClassificationReview({
   initial,

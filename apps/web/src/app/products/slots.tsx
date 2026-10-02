@@ -2,24 +2,24 @@ import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";
 import { isNonFoodCategory } from "@cubby/shared";
 import { useMemo } from "react";
 
-import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
-} from "~/app/_components/entity-media/entity-display-images";
-import { FullNutrientBreakdown } from "~/app/_components/nutrition/FullNutrientBreakdown";
-import { NutrientDensityStats } from "~/app/_components/nutrition/NutrientDensityStats";
-import { ProductNutritionLabel } from "~/app/_components/nutrition/ProductNutritionLabel";
-import { RecipeUsagesTable } from "~/app/_components/recipe/recipe-usages-table";
-import { RelatednessRail } from "~/app/_components/relatedness/relatedness-rail";
-import { UnitCoveragePanel } from "~/app/_components/units/UnitCoveragePanel";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { Row, Stack } from "~/components/layout";
-import { Description } from "~/components/ui/description";
-import { Image } from "~/components/ui/image";
+} from "~/entity/entity-media/entity-display-images";
+import { RelatednessRail } from "~/entity/relatedness/relatedness-rail";
+import { FullNutrientBreakdown } from "~/features/nutrition/FullNutrientBreakdown";
+import { NutrientDensityStats } from "~/features/nutrition/NutrientDensityStats";
+import { ProductNutritionLabel } from "~/features/nutrition/ProductNutritionLabel";
+import { RecipeUsagesTable } from "~/features/recipes/recipe-usages-table";
+import { UnitCoveragePanel } from "~/features/units/UnitCoveragePanel";
 import { labelNutrientsPer100 } from "~/lib/label-nutrition";
 import { countLabel } from "~/lib/pluralize";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+import { Row, Stack } from "~/ui/layout";
+import { Description } from "~/ui/primitives/description";
+import { Image } from "~/ui/primitives/image";
 
 /**
  * Nutrition: a package-label override (`labelNutrition`) leads and takes

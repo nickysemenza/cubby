@@ -1,9 +1,9 @@
 import { entityIdSchema, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useCallback, useRef, useState } from "react";
 
-import { showErrorToast } from "~/components/feedback/error-details";
 import { precomputeEnrichmentProposalsStream } from "~/lib/ai-streams";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
+import { showErrorToast } from "~/ui/feedback/error-details";
 
 /** One ingredient to pre-compute proposals for. */
 interface ProposalRequest {

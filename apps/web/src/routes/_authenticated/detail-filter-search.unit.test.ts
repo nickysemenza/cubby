@@ -1,7 +1,7 @@
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 
-import { entitySearch } from "~/entities/generated/entity-search.gen";
+import { entitySearch } from "~/entity/generated/entity-search.gen";
 
 describe("detail filter link route contracts", () => {
   it("keeps Product, Location, and exact Inventory facets across navigation", () => {

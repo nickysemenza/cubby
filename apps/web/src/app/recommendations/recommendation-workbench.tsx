@@ -9,17 +9,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
+import { DuplicateProductMergeFix } from "~/app/problems/components/tier2-fixes";
+import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import {
   type EntityDisplayImagesQueryOptions,
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
-} from "~/app/_components/entity-media/entity-display-images";
-import { RelatedProductRow } from "~/app/_components/relatedness/related-product-row";
-import { DuplicateProductMergeFix } from "~/app/problems/components/tier2-fixes";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+} from "~/entity/entity-media/entity-display-images";
+import { RelatedProductRow } from "~/entity/relatedness/related-product-row";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   inventory,
@@ -27,6 +24,9 @@ import {
   recommendations,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 
 import {
   ProductMatchQueue,

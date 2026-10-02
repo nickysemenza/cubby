@@ -16,32 +16,32 @@ import {
 } from "@tanstack/react-table";
 import { useCallback, useEffect, useId, useMemo } from "react";
 
-import { useTableColumnLayout } from "~/app/_components/data-table/column-layout";
+import { EntityCover } from "~/entity/components/entity-cover";
+import { tryFormatAmount } from "~/features/inventory/format-amount";
+import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { useTableColumnLayout } from "~/ui/data-table/column-layout";
 import {
   createImageColumn,
   createNameColumn,
-} from "~/app/_components/data-table/columnHelpers";
-import RTable from "~/app/_components/data-table/Table";
+} from "~/ui/data-table/columnHelpers";
+import RTable from "~/ui/data-table/Table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
-} from "~/app/_components/data-table/table-features";
-import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
-import { EntityCover } from "~/components/entity/entity-cover";
-import { Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
+} from "~/ui/data-table/table-features";
+import { Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
 import {
   Popover,
   PopoverContent,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
-} from "~/components/ui/popover";
-import { Skeleton } from "~/components/ui/skeleton";
-import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+} from "~/ui/primitives/popover";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 import {
   CopyableShortcode,

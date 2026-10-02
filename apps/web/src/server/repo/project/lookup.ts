@@ -11,7 +11,7 @@ import { parseShortcode } from "@cubby/shared";
 import { and, asc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { projectListRows } from "~/entities/list-read-schema";
+import { projectListRows } from "~/entity/list-read-schema";
 import type { Database } from "~/server/db";
 import { entityAttachment, image, project } from "~/server/db/schema";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";

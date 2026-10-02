@@ -811,7 +811,7 @@ export default defineEntity({
           { value: "30d", label: "Due in 30 days" },
         ],
         expandRef: {
-          module: "~/entities/filter-behavior",
+          module: "~/entity/filter-behavior",
           export: "resolveTaskDueFilter",
         },
       },

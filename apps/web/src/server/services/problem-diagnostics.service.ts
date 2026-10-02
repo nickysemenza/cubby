@@ -12,7 +12,7 @@
 import { UpcEnrichmentFreshness, ProblemItem } from "@cubby/schemas/problems";
 import type { ProjectAttentionItem } from "@cubby/schemas/project";
 
-import type { DiagnosticKey } from "~/entities/problem-query";
+import type { DiagnosticKey } from "~/entity/problem-query";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { proposeSizeFromTitle } from "~/lib/title-unit-size";
 import type { Database } from "~/server/db";

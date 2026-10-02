@@ -6,7 +6,7 @@ import { z } from "zod";
 import type {
   ListSearch,
   ListSlotProps,
-} from "~/app/_components/entity-list/list-slot-types";
+} from "~/entity/entity-list/list-slot-types";
 
 import { RunHistory } from "./run-history";
 

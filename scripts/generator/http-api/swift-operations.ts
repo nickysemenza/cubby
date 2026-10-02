@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { entityListInputSchema } from "../../../apps/web/src/entities/generated/entity-lists.gen.ts";
+import { entityListInputSchema } from "../../../apps/web/src/entity/generated/entity-lists.gen.ts";
 import { generatedEntityFieldModels } from "../../../packages/schemas/src/generated/entity-field-model.gen.ts";
 import { entityInspectorMetadata } from "../../../packages/schemas/src/generated/entity-inspector.gen.ts";
 import { entityKeys } from "../../../packages/schemas/src/generated/entity-summary.gen.ts";

@@ -21,7 +21,7 @@ import {
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
-import { projectListRows } from "~/entities/list-read-schema";
+import { projectListRows } from "~/entity/list-read-schema";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { product, task } from "~/server/db/schema";

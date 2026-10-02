@@ -39,7 +39,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
-import { projectListRows } from "~/entities/list-read-schema";
+import { projectListRows } from "~/entity/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {

@@ -14,20 +14,20 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { StaticPicker } from "~/app/_components/combobox/static-picker";
-import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
-import { UnitMappingGraph } from "~/app/_components/units/unit-mapping-graph";
-import { UnitMappingsTable } from "~/app/_components/units/unitmappingstable";
-import { Row, Stack } from "~/components/layout";
-import { Checkbox } from "~/components/ui/checkbox";
-import { Description } from "~/components/ui/description";
-import { Input } from "~/components/ui/input";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import { ConversionCapabilities } from "~/features/units/ConversionCapabilities";
+import { UnitMappingGraph } from "~/features/units/unit-mapping-graph";
+import { UnitMappingsTable } from "~/features/units/unitmappingstable";
 import { BASE_KINDS, type BaseKind } from "~/lib/conversion-coverage";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
+import { StaticPicker } from "~/ui/combobox/static-picker";
+import { useEntityActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import { Description } from "~/ui/primitives/description";
+import { Input } from "~/ui/primitives/input";
 
 import type { EquivalenceDraft } from "./equivalence-workbench-link";
 import {

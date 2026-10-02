@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-import { Row } from "~/components/layout";
-import { Button } from "~/components/ui/button";
+import { Row } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 
 /**
  * Shared chip primitives behind the /projects dashboard's toggle-style

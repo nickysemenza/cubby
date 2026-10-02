@@ -1,4 +1,4 @@
-import { generatedBrowserRoutes } from "~/entities/generated/entity-routes.gen";
+import { generatedBrowserRoutes } from "~/entity/generated/entity-routes.gen";
 
 import { BROWSER_OPERATION_PATH } from "./browser-operation-path";
 

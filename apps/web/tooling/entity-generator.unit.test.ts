@@ -1619,9 +1619,9 @@ describe("typed entity compiler", () => {
         },
       },
       fields: {
-        create: { module: "~/entities/alpha", export: "alphaCreate" },
+        create: { module: "~/entity/alpha", export: "alphaCreate" },
         update: null,
-        output: { module: "~/entities/alpha", export: "alphaOut" },
+        output: { module: "~/entity/alpha", export: "alphaOut" },
       },
     };
     expect(
@@ -1648,7 +1648,7 @@ describe("typed entity compiler", () => {
           createOverride: "page",
           listOverride: null,
           detailOverride: {
-            query: { module: "~/entities/alpha", export: "alphaQuery" },
+            query: { module: "~/entity/alpha", export: "alphaQuery" },
           },
         },
       },
@@ -1679,7 +1679,7 @@ describe("typed entity compiler", () => {
       ]),
     ).toThrow("no create+update contract");
     const alphaDetail = {
-      query: { module: "~/entities/alpha", export: "alphaQuery" },
+      query: { module: "~/entity/alpha", export: "alphaQuery" },
     };
     expect(() =>
       compileEntityDeclarations([
@@ -1757,7 +1757,7 @@ describe("typed entity compiler", () => {
     const entities = await loadEntityDeclarations();
     expect(missingListSources(entities)).toEqual([]);
     const registry = (await import("node:fs/promises")).readFile(
-      new URL("../src/entities/list-columns/index.ts", import.meta.url),
+      new URL("../src/entity/list-columns/index.ts", import.meta.url),
       "utf8",
     );
     const withoutRuns = (await registry).replace(/^\s+run:.*$/mu, "");

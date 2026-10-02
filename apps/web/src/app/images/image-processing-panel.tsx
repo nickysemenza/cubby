@@ -5,23 +5,23 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { ShortcodeProse } from "~/components/shortcode-prose";
-import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
-import { Image } from "~/components/ui/image";
-import { Textarea } from "~/components/ui/textarea";
 import {
   image as imageOperations,
   activity,
   imageProcessing,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Button } from "~/ui/primitives/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "~/ui/primitives/dialog";
+import { Image } from "~/ui/primitives/image";
+import { Textarea } from "~/ui/primitives/textarea";
+import { ShortcodeProse } from "~/ui/shortcode-prose";
 
 function ImageAnalysisHistory({
   id,

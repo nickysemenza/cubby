@@ -1,10 +1,10 @@
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { Button } from "~/components/ui/button";
 import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Button } from "~/ui/primitives/button";
 
 const shiftDays = (date: string, days: number) => {
   const shifted = parsePlainDate(date);

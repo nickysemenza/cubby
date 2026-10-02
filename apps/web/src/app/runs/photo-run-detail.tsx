@@ -2,14 +2,14 @@ import type { PhotoRunReview } from "@cubby/schemas/photo-import-run";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, type ReactNode } from "react";
 
-import { Stack } from "~/components/layout";
-import { ShortcodeProse } from "~/components/shortcode-prose";
-import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Progress } from "~/components/ui/progress";
-import { StatusText } from "~/components/ui/status-text";
 import type { RunDetail } from "~/contracts/run.contract";
 import { photoImport } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
+import { Progress } from "~/ui/primitives/progress";
+import { StatusText } from "~/ui/primitives/status-text";
+import { ShortcodeProse } from "~/ui/shortcode-prose";
 
 import { runHasAgent } from "./agent-observation";
 import { PhotoGroupReview, usePhotoRunReview } from "./photo-group-review";

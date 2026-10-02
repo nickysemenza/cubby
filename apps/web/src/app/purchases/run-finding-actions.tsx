@@ -1,9 +1,9 @@
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
 import type { RunDetail } from "~/contracts/run.contract";
 import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCurrency } from "~/lib/utils";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 
 export function RunFindingActions({
   finding,

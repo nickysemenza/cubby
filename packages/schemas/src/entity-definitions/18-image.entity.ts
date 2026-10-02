@@ -40,7 +40,7 @@ export default defineEntity({
     listOverride: null,
     detailOverride: {
       query: {
-        module: "~/entities/image-queries",
+        module: "~/entity/image-queries",
         export: "imageDetailQuery",
       },
     },
@@ -731,7 +731,7 @@ export default defineEntity({
           { value: "1y", label: "Last 12 months" },
         ],
         expandRef: {
-          module: "~/entities/filter-behavior",
+          module: "~/entity/filter-behavior",
           export: "resolveImageCreatedDate",
         },
       },
@@ -746,7 +746,7 @@ export default defineEntity({
           { value: "1y", label: "Last 12 months" },
         ],
         expandRef: {
-          module: "~/entities/filter-behavior",
+          module: "~/entity/filter-behavior",
           export: "resolveUpdatedDate",
         },
       },

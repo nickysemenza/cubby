@@ -1,0 +1,66 @@
+import { type ImageOut, isDisplayableImageFile } from "@cubby/schemas/image";
+import { createContext, type ReactNode, useContext, useMemo } from "react";
+
+import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { useChunkedRecordQuery } from "~/ui/hooks/useChunkedRecordQuery";
+
+export type ProductImageMap = Record<string, ImageOut[]>;
+
+const ProductImageSummariesContext = createContext<ProductImageMap>({});
+const EMPTY_PRODUCT_IMAGE_MAP: ProductImageMap = {};
+type ProductSummaries = Awaited<
+  ReturnType<typeof productOperations.summaries.call>
+>;
+
+function useProductImageSummaries(productIds: readonly string[]) {
+  return useChunkedRecordQuery({
+    ids: productIds,
+    empty: EMPTY_PRODUCT_IMAGE_MAP,
+    queryOptions: (chunkIds) => ({
+      ...productOperations.summaries.queryOptions({
+        ids: chunkIds,
+        include: ["images"],
+      }),
+      enabled: chunkIds.length > 0,
+      select: (data: ProductSummaries) =>
+        data.images ?? EMPTY_PRODUCT_IMAGE_MAP,
+    }),
+  });
+}
+
+export function ProductImageSummariesProvider({
+  productIds,
+  summaries,
+  children,
+}: {
+  productIds: readonly string[];
+  summaries?: ProductImageMap;
+  children: ReactNode;
+}) {
+  const fetchedSummaries = useProductImageSummaries(
+    summaries ? [] : productIds,
+  );
+  // Drop PDF manuals (they share the images relation) so every consumer's
+  // `images[0]` cover stays a real image. Memoized — a fresh map each render
+  // would destabilize downstream hooks.
+  const value = useMemo(() => {
+    const raw = summaries ?? fetchedSummaries;
+    return Object.fromEntries(
+      Object.entries(raw).map(([id, imgs]) => [
+        id,
+        imgs.filter(isDisplayableImageFile),
+      ]),
+    );
+  }, [summaries, fetchedSummaries]);
+
+  return (
+    <ProductImageSummariesContext.Provider value={value}>
+      {children}
+    </ProductImageSummariesContext.Provider>
+  );
+}
+
+export function useHydratedProductImages(productId: string) {
+  const imageByProductId = useContext(ProductImageSummariesContext);
+  return imageByProductId[productId] ?? [];
+}

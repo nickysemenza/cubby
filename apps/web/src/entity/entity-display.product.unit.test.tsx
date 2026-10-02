@@ -1,0 +1,329 @@
+import type { ProductCategory } from "@cubby/shared";
+import type { CellData } from "@tanstack/react-table";
+import { render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { describe, expect, it } from "vitest";
+
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+  type CubbyColumnDef,
+} from "~/ui/data-table/table-features";
+
+import { categorySummaryFixture } from "../../tooling/product-category-fixtures";
+import { createEntityDisplayColumns } from "./entity-display";
+
+/**
+ * The product list ("apps/web/src/app/products/productlist.tsx") is the one
+ * page this file guards: every column it declares an override for, and every
+ * generic column the declaration alone produces, must keep exactly the shape
+ * asserted here. See `docs/entities.md`'s "declaration wins" rule and the
+ * `00-product.entity.ts` field roster.
+ */
+
+/** Row shape covering every product field the list surfaces, mirroring
+ * `ProductListItem` only where `createEntityDisplayColumns` reads it. */
+interface ProductRow {
+  category: ProductCategory | null;
+  manufacturer: string;
+  primaryGtin: string | null;
+  fdc_id: number | null;
+  model: string | null;
+  notes: string | null;
+  stockTracked: boolean | null;
+  dataQuality: { status: string; gaps: unknown[] };
+  externalIds: { source: string }[];
+  price: number | null;
+  expenseTotal: number;
+  servingAsLocations: number;
+  componentCount: number;
+  quantityLedger: {
+    expectedQuantity: number;
+    acquiredUnits: number;
+    exitedUnits: number;
+    unknownAcquisitionLines: number;
+    unknownExitLines: number;
+  };
+  quantityVariance: number | null;
+  purchaseDate: string | null;
+  tags: string[];
+  expenseCount: number;
+  usdaUnavailable: boolean | null;
+  onHandUnits: number | null;
+}
+
+const PRODUCT_ROW: ProductRow = {
+  category: categorySummaryFixture("tools"),
+  manufacturer: "Acme",
+  primaryGtin: "012345678905",
+  fdc_id: 173944,
+  model: "X-100",
+  notes: "Fixture notes",
+  stockTracked: true,
+  dataQuality: { status: "complete", gaps: [] },
+  externalIds: [{ source: "amazon" }],
+  price: 12.5,
+  expenseTotal: 42,
+  servingAsLocations: 1,
+  componentCount: 0,
+  quantityLedger: {
+    expectedQuantity: 3,
+    acquiredUnits: 3,
+    exitedUnits: 0,
+    unknownAcquisitionLines: 0,
+    unknownExitLines: 0,
+  },
+  quantityVariance: 0,
+  purchaseDate: "2026-09-01",
+  tags: ["kitchen"],
+  expenseCount: 2,
+  usdaUnavailable: null,
+  onHandUnits: 3,
+};
+
+/**
+ * Narrows a column's `cell` to a callable renderer taking only `{ row }` —
+ * every plain-scalar column `createEntityDisplayColumns` builds itself, and
+ * the same shape every override here uses. Copied from the shared
+ * `entity-display.unit.test.tsx` fixture rather than imported: it captures
+ * `TValue` per call site (see `materializeCubbyColumns`'s doc in
+ * table-features.ts), so it can't be hoisted to a shared helper module either.
+ */
+function isRowRenderer<TRecord extends object, TValue extends CellData>(
+  cell: CubbyColumnDef<TRecord, TValue>["cell"],
+): cell is (context: { row: { original: TRecord } }) => ReactNode {
+  return typeof cell === "function";
+}
+
+function renderRowCell<TRecord extends object, TValue extends CellData>(
+  cell: CubbyColumnDef<TRecord, TValue>["cell"],
+  record: TRecord,
+): ReactNode {
+  if (!isRowRenderer<TRecord, TValue>(cell)) {
+    throw new Error("Expected a row cell renderer.");
+  }
+  return cell({ row: { original: record } });
+}
+
+/**
+ * Builds the product list's columns the same way `productlist.tsx` does:
+ * overrides for every field it still renders specially, matched by column id.
+ * `ledgerExpectedQuantity`, `quantityVariance`, `tags` and `dataQuality` are
+ * rendered by their manifest-declared list renderers (the first two read
+ * `quantityLedger`, nested on the list row). `usdaUnavailable` and `onHandUnits` are
+ * left generic to exercise the declaration's own width/format/mobile/sorting
+ * metadata, same as the shared `declared width/format/mobile/sorting` block.
+ */
+function buildProductColumns() {
+  const helper = createCubbyColumnHelper<ProductRow>();
+  return createEntityDisplayColumns(
+    "product",
+    helper,
+    createCubbyColumnCollection<ProductRow>((add) => {
+      add(
+        helper.display({
+          id: "categoryId",
+          cell: ({ row }) => <span>{row.original.category?.name}</span>,
+        }),
+      );
+      add(
+        helper.display({
+          id: "manufacturer",
+          cell: ({ row }) => <span>{row.original.manufacturer}</span>,
+        }),
+      );
+      add(
+        helper.display({
+          id: "primaryGtin",
+          cell: ({ row }) => <span>{row.original.primaryGtin}</span>,
+        }),
+      );
+      add(
+        helper.display({
+          id: "fdc_id",
+          cell: ({ row }) => <span>{row.original.fdc_id}</span>,
+        }),
+      );
+      add(
+        helper.display({
+          id: "model",
+          cell: ({ row }) => <span>{row.original.model}</span>,
+        }),
+      );
+      add(
+        helper.display({
+          id: "notes",
+          cell: ({ row }) => <span>{row.original.notes}</span>,
+        }),
+      );
+      add(
+        helper.display({
+          id: "stockTracked",
+          cell: ({ row }) => <span>{String(row.original.stockTracked)}</span>,
+        }),
+      );
+      add(
+        helper.display({
+          id: "externalIds",
+          cell: ({ row }) => <span>{row.original.externalIds.length}</span>,
+        }),
+      );
+      add(
+        helper.display({
+          id: "price",
+          header: () => "Price",
+          cell: ({ row }) => <span>{row.original.price}</span>,
+        }),
+      );
+      add(
+        helper.display({
+          id: "expenseTotal",
+          cell: ({ row }) => <span>{row.original.expenseTotal}</span>,
+        }),
+      );
+      add(
+        helper.display({
+          id: "servingAsLocations",
+          cell: ({ row }) => <span>{row.original.servingAsLocations}</span>,
+        }),
+      );
+      add(
+        helper.display({
+          id: "componentCount",
+          cell: ({ row }) => <span>{row.original.componentCount}</span>,
+        }),
+      );
+      add(
+        helper.display({
+          id: "purchaseDate",
+          cell: ({ row }) => <span>{row.original.purchaseDate}</span>,
+        }),
+      );
+      add(
+        helper.display({
+          id: "expenseCount",
+          enableSorting: true,
+          cell: ({ row }) => <span>{row.original.expenseCount}</span>,
+        }),
+      );
+    }),
+  );
+}
+
+/** Renders one column's cell against a fixture row — filtered to a single
+ * column and invoked inside the same `.visit()` callback, so its `cell` is
+ * used exactly where its `TValue` is still concrete (see
+ * `materializeCubbyColumns`'s doc in table-features.ts). */
+function renderProductCell(columnId: string, row: ProductRow) {
+  const columns = buildProductColumns();
+  const matched = columns.filter((column) => column.id === columnId);
+  const rendered = matched.visit((column) => renderRowCell(column.cell, row));
+  const [first] = rendered;
+  if (rendered.length !== 1 || first === undefined) {
+    throw new Error(`Expected exactly one column with id ${columnId}.`);
+  }
+  return first;
+}
+
+function buildProductColumnMeta() {
+  return buildProductColumns().visit((column) => ({
+    id: String(
+      column.id ?? ("accessorKey" in column ? column.accessorKey : ""),
+    ),
+    className: column.meta?.className,
+    mobile: column.meta?.mobile,
+    enableSorting: column.enableSorting,
+  }));
+}
+
+describe("product list display columns", () => {
+  it("derives enableSorting from the generated sort roster per column id", () => {
+    const byId = Object.fromEntries(
+      buildProductColumnMeta().map((d) => [d.id, d.enableSorting]),
+    );
+    // In `generatedEntitySort.product.fields`.
+    expect(byId.categoryId).toBe(true);
+    expect(byId.manufacturer).toBe(true);
+    expect(byId.primaryGtin).toBe(true);
+    expect(byId.fdc_id).toBe(true);
+    expect(byId.model).toBe(true);
+    expect(byId.notes).toBe(true);
+    expect(byId.price).toBe(true);
+    expect(byId.expenseTotal).toBe(true);
+    expect(byId.ledgerExpectedQuantity).toBe(true);
+    expect(byId.quantityVariance).toBe(true);
+    expect(byId.purchaseDate).toBe(true);
+    // The override's own `enableSorting: true` survives even though
+    // "expenseCount" is also in the roster (belt-and-suspenders in the page).
+    expect(byId.expenseCount).toBe(true);
+    // Not in the roster.
+    expect(byId.stockTracked).toBe(false);
+    // The manifest renderer's column sorts by score; its id is the sort field.
+    expect(byId.dataQuality).toBe(true);
+    expect(byId.externalIds).toBe(false);
+    expect(byId.servingAsLocations).toBe(false);
+    expect(byId.componentCount).toBe(false);
+    expect(byId.tags).toBe(false);
+    expect(byId.usdaUnavailable).toBe(false);
+    expect(byId.onHandUnits).toBe(false);
+  });
+
+  it("carries the declared width/mobile metadata for a generic column", () => {
+    const byId = Object.fromEntries(
+      buildProductColumnMeta().map((d) => [d.id, d]),
+    );
+    // `usdaUnavailable` declares no width/mobile at all — hidden by default
+    // but still built (same shape as the task entity's
+    // `dueEndDate`/`sortOrder`); `onHandUnits` is the mobile card's trailing
+    // value.
+    expect(byId.usdaUnavailable?.className).toBeUndefined();
+    expect(byId.usdaUnavailable?.mobile).toBeUndefined();
+    expect(byId.onHandUnits?.className).toBeUndefined();
+    expect(byId.onHandUnits?.mobile).toMatchObject({ slot: "trailing" });
+  });
+
+  it("renders the category override's own cell against the row", () => {
+    render(<>{renderProductCell("categoryId", PRODUCT_ROW)}</>);
+    expect(screen.getByText("Tools")).toBeVisible();
+  });
+
+  it("renders ledgerExpectedQuantity through the declared expected-quantity renderer", () => {
+    render(<>{renderProductCell("ledgerExpectedQuantity", PRODUCT_ROW)}</>);
+    expect(screen.getByText("3")).toBeVisible();
+  });
+
+  it("rejects an override for a field the declaration no longer lists (the stored expectedQuantity field left the list)", () => {
+    const helper = createCubbyColumnHelper<
+      ProductRow & { rawExpectedQuantity: number | null }
+    >();
+    expect(() =>
+      createEntityDisplayColumns(
+        "product",
+        helper,
+        createCubbyColumnCollection((add) => {
+          for (const id of [
+            "categoryId",
+            "manufacturer",
+            "primaryGtin",
+            "fdc_id",
+            "model",
+            "notes",
+            "stockTracked",
+            "externalIds",
+            "price",
+            "expenseTotal",
+            "servingAsLocations",
+            "componentCount",
+            "purchaseDate",
+            "expenseCount",
+          ]) {
+            add(helper.display({ id, cell: () => null }));
+          }
+          // Not a declared column id at all (the raw stored field has no
+          // `display.list` any more) — must be rejected as undeclared.
+          add(helper.display({ id: "rawExpectedQuantity", cell: () => null }));
+        }),
+      ),
+    ).toThrow("Undeclared display renderer for product.rawExpectedQuantity");
+  });
+});

@@ -2,19 +2,19 @@ import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import {
-  useActionMutation,
-  useEntityActionMutation,
-} from "~/app/_components/hooks/useActionMutation";
-import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
-import { useQueuePass } from "~/app/_components/queue-pass/useQueuePass";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Empty, EmptyActions, EmptyDescription } from "~/components/ui/empty";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
+import { useQueuePass } from "~/features/queue-pass/useQueuePass";
 import { ingredient } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import {
+  useActionMutation,
+  useEntityActionMutation,
+} from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Empty, EmptyActions, EmptyDescription } from "~/ui/primitives/empty";
 
 import type { EnrichmentEditorHandle } from "./enrichment-editor";
 import { type MergeOption, ReviewCard } from "./review-card";

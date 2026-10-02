@@ -2,19 +2,19 @@ import type { AwaitingWork } from "@cubby/schemas/maintenance";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Row, Stack } from "~/components/layout";
+import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { pluralWord } from "~/lib/pluralize";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "~/components/ui/card";
-import { Description } from "~/components/ui/description";
-import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { pluralWord } from "~/lib/pluralize";
+} from "~/ui/primitives/card";
+import { Description } from "~/ui/primitives/description";
 
 import { ProblemActionButton } from "./problem-action-button";
 

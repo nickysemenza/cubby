@@ -11,15 +11,6 @@ import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { ChartTooltip } from "~/app/projects/charts/ChartTooltip";
 import { HorizontalBarChart } from "~/app/projects/charts/horizontal-bar-chart";
 import { capitalize, TRADE_LABELS } from "~/app/projects/project-formatting";
-import { CrossTabTable } from "~/components/matrix/cross-tab-table";
-import type { CrossTabColumn } from "~/components/matrix/group-columns";
-import { HEAT_CLASSES, heatBucket } from "~/components/matrix/heat-scale";
-import {
-  cellMono,
-  EMPTY_MARK,
-  emptyCell,
-  totalCell,
-} from "~/components/matrix/matrix-chrome";
 import {
   nivoBarChrome,
   nivoChartTheme,
@@ -27,6 +18,15 @@ import {
 } from "~/lib/nivo-theme";
 import { getCostTypeColor } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
+import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
+import type { CrossTabColumn } from "~/ui/matrix/group-columns";
+import { HEAT_CLASSES, heatBucket } from "~/ui/matrix/heat-scale";
+import {
+  cellMono,
+  EMPTY_MARK,
+  emptyCell,
+  totalCell,
+} from "~/ui/matrix/matrix-chrome";
 
 import { pivotTradeCostContributions } from "./trade-cost-pivot";
 

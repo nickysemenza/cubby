@@ -4,10 +4,10 @@ import { z } from "zod";
 
 import { InventorySessionWorkbench } from "~/app/inventory/session/InventorySessionWorkbench";
 import { RECOUNT_WORKLISTS } from "~/app/inventory/worklist/worklist-locations";
-import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { Page } from "~/components/page/Page";
-import { DetailPagePending } from "~/components/route-pending";
 import { pageTitle } from "~/lib/page-title";
+import { RouteErrorComponent } from "~/ui/lazy-route-error";
+import { Page } from "~/ui/page/Page";
+import { DetailPagePending } from "~/ui/route-pending";
 
 const searchSchema = z.object({
   parent: locationShortcode.optional().catch(undefined),

@@ -1,11 +1,11 @@
-import { Grid, Row } from "~/components/layout";
+import { entities } from "~/entity/entities";
+import { Grid, Row } from "~/ui/layout";
 import {
   Card,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "~/components/ui/card";
-import { entities } from "~/entities/entities";
+} from "~/ui/primitives/card";
 
 import { Prose } from "../_components/Prose";
 import { EntityRelationshipsDiagram } from "./entity-relationships-diagram";

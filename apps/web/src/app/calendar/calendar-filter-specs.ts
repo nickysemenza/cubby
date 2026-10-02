@@ -6,9 +6,9 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { createElement } from "react";
 
 import { tradeOptions } from "~/app/projects/trade-options";
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
-import { fieldEnumOptions } from "~/entities/enum-field-display";
-import { getEntityFilters, type FilterSpec } from "~/entities/filter-manifest";
+import { fieldEnumOptions } from "~/entity/enum-field-display";
+import { getEntityFilters, type FilterSpec } from "~/entity/filter-manifest";
+import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 
 import { KIND_ICONS } from "./calendar-icons";
 

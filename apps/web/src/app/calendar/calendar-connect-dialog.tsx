@@ -8,16 +8,16 @@ import { KeyIcon } from "@phosphor-icons/react/dist/csr/Key";
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { WorkflowDialog } from "~/components/dialogs/workflow-dialog";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Row, Stack } from "~/components/layout";
-import { Button, buttonVariants } from "~/components/ui/button";
-import { DialogTrigger } from "~/components/ui/dialog";
-import { StatusText } from "~/components/ui/status-text";
 import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyTextWithToast } from "~/lib/clipboard";
 import { cn } from "~/lib/utils";
+import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Button, buttonVariants } from "~/ui/primitives/button";
+import { DialogTrigger } from "~/ui/primitives/dialog";
+import { StatusText } from "~/ui/primitives/status-text";
 
 const FEEDS = [
   { file: "all.ics", label: "Everything" },

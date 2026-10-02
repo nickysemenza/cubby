@@ -16,22 +16,22 @@ import type { CellData, SortingState } from "@tanstack/react-table";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { useTableColumnLayout } from "~/app/_components/data-table/column-layout";
-import RTable from "~/app/_components/data-table/Table";
+import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { copyText } from "~/lib/clipboard";
+import { cn, formatCount, formatCurrency, formatPercent } from "~/lib/utils";
+import { useTableColumnLayout } from "~/ui/data-table/column-layout";
+import RTable from "~/ui/data-table/Table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   type CubbyColumnDef,
   useCubbyTable,
-} from "~/app/_components/data-table/table-features";
-import { Row, Stack } from "~/components/layout";
-import { CrossTabTable } from "~/components/matrix/cross-tab-table";
-import { Button } from "~/components/ui/button";
-import { NativeSelect } from "~/components/ui/native-select";
-import { Switch } from "~/components/ui/switch";
-import { expense } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { copyText } from "~/lib/clipboard";
-import { cn, formatCount, formatCurrency, formatPercent } from "~/lib/utils";
+} from "~/ui/data-table/table-features";
+import { Row, Stack } from "~/ui/layout";
+import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
+import { Button } from "~/ui/primitives/button";
+import { NativeSelect } from "~/ui/primitives/native-select";
+import { Switch } from "~/ui/primitives/switch";
 
 import {
   canSwapExpenseAnalyzeAxes,

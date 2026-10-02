@@ -24,7 +24,7 @@ import {
 } from "@cubby/schemas/pagination";
 import { and, asc, count, desc, eq, inArray, not, sql, sum } from "drizzle-orm";
 
-import { projectListRows } from "~/entities/list-read-schema";
+import { projectListRows } from "~/entity/list-read-schema";
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { inventoryEntry, location, product } from "~/server/db/schema";

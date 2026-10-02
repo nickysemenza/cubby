@@ -1,7 +1,7 @@
 import type { ProjectPortfolioAnalyticsOut } from "@cubby/schemas/project";
 
-import { Section, Stack } from "~/components/layout";
-import { Skeleton } from "~/components/ui/skeleton";
+import { Section, Stack } from "~/ui/layout";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 import { CostVsEstimate } from "./charts/cost-vs-estimate";
 import { OpenTasksByProject } from "./charts/open-tasks-by-project";

@@ -4,14 +4,14 @@ import { type ComponentProps, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { entityDetailFor } from "~/entities/entity-detail";
-import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
+import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import { entityDetailFor } from "~/entity/entity-detail";
+import type { EntityDetailByEntity } from "~/entity/generated/entity-details.gen";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
 
 import type { UnitCoverageItem } from "./unit-coverage-items";
 
@@ -21,7 +21,7 @@ const updateProduct = entityMutationOptionsFactory("product", "update");
 // CoverageChips moved to the units folder (lean deps — Badge/Row/BASE_KINDS only)
 // so list/detail bundles that show coverage don't pull in this file's mutation
 // hooks + transport. Re-exported here for existing problems-page callers.
-export { CoverageChips } from "~/app/_components/units/CoverageChips";
+export { CoverageChips } from "~/features/units/CoverageChips";
 // Re-export the pure core (defined in unit-coverage-items.ts so it stays
 // unit-testable) so the registry can import everything from one place.
 export {

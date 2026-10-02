@@ -4,7 +4,7 @@ import { buildEntity } from "tooling/factories/build";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { parseEntityTimelineInput } from "~/entities/generated/entity-timelines.gen";
+import { parseEntityTimelineInput } from "~/entity/generated/entity-timelines.gen";
 import { householdLocalDate } from "~/lib/household-date";
 import { task } from "~/server/db/schema";
 import {

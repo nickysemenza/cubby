@@ -1,9 +1,6 @@
 import type { ProductCategoryFeature } from "@cubby/schemas/product-category";
 
-import {
-  nestByParent,
-  type TreeRow,
-} from "~/app/_components/entity-list/manifest-tree";
+import { nestByParent, type TreeRow } from "~/entity/entity-list/manifest-tree";
 
 interface CategoryTreeInput {
   id: string;

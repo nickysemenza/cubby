@@ -1,15 +1,15 @@
 import type { NutritionBasis } from "@cubby/schemas/nutrition";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 
-import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
-import { CopyRecipeParseButton } from "~/app/_components/recipe/copy-corpus-button";
-import { RecipeAvailabilityPanel } from "~/app/_components/recipe/RecipeAvailabilityPanel";
+import { AddToMeal } from "~/app/meals/add-to-meal";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { CopyRecipeParseButton } from "~/features/recipes/copy-corpus-button";
+import { RecipeAvailabilityPanel } from "~/features/recipes/RecipeAvailabilityPanel";
 import RecipeDetail, {
   type RecipeViewMode,
-} from "~/app/_components/recipe/RecipeDetail";
-import type { RecipeFlowLayoutMode } from "~/app/_components/recipe/RecipeFlowView";
-import { AddToMeal } from "~/app/meals/add-to-meal";
-import { Row, Stack } from "~/components/layout";
+} from "~/features/recipes/RecipeDetail";
+import type { RecipeFlowLayoutMode } from "~/features/recipes/RecipeFlowView";
+import { Row, Stack } from "~/ui/layout";
 
 /**
  * The cooking workflow: view switcher, scaling, nutrition basis, costing

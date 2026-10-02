@@ -1,0 +1,269 @@
+import {
+  type BrowserRoutedEntity,
+  browserRoutedEntities,
+} from "@cubby/schemas/entity-manifest";
+import {
+  WAYFINDING_DOMAINS,
+  entitySummary,
+} from "@cubby/schemas/entity-summary";
+import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
+import { BookOpenTextIcon } from "@phosphor-icons/react/dist/csr/BookOpenText";
+import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { CameraIcon } from "@phosphor-icons/react/dist/csr/Camera";
+import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
+import { ClipboardTextIcon } from "@phosphor-icons/react/dist/csr/ClipboardText";
+import { CreditCardIcon } from "@phosphor-icons/react/dist/csr/CreditCard";
+import { CubeFocusIcon } from "@phosphor-icons/react/dist/csr/CubeFocus";
+import { CurrencyCircleDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyCircleDollar";
+import { LayoutIcon } from "@phosphor-icons/react/dist/csr/Layout";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { PlantIcon } from "@phosphor-icons/react/dist/csr/Plant";
+import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
+import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
+import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { WarehouseIcon } from "@phosphor-icons/react/dist/csr/Warehouse";
+import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
+import type { Icon } from "@phosphor-icons/react/lib";
+import type { LinkProps } from "@tanstack/react-router";
+
+import { entities } from "~/entity/entities";
+
+import {
+  DOMAIN_WAYFINDING,
+  domainForEntity,
+  type WayfindingDomain,
+} from "./domain-wayfinding";
+
+/** A route selected by a declarative application view. */
+export interface ApplicationDestination {
+  readonly to: LinkProps["to"];
+  readonly entity?: BrowserRoutedEntity;
+  readonly label: string;
+  readonly description: string;
+  readonly icon: Icon;
+}
+
+/** A household activity family. Domain order is the shell's reading order. */
+export interface ActivityViewDefinition {
+  readonly key: WayfindingDomain;
+  readonly label: string;
+  readonly icon: Icon;
+  readonly destinations: readonly ApplicationDestination[];
+}
+
+/** A direct roster/detail entry point backed by one entity declaration. */
+export interface RecordViewDefinition extends ApplicationDestination {
+  readonly entity: BrowserRoutedEntity;
+  readonly domain: WayfindingDomain;
+}
+
+const recordDestination = (
+  entity: BrowserRoutedEntity,
+  description: string,
+): ApplicationDestination => ({
+  to: entities[entity].routes.list,
+  entity,
+  label: entities[entity].pluralLabel,
+  description,
+  icon: entities[entity].phosphorIcon,
+});
+
+/**
+ * Task-shaped destinations. Specialist workbenches stay specialist: this
+ * declaration only places and describes them; their route owns its UI.
+ */
+export const activityViews = [
+  {
+    key: "cook",
+    label: DOMAIN_WAYFINDING.cook.label,
+    icon: ChefHatIcon,
+    destinations: [
+      recordDestination("recipe", "Browse recipes and open one to cook."),
+      recordDestination("cookbook", "Browse the recipe collections you keep."),
+      {
+        to: "/ingredients/workbench",
+        label: "Ingredient workbench",
+        description: "Resolve ingredient identity and measurement coverage.",
+        icon: ListChecksIcon,
+      },
+      {
+        to: "/ingredients/equivalences",
+        label: "Ingredient equivalences",
+        description: "Review conversion paths between ingredient units.",
+        icon: ArrowsLeftRightIcon,
+      },
+      {
+        to: "/recipes/compare",
+        label: "Compare recipes",
+        description: "Compare ingredients, portions, and costs side by side.",
+        icon: LayoutIcon,
+      },
+      {
+        to: "/recipes/import",
+        label: "Import recipes",
+        description: "Bring recipes into Cubby with a supervised review.",
+        icon: BookOpenTextIcon,
+      },
+    ],
+  },
+  {
+    key: "pantry",
+    label: DOMAIN_WAYFINDING.pantry.label,
+    icon: WarehouseIcon,
+    destinations: [
+      recordDestination("inventory", "Review what is currently on hand."),
+      recordDestination("location", "Browse the places where things live."),
+      {
+        to: "/scan",
+        label: "Scan a product",
+        description: "Find or receive a product from its barcode.",
+        icon: BarcodeIcon,
+      },
+      {
+        to: "/inventory/session",
+        label: "Recount inventory",
+        description: "Restore the household's approximate on-hand picture.",
+        icon: ClipboardTextIcon,
+      },
+      {
+        to: "/locations/photo-pass",
+        label: "Location photo pass",
+        description:
+          "Capture useful location photos while moving around the house.",
+        icon: CameraIcon,
+      },
+      {
+        to: "/locations/arrange",
+        label: "Arrange locations",
+        description: "Maintain the physical location hierarchy.",
+        icon: WarehouseIcon,
+      },
+      {
+        to: "/pantry-view",
+        label: "Pantry view",
+        description: "Explore stocked products in their physical context.",
+        icon: CubeFocusIcon,
+      },
+      {
+        to: "/labels",
+        label: "Print labels",
+        description: "Prepare durable labels for household locations.",
+        icon: QrCodeIcon,
+      },
+    ],
+  },
+  {
+    key: "plan",
+    label: DOMAIN_WAYFINDING.plan.label,
+    icon: CalendarBlankIcon,
+    destinations: [
+      recordDestination("meal", "Review meals planned for upcoming days."),
+      recordDestination("wish", "Keep track of items you may want to buy."),
+      {
+        to: "/calendar",
+        label: "Household calendar",
+        description: "Plan meals, tasks, and expected expenses by date.",
+        icon: CalendarBlankIcon,
+      },
+      {
+        to: "/meals/suggestions",
+        label: "What can I make?",
+        description: "Find recipes supported by approximate availability.",
+        icon: SparkleIcon,
+      },
+      {
+        to: "/meals/shopping-list",
+        label: "Build a shopping list",
+        description: "Turn selected meals into reviewed shopping needs.",
+        icon: ShoppingCartIcon,
+      },
+    ],
+  },
+  {
+    key: "house",
+    label: DOMAIN_WAYFINDING.house.label,
+    icon: WrenchIcon,
+    destinations: [
+      recordDestination(
+        "project",
+        "Open household work grouped into projects.",
+      ),
+      recordDestination("task", "Review concrete work and completion state."),
+      recordDestination(
+        "planting",
+        "Record plantings, photos, harvests, and plans for your growing areas.",
+      ),
+      {
+        to: "/garden-workbench",
+        label: "Garden workbench",
+        description: "Compare planting timing, household practice, and plans.",
+        icon: PlantIcon,
+      },
+      {
+        to: "/tools",
+        label: "Tool coverage",
+        description: "See which reusable tools support household work.",
+        icon: WrenchIcon,
+      },
+    ],
+  },
+  {
+    key: "finance",
+    label: DOMAIN_WAYFINDING.finance.label,
+    icon: CreditCardIcon,
+    destinations: [
+      recordDestination("expense", "Review the authoritative household spend."),
+      recordDestination("purchase", "Review orders and their expense lines."),
+      {
+        to: "/household-contribution",
+        label: "Contribution ledger",
+        description: "Review shared costs and household positions.",
+        icon: ArrowsLeftRightIcon,
+      },
+      {
+        to: "/statement-rows",
+        label: "Reconcile statements",
+        description: "Match imported statement evidence to recorded purchases.",
+        icon: CurrencyCircleDollarIcon,
+      },
+    ],
+  },
+] as const satisfies readonly ActivityViewDefinition[];
+
+/**
+ * Images have a Records destination but intentionally no route wayfinding
+ * (`presentation.domain: null`); the catalog files them under Pantry.
+ */
+const recordDomain = (entity: BrowserRoutedEntity): WayfindingDomain =>
+  domainForEntity(entity) ?? "pantry";
+
+const recordView = (entity: BrowserRoutedEntity): RecordViewDefinition => ({
+  entity,
+  domain: recordDomain(entity),
+  to: entities[entity].routes.list,
+  label: entities[entity].pluralLabel,
+  description: entitySummary[entity].description,
+  icon: entities[entity].phosphorIcon,
+});
+
+/**
+ * Every browser-routed entity appears exactly once in the Records catalog,
+ * grouped by wayfinding line in shell order and, within a line, in
+ * declaration order. Copy and grouping come from each declaration's
+ * `presentation`; nothing here is per-entity.
+ */
+export const recordViews: readonly RecordViewDefinition[] =
+  WAYFINDING_DOMAINS.flatMap((domain) =>
+    browserRoutedEntities
+      .filter((entity) => recordDomain(entity) === domain)
+      .map(recordView),
+  );
+
+export function recordViewFor(
+  entity: BrowserRoutedEntity,
+): RecordViewDefinition {
+  const definition = recordViews.find((view) => view.entity === entity);
+  if (!definition) throw new Error(`Record view ${entity} is missing`);
+  return definition;
+}

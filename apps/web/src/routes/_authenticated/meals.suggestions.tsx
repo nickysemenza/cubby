@@ -9,8 +9,8 @@ import {
   mealSuggestionsSearchSchema,
 } from "~/app/meals/meal-search";
 import { MealSuggestionsPage } from "~/app/meals/suggestions-page";
-import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
+import { Page } from "~/ui/page/Page";
 
 export const Route = createFileRoute("/_authenticated/meals/suggestions")({
   validateSearch: mealSuggestionsSearchSchema,

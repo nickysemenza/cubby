@@ -20,24 +20,24 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { match } from "ts-pattern";
 
-import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
-import { LocationBreadcrumb } from "~/app/_components/locations/location-breadcrumb";
-import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
-import { Image } from "~/components/ui/image";
-import { Input } from "~/components/ui/input";
+import { entities, entityDetailParams } from "~/entity/entities";
+import { tryFormatAmount } from "~/features/inventory/format-amount";
+import { LocationBreadcrumb } from "~/features/locations/location-breadcrumb";
+import { cn } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
+import { Image } from "~/ui/primitives/image";
+import { Input } from "~/ui/primitives/input";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "~/components/ui/sheet";
-import { Spinner } from "~/components/ui/spinner";
-import { entities, entityDetailParams } from "~/entities/entities";
-import { cn } from "~/lib/utils";
+} from "~/ui/primitives/sheet";
+import { Spinner } from "~/ui/primitives/spinner";
 
 import {
   locationTypeNoun,

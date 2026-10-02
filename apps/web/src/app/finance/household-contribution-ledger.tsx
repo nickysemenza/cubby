@@ -7,20 +7,24 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useId, useMemo, useState } from "react";
 
-import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
-import { DatePickerInput } from "~/app/_components/date-picker-input";
+import { fieldEnumOptions } from "~/entity/enum-field-display";
 import {
   ContributionGapTargets,
   contributionGapLabels,
   MoneyCell,
-} from "~/app/_components/household-contribution-format";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Row, Stack } from "~/components/layout";
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Skeleton } from "~/components/ui/skeleton";
-import { StatGrid, StatTile } from "~/components/ui/stat-tile";
+} from "~/features/finance/household-contribution-format";
+import { householdContribution } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { countLabel } from "~/lib/pluralize";
+import { formatCurrency } from "~/lib/utils";
+import { renderOptionCell } from "~/ui/data-table/columnHelpers";
+import { DatePickerInput } from "~/ui/date-picker-input";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Row, Stack } from "~/ui/layout";
+import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { Skeleton } from "~/ui/primitives/skeleton";
+import { StatGrid, StatTile } from "~/ui/primitives/stat-tile";
 import {
   Table,
   TableBody,
@@ -28,11 +32,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "~/components/ui/table";
-import { fieldEnumOptions } from "~/entities/enum-field-display";
-import { householdContribution } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { countLabel } from "~/lib/pluralize";
-import { formatCurrency } from "~/lib/utils";
+} from "~/ui/primitives/table";
 
 function CheckMark({ ok }: { ok: boolean }) {
   return ok ? (

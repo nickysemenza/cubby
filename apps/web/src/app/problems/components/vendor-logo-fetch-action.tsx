@@ -1,9 +1,9 @@
 import type { VendorOut } from "@cubby/schemas/vendor";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { Button } from "~/components/ui/button";
 import { vendor as vendorOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Button } from "~/ui/primitives/button";
 
 type VendorLogoTarget = Pick<VendorOut, "id" | "name" | "website">;
 type FetchLogoMutationOptions =

@@ -2,12 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
-import { Stack } from "~/components/layout";
-import { Page } from "~/components/page/Page";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { Skeleton } from "~/components/ui/skeleton";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
+import { Stack } from "~/ui/layout";
+import { Page } from "~/ui/page/Page";
+import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 export const Route = createFileRoute("/_authenticated/usda/ndb/$code")({
   head: ({ params }) => ({

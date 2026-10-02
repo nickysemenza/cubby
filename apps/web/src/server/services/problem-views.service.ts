@@ -19,24 +19,24 @@ import { z } from "zod";
 import {
   parseEntityListInput,
   type ListEntity,
-} from "~/entities/generated/entity-lists.gen";
-import { compileProblemFilters } from "~/entities/problem-filter-semantics";
+} from "~/entity/generated/entity-lists.gen";
+import { compileProblemFilters } from "~/entity/problem-filter-semantics";
 import type {
   DiagnosticKey,
   EntityProblemSource,
   FilterAssembly,
   ProblemFreshness,
   ProblemSource,
-} from "~/entities/problem-query";
+} from "~/entity/problem-query";
 import {
   problemQuery,
   problemQueryDeclarations,
-} from "~/entities/problem-registry";
-import { validateCompleteProblemRegistry } from "~/entities/problem-registry-validation";
+} from "~/entity/problem-registry";
+import { validateCompleteProblemRegistry } from "~/entity/problem-registry-validation";
 import {
   type ViewProblemDeclaration,
   viewProblemDeclarations,
-} from "~/entities/view-manifest";
+} from "~/entity/view-manifest";
 import { countLabel } from "~/lib/pluralize";
 import type { Database } from "~/server/db";
 import { expenseList } from "~/server/repo/expense/lookup";

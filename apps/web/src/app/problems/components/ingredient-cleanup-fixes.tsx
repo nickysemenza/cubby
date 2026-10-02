@@ -1,8 +1,10 @@
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { type ReactNode, useState } from "react";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { Stack } from "~/components/layout";
+import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { countLabel } from "~/lib/pluralize";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Stack } from "~/ui/layout";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,10 +14,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
-import { Button } from "~/components/ui/button";
-import { problems } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { countLabel } from "~/lib/pluralize";
+} from "~/ui/primitives/alert-dialog";
+import { Button } from "~/ui/primitives/button";
 
 /**
  * Per-card and bulk cleanup actions for the three ingredient problem sections.

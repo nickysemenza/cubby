@@ -1,0 +1,58 @@
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { fieldEnumOptions } from "~/entity/enum-field-display";
+import { renderOptionCell } from "~/ui/data-table/columnHelpers";
+import { NoneValue } from "~/ui/primitives/none-value";
+
+import type { EntityDetailFieldRenderers } from "./index";
+
+export const financialAccountDetailFields = {
+  "financial-account-identity": (account) => ({
+    value: renderOptionCell(
+      account.identity.kind,
+      fieldEnumOptions("financialAccount", "identity"),
+    ),
+    filterAction: (
+      <EntityRefLink
+        variant="filter"
+        to="/financial-accounts"
+        search={{ identity: account.identity.kind }}
+        label={`Show all ${account.identity.kind.replaceAll("_", " ")} accounts`}
+      />
+    ),
+  }),
+  "financial-account-source-aliases": (account) => ({
+    value:
+      account.sourceAliases.length > 0 ? (
+        <span className="font-mono text-xs">
+          {account.sourceAliases
+            .map((alias) => `${alias.source}: ${alias.alias}`)
+            .join(", ")}
+        </span>
+      ) : (
+        <NoneValue />
+      ),
+  }),
+  "financial-account-card-numbers": (account) => ({
+    value:
+      account.cardNumbers.length > 0 ? (
+        <ul className="space-y-0.5 font-mono text-xs">
+          {account.cardNumbers.map((card) => (
+            <li key={card.last4}>
+              {[
+                `•••• ${card.last4}`,
+                card.kind.replaceAll("_", " "),
+                card.validFrom || card.validTo
+                  ? `${card.validFrom ?? "…"} → ${card.validTo ?? "…"}`
+                  : null,
+                card.note,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <NoneValue />
+      ),
+  }),
+} satisfies EntityDetailFieldRenderers<"financialAccount">;

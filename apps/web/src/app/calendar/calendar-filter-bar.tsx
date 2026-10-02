@@ -1,6 +1,6 @@
-import { ManifestFilterBar } from "~/app/_components/data-table/ManifestFilterBar";
-import { useDeferredFilterOptions } from "~/app/_components/hooks/useDeferredFilterOptions";
-import { useFilterOptions } from "~/app/_components/hooks/useFilterOptions";
+import { ManifestFilterBar } from "~/ui/data-table/ManifestFilterBar";
+import { useDeferredFilterOptions } from "~/ui/hooks/useDeferredFilterOptions";
+import { useFilterOptions } from "~/ui/hooks/useFilterOptions";
 
 import {
   calendarFilterSpecs,

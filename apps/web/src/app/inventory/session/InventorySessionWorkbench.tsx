@@ -16,26 +16,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 
-import {
-  useActionMutation,
-  useEntityActionMutation,
-} from "~/app/_components/hooks/useActionMutation";
-import { LocationMoveDialog } from "~/app/_components/locations/location-move-dialog";
-import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
-import { QueuePassResumePrompt } from "~/app/_components/queue-pass/QueuePassProgress";
-import { showErrorToast } from "~/components/feedback/error-details";
-import { Row, Stack } from "~/components/layout";
-import { Button, buttonVariants } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Description } from "~/components/ui/description";
-import {
-  Empty,
-  EmptyActions,
-  EmptyDescription,
-  EmptyTitle,
-} from "~/components/ui/empty";
-import { Spinner } from "~/components/ui/spinner";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import { LocationMoveDialog } from "~/features/locations/location-move-dialog";
+import { LocationScanButton } from "~/features/locations/location-scan-button";
+import { QueuePassResumePrompt } from "~/features/queue-pass/QueuePassProgress";
 import {
   inventory,
   location,
@@ -43,6 +27,22 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatRelative } from "~/lib/date-format";
 import { getErrorMessage } from "~/lib/error-utils";
+import { showErrorToast } from "~/ui/feedback/error-details";
+import {
+  useActionMutation,
+  useEntityActionMutation,
+} from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Button, buttonVariants } from "~/ui/primitives/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/ui/primitives/card";
+import { Description } from "~/ui/primitives/description";
+import {
+  Empty,
+  EmptyActions,
+  EmptyDescription,
+  EmptyTitle,
+} from "~/ui/primitives/empty";
+import { Spinner } from "~/ui/primitives/spinner";
 
 import type { RecountWorklist } from "../worklist/worklist-locations";
 import { LocationReviewPane } from "./_components/LocationReviewPane";

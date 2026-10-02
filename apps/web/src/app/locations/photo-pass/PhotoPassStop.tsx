@@ -13,14 +13,14 @@ import { CameraIcon } from "@phosphor-icons/react/dist/csr/Camera";
 import { SkipForwardIcon } from "@phosphor-icons/react/dist/csr/SkipForward";
 import { useRef } from "react";
 
-import { LocationIcon } from "~/app/_components/locations/location-icons";
-import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Card, CardContent } from "~/components/ui/card";
-import { Description } from "~/components/ui/description";
-import { Image } from "~/components/ui/image";
-import { Spinner } from "~/components/ui/spinner";
+import { LocationIcon } from "~/features/locations/location-icons";
+import { Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { Card, CardContent } from "~/ui/primitives/card";
+import { Description } from "~/ui/primitives/description";
+import { Image } from "~/ui/primitives/image";
+import { Spinner } from "~/ui/primitives/spinner";
 
 import type { PhotoStop } from "./photo-pass-utils";
 

@@ -130,13 +130,13 @@ export const renderFilterArtifacts = (
   return [
     {
       relativePath:
-        "apps/web/src/entities/generated/entity-filter-bindings.gen.ts",
+        "apps/web/src/entity/generated/entity-filter-bindings.gen.ts",
       source:
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n' +
         'import { parseShortcodeFor } from "@cubby/schemas/identifiers";\n' +
         (usesPresets
-          ? 'import { presetExpand } from "~/entities/filter-presets";\n'
+          ? 'import { presetExpand } from "~/entity/filter-presets";\n'
           : "") +
         `${runtimeImports}\n` +
         'import type { FilterSpec } from "../filter-manifest";\n\n' +

@@ -180,7 +180,7 @@ const renderHttpContract = async (
 /**
  * Stage 2 of `pnpm generate`: the Start operation registry, the lazy handler
  * loaders, the browser client catalog, and the ts-rest HTTP contract. Runs after stage 1's files are on
- * disk (the contracts runtime-import `~/entities/generated/*.gen.ts`) and
+ * disk (the contracts runtime-import `~/entity/generated/*.gen.ts`) and
  * takes stage 1's `HTTP_RESOURCES` in memory rather than re-parsing its
  * artifact.
  */

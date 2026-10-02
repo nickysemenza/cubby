@@ -8,7 +8,7 @@ import {
 import {
   tryFormatAmount,
   tryFormatAmountShopper,
-} from "~/app/_components/inventory/format-amount";
+} from "~/features/inventory/format-amount";
 import { formatCalendarDay } from "~/lib/date-format";
 
 import { formatCostEstimate } from "./meal-nutrition";

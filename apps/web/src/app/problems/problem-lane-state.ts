@@ -1,7 +1,7 @@
 import type { ProblemKey } from "@cubby/schemas/problems";
 
-import type { ProblemExecutionLane } from "~/entities/problem-query";
-import { problemQuery } from "~/entities/problem-registry";
+import type { ProblemExecutionLane } from "~/entity/problem-query";
+import { problemQuery } from "~/entity/problem-registry";
 
 export type ProblemLaneState = {
   loaded: boolean;

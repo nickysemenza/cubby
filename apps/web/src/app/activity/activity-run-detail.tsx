@@ -3,20 +3,20 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import { z } from "zod";
 
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
+import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { copyText } from "~/lib/clipboard";
+import { formatInstant } from "~/lib/date-format";
+import { formatCurrency } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "~/components/ui/card";
-import { StatusText } from "~/components/ui/status-text";
-import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { copyText } from "~/lib/clipboard";
-import { formatInstant } from "~/lib/date-format";
-import { formatCurrency } from "~/lib/utils";
+} from "~/ui/primitives/card";
+import { StatusText } from "~/ui/primitives/status-text";
 
 // oxlint-disable-next-line complexity -- one selected record owns paired attempt and event pagination with their diagnostics.
 export function ActivityRunDetail({

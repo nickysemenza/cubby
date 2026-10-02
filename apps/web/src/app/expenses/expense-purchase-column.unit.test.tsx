@@ -4,13 +4,13 @@ import { render, screen } from "@testing-library/react";
 import { useMemo } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import RTable from "~/app/_components/data-table/Table";
+import { expenseVendorColumn } from "~/app/projects/shared";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import RTable from "~/ui/data-table/Table";
 import {
   createCubbyColumnHelper,
   useCubbyTable,
-} from "~/app/_components/data-table/table-features";
-import { expenseVendorColumn } from "~/app/projects/shared";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+} from "~/ui/data-table/table-features";
 
 const LINKED: ExpenseOut = {
   id: testShortcode("expense", "EXP-4K7M"),

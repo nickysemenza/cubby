@@ -4,10 +4,10 @@ import { FolderSimplePlusIcon } from "@phosphor-icons/react/dist/csr/FolderSimpl
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useState } from "react";
 
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
 import { cn } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
 
 import { ItemReviewCard, LocationReviewCard } from "./review-rows";
 import type { InventoryItem } from "./types";

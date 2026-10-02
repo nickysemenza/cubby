@@ -4,21 +4,21 @@ import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import type {
-  ListSlotComponent,
-  ListSlotProps,
-} from "~/app/_components/entity-list/list-slot-types";
-import { useAllEntityRecords } from "~/app/_components/hooks/useAllEntityRecords";
-import { ScheduleGrid } from "~/app/_components/schedule/schedule-grid";
 import {
   plantingScheduleRows,
   yearWindow,
 } from "~/app/garden-workbench/garden-schedule";
 import { usePlantingScheduleLabel } from "~/app/garden-workbench/planting-schedule-label";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Row, Stack } from "~/components/layout";
-import { usePageCount } from "~/components/page/Page";
-import { Button } from "~/components/ui/button";
+import type {
+  ListSlotComponent,
+  ListSlotProps,
+} from "~/entity/entity-list/list-slot-types";
+import { ScheduleGrid } from "~/features/schedule/schedule-grid";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { useAllEntityRecords } from "~/ui/hooks/useAllEntityRecords";
+import { Row, Stack } from "~/ui/layout";
+import { usePageCount } from "~/ui/page/Page";
+import { Button } from "~/ui/primitives/button";
 
 function searchYear(value: ListSlotProps["search"]["year"]): number {
   const parsed = Number(value);

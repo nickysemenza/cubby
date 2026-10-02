@@ -10,8 +10,11 @@ import { getRouteApi } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
+import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { getErrorMessage } from "~/lib/error-utils";
+import { useHydratedLoading } from "~/ui/hooks/useHydrated";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 import {
   Empty,
   EmptyActions,
@@ -19,11 +22,8 @@ import {
   EmptyHeader,
   EmptyIcon,
   EmptyTitle,
-} from "~/components/ui/empty";
-import { Skeleton } from "~/components/ui/skeleton";
-import { useHydratedLoading } from "~/hooks/useHydrated";
-import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
+} from "~/ui/primitives/empty";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
 

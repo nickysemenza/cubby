@@ -2,12 +2,9 @@ import { infLocation } from "@cubby/schemas/location";
 import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { z } from "zod";
 
-import { LocationTree } from "~/app/_components/inventory/location-tree-view";
-import {
-  formatRichText,
-  parseRichTextSafe,
-} from "~/app/_components/recipe/richtext";
-import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
+import { LocationTree } from "~/features/inventory/location-tree-view";
+import { formatRichText, parseRichTextSafe } from "~/features/recipes/richtext";
+import { ConversionCapabilities } from "~/features/units/ConversionCapabilities";
 
 import { EditableComponentDemo } from "../_components/EditableComponentDemo";
 import { Prose } from "../_components/Prose";

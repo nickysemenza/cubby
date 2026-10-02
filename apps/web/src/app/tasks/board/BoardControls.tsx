@@ -1,13 +1,13 @@
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 
-import { Row } from "~/components/layout";
-import { Input } from "~/components/ui/input";
+import { cn } from "~/lib/utils";
+import { Row } from "~/ui/layout";
+import { Input } from "~/ui/primitives/input";
 import {
   ViewSwitcher,
   type ViewSwitcherOption,
-} from "~/components/ui/view-switcher";
-import { cn } from "~/lib/utils";
+} from "~/ui/primitives/view-switcher";
 
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
 

@@ -2,9 +2,9 @@ import type { ExpenseCumulativePoint } from "@cubby/schemas/project";
 import { TrendUpIcon } from "@phosphor-icons/react/dist/csr/TrendUp";
 import { useMemo } from "react";
 
-import { SpendTrend } from "~/app/_components/charts/kit";
 import { ChartEmpty } from "~/app/projects/charts/chart-empty";
 import { monthLabel } from "~/app/projects/project-formatting";
+import { SpendTrend } from "~/ui/charts/kit";
 
 /**
  * Monthly cumulative net spend — the analytics-view lens over

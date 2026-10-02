@@ -42,9 +42,9 @@ import {
   fromNamedEstimates,
   fromWMeasureEstimate,
 } from "~/lib/nutrition-estimates";
+import type { Result } from "~/lib/result-types";
 import { productWasmInputs } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
-import type { Result } from "~/misc/result-types";
 
 // The costing engine (two-pass totals, consumption model, sub-recipe yield
 // scaling, baker %, diagnostics) lives in Rust — recipebridge's costing module

@@ -5,10 +5,10 @@ import type {
 import { reconcilePurchase } from "@cubby/schemas/purchase";
 import type { FC } from "react";
 
-import { Description } from "~/components/ui/description";
-import { EnumPill } from "~/components/ui/enum-pill";
-import { fieldEnumOptions } from "~/entities/enum-field-display";
+import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { formatCurrency } from "~/lib/utils";
+import { Description } from "~/ui/primitives/description";
+import { EnumPill } from "~/ui/primitives/enum-pill";
 
 /**
  * `statedTotal` vs `SUM(expense.cost)`, as a **soft** cue.

@@ -9,32 +9,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { PurchaseImportAgentConnection } from "~/app/activity/purchase-import-agent-connection";
 import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
 import { AwaitingWorkCard } from "~/app/problems/components/awaiting-work-card";
 import { MaintenanceCard } from "~/app/problems/components/maintenance-card";
-import { showErrorToast } from "~/components/feedback/error-details";
-import { Row, Stack } from "~/components/layout";
-import { Page } from "~/components/page/Page";
-import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "~/components/ui/collapsible";
-import { Description } from "~/components/ui/description";
-import { Eyebrow } from "~/components/ui/eyebrow";
-import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
-import { StatusText } from "~/components/ui/status-text";
 import {
   calendar,
   ledgerParty,
@@ -52,6 +30,28 @@ import {
   timingResponseSchema,
   type TimingResponse,
 } from "~/routes/api/debug/timing";
+import { showErrorToast } from "~/ui/feedback/error-details";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { Row, Stack } from "~/ui/layout";
+import { Page } from "~/ui/page/Page";
+import { Button } from "~/ui/primitives/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/ui/primitives/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "~/ui/primitives/collapsible";
+import { Description } from "~/ui/primitives/description";
+import { Eyebrow } from "~/ui/primitives/eyebrow";
+import { Input } from "~/ui/primitives/input";
+import { NativeSelect } from "~/ui/primitives/native-select";
+import { StatusText } from "~/ui/primitives/status-text";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   validateSearch: z.object({

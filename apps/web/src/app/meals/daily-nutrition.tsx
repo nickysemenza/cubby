@@ -15,17 +15,17 @@ import { Link } from "@tanstack/react-router";
 import { addDays, format, parseISO } from "date-fns";
 import { useState } from "react";
 
-import { StaticPicker } from "~/app/_components/combobox/static-picker";
-import { DatePickerInput } from "~/app/_components/date-picker-input";
-import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { useHouseholdToday } from "~/hooks/use-household-today";
+import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
+import { StaticPicker } from "~/ui/combobox/static-picker";
+import { DatePickerInput } from "~/ui/date-picker-input";
+import { useHouseholdToday } from "~/ui/hooks/use-household-today";
+import { Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
+import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import { AddFoodDialog } from "./add-food-dialog";
 import { NutritionSummary } from "./meal-nutrition-summary";

@@ -3,8 +3,8 @@ import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import { RankedBarBreakdown } from "~/app/_components/charts/kit";
-import { entityDetailLink } from "~/entities/entities";
+import { entityDetailLink } from "~/entity/entities";
+import { RankedBarBreakdown } from "~/ui/charts/kit";
 
 import {
   ProjectChartLabel,

@@ -6,38 +6,38 @@ import { usdaListInput } from "@cubby/schemas/usda";
 import { type DataType, dataTypeEnum, dataTypeLabel } from "@cubby/usda";
 import { useCallback, useEffect, useMemo } from "react";
 
-import { DataTableToolbar } from "~/app/_components/data-table/data-table-toolbar";
-import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
-import {
-  createCubbyColumnCollection,
-  createCubbyColumnHelper,
-} from "~/app/_components/data-table/table-features";
-import { EntityShelf } from "~/app/_components/entity-list/entity-shelf";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { EntityShelf } from "~/entity/entity-list/entity-shelf";
 import {
   resolveListView,
   useEntityListCardDensity,
   useListSearch,
-} from "~/app/_components/entity-list/generic-entity-list";
-import { useEntityList } from "~/app/_components/hooks/useEntityList";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { Stack } from "~/components/layout";
-import { Description } from "~/components/ui/description";
-import { NoneValue } from "~/components/ui/none-value";
-import { getEntityFilters } from "~/entities/filter-manifest";
+} from "~/entity/entity-list/generic-entity-list";
+import { getEntityFilters } from "~/entity/filter-manifest";
 import {
   buildFiltersFromManifest,
   filterGetterFromColumnFilters,
-} from "~/entities/filters";
+} from "~/entity/filters";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
+import { DataTableToolbar } from "~/ui/data-table/data-table-toolbar";
+import { ListWorkbench } from "~/ui/data-table/ListWorkbench";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/ui/data-table/table-features";
+import { useEntityList } from "~/ui/hooks/useEntityList";
+import { Stack } from "~/ui/layout";
+import { Description } from "~/ui/primitives/description";
+import { NoneValue } from "~/ui/primitives/none-value";
 
-import { createEntityInlineLinkColumn } from "../_components/data-table/columnHelpers";
-import type { TableStateReturn } from "../_components/data-table/useTableState";
-import type { ListQueryOptionsFn } from "../_components/hooks/usePaginatedTableCore";
-import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
-import { CoreNutrientCoverage } from "../_components/usda/core-nutrient-coverage";
+import { UnitMappingDisplay } from "../../features/units/UnitMappingDisplay";
+import { CoreNutrientCoverage } from "../../features/usda/core-nutrient-coverage";
+import { createEntityInlineLinkColumn } from "../../ui/data-table/columnHelpers";
+import type { TableStateReturn } from "../../ui/data-table/useTableState";
+import type { ListQueryOptionsFn } from "../../ui/hooks/usePaginatedTableCore";
 
 type USDAListRow = FoodSummaryWithLinkedProducts & {
   id: string;

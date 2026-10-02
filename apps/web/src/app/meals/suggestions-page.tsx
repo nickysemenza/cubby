@@ -2,14 +2,14 @@ import type { RecipeAvailability } from "@cubby/schemas/availability";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { Grid, Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
-import { StatusText } from "~/components/ui/status-text";
-import { entityDetailLink } from "~/entities/entities";
+import { entityDetailLink } from "~/entity/entities";
 import { suggestions } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
+import { Grid, Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
+import { StatusText } from "~/ui/primitives/status-text";
 
 import { AddToMeal } from "./add-to-meal";
 import {

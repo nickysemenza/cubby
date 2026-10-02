@@ -10,10 +10,6 @@ import {
 import { useEffect, useState } from "react";
 
 import { runHref } from "~/app/purchases/purchase-import-links";
-import { WorkflowDialog } from "~/components/dialogs/workflow-dialog";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { StatusText } from "~/components/ui/status-text";
 import type {
   TargetedImportLaunch,
   TargetedImportPurpose,
@@ -22,6 +18,10 @@ import type {
   TargetedProductCandidate,
 } from "~/contracts/run.contract";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
+import { StatusText } from "~/ui/primitives/status-text";
 
 const startTargetedImport = (input: TargetedImportStartInput) =>
   runOperations.startTargeted.call(input);

@@ -4,17 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 import { openRecipeRecomputeAllStream } from "~/app/recipes/recipe-streams";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
-import { Description } from "~/components/ui/description";
-import { Eyebrow } from "~/components/ui/eyebrow";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   recipe,
@@ -26,6 +15,17 @@ import {
   openProblemsReparseStream,
 } from "~/lib/problems-streams";
 import { openSearchIndexRepairStream } from "~/lib/search-streams";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/ui/primitives/card";
+import { Description } from "~/ui/primitives/description";
+import { Eyebrow } from "~/ui/primitives/eyebrow";
 
 import { BACKFILL } from "./backfill-registry";
 import { ImageMetadataMaintenance } from "./image-metadata-maintenance";

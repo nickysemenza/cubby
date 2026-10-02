@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { defineContract, mutation } from "~/contracts/define";
-import { entityMutationOutputEntities } from "~/entities/generated/entity-mutation-results.gen";
+import { entityMutationOutputEntities } from "~/entity/generated/entity-mutation-results.gen";
 import type {
   EntityBrowserMutationInput,
   EntityBrowserMutationResult,

@@ -8,7 +8,7 @@ import type {
   ScheduleRow,
   ScheduleSegment,
   ScheduleWindow,
-} from "~/app/_components/schedule/schedule-grid";
+} from "~/features/schedule/schedule-grid";
 
 export const yearWindow = (year: number): ScheduleWindow => ({
   startDate: `${year}-01-01`,

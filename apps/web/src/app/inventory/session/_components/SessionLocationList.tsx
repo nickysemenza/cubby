@@ -3,21 +3,21 @@ import type { InfLocation } from "@cubby/schemas/location";
 import pluralize from "pluralize";
 import { useState } from "react";
 
-import { LocationTreeRow } from "~/app/_components/locations/location-tree-row";
-import { passCounts } from "~/app/_components/queue-pass/queue-pass";
-import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Card, CardTitle } from "~/components/ui/card";
-import { Description } from "~/components/ui/description";
+import { LocationTreeRow } from "~/features/locations/location-tree-row";
+import { passCounts } from "~/features/queue-pass/queue-pass";
+import { cn } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { Card, CardTitle } from "~/ui/primitives/card";
+import { Description } from "~/ui/primitives/description";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from "~/components/ui/sheet";
-import { cn } from "~/lib/utils";
+} from "~/ui/primitives/sheet";
 
 import { locationTypeNoun, type SessionLocation } from "../session-utils";
 import { QrJumpButton } from "./QrJumpButton";

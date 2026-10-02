@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
-import { DrilldownMetricStrip } from "~/components/ui/drilldown-metric-strip";
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { DrilldownMetricStrip } from "~/ui/primitives/drilldown-metric-strip";
 
 const route = getRouteApi("/_authenticated/tasks/");
 

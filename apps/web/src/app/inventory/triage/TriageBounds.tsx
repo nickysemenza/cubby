@@ -4,9 +4,9 @@ import {
 } from "@cubby/schemas/identifiers";
 import { useState } from "react";
 
-import { useProductCategories } from "~/app/_components/hooks/useProductCategories";
-import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { useProductCategories } from "~/ui/hooks/useProductCategories";
+import { Input } from "~/ui/primitives/input";
+import { NativeSelect } from "~/ui/primitives/native-select";
 
 export interface TriageBoundsValue {
   minSpend: number | undefined;

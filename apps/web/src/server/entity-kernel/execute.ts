@@ -4,7 +4,7 @@ import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effect
 import { searchableEntitySchema } from "@cubby/schemas/search";
 import { z } from "zod";
 
-import { generatedEntityRelationListResultSchema } from "~/entities/generated/entity-relation-lists.gen";
+import { generatedEntityRelationListResultSchema } from "~/entity/generated/entity-relation-lists.gen";
 import { createAppError } from "~/server/errors/app-error";
 import {
   ENTITY_KERNEL_BINDINGS,

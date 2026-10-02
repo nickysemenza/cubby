@@ -13,23 +13,23 @@ import {
 import { keyBy } from "es-toolkit";
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 
-import { useDeleteEntityAction } from "~/app/_components/actions/delete-entity-action";
+import { useDeleteEntityAction } from "~/entity/actions/delete-entity-action";
+import { taskCaptureRequest } from "~/entity/editing/editor-requests";
+import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
+import { getErrorMessage } from "~/lib/error-utils";
+import { cn } from "~/lib/utils";
 import {
   createDndAnnouncements,
   cubbyDndScreenReaderInstructions,
-} from "~/components/dnd/accessibility";
-import { createDndAutoScroller } from "~/components/dnd/auto-scroll";
-import { DragPreviewFrame } from "~/components/dnd/DragPreviewFrame";
+} from "~/ui/dnd/accessibility";
+import { createDndAutoScroller } from "~/ui/dnd/auto-scroll";
+import { DragPreviewFrame } from "~/ui/dnd/DragPreviewFrame";
 import {
   createValidTargetKeyboardCoordinates,
   useCubbyDndSensors,
-} from "~/components/dnd/sensors";
-import { Row } from "~/components/layout";
-import { taskCaptureRequest } from "~/entities/editing/editor-requests";
-import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
-import { useIsMobile } from "~/hooks/useMobile";
-import { getErrorMessage } from "~/lib/error-utils";
-import { cn } from "~/lib/utils";
+} from "~/ui/dnd/sensors";
+import { useIsMobile } from "~/ui/hooks/useMobile";
+import { Row } from "~/ui/layout";
 
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
 import {

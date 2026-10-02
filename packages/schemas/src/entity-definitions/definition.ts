@@ -2085,14 +2085,14 @@ const buildMetadataSchemas = () => {
             .strict()
             .optional()
             .default({
-              label: { module: "~/entities/entities", export: "entityLabel" },
+              label: { module: "~/entity/entities", export: "entityLabel" },
               resolver: {
                 module: "~/server/repo/shortcode-resolver",
                 export: "resolveLiveShortcode",
               },
             }),
           filters: sourceRefMetadataSchema.nullable().optional().default({
-            module: "~/entities/filter-manifest",
+            module: "~/entity/filter-manifest",
             export: "getEntityFilters",
           }),
           search: z

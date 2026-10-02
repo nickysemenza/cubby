@@ -1,6 +1,6 @@
-import { Skeleton } from "~/components/ui/skeleton";
-import { StatGrid, StatTile } from "~/components/ui/stat-tile";
 import { formatCurrency } from "~/lib/utils";
+import { Skeleton } from "~/ui/primitives/skeleton";
+import { StatGrid, StatTile } from "~/ui/primitives/stat-tile";
 
 interface ExpenseSummary {
   actual: number;

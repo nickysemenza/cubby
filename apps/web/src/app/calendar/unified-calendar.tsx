@@ -21,26 +21,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { showErrorToast } from "~/components/feedback/error-details";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Row, Stack } from "~/components/layout";
-import {
-  type EventCalendarRenderEventProps,
-  type EventCalendarRenderEventRoot,
-  FortnightEventCalendar,
-  MonthEventCalendar,
-  WeekEventCalendar,
-} from "~/components/reui/event-calendar/event-calendar";
-import type {
-  CalendarEvent,
-  EventCalendarProposedUpdate,
-} from "~/components/reui/event-calendar/event-calendar-types";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
-import { createPopoverHandle, PopoverTrigger } from "~/components/ui/popover";
-import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
-import { ChoiceSwitcher } from "~/components/ui/view-switcher";
-import { useEntityCommands } from "~/entities/editing/use-entity-commands";
+import { useEntityCommands } from "~/entity/editing/use-entity-commands";
 import { calendar } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { formatCalendarDay } from "~/lib/date-format";
@@ -48,6 +29,25 @@ import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
+import { showErrorToast } from "~/ui/feedback/error-details";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
+import { createPopoverHandle, PopoverTrigger } from "~/ui/primitives/popover";
+import { ResponsiveSheet } from "~/ui/primitives/responsive-sheet";
+import { ChoiceSwitcher } from "~/ui/primitives/view-switcher";
+import {
+  type EventCalendarRenderEventProps,
+  type EventCalendarRenderEventRoot,
+  FortnightEventCalendar,
+  MonthEventCalendar,
+  WeekEventCalendar,
+} from "~/ui/reui/event-calendar/event-calendar";
+import type {
+  CalendarEvent,
+  EventCalendarProposedUpdate,
+} from "~/ui/reui/event-calendar/event-calendar-types";
 
 import { CalendarAgenda } from "./calendar-agenda";
 import type { CalendarCreateDialog as CalendarCreateDialogComponent } from "./calendar-create-dialog";

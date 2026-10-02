@@ -5,18 +5,18 @@ import { useCallback, useId, useRef, useState } from "react";
 import {
   productionPersistentScannerPort,
   type PersistentScannerPort,
-} from "~/app/_components/inventory/persistent-scanner";
-import { Stack } from "~/components/layout";
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
-import { Spinner } from "~/components/ui/spinner";
+} from "~/features/inventory/persistent-scanner";
 import { getErrorMessage } from "~/lib/error-utils";
 import type { ResolvedScanCode } from "~/lib/scan-code";
 import { resolveScanCode } from "~/lib/scan-code";
+import { Stack } from "~/ui/layout";
+import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
+import { Input } from "~/ui/primitives/input";
+import { Label } from "~/ui/primitives/label";
+import { ResponsiveSheet } from "~/ui/primitives/responsive-sheet";
+import { Spinner } from "~/ui/primitives/spinner";
 
 interface ScanWorkbenchProps {
   onResolve: (value: ResolvedScanCode) => Promise<void>;

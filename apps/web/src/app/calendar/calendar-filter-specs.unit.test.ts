@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildFiltersFromManifest,
   filterGetterFromSearch,
-} from "~/entities/filters";
+} from "~/entity/filters";
 
 import {
   calendarFilterSpecs,

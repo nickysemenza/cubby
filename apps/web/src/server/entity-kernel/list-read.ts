@@ -1,9 +1,9 @@
 import { buildPaginatedResponse } from "@cubby/schemas/pagination";
 import { z } from "zod";
 
-import type { ListEntity } from "~/entities/generated/entity-lists.gen";
-import { listReadRowSchema } from "~/entities/list-read-fields";
-import { listReadFields, projectListRows } from "~/entities/list-read-schema";
+import type { ListEntity } from "~/entity/generated/entity-lists.gen";
+import { listReadRowSchema } from "~/entity/list-read-fields";
+import { listReadFields, projectListRows } from "~/entity/list-read-schema";
 import { withListEntityMedia } from "~/server/repo/entity-display-image";
 import { expandListGroups } from "~/server/repo/list-projection";
 import { withListReadTracing } from "~/server/repo/list-read-tracing";

@@ -4,7 +4,7 @@ import type { ESTree } from "@oxlint/plugins";
 
 /**
  * Enforcement layer for the "error surfaces stay raw" product rule (see
- * AGENTS.md "Product constraints"): `showErrorToast` (`apps/web/src/components/feedback/error-details.tsx`)
+ * AGENTS.md "Product constraints"): `showErrorToast` (`apps/web/src/ui/feedback/error-details.tsx`)
  * is the only toast path that keeps the raw server message and attaches the
  * Details action; a hand-rolled `toast.error(...)` written where an error
  * object is already in scope re-derives a worse message and drops
@@ -13,14 +13,14 @@ import type { ESTree } from "@oxlint/plugins";
  * callback, or an `onError` handler — and leaves every other `toast.error`
  * call (validation notices, copy failures, etc.) alone.
  *
- * `apps/web/src/components/feedback/error-details.tsx` itself calls
+ * `apps/web/src/ui/feedback/error-details.tsx` itself calls
  * `toast.error` as part of implementing the shared helper; it is excluded
  * via the `.oxlintrc.json` override, not here, so the exclusion is visible
  * next to the other file-glob overrides instead of hidden in the rule.
  */
 
 const MESSAGE =
-  "An error object is in scope here — use showErrorToast(error, message?) from ~/components/feedback/error-details so the raw message and Details action are kept.";
+  "An error object is in scope here — use showErrorToast(error, message?) from ~/ui/feedback/error-details so the raw message and Details action are kept.";
 
 function isToastErrorCall(node: ESTree.CallExpression): boolean {
   const { callee } = node;

@@ -1,20 +1,20 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { Row } from "~/components/layout";
-import { Button } from "~/components/ui/button";
+import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
+import { getErrorMessage } from "~/lib/error-utils";
+import type { PurchaseAgentConnectionStatus } from "~/lib/purchase-import-debug";
+import { Row } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "~/components/ui/card";
-import { StatusText } from "~/components/ui/status-text";
-import { run } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatInstant } from "~/lib/date-format";
-import { getErrorMessage } from "~/lib/error-utils";
-import type { PurchaseAgentConnectionStatus } from "~/lib/purchase-import-debug";
+} from "~/ui/primitives/card";
+import { StatusText } from "~/ui/primitives/status-text";
 
 export function PurchaseImportAgentConnection({
   feedback,

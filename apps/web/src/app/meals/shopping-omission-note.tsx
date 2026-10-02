@@ -4,10 +4,10 @@ import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { Link } from "@tanstack/react-router";
 
-import { Row, Stack } from "~/components/layout";
-import { entityDetailLink } from "~/entities/entities";
+import { entityDetailLink } from "~/entity/entities";
 import { formatCalendarDay } from "~/lib/date-format";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
+import { Row, Stack } from "~/ui/layout";
 
 /**
  * Honesty footnotes for the shopping list — two omissions, deliberately

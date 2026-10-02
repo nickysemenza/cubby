@@ -7,12 +7,12 @@ import type { entityTimelineContract } from "~/contracts/entity-timeline.contrac
 import {
   type DetailEntity,
   getEntityDetailOutputSchema,
-} from "~/entities/generated/entity-details.gen";
+} from "~/entity/generated/entity-details.gen";
 import {
   getEntityListOutputSchema,
   type ListEntity,
-} from "~/entities/generated/entity-lists.gen";
-import { getEntityTimelineOutputSchema } from "~/entities/generated/entity-timelines.gen";
+} from "~/entity/generated/entity-lists.gen";
+import { getEntityTimelineOutputSchema } from "~/entity/generated/entity-timelines.gen";
 import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contracts";
 
 import { entityRipple, type InvalidationTagSet, ripple } from "./cache-tags";

@@ -17,42 +17,15 @@ import {
   useMemo,
 } from "react";
 
-import { SavedViewsMenu } from "~/app/_components/data-table/DataTableViews";
-import type { CubbyRow } from "~/app/_components/data-table/table-features";
+import { ProjectMark } from "~/app/projects/project-mark";
+import type { ProjectPortfolioAnalyticsViewProps } from "~/app/projects/project-portfolio-analytics-view";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { entities, entityDetailParams } from "~/entity/entities";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
-} from "~/app/_components/entity-media/entity-display-images";
-import type { PreviewPresentation } from "~/app/_components/hooks/useEntityPreview";
-import { ProjectMark } from "~/app/projects/project-mark";
-import type { ProjectPortfolioAnalyticsViewProps } from "~/app/projects/project-portfolio-analytics-view";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { DashboardSectionLoading } from "~/components/feedback/loading-skeletons";
-import { Grid, Row, Section, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
-import { Checkbox } from "~/components/ui/checkbox";
-import {
-  Empty,
-  EmptyActions,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyIcon,
-  EmptyTitle,
-} from "~/components/ui/empty";
-import { Image } from "~/components/ui/image";
-import { Skeleton } from "~/components/ui/skeleton";
-import type { SummaryItem } from "~/components/ui/stat-tile";
-import { StatGrid, StatTile } from "~/components/ui/stat-tile";
-import { entities, entityDetailParams } from "~/entities/entities";
-import { type ProjectImageSummaries } from "~/entities/image-queries";
+} from "~/entity/entity-media/entity-display-images";
+import { type ProjectImageSummaries } from "~/entity/image-queries";
 import {
   image,
   project,
@@ -61,6 +34,33 @@ import { formatCalendarDay } from "~/lib/date-format";
 import { formatDateSpan } from "~/lib/date-span";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn, formatCurrency } from "~/lib/utils";
+import { SavedViewsMenu } from "~/ui/data-table/DataTableViews";
+import type { CubbyRow } from "~/ui/data-table/table-features";
+import { DashboardSectionLoading } from "~/ui/feedback/loading-skeletons";
+import type { PreviewPresentation } from "~/ui/hooks/useEntityPreview";
+import { Grid, Row, Section, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/ui/primitives/card";
+import { Checkbox } from "~/ui/primitives/checkbox";
+import {
+  Empty,
+  EmptyActions,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyIcon,
+  EmptyTitle,
+} from "~/ui/primitives/empty";
+import { Image } from "~/ui/primitives/image";
+import { Skeleton } from "~/ui/primitives/skeleton";
+import type { SummaryItem } from "~/ui/primitives/stat-tile";
+import { StatGrid, StatTile } from "~/ui/primitives/stat-tile";
 
 import {
   defaultFilters,

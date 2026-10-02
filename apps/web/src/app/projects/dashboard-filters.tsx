@@ -5,10 +5,10 @@ import {
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { type ReactNode, useId, useState } from "react";
 
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { NativeSelect } from "~/components/ui/native-select";
-import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { NativeSelect } from "~/ui/primitives/native-select";
+import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 
 import {
   activeFilterCount,

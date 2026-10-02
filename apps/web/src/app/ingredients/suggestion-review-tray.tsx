@@ -1,11 +1,11 @@
 import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 
-import { AiProvenance } from "~/app/_components/ai/ai-proposal-card";
-import { AiProposalList } from "~/app/_components/ai/ai-proposal-list";
-import { Row, Stack } from "~/components/layout";
-import { Description } from "~/components/ui/description";
-import { Input } from "~/components/ui/input";
-import { Progress } from "~/components/ui/progress";
+import { AiProvenance } from "~/features/ai/ai-proposal-card";
+import { AiProposalList } from "~/features/ai/ai-proposal-list";
+import { Row, Stack } from "~/ui/layout";
+import { Description } from "~/ui/primitives/description";
+import { Input } from "~/ui/primitives/input";
+import { Progress } from "~/ui/primitives/progress";
 
 import { UnitInput } from "./workbench-editor-core";
 import type { Suggestion } from "./workbench-row";

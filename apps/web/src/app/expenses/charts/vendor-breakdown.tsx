@@ -1,7 +1,7 @@
 import type { ExpenseVendorAggregate } from "@cubby/schemas/project";
 import { StorefrontIcon } from "@phosphor-icons/react/dist/csr/Storefront";
 
-import { RankedBarBreakdown } from "~/app/_components/charts/kit";
+import { RankedBarBreakdown } from "~/ui/charts/kit";
 
 /**
  * Net spend by vendor — sourced from `expense.analytics`'s `byVendor`

@@ -18,16 +18,16 @@ import {
   recordStatementBatch,
   statementCsvHeaders,
 } from "~/app/finance/statement-csv";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Page } from "~/components/page/Page";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { NativeSelect } from "~/components/ui/native-select";
-import { useHydrationGate } from "~/hooks/useHydrated";
 import { statementRow } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
 import { statusTone } from "~/lib/status-tone";
 import { formatCount, formatCurrency } from "~/lib/utils";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { useHydrationGate } from "~/ui/hooks/useHydrated";
+import { Page } from "~/ui/page/Page";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { NativeSelect } from "~/ui/primitives/native-select";
 
 type ParsedImport = ReturnType<typeof parseStatementCsv>;
 type RecordStatementRowsOut = Awaited<

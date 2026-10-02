@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { EquivalencesReport } from "~/app/ingredients/equivalences-report";
-import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
+import { Page } from "~/ui/page/Page";
 
 export const Route = createFileRoute(
   "/_authenticated/ingredients/equivalences",

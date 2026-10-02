@@ -84,7 +84,7 @@ const validateConnectedViews = (entities: readonly CompiledEntity[]) => {
  * `pnpm generate` writes every generated output; none is committed. The
  * stages run in order because each later stage imports the earlier stages'
  * files from disk (declarations import the shortcode registry; contracts
- * runtime-import `~/entities/generated/*.gen.ts`; the OpenAPI stage imports
+ * runtime-import `~/entity/generated/*.gen.ts`; the OpenAPI stage imports
  * `http-contract.gen.ts`), so the later stages load only after the earlier
  * ones are written.
  */
@@ -127,7 +127,7 @@ const main = async () => {
   const missingSources = missingListSources(entities);
   if (missingSources.length > 0) {
     throw new EntityDeclarationError(
-      `route.list is true, but these entities have no kernel list read (no create+update contract) and no list override in apps/web/src/entities/list-columns/index.ts to supply rows. Add one with a \`source\`, or declare list: null:\n${missingSources.map((key) => `- ${key}`).join("\n")}`,
+      `route.list is true, but these entities have no kernel list read (no create+update contract) and no list override in apps/web/src/entity/list-columns/index.ts to supply rows. Add one with a \`source\`, or declare list: null:\n${missingSources.map((key) => `- ${key}`).join("\n")}`,
     );
   }
 

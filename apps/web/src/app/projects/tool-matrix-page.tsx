@@ -40,33 +40,30 @@ import { format } from "date-fns";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { match } from "ts-pattern";
 
+import { ProjectMark } from "~/app/projects/project-mark";
+import type { ToolMatrixSearch } from "~/app/tools/tool-search";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
-} from "~/app/_components/products/product-image-summaries";
-import { ProjectMark } from "~/app/projects/project-mark";
-import type { ToolMatrixSearch } from "~/app/tools/tool-search";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { Row, Stack } from "~/components/layout";
-import {
-  cellMonoDense,
-  stickyRowHeaderPage,
-} from "~/components/matrix/matrix-chrome";
-import { Badge } from "~/components/ui/badge";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "~/components/ui/empty";
-import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
-import { Skeleton } from "~/components/ui/skeleton";
+} from "~/features/products/product-image-summaries";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { project } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { toolTimelineConflict } from "~/lib/tool-timeline";
 import { cn, formatCurrency } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { cellMonoDense, stickyRowHeaderPage } from "~/ui/matrix/matrix-chrome";
+import { Badge } from "~/ui/primitives/badge";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "~/ui/primitives/empty";
+import { Input } from "~/ui/primitives/input";
+import { NativeSelect } from "~/ui/primitives/native-select";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 import { PROJECT_STATUS_LABELS } from "./project-formatting";
 

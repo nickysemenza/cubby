@@ -36,8 +36,8 @@
     "**/drizzle/**",
     "**/node_modules/**",
     "apps/usda-api/data/**",
-    "apps/web/src/components/reui/**",
-    "apps/web/src/components/ui/**",
+    "apps/web/src/ui/reui/**",
+    "apps/web/src/ui/primitives/**",
     "apps/web/src/routeTree.gen.ts",
     "apps/web/wasm/**",
     "**/worker-configuration.d.ts",
@@ -193,7 +193,7 @@
                 "message": "The client operation overrides (loaded by the browser catalog) must stay free of eager server/runtime imports. Import types only, and dispatch through the operation catalog (~/integrations/tanstack-query/operation-catalog)."
               },
               {
-                "group": ["~/server-functions/**"],
+                "group": ["~/features/ai/server-functions/**"],
                 "allowTypeImports": true,
                 "message": "The client operation overrides (loaded by the browser catalog) must stay free of eager server/runtime imports. Import types only, and dispatch through the operation catalog (~/integrations/tanstack-query/operation-catalog)."
               }
@@ -223,7 +223,7 @@
       }
     },
     {
-      "files": ["apps/web/src/components/feedback/error-details.tsx"],
+      "files": ["apps/web/src/ui/feedback/error-details.tsx"],
       "rules": {
         "cubby/no-error-toast-in-handler": "off"
       }
@@ -364,8 +364,8 @@
         "**/*.spec.ts",
         "**/*.spec.tsx",
         "**/*.live-eval.ts",
-        "apps/web/src/components/ui/**",
-        "apps/web/src/components/reui/**"
+        "apps/web/src/ui/primitives/**",
+        "apps/web/src/ui/reui/**"
       ],
       "rules": {
         "cubby/no-raw-table": "error"
@@ -384,22 +384,22 @@
     },
     {
       "files": [
-        "apps/web/src/app/_components/ai/ai-usage-page.tsx",
-        "apps/web/src/app/_components/charts/kit.tsx",
-        "apps/web/src/app/_components/dev/mcp-usage-dashboard.tsx",
-        "apps/web/src/app/_components/labels/label-summary.tsx",
-        "apps/web/src/app/_components/nutrition/NutrientDensityStats.tsx",
-        "apps/web/src/app/_components/perf-overlay/index.tsx",
-        "apps/web/src/app/_components/recipe/RecipeMagazineView.tsx",
-        "apps/web/src/app/_components/recipe/compare/RecipeCompareGrid.tsx",
-        "apps/web/src/app/_components/recipe/cookbook-import/run-report-panel.tsx",
-        "apps/web/src/app/_components/units/NutrientsSummary.tsx",
-        "apps/web/src/app/_components/visualizations/recipe-cost-treemap.tsx",
+        "apps/web/src/features/ai/ai-usage-page.tsx",
+        "apps/web/src/ui/charts/kit.tsx",
+        "apps/web/src/features/developer/mcp-usage-dashboard.tsx",
+        "apps/web/src/features/labels/label-summary.tsx",
+        "apps/web/src/features/nutrition/NutrientDensityStats.tsx",
+        "apps/web/src/features/performance/index.tsx",
+        "apps/web/src/features/recipes/RecipeMagazineView.tsx",
+        "apps/web/src/features/recipes/compare/RecipeCompareGrid.tsx",
+        "apps/web/src/features/recipes/cookbook-import/run-report-panel.tsx",
+        "apps/web/src/features/units/NutrientsSummary.tsx",
+        "apps/web/src/ui/visualizations/recipe-cost-treemap.tsx",
         "apps/web/src/app/cookbooks/cookbook-run-report.tsx",
         "apps/web/src/app/purchases/financial-settlement.tsx",
         "apps/web/src/app/purchases/purchase-import-run-detail.tsx",
         "apps/web/src/app/runs/run-history.tsx",
-        "apps/web/src/entities/detail-field-renderers/image-capture.tsx",
+        "apps/web/src/entity/detail-field-renderers/image-capture.tsx",
         "apps/web/src/lib/format-duration.ts",
         "apps/web/src/lib/wasm-execution.ts",
         "apps/web/src/server/calendar/ics.ts",
@@ -418,15 +418,15 @@
     },
     {
       "files": [
-        "apps/web/src/app/_components/entity-detail/entity-relation-table.tsx",
-        "apps/web/src/app/_components/merge/entity-merge-dialog.tsx",
-        "apps/web/src/app/_components/perf-overlay/index.tsx",
-        "apps/web/src/app/_components/recipe/compare/RecipeCompareGrid.tsx",
+        "apps/web/src/entity/entity-detail/entity-relation-table.tsx",
+        "apps/web/src/entity/merge/entity-merge-dialog.tsx",
+        "apps/web/src/features/performance/index.tsx",
+        "apps/web/src/features/recipes/compare/RecipeCompareGrid.tsx",
         "apps/web/src/app/docs/_components/GuideDoc.tsx",
         "apps/web/src/app/projects/charts/task-status-board.tsx",
         "apps/web/src/app/projects/tool-matrix-page.tsx",
-        "apps/web/src/components/markdown.tsx",
-        "apps/web/src/components/matrix/cross-tab-table.tsx"
+        "apps/web/src/ui/markdown.tsx",
+        "apps/web/src/ui/matrix/cross-tab-table.tsx"
       ],
       "rules": {
         "cubby/no-raw-table": "off"

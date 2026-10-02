@@ -4,21 +4,18 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGl
 import { useQuery } from "@tanstack/react-query";
 import { type Ref, useEffect, useMemo, useRef, useState } from "react";
 
-import { verbDef } from "~/app/_components/actions/action-verbs";
-import {
-  AiProposalCard,
-  AiProvenance,
-} from "~/app/_components/ai/ai-proposal-card";
-import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
-import { QueuePassPosition } from "~/app/_components/queue-pass/QueuePassProgress";
-import { UsdaFoodResultRow } from "~/app/_components/usda/usda-food-result-row";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Kbd, KbdGroup } from "~/components/ui/kbd";
-import { Spinner } from "~/components/ui/spinner";
+import { verbDef } from "~/entity/actions/action-verbs";
+import { AiProposalCard, AiProvenance } from "~/features/ai/ai-proposal-card";
+import { QueuePassPosition } from "~/features/queue-pass/QueuePassProgress";
+import { UsdaFoodResultRow } from "~/features/usda/usda-food-result-row";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
+import { UsdaFoodSearchField } from "~/ui/combobox/with-usda-food-search";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Kbd, KbdGroup } from "~/ui/primitives/kbd";
+import { Spinner } from "~/ui/primitives/spinner";
 
 import {
   EnrichmentEditor,

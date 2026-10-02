@@ -5,7 +5,7 @@ import {
   entityListBaseOutputSchema,
   entityListEnrichmentOutputSchema,
   entityListSummaryOutputSchema,
-} from "~/entities/generated/entity-lists.gen";
+} from "~/entity/generated/entity-lists.gen";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 

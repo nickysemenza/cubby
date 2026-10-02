@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   ScheduleGrid,
   type ScheduleRow,
-} from "~/app/_components/schedule/schedule-grid";
+} from "~/features/schedule/schedule-grid";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { usePlantingScheduleLabel } from "./planting-schedule-label";

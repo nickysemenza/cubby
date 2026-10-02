@@ -5,15 +5,18 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
-} from "~/app/_components/entity-media/entity-display-images";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
-import { StatusText } from "~/components/ui/status-text";
+} from "~/entity/entity-media/entity-display-images";
+import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { cn } from "~/lib/utils";
+import { useHydrated } from "~/ui/hooks/useHydrated";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
+import { StatusText } from "~/ui/primitives/status-text";
 import {
   Table,
   TableBody,
@@ -21,15 +24,12 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "~/components/ui/table";
+} from "~/ui/primitives/table";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "~/components/ui/tooltip";
-import { useHydrated } from "~/hooks/useHydrated";
-import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { cn } from "~/lib/utils";
+} from "~/ui/primitives/tooltip";
 
 import { equivalenceWorkbenchSearch } from "./equivalence-workbench-link";
 

@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { CollectionsIndexPage } from "~/app/collections/collections-index-page";
-import { Page } from "~/components/page/Page";
 import { pageTitle } from "~/lib/page-title";
+import { Page } from "~/ui/page/Page";
 
 export const Route = createFileRoute("/_authenticated/collections/")({
   component: CollectionsRoute,

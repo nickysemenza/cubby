@@ -3,31 +3,31 @@ import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOu
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { FieldSuggestionProvider } from "~/app/_components/ai/field-suggestion-provider";
+import { fieldClearing } from "~/entity/editing/field-clearing";
+import type { EntityMutationPort } from "~/entity/editing/types";
+import { useEntityEditSession } from "~/entity/editing/use-entity-edit-session";
+import { entityDetailLink } from "~/entity/entities";
+import { fieldEnumOptions } from "~/entity/enum-field-display";
+import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
+import { formatCurrency } from "~/lib/utils";
 import {
   FormWrapper,
   NullableNumericField,
   PlainDateField,
   SelectField,
   UnifiedTextField,
-} from "~/app/_components/form-utils";
-import { Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
+} from "~/ui/form-utils";
+import { useIsMobile } from "~/ui/hooks/useMobile";
+import { Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 import {
   Popover,
   PopoverContent,
   type PopoverHandle,
   PopoverHeader,
   PopoverTitle,
-} from "~/components/ui/popover";
-import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
-import { fieldClearing } from "~/entities/editing/field-clearing";
-import type { EntityMutationPort } from "~/entities/editing/types";
-import { useEntityEditSession } from "~/entities/editing/use-entity-edit-session";
-import { entityDetailLink } from "~/entities/entities";
-import { fieldEnumOptions } from "~/entities/enum-field-display";
-import { useIsMobile } from "~/hooks/useMobile";
-import { formatCurrency } from "~/lib/utils";
+} from "~/ui/primitives/popover";
+import { ResponsiveSheet } from "~/ui/primitives/responsive-sheet";
 
 import { DuplicateMealButton } from "../meals/copy-meals";
 import { CalendarItemPresentation, itemMetadata } from "./calendar-item-row";

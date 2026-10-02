@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ProblemExecutionLane } from "~/entities/problem-query";
+import type { ProblemExecutionLane } from "~/entity/problem-query";
 
 import {
   type ProblemLaneState,

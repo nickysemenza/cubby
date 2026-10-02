@@ -146,14 +146,14 @@ export default defineEntity({
         export: "exampleRepository",
       },
       references: {
-        label: { module: "~/entities/entities", export: "entityLabel" },
+        label: { module: "~/entity/entities", export: "entityLabel" },
         resolver: {
           module: "~/server/repo/shortcode-resolver",
           export: "resolveLiveShortcode",
         },
       },
       filters: {
-        module: "~/entities/filter-manifest",
+        module: "~/entity/filter-manifest",
         export: "getEntityFilters",
       },
       search: {
@@ -305,7 +305,7 @@ from explicitly declared read-RPC adapters; it does not expand `httpActions`.
 `capabilities.bulkUpdate` (`{ fields: [...] } | null`) is the only thing an
 entity declares for bulk editing — there is no per-entity bulk-edit verb to
 write. The web list registers one generic `bulkEdit` action
-(`apps/web/src/app/_components/actions/bulk-edit-entity-action.tsx`) for every
+(`apps/web/src/entity/actions/bulk-edit-entity-action.tsx`) for every
 entity whose manifest declares it, and its dialog renders exactly those
 fields through the same reference/select/date rendering `EntityIntentFields`
 uses. The mutation payload is the form's dirty-field subset: an untouched

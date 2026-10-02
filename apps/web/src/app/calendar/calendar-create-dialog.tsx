@@ -1,6 +1,6 @@
 import type { CalendarItemKind } from "@cubby/schemas/calendar";
 
-import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
+import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 
 import { calendarItemCreateRequest } from "./calendar-kind-registry";
 

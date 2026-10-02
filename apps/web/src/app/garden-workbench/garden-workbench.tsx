@@ -13,16 +13,16 @@ import { PlantIcon } from "@phosphor-icons/react/dist/csr/Plant";
 import { useMemo } from "react";
 
 import {
-  type AllEntityRecords,
-  useAllEntityRecords,
-} from "~/app/_components/hooks/useAllEntityRecords";
-import {
   ScheduleGrid,
   type ScheduleRow,
-} from "~/app/_components/schedule/schedule-grid";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Stack } from "~/components/layout";
-import { NativeSelect } from "~/components/ui/native-select";
+} from "~/features/schedule/schedule-grid";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import {
+  type AllEntityRecords,
+  useAllEntityRecords,
+} from "~/ui/hooks/useAllEntityRecords";
+import { Stack } from "~/ui/layout";
+import { NativeSelect } from "~/ui/primitives/native-select";
 import {
   Table,
   TableBody,
@@ -30,8 +30,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "~/components/ui/table";
-import { ViewSwitcher } from "~/components/ui/view-switcher";
+} from "~/ui/primitives/table";
+import { ViewSwitcher } from "~/ui/primitives/view-switcher";
 
 import {
   cropName,

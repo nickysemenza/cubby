@@ -11,7 +11,7 @@ import { ShieldWarningIcon } from "@phosphor-icons/react/dist/csr/ShieldWarning"
 import type { Icon } from "@phosphor-icons/react/lib";
 import { z } from "zod";
 
-import type { BadgeVariant } from "~/components/ui/badge";
+import type { BadgeVariant } from "~/ui/primitives/badge";
 
 import { statusTone } from "./status-tone";
 

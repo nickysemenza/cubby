@@ -4,12 +4,12 @@ import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { ConnectedRecordsTable } from "~/app/_components/entity-detail/connected-records-table";
 import {
   entityDetailParams,
   entities,
   isBrowserRoutedEntity,
-} from "~/entities/entities";
+} from "~/entity/entities";
+import { ConnectedRecordsTable } from "~/entity/entity-detail/connected-records-table";
 import { pageTitle } from "~/lib/page-title";
 
 // A hand-typed or truncated link renders the unknown-view message instead of

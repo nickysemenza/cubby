@@ -13,7 +13,7 @@ import { z } from "zod";
 import type {
   ParsedEntityTimelineInputByEntity,
   TimelineEntity,
-} from "~/entities/generated/entity-timelines.gen";
+} from "~/entity/generated/entity-timelines.gen";
 import { householdDateTime, householdLocalDate } from "~/lib/household-date";
 import { executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";

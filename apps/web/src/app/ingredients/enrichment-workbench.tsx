@@ -12,40 +12,15 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import type { z } from "zod";
 
-import { verbDef } from "~/app/_components/actions/action-verbs";
-import { confidenceColor } from "~/app/_components/ai/ai-proposal-card";
-import type { BulkActionsConfig } from "~/app/_components/data-table/bulk-actions.types";
-import { createNameColumn } from "~/app/_components/data-table/columnHelpers";
-import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";
-import {
-  createCubbyColumnCollection,
-  createCubbyColumnHelper,
-} from "~/app/_components/data-table/table-features";
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { useBulkActionMutation } from "~/app/_components/hooks/useBulkActionMutation";
-import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
-import {
-  type EntityPreviewRendererProps,
-  useEntityPreview,
-} from "~/app/_components/hooks/useEntityPreview";
-import { EntityMergeDialog } from "~/app/_components/merge/entity-merge-dialog";
 import { CoverageChips } from "~/app/problems/components/unit-coverage-fix";
 import {
   createManyProductsStream,
   markProductsUsdaUnavailableStream,
 } from "~/app/products/product-streams";
-import { showErrorToast } from "~/components/feedback/error-details";
-import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import { Progress } from "~/components/ui/progress";
-import {
-  ViewSwitcher,
-  type ViewSwitcherOption,
-} from "~/components/ui/view-switcher";
-import { entityDetailFor } from "~/entities/entity-detail";
-import { useHydrated } from "~/hooks/useHydrated";
+import { verbDef } from "~/entity/actions/action-verbs";
+import { entityDetailFor } from "~/entity/entity-detail";
+import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
+import { confidenceColor } from "~/features/ai/ai-proposal-card";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   ai,
@@ -54,6 +29,31 @@ import {
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
+import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
+import { createNameColumn } from "~/ui/data-table/columnHelpers";
+import { ListWorkbench } from "~/ui/data-table/ListWorkbench";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/ui/data-table/table-features";
+import { showErrorToast } from "~/ui/feedback/error-details";
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
+import { useBulkActionMutation } from "~/ui/hooks/useBulkActionMutation";
+import { useClientEntityList } from "~/ui/hooks/useClientEntityList";
+import {
+  type EntityPreviewRendererProps,
+  useEntityPreview,
+} from "~/ui/hooks/useEntityPreview";
+import { useHydrated } from "~/ui/hooks/useHydrated";
+import { Row, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
+import { Progress } from "~/ui/primitives/progress";
+import {
+  ViewSwitcher,
+  type ViewSwitcherOption,
+} from "~/ui/primitives/view-switcher";
 
 import {
   type EquivalenceDraft,

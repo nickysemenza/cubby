@@ -22,10 +22,15 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { type CollectionMatrixRow } from "~/app/collections/collection-types";
-import { showErrorToast } from "~/components/feedback/error-details";
-import { Stack } from "~/components/layout";
-import { CrossTabTable } from "~/components/matrix/cross-tab-table";
-import { Button } from "~/components/ui/button";
+import { EntityIcon, entityDetailLink } from "~/entity/entities";
+import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { IDEMPOTENT_MUTATION_RETRY } from "~/integrations/tanstack-query/query-policy";
+import { cn, formatCount } from "~/lib/utils";
+import { showErrorToast } from "~/ui/feedback/error-details";
+import { focusOnMount } from "~/ui/hooks/focus-on-mount";
+import { Stack } from "~/ui/layout";
+import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
+import { Button } from "~/ui/primitives/button";
 import {
   Dialog,
   DialogContent,
@@ -33,18 +38,13 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "~/components/ui/dialog";
-import { DialogFormActions } from "~/components/ui/dialog-form-actions";
-import { Image } from "~/components/ui/image";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { NativeSelect } from "~/components/ui/native-select";
-import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { EntityIcon, entityDetailLink } from "~/entities/entities";
-import { focusOnMount } from "~/hooks/focus-on-mount";
-import { collection as collectionOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { IDEMPOTENT_MUTATION_RETRY } from "~/integrations/tanstack-query/query-policy";
-import { cn, formatCount } from "~/lib/utils";
+} from "~/ui/primitives/dialog";
+import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
+import { Image } from "~/ui/primitives/image";
+import { Input } from "~/ui/primitives/input";
+import { Label } from "~/ui/primitives/label";
+import { NativeSelect } from "~/ui/primitives/native-select";
+import { Tabs, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 
 import type { CollectionAssignmentSearch } from "./collection-assignment-search";
 import {

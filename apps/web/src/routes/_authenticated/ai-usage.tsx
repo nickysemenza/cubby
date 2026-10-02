@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { AiUsagePage } from "~/app/_components/ai/ai-usage-page";
-import { Page } from "~/components/page/Page";
+import { AiUsagePage } from "~/features/ai/ai-usage-page";
 import { pageTitle } from "~/lib/page-title";
+import { Page } from "~/ui/page/Page";
 
 export const Route = createFileRoute("/_authenticated/ai-usage")({
   component: AiUsageRoute,

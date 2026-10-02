@@ -5,19 +5,19 @@ import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 import { useMemo, type FC } from "react";
 
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
-} from "~/app/_components/entity-media/entity-display-images";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Description } from "~/components/ui/description";
-import { NoneValue } from "~/components/ui/none-value";
+} from "~/entity/entity-media/entity-display-images";
 import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { Description } from "~/ui/primitives/description";
+import { NoneValue } from "~/ui/primitives/none-value";
 
 // Module-level so the fallback keeps a stable reference across renders.
 const NO_OTHER_EXPENSES: ExpenseOut[] = [];

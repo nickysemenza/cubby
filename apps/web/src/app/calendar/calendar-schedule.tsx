@@ -3,20 +3,20 @@ import type { EntityRef } from "@cubby/schemas/entity";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 
+import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { entityDetailLink } from "~/entity/entities";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
-} from "~/app/_components/entity-media/entity-display-images";
+} from "~/entity/entity-media/entity-display-images";
 import {
   ScheduleGrid,
   type ScheduleRow,
   type ScheduleSegment,
   type ScheduleWindow,
-} from "~/app/_components/schedule/schedule-grid";
-import { TASK_STATUS_LABELS } from "~/app/tasks/task-options";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { Description } from "~/components/ui/description";
-import { entityDetailLink } from "~/entities/entities";
+} from "~/features/schedule/schedule-grid";
+import { Description } from "~/ui/primitives/description";
 
 const milestoneFields = [
   ["sowedOn", "Sowed"],

@@ -14,36 +14,36 @@ import {
 } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 
-import { useRecipeCostingData } from "~/app/_components/hooks/useRecipeCostingData";
-import { CopyDebugButton } from "~/app/_components/recipe/copy-debug-button";
+import { entityDetailFor } from "~/entity/entity-detail";
+import { CopyDebugButton } from "~/features/recipes/copy-debug-button";
 import {
   buildDisplayQuantities,
   gramMapFromCosting,
-} from "~/app/_components/recipe/IngredientQuantities";
-import { recipeTreeToMarkdown } from "~/app/_components/recipe/recipe-export-markdown";
-import { scaleRecipe } from "~/app/_components/recipe/recipe-scaling";
-import { getRecipeNutritionBasis } from "~/app/_components/recipe/recipe-utils";
-import { RecipeFlowView } from "~/app/_components/recipe/RecipeFlowView";
-import { RecipeIngredientMatrixView } from "~/app/_components/recipe/RecipeIngredientMatrixView";
-import { RecipeMagazineView } from "~/app/_components/recipe/RecipeMagazineView";
-import { RecipePrepSheetView } from "~/app/_components/recipe/RecipePrepSheetView";
-import { RecipeScaleControl } from "~/app/_components/recipe/RecipeScaleControl";
-import { RecipeSpecView } from "~/app/_components/recipe/RecipeSpecView";
-import { useRecipeTree } from "~/app/_components/recipe/useRecipeTree";
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { Row } from "~/components/layout";
-import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { Page } from "~/components/page/Page";
-import { DetailPagePending } from "~/components/route-pending";
-import { Button } from "~/components/ui/button";
+} from "~/features/recipes/IngredientQuantities";
+import { recipeTreeToMarkdown } from "~/features/recipes/recipe-export-markdown";
+import { scaleRecipe } from "~/features/recipes/recipe-scaling";
+import { getRecipeNutritionBasis } from "~/features/recipes/recipe-utils";
+import { RecipeFlowView } from "~/features/recipes/RecipeFlowView";
+import { RecipeIngredientMatrixView } from "~/features/recipes/RecipeIngredientMatrixView";
+import { RecipeMagazineView } from "~/features/recipes/RecipeMagazineView";
+import { RecipePrepSheetView } from "~/features/recipes/RecipePrepSheetView";
+import { RecipeScaleControl } from "~/features/recipes/RecipeScaleControl";
+import { RecipeSpecView } from "~/features/recipes/RecipeSpecView";
+import { useRecipeTree } from "~/features/recipes/useRecipeTree";
+import { scaleNutrition } from "~/lib/nutrition-estimates";
+import { pageTitle } from "~/lib/page-title";
+import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
+import { useDetailTitle } from "~/ui/hooks/useDocumentTitle";
+import { useRecipeCostingData } from "~/ui/hooks/useRecipeCostingData";
+import { Row } from "~/ui/layout";
+import { RouteErrorComponent } from "~/ui/lazy-route-error";
+import { Page } from "~/ui/page/Page";
+import { Button } from "~/ui/primitives/button";
 import {
   ViewSwitcher,
   type ViewSwitcherOption,
-} from "~/components/ui/view-switcher";
-import { entityDetailFor } from "~/entities/entity-detail";
-import { useDetailTitle } from "~/hooks/useDocumentTitle";
-import { scaleNutrition } from "~/lib/nutrition-estimates";
-import { pageTitle } from "~/lib/page-title";
+} from "~/ui/primitives/view-switcher";
+import { DetailPagePending } from "~/ui/route-pending";
 
 import { recipeExportSearchSchema } from "./-recipe-export-search";
 

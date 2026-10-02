@@ -7,9 +7,9 @@ import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { showErrorToast } from "~/components/feedback/error-details";
 import { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { putPresignedObject } from "~/lib/presigned-upload";
+import { showErrorToast } from "~/ui/feedback/error-details";
 
 export interface UploadedImage {
   id: string;

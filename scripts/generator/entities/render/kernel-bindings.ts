@@ -131,7 +131,7 @@ export const renderKernelBindingsArtifacts = (
     .join("\n");
   return [
     {
-      relativePath: "apps/web/src/entities/generated/entity-port-checks.gen.ts",
+      relativePath: "apps/web/src/entity/generated/entity-port-checks.gen.ts",
       source:
         generatedHeader +
         "// Nothing imports this file; the web typecheck checks it on its own, so the\n" +
@@ -153,7 +153,7 @@ export const renderKernelBindingsArtifacts = (
         generatedHeader +
         'import type { EntityKernelCoreBinding } from "~/server/entity-kernel/adapter";\n' +
         'import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";\n' +
-        'import type { TimelineEntity } from "~/entities/generated/entity-timelines.gen";\n' +
+        'import type { TimelineEntity } from "~/entity/generated/entity-timelines.gen";\n' +
         'import type { EntityTimelineImplementation } from "~/server/entity-timeline/contracts";\n\n' +
         'import { defineEntityOperations } from "~/server/entity-kernel/entity-operations";\n' +
         `${runtimeAdapterImportSource}\n` +

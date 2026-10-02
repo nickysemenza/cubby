@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createServerFunctionIdGenerator } from "./server-function-id";
 
 const detailFunction = {
-  filename: "src/entities/entity-detail.functions.ts",
+  filename: "src/entity/entity-detail.functions.ts",
   functionName: "getEntityDetailTransport_createServerFn_handler",
 };
 
@@ -24,7 +24,7 @@ describe("generateServerFunctionId", () => {
       generateServerFunctionId({
         ...detailFunction,
         filename:
-          "/Users/example/.codex/worktrees/test/cubby/apps/web/src/entities/entity-detail.functions.ts?server-fn-split",
+          "/Users/example/.codex/worktrees/test/cubby/apps/web/src/entity/entity-detail.functions.ts?server-fn-split",
       }),
     ).toBe(expected);
     expect(
@@ -56,13 +56,13 @@ describe("generateServerFunctionId", () => {
   it("throws instead of silently suffixing a semantic collision", () => {
     const generateServerFunctionId = createServerFunctionIdGenerator();
     generateServerFunctionId({
-      filename: "src/entities/entity_detail.functions.ts",
+      filename: "src/entity/entity_detail.functions.ts",
       functionName: detailFunction.functionName,
     });
 
     expect(() =>
       generateServerFunctionId({
-        filename: "src/entities/entity-detail.functions.ts",
+        filename: "src/entity/entity-detail.functions.ts",
         functionName: detailFunction.functionName,
       }),
     ).toThrow(/Server function id collision/u);

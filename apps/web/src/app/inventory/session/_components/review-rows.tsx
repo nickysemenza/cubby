@@ -3,13 +3,13 @@ import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { InfLocation } from "@cubby/schemas/location";
 import type { ReactNode } from "react";
 
-import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
-import { LocationIcon } from "~/app/_components/locations/location-icons";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { Row } from "~/components/layout";
-import { Description } from "~/components/ui/description";
-import { Image } from "~/components/ui/image";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { tryFormatAmount } from "~/features/inventory/format-amount";
+import { LocationIcon } from "~/features/locations/location-icons";
 import { cn } from "~/lib/utils";
+import { Row } from "~/ui/layout";
+import { Description } from "~/ui/primitives/description";
+import { Image } from "~/ui/primitives/image";
 
 import { AuditedHint } from "./AuditedHint";
 import { LocationContentsPreview } from "./LocationContentsPreview";

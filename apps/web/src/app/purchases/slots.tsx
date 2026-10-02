@@ -3,13 +3,9 @@ import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import type { DetailSlotComponent } from "~/app/_components/entity-detail/detail-slots";
-import { RelationshipSummaryTable } from "~/app/_components/relationships/relationship-summary-table";
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { NoneValue } from "~/components/ui/none-value";
-import { StatusText } from "~/components/ui/status-text";
 import type { RunSummary } from "~/contracts/run.contract";
+import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { RelationshipSummaryTable } from "~/entity/relationships/relationship-summary-table";
 import {
   run as runOperations,
   purchase as purchaseOperations,
@@ -17,6 +13,10 @@ import {
 import { formatInstant } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
+import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
+import { NoneValue } from "~/ui/primitives/none-value";
+import { StatusText } from "~/ui/primitives/status-text";
 
 import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";

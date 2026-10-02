@@ -15,25 +15,25 @@ import {
 } from "react";
 import { z } from "zod";
 
-import { useTableColumnLayout } from "~/app/_components/data-table/column-layout";
-import RTable from "~/app/_components/data-table/Table";
+import { ActivityRunDetail } from "~/app/activity/activity-run-detail";
+import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { formatInstant } from "~/lib/date-format";
+import { formatCurrency } from "~/lib/utils";
+import { useTableColumnLayout } from "~/ui/data-table/column-layout";
+import RTable from "~/ui/data-table/Table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
-} from "~/app/_components/data-table/table-features";
-import type { InfiniteScrollControls } from "~/app/_components/hooks/useInfiniteTableList";
-import { ActivityRunDetail } from "~/app/activity/activity-run-detail";
-import { Row, Stack } from "~/components/layout";
-import { usePageCount } from "~/components/page/Page";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
-import { Sheet, SheetContent, SheetTitle } from "~/components/ui/sheet";
-import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { formatInstant } from "~/lib/date-format";
-import { formatCurrency } from "~/lib/utils";
+} from "~/ui/data-table/table-features";
+import type { InfiniteScrollControls } from "~/ui/hooks/useInfiniteTableList";
+import { Row, Stack } from "~/ui/layout";
+import { usePageCount } from "~/ui/page/Page";
+import { Badge } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { Input } from "~/ui/primitives/input";
+import { NativeSelect } from "~/ui/primitives/native-select";
+import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";
 
 export interface RunHistoryFilters extends Partial<ActivityListInput> {
   selected?: string;

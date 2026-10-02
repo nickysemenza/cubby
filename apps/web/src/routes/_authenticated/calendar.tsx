@@ -5,7 +5,6 @@ import {
 } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
 
-import { listChromePage } from "~/app/_components/routing/entity-routes";
 import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
 import { CalendarFilterBar } from "~/app/calendar/calendar-filter-bar";
 import { buildCalendarFilters } from "~/app/calendar/calendar-filters";
@@ -14,6 +13,7 @@ import {
   calendarSearchSchema,
 } from "~/app/calendar/calendar-search";
 import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
+import { listChromePage } from "~/entity/routing/entity-routes";
 import { pageTitle } from "~/lib/page-title";
 
 // Bound to a const, not inlined into the options object below: see

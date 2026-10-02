@@ -6,25 +6,25 @@ import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { useMemo, useRef, useState } from "react";
 
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { Row, Section, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
+import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
+import { useHydratedLoading } from "~/ui/hooks/useHydrated";
+import { Row, Section, Stack } from "~/ui/layout";
+import { Badge } from "~/ui/primitives/badge";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "~/components/ui/card";
+} from "~/ui/primitives/card";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "~/components/ui/collapsible";
-import { Spinner } from "~/components/ui/spinner";
-import { useHydratedLoading } from "~/hooks/useHydrated";
-import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+} from "~/ui/primitives/collapsible";
+import { Spinner } from "~/ui/primitives/spinner";
 
 import { AutoFixButton, useAutoFixPlan } from "./components/auto-fix-button";
 import { AUTO_FIX_SECTION_IDS } from "./components/auto-fix-registry";

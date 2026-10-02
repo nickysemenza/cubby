@@ -1,9 +1,9 @@
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 
-import { Row } from "~/components/layout";
-import { Description } from "~/components/ui/description";
-import { Image } from "~/components/ui/image";
+import { Row } from "~/ui/layout";
+import { Description } from "~/ui/primitives/description";
+import { Image } from "~/ui/primitives/image";
 
 import type { InventoryItem } from "./types";
 

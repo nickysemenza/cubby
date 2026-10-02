@@ -1,4 +1,4 @@
-import type { FilterableComboboxItem } from "~/components/ui/combobox";
+import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
 
 const CATEGORICAL_COLORS = [
   "var(--chart-1)",

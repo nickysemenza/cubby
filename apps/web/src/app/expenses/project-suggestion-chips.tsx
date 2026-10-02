@@ -4,7 +4,7 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import {
   EntityRecommendations,
   type EntityRecommendationOperations,
-} from "~/app/_components/relatedness/entity-recommendations";
+} from "~/entity/relatedness/entity-recommendations";
 
 interface ProjectSuggestionChipsProps {
   expense: ExpenseOut;

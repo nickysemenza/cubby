@@ -1,6 +1,6 @@
 import type { ListSlotId } from "@cubby/schemas/entity-manifest";
 
-import type { ListSlotComponent } from "~/app/_components/entity-list/list-slot-types";
+import type { ListSlotComponent } from "~/entity/entity-list/list-slot-types";
 
 import { ProjectScheduleListSlot } from "./project-schedule";
 import { ProjectsDashboard } from "./projects-dashboard";

@@ -1,17 +1,15 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState } from "react";
 
-import { getHomeAsOfWindow } from "~/app/_components/home/home-as-of-window";
-import { TodayAttention } from "~/app/_components/home/HouseCard";
-import { TodayMeals } from "~/app/_components/home/MealsCard";
-import { PantryValueCard } from "~/app/_components/home/PantryValueCard";
-import { DailyPasses } from "~/app/_components/home/QuickActionsCard";
-import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
-import { RecordedSpendCard } from "~/app/_components/home/RecordedSpendCard";
-import { ProblemsBanner } from "~/app/_components/homepage/problems-banner";
 import { TodayNutrition } from "~/app/meals/daily-nutrition";
-import { CollapsibleSection, Grid, Section } from "~/components/layout";
-import { Page } from "~/components/page/Page";
+import { getHomeAsOfWindow } from "~/features/home/home-as-of-window";
+import { TodayAttention } from "~/features/home/HouseCard";
+import { TodayMeals } from "~/features/home/MealsCard";
+import { PantryValueCard } from "~/features/home/PantryValueCard";
+import { ProblemsBanner } from "~/features/home/problems-banner";
+import { DailyPasses } from "~/features/home/QuickActionsCard";
+import { RecentActivityFeed } from "~/features/home/RecentActivityFeed";
+import { RecordedSpendCard } from "~/features/home/RecordedSpendCard";
 import {
   expense,
   location,
@@ -21,15 +19,15 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { authClient } from "~/lib/auth-client";
 import { formatInstant } from "~/lib/date-format";
+import { CollapsibleSection, Grid, Section } from "~/ui/layout";
+import { Page } from "~/ui/page/Page";
 
 const HomeInsights = lazy(async () => {
-  const module = await import("~/app/_components/home/HomeInsights");
+  const module = await import("~/features/home/HomeInsights");
   return { default: module.HomeInsights };
 });
 
-const EntityCount = lazy(
-  () => import("~/app/_components/homepage/entitycount"),
-);
+const EntityCount = lazy(() => import("~/features/home/entitycount"));
 
 export const Route = createFileRoute("/")({
   // The home dashboard is authenticated-only (the counts/feeds are all

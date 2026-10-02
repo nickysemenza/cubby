@@ -22,7 +22,6 @@ import {
 } from "react";
 import { z } from "zod";
 
-import { useSectionVisible } from "~/app/_components/data-table/detail-page";
 import { runHref } from "~/app/purchases/purchase-import-links";
 import {
   agentUrl,
@@ -31,22 +30,8 @@ import {
 } from "~/app/runs/agent-observation";
 import { usePhotoRunReview } from "~/app/runs/photo-group-review";
 import { PhotoImportRunView } from "~/app/runs/photo-run-detail";
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { Row, Section, Stack } from "~/components/layout";
-import { ShortcodeProse } from "~/components/shortcode-prose";
-import { Badge, type BadgeVariant } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
-import { StatGrid, StatTile } from "~/components/ui/stat-tile";
-import { StatusText } from "~/components/ui/status-text";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
 import type { RunDetail } from "~/contracts/run.contract";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   purchaseImport,
@@ -56,6 +41,21 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { formatInstant } from "~/lib/date-format";
 import { putPresignedObject } from "~/lib/presigned-upload";
 import { cn, formatCurrency } from "~/lib/utils";
+import { useSectionVisible } from "~/ui/data-table/detail-page";
+import { Row, Section, Stack } from "~/ui/layout";
+import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
+import { Button } from "~/ui/primitives/button";
+import { StatGrid, StatTile } from "~/ui/primitives/stat-tile";
+import { StatusText } from "~/ui/primitives/status-text";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/ui/primitives/table";
+import { ShortcodeProse } from "~/ui/shortcode-prose";
 
 import { AgentContextPerCall } from "./agent-context-breakdown";
 import {

@@ -1,8 +1,8 @@
 import type { MerchantVendorInference } from "@cubby/schemas/financial-transaction";
 
-import { EntityRefLink } from "~/components/entity/entity-ref-link";
-import { Row, Stack } from "~/components/layout";
-import { entities, entityDetailParams } from "~/entities/entities";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { entities, entityDetailParams } from "~/entity/entities";
+import { Row, Stack } from "~/ui/layout";
 
 const supportCopy = (count: number) =>
   `${count} previously settled ${count === 1 ? "transaction" : "transactions"}`;

@@ -11,7 +11,7 @@ export default defineEntity({
     // No kernel `get`: the detail reads the cookbook summary query.
     detailOverride: {
       query: {
-        module: "~/entities/cookbook-queries",
+        module: "~/entity/cookbook-queries",
         export: "cookbookDetailQuery",
       },
     },
