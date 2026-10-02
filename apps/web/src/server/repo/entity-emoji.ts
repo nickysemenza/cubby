@@ -13,18 +13,13 @@ import { logAuditEntry } from "./audit-log";
 import { notDeleted, unwrapDb } from "./database-helpers";
 import { SHORTCODE_TABLE } from "./generated/shortcode-tables.gen";
 
-/** Legacy field aliases are declaration-owned and accepted only when they agree. */
+/** Every new identity write uses the shared emoji validation. */
 export function normalizeRecordEmoji(entity: Entity, input: unknown) {
   const data = z.record(z.string(), z.unknown()).parse(input);
   const field = entityInspectorMetadata[entity].recordEmojiField;
   if (!field) return data;
-  const keys = [field, ...entityInspectorMetadata[entity].recordEmojiAliases];
-  const provided = keys.filter((key) => Object.hasOwn(data, key));
-  if (!provided.length) return data;
-  const values = provided.map((key) => recordEmojiInput.parse(data[key]));
-  if (values.some((value) => value !== values[0]))
-    throw new Error("Conflicting emoji and legacy icon values.");
-  return { ...data, [field]: values[0] };
+  if (!Object.hasOwn(data, field)) return data;
+  return { ...data, [field]: recordEmojiInput.parse(data[field]) };
 }
 
 /** The kernel owns identity persistence independently of repository domain patches. */
@@ -76,12 +71,6 @@ export async function withRecordEmoji<Row>(
     const emoji = byCode.get(identity.parse(row).id) ?? null;
     return Object.assign({}, row, {
       [field]: emoji,
-      ...Object.fromEntries(
-        entityInspectorMetadata[entity].recordEmojiAliases.map((alias) => [
-          alias,
-          emoji,
-        ]),
-      ),
     });
   });
 }
@@ -130,7 +119,7 @@ export async function auditRecordEmoji(
     });
 }
 
-/** An old full-record writer may send an unchanged legacy mark while editing another field. */
+/** A full-record edit may retain an unchanged legacy mark while editing another field. */
 export async function normalizeSavedRecordEmoji(
   db: Database,
   entity: keyof typeof SHORTCODE_TABLE,
@@ -140,22 +129,17 @@ export async function normalizeSavedRecordEmoji(
   const data = z.record(z.string(), z.unknown()).parse(input);
   const presentation = entityInspectorMetadata[entity];
   const field = presentation.recordEmojiField;
-  if (!field || !presentation.recordEmojiAliases.length)
-    return normalizeRecordEmoji(entity, data);
-  const keys = [field, ...presentation.recordEmojiAliases].filter((key) =>
-    Object.hasOwn(data, key),
-  );
+  if (!field) return normalizeRecordEmoji(entity, data);
   if (
-    keys.length &&
-    keys.every((key) => data[key] === data[keys[0]!]) &&
-    !recordEmojiInput.safeParse(data[keys[0]!]).success
+    Object.hasOwn(data, field) &&
+    !recordEmojiInput.safeParse(data[field]).success
   ) {
     const previous = await recordEmojiBeforeUpdate(db, entity, code, {
-      [field]: data[keys[0]!],
+      [field]: data[field],
     });
-    if (previous === data[keys[0]!])
+    if (previous === data[field])
       return Object.fromEntries(
-        Object.entries(data).filter(([key]) => !new Set<string>(keys).has(key)),
+        Object.entries(data).filter(([key]) => key !== field),
       );
   }
   return normalizeRecordEmoji(entity, data);

@@ -943,7 +943,6 @@ const buildMetadataSchemas = () => {
         })
         .strict(),
       recordEmojiField: fieldKey.nullable().optional().default(null),
-      recordEmojiAliases: z.array(fieldKey).optional().default([]),
       icons: z
         .object({
           /** A `@phosphor-icons/react` export name; the browser registry resolves it. */

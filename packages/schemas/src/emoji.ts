@@ -27,7 +27,8 @@ export const recordEmojiField = {
   validation: {
     read: z.string().nullable().optional(),
     create: recordEmojiInput.optional(),
-    update: recordEmojiInput.optional(),
+    // Saved legacy text is compared by the kernel before validating a changed identity.
+    update: z.string().nullable().optional(),
   },
 } as const;
 

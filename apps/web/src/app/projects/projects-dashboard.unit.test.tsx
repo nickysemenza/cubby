@@ -29,7 +29,6 @@ function projectFixture(): ProjectOut {
     parentProjectId: null,
     startDate: null,
     endDate: null,
-    icon: null,
     notes: null,
     googleDriveFolderUrl: null,
     notionPageUrl: null,

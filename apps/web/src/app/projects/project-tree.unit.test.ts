@@ -24,7 +24,6 @@ function proj(id: string, parentProjectId?: string): ProjectListItemOut {
         : null,
     startDate: null,
     endDate: null,
-    icon: null,
     notes: null,
     googleDriveFolderUrl: null,
     notionPageUrl: null,

@@ -124,28 +124,23 @@ test("edits compound emoji, clears it, and browses inherited category membership
     name: "Synthetic emoji project",
     kind: "household",
     year: 2199,
-    icon: "🛠️",
+    emoji: "🛠️",
   });
-  for (const data of [
-    { icon: null },
-    { emoji: "🏠" },
-    { emoji: null },
-    { icon: "🛠️" },
-  ]) {
-    await patch(`projects/${project}`, z.json().parse(data));
-    const persisted = z
-      .object({ emoji: z.string().nullable(), icon: z.string().nullable() })
-      .parse(
-        await (await page.request.get(`/api/v1/projects/${project}`)).json(),
-      );
-    const value = "emoji" in data ? data.emoji : data.icon;
-    expect(persisted).toMatchObject({ emoji: value, icon: value });
+  for (const emoji of [null, "🏠", null, "🛠️"]) {
+    await patch(`projects/${project}`, { emoji });
+    const body = await (
+      await page.request.get(`/api/v1/projects/${project}`)
+    ).json();
+    expect(z.object({ emoji: z.string().nullable() }).parse(body).emoji).toBe(
+      emoji,
+    );
+    expect(Object.hasOwn(body, "icon")).toBe(false);
   }
-  const conflict = await page.request.patch(`/api/v1/projects/${project}`, {
+  const invalid = await page.request.patch(`/api/v1/projects/${project}`, {
     headers,
-    data: { emoji: "🏠", icon: "🛠️" },
+    data: { emoji: "multiple emoji 🥕🥦" },
   });
-  expect(conflict.ok()).toBe(false);
+  expect(invalid.ok()).toBe(false);
   await gotoAuthenticatedPage(page, `/spending-categories/${spending}`);
   await page.getByRole("button", { name: /more/ }).first().click();
   await expect(

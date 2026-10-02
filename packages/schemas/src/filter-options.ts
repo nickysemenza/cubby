@@ -39,7 +39,6 @@ const filterOptionProjection = z.enum([
   "count",
   "logo",
   "kind",
-  "icon",
   "dates",
 ]);
 export type FilterOptionProjection = z.infer<typeof filterOptionProjection>;
@@ -93,8 +92,6 @@ export const filterOptionItem = z.object({
   logo: imageUrlSummary.nullable().optional(),
   /** Present when requested through `include` (`ledgerParty`'s kind). */
   kind: ledgerPartyKind.optional(),
-  /** Present when requested through `include` (an entity's own icon, e.g. `project`). */
-  icon: z.string().nullable().optional(),
   emoji: z.string().nullable().optional(),
   /**
    * Present when requested through `include` (`project`'s effective content

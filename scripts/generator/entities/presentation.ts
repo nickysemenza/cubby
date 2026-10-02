@@ -417,8 +417,6 @@ function recordEmojiEdit(
         `${context}.recordEmojiField requires a nullable, editable text field on a mutable entity.`,
       );
     lookup.read(emojiField, "recordEmojiField");
-    for (const alias of presentation.recordEmojiAliases)
-      lookup.read(alias, "recordEmojiAliases");
   }
   const editSections = presentation.edit.sections;
   return emojiField &&
