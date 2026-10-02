@@ -601,7 +601,7 @@ export class MacImportDriver {
   ): void {
     const file = path.join(
       this.artifacts,
-      `${String(++this.sequence).padStart(3, "0")}-${args[0]}.txt`,
+      `${createHash("sha256").update(this.session).digest("hex").slice(0, 8)}-${String(++this.sequence).padStart(3, "0")}-${args[0]}.txt`,
     );
     writeFileSync(file, output);
     this.evidence.push(file);
