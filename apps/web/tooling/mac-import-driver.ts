@@ -829,15 +829,9 @@ export class MacImportDriver {
     await this.click('label="Open" role=Button');
   }
   async openSettings(): Promise<void> {
-    this.observe();
-    const existing = this.matching("id=com_apple_SwiftUI_Settings_window");
-    // Browser capture changes focus; raise the existing owned window directly.
-    if (existing.length) {
-      this.presentationAction("raise", "com_apple_SwiftUI_Settings_window", "");
-      this.record(["raise-settings-window"], 0, this.observe());
-    } else {
-      this.nativeShortcut(43, "Settings");
-    }
+    // SwiftUI Settings can expose AXWindow without supporting AXRaise.
+    // The registered command also brings an existing Settings window forward.
+    this.nativeShortcut(43, "Settings");
     await this.wait('label="Settings" role=window');
     await this.wait("id=settings.purchaseImport.syncNow");
   }

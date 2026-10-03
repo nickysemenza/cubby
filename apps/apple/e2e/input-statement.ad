@@ -2,7 +2,8 @@ context platform=ios timeout=240000
 
 open com.nickysemenza.cubby
 wait "role=Button label=Library" 60000
-click "role=Button label=Library"
+# Tap the visible tab in the fixed simulator; the selector click can leave Work selected.
+press 257 822
 wait text "Browse catalog" 30000
 click "label=\"Browse catalog\""
 wait "id=browse.importStatement" 30000
