@@ -31,4 +31,4 @@ runs:
           !~/.agent-device/apple-runner/derived/**/AgentDeviceRunner.env.session-*
           !~/.agent-device/apple-runner/derived/**/lock
           !~/.agent-device/apple-runner/derived/**/*.lock
-        key: agent-device-apple-runner-v2-${{ runner.os }}-${{ inputs.toolchain-hash }}-${{ hashFiles('node_modules/agent-device/package.json') }}
+        key: agent-device-apple-runner-v3-${{ runner.os }}-${{ inputs.toolchain-hash }}-${{ hashFiles('node_modules/agent-device/package.json', 'patches/agent-device@0.21.20.patch') }}

@@ -199,7 +199,7 @@ overrides:
 packageExtensionsChecksum: sha256-GYGvzqzCaBEjRUkt2pA0hJT6/Z1e6lbIOYIR82rtvfo=
 
 patchedDependencies:
-  agent-device@0.21.20: 1872e655a2b0e0b18f0416e8f6f4189a8e3dccf9977d8359e0162a4bb44d18f5
+  agent-device@0.21.20: 46825c16c8cab75b62371f35edb42317eab87d88dff708f0fa5b50a828ca8d30
   pg-cloudflare@1.4.1: 7ba78d4e240dc5d04b32abfe9c2e6513ab69633aa0ac82f45ab77c372b1d36c6
 
 importers:
@@ -230,7 +230,7 @@ importers:
         version: 26.6.3
       agent-device:
         specifier: 0.21.20
-        version: 0.21.20(patch_hash=1872e655a2b0e0b18f0416e8f6f4189a8e3dccf9977d8359e0162a4bb44d18f5)(ai@7.0.127(zod@4.6.5))
+        version: 0.21.20(patch_hash=46825c16c8cab75b62371f35edb42317eab87d88dff708f0fa5b50a828ca8d30)(ai@7.0.127(zod@4.6.5))
       concurrently:
         specifier: ^10.0.5
         version: 10.0.5
@@ -11204,7 +11204,7 @@ snapshots:
 
   '@e2e-dev/mobile@0.9.0(ai@7.0.127(zod@4.6.5))(e2e@0.15.2(@ai-sdk/openai@4.0.83(zod@4.6.5))(@cfworker/json-schema@4.1.1)(ai@7.0.127(zod@4.6.5))(supports-color@10.2.2))':
     dependencies:
-      agent-device: 0.21.20(patch_hash=1872e655a2b0e0b18f0416e8f6f4189a8e3dccf9977d8359e0162a4bb44d18f5)(ai@7.0.127(zod@4.6.5))
+      agent-device: 0.21.20(patch_hash=46825c16c8cab75b62371f35edb42317eab87d88dff708f0fa5b50a828ca8d30)(ai@7.0.127(zod@4.6.5))
       e2e: 0.15.2(@ai-sdk/openai@4.0.83(zod@4.6.5))(@cfworker/json-schema@4.1.1)(ai@7.0.127(zod@4.6.5))(supports-color@10.2.2)
       pngjs: 7.0.0
       zod: 4.6.5
@@ -15177,7 +15177,7 @@ snapshots:
 
   agent-base@9.0.0: {}
 
-  agent-device@0.21.20(patch_hash=1872e655a2b0e0b18f0416e8f6f4189a8e3dccf9977d8359e0162a4bb44d18f5)(ai@7.0.127(zod@4.6.5)):
+  agent-device@0.21.20(patch_hash=46825c16c8cab75b62371f35edb42317eab87d88dff708f0fa5b50a828ca8d30)(ai@7.0.127(zod@4.6.5)):
     optionalDependencies:
       ai: 7.0.127(zod@4.6.5)
 
