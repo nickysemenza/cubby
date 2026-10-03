@@ -73,7 +73,7 @@ export class MacImportDriver {
   }
 
   private presentationAction(
-    action: "press" | "scroll" | "fill" | "raise",
+    action: "press" | "scroll" | "fill",
     containerID: string,
     value: string,
   ): boolean {
@@ -796,7 +796,15 @@ export class MacImportDriver {
     this.guardForeground();
     // View commands can change the main destination while Settings remains key.
     // Raise the owned main window before invoking a file importer or sheet.
-    this.presentationAction("raise", "main", "");
+    execFileSync(
+      "osascript",
+      [
+        "-e",
+        'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set mainWindow to first window of ownedProcess whose value of attribute "AXIdentifier" is "main"\n perform action "AXRaise" of mainWindow\n end tell\nend run',
+        String(this.pid),
+      ],
+      { encoding: "utf8", timeout: 10000 },
+    );
     this.record(["raise-main-window", label], 0, this.observe());
   }
   private nativeShortcut(keyCode: number, label: string): void {

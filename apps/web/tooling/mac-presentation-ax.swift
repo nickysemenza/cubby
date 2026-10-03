@@ -96,11 +96,6 @@ guard containers.count == 1 else {
 }
 let status: AXError
 switch arguments[1] {
-case "raise":
-    guard attribute(containers[0], kAXRoleAttribute) as? String == kAXWindowRole else {
-        fatalError("Expected one owned AX window")
-    }
-    status = AXUIElementPerformAction(containers[0], kAXRaiseAction as CFString)
 case "press":
     let buttons = descendants(containers[0]) {
         attribute($0, kAXIdentifierAttribute) as? String == arguments[5]
