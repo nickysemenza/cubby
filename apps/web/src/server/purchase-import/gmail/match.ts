@@ -1,5 +1,5 @@
 import type { LedgerPartyId, VendorId } from "@cubby/schemas/identifiers";
-import { and, eq, gte, isNotNull, isNull, lte, ne } from "drizzle-orm";
+import { and, eq, gt, gte, isNotNull, isNull, lte, ne } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { orderMail, orderMailEvent } from "~/server/db/schema";
@@ -9,6 +9,8 @@ import { cents } from "~/server/repo/money";
 import { uniqueOrderSubsetForCharge } from "../writer-policy";
 
 interface HuntWindow {
+  /** Only mail saved after this instant counts (a reopened hunt never re-reads old mail). */
+  savedAfter?: Date;
   ledgerPartyId: LedgerPartyId;
   vendorId: VendorId;
   /** Signed statement amount: charges positive, credits negative. */
@@ -34,6 +36,7 @@ export async function orderAmountsInHuntWindow(db: Database, hunt: HuntWindow) {
         isNotNull(orderMailEvent.orderId),
         isNotNull(orderMailEvent.amount),
         isNull(orderMailEvent.supersededAt),
+        hunt.savedAfter ? gt(orderMail.createdAt, hunt.savedAfter) : undefined,
         hunt.amount < 0
           ? eq(orderMailEvent.event, "refunded")
           : ne(orderMailEvent.event, "refunded"),

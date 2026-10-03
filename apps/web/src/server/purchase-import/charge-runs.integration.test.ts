@@ -506,7 +506,11 @@ describe("selected statement-charge runs", () => {
       .select({ input: runTable.input })
       .from(runTable)
       .where(eq(runTable.id, restarted.successorRunId!));
-    expect(successor?.input).toEqual(started.run.input);
+    // Only the unresolved charges travel; the settled one stays with its run.
+    expect(successor?.input).toEqual({
+      kind: "charge_hunts",
+      huntIds: [a.id, b.id],
+    });
     expect((await huntOf(s.a.shortcode)).state).toBe("browser_queued");
     expect((await huntOf(s.b.shortcode)).state).toBe("browser_queued");
     expect((await huntOf(s.c.shortcode)).state).toBe("resolved");
@@ -684,5 +688,68 @@ describe("selected statement-charge runs", () => {
         operationId: "finish:skipped",
       }),
     ).resolves.toMatchObject({ status: "needs_review" });
+  });
+
+  it("treats a dispatch_failed charge run as holding its hunts against implicit starts, restarts, and retries", async () => {
+    const s = await threeCharges();
+    // A finished implicit run on the account that a member could restart.
+    const implicit = await startOrResumeRun(ctx.db, {
+      ledgerPartyId: s.party.id,
+      vendorAccountId: s.account.id,
+      trigger: "manual",
+    });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "dispatch_failed" })
+      .where(eq(runTable.id, implicit.id));
+    const [implicitRow] = await getDb(ctx.db)
+      .select({ shortcode: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, implicit.id));
+    const charge = await start(s, [s.a]);
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "dispatch_failed" })
+      .where(eq(runTable.id, charge.run.id));
+
+    await expect(
+      startOrResumeRun(ctx.db, {
+        ledgerPartyId: s.party.id,
+        vendorAccountId: s.account.id,
+        trigger: "manual",
+      }),
+    ).rejects.toThrow("charge search");
+    await expect(
+      controlRun(ctx.db, ctx.actor, {
+        runPublicId: implicitRow!.shortcode,
+        action: "retry_dispatch",
+      }),
+    ).rejects.toThrow("charge search");
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "failed" })
+      .where(eq(runTable.id, implicit.id));
+    await expect(
+      controlRun(ctx.db, ctx.actor, {
+        runPublicId: implicitRow!.shortcode,
+        action: "restart",
+      }),
+    ).rejects.toThrow("charge search");
+  });
+
+  it("refuses to restart a charge run that has nothing left to carry", async () => {
+    const s = await threeCharges();
+    const started = await start(s, [s.a]);
+    await allocate(s, s.a);
+    await finishRun(ctx.db, broker, {
+      runId: started.run.id,
+      operationId: "finish:done",
+    });
+    await expect(
+      controlRun(ctx.db, ctx.actor, {
+        runPublicId: started.runId,
+        action: "restart",
+      }),
+    ).rejects.toThrow("no unresolved charges");
   });
 });

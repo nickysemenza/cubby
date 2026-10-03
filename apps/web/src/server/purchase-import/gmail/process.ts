@@ -12,8 +12,10 @@ import {
   isNotNull,
   isNull,
   like,
+  lt,
   lte,
   notInArray,
+  or,
 } from "drizzle-orm";
 
 import { classifyOrderMail } from "~/server/agents/purchase-import/extract";
@@ -46,7 +48,7 @@ import { attachFileToEntity } from "~/server/services/image-storage.service";
 
 import {
   MAIL_MATCHABLE_HUNT_STATES,
-  notOwnedByUnfinishedChargeRun,
+  notHeldByChargeRun,
 } from "../charge-hunt-state";
 import { refundTally } from "../findings";
 import {
@@ -452,7 +454,12 @@ export async function processOrderMails(
               eq(importHunt.ledgerPartyId, mail.ledgerPartyId),
               eq(importHunt.vendorId, matchedVendor.id),
               inArray(importHunt.state, [...MAIL_MATCHABLE_HUNT_STATES]),
-              notOwnedByUnfinishedChargeRun,
+              notHeldByChargeRun,
+              // A reopened charge re-matches only mail saved after it was left.
+              or(
+                eq(importHunt.state, "pending_mail"),
+                lt(importHunt.updatedAt, mail.createdAt),
+              ),
               lte(importHunt.dateFrom, date),
               gte(importHunt.dateTo, date),
             ),

@@ -28,14 +28,14 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import {
   MAIL_MATCHABLE_HUNT_STATES,
-  notOwnedByUnfinishedChargeRun,
+  notHeldByChargeRun,
 } from "./charge-hunt-state";
 import { dispatchRunEvent } from "./dispatch";
 import { matchProcessedOrderMail } from "./gmail/match";
 import { settleRetainedPaymentEvidence } from "./retained-settlement";
 import {
-  ACTIVE_RUN_STATUSES,
   ActiveChargeRunError,
+  CHARGE_HOLDING_STATUSES,
   startOrResumeRun,
 } from "./run-service";
 
@@ -207,13 +207,17 @@ export async function discoverImportHunts(db: Database): Promise<number> {
     const [reopened] = inserted.length
       ? []
       : await database
-          .select({ id: importHunt.id, state: importHunt.state })
+          .select({
+            id: importHunt.id,
+            state: importHunt.state,
+            updatedAt: importHunt.updatedAt,
+          })
           .from(importHunt)
           .where(
             and(
               eq(importHunt.financialTransactionId, row.financialTransactionId),
               inArray(importHunt.state, [...MAIL_MATCHABLE_HUNT_STATES]),
-              notOwnedByUnfinishedChargeRun,
+              notHeldByChargeRun,
             ),
           );
     const [hunt] = inserted.length ? inserted : reopened ? [reopened] : [];
@@ -229,6 +233,10 @@ export async function discoverImportHunts(db: Database): Promise<number> {
       vendorId: row.vendorId,
       amount: row.amount,
       ...window,
+      savedAfter:
+        reopened && reopened.state !== "pending_mail"
+          ? reopened.updatedAt
+          : undefined,
     });
     if (!matchedOrderIds) continue;
     await database
@@ -297,7 +305,7 @@ export async function dispatchImportHunts(
         .where(
           and(
             sql`${runTable.input}->>'kind' = 'charge_hunts'`,
-            inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+            inArray(runTable.status, [...CHARGE_HOLDING_STATUSES]),
           ),
         )
     ).map((row) => row.accountId),

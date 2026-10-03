@@ -633,6 +633,66 @@ describe("Gmail order mail processing", () => {
     });
   });
 
+  it("does not re-match a reopened charge with mail saved before it was left", async () => {
+    const seed = await seedForgeWear();
+    const charge = await statementRow(seed, 64.25, "2026-09-10");
+    await discoverImportHunts(ctx.db);
+    const [hunt] = await getDb(ctx.db)
+      .select({ id: importHunt.id })
+      .from(importHunt);
+    // The run left the charge deferred after this moment, so mail saved now
+    // is older than the deferral.
+    await getDb(ctx.db)
+      .update(importHunt)
+      .set({
+        state: "deferred_for_review",
+        updatedAt: new Date(Date.now() + 60_000),
+      })
+      .where(eq(importHunt.id, hunt!.id));
+    await receiveMail(
+      seed,
+      "msg-seen-by-agent",
+      "2026-09-10T15:00:00.000Z",
+      placed("FW-SYN-1001", 64.25, "2026-09-10T15:00:00.000Z"),
+    );
+    expect((await huntFor(charge.id)).state).toBe("deferred_for_review");
+  });
+
+  it("re-matches a reopened charge in discovery only from mail saved after it was left", async () => {
+    const seed = await seedForgeWear();
+    await receiveMail(
+      seed,
+      "msg-before-charge",
+      "2026-09-10T15:00:00.000Z",
+      placed("FW-SYN-1001", 64.25, "2026-09-10T15:00:00.000Z"),
+    );
+    const charge = await statementRow(seed, 64.25, "2026-09-10");
+    await discoverImportHunts(ctx.db);
+    const [hunt] = await getDb(ctx.db)
+      .select({ id: importHunt.id })
+      .from(importHunt);
+    const reopen = (updatedAt: Date) =>
+      getDb(ctx.db)
+        .update(importHunt)
+        .set({
+          state: "deferred_for_review",
+          matchedOrderIds: [],
+          updatedAt,
+        })
+        .where(eq(importHunt.id, hunt!.id));
+    // Left after the mail was saved: the agent already saw it.
+    await reopen(new Date(Date.now() + 60_000));
+    await discoverImportHunts(ctx.db);
+    expect((await huntFor(charge.id)).state).toBe("deferred_for_review");
+    // Left before the mail was saved: the mail is new to the hunt.
+    await reopen(new Date(0));
+    await discoverImportHunts(ctx.db);
+    expect(await huntFor(charge.id)).toMatchObject({
+      state: "pending_browser",
+      matchedOrderIds: ["FW-SYN-1001"],
+    });
+  });
+
   it("never matches a refund mail to a charge hunt, or an order confirmation to a statement credit", async () => {
     const seed = await seedForgeWear();
     const charge = await statementRow(seed, 42, "2026-09-10");

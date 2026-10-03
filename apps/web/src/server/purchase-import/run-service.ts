@@ -189,6 +189,33 @@ export const ACTIVE_RUN_STATUSES = [
   "paused_approval",
 ] as const;
 
+/** Statuses in which a charge run holds its hunts (a failed dispatch is retried). */
+export const CHARGE_HOLDING_STATUSES = [
+  ...ACTIVE_RUN_STATUSES,
+  "dispatch_failed",
+] as const;
+
+/** An implicit start, restart, or retry must not work a charge run's account. */
+async function assertNoHoldingChargeRun(
+  tx: DrizzleTransaction,
+  accountId: VendorAccountId,
+  exceptRunId?: RunId,
+) {
+  const [held] = await tx
+    .select({ shortcode: runTable.shortcode })
+    .from(runTable)
+    .where(
+      and(
+        eq(runTable.vendorAccountId, accountId),
+        inArray(runTable.status, [...CHARGE_HOLDING_STATUSES]),
+        sql`${runTable.input}->>'kind' = 'charge_hunts'`,
+        exceptRunId ? ne(runTable.id, exceptRunId) : undefined,
+      ),
+    )
+    .limit(1);
+  if (held) throw new ActiveChargeRunError(held.shortcode);
+}
+
 type TargetedRunTarget =
   | {
       kind: "purchase";
@@ -465,20 +492,7 @@ export async function startOrResumeRun(
           "Vendor account already has an active import run; finish or stop it before starting this backfill",
         );
     }
-    if (!chargeHunts) {
-      const [active] = await tx
-        .select({ shortcode: runTable.shortcode, input: runTable.input })
-        .from(runTable)
-        .where(
-          and(
-            eq(runTable.vendorAccountId, input.vendorAccountId),
-            inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
-          ),
-        )
-        .limit(1);
-      if (active && chargeHuntRunInput.safeParse(active.input).success)
-        throw new ActiveChargeRunError(active.shortcode);
-    }
+    if (!chargeHunts) await assertNoHoldingChargeRun(tx, input.vendorAccountId);
     if (chargeHunts) {
       const [active] = await tx
         .select({ shortcode: runTable.shortcode })
@@ -1826,7 +1840,9 @@ export async function claimNextImportWork(
       and(
         eq(importHunt.vendorAccountId, scope.public.vendorAccountId),
         eq(importHunt.state, "browser_queued"),
-        chargeHuntIds ? inArray(importHunt.id, chargeHuntIds) : undefined,
+        chargeHuntIds
+          ? inArray(importHunt.id, chargeHuntIds)
+          : notOwnedByUnfinishedChargeRun,
       ),
     )
     .orderBy(
@@ -3239,7 +3255,7 @@ export async function finishRun(
                 // A charge run answers only for its own selection.
                 chargeHuntIds
                   ? inArray(importHunt.id, chargeHuntIds)
-                  : undefined,
+                  : notOwnedByUnfinishedChargeRun,
               ),
             )
             .limit(1)
@@ -4116,7 +4132,9 @@ export async function controlRun(
         .from(runTable)
         .where(eq(runTable.id, scope.public.runId))
         .limit(1)
-        .for("update");
+        // A key-preserving lock: this transaction also touches child rows
+        // whose foreign keys share-lock the Run, so a full lock could deadlock.
+        .for("no key update");
       if (!locked) throw new Error("Purchase import run was not found");
       if (input.action === "restart") {
         if (
@@ -4160,18 +4178,23 @@ export async function controlRun(
           );
         const restartCharges = chargeHuntRunInput.safeParse(locked.input);
         let carriedChargeHuntIds: string[] = [];
-        if (restartCharges.success && locked.vendorAccountId) {
+        if (locked.vendorAccountId) {
           // Same admission fence as starting a run on this account.
           await tx.execute(
             sql`SELECT pg_advisory_xact_lock(hashtext(${locked.vendorAccountId}))`,
           );
+          if (!restartCharges.success)
+            await assertNoHoldingChargeRun(tx, locked.vendorAccountId);
+        }
+        if (restartCharges.success && locked.vendorAccountId) {
           const [active] = await tx
             .select({ shortcode: runTable.shortcode })
             .from(runTable)
             .where(
               and(
                 eq(runTable.vendorAccountId, locked.vendorAccountId),
-                inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+                inArray(runTable.status, [...CHARGE_HOLDING_STATUSES]),
+                ne(runTable.id, scope.public.runId),
               ),
             )
             .limit(1);
@@ -4179,19 +4202,29 @@ export async function controlRun(
             throw new Error(
               `Vendor account already has an active import run (${active.shortcode}); finish or stop it before restarting`,
             );
-          const taken = await tx
+          // Carry only unresolved charges that no other unfinished run holds.
+          const carried = await tx
             .select({ id: importHunt.id })
             .from(importHunt)
             .where(
               and(
                 inArray(importHunt.id, restartCharges.data.huntIds),
-                unfinishedChargeRunOwns(scope.public.runId),
+                inArray(importHunt.state, [
+                  CHARGE_HUNT_STATE.queued,
+                  CHARGE_HUNT_STATE.deferred,
+                  CHARGE_HUNT_STATE.notFound,
+                ]),
+                sql`NOT ${unfinishedChargeRunOwns({
+                  exceptRunId: scope.public.runId,
+                  includeReview: true,
+                })}`,
               ),
             );
-          const takenIds = new Set(taken.map((hunt) => hunt.id));
-          carriedChargeHuntIds = restartCharges.data.huntIds.filter(
-            (id) => !takenIds.has(id),
-          );
+          carriedChargeHuntIds = carried.map((hunt) => hunt.id);
+          if (carriedChargeHuntIds.length === 0)
+            throw new Error(
+              "This charge search has no unresolved charges to carry; select charges again",
+            );
         }
         const successorId = runEntityId.parse(crypto.randomUUID());
         const dispatchEventId = crypto.randomUUID();
@@ -4217,7 +4250,12 @@ export async function controlRun(
           purpose: locked.purpose,
           trigger: backfill ? "backfill" : "manual",
           notes: locked.notes,
-          input: locked.input,
+          input: restartCharges.success
+            ? chargeHuntRunInput.parse({
+                kind: "charge_hunts",
+                huntIds: carriedChargeHuntIds,
+              })
+            : locked.input,
           historyCursorUrl: resumeHistoryUrl,
           coordinatorModel: coordinatorModelFor(locked.purpose),
           skillRevision: locked.skillRevision,
@@ -4310,6 +4348,15 @@ export async function controlRun(
         controllerLedgerPartyKind: controller.ledgerPartyKind,
       });
       if (input.action === "retry_dispatch") {
+        if (
+          locked.vendorAccountId &&
+          !chargeHuntRunInput.safeParse(locked.input).success
+        ) {
+          await tx.execute(
+            sql`SELECT pg_advisory_xact_lock(hashtext(${locked.vendorAccountId}))`,
+          );
+          await assertNoHoldingChargeRun(tx, locked.vendorAccountId);
+        }
         if (
           !new Set(["running", "dispatch_failed"]).has(locked.status) ||
           locked.coordinatorStartedAt
