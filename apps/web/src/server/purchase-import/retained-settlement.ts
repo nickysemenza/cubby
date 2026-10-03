@@ -15,6 +15,7 @@ import { and, asc, between, eq, inArray, notInArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  expense,
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
@@ -81,8 +82,11 @@ export type RetainedSettlementOutcome =
   | "incomplete"
   | "competing";
 
+// Sources record the same payment at different precision (a full timestamp
+// and card on the page, a date only in an export), so they agree on amount
+// and charge day.
 const paymentKey = (payment: RetainedPayment) =>
-  `${cents(payment.amount)}|${payment.chargedAt?.toISOString() ?? ""}|${payment.cardLastFour ?? ""}`;
+  `${cents(payment.amount)}|${payment.chargedAt?.toISOString().slice(0, 10) ?? ""}`;
 
 /**
  * One order's payment set. A Purchase seen through several sources (a browser
@@ -361,6 +365,23 @@ async function namesOnlyThisCharge(
   return own?.[0]?.transactionId === input.charge.id;
 }
 
+/** The sum of a Purchase's live, priced Expense lines, or null when none. */
+async function liveExpenseTotalCents(
+  tx: DrizzleTransaction,
+  purchaseId: PurchaseId,
+): Promise<number | null> {
+  const [row] = await tx
+    .select({
+      total: sql<string | null>`sum(${expense.cost})`,
+      priced: sql<number>`count(${expense.cost})::int`,
+    })
+    .from(expense)
+    .where(and(eq(expense.purchaseId, purchaseId), notDeleted(expense)));
+  return row && row.priced > 0 && row.total !== null
+    ? cents(Number(row.total))
+    : null;
+}
+
 /**
  * Settle one Purchase from the payment lines its own order evidence retained.
  *
@@ -413,14 +434,19 @@ export async function settlePurchaseFromRetainedPayments(
   const matches = matchCompletePaymentSet(toPolicyPayments(payments), charges);
   if (!matches) return "incomplete";
 
-  // Payment lines that exceed the order's own printed total describe a
-  // combined charge: this order alone may never absorb it.
+  // Payment lines that exceed the order's own total describe a combined
+  // charge: this order alone may never absorb it. Without a printed total the
+  // live Expense lines stand in; with neither, the paid amount is unproven.
+  const orderTotal =
+    target.statedTotal !== null
+      ? cents(target.statedTotal)
+      : await liveExpenseTotalCents(tx, input.purchaseId);
+  if (orderTotal === null) return "incomplete";
   const paid = payments.reduce(
     (sum, payment) => sum + cents(payment.amount),
     0,
   );
-  const sharesCharge =
-    target.statedTotal !== null && paid > cents(target.statedTotal);
+  const sharesCharge = paid > orderTotal;
   const plan: PlannedAllocation[] = [];
   for (const match of matches) {
     const charge = charges.find((row) => row.id === match.transactionId);

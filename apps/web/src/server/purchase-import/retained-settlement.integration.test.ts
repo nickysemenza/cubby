@@ -63,6 +63,8 @@ describe("settlement from retained order evidence", () => {
       total: number;
       payments: { amount: number; chargedAt: string }[];
       source?: string;
+      /** The order page printed no grand total. */
+      unprintedTotal?: boolean;
     },
   ) {
     seed += 2;
@@ -93,7 +95,7 @@ describe("settlement from retained order evidence", () => {
                 orderedAt: "2026-09-01T12:00:00.000Z",
                 merchant: "ForgeWear",
                 currency: "USD",
-                printedGrandTotal: order.total,
+                printedGrandTotal: order.unprintedTotal ? null : order.total,
                 lines: [
                   {
                     title: `ForgeWear item for ${order.orderId}`,
@@ -289,6 +291,19 @@ describe("settlement from retained order evidence", () => {
       { transactionId: combined.id, purchaseId: first, amount: 20 },
       { transactionId: combined.id, purchaseId: second, amount: 30 },
     ]);
+  });
+
+  it("does not let an order without a printed total absorb a larger combined charge", async () => {
+    const { card, run } = await world();
+    await charge(card.id, { amount: 50, postedDate: "2026-09-04" });
+    const purchaseId = await importOrder(run.id, {
+      orderId: "FW-4101",
+      total: 20,
+      unprintedTotal: true,
+      payments: [{ amount: 50, chargedAt: "2026-09-03T12:00:00.000Z" }],
+    });
+    await settleRetainedPaymentEvidence(ctx.db);
+    expect(await allocationsFor([purchaseId])).toEqual([]);
   });
 
   it("never treats orders whose totals merely add up to a charge as a group", async () => {

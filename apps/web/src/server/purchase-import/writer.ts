@@ -845,6 +845,10 @@ export async function importVendorOrder(
   // eslint-disable-next-line complexity
   return withTransaction(db, async (tx) => {
     const partyId = parseEntityId("ledgerParty", input.ledgerPartyId);
+    // First, before any row lock: a settlement pass holds this lock while it
+    // waits on Purchase rows, so taking it after writing the Purchase would
+    // deadlock against that pass.
+    await lockPartySettlement(tx, partyId);
     const [ownedScope] = await tx
       .select({ partyId: ledgerParty.id })
       .from(ledgerParty)
@@ -1234,9 +1238,6 @@ export async function importVendorOrder(
     });
     if (!claim) throw new Error("Import source claim was not persisted");
 
-    // Taken before this order's payment lines become visible to the same
-    // transaction, so a concurrent settlement pass cannot miss them.
-    await lockPartySettlement(tx, partyId);
     if (isSourceRefresh) {
       await tx
         .delete(purchasePaymentEvidence)
