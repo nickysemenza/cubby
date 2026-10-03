@@ -6,7 +6,7 @@ import {
 } from "@cubby/schemas/data-quality";
 import { describe, expect, it } from "vitest";
 
-import { exceptionReasonsFor } from "./exceptions";
+import { exceptionReasonsFor } from "./exception-reasons";
 
 describe("data exception reasons", () => {
   // A check absent from EXCEPTION_REASONS admits no reason, so its gap could
