@@ -53,6 +53,11 @@ test("imports an incomplete cookbook bundle, retries its staged photo, and prese
     page.getByText("Existing photo preserved", { exact: true }),
   ).toBeVisible();
   await expect(imported).toHaveAttribute("href", destination);
+  // A recipe's result shows before the run's stream closes; leaving earlier
+  // is (correctly) blocked by the "Leave and lose this run?" dialog.
+  await expect(
+    page.getByText("Keep this page open", { exact: false }),
+  ).toHaveCount(0);
   await imported.click();
   const hero = page.getByRole("img", { name: `${name} carrots`, exact: true });
   await expect(hero).toBeVisible();
