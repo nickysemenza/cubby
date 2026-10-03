@@ -132,6 +132,7 @@ import {
   wantsListGroup,
   type ListProjection,
 } from "~/server/repo/list-projection";
+import { locationDescendantsSql } from "~/server/repo/location/descendants-sql";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
 import {
   resolveProductCategory,
@@ -717,7 +718,7 @@ export const buildProductWhere = async (
       and(
         notDeleted(inventoryEntry),
         selectedLocationIds.length > 0
-          ? inArray(inventoryEntry.locationId, selectedLocationIds)
+          ? sql`${inventoryEntry.locationId} IN ${locationDescendantsSql(selectedLocationIds)}`
           : sql`false`,
       ),
     );

@@ -294,7 +294,11 @@ export const productFilterFields = {
   servingAsLocationPresenceFilter: presenceFilter.describe(
     "Filter to products that are / aren't in service as a Location.",
   ),
-  locationIdFilter: entityFilterList(locationShortcode).optional(),
+  locationIdFilter: entityFilterList(locationShortcode)
+    .optional()
+    .describe(
+      "Filter to products with stock in the selected Locations or any of their descendants.",
+    ),
   ingredientPresenceFilter: presenceFilter,
   ingredientIdFilter: entityFilterList(ingredientShortcode).optional(),
   growsPlantIdFilter: entityFilterList(plantShortcode).optional(),
