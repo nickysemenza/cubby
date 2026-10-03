@@ -214,21 +214,11 @@ export function CollectionProductsTable({
                 label: "Quantity",
               },
             },
-            cell: ({ row }) => {
-              const totals = new Map<string, number>();
-              for (const entry of row.original.inventory ?? []) {
-                totals.set(
-                  entry.amount.unit,
-                  (totals.get(entry.amount.unit) ?? 0) + entry.amount.value,
-                );
-              }
-              return (
-                [...totals]
-                  .sort(([left], [right]) => left.localeCompare(right))
-                  .map(([unit, value]) => tryFormatAmount({ value, unit }))
-                  .join(" + ") || "—"
-              );
-            },
+            // Per-unit totals are server-computed (`inventoryTotals`).
+            cell: ({ row }) =>
+              (row.original.inventoryTotals ?? [])
+                .map(({ value, unit }) => tryFormatAmount({ value, unit }))
+                .join(" + ") || "—",
           }),
         );
         add(

@@ -226,9 +226,6 @@ function CalendarFortnightChip({
   );
 }
 
-const itemIncludesDay = (item: CalendarItem, day: string) =>
-  item.startDate <= day && item.endDateExclusive > day;
-
 const scheduleQueryInput = (
   startDate: string,
   endDateExclusive: string,
@@ -443,12 +440,19 @@ export function UnifiedCalendar({
   const onCreateOpenChange = useCallback((open: boolean) => {
     if (!open) setCreateKind(null);
   }, []);
+  // Which items a day holds is the server's `days[day].itemIds`, not a span
+  // comparison here — native renders the same buckets.
+  const itemIncludesDay = useCallback(
+    (item: CalendarItem, day: string) =>
+      data?.days[day]?.itemIds.includes(item.id) ?? false,
+    [data],
+  );
   const selectedItems = useMemo(
     () =>
       selectedDay
         ? items.filter((item) => itemIncludesDay(item, selectedDay))
         : NO_ITEMS,
-    [items, selectedDay],
+    [items, selectedDay, itemIncludesDay],
   );
   const selectedSummary = selectedDay
     ? (data?.days[selectedDay] ?? EMPTY_DAY_SUMMARY)

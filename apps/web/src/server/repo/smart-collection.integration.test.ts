@@ -277,6 +277,46 @@ describe("smart Collection live relationships", () => {
     expect((await detail(rule)).totalCount).toBe(0);
     expect((await detail(combined)).totalCount).toBe(1);
   });
+
+  // Web and native both showed a Product's visible stock as one total per
+  // unit; the server owns that sum so neither client re-derives it.
+  it("totals each Product's visible inventory per unit, ordered by unit", async () => {
+    const bench = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Paint bench" }),
+      ctx.actor,
+    );
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Paint shelf" }),
+      ctx.actor,
+    );
+    const crate = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Paint crate" }),
+      ctx.actor,
+    );
+    const roller = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic roller" }),
+      ctx.actor,
+    );
+    const stock = (locationId: typeof bench.id, value: number, unit: string) =>
+      createInventoryFixture(
+        ctx.db,
+        { productId: roller.id, locationId, amount: { value, unit } },
+        ctx.actor,
+      );
+    await stock(bench.id, 2, "each");
+    await stock(shelf.id, 1.5, "each");
+    await stock(crate.id, 3, "box");
+
+    const [row] = (await detail()).products;
+    expect(row?.inventoryTotals).toEqual([
+      { value: 3, unit: "box" },
+      { value: 3.5, unit: "each" },
+    ]);
+  });
 });
 
 describe("collection workflow persistence", () => {

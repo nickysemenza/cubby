@@ -150,18 +150,15 @@ final class WardrobeModel {
     }
 
     /// `collection.referenceDetail` has already filtered these inventory rows to the wardrobe's
-    /// owner. Summarizing that projection here avoids accidentally showing household-wide stock.
+    /// owner and summed them per unit (`inventoryTotals`); native only formats the result.
     private static func wardrobeSubtitle(_ product: CollectionProductOut) -> String? {
         var parts = [String]()
         if !product.manufacturer.isEmpty { parts.append(product.manufacturer) }
 
         let inventory = product.inventory ?? []
-        let totals = Dictionary(grouping: inventory, by: { $0.amount.unit })
-            .map { unit, rows in
-                let value = rows.reduce(0) { $0 + $1.amount.value }
-                return "\(value.formatted(.number.precision(.fractionLength(0...2)))) \(unit)"
-            }
-            .sorted()
+        let totals = (product.inventoryTotals ?? []).map {
+            "\($0.value.formatted(.number.precision(.fractionLength(0...2)))) \($0.unit)"
+        }
         if !totals.isEmpty { parts.append(totals.joined(separator: " + ")) }
 
         let ownerLocationIDs = Set(inventory.map(\.locationId))

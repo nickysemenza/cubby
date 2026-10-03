@@ -428,6 +428,32 @@ export async function getSmartCollectionDetail(
     getProductCoverImageUrlsByProductIds(db, productIds),
     loadPurchasesByProductId(db, productIds),
   ]);
+  const productInventory = (productId: string) => {
+    const inventory = visibleInventory
+      .filter((entry) => entry.productId === productId)
+      .flatMap((entry) => {
+        const loc = graph.locationsById.get(entry.locationId);
+        return loc
+          ? [
+              {
+                id: parseShortcodeFor("inventory", entry.shortcode),
+                locationId: parseShortcodeFor("location", loc.shortcode),
+                amount: entry.amount,
+              },
+            ]
+          : [];
+      });
+    const totals = new Map<string, number>();
+    for (const { amount } of inventory) {
+      totals.set(amount.unit, (totals.get(amount.unit) ?? 0) + amount.value);
+    }
+    return {
+      inventory,
+      inventoryTotals: [...totals]
+        .map(([unit, value]) => ({ value, unit }))
+        .sort((a, b) => a.unit.localeCompare(b.unit)),
+    };
+  };
   return {
     summary: result.summary,
     totalCount: matching.length,
@@ -439,20 +465,7 @@ export async function getSmartCollectionDetail(
       direct: false,
       inherited: false,
       matches: result.members.get(item.id) ?? [],
-      inventory: visibleInventory
-        .filter((entry) => entry.productId === item.id)
-        .flatMap((entry) => {
-          const loc = graph.locationsById.get(entry.locationId);
-          return loc
-            ? [
-                {
-                  id: parseShortcodeFor("inventory", entry.shortcode),
-                  locationId: parseShortcodeFor("location", loc.shortcode),
-                  amount: entry.amount,
-                },
-              ]
-            : [];
-        }),
+      ...productInventory(item.id),
       placements: placements.get(item.id) ?? [],
       purchases: purchases.get(item.id) ?? [],
     })),

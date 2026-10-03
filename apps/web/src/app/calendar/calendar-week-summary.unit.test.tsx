@@ -25,6 +25,7 @@ const summary: CalendarDaySummary = {
   expenseCount: 1,
   mealCount: 2,
   projectCount: 0,
+  itemIds: [],
 };
 
 describe("WeekSummaryGrid", () => {

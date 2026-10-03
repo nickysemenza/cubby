@@ -159,6 +159,8 @@ export const collectionProductOut = z.object({
       }),
     )
     .optional(),
+  /** `inventory` summed per unit and ordered by unit; present with `inventory`. */
+  inventoryTotals: z.array(amount).optional(),
 });
 export type CollectionProductOut = z.infer<typeof collectionProductOut>;
 
