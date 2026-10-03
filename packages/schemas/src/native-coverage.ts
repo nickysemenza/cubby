@@ -1,4 +1,6 @@
-import { mapRecord } from "@cubby/shared";
+// Not "@cubby/shared": its index reaches generated files, and this module is imported by the
+// generator before they exist.
+import { mapRecord } from "../../shared/src/record";
 import type { Entity } from "./entity-core";
 import type {
   ControlRendererId,
