@@ -786,6 +786,11 @@ const CLIENT_PASSTHROUGH_METHODS = {
     method: "setInventoryOwnership",
     doc: "Applies a stored ownership choice to all or part of one inventory row. A partial quantity may split the row; callers must refresh the returned entry ids rather than assuming the original row is the only record changed.",
   },
+  "inventory.receivingContext": {
+    method: "inventoryReceivingContext",
+    doc: null,
+  },
+  "inventory.receiveExpense": { method: "receiveExpense", doc: null },
   "dataQuality.setException": { method: "setDataException", doc: null },
   "dataQuality.clearException": { method: "clearDataException", doc: null },
   "image.detail": { method: "imageDetail", doc: null },
