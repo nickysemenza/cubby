@@ -26,14 +26,22 @@ export const ExpenseSettlement: DetailSlotComponent<"expense"> = ({
       <Row gap="sm" wrap>
         <VerbButton
           verb="split"
-          disabled={!expense.purchaseId}
-          disabledReason="Record this expense's vendor first — a split files its parts under the same purchase."
+          disabledReason={
+            expense.purchaseId
+              ? undefined
+              : "Record this expense's vendor first — a split files its parts under the same purchase."
+          }
           onClick={() => setSplitOpen(true)}
         />
         <VerbButton
           verb="receive"
-          disabled={!expense.productId}
-          disabledReason="Link a product first — receiving needs something to put on a shelf."
+          // `VerbButton` disables on any non-null reason, so pass one only when
+          // there is no Product; an always-present string locked Receive out.
+          disabledReason={
+            expense.productId
+              ? undefined
+              : "Link a product first — receiving needs something to put on a shelf."
+          }
           onClick={() => setReceiveOpen(true)}
         />
       </Row>
