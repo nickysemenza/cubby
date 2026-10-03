@@ -1,7 +1,6 @@
 context platform=ios timeout=240000
 
 open com.nickysemenza.cubby
-snapshot -i
 wait "role=Button label=Find" 240000
 click "role=Button label=Find"
 wait "role=SearchField label=\"Search Cubby\" editable=true" 30000
@@ -19,7 +18,6 @@ wait text "Synthetic Atlas Lantern Updated" 30000
 click "label=Library id=BackButton"
 wait text "Browse catalog" 30000
 click "label=\"Browse catalog\""
-snapshot -i
 scroll down 0.5 --until "id=browse.catalog.product"
 wait "id=browse.catalog.product" 30000
 click "id=browse.catalog.product label=Products"
