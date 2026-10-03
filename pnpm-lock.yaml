@@ -326,9 +326,6 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^5.20261001.1
         version: 5.20261001.1
-      '@flue/sdk':
-        specifier: 2.2.2
-        version: 2.2.2
       '@flue/vite':
         specifier: 2.2.2
         version: 2.2.2(@aws-sdk/credential-provider-node@3.972.84)(@babel/core@8.0.6)(@babel/runtime@7.29.7)(@cloudflare/workers-types@5.20261001.1)(@modelcontextprotocol/client@2.0.0)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.6.5))(@modelcontextprotocol/server@2.0.0)(@smithy/signature-v4@5.7.4)(@tanstack/ai@0.54.0(@opentelemetry/api@1.9.1)(zod@4.6.5))(ai@7.0.127(zod@4.6.5))(hono@4.13.12)(react@19.3.0)(rolldown@1.2.12)(supports-color@10.2.2)(typescript@7.0.2)(undici@8.10.2)(vite@8.3.2(@types/node@26.6.3)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.0))(ws@8.22.0)(zod@4.6.5)

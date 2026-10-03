@@ -12,6 +12,7 @@ import {
   CF_ACCOUNT_ID,
   CF_AIG_GATEWAY_ID,
   getAiGateway,
+  getTestAiGateway,
 } from "~/server/cf-env";
 
 /**
@@ -155,6 +156,18 @@ export function gatewayFetch(
     const headers = strippedHeaders(init);
     const signal = init?.signal ?? undefined;
 
+    const testGateway = getTestAiGateway();
+    if (testGateway) {
+      headers.set("cf-aig-metadata", JSON.stringify(metadata));
+      return captureFailure(
+        await testGateway.fetch(
+          `https://ai-gateway.test/${provider}/${endpoint}`,
+          { ...init, headers, signal },
+        ),
+        opts,
+      );
+    }
+
     const gateway = getAiGateway();
     if (gateway) {
       return captureFailure(
@@ -213,5 +226,9 @@ export function gatewayFetch(
  * embeddings client came to treat a bindingless prod Worker as unconfigured.
  */
 export function gatewayConfigured(): boolean {
-  return getAiGateway() !== undefined || !!env.AI_GATEWAY_API_KEY;
+  return (
+    getTestAiGateway() !== undefined ||
+    getAiGateway() !== undefined ||
+    !!env.AI_GATEWAY_API_KEY
+  );
 }

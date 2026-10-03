@@ -1,11 +1,8 @@
 import { runEntityId, parseEntityId } from "@cubby/schemas/identifiers";
-/* eslint-disable anti-slop/no-unsafe-dictionary-type -- The harness adapts generated Wrangler JSON whose binding dictionaries have no source-level owner type. */
-import { sleep } from "@cubby/shared/retry";
 import { and, eq } from "drizzle-orm";
-import { createWorkerdHarness } from "tooling/purchase-agent-workerd-harness";
+import { awaitEvent, call, mcp, mcpRead } from "tooling/purchase-agent-script";
 import { type TestDbContext, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
-import type { TestHarness } from "wrangler";
 import { z } from "zod";
 
 import {
@@ -16,18 +13,15 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   image,
-  runFinding,
   run as runTable,
   runOperation,
   runProgress,
   runTarget,
   importSourceClaim,
-  oauthRefreshToken,
   product,
   photoGroupProposal,
   purchase,
   purchasePaymentEvidence,
-  session,
 } from "~/server/db/schema";
 import { approvePhotoGroupProposals } from "~/server/photo-import-run/proposals";
 import { getDb } from "~/server/repo/database-helpers";
@@ -39,88 +33,25 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
-  ensurePurchaseAgentOAuthClient,
-  PURCHASE_AGENT_OAUTH_CLIENT_ID,
-} from "./agent-auth";
+  authorizePurchaseAgent,
+  type ScenarioHarness,
+  startScenarioHarness,
+  waitFor,
+  workerdDiagnostic,
+} from "./purchase-agent-workerd.fixtures";
 import {
   startPhotoInventoryCoordinator,
   startPhotoInventoryRun,
   startTargetedRun,
 } from "./run-service";
 
-let harness: TestHarness | undefined;
-
-async function waitFor(predicate: () => Promise<boolean>, message: string) {
-  const deadline = Date.now() + 10_000;
-  while (Date.now() < deadline) {
-    if (await predicate()) return;
-    await sleep(25);
-  }
-  throw new Error(message);
-}
-
-async function workerdDiagnostic(db: TestDbContext["db"], runId: string) {
-  const [run, operations, findings, progress, proposals, usage] =
-    await Promise.all([
-      getDb(db)
-        .select({
-          status: runTable.status,
-          failureCode: runTable.failureCode,
-          dispatchError: runTable.dispatchError,
-          dispatchAttempts: runTable.dispatchAttempts,
-          coordinatorStartedAt: runTable.coordinatorStartedAt,
-        })
-        .from(runTable)
-        .where(eq(runTable.id, runEntityId.parse(runId))),
-      getDb(db)
-        .select({
-          operationId: runOperation.operationId,
-          kind: runOperation.kind,
-          state: runOperation.state,
-          result: runOperation.result,
-          error: runOperation.error,
-        })
-        .from(runOperation)
-        .where(eq(runOperation.runId, runId)),
-      // The review reason lives on the finding and the last progress report,
-      // not on the run row.
-      getDb(db)
-        .select({ kind: runFinding.kind, summary: runFinding.summary })
-        .from(runFinding)
-        .where(eq(runFinding.runId, runId)),
-      getDb(db)
-        .select({
-          phase: runProgress.phase,
-          detail: runProgress.detail,
-        })
-        .from(runProgress)
-        .where(eq(runProgress.runId, runId)),
-      getDb(db)
-        .select({ state: photoGroupProposal.state })
-        .from(photoGroupProposal)
-        .where(eq(photoGroupProposal.runId, runEntityId.parse(runId))),
-      getDb(db)
-        .select({ id: aiUsage.id })
-        .from(aiUsage)
-        .where(eq(aiUsage.runId, runEntityId.parse(runId))),
-    ]);
-  return JSON.stringify({
-    run,
-    operations,
-    findings,
-    progress,
-    proposals,
-    usage,
-    logs: harness?.getLogs(),
-  });
-}
+let scenario: ScenarioHarness | undefined;
 
 async function protectedBusinessSnapshot(
   db: TestDbContext["db"],
   input: {
     purchaseId: typeof purchase.$inferSelect.id;
     productId: typeof product.$inferSelect.id;
-    runId: string;
   },
 ) {
   const database = getDb(db);
@@ -150,12 +81,27 @@ async function protectedBusinessSnapshot(
 }
 
 afterEach(async () => {
-  await harness?.close();
-  harness = undefined;
+  await scenario?.close();
+  scenario = undefined;
 });
 
 describe("purchase-agent coupled two-Worker workerd harness", () => {
   const ctx = withTestDb();
+
+  const waitForRun = async (
+    runId: string,
+    predicate: () => Promise<boolean>,
+    message: string,
+  ) => {
+    try {
+      await waitFor(predicate, message);
+    } catch (error) {
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}\n${await workerdDiagnostic(ctx.db, runId, scenario?.harness)}`,
+        { cause: error },
+      );
+    }
+  };
 
   it("dispatches a photo run through Flue and MCP, waits for review, then commits only on approval", async () => {
     await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -194,158 +140,116 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
       ).eventId,
     ).toBe(started.eventId);
 
-    await ensurePurchaseAgentOAuthClient(ctx.db);
-    const now = new Date();
-    const sessionId = `photo-workerd-${crypto.randomUUID()}`;
-    await getDb(ctx.db)
-      .insert(session)
-      .values({
-        id: sessionId,
-        token: `${sessionId}-token`,
-        userId: ctx.actor.userId,
-        expiresAt: new Date(now.getTime() + 60 * 60_000),
-        createdAt: now,
-        updatedAt: now,
-      });
-    await getDb(ctx.db)
-      .insert(oauthRefreshToken)
-      .values({
-        id: `${sessionId}-grant`,
-        token: `${sessionId}-refresh`,
-        clientId: PURCHASE_AGENT_OAUTH_CLIENT_ID,
-        sessionId,
-        userId: ctx.actor.userId,
-        expiresAt: new Date(now.getTime() + 60 * 60_000),
-        createdAt: now,
-        authTime: now,
-        scopes: ["openid", "profile", "email", "offline_access"],
-      });
+    await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
     const productName = `Synthetic wardrobe item ${crypto.randomUUID()}`;
-    const previousHyperdrive = new Map(
-      [
-        "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
-        "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
-      ].map((key) => [key, process.env[key]]),
-    );
-    for (const key of previousHyperdrive.keys())
-      process.env[key] = ctx.databaseUrl;
-    try {
-      harness = createWorkerdHarness(ctx.databaseUrl);
-      const { url } = await harness.listen();
-      const model = harness.getWorker("cubby-test-model");
-      expect(
-        (
-          await model.fetch("https://model.test/configure", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              mode: "photo",
-              runId: run.id,
-              runShortcode: run.publicId,
-              imageShortcode: imageFixture.shortcode,
-              productName,
-            }),
-          })
-        ).status,
-      ).toBe(204);
-      expect(
-        (
-          await fetch(new URL("/dispatch", url), {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              version: 1,
-              type: "start_or_resume",
-              runId: run.id,
-              // The persisted run, not a stale queue hint, selects the Flue workflow.
-              purpose: "account_sync",
-              eventId: started.eventId,
-            }),
-          })
-        ).status,
-      ).toBe(202);
-      try {
-        await waitFor(async () => {
-          const [proposal, progress, startedProgress, usage] =
-            await Promise.all([
-              getDb(ctx.db)
-                .select({ state: photoGroupProposal.state })
-                .from(photoGroupProposal)
-                .where(eq(photoGroupProposal.runId, run.id))
-                .limit(1),
-              getDb(ctx.db)
-                .select({ phase: runProgress.phase })
-                .from(runProgress)
-                .where(
-                  and(
-                    eq(runProgress.runId, run.id),
-                    eq(runProgress.phase, "awaiting_approval"),
-                  ),
-                )
-                .limit(1),
-              getDb(ctx.db)
-                .select({ id: runProgress.id })
-                .from(runProgress)
-                .where(
-                  and(
-                    eq(runProgress.runId, run.id),
-                    eq(runProgress.detail, "Coordinator started"),
-                  ),
-                )
-                .limit(1),
-              getDb(ctx.db)
-                .select({ id: aiUsage.id })
-                .from(aiUsage)
-                .where(eq(aiUsage.runId, run.id))
-                .limit(1),
-            ]);
-          return (
-            proposal[0]?.state === "proposed" &&
-            progress.length === 1 &&
-            startedProgress.length === 1 &&
-            usage.length === 1
-          );
-        }, "Photo agent did not propose a group and wait for approval");
-      } catch (error) {
-        throw new Error(
-          `${error instanceof Error ? error.message : String(error)}\n${await workerdDiagnostic(ctx.db, run.id)}`,
-          { cause: error },
+    scenario = await startScenarioHarness(ctx.databaseUrl, {
+      steps: [
+        call("photo-claim", "claim_next_import_work"),
+        mcp("photo-propose", "photo_run", run.id, {
+          action: "propose_groups",
+          runId: run.publicId,
+          groups: [
+            {
+              groupKey: "synthetic-wardrobe-item",
+              images: [{ id: imageFixture.shortcode, purpose: "item" }],
+              product: { kind: "create", create: { name: productName } },
+              evidence:
+                "Synthetic item photo; review the proposed identity before creating a Product.",
+            },
+          ],
+        }),
+        mcpRead("photo-list", "imports_read", {
+          action: "photo_proposals",
+          runId: run.publicId,
+        }),
+        call("photo-await", "report_agent_progress", {
+          phase: "awaiting_approval",
+          awaitingApproval: true,
+          detail: "One synthetic item is ready for review",
+        }),
+      ],
+    });
+    await scenario.dispatch({
+      version: 1,
+      type: "start_or_resume",
+      runId: run.id,
+      // The persisted run, not a stale queue hint, selects the Flue workflow.
+      purpose: "account_sync",
+      eventId: started.eventId,
+    });
+    await waitForRun(
+      run.id,
+      async () => {
+        const [proposal, progress, startedProgress, usage] = await Promise.all([
+          getDb(ctx.db)
+            .select({ state: photoGroupProposal.state })
+            .from(photoGroupProposal)
+            .where(eq(photoGroupProposal.runId, run.id))
+            .limit(1),
+          getDb(ctx.db)
+            .select({ phase: runProgress.phase })
+            .from(runProgress)
+            .where(
+              and(
+                eq(runProgress.runId, run.id),
+                eq(runProgress.phase, "awaiting_approval"),
+              ),
+            )
+            .limit(1),
+          getDb(ctx.db)
+            .select({ id: runProgress.id })
+            .from(runProgress)
+            .where(
+              and(
+                eq(runProgress.runId, run.id),
+                eq(runProgress.detail, "Coordinator started"),
+              ),
+            )
+            .limit(1),
+          getDb(ctx.db)
+            .select({ id: aiUsage.id })
+            .from(aiUsage)
+            .where(eq(aiUsage.runId, run.id))
+            .limit(1),
+        ]);
+        return (
+          proposal[0]?.state === "proposed" &&
+          progress.length === 1 &&
+          startedProgress.length === 1 &&
+          usage.length === 1
         );
-      }
-      expect(
-        await getDb(ctx.db)
-          .select({ id: product.id })
-          .from(product)
-          .where(eq(product.name, productName)),
-      ).toHaveLength(0);
-      const [waitingRun] = await getDb(ctx.db)
-        .select({ status: runTable.status })
-        .from(runTable)
-        .where(eq(runTable.id, run.id));
-      expect(waitingRun?.status).toBe("running");
-      const approval = await approvePhotoGroupProposals(
-        ctx.db,
-        { runId: run.publicId },
-        ctx.actor,
-      );
-      expect(approval.results[0]?.outcome).toBe("committed");
-      expect(
-        await getDb(ctx.db)
-          .select({ id: product.id })
-          .from(product)
-          .where(eq(product.name, productName)),
-      ).toHaveLength(1);
-      const [settled] = await getDb(ctx.db)
-        .select({ status: runTable.status })
-        .from(runTable)
-        .where(eq(runTable.id, run.id));
-      expect(settled?.status).toBe("completed");
-    } finally {
-      for (const [key, value] of previousHyperdrive) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-      }
-    }
+      },
+      "Photo agent did not propose a group and wait for approval",
+    );
+    expect(
+      await getDb(ctx.db)
+        .select({ id: product.id })
+        .from(product)
+        .where(eq(product.name, productName)),
+    ).toHaveLength(0);
+    const [waitingRun] = await getDb(ctx.db)
+      .select({ status: runTable.status })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
+    expect(waitingRun?.status).toBe("running");
+    const approval = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.publicId },
+      ctx.actor,
+    );
+    expect(approval.results[0]?.outcome).toBe("committed");
+    expect(
+      await getDb(ctx.db)
+        .select({ id: product.id })
+        .from(product)
+        .where(eq(product.name, productName)),
+    ).toHaveLength(1);
+    const [settled] = await getDb(ctx.db)
+      .select({ status: runTable.status })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
+    expect(settled?.status).toBe("completed");
+    expect(await scenario.violations()).toEqual([]);
   }, 60_000);
 
   it("uses the production service to fence, pause for browser evidence, resume, and complete without business writes", async () => {
@@ -394,32 +298,7 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
       productId: targetProduct.entityId,
       productQuantity: 1,
     });
-    await ensurePurchaseAgentOAuthClient(ctx.db);
-    const now = new Date();
-    const sessionId = "purchase-agent-workerd-session";
-    await getDb(ctx.db)
-      .insert(session)
-      .values({
-        id: sessionId,
-        token: "purchase-agent-workerd-session-token",
-        userId: ctx.actor.userId,
-        expiresAt: new Date(now.getTime() + 60 * 60_000),
-        createdAt: now,
-        updatedAt: now,
-      });
-    await getDb(ctx.db)
-      .insert(oauthRefreshToken)
-      .values({
-        id: "purchase-agent-workerd-grant",
-        token: "purchase-agent-workerd-refresh-token",
-        clientId: PURCHASE_AGENT_OAUTH_CLIENT_ID,
-        sessionId,
-        userId: ctx.actor.userId,
-        expiresAt: new Date(now.getTime() + 60 * 60_000),
-        createdAt: now,
-        authTime: now,
-        scopes: ["openid", "profile", "email", "offline_access"],
-      });
+    await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
     const sourceExternalKey = "workerd:ORDER-WORKERD-1";
     const evidenceChecksum = "a".repeat(64);
     const started = await startTargetedRun(ctx.db, {
@@ -442,154 +321,155 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
     });
     if (!started.created || !started.run.dispatchEventId)
       throw new Error("Expected targeted run dispatch generation");
+    const runId = started.run.id;
 
     const before = await protectedBusinessSnapshot(ctx.db, {
       purchaseId: targetPurchase.id,
       productId: targetProduct.entityId,
-      runId: started.run.id,
     });
-    const previousHyperdrive = new Map(
-      [
-        "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
-        "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
-      ].map((key) => [key, process.env[key]]),
-    );
-    for (const key of previousHyperdrive.keys())
-      process.env[key] = ctx.databaseUrl;
-    try {
-      harness = createWorkerdHarness(ctx.databaseUrl);
-      const { url } = await harness.listen();
-      const model = harness.getWorker("cubby-test-model");
-      expect(
-        (
-          await model.fetch("https://model.test/configure", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              runId: started.run.id,
-              productShortcode: targetProductRow.shortcode,
-              sourceExternalKey,
-              evidenceChecksum,
-            }),
-          })
-        ).status,
-      ).toBe(204);
-      const dispatch = (event: Record<string, unknown>) =>
-        fetch(new URL("/dispatch", url), {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(event),
-        });
-      const startEvent = {
-        version: 1,
-        type: "start_or_resume",
-        runId: started.run.id,
-        purpose: "purchase_validation",
-        eventId: started.run.dispatchEventId,
-      };
-      expect((await dispatch(startEvent)).status).toBe(202);
-      let browserCommand:
-        | { commandId: string; operationId: string }
-        | undefined;
-      try {
-        // Connect the browser only after the run has paused. The row exists
-        // before the broker is consulted, so posting on its first sight raced
-        // the pause and let browser evidence join the still-open submission,
-        // hiding how the agent settles a pending browser command.
-        await waitFor(async () => {
-          const [[operation], [run]] = await Promise.all([
-            getDb(ctx.db)
-              .select({
-                operationId: runOperation.operationId,
-                state: runOperation.state,
-                result: runOperation.result,
-              })
-              .from(runOperation)
-              .where(
-                and(
-                  eq(runOperation.runId, started.run.id),
-                  eq(runOperation.kind, "browser_command"),
-                ),
-              )
-              .limit(1),
-            getDb(ctx.db)
-              .select({ status: runTable.status })
-              .from(runTable)
-              .where(eq(runTable.id, started.run.id)),
-          ]);
-          const parsed = z
-            .object({ commandId: z.uuid() })
-            .safeParse(operation?.result);
-          browserCommand =
-            parsed.success && operation?.state === "completed"
-              ? {
-                  commandId: parsed.data.commandId,
-                  operationId: operation.operationId,
-                }
-              : undefined;
-          return (
-            Boolean(browserCommand?.operationId) &&
-            run?.status === "paused_offline"
-          );
-        }, "Production service never paused for the browser command");
-      } catch (error) {
-        throw new Error(
-          `${error instanceof Error ? error.message : String(error)}\n${await workerdDiagnostic(ctx.db, started.run.id)}`,
-          { cause: error },
-        );
-      }
-
-      const browserResult = await fetch(new URL("/browser-result", url), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          vendorAccountId: account.id,
-          ledgerPartyId: party.id,
-          userId: ctx.actor.userId,
-          runId: started.run.id,
-          commandId: z.uuid().parse(browserCommand?.commandId),
-          operationId: browserCommand?.operationId,
+    scenario = await startScenarioHarness(ctx.databaseUrl, {
+      steps: [
+        call("claim-initial", "claim_next_import_work"),
+        call("browser-1", "issue_browser_command", {
+          operationId: "capture-order",
+          command: {
+            kind: "capture_order",
+            target: "https://shop.example.test/orders/ORDER-WORKERD-1",
+          },
         }),
-      });
-      // A 500 here comes from the broker Durable Object; surface its body and
-      // the runtime logs, which the bare status assertion used to discard.
-      if (browserResult.status !== 202)
-        throw new Error(
-          `browser-result ${browserResult.status}: ${await browserResult.text()}\n${JSON.stringify(harness.getLogs().slice(-40), null, 1)}\n${await workerdDiagnostic(ctx.db, started.run.id)}`,
-        );
-      try {
-        await waitFor(async () => {
-          const [run] = await getDb(ctx.db)
-            .select({
-              status: runTable.status,
-              coordinatorStartedAt: runTable.coordinatorStartedAt,
-            })
+        awaitEvent("browser_connected", "browser_result"),
+        call("claim-resume", "claim_next_import_work"),
+        awaitEvent("browser_result"),
+        mcp(
+          "prepare:workerd",
+          "purchase_import",
+          runId,
+          {
+            action: "prepare",
+            orders: [
+              {
+                stableOrderId: "order-workerd",
+                itemOperationId: "prepare-item:workerd",
+                source: {
+                  kind: "browser_order",
+                  externalKey: sourceExternalKey,
+                  checksum: evidenceChecksum,
+                },
+                evidenceChecksum,
+                extractionRevision: "workerd@1",
+                extraction: {
+                  status: "ready",
+                  candidate: {
+                    orderId: "ORDER-WORKERD-1",
+                    orderedAt: "2026-09-20T12:00:00.000Z",
+                    merchant: "Workerd harness vendor",
+                    currency: "USD",
+                    printedGrandTotal: 12.34,
+                    lines: [
+                      {
+                        title: "Workerd validation product",
+                        amount: 12.34,
+                        lineKind: "principal",
+                        quantity: 1,
+                      },
+                    ],
+                    payments: [],
+                    allShipmentsDelivered: false,
+                  },
+                },
+                lineIds: ["order-workerd:line-1"],
+                primaryDocumentImageId: null,
+                screenshotImageId: null,
+              },
+            ],
+          },
+          { itemOperationIds: ["prepare-item:workerd"] },
+        ),
+        mcp("validate:workerd", "purchase_import", runId, {
+          action: "validate",
+          prepareOperationId: "prepare:workerd",
+          resolutions: [
+            {
+              stableOrderId: "order-workerd",
+              stableLineId: "order-workerd:line-1",
+              resolution: {
+                kind: "existing",
+                productId: targetProductRow.shortcode,
+              },
+            },
+          ],
+        }),
+        // An unchanged Purchase must compare as `replayed`.
+        { check: "validate:workerd", includes: "replayed" },
+        call("finish-1", "finish_import_run", {
+          operationId: "finish-after-validation",
+        }),
+      ],
+    });
+    await scenario.dispatch({
+      version: 1,
+      type: "start_or_resume",
+      runId,
+      purpose: "purchase_validation",
+      eventId: started.run.dispatchEventId,
+    });
+    // Connect the browser only after the run has paused. The row exists
+    // before the broker is consulted, so connecting on its first sight raced
+    // the pause and let browser evidence join the still-open submission,
+    // hiding how the agent settles a pending browser command.
+    await waitForRun(
+      runId,
+      async () => {
+        const [[operation], [run]] = await Promise.all([
+          getDb(ctx.db)
+            .select({ state: runOperation.state, result: runOperation.result })
+            .from(runOperation)
+            .where(
+              and(
+                eq(runOperation.runId, runId),
+                eq(runOperation.kind, "browser_command"),
+              ),
+            )
+            .limit(1),
+          getDb(ctx.db)
+            .select({ status: runTable.status })
             .from(runTable)
-            .where(eq(runTable.id, started.run.id));
-          return (
-            run?.status === "completed" && run.coordinatorStartedAt !== null
-          );
-        }, "Production service never finalized targeted run");
-      } catch (error) {
-        throw new Error(
-          `${error instanceof Error ? error.message : String(error)}\n${await workerdDiagnostic(ctx.db, started.run.id)}`,
-          { cause: error },
+            .where(eq(runTable.id, runId)),
+        ]);
+        return (
+          z.object({ commandId: z.uuid() }).safeParse(operation?.result)
+            .success &&
+          operation?.state === "completed" &&
+          run?.status === "paused_offline"
         );
-      }
-      const after = await protectedBusinessSnapshot(ctx.db, {
+      },
+      "Production service never paused for the browser command",
+    );
+    await scenario.connectBrowser({
+      vendorAccountId: account.id,
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+    });
+    await waitForRun(
+      runId,
+      async () => {
+        const [run] = await getDb(ctx.db)
+          .select({
+            status: runTable.status,
+            coordinatorStartedAt: runTable.coordinatorStartedAt,
+          })
+          .from(runTable)
+          .where(eq(runTable.id, runId));
+        return run?.status === "completed" && run.coordinatorStartedAt !== null;
+      },
+      "Production service never finalized targeted run",
+    );
+    expect(
+      await protectedBusinessSnapshot(ctx.db, {
         purchaseId: targetPurchase.id,
         productId: targetProduct.entityId,
-        runId: started.run.id,
-      });
-      expect(after).toEqual(before);
-      expect(
-        await (await model.fetch("https://model.test/violations")).json(),
-      ).toEqual([]);
-    } finally {
-      for (const [key, value] of previousHyperdrive) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-      }
-    }
+      }),
+    ).toEqual(before);
+    expect(await scenario.violations()).toEqual([]);
   }, 60_000);
 });

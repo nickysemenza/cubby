@@ -8,6 +8,8 @@
  */
 import { z } from "zod";
 
+import { tradeSchema } from "./task-fields";
+
 export const purchaseAgentRunRef = z.object({ runId: z.string() });
 
 export const purchaseAgentOperationRef = purchaseAgentRunRef.extend({
@@ -36,6 +38,10 @@ export const issueBrowserCommandInput = purchaseAgentOperationRef.extend({
 
 export const importOrderEvidenceInput = purchaseAgentOperationRef.extend({
   commandId: z.string(),
+  /** As for `purchase_import.commit`: a principal line needs a trade. */
+  defaultTrade: tradeSchema.optional(),
+  /** A Project shortcode, resolved and authorized by the web Worker. */
+  defaultProjectId: z.string().optional(),
 });
 
 export const saveNavigationHintsInput = purchaseAgentOperationRef.extend({
