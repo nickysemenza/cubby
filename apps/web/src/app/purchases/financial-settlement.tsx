@@ -1,8 +1,11 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { PurchaseOut } from "@cubby/schemas/purchase";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type {
+  PurchaseOut,
+  PurchaseSettlementSuggestOut,
+} from "@cubby/schemas/purchase";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
@@ -37,6 +40,7 @@ import { EnumPill } from "~/ui/primitives/enum-pill";
 import { Input } from "~/ui/primitives/input";
 
 import { LinkedTransactions } from "../finance/linked-transactions";
+import { SettlementCandidateList } from "./settlement-candidate-list";
 
 type FinancialPurchase = PurchaseOut & {
   financialReconciliation: {
@@ -145,6 +149,14 @@ function MatchStatementTransaction({
     entity: "financialTransaction",
   });
   const queryClient = useQueryClient();
+  // Advisory only: the result reorders and highlights tied candidates, and
+  // never selects or allocates on the person's behalf.
+  const suggest = useMutation(
+    purchaseOperations.suggestSettlementMatch.mutationOptions(),
+  );
+  const suggestion: PurchaseSettlementSuggestOut | null = suggest.isError
+    ? { status: "unavailable", error: String(suggest.error) }
+    : (suggest.data ?? null);
   return (
     <>
       <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
@@ -175,52 +187,23 @@ function MatchStatementTransaction({
               can still add a transaction manually.
             </Description>
           ) : null}
-          <div className="max-h-80 space-y-2 overflow-y-auto">
-            {candidates.map(({ transaction, days, merchantMatches }) => (
-              <button
-                key={transaction.id}
-                type="button"
-                aria-pressed={selected?.id === transaction.id}
-                className="flex w-full items-start justify-between gap-3 rounded-md border border-border p-3 text-left text-sm aria-pressed:border-primary aria-pressed:bg-primary/5"
-                onClick={() => {
-                  setSelected(transaction);
-                  setAllocations(
-                    initialSettlementAllocations(
-                      purchase.id,
-                      transaction,
-                      purchase,
-                    ).map((row) => ({ ...row, key: crypto.randomUUID() })),
-                  );
-                }}
-              >
-                <span className="min-w-0">
-                  <strong className="block truncate">
-                    {transaction.merchant ?? transaction.displayName}
-                  </strong>
-                  <span className="block text-xs text-muted-foreground">
-                    {transaction.kind === "refund" ? "Refund" : "Charge"}
-                  </span>
-                  {transaction.rawDescription &&
-                  transaction.rawDescription !== transaction.merchant ? (
-                    <span className="block text-xs text-muted-foreground">
-                      Statement: {transaction.rawDescription}
-                    </span>
-                  ) : null}
-                  <span className="text-muted-foreground">
-                    {transaction.postedDate ?? transaction.transactionDate} ·{" "}
-                    {Math.round(days)} {Math.round(days) === 1 ? "day" : "days"}{" "}
-                    apart
-                    {merchantMatches
-                      ? " · vendor name matches"
-                      : " · vendor differs"}
-                  </span>
-                </span>
-                <span className="shrink-0 font-mono tabular-nums">
-                  {formatCurrency(transaction.amount)}
-                </span>
-              </button>
-            ))}
-          </div>
+          <SettlementCandidateList
+            candidates={candidates}
+            selectedId={selected?.id ?? null}
+            suggestion={suggestion}
+            suggesting={suggest.isPending}
+            onSuggest={() => suggest.mutate({ purchaseId: purchase.id })}
+            onSelect={({ transaction }) => {
+              setSelected(transaction);
+              setAllocations(
+                initialSettlementAllocations(
+                  purchase.id,
+                  transaction,
+                  purchase,
+                ).map((row) => ({ ...row, key: crypto.randomUUID() })),
+              );
+            }}
+          />
           {selected ? (
             <div className="space-y-2 border-t border-border pt-3">
               <div className="text-sm font-medium">
