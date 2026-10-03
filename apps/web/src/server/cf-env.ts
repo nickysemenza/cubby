@@ -118,6 +118,21 @@ export const CF_AIG_GATEWAY_ID = process.env.AI_GATEWAY_ID || "cubby";
 export const getAiGateway = () => cfEnv?.AI?.gateway(CF_AIG_GATEWAY_ID);
 
 /**
+ * The deterministic gateway peer that exists only in the coupled workerd
+ * harness (`tooling/purchase-agent-workerd-harness.ts`). It is deliberately
+ * absent from wrangler.jsonc, so a deployed Worker can never resolve it and
+ * keeps the mandatory `env.AI` transport above.
+ */
+export const getTestAiGateway = (): { fetch: typeof fetch } | undefined =>
+  // SAFETY: the optional extension describes only the harness-only service
+  // binding; generated production bindings cannot supply it.
+  (
+    cfEnv as
+      | (Env & { CUBBY_TEST_AI_GATEWAY?: { fetch: typeof fetch } })
+      | undefined
+  )?.CUBBY_TEST_AI_GATEWAY;
+
+/**
  * The optional entity-vector index (`env.VECTORIZE`) from the Worker
  * environment. Narrowed to Cubby's owned surface because `wrangler types`
  * emits the legacy `VectorizeIndex` class, which omits `queryById`.

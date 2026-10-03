@@ -1,6 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { runEntityId, parseEntityId } from "@cubby/schemas/identifiers";
 import { sleep } from "@cubby/shared/retry";
@@ -8,9 +7,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { createWorkerdHarness } from "tooling/purchase-agent-workerd-harness";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
-import { CF_ACCOUNT_ID, CF_AIG_GATEWAY_ID } from "~/server/cf-env";
 import {
   aiAnalysis,
   run as runTable,
@@ -32,6 +29,14 @@ import {
   ensurePurchaseAgentOAuthClient,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "./agent-auth";
+import {
+  type EvalCandidate,
+  evalCandidates,
+  evalCostUsd,
+  evalUsageReport,
+  evalWebRoot,
+  liveEvalModelWorker,
+} from "./flue-eval-live-support";
 import { type EvalCase, flueModelEvalCases } from "./flue-model-eval.fixtures";
 import { scoreProposals } from "./flue-model-eval.score";
 import {
@@ -45,71 +50,15 @@ import {
  * forwarded to Cubby's AI Gateway as each candidate. Run with
  * `pnpm --dir apps/web eval:flue-models`.
  */
-const webRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../..",
+const candidates = evalCandidates(
+  "gpt-6-luna:medium,gpt-6-luna:high,gpt-6-sol:medium,gpt-6-sol:high",
 );
-const candidate = z.object({
-  model: z.enum(["gpt-6-luna", "gpt-6-sol"]),
-  effort: z.enum(["none", "low", "medium", "high"]),
-});
-type Candidate = z.infer<typeof candidate>;
-const candidates = (
-  process.env.FLUE_EVAL_CANDIDATES ??
-  "gpt-6-luna:medium,gpt-6-luna:high,gpt-6-sol:medium,gpt-6-sol:high"
-)
-  .split(",")
-  .map((entry) => {
-    const [model, effort] = entry.split(":");
-    return candidate.parse({ model, effort });
-  });
 const caseFilter = process.env.FLUE_EVAL_CASES?.split(",");
 const cases = flueModelEvalCases.filter(
   (evalCase) => !caseFilter || caseFilter.includes(evalCase.name),
 );
 const repeats = Number(process.env.FLUE_EVAL_REPEATS ?? "1");
 const RUN_TIMEOUT_MS = 8 * 60_000;
-
-/** USD per million tokens, from OpenAI's standard-tier pricing page. */
-const PRICES = {
-  "gpt-6-sol": { input: 2, cachedInput: 0.2, output: 10 },
-  "gpt-6-luna": { input: 0.1, cachedInput: 0.01, output: 0.5 },
-} satisfies Record<
-  Candidate["model"],
-  { input: number; cachedInput: number; output: number }
->;
-
-const usageReport = z.object({
-  requests: z.number(),
-  failedRequests: z.number(),
-  inputTokens: z.number(),
-  cachedInputTokens: z.number(),
-  outputTokens: z.number(),
-  reasoningTokens: z.number(),
-  modelMs: z.number(),
-});
-type Usage = z.infer<typeof usageReport>;
-
-function costUsd(model: Candidate["model"], usage: Usage) {
-  const price = PRICES[model];
-  const uncached = usage.inputTokens - usage.cachedInputTokens;
-  return (
-    (uncached * price.input +
-      usage.cachedInputTokens * price.cachedInput +
-      usage.outputTokens * price.output) /
-    1_000_000
-  );
-}
-
-function gatewayApiKey() {
-  if (process.env.AI_GATEWAY_API_KEY) return process.env.AI_GATEWAY_API_KEY;
-  const line = readFileSync(path.join(webRoot, ".env"), "utf8")
-    .split("\n")
-    .find((entry) => entry.startsWith("AI_GATEWAY_API_KEY="));
-  const key = line?.slice("AI_GATEWAY_API_KEY=".length).replace(/^"|"$/gu, "");
-  if (!key) throw new Error("AI_GATEWAY_API_KEY is required for the live eval");
-  return key;
-}
 
 async function poll(done: () => Promise<boolean>) {
   const deadline = Date.now() + RUN_TIMEOUT_MS;
@@ -163,20 +112,17 @@ describe("photo coordinator model eval", () => {
         "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
       ])
         process.env[key] = ctx.databaseUrl;
-      const harness = createWorkerdHarness(ctx.databaseUrl, {
-        main: "tooling/flue-eval-model.ts",
-        vars: {
-          GATEWAY_OPENAI_URL: `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_AIG_GATEWAY_ID}/openai`,
-        },
-        secrets: { AI_GATEWAY_API_KEY: gatewayApiKey() },
-      });
+      const harness = createWorkerdHarness(
+        ctx.databaseUrl,
+        liveEvalModelWorker(),
+      );
       const { url } = await harness.listen();
       const model = harness.getWorker("cubby-test-model");
 
       // Catalog Products are created once and shared by every candidate:
       // proposals are never approved, so no run changes them.
       const catalog = new Map<string, string>();
-      const runCase = async (evalCase: EvalCase, choice: Candidate) => {
+      const runCase = async (evalCase: EvalCase, choice: EvalCandidate) => {
         const products = new Map<string, string>();
         for (const entry of evalCase.catalog) {
           let productId = catalog.get(entry.key);
@@ -276,7 +222,7 @@ describe("photo coordinator model eval", () => {
           return waiting.length > 0;
         });
         const wallMs = Date.now() - startedAt;
-        const usage = usageReport.parse(
+        const usage = evalUsageReport.parse(
           await (await model.fetch("https://model.test/usage")).json(),
         );
         const [final] = await getDb(ctx.db)
@@ -321,7 +267,7 @@ describe("photo coordinator model eval", () => {
           reachedApproval: settled && (final?.status === "running" || reviewed),
           wallMs,
           usage,
-          costUsd: costUsd(choice.model, usage),
+          costUsd: evalCostUsd(choice.model, usage),
           ...score,
           exact: reviewed || score.exact,
           pairF1: reviewed ? 1 : score.pairF1,
@@ -330,7 +276,7 @@ describe("photo coordinator model eval", () => {
       };
 
       const outDir = path.join(
-        webRoot,
+        evalWebRoot,
         "../../artifacts/flue-model-eval",
         new Date().toISOString().replace(/[:.]/gu, "-"),
       );
