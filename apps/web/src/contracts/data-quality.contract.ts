@@ -13,7 +13,7 @@ import { defineContract, mutation } from "~/contracts/define";
  */
 export const dataQualityContract = defineContract("dataQuality", {
   setException: mutation({
-    http: false,
+    native: "Accept a data gap as a recorded exception",
     input: setDataExceptionInput,
     output: dataQuality,
     invalidates: [
@@ -25,7 +25,7 @@ export const dataQualityContract = defineContract("dataQuality", {
     ],
   }),
   clearException: mutation({
-    http: false,
+    native: "Clear a recorded data exception",
     input: clearDataExceptionInput,
     output: dataQuality,
     invalidates: [
