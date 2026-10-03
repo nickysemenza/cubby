@@ -72,7 +72,24 @@ export const orderMailImportRunInput = z.object({
   evidenceChecksum: z.string().min(1),
   orderId: z.string().min(1),
 });
+/**
+ * `Run.input` for an explicit historical backfill: list and import only
+ * orders placed within the inclusive range, newest first. It never moves the
+ * account's incremental cursor.
+ */
+export const orderBackfillRunInput = z
+  .object({
+    kind: z.literal("order_backfill"),
+    from: z.iso.date(),
+    to: z.iso.date(),
+  })
+  .refine((range) => range.from <= range.to, {
+    message: "Backfill range must start on or before its end",
+    path: ["from"],
+  });
+export type OrderBackfillRunInput = z.infer<typeof orderBackfillRunInput>;
 export type RunInput =
   | MailSearchRunInput
-  | z.infer<typeof orderMailImportRunInput>;
+  | z.infer<typeof orderMailImportRunInput>
+  | OrderBackfillRunInput;
 export type RunProgress = MailSearchRunProgress;

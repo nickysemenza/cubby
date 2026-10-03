@@ -43,7 +43,10 @@ import {
   type RunTrigger,
   type RunPurpose,
 } from "@cubby/schemas/purchase-import";
-import { orderMailImportRunInput } from "@cubby/schemas/run-fields";
+import {
+  orderBackfillRunInput,
+  orderMailImportRunInput,
+} from "@cubby/schemas/run-fields";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
 import { vendorAgentHints } from "@cubby/schemas/vendor-import-fields";
 import {
@@ -362,12 +365,19 @@ export async function startOrResumeRun(
     ledgerPartyId: LedgerPartyId;
     vendorAccountId: VendorAccountId;
     trigger: RunTrigger;
+    /** Inclusive order-date range for an explicit `backfill` run. */
+    backfill?: { from: string; to: string };
     predecessorRunId?: string;
     skillRevision?: string;
     runtimeRevision?: string;
   },
 ) {
   const trigger = runTrigger.parse(input.trigger);
+  const backfill = input.backfill
+    ? orderBackfillRunInput.parse({ kind: "order_backfill", ...input.backfill })
+    : null;
+  if ((trigger === "backfill") !== (backfill !== null))
+    throw new Error("A backfill run requires exactly one explicit date range");
   return withTransaction(db, async (tx) => {
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${input.vendorAccountId}))`,
@@ -406,6 +416,32 @@ export async function startOrResumeRun(
       throw new Error("Vendor account is not owned by an authenticated member");
     if (!scope.browserSyncEnabled)
       throw new Error("Browser sync is not enabled for this Vendor account");
+    if (backfill) {
+      // A backfill never joins a different active run: resuming an
+      // incremental sync or another range would silently drop the request.
+      const [active] = await tx
+        .select({ input: runTable.input })
+        .from(runTable)
+        .where(
+          and(
+            eq(runTable.vendorAccountId, input.vendorAccountId),
+            inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+          ),
+        )
+        .limit(1);
+      const activeRange = orderBackfillRunInput.safeParse(active?.input);
+      if (
+        active &&
+        !(
+          activeRange.success &&
+          activeRange.data.from === backfill.from &&
+          activeRange.data.to === backfill.to
+        )
+      )
+        throw new Error(
+          "Vendor account already has an active import run; finish or stop it before starting this backfill",
+        );
+    }
     const result = await findOrCreateWithShortcode(tx, "run", {
       where: and(
         eq(runTable.vendorAccountId, input.vendorAccountId),
@@ -428,6 +464,7 @@ export async function startOrResumeRun(
             ? runEntityId.parse(input.predecessorRunId)
             : null,
           trigger,
+          input: backfill,
           coordinatorModel: coordinatorModelFor("account_sync"),
           skillRevision: input.skillRevision ?? "purchase-import@1",
           runtimeRevision: input.runtimeRevision ?? "flue@1",
@@ -1604,9 +1641,26 @@ export async function claimNextImportWork(
     .limit(1);
   if (history?.exhaustedAt) return { kind: "none" as const };
   const walkFrom = history?.cursorUrl ?? startUrl;
-  return walkFrom
-    ? { kind: "cursor_walk" as const, startUrl: walkFrom }
-    : { kind: "none" as const };
+  if (!walkFrom) return { kind: "none" as const };
+  const backfill = await runBackfillRange(db, scope.public.runId);
+  return backfill
+    ? {
+        kind: "cursor_walk" as const,
+        startUrl: walkFrom,
+        backfill: { from: backfill.from, to: backfill.to },
+      }
+    : { kind: "cursor_walk" as const, startUrl: walkFrom };
+}
+
+/** The explicit date range of a backfill run, or null for any other run. */
+async function runBackfillRange(db: Database, runId: string) {
+  const [row] = await getDb(db)
+    .select({ input: runTable.input })
+    .from(runTable)
+    .where(eq(runTable.id, runEntityId.parse(runId)))
+    .limit(1);
+  const parsed = orderBackfillRunInput.safeParse(row?.input);
+  return parsed.success ? parsed.data : null;
 }
 
 /**
@@ -2075,19 +2129,33 @@ export async function importBrowserOrderEvidence(
           )[0]?.cursor,
         )
       : null;
-    const newestKnown = cursor?.newestOrderAt?.slice(0, 10) ?? null;
-    // Stop paging once a whole page predates the account cursor: everything
-    // older was covered by an earlier run.
+    const backfill = await runBackfillRange(db, input.runId);
+    // Stop paging once a whole page predates the walk's lower bound: the
+    // backfill range's start, otherwise the account cursor (everything older
+    // was covered by an earlier run). One older order on a page is not
+    // enough, because a vendor's history is not strictly date ordered.
+    const lowerBound =
+      backfill?.from ?? cursor?.newestOrderAt?.slice(0, 10) ?? null;
     const reachedCursor =
-      newestKnown !== null &&
+      lowerBound !== null &&
       classified.orders.length > 0 &&
       classified.orders.every(
-        (order) => order.orderedAt !== null && order.orderedAt < newestKnown,
+        (order) => order.orderedAt !== null && order.orderedAt < lowerBound,
       );
+    // A backfill works only its range. An undated listing row stays: its
+    // detail page decides, and importing it is replay-safe.
+    const listedOrders = backfill
+      ? classified.orders.filter(
+          (order) =>
+            order.orderedAt === null ||
+            (order.orderedAt >= backfill.from &&
+              order.orderedAt <= backfill.to),
+        )
+      : classified.orders;
     const seen = await recordOrderListing(db, {
       runId: runEntityId.parse(input.runId),
       vendorId: scope.vendorId,
-      orders: classified.orders,
+      orders: listedOrders,
     });
     const pending = await getDb(db)
       .select({ value: count() })
@@ -2109,7 +2177,7 @@ export async function importBrowserOrderEvidence(
       .where(eq(runTable.id, runEntityId.parse(input.runId)));
     return {
       kind: "order_list" as const,
-      orders: classified.orders,
+      orders: listedOrders,
       ordersSeen: seen,
       pending: pending[0]?.value ?? 0,
       nextPageUrl,
@@ -2531,6 +2599,86 @@ export async function stopRunForReview(
 }
 
 /**
+ * Leave one listed order for human review while the run continues with the
+ * rest of its worklist. The order keeps a durable finding and becomes
+ * `skipped`; a restart carries it forward as pending work.
+ */
+export async function deferOrderForReview(
+  db: Database,
+  input: {
+    runId: string;
+    operationId: string;
+    orderId: string;
+    summary: string;
+  },
+) {
+  const scope = await loadRunScope(db, input.runId);
+  assertRunActive(scope.public.status);
+  if (scope.public.purpose !== "account_sync")
+    throw new Error("Only an account-sync run has an order worklist");
+  const runId = runEntityId.parse(input.runId);
+  const orderId = z.string().trim().min(1).max(200).parse(input.orderId);
+  const summary = z.string().trim().min(1).max(1_000).parse(input.summary);
+  const fingerprint = await sha256Hex(`deferred-order:${orderId}`);
+  return withTransaction(db, async (tx) => {
+    const [candidate] = await tx
+      .select({ state: runOrderCandidate.state })
+      .from(runOrderCandidate)
+      .where(
+        and(
+          eq(runOrderCandidate.runId, runId),
+          eq(runOrderCandidate.orderId, orderId),
+        ),
+      )
+      .limit(1)
+      .for("update");
+    if (!candidate || !["pending", "skipped"].includes(candidate.state))
+      throw new Error(
+        `Order ${orderId} is not a pending order on this run's worklist`,
+      );
+    await tx
+      .insert(runFinding)
+      .values({
+        runId,
+        ledgerPartyId: scope.ledgerPartyId,
+        entityKind: "run",
+        entityId: runId,
+        kind: "other",
+        summary: `Order ${orderId} needs review: ${summary}`,
+        evidenceFingerprint: fingerprint,
+      })
+      .onConflictDoNothing();
+    const [finding] = await tx
+      .select({ id: runFinding.id })
+      .from(runFinding)
+      .where(
+        and(
+          eq(runFinding.runId, runId),
+          eq(runFinding.entityKind, "run"),
+          eq(runFinding.entityId, runId),
+          eq(runFinding.evidenceFingerprint, fingerprint),
+          eq(runFinding.status, "open"),
+        ),
+      )
+      .limit(1);
+    await tx
+      .update(runOrderCandidate)
+      .set({ state: "skipped", updatedAt: new Date() })
+      .where(
+        and(
+          eq(runOrderCandidate.runId, runId),
+          eq(runOrderCandidate.orderId, orderId),
+        ),
+      );
+    return {
+      orderId,
+      state: "skipped" as const,
+      findingId: finding?.id ?? null,
+    };
+  });
+}
+
+/**
  * Move the account cursor forward to the newest order this run handled
  * (imported or already covered). Only forward: a run that walked an old page
  * never rewinds `newestOrderAt`, and `orderIdsOnNewestDate` disambiguates
@@ -2540,6 +2688,9 @@ async function advanceAccountCursor(
   db: Database,
   input: { runId: string; vendorAccountId: VendorAccountId },
 ) {
+  // A backfill walks older history; only incremental runs own the
+  // newest-order cursor, which therefore never rewinds or jumps.
+  if (await runBackfillRange(db, input.runId)) return null;
   const handled = await getDb(db)
     .select({
       orderId: runOrderCandidate.orderId,
@@ -2586,6 +2737,23 @@ async function advanceAccountCursor(
     .set({ cursor: next, updatedAt: new Date() })
     .where(eq(vendorAccount.id, input.vendorAccountId));
   return next;
+}
+
+/**
+ * A deferred order is not imported, so an account sync that deferred any
+ * order must not read as a complete import; its finding names the order.
+ */
+async function accountSyncFinishStatus(db: Database, runId: RunId) {
+  const [deferred] = await getDb(db)
+    .select({ value: count() })
+    .from(runOrderCandidate)
+    .where(
+      and(
+        eq(runOrderCandidate.runId, runId),
+        eq(runOrderCandidate.state, "skipped"),
+      ),
+    );
+  return (deferred?.value ?? 0) > 0 ? "needs_review" : "completed";
 }
 
 export async function finishRun(
@@ -2679,11 +2847,12 @@ export async function finishRun(
         runId: input.runId,
         operationId: `${input.operationId}:audit`,
       });
+      const status = await accountSyncFinishStatus(db, runId);
       const auditedAt = new Date();
       await getDb(db)
         .update(runTable)
         .set({
-          status: "completed",
+          status,
           auditedAt,
           endedAt: new Date(),
           updatedAt: new Date(),
@@ -3494,6 +3663,7 @@ export async function controlRun(
           dispatchEventId: runTable.dispatchEventId,
           coordinatorStartedAt: runTable.coordinatorStartedAt,
           decisionRevision: runTable.decisionRevision,
+          historyCursorUrl: runTable.historyCursorUrl,
         })
         .from(runTable)
         .where(eq(runTable.id, scope.public.runId))
@@ -3542,6 +3712,13 @@ export async function controlRun(
           );
         const successorId = runEntityId.parse(crypto.randomUUID());
         const dispatchEventId = crypto.randomUUID();
+        // An unfinished backfill resumes from the history page it reached; a
+        // completed one, or an incremental sync, walks from the newest page.
+        const backfill = orderBackfillRunInput.safeParse(locked.input).success;
+        const resumeHistoryUrl =
+          backfill && locked.status !== "completed"
+            ? locked.historyCursorUrl
+            : null;
         const successor = await insertWithShortcode(tx, "run", {
           id: successorId,
           ledgerPartyId: locked.ledgerPartyId,
@@ -3555,9 +3732,10 @@ export async function controlRun(
           vendorId: locked.vendorId,
           predecessorRunId: scope.public.runId,
           purpose: locked.purpose,
-          trigger: "manual",
+          trigger: backfill ? "backfill" : "manual",
           notes: locked.notes,
           input: locked.input,
+          historyCursorUrl: resumeHistoryUrl,
           coordinatorModel: coordinatorModelFor(locked.purpose),
           skillRevision: locked.skillRevision,
           runtimeRevision: locked.runtimeRevision,
@@ -3575,6 +3753,32 @@ export async function controlRun(
               state: "pending" as const,
             })),
           );
+        if (locked.purpose === "account_sync") {
+          // Listed orders the predecessor never imported (still pending, or
+          // deferred for review) are the successor's first work, so resuming
+          // from a later history page cannot lose them.
+          const unfinished = await tx
+            .select({
+              orderId: runOrderCandidate.orderId,
+              orderUrl: runOrderCandidate.orderUrl,
+              orderedAt: runOrderCandidate.orderedAt,
+            })
+            .from(runOrderCandidate)
+            .where(
+              and(
+                eq(runOrderCandidate.runId, scope.public.runId),
+                inArray(runOrderCandidate.state, ["pending", "skipped"]),
+              ),
+            );
+          if (unfinished.length)
+            await tx.insert(runOrderCandidate).values(
+              unfinished.map((order) => ({
+                ...order,
+                runId: successorId,
+                state: "pending" as const,
+              })),
+            );
+        }
         return {
           publicId: input.runPublicId,
           status: locked.status,

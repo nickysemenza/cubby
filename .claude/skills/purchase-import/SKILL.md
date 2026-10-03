@@ -110,7 +110,10 @@ path and after each committed item. Account-sync work is a `cursor_walk`
 orders with `nextPageUrl`, or `null` once the page predates the account
 cursor), then one `order` at a time (capture and import its detail page),
 then hunts and enrichment; `finish_import_run` refuses while a listed order
-is still pending. A `receipt_evidence` item must go through
+is still pending. A backfill run walks an explicit date range of older history
+and never moves the incremental cursor. `defer_order_for_review` leaves one
+ambiguous order for review while the others continue; the run then ends in
+review rather than reporting a complete import, and a restart retries it. A `receipt_evidence` item must go through
 `extract_receipt_evidence`, whose immutable source/checksum/extraction payload
 is passed unchanged to `purchase_import.prepare`; it is not a separate writer.
 For browser evidence, continue every selected order or hunt before calling

@@ -287,6 +287,23 @@ export function purchaseImportTools(
           terminate: true,
         }),
     }),
+    defineTool({
+      name: "defer_order_for_review",
+      description:
+        "Leave one listed order from this account-sync worklist for human review when its evidence stays ambiguous or unreadable, then continue with the remaining orders. The server records one finding naming the order and marks it skipped; the run then ends in review instead of claiming a complete import.",
+      input: v.object({
+        operationId,
+        orderId: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+        detail: v.pipe(v.string(), v.minLength(1), v.maxLength(1_000)),
+      }),
+      output: serviceResult,
+      durable: true,
+      run: async ({ data, step }) => ({
+        output: await step.do(`defer-order:${data.operationId}`, () =>
+          serviceForRun().deferOrderForReview({ runId, ...data }),
+        ),
+      }),
+    }),
   ] as const;
 }
 

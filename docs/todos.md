@@ -147,20 +147,19 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
-- 🟢 **Manual purchase lifecycle.** Use the existing run machinery to expand
-  selected order, mail, or charge candidates into retained evidence, receipts
-  with attachment ids and classifications, itemization, and settlement.
-  Record confirmed and terminal outcomes so interruption resumes without
-  duplicate writes; handle several orders in one run and leave ambiguous
-  decisions reviewable. Reuse the bounded prepare/commit and approval paths in
+- 🟢 **Manual purchase lifecycle.** Account-sync runs handle several listed
+  orders, defer one ambiguous order for review without blocking the rest, and
+  carry unfinished orders into a restart. Remaining: start a run from a
+  selected set of mail or charge candidates (today mail is one run per message
+  and hunts join the account run), with each candidate's terminal outcome
+  recorded. Reuse the bounded prepare/commit and approval paths in
   [purchase import](../.claude/skills/purchase-import/SKILL.md).
 
-- 🟢 **Resumable historical backfill.** Successful completed imports already
-  advance the account's newest-order cursor. Add explicit date-range backfill,
-  newest first, with progress persisted after confirmed outcomes and pacing
-  according to vendor constraints rather than a fixed orders/hour promise.
-  Preserve same-day order ids and never rewind the incremental cursor
-  (`purchase-import/run-service.ts`, `VendorAccount.cursor`).
+- 🟢 **Start a historical backfill from the Mac app.** The server accepts an
+  inclusive date range on `/api/import/agent/sync`, walks it newest first, and
+  never moves the incremental cursor; the Mac Settings sync section needs the
+  range control. Pace by the browser bridge's one-command handoff unless a
+  vendor proves a stricter limit.
 
 - 🟢 **Vendor evidence classification and policy.** Automatically classify
   `orderEvidence` only from clear deterministic evidence; review uncertain
