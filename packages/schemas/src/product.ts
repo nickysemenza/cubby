@@ -312,6 +312,11 @@ export const productFilterFields = {
    * than narrowing it (see `taskFilterFields.projectPresenceFilter`).
    */
   tagsPresenceFilter: presenceFilter,
+  /**
+   * `"none"` is the worklist of Products with no consumable/durable kind yet;
+   * OR-ed with the `kind` filter. A worklist only — not a data-quality check.
+   */
+  kindPresenceFilter: presenceFilter,
   categoryFilter: oneOrMany(productCategoryShortcode).optional(),
   categoryFeatureFilter: oneOrMany(productCategoryFeature).optional(),
   categoryPresenceFilter: presenceFilter,
@@ -1007,6 +1012,7 @@ export const productMcpOut = z
     fdc_id: true,
     usdaUnavailable: true,
     stockTracked: true,
+    kind: true,
     labelNutrition: true,
     dataQuality: true,
   })

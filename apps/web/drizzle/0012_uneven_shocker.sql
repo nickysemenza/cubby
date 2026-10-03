@@ -1,0 +1,2 @@
+ALTER TABLE "Product" ADD COLUMN "kind" text;--> statement-breakpoint
+ALTER TABLE "Product" ADD CONSTRAINT "Product_kind_check" CHECK ("Product"."kind" IS NULL OR "Product"."kind" IN ('consumable', 'durable'));

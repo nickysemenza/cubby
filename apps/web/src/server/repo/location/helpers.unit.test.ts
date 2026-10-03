@@ -134,6 +134,7 @@ const product = {
   usdaUnavailable: null,
   acquisitionOrigin: "unknown" as const,
   stockTracked: null,
+  kind: null,
   labelNutrition: null,
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,

@@ -16,6 +16,7 @@ import {
   mealKindValues,
   mealTypeValues,
 } from "../meal-classification.js";
+import { PRODUCT_KIND_LABELS, productKindValues } from "../product-fields.js";
 import {
   PROJECT_STATUS_LABELS,
   projectKindValues,
@@ -100,6 +101,7 @@ export const selectControlOptions = {
     done: "var(--chart-positive)",
   }),
   trade: labeled(tradeValues, TRADE_LABELS),
+  productKind: labeled(productKindValues, PRODUCT_KIND_LABELS),
   expenseLineKind: labeled(expenseLineKindValues, EXPENSE_LINE_KIND_LABELS, {
     principal: "var(--slate)",
     tax: "var(--slate)",

@@ -240,15 +240,6 @@ See also the image operational passes at the end of this file.
 
 ## Inventory, products & locations
 
-- 🧱 **Consumable vs durable as a Product attribute.** Add optional
-  `Product.kind: consumable | durable`, independent of the choice to count
-  stock (`stockTracked`). Use kind for useful worklist filters and contextual
-  import project suggestions: routine supplies suggest Household, project
-  materials use order/project evidence, and explicit choices win. Leave kind
-  unset when uncertain, with no completeness penalty or classification wizard;
-  do not rewrite existing Expenses. Plan schema and generated-client
-  compatibility before adding the field.
-
 - 🧱 **Record historical acquisitions with unknown cost and date.** Record a
   known acquired quantity through the existing Expense path with `cost: null`
   and an absent date when unknown; never invent quantity, price, or date, and

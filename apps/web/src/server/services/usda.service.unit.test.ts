@@ -98,6 +98,7 @@ const dummyProducts = (count: number): ProductTopLevelOut[] =>
       },
       usdaUnavailable: null,
       stockTracked: null,
+      kind: null,
       dataQuality: {
         status: "complete",
         facets: [],
