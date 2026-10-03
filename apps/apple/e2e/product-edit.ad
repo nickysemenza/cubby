@@ -17,7 +17,7 @@ wait text "Synthetic Atlas Lantern Updated" 30000
 
 click "label=Library id=BackButton"
 wait text "Browse catalog" 30000
-click "label=\"Browse catalog\""
+click "label=\"Browse catalog\"" --settle
 scroll down 0.5 --until "id=browse.catalog.product"
 wait "id=browse.catalog.product" 30000
 click "id=browse.catalog.product label=Products"
