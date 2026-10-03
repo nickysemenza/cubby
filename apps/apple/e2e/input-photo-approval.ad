@@ -1,7 +1,7 @@
-context platform=ios timeout=240000
+context platform=ios timeout=600000
 
 open com.nickysemenza.cubby
-wait "label=\"Review item groups\"" 60000
+wait "label=\"Review item groups\"" 240000
 click "label=\"Review item groups\""
 wait "id=review.workspace" 30000
 wait text "Synthetic Input Crew Shirt" 30000

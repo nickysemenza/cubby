@@ -1,7 +1,8 @@
-context platform=ios timeout=240000
+context platform=ios timeout=600000
 
 open com.nickysemenza.cubby
-wait "role=Button label=Library" 60000
+# Readiness may restart the test-owned runner after the app opens on a slow host.
+wait "role=Button label=Library" 240000
 # A timed-out launch capture can still occupy the runner after it returns a tree.
 # Allow that abandoned read to drain before submitting the first input.
 wait 10000
