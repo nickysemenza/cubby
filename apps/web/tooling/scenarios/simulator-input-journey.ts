@@ -4,6 +4,7 @@ import path from "node:path";
 import type { Pool } from "pg";
 import { and, eq } from "drizzle-orm";
 import { pollUntil } from "@cubby/shared/retry";
+import { z } from "zod";
 import { testUserId } from "@cubby/schemas/testing";
 import { imageId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import * as schema from "~/server/db/schema";
@@ -38,6 +39,7 @@ export async function createSimulatorInputJourney(input: {
   repoRoot: string;
   artifacts: string;
   deviceID: string;
+  session: string;
   common: string[];
   run: Run;
 }) {
@@ -85,18 +87,39 @@ export async function createSimulatorInputJourney(input: {
     image,
   );
   const sha256 = createHash("sha256").update(readFileSync(image)).digest("hex");
-  const replay = async (script: string) =>
-    input.run("pnpm", [
-      "exec",
-      "agent-device",
-      "test",
-      `apps/apple/e2e/${script}.ad`,
-      ...input.common,
-      "--artifacts-dir",
-      path.join(input.artifacts, script),
-      "--reporter",
-      `junit:${path.join(input.artifacts, `${script}.xml`)}`,
-    ]);
+  const replay = async (script: string, extension: "ad" | "yaml" = "ad") => {
+    const report = path.join(input.artifacts, `${script}.json`);
+    // Suite test creates a new runner owner; these phases share the prepared session.
+    await input.run(
+      "pnpm",
+      [
+        "exec",
+        "agent-device",
+        "replay",
+        `apps/apple/e2e/${script}.${extension}`,
+        ...(extension === "yaml" ? ["--maestro"] : []),
+        ...input.common,
+        "--timeout",
+        "600000",
+        "--json",
+      ],
+      report,
+    );
+    const result = z
+      .object({
+        success: z.literal(true),
+        data: z.object({
+          replayed: z.number().int().positive(),
+          healed: z.literal(0),
+          sessionActive: z.literal(true),
+          session: z.literal(input.session),
+        }),
+      })
+      .parse(JSON.parse(readFileSync(report, "utf8")));
+    console.log(
+      `[native-replay] ${script} passed ${result.data.replayed} actions`,
+    );
+  };
   return {
     inputs: [csv, image],
     async installInputs(appDocuments: string) {
@@ -105,6 +128,8 @@ export async function createSimulatorInputJourney(input: {
       await input.run("xcrun", ["simctl", "addmedia", input.deviceID, image]);
     },
     async execute() {
+      await replay("input-statement-open");
+      await replay("input-statement-files", "yaml");
       await replay("input-statement");
       const transactions = await database.query.financialTransaction.findMany({
         where: notDeleted(schema.financialTransaction),

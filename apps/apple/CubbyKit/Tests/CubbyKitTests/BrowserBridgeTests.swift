@@ -187,6 +187,54 @@ struct BrowserBridgeTests {
         #expect(capture.images[0].highResolutionUrl == highResolutionURL.absoluteString)
     }
 
+    @Test("Structured product identifiers ride the capture and stay optional for older payloads")
+    func structuredProductsContract() throws {
+        let sourceURL = try #require(URL(string: "https://www.forgewear.example.test/p/tee-black-m"))
+        let structured = BrowserStructuredProducts(
+            products: [
+                BrowserStructuredProduct(
+                    skus: ["FW-TEE-BLK-M"], mpns: ["TEE-100"], gtins: ["036000291452"], productIds: [])
+            ], variantGroup: false)
+        let capture = BrowserPageCapture(
+            sourceURL: sourceURL, title: "Tee", capturedAt: .now, captureVersion: 2,
+            readableText: "Tee", links: [], images: [], structuredProducts: structured)
+        let encoded = try JSONEncoder().encode(capture)
+        let decoded = try JSONDecoder().decode(BrowserPageCapture.self, from: encoded)
+        #expect(decoded.structuredProducts == structured)
+
+        var legacy = try #require(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        legacy.removeValue(forKey: "structuredProducts")
+        let legacyData = try JSONSerialization.data(withJSONObject: legacy)
+        let legacyCapture = try JSONDecoder().decode(BrowserPageCapture.self, from: legacyData)
+        #expect(legacyCapture.structuredProducts == nil)
+    }
+
+    #if os(macOS)
+        @Test("The fixed capture payload maps schema.org Product data and tolerates its absence")
+        func fixedCapturePayloadStructuredProducts() throws {
+            let base = """
+                "url":"https://www.forgewear.example.test/p/tee","canonicalUrl":null,
+                "servedAmazonAsin":null,"variantMarkers":[],"title":"Tee","text":"Tee",
+                "links":[],"images":[],"authenticationRequired":false
+                """
+            let withData = """
+                {\(base),"structuredProducts":{"variantGroup":true,"products":[
+                {"skus":["A1"],"mpns":[],"gtins":["036000291452"],"productIds":["P1"]}]}}
+                """
+            let payload = try JSONDecoder().decode(
+                MacBrowserCommandExecutor.FixedCapturePayload.self, from: Data(withData.utf8))
+            let capture = try #require(payload.structuredProducts?.capture)
+            #expect(capture.variantGroup)
+            #expect(capture.products.first?.gtins == ["036000291452"])
+            #expect(capture.products.first?.productIds == ["P1"])
+
+            let without = try JSONDecoder().decode(
+                MacBrowserCommandExecutor.FixedCapturePayload.self, from: Data("{\(base)}".utf8))
+            #expect(without.structuredProducts == nil)
+        }
+    #endif
+
     @Test("Completed results replay until acknowledged")
     func replayLifecycle() {
         let uuid = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!

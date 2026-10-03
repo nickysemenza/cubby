@@ -1,0 +1,20 @@
+appId: com.nickysemenza.cubby
+---
+- extendedWaitUntil:
+    visible:
+      text: On My iPhone
+    timeout: 30000
+# iOS 26 can restore the app folder; iOS 27 opens at the device root.
+- runFlow:
+    when:
+      visible:
+        id: BackButton
+        text: On My iPhone
+    commands:
+      - tapOn:
+          id: BackButton
+          text: On My iPhone
+- extendedWaitUntil:
+    visible:
+      id: Cubby, Container
+    timeout: 30000

@@ -6,6 +6,7 @@ import {
   type AiFeature,
   ENTITY_EMBEDDING_FEATURE,
   FIELD_SUGGESTION_FEATURE,
+  SETTLEMENT_CANDIDATE_RANK_FEATURE,
   IMAGE_DESCRIPTION_FEATURE,
   INGREDIENT_MERGE_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
@@ -70,6 +71,12 @@ export const AI_SMOKE_CASES = {
     feature: SELECTION_OVERFLOW_FEATURE,
     label: "Large shortlist",
     description: "Selection beyond Jev's roster limit",
+    group: "Decisions",
+  },
+  settlementCandidateRank: {
+    feature: SETTLEMENT_CANDIDATE_RANK_FEATURE,
+    label: "Settlement tie-break",
+    description: "Order statement charges tied for a Purchase",
     group: "Decisions",
   },
   productIdentification: {

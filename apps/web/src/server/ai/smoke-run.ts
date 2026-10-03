@@ -25,6 +25,7 @@ import {
   PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
   PURCHASE_IMPORT_REPAIR_FEATURE,
   SEMANTIC_QUERY_FEATURE,
+  SETTLEMENT_CANDIDATE_RANK_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
 } from "~/server/ai/features";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
@@ -263,6 +264,33 @@ async function runCase(
                 : "Find a non-existent item",
             candidates,
             usage: { db, runId, operation: "smoke.selectionOverflow" },
+          },
+        ),
+      };
+    }
+    case "settlementCandidateRank": {
+      const { fixture } = aiSmokeInputs.settlementCandidateRank.parse(raw);
+      const lines = [
+        "purchase | $42.50 | posted 2026-03-04 | merchant Example Hardware North",
+        "purchase | $42.50 | posted 2026-03-09 | merchant Example Hardware South",
+      ];
+      return {
+        result: await runAiSelection(
+          {
+            feature: SETTLEMENT_CANDIDATE_RANK_FEATURE,
+            rules:
+              "Choose the statement transaction most likely to be the payment for this vendor order.",
+            idOf: (line) => line,
+            renderLine: (line) => line,
+            maxCandidates: lines.length,
+          },
+          {
+            subject:
+              fixture === "standard"
+                ? "Order dated 2026-03-03 from Example Hardware North, total $42.50"
+                : "Order dated 2026-01-15 from Example Garden, total $12.00",
+            candidates: lines,
+            usage: { db, runId, operation: "smoke.settlementCandidateRank" },
           },
         ),
       };

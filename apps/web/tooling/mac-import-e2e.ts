@@ -460,17 +460,39 @@ async function cleanupNativeProcess(): Promise<void> {
   );
   driver.evidence.push(evidence);
 }
-function finishFixtureLease(
+async function finishFixtureLease(
   lease: ReturnType<typeof acquireMacFixtureLease> | undefined,
   cleanupSucceeded: boolean,
-): void {
+): Promise<void> {
   if (!lease) return;
   try {
-    assertMacFixturesIdle();
     if (!cleanupSucceeded || ownedProcessCleanupFailed)
       throw new Error(
         "Mac fixture cleanup failed; host lease retained for diagnosis",
       );
+    await pollUntil(
+      () => {
+        try {
+          assertMacFixturesIdle();
+          return true;
+        } catch (error) {
+          // Verified app exit can precede its fixture child processes exiting.
+          if (
+            error instanceof Error &&
+            error.message.startsWith(
+              "Stable Mac fixture app is already running.",
+            )
+          )
+            return undefined;
+          throw error;
+        }
+      },
+      {
+        label: "Mac fixture processes exited",
+        timeoutMs: 10000,
+        intervalMs: 100,
+      },
+    );
     lease.release();
   } catch (error) {
     const cleanupError = retainCleanupFailure(error, "fixture lease cleanup");
@@ -1075,7 +1097,7 @@ async function main(): Promise<void> {
     } catch (error) {
       retainCleanupFailure(error);
     } finally {
-      finishFixtureLease(fixtureLease, cleanupSucceeded);
+      await finishFixtureLease(fixtureLease, cleanupSucceeded);
     }
     saveArtifact();
   }
