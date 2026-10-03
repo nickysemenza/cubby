@@ -1,0 +1,36 @@
+name: Initialize stock simulator data
+description: Reuse first-boot data for an exact hosted image/runtime/device before installing test apps.
+runs:
+  using: composite
+  steps:
+    - name: Identify the stock simulator and runtime
+      id: stock
+      shell: bash
+      run: node scripts/pristine-simulator-cache.ts key
+    - name: Restore initialized stock data
+      id: data
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        key: ${{ steps.stock.outputs.cache-key }}
+        path: |
+          ${{ steps.stock.outputs.data-path }}
+          !${{ steps.stock.outputs.data-path }}/tmp
+          !${{ steps.stock.outputs.data-path }}/Library/Logs
+    - name: Initialize a missing stock template
+      if: steps.data.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        STOCK_DEVICE_ID: ${{ steps.stock.outputs.device-id }}
+      run: node scripts/pristine-simulator-cache.ts seed "$STOCK_DEVICE_ID"
+    # Save immediately after shutdown, never in a post-test step: Cubby and
+    # XCTest have not been installed and no app session can enter the cache.
+    - name: Save stock first-boot data
+      if: steps.data.outputs.cache-hit != 'true'
+      continue-on-error: true
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        key: ${{ steps.stock.outputs.cache-key }}
+        path: |
+          ${{ steps.stock.outputs.data-path }}
+          !${{ steps.stock.outputs.data-path }}/tmp
+          !${{ steps.stock.outputs.data-path }}/Library/Logs

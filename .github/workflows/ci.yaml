@@ -543,6 +543,8 @@ jobs:
           "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/cubby-sim-pg" -l "$RUNNER_TEMP/cubby-sim-pg.log" -o '-h 127.0.0.1 -p 55432' start
           "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -c "ALTER USER postgres WITH PASSWORD 'password'"
           "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -Atc "SELECT name FROM pg_available_extensions WHERE name = 'vector'" | grep -qx vector
+      - uses: ./.github/actions/setup-pristine-simulator
+        continue-on-error: true
       - name: Run native read and write against a disposable database
         env:
           CUBBY_SIM_DB_EXTERNAL: "1"
@@ -674,6 +676,8 @@ jobs:
           "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/cubby-sim-pg" -l "$RUNNER_TEMP/cubby-sim-pg.log" -o '-h 127.0.0.1 -p 55432' start
           "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -c "ALTER USER postgres WITH PASSWORD 'password'"
           "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -Atc "SELECT name FROM pg_available_extensions WHERE name = 'vector'" | grep -qx vector
+      - uses: ./.github/actions/setup-pristine-simulator
+        continue-on-error: true
       - run: pnpm test:e2e:agent:ios
       - name: Save Apple test runner cache
         if: always()

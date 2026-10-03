@@ -24,6 +24,7 @@
         "scripts/stamp-source-mtimes.ts!",
         "scripts/apple-simulator-build-cache.ts!",
         "scripts/benchmark-apple-runner.ts!",
+        "scripts/pristine-simulator-cache.ts!",
         "scripts/generator/ensure.ts!"
       ],
       "project": ["neon.ts!", "scripts/**/*.ts!"],
