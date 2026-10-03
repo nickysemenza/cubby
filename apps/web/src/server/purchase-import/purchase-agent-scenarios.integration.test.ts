@@ -36,7 +36,10 @@ import {
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { learnPurchaseProductExternalId } from "./external-id-learning";
-import { startOrderMailImport } from "./gmail/import";
+import {
+  startOrderMailImport,
+  startSelectedOrderMailImport,
+} from "./gmail/import";
 import {
   authorizePurchaseAgent,
   type ScenarioHarness,
@@ -974,6 +977,180 @@ describe("purchase-agent scripted Flue scenarios", () => {
     );
     expect(open).toHaveLength(1);
     expect(open[0]?.summary).toContain("SCN60001");
+    expect(await scenario.violations()).toEqual([]);
+  }, 90_000);
+
+  it("mail evidence: one run over two selected confirmations imports the readable one, defers the unreadable one, and finishes for review", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Scenario mail member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Scenario mail shop ${crypto.randomUUID()}`,
+    });
+    const seedEvent = async (
+      orderId: string,
+      receivedAt: string,
+      bodyText: string,
+    ) => {
+      const [mail] = await getDb(ctx.db)
+        .insert(orderMail)
+        .values({
+          ledgerPartyId: party.id,
+          vendorId: vendor.id,
+          messageId: `scenario-confirmation-${crypto.randomUUID()}`,
+          sender: "orders@mail-shop.example.test",
+          subject: `Order ${orderId} confirmed`,
+          receivedAt: new Date(receivedAt),
+          rawChecksum: crypto.randomUUID().replaceAll("-", "").repeat(2),
+          content: { snippet: null, bodyHtml: null, bodyText },
+        })
+        .returning();
+      if (!mail) throw new Error("Missing scenario mail");
+      const [event] = await getDb(ctx.db)
+        .insert(orderMailEvent)
+        .values({
+          orderMailId: mail.id,
+          event: "placed",
+          orderId,
+          amount: 9,
+          currency: "USD",
+          sourceKey: `scenario:${mail.id}`,
+        })
+        .returning();
+      if (!event) throw new Error("Missing scenario mail event");
+      return { eventId: event.id, evidenceChecksum: mail.rawChecksum };
+    };
+    const sent: Array<Record<string, unknown>> = [];
+    const started = await startSelectedOrderMailImport(
+      ctx.db,
+      {
+        orders: [
+          await seedEvent(
+            "SCN70001",
+            "2026-09-24T12:00:00Z",
+            "Order SCN70001. Synthetic pruning saw, SKU SAW-30, quantity 1, $9.00. Grand Total $9.00 USD.",
+          ),
+          await seedEvent(
+            "SCN70002",
+            "2026-09-25T12:00:00Z",
+            "Thanks for your order SCN70002! We will email you when it ships.",
+          ),
+        ],
+      },
+      ctx.actor,
+      { send: async (value) => void sent.push(value) },
+    );
+    const [row] = await getDb(ctx.db)
+      .select({ id: runTable.id })
+      .from(runTable)
+      .where(eq(runTable.shortcode, started.runId));
+    if (!row || !sent[0]) throw new Error("Selected mail did not dispatch");
+    const runId = row.id;
+    scenarioRunId = runId;
+    await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
+    const order = (path: string) => from("extract-1", path);
+    scenario = await startScenarioHarness(ctx.databaseUrl, {
+      steps: [
+        call("claim-1", "claim_next_import_work"),
+        { check: "claim-1", includes: "SCN70001" },
+        call("extract-1", "extract_run_evidence"),
+        mcp(
+          "prepare-1",
+          "purchase_import",
+          runId,
+          {
+            action: "prepare",
+            orders: [
+              {
+                stableOrderId: order("stableOrderId"),
+                itemOperationId: order("itemOperationId"),
+                source: order("source"),
+                evidenceChecksum: order("evidenceChecksum"),
+                extractionRevision: order("extractionRevision"),
+                extraction: order("extraction"),
+                lineIds: order("lineIds"),
+                primaryDocumentImageId: null,
+                screenshotImageId: null,
+              },
+            ],
+          },
+          { itemOperationIds: [order("itemOperationId")] },
+        ),
+        mcp(
+          "commit-1",
+          "purchase_import",
+          runId,
+          {
+            action: "commit",
+            prepareOperationId: "prepare-1",
+            defaultTrade: "other",
+            resolutions: [
+              {
+                stableOrderId: order("stableOrderId"),
+                stableLineId: order("lineIds.0"),
+                resolution: { kind: "new" },
+              },
+            ],
+          },
+          { operationId: "commit-1" },
+        ),
+        settlementRead("settlement-1"),
+        call("claim-2", "claim_next_import_work"),
+        { check: "claim-2", includes: "SCN70002" },
+        call("extract-2", "extract_run_evidence"),
+        { check: "extract-2", includes: "unreadable" },
+        call("defer-2", "defer_order_for_review", {
+          orderId: "SCN70002",
+          detail: "The confirmation names the order but lists no items.",
+        }),
+        call("claim-done", "claim_next_import_work"),
+        { check: "claim-done", includes: "none" },
+        call("finish-1", "finish_import_run"),
+      ],
+      extractions: [
+        {
+          match: "SCN70001",
+          output: readyExtraction("SCN70001", "2026-09-24T12:00:00.000Z", [
+            {
+              title: "Synthetic pruning saw",
+              amount: 9,
+              lineKind: "principal",
+              sku: "SAW-30",
+            },
+          ]),
+        },
+        {
+          match: "SCN70002",
+          output: unreadableExtraction(
+            "The confirmation names the order but lists no items or total.",
+          ),
+        },
+      ],
+    });
+    await scenario.dispatch(sent[0]);
+    await waitForStatus(runId, "needs_review");
+
+    expect((await purchaseGraph(vendor.id)).purchases).toMatchObject([
+      { orderId: "SCN70001" },
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select({
+          orderId: runOrderCandidate.orderId,
+          state: runOrderCandidate.state,
+        })
+        .from(runOrderCandidate)
+        .where(eq(runOrderCandidate.runId, runId))
+        .orderBy(runOrderCandidate.orderId),
+    ).toEqual([
+      { orderId: "SCN70001", state: "imported" },
+      { orderId: "SCN70002", state: "skipped" },
+    ]);
+    expect(
+      (await findings(runId)).filter((f) => f.status === "open"),
+    ).toMatchObject([{ summary: expect.stringContaining("SCN70002") }]);
     expect(await scenario.violations()).toEqual([]);
   }, 90_000);
 });
