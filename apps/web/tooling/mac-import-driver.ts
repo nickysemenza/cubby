@@ -823,7 +823,20 @@ export class MacImportDriver {
       );
       this.record(["raise-settings-window"], 0, this.observe());
     } else {
-      this.nativeMenu("Cubby", "Settings…");
+      this.guardForeground();
+      // Post to the verified PID: the desktop-wide shortcut can reach another app.
+      execFileSync(
+        "osascript",
+        [
+          "-l",
+          "JavaScript",
+          "-e",
+          'ObjC.import("CoreGraphics"); function run(argv) { const pid=Number(argv[0]); for (const down of [true,false]) { const event=$.CGEventCreateKeyboardEvent(null,43,down); $.CGEventSetFlags(event,1<<20); $.CGEventPostToPid(pid,event); } }',
+          String(this.pid),
+        ],
+        { timeout: 10000 },
+      );
+      this.record(["owned-settings-shortcut"], 0, this.observe());
     }
     await this.wait('label="Settings" role=window');
     await this.wait("id=settings.purchaseImport.syncNow");
