@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { sleep } from "@cubby/shared/retry";
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { createWorkerdHarness } from "tooling/purchase-agent-workerd-harness";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -13,6 +13,7 @@ import {
   financialTransactionAllocation,
   orderMail,
   orderMailEvent,
+  product,
   purchase,
   run as runTable,
   runProgress,
@@ -328,7 +329,18 @@ describe("purchase coordinator decision eval", () => {
       for (const choice of candidates)
         for (const decision of cases)
           for (let attempt = 0; attempt < repeats; attempt += 1) {
+            const caseStartedAt = new Date();
             results.push(await runCase(decision, choice));
+            // Product names are unique per manufacturer: retire every Product
+            // this run seeded or created so the next run can reuse the same
+            // catalog and order titles without colliding or matching it.
+            await getDb(ctx.db)
+              .update(product)
+              .set({
+                name: sql`${product.name} || ' ~' || ${product.id}`,
+                deletedAt: new Date(),
+              })
+              .where(gte(product.createdAt, caseStartedAt));
             // Written per run so a later failure keeps finished results.
             writeFileSync(
               path.join(outDir, "results.jsonl"),
