@@ -472,9 +472,7 @@ jobs:
         if: always()
         uses: ./.github/actions/save-cache-main-only
         with:
-          path: |
-            apps/apple/DerivedData
-            !apps/apple/DerivedData/Logs
+          path: ${{ steps.derived-data.outputs.cache-paths }}
           key: ${{ steps.derived-data.outputs.cache-key }}
           cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
           matched-key: ${{ steps.derived-data.outputs.save-matched-key }}
@@ -526,6 +524,8 @@ jobs:
         with:
           targets: sim
       - uses: ./.github/actions/setup-apple-tools
+        with:
+          restore-spm-clones: "false"
       - uses: ./.github/actions/setup-apple-build-cache
         id: derived-data
       - uses: ./.github/actions/setup-apple-test-runner-cache
@@ -560,9 +560,7 @@ jobs:
         if: always()
         uses: ./.github/actions/save-cache-main-only
         with:
-          path: |
-            apps/apple/DerivedData
-            !apps/apple/DerivedData/Logs
+          path: ${{ steps.derived-data.outputs.cache-paths }}
           key: ${{ steps.derived-data.outputs.cache-key }}
           cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
           matched-key: ${{ steps.derived-data.outputs.save-matched-key }}
@@ -650,6 +648,8 @@ jobs:
         with:
           targets: sim
       - uses: ./.github/actions/setup-apple-tools
+        with:
+          restore-spm-clones: "false"
       - uses: ./.github/actions/setup-apple-build-cache
         id: derived-data
       - uses: ./.github/actions/setup-apple-test-runner-cache
@@ -680,9 +680,7 @@ jobs:
         if: always()
         uses: ./.github/actions/save-cache-main-only
         with:
-          path: |
-            apps/apple/DerivedData
-            !apps/apple/DerivedData/Logs
+          path: ${{ steps.derived-data.outputs.cache-paths }}
           key: ${{ steps.derived-data.outputs.cache-key }}
           cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
           matched-key: ${{ steps.derived-data.outputs.save-matched-key }}

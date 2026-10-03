@@ -16,6 +16,10 @@ outputs:
     value: ${{ steps.spm-cache.outputs.cache-primary-key }}
 
 inputs:
+  restore-spm-clones:
+    description: Restore package checkouts for jobs that normally compile
+    required: false
+    default: "true"
   sentry-cli:
     description: "Also install getsentry/tools/sentry-cli (needed only for archive builds)"
     required: false
@@ -37,6 +41,7 @@ runs:
     # identity. Canonicalize XcodeGen's maps so serialization order is irrelevant.
     - name: Fingerprint app package declarations
       id: packages
+      if: inputs.restore-spm-clones == 'true'
       shell: bash
       run: |
         xcodegen dump --spec apps/apple/project.yml --type json --no-env | node -e '
@@ -64,6 +69,7 @@ runs:
     # resolver fetches any delta from an advisory dependency clone cache.
     - name: Restore cached SPM clones
       id: spm-cache
+      if: inputs.restore-spm-clones == 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: apps/apple/SourcePackages
