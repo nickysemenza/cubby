@@ -16,7 +16,9 @@ click "label=\"On My iPhone\""
 wait "id=\"Cubby, Container\"" 30000
 click "id=\"Cubby, Container\""
 wait "id=\"synthetic-input-statement, csv\"" 30000
-click "id=\"synthetic-input-statement, csv\""
+# The OS cell spans its filename and metadata; tap the single synthetic file's
+# icon rather than its inactive metadata center in this fixed simulator fixture.
+press 71 260
 wait text "Synthetic Input Card" 30000
 wait "id=statement.csv.select.1" 30000
 click "id=statement.csv.select.1"
