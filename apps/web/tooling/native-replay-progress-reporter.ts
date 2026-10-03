@@ -1,5 +1,14 @@
 import { performance } from "node:perf_hooks";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { z } from "zod";
+import { readReplayTextEntryDiagnostics } from "./native-text-entry-diagnostics.ts";
+
+const resultSchema = z.object({
+  status: z.literal("failed"),
+  session: z.string().min(1).max(512),
+});
 
 const stepSchema = z
   .object({
@@ -34,5 +43,23 @@ export default {
     console.log(
       `[native-replay] step ${step.stepIndex}/${step.stepTotal} ${step.stepCommand} elapsed=${Math.round(performance.now() - startedAt)}ms`,
     );
+  },
+  onTestResult(event: unknown) {
+    const directory = process.env.CUBBY_NATIVE_DIAGNOSTICS_DIR;
+    const parsed = resultSchema.safeParse(event);
+    if (!directory || !parsed.success) return;
+    const diagnostics = readReplayTextEntryDiagnostics(
+      tmpdir(),
+      parsed.data.session,
+    );
+    if (!diagnostics) return;
+    try {
+      writeFileSync(
+        join(directory, "native-text-entry-diagnostics.json"),
+        `${JSON.stringify(diagnostics, null, 2)}\n`,
+      );
+    } catch {
+      console.warn("[native-replay] Text entry diagnostics unavailable");
+    }
   },
 };

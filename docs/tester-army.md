@@ -94,6 +94,10 @@ before reuse. Only its derived build directory is cached. Device leases,
 per-session launch files, test results, logs, and lock files are excluded so
 a new runner cannot inherit another host's process state.
 Bundles record native build, boot, installation, and driver preparation durations separately.
+Failed deterministic replays also retain a fixed projection of the SDK's text
+commit polling: elapsed time, requested/observed character counts, matched prefix
+length and outcome. The reporter reads it before the isolated replay daemon is
+removed; field contents and the raw runner log are excluded.
 If driver preparation fails, diagnostics retain the simulator screenshot and
 original error without starting XCTest again for a UI snapshot. Failures after
 successful preparation still capture the UI tree.

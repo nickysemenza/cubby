@@ -585,6 +585,7 @@ jobs:
             artifacts/sim-e2e/**/run-manifest.json
             artifacts/sim-e2e/**/run-results.json
             artifacts/sim-e2e/**/native-driver-diagnostics.json
+            artifacts/sim-e2e/**/native-text-entry-diagnostics.json
             artifacts/sim-e2e/**/SHA256SUMS
 
   tester-army-inputs:

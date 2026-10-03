@@ -1248,32 +1248,44 @@ async function runNativeJourney(
     ? await recordSimulatorVideo(deviceID)
     : undefined;
   try {
-    await run("pnpm", [
-      "exec",
-      "agent-device",
-      "test",
-      emojiReview
-        ? "apps/apple/e2e/emoji-review.ad"
-        : productClarity
-          ? "apps/apple/e2e/product-clarity.yaml"
-          : layout
-            ? "apps/apple/e2e/native-layout.ad"
-            : "apps/apple/e2e/product-edit.ad",
-      ...common,
-      ...(productClarity ? ["--maestro"] : []),
-      "--artifacts-dir",
-      artifacts,
-      "--reporter",
-      "default",
-      "--reporter",
-      path.join(webRoot, "tooling/native-replay-progress-reporter.ts"),
-      "--reporter",
-      `junit:${path.join(artifacts, "junit.xml")}`,
-      "-e",
-      `PRODUCT_ID=${productId}`,
-      ...(layoutRunID ? ["-e", `RUN_ID=${layoutRunID}`] : []),
-      ...(purchaseId ? ["-e", `PURCHASE_ID=${purchaseId}`] : []),
-    ]);
+    await run(
+      "pnpm",
+      [
+        "exec",
+        "agent-device",
+        "test",
+        emojiReview
+          ? "apps/apple/e2e/emoji-review.ad"
+          : productClarity
+            ? "apps/apple/e2e/product-clarity.yaml"
+            : layout
+              ? "apps/apple/e2e/native-layout.ad"
+              : "apps/apple/e2e/product-edit.ad",
+        ...common,
+        ...(productClarity ? ["--maestro"] : []),
+        "--artifacts-dir",
+        artifacts,
+        "--reporter",
+        "default",
+        "--reporter",
+        path.join(webRoot, "tooling/native-replay-progress-reporter.ts"),
+        "--reporter",
+        `junit:${path.join(artifacts, "junit.xml")}`,
+        "-e",
+        `PRODUCT_ID=${productId}`,
+        ...(layoutRunID ? ["-e", `RUN_ID=${layoutRunID}`] : []),
+        ...(purchaseId ? ["-e", `PURCHASE_ID=${purchaseId}`] : []),
+      ],
+      repoRoot,
+      undefined,
+      false,
+      {
+        ...process.env,
+        ...(process.env.GITHUB_ACTIONS === "true" && {
+          CUBBY_NATIVE_DIAGNOSTICS_DIR: artifacts,
+        }),
+      },
+    );
   } finally {
     await stopRecording?.();
   }
@@ -1853,6 +1865,11 @@ async function main(): Promise<void> {
       const output = path.join(artifacts, "native-driver-diagnostics.json");
       writeFileSync(output, `${JSON.stringify(diagnostics, null, 2)}\n`);
       scenarioEvidence.push(output);
+      const textDiagnostics = path.join(
+        artifacts,
+        "native-text-entry-diagnostics.json",
+      );
+      if (existsSync(textDiagnostics)) scenarioEvidence.push(textDiagnostics);
     } catch {
       console.warn(`[${lane}] Native driver diagnostics unavailable`);
     }
