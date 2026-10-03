@@ -8,6 +8,7 @@ import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
 import { spawnToExit } from "../../../scripts/lib/run.ts";
 import {
   hasMatchingSimulatorBuild,
+  hostedSimulatorBuildArgs,
   simulatorBuildFingerprint,
   stampSimulatorBuild,
 } from "../../../scripts/apple-simulator-build-cache.ts";
@@ -31,7 +32,15 @@ import { Pool } from "pg";
 import { z } from "zod";
 
 import { writeE2ERunBundle } from "./e2e-run-bundle";
-import { collectNativeDriverDiagnostics } from "./native-driver-diagnostics";
+import {
+  collectNativeDriverDiagnostics,
+  projectNativeNavigationSnapshot,
+} from "./native-driver-diagnostics";
+import { simulatorInventorySchema } from "./simulator-inventory-schema";
+import {
+  iosSimulatorDeviceType,
+  selectIOSSimulator,
+} from "../../../scripts/apple-simulator-selection.ts";
 import { scrubErrorMessage } from "../src/lib/error-diagnostics";
 import { assertSimulatorAdminUrl } from "./sim-db-guard";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
@@ -238,7 +247,8 @@ async function assertNativeEdit(
 ): Promise<void> {
   const checkPool = new Pool({ connectionString: databaseURL });
   try {
-    const { SIM_PRODUCT_UPDATED_NAME } = await import("./scenarios/simulator");
+    const { SIM_PRODUCT_UPDATED_NAME } =
+      await import("./scenarios/simulator-product-fixture");
     const targetName =
       expectedName ??
       (emojiReview
@@ -496,14 +506,9 @@ async function run(
     );
 }
 
-async function simulator(): Promise<{
-  udid: string;
-  name: string;
-  state: string;
-  runtime: string;
-  deviceTypeIdentifier: string;
-}> {
-  const deviceType = "com.apple.CoreSimulator.SimDeviceType.iPhone-17";
+async function simulator(): Promise<
+  NonNullable<ReturnType<typeof selectIOSSimulator>>
+> {
   const raw = await new Promise<string>((resolve, reject) => {
     const child = spawn("xcrun", [
       "simctl",
@@ -521,43 +526,16 @@ async function simulator(): Promise<{
     );
     child.once("error", reject);
   });
-  const parsed = z
-    .object({
-      devices: z.record(
-        z.string(),
-        z.array(
-          z
-            .object({
-              name: z.string(),
-              udid: z.string(),
-              state: z.string(),
-              deviceTypeIdentifier: z.string(),
-            })
-            .loose(),
-        ),
-      ),
-    })
-    .parse(JSON.parse(raw));
-  const phones = Object.entries(parsed.devices)
-    .filter(([runtime]) => runtime.includes(".iOS-"))
-    .flatMap(([runtime, devices]) =>
-      devices.map((device) => ({ ...device, runtime })),
-    )
-    .filter((device) => device.name.includes("iPhone"));
+  const parsed = simulatorInventorySchema.parse(JSON.parse(raw));
   const preferred = process.env.CUBBY_SIM_DEVICE;
-  const selected = preferred
-    ? phones.find(
-        (device) =>
-          device.deviceTypeIdentifier === deviceType &&
-          (device.name === preferred || device.udid === preferred),
-      )
-    : (phones.find(
-        (device) =>
-          device.deviceTypeIdentifier === deviceType &&
-          device.state === "Booted",
-      ) ?? phones.find((device) => device.deviceTypeIdentifier === deviceType));
+  const selected = selectIOSSimulator(parsed, preferred);
   if (!selected && !preferred) {
-    await run("xcrun", ["simctl", "create", "cubby-e2e-iPhone17", deviceType]);
+    await run("xcrun", [
+      "simctl",
+      "create",
+      "cubby-e2e-iPhone17",
+      iosSimulatorDeviceType,
+    ]);
     return simulator();
   }
   if (!selected)
@@ -652,8 +630,9 @@ async function runWarmSimulator(options: {
   install: () => Promise<void>;
   launch: () => Promise<void>;
 }): Promise<void> {
-  const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME, seedSimulatorScenario } =
-    await import("./scenarios/simulator");
+  const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME } =
+    await import("./scenarios/simulator-product-fixture");
+  const { seedSimulatorScenario } = await import("./scenarios/simulator");
   const { deviceID, common, session, productId, userId, install, launch } =
     options;
   const stateDir = path.join(artifacts, "agent-device-state");
@@ -995,7 +974,7 @@ async function runHeadlessProductScenario(
   userId: string,
 ): Promise<void> {
   const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME } =
-    await import("./scenarios/simulator");
+    await import("./scenarios/simulator-product-fixture");
   let builtVersion: string | undefined;
   const runNative = async (
     id: string,
@@ -1263,7 +1242,7 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
       runtime: testerArmy
         ? {
             ...runtime,
-            testerArmy: "0.15.2",
+            testerArmy: "0.16.0",
             model: process.env.TESTER_ARMY_MODEL ?? "openai/gpt-6-luna",
             effort: "medium",
           }
@@ -1351,36 +1330,52 @@ async function runNativeJourney(
       throw new Error("Tester Army iOS journey did not pass");
     return;
   }
+  // CLI replay owns a separate daemon. Release the prepare daemon so it
+  // cannot retain the runner lease; this hosted daemon belongs to this job.
+  if (process.env.GITHUB_ACTIONS === "true")
+    await run("pnpm", ["exec", "agent-device", "daemon", "stop"]);
   const stopRecording = video
     ? await recordSimulatorVideo(deviceID)
     : undefined;
   try {
-    await run("pnpm", [
-      "exec",
-      "agent-device",
-      "test",
-      emojiReview
-        ? "apps/apple/e2e/emoji-review.ad"
-        : productClarity
-          ? "apps/apple/e2e/product-clarity.yaml"
-          : layout
-            ? "apps/apple/e2e/native-layout.ad"
-            : "apps/apple/e2e/product-edit.ad",
-      ...common,
-      ...(productClarity ? ["--maestro"] : []),
-      "--artifacts-dir",
-      artifacts,
-      "--reporter",
-      "default",
-      "--reporter",
-      path.join(webRoot, "tooling/native-replay-progress-reporter.ts"),
-      "--reporter",
-      `junit:${path.join(artifacts, "junit.xml")}`,
-      "-e",
-      `PRODUCT_ID=${productId}`,
-      ...(layoutRunID ? ["-e", `RUN_ID=${layoutRunID}`] : []),
-      ...(purchaseId ? ["-e", `PURCHASE_ID=${purchaseId}`] : []),
-    ]);
+    await run(
+      "pnpm",
+      [
+        "exec",
+        "agent-device",
+        "test",
+        emojiReview
+          ? "apps/apple/e2e/emoji-review.ad"
+          : productClarity
+            ? "apps/apple/e2e/product-clarity.yaml"
+            : layout
+              ? "apps/apple/e2e/native-layout.ad"
+              : "apps/apple/e2e/product-edit.ad",
+        ...common,
+        ...(productClarity ? ["--maestro"] : []),
+        "--artifacts-dir",
+        artifacts,
+        "--reporter",
+        "default",
+        "--reporter",
+        path.join(webRoot, "tooling/native-replay-progress-reporter.ts"),
+        "--reporter",
+        `junit:${path.join(artifacts, "junit.xml")}`,
+        "-e",
+        `PRODUCT_ID=${productId}`,
+        ...(layoutRunID ? ["-e", `RUN_ID=${layoutRunID}`] : []),
+        ...(purchaseId ? ["-e", `PURCHASE_ID=${purchaseId}`] : []),
+      ],
+      repoRoot,
+      undefined,
+      false,
+      {
+        ...process.env,
+        ...(process.env.GITHUB_ACTIONS === "true" && {
+          CUBBY_NATIVE_DIAGNOSTICS_DIR: artifacts,
+        }),
+      },
+    );
   } finally {
     await stopRecording?.();
   }
@@ -1699,37 +1694,31 @@ async function main(): Promise<void> {
           await run("node", ["scripts/stamp-source-mtimes.ts", "apps/apple"]);
         nativeBuildSourceVersion = nativeSourceFingerprint(true);
         currentNativeSourceVersion = () => nativeSourceFingerprint(true);
-        const buildArgs = [
-          "-project",
-          "apps/apple/Cubby.xcodeproj",
-          "-scheme",
-          "Cubby-iOS",
-          "-configuration",
-          "Debug",
-          "-destination",
-          hosted
-            ? "generic/platform=iOS Simulator"
-            : `platform=iOS Simulator,id=${device.udid}`,
-          "-derivedDataPath",
-          "apps/apple/DerivedData",
-          // CubbyAPI is generated by swift-openapi-generator's build plugin;
-          // a fresh machine or runner has never trusted it interactively.
-          "-skipPackagePluginValidation",
-          "-skipMacroValidation",
-          ...(hosted
-            ? [
-                "-clonedSourcePackagesDirPath",
-                "apps/apple/SourcePackages",
-                "SWIFT_ENABLE_BATCH_MODE=YES",
-                "ARCHS=arm64",
-                "ONLY_ACTIVE_ARCH=YES",
-              ]
-            : []),
-          "CODE_SIGNING_ALLOWED=NO",
-          "COMPILER_INDEX_STORE_ENABLE=NO",
-        ];
+        const buildArgs = hosted
+          ? hostedSimulatorBuildArgs
+          : [
+              "-project",
+              "apps/apple/Cubby.xcodeproj",
+              "-scheme",
+              "Cubby-iOS",
+              "-configuration",
+              "Debug",
+              "-destination",
+              `platform=iOS Simulator,id=${device.udid}`,
+              "-derivedDataPath",
+              "apps/apple/DerivedData",
+              "-skipPackagePluginValidation",
+              "-skipMacroValidation",
+              "CODE_SIGNING_ALLOWED=NO",
+              "COMPILER_INDEX_STORE_ENABLE=NO",
+            ];
         let certifiedInput: string | undefined;
-        if (hosted) {
+        // A certificate already binds the resolved package state to this app.
+        // Resolve again only when current inputs or bundle bytes do not match.
+        let reuseCertifiedApp =
+          hosted &&
+          hasMatchingSimulatorBuild(repoRoot, nativeToolchain, buildArgs);
+        if (hosted && !reuseCertifiedApp) {
           await run("xcodebuild", [
             ...buildArgs,
             "-resolvePackageDependencies",
@@ -1738,19 +1727,30 @@ async function main(): Promise<void> {
             certifiedInput = simulatorBuildFingerprint(
               repoRoot,
               nativeToolchain,
+              buildArgs,
             );
           } catch (error) {
             console.warn(
               `[${lane}] Simulator cache unavailable: ${String(error)}`,
             );
           }
+          reuseCertifiedApp = hasMatchingSimulatorBuild(
+            repoRoot,
+            nativeToolchain,
+            buildArgs,
+          );
         }
-        if (hosted && hasMatchingSimulatorBuild(repoRoot, nativeToolchain)) {
+        if (reuseCertifiedApp) {
           console.log(`[${lane}] Reusing the verified simulator app bundle`);
         } else {
           await run("xcodebuild", [...buildArgs, "build"]);
           if (certifiedInput)
-            stampSimulatorBuild(repoRoot, nativeToolchain, certifiedInput);
+            stampSimulatorBuild(
+              repoRoot,
+              nativeToolchain,
+              certifiedInput,
+              buildArgs,
+            );
         }
         nativeBuildBinary = path.join(appPath, "Cubby");
         nativeBuildReady = true;
@@ -1810,15 +1810,23 @@ async function main(): Promise<void> {
         });
       };
       const launch = async () => {
-        await run("xcrun", [
-          "simctl",
-          "launch",
-          "--terminate-running-process",
-          device.udid,
-          "com.nickysemenza.cubby",
-          "--cubby-e2e-server",
-          nativeOrigin,
-        ]);
+        const launchStarted = performance.now();
+        try {
+          await run("xcrun", [
+            "simctl",
+            "launch",
+            "--terminate-running-process",
+            device.udid,
+            "com.nickysemenza.cubby",
+            "--cubby-e2e-server",
+            nativeOrigin,
+          ]);
+        } finally {
+          phases.push({
+            name: "native-launch",
+            durationMs: Math.round(performance.now() - launchStarted),
+          });
+        }
       };
       try {
         await install();
@@ -1946,7 +1954,14 @@ async function main(): Promise<void> {
           ]);
           await run(
             "pnpm",
-            ["exec", "agent-device", "snapshot", "--raw", ...diagnosticArgs],
+            [
+              "exec",
+              "agent-device",
+              "snapshot",
+              "--raw",
+              "--json",
+              ...diagnosticArgs,
+            ],
             repoRoot,
             path.join(artifacts, "failure-ui-tree.ndjson"),
           );
@@ -1991,12 +2006,40 @@ async function main(): Promise<void> {
         path.join(homedir(), ".agent-device"),
         new Date(performance.timeOrigin + runStartedAt).toISOString(),
       );
+      let navigation:
+        | ReturnType<typeof projectNativeNavigationSnapshot>
+        | undefined;
+      const snapshot = path.join(artifacts, "failure-ui-tree.ndjson");
+      if (existsSync(snapshot)) {
+        try {
+          navigation = projectNativeNavigationSnapshot(
+            statSync(snapshot).size <= 2_000_000
+              ? JSON.parse(readFileSync(snapshot, "utf8"))
+              : undefined,
+          );
+        } catch {
+          navigation = projectNativeNavigationSnapshot(undefined);
+        }
+      }
       const output = path.join(artifacts, "native-driver-diagnostics.json");
-      writeFileSync(output, `${JSON.stringify(diagnostics, null, 2)}\n`);
+      writeFileSync(
+        output,
+        `${JSON.stringify({ ...diagnostics, ...(navigation && { navigation }) }, null, 2)}\n`,
+      );
       scenarioEvidence.push(output);
     } catch {
       console.warn(`[${lane}] Native driver diagnostics unavailable`);
     }
+    const textDiagnostics = path.join(
+      artifacts,
+      "native-text-entry-diagnostics.json",
+    );
+    if (existsSync(textDiagnostics)) scenarioEvidence.push(textDiagnostics);
+    const replayDiagnostics = path.join(
+      artifacts,
+      "native-replay-driver-diagnostics.json",
+    );
+    if (existsSync(replayDiagnostics)) scenarioEvidence.push(replayDiagnostics);
   }
   failure = finishE2ERun(failure);
   if (failure !== undefined) throw failure;

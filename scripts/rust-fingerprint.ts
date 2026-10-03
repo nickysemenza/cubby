@@ -74,12 +74,30 @@ export const rustFingerprint = (
   manifestPath: string,
   extra: string[],
 ): string => {
-  const metadata = command("cargo", [
+  const metadataArgs = [
     "metadata",
     "--format-version=1",
     "--manifest-path",
     manifestPath,
-  ]);
+  ];
+  let metadata: string;
+  try {
+    // A restored graph needs no registry refresh. Locked mode rejects stale
+    // manifests and local overrides that require a new resolution; a cold or
+    // incomplete cache falls back to Cargo's existing resolver below.
+    metadata = execFileSync(
+      "cargo",
+      [...metadataArgs, "--locked", "--offline"],
+      {
+        cwd: ROOT,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        maxBuffer: 1 << 26,
+      },
+    );
+  } catch {
+    metadata = command("cargo", metadataArgs);
+  }
   const roots = new Set(
     parseCargoMetadata(metadata)
       .packages.filter((pkg) => pkg.source === null)

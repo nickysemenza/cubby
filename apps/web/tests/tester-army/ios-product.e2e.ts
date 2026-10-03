@@ -24,7 +24,7 @@ test("iOS product rename persists after reopening", async ({
     screen.getByTestId("detail.product").getByText(name),
   ).toBeVisible();
   await agent.act(
-    "Edit this product, change its Name to {name}, and tap Save",
+    "Edit this product, change its Name to {name}, and tap Save. Wait for the product detail to display {name} before declaring success; the first detail snapshot may still contain the previous name while it reloads.",
     {
       params: { name: updatedName },
     },

@@ -6,6 +6,30 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { digestFiles, walkFiles } from "./lib/tree-digest.ts";
 
+// Both hosted callers compile this profile. Its bytes also enter the cache key;
+// harness and workflow changes do not change the app's compiler inputs.
+export const hostedSimulatorBuildArgs = Object.freeze([
+  "-project",
+  "apps/apple/Cubby.xcodeproj",
+  "-scheme",
+  "Cubby-iOS",
+  "-configuration",
+  "Debug",
+  "-destination",
+  "generic/platform=iOS Simulator",
+  "-derivedDataPath",
+  "apps/apple/DerivedData",
+  "-clonedSourcePackagesDirPath",
+  "apps/apple/SourcePackages",
+  "-skipPackagePluginValidation",
+  "-skipMacroValidation",
+  "SWIFT_ENABLE_BATCH_MODE=YES",
+  "ARCHS=arm64",
+  "ONLY_ACTIVE_ARCH=YES",
+  "CODE_SIGNING_ALLOWED=NO",
+  "COMPILER_INDEX_STORE_ENABLE=NO",
+]);
+
 const bundlePath =
   "apps/apple/DerivedData/Build/Products/Debug-iphonesimulator/Cubby.app";
 const markerPath = "apps/apple/DerivedData/cubby-simulator-build.json";
@@ -50,14 +74,13 @@ function canonicalPackageState(source: string): string {
 const buildDrivers = [
   "scripts/apple-check.sh",
   "apps/apple/scripts/prepare-project.sh",
-  "apps/web/tooling/sim-e2e.ts",
-  ".github/workflows/ci.yaml",
   "scripts/apple-simulator-build-cache.ts",
 ];
 
 export function simulatorBuildFingerprint(
   root: string,
   toolchain: string,
+  buildArgs: readonly string[] = hostedSimulatorBuildArgs,
 ): string {
   const inputs = requiredInputs.map((file) => path.join(root, file));
   for (const file of inputs) {
@@ -83,13 +106,17 @@ export function simulatorBuildFingerprint(
     root,
     [...new Set(inputs)].filter((file) => file !== workspaceFile).sort(),
     {
-      seed: `simulator-app-v2:Debug:arm64:batch:${toolchain}:${packageState}`,
+      seed: `simulator-app-v3:${JSON.stringify(buildArgs)}:${toolchain}:${packageState}`,
       links: true,
     },
   );
 }
 
-function buildCertificate(root: string, toolchain: string) {
+function buildCertificate(
+  root: string,
+  toolchain: string,
+  buildArgs: readonly string[],
+) {
   const bundle = path.join(root, bundlePath);
   for (const file of ["Cubby", "Info.plist"]) {
     if (!existsSync(path.join(bundle, file)))
@@ -97,7 +124,7 @@ function buildCertificate(root: string, toolchain: string) {
   }
   return JSON.stringify({
     schemaVersion: 1,
-    inputs: simulatorBuildFingerprint(root, toolchain),
+    inputs: simulatorBuildFingerprint(root, toolchain, buildArgs),
     bundle: digestFiles(bundle, walkFiles(bundle, { includeSymlinks: true }), {
       links: true,
     }),
@@ -108,21 +135,26 @@ export function stampSimulatorBuild(
   root: string,
   toolchain: string,
   expected: string,
+  buildArgs: readonly string[] = hostedSimulatorBuildArgs,
 ): void {
-  if (simulatorBuildFingerprint(root, toolchain) !== expected) {
+  if (simulatorBuildFingerprint(root, toolchain, buildArgs) !== expected) {
     throw new Error("Simulator build inputs changed during compilation");
   }
-  writeFileSync(path.join(root, markerPath), buildCertificate(root, toolchain));
+  writeFileSync(
+    path.join(root, markerPath),
+    buildCertificate(root, toolchain, buildArgs),
+  );
 }
 
 export function hasMatchingSimulatorBuild(
   root: string,
   toolchain: string,
+  buildArgs: readonly string[] = hostedSimulatorBuildArgs,
 ): boolean {
   try {
     return (
       readFileSync(path.join(root, markerPath), "utf8") ===
-      buildCertificate(root, toolchain)
+      buildCertificate(root, toolchain, buildArgs)
     );
   } catch {
     return false;
@@ -134,18 +166,21 @@ if (
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-  const toolchain = execFileSync("xcodebuild", ["-version"], {
-    encoding: "utf8",
-  }).trim();
   const command = process.argv[2];
-  if (command === "key")
-    console.log(simulatorBuildFingerprint(root, toolchain));
-  else if (command === "verify")
-    process.exitCode = hasMatchingSimulatorBuild(root, toolchain) ? 0 : 1;
-  else if (command === "stamp" && process.argv[3])
-    stampSimulatorBuild(root, toolchain, process.argv[3]);
-  else
-    throw new Error(
-      "Usage: apple-simulator-build-cache.ts key|verify|stamp <pre-build-key>",
-    );
+  if (command === "args") console.log(hostedSimulatorBuildArgs.join("\n"));
+  else {
+    const toolchain = execFileSync("xcodebuild", ["-version"], {
+      encoding: "utf8",
+    }).trim();
+    if (command === "key")
+      console.log(simulatorBuildFingerprint(root, toolchain));
+    else if (command === "verify")
+      process.exitCode = hasMatchingSimulatorBuild(root, toolchain) ? 0 : 1;
+    else if (command === "stamp" && process.argv[3])
+      stampSimulatorBuild(root, toolchain, process.argv[3]);
+    else
+      throw new Error(
+        "Usage: apple-simulator-build-cache.ts args|key|verify|stamp <pre-build-key>",
+      );
+  }
 }

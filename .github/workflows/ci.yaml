@@ -477,9 +477,7 @@ jobs:
         if: always()
         uses: ./.github/actions/save-cache-main-only
         with:
-          path: |
-            apps/apple/DerivedData
-            !apps/apple/DerivedData/Logs
+          path: ${{ steps.derived-data.outputs.cache-paths }}
           key: ${{ steps.derived-data.outputs.cache-key }}
           cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
           matched-key: ${{ steps.derived-data.outputs.save-matched-key }}
@@ -526,10 +524,13 @@ jobs:
         with:
           wasm: restore
           pnpm-store-cache: "false"
+      - uses: ./.github/actions/reuse-worker-build
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: sim
       - uses: ./.github/actions/setup-apple-tools
+        with:
+          restore-spm-clones: "false"
       - uses: ./.github/actions/setup-apple-build-cache
         id: derived-data
       - uses: ./.github/actions/setup-apple-test-runner-cache
@@ -562,16 +563,9 @@ jobs:
           fi
       - name: Save Apple test runner cache
         if: always()
-        uses: ./.github/actions/save-cache-main-only
+        uses: ./.github/actions/save-apple-test-runner-cache
         with:
-          path: |
-            ~/.agent-device/apple-runner/derived
-            !~/.agent-device/apple-runner/derived/**/Logs
-            !~/.agent-device/apple-runner/derived/**/TestResults
-            !~/.agent-device/apple-runner/derived/**/*.log
-            !~/.agent-device/apple-runner/derived/**/AgentDeviceRunner.env.session-*
-            !~/.agent-device/apple-runner/derived/**/lock
-            !~/.agent-device/apple-runner/derived/**/*.lock
+          path: ${{ steps.test-runner.outputs.cache-paths }}
           key: ${{ steps.test-runner.outputs.cache-key }}
           cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
           matched-key: ${{ steps.test-runner.outputs.matched-key }}
@@ -579,9 +573,7 @@ jobs:
         if: always()
         uses: ./.github/actions/save-cache-main-only
         with:
-          path: |
-            apps/apple/DerivedData
-            !apps/apple/DerivedData/Logs
+          path: ${{ steps.derived-data.outputs.cache-paths }}
           key: ${{ steps.derived-data.outputs.cache-key }}
           cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
           matched-key: ${{ steps.derived-data.outputs.save-matched-key }}
@@ -645,6 +637,7 @@ jobs:
         with:
           wasm: restore
       - run: pnpm test:e2e:agent:preflight
+      - uses: ./.github/actions/reuse-worker-build
       - uses: ./.github/actions/start-test-services
       - run: pnpm --filter @cubby/web run test:e2e:install-browser chromium --with-deps
       - run: pnpm test:e2e:agent:web
@@ -681,10 +674,13 @@ jobs:
           wasm: restore
           pnpm-store-cache: "false"
       - run: pnpm test:e2e:agent:preflight
+      - uses: ./.github/actions/reuse-worker-build
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: sim
       - uses: ./.github/actions/setup-apple-tools
+        with:
+          restore-spm-clones: "false"
       - uses: ./.github/actions/setup-apple-build-cache
         id: derived-data
       - uses: ./.github/actions/setup-apple-test-runner-cache
@@ -705,16 +701,9 @@ jobs:
       - run: pnpm test:e2e:agent:ios
       - name: Save Apple test runner cache
         if: always()
-        uses: ./.github/actions/save-cache-main-only
+        uses: ./.github/actions/save-apple-test-runner-cache
         with:
-          path: |
-            ~/.agent-device/apple-runner/derived
-            !~/.agent-device/apple-runner/derived/**/Logs
-            !~/.agent-device/apple-runner/derived/**/TestResults
-            !~/.agent-device/apple-runner/derived/**/*.log
-            !~/.agent-device/apple-runner/derived/**/AgentDeviceRunner.env.session-*
-            !~/.agent-device/apple-runner/derived/**/lock
-            !~/.agent-device/apple-runner/derived/**/*.lock
+          path: ${{ steps.test-runner.outputs.cache-paths }}
           key: ${{ steps.test-runner.outputs.cache-key }}
           cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
           matched-key: ${{ steps.test-runner.outputs.matched-key }}
@@ -722,9 +711,7 @@ jobs:
         if: always()
         uses: ./.github/actions/save-cache-main-only
         with:
-          path: |
-            apps/apple/DerivedData
-            !apps/apple/DerivedData/Logs
+          path: ${{ steps.derived-data.outputs.cache-paths }}
           key: ${{ steps.derived-data.outputs.cache-key }}
           cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
           matched-key: ${{ steps.derived-data.outputs.save-matched-key }}

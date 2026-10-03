@@ -16,6 +16,10 @@ outputs:
     value: ${{ steps.spm-cache.outputs.cache-primary-key }}
 
 inputs:
+  restore-spm-clones:
+    description: Restore package checkouts for jobs that normally compile
+    required: false
+    default: "true"
   sentry-cli:
     description: "Also install getsentry/tools/sentry-cli (needed only for archive builds)"
     required: false
@@ -33,15 +37,43 @@ runs:
       shell: bash
       run: brew install getsentry/tools/sentry-cli
 
-    # The app's own Package.resolved lives inside the gitignored xcodeproj,
-    # so Sentry/Nuke float within their `from:` ranges here; a slightly stale
-    # cache is fine because `xcodebuild`'s SPM resolver only fetches the
-    # delta.
+    # Package declarations, rather than app build settings, determine clone
+    # identity. Canonicalize XcodeGen's maps so serialization order is irrelevant.
+    - name: Fingerprint app package declarations
+      id: packages
+      if: inputs.restore-spm-clones == 'true'
+      shell: bash
+      run: |
+        xcodegen dump --spec apps/apple/project.yml --type json --no-env | node -e '
+          const { createHash } = require("node:crypto");
+          const canonical = value => Array.isArray(value)
+            ? value.map(canonical)
+            : value && typeof value === "object"
+              ? Object.fromEntries(Object.entries(value)
+                .sort(([left], [right]) => left.localeCompare(right))
+                .map(([key, value]) => [key, canonical(value)]))
+              : value;
+          let source = "";
+          process.stdin.on("data", chunk => source += chunk);
+          process.stdin.on("end", () => {
+            const { packages } = JSON.parse(source);
+            if (!packages || typeof packages !== "object")
+              throw new Error("XcodeGen package declarations are unavailable");
+            const hash = createHash("sha256")
+              .update(JSON.stringify(canonical(packages))).digest("hex");
+            console.log(`packages-hash=${hash}`);
+          });
+        ' >> "$GITHUB_OUTPUT"
+
+    # App package versions float within their declared ranges. Xcode's normal
+    # resolver fetches any delta from an advisory dependency clone cache.
     - name: Restore cached SPM clones
       id: spm-cache
+      if: inputs.restore-spm-clones == 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: apps/apple/SourcePackages
-        key: spm-clones-v1-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved', 'apps/apple/project.yml') }}
+        key: spm-clones-v2-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-${{ steps.packages.outputs.packages-hash }}
         restore-keys: |
+          spm-clones-v2-${{ runner.os }}-
           spm-clones-v1-${{ runner.os }}-

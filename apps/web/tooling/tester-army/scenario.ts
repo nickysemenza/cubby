@@ -6,7 +6,7 @@ import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import {
   SIM_PRODUCT_NAME,
   SIM_PRODUCT_UPDATED_NAME,
-} from "../scenarios/simulator";
+} from "../scenarios/simulator-product-fixture";
 
 const browserState = z.object({
   cookies: z.array(

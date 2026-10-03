@@ -23,6 +23,8 @@
         "scripts/dev-db.ts!",
         "scripts/stamp-source-mtimes.ts!",
         "scripts/apple-simulator-build-cache.ts!",
+        "scripts/benchmark-apple-runner.ts!",
+        "scripts/pristine-simulator-cache.ts!",
         "scripts/generator/ensure.ts!"
       ],
       "project": ["neon.ts!", "scripts/**/*.ts!"],
@@ -41,7 +43,13 @@
       // apple.ts quits the running Mac app before relaunching. container: the
       // Apple test-service runtime. All are system tools, never npm
       // dependencies.
-      "ignoreBinaries": ["xcode-select", "pkill", "container", "wrangler"]
+      "ignoreBinaries": [
+        "xcode-select",
+        "plutil",
+        "pkill",
+        "container",
+        "wrangler"
+      ]
     },
     "apps/web": {
       "entry": [

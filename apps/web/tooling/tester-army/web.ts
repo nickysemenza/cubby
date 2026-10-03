@@ -190,7 +190,7 @@ if (flags.includes("--services-ready")) {
       cases: [{ name: "web product rename and reopen", status }],
       fixture: "synthetic-product",
       fixtureVersion: 1,
-      runtime: { testerArmy: "0.15.2", model: config, effort: "medium" },
+      runtime: { testerArmy: "0.16.0", model: config, effort: "medium" },
     });
     console.log(`[tester-army] Run bundle: ${output}`);
   }

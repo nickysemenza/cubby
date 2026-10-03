@@ -62,6 +62,12 @@ uses fresh fixture state. Install the Chromium browser with
 `pnpm --dir apps/web exec playwright install chromium` if needed.
 The iOS prerequisites are the same as `pnpm test:e2e:sim`.
 
+Manual GitHub web and native lanes reuse the regular CI Worker artifact when
+a successful push run published one for the exact tested commit. The existing
+source and output fingerprint checks still run; missing, expired or invalid
+artifacts fall back to a normal build. Pull-request merge artifacts are excluded
+because they were built from a different commit.
+
 The shared Node setup restores the portable WASM package from the exact Rust
 source key used by Linux jobs, avoiding a second macOS compilation.
 The two optional macOS lanes disable pnpm store caching: measured installs took
@@ -75,7 +81,13 @@ resolve package dependencies before validating a certificate for the cached app.
 An unchanged toolchain, generated inputs, Swift and resource files, FFI bytes,
 dependency pins, and complete app-bundle checksum allow compilation to be skipped.
 Otherwise they run the normal incremental build and certify its result. The
-required Apple gate always compiles and supplies the same certificate. Simulator boot follows compilation to avoid CPU contention. App replacement
+required Apple gate always compiles and supplies the same certificate. The optional
+GitHub native lanes start simulator boot after dependency installation, overlapping
+startup with Apple tool setup and cache restores. Booting during extraction and
+generation increased observed dependency setup from 42 seconds to 84–386 seconds;
+these runs were not a controlled comparison. The harness still waits for boot
+readiness before installing the app. Local runs start boot after compilation.
+App replacement
 uses `simctl` directly, before preparing the driver, so installation does not
 start XCTest or inherit the SDK's short command timeout.
 Both lanes also cache agent-device's compiled Apple test runner, keyed by its
@@ -84,6 +96,10 @@ before reuse. Only its derived build directory is cached. Device leases,
 per-session launch files, test results, logs, and lock files are excluded so
 a new runner cannot inherit another host's process state.
 Bundles record native build, boot, installation, and driver preparation durations separately.
+Failed deterministic replays also retain a fixed projection of the SDK's text
+commit polling: elapsed time, requested/observed character counts, matched prefix
+length and outcome. The reporter reads it before the isolated replay daemon is
+removed; field contents and the raw runner log are excluded.
 If driver preparation fails, diagnostics retain the simulator screenshot and
 original error without starting XCTest again for a UI snapshot. Failures after
 successful preparation still capture the UI tree.

@@ -67,6 +67,7 @@ runs:
     - name: Build recipebridge WASM
       if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
       shell: bash
+
       # pnpm 12 otherwise installs dependencies before running this script,
       # breaking the WASM-before-install ordering above.
       run: wasm-pack build --scope cubby --out-dir ../packages/wasm recipebridge

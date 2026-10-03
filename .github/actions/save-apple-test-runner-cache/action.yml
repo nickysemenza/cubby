@@ -1,0 +1,42 @@
+name: Save Apple test runner cache
+description: Save certified runner products only after the snapshot helper cache is populated.
+inputs:
+  path:
+    required: true
+    description: Shared restore paths
+  key:
+    required: true
+    description: Primary cache key
+  cache-hit:
+    required: true
+    description: Exact cache hit
+  matched-key:
+    required: true
+    description: Restored key
+runs:
+  using: composite
+  steps:
+    # Presence prevents an immutable, incomplete v5 archive after early failure.
+    # The SDK still validates source/toolchain identity and bytes before reuse.
+    - id: snapshot
+      if: always()
+      shell: bash
+      run: |
+        ready=false
+        snapshot_cache_root="${SNAPSHOT_CACHE_ROOT:-$HOME/.agent-device/snapshot-source}"
+        shopt -s nullglob
+        for bridge in "$snapshot_cache_root"/[0-9a-f]*/snapshot-bridge; do
+          directory="${bridge%/*}"
+          if [[ "${directory##*/}" =~ ^[0-9a-f]{32}$ && -f "$bridge" && ! -L "$bridge" && -f "$directory/manifest.json" && ! -L "$directory/manifest.json" ]]; then
+            ready=true
+            break
+          fi
+        done
+        echo "ready=$ready" >> "$GITHUB_OUTPUT"
+    - uses: ./.github/actions/save-cache-main-only
+      if: always() && steps.snapshot.outputs.ready == 'true'
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ inputs.key }}
+        cache-hit: ${{ inputs.cache-hit }}
+        matched-key: ${{ inputs.matched-key }}

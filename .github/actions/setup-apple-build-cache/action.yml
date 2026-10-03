@@ -1,9 +1,12 @@
 name: Setup Apple build cache
 description: Restore shared simulator DerivedData with the matching Xcode toolchain.
 outputs:
+  cache-paths:
+    description: Shared compiled products and their resolved dependency metadata
+    value: ${{ steps.paths.outputs.value }}
   save-matched-key:
-    description: Matching key for save policy; initialize a new cache generation from legacy restores
-    value: ${{ startsWith(steps.derived-data.outputs.cache-matched-key, 'xcode-dd-v3-') && steps.derived-data.outputs.cache-matched-key || '' }}
+    description: Matching key for the shared save policy
+    value: ${{ startsWith(steps.derived-data.outputs.cache-matched-key, 'xcode-dd-v5-') && steps.derived-data.outputs.cache-matched-key || '' }}
   toolchain-hash:
     value: ${{ steps.xcode-version.outputs.hash }}
     description: Xcode toolchain hash
@@ -27,20 +30,27 @@ runs:
     - name: Ignore file-system inode changes in XCBuild
       shell: bash
       run: defaults write com.apple.dt.XCBuild IgnoreFileSystemDeviceInodeChanges -bool YES
+    - name: Define shared cache paths
+      id: paths
+      shell: bash
+      run: |
+        {
+          echo 'value<<CACHE_PATHS'
+          echo 'apps/apple/DerivedData'
+          echo '!apps/apple/DerivedData/Logs'
+          echo 'apps/apple/SourcePackages/workspace-state.json'
+          echo 'CACHE_PATHS'
+        } >> "$GITHUB_OUTPUT"
     - name: Restore cached DerivedData
       id: derived-data
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         # Must list exactly the save step's paths: the cache version hashes them.
-        path: |
-          apps/apple/DerivedData
-          !apps/apple/DerivedData/Logs
-        # v2 may contain successful builds without a certificate because Swift
-        # rewrote package ordering. Seed v3 with canonical dependency metadata.
-        key: xcode-dd-v3-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/App/**', 'apps/apple/CubbyKit/**') }}-${{ hashFiles('scripts/apple-check.sh', 'scripts/apple-simulator-build-cache.ts', 'apps/apple/scripts/prepare-project.sh', 'apps/web/tooling/sim-e2e.ts', '.github/workflows/ci.yaml') }}
+        path: ${{ steps.paths.outputs.value }}
+        # v5 pairs the app certificate with its resolved dependency state.
+        # Optional E2E can verify the bundle without restoring package clones.
+        key: xcode-dd-v5-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/App/**', 'apps/apple/CubbyKit/**') }}-${{ hashFiles('scripts/apple-check.sh', 'scripts/apple-simulator-build-cache.ts', 'apps/apple/scripts/prepare-project.sh') }}
+        # Earlier generations used different paths and cannot restore this pair.
         restore-keys: |
-          xcode-dd-v3-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-
-          xcode-dd-v3-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-
-          xcode-dd-v2-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-
-          xcode-dd-v2-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-
-          xcode-dd-v1-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-
+          xcode-dd-v5-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/CubbyKit/Package.resolved') }}-
+          xcode-dd-v5-${{ runner.os }}-${{ steps.xcode-version.outputs.hash }}-

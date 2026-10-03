@@ -1,5 +1,15 @@
 import { performance } from "node:perf_hooks";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { z } from "zod";
+import { readReplayDriverDiagnostics } from "./native-driver-diagnostics.ts";
+import { readReplayTextEntryDiagnostics } from "./native-text-entry-diagnostics.ts";
+
+const resultSchema = z.object({
+  status: z.literal("fail"),
+  session: z.string().min(1).max(512),
+});
 
 const stepSchema = z
   .object({
@@ -34,5 +44,32 @@ export default {
     console.log(
       `[native-replay] step ${step.stepIndex}/${step.stepTotal} ${step.stepCommand} elapsed=${Math.round(performance.now() - startedAt)}ms`,
     );
+  },
+  onTestResult(event: unknown) {
+    const directory = process.env.CUBBY_NATIVE_DIAGNOSTICS_DIR;
+    const parsed = resultSchema.safeParse(event);
+    if (!directory || !parsed.success) return;
+    const diagnostics = readReplayTextEntryDiagnostics(
+      tmpdir(),
+      parsed.data.session,
+    );
+    const driverDiagnostics = readReplayDriverDiagnostics(
+      tmpdir(),
+      parsed.data.session,
+    );
+    try {
+      if (driverDiagnostics)
+        writeFileSync(
+          join(directory, "native-replay-driver-diagnostics.json"),
+          `${JSON.stringify(driverDiagnostics, null, 2)}\n`,
+        );
+      if (diagnostics)
+        writeFileSync(
+          join(directory, "native-text-entry-diagnostics.json"),
+          `${JSON.stringify(diagnostics, null, 2)}\n`,
+        );
+    } catch {
+      console.warn("[native-replay] Replay diagnostics unavailable");
+    }
   },
 };
