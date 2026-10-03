@@ -24,6 +24,7 @@ const input = (over: Partial<Parameters<typeof describeDiscard>[1]> = {}) => ({
   quantity: 1,
   adjustInventory: true,
   inventoryEntryId: null,
+  requestedQuantity: null,
   ...over,
 });
 

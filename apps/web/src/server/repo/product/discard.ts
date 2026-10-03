@@ -437,7 +437,7 @@ export const previewProductDiscard = async (
   productId: ProductId,
   input: Pick<
     ProductDiscardPreviewInput,
-    "quantity" | "adjustInventory" | "inventoryEntryId"
+    "quantity" | "adjustInventory" | "inventoryEntryId" | "requestedQuantity"
   >,
 ): Promise<ProductDiscardPreviewOut> => {
   const prod = await getDb(db).query.product.findFirst({
