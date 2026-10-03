@@ -43,7 +43,13 @@
       // apple.ts quits the running Mac app before relaunching. container: the
       // Apple test-service runtime. All are system tools, never npm
       // dependencies.
-      "ignoreBinaries": ["xcode-select", "pkill", "container", "wrangler"]
+      "ignoreBinaries": [
+        "xcode-select",
+        "plutil",
+        "pkill",
+        "container",
+        "wrangler"
+      ]
     },
     "apps/web": {
       "entry": [
