@@ -1,12 +1,17 @@
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import { cardLastFoursOn } from "@cubby/schemas/financial-account";
-import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
+import {
+  financialTransactionKind,
+  financialTransactionSettlementViolation,
+} from "@cubby/schemas/financial-transaction";
 import {
   parseEntityId,
   type FinancialTransactionId,
+  type LedgerPartyId,
   type PurchaseId,
 } from "@cubby/schemas/identifiers";
-import { and, between, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { createLogger } from "@cubby/worker-tracing";
+import { and, asc, between, eq, inArray, notInArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -14,6 +19,7 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   importHunt,
+  importSourceClaim,
   ledgerParty,
   purchase,
   purchasePaymentEvidence,
@@ -32,105 +38,110 @@ import {
 } from "~/server/repo/financial-transaction-allocations";
 import { cents } from "~/server/repo/money";
 
-import { matchCompletePaymentSet } from "./writer-policy";
+import {
+  matchCompletePaymentSet,
+  type SettlementCandidate,
+} from "./writer-policy";
+
+const log = createLogger("purchase-import.settlement");
 
 /** Payment lines and statement rows may disagree by posting lag, never more. */
 const POSTING_WINDOW_DAYS = 3;
+const DAY_MS = 86_400_000;
 
 /**
- * Charges an order's evidence may settle against: real money movement on the
- * member's own accounts. A void row never moved money and an expected row has
- * not yet; a charge whose merchant is confirmed for a different vendor belongs
- * to that vendor's orders.
+ * Serialize settlement per member. An import inserts its payment lines and
+ * settles inside one transaction; without this lock a concurrent pass could
+ * settle a charge before the import's competing line is visible to it.
  */
-const settleableChargeCondition = (vendorId: string) =>
-  and(
-    notDeleted(financialTransaction),
-    inArray(financialTransaction.status, ["posted", "pending"]),
-    sql`NOT EXISTS (
-      SELECT 1 FROM "MerchantVendorRule" mvr
-      WHERE mvr."ledgerPartyId" = "FinancialAccount"."ledgerPartyId"
-        AND mvr."normalizedMerchant" = lower(regexp_replace(trim("FinancialTransaction"."merchant"), '\\s+', ' ', 'g'))
-        AND mvr."vendorId" <> ${vendorId}::uuid
-    )`,
-    sql`NOT EXISTS (
-      SELECT 1 FROM "FinancialTransactionAllocation" fta
-      WHERE fta."transactionId" = "FinancialTransaction"."id"
-        AND fta."deletedAt" IS NULL
-    )`,
+export async function lockPartySettlement(
+  tx: DrizzleTransaction,
+  ledgerPartyId: LedgerPartyId,
+): Promise<void> {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtext(${`purchase-settlement:${ledgerPartyId}`}))`,
   );
+}
 
-const shiftDays = (date: Date, days: number) =>
-  new Date(date.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+type RetainedPayment = {
+  amount: number;
+  chargedAt: Date | null;
+  cardLastFour: string | null;
+};
+
+type Charge = SettlementCandidate & {
+  kind: ReturnType<typeof financialTransactionKind.parse>;
+};
 
 export type RetainedSettlementOutcome =
   | "allocated"
   | "already_allocated"
   | "no_evidence"
+  | "conflicting_sources"
   | "incomplete"
   | "competing";
 
-/**
- * Settle one Purchase from the payment lines its own order evidence retained.
- *
- * Only a complete, unique payment set is written: every retained payment must
- * match exactly one settleable charge (amount, card, posting window), and no
- * other unsettled Purchase may hold a payment line that could claim the same
- * charge. Anything less leaves settlement for review. The whole set is written
- * in the caller's transaction or not at all, and stock is never touched.
- */
-export async function settlePurchaseFromRetainedPayments(
-  tx: DrizzleTransaction,
-  input: { purchaseId: PurchaseId; actor: ActorContext },
-): Promise<RetainedSettlementOutcome> {
-  const [target] = await tx
-    .select({
-      vendorId: purchase.vendorId,
-      ledgerPartyId: sql<string | null>`(
-        SELECT va."ledgerPartyId" FROM "VendorAccount" va
-        WHERE va."id" = ${purchase.vendorAccountId}
-      )`,
-    })
-    .from(purchase)
-    .where(and(eq(purchase.id, input.purchaseId), notDeleted(purchase)))
-    .limit(1)
-    .for("update");
-  if (!target?.vendorId || !target.ledgerPartyId) return "no_evidence";
-  const [existing] = await tx
-    .select({ id: financialTransactionAllocation.id })
-    .from(financialTransactionAllocation)
-    .where(
-      and(
-        eq(financialTransactionAllocation.purchaseId, input.purchaseId),
-        notDeleted(financialTransactionAllocation),
-      ),
-    )
-    .limit(1);
-  if (existing) return "already_allocated";
+const paymentKey = (payment: RetainedPayment) =>
+  `${cents(payment.amount)}|${payment.chargedAt?.toISOString() ?? ""}|${payment.cardLastFour ?? ""}`;
 
-  const payments = await tx
+/**
+ * One order's payment set. A Purchase seen through several sources (a browser
+ * page and an export) keeps each source's lines; they must describe the same
+ * payments, or the order's evidence disagrees with itself and stays for review.
+ */
+async function loadPaymentSet(
+  tx: DrizzleTransaction,
+  purchaseId: PurchaseId,
+): Promise<RetainedPayment[] | "conflicting_sources"> {
+  const rows = await tx
     .select({
+      sourceClaimId: purchasePaymentEvidence.sourceClaimId,
       amount: purchasePaymentEvidence.amount,
       chargedAt: purchasePaymentEvidence.chargedAt,
       cardLastFour: purchasePaymentEvidence.cardLastFour,
     })
     .from(purchasePaymentEvidence)
-    .where(eq(purchasePaymentEvidence.purchaseId, input.purchaseId))
-    .orderBy(purchasePaymentEvidence.evidenceIndex);
-  const dated = payments.flatMap((payment) =>
-    payment.chargedAt ? [payment.chargedAt] : [],
+    .where(eq(purchasePaymentEvidence.purchaseId, purchaseId))
+    .orderBy(
+      asc(purchasePaymentEvidence.sourceClaimId),
+      asc(purchasePaymentEvidence.evidenceIndex),
+    );
+  const bySource = new Map<string, RetainedPayment[]>();
+  for (const row of rows) {
+    const set = bySource.get(row.sourceClaimId) ?? [];
+    set.push(row);
+    bySource.set(row.sourceClaimId, set);
+  }
+  const sets = [...bySource.values()];
+  const signature = (set: RetainedPayment[]) =>
+    set.map(paymentKey).sort().join(";");
+  const [first] = sets;
+  if (!first) return [];
+  return sets.every((set) => signature(set) === signature(first))
+    ? first
+    : "conflicting_sources";
+}
+
+/**
+ * Charges an order's evidence may settle against: real settlement money on
+ * the member's own accounts within the posting window. A void row never moved
+ * money and an expected one has not yet; a charge whose merchant is confirmed
+ * for a different vendor belongs to that vendor's orders; a kind or sign that
+ * cannot settle a Purchase is excluded rather than left to fail validation.
+ */
+async function settleableCharges(
+  tx: DrizzleTransaction,
+  input: {
+    ledgerPartyId: LedgerPartyId;
+    vendorId: string;
+    payments: RetainedPayment[];
+  },
+): Promise<Charge[]> {
+  const dated = input.payments.flatMap((payment) =>
+    payment.chargedAt ? [payment.chargedAt.getTime()] : [],
   );
-  // Without a dated payment line there is no posting window to bound the
-  // search; an amount alone is coincidence, not evidence.
-  if (payments.length === 0 || dated.length === 0) return "no_evidence";
-  const low = shiftDays(
-    new Date(Math.min(...dated.map((date) => date.getTime()))),
-    -POSTING_WINDOW_DAYS,
-  );
-  const high = shiftDays(
-    new Date(Math.max(...dated.map((date) => date.getTime()))),
-    POSTING_WINDOW_DAYS,
-  );
+  if (dated.length === 0) return [];
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
   const rows = await tx
     .select({
       id: financialTransaction.id,
@@ -145,167 +156,77 @@ export async function settlePurchaseFromRetainedPayments(
       financialAccount,
       and(
         eq(financialAccount.id, financialTransaction.accountId),
-        eq(
-          financialAccount.ledgerPartyId,
-          parseEntityId("ledgerParty", target.ledgerPartyId),
-        ),
+        eq(financialAccount.ledgerPartyId, input.ledgerPartyId),
         notDeleted(financialAccount),
       ),
     )
     .where(
       and(
-        settleableChargeCondition(target.vendorId),
+        notDeleted(financialTransaction),
+        inArray(financialTransaction.status, ["posted", "pending"]),
         between(
           sql<string>`coalesce(${financialTransaction.transactionDate}, ${financialTransaction.postedDate})`,
-          low,
-          high,
+          day(Math.min(...dated) - POSTING_WINDOW_DAYS * DAY_MS),
+          day(Math.max(...dated) + POSTING_WINDOW_DAYS * DAY_MS),
         ),
+        sql`NOT EXISTS (
+          SELECT 1 FROM "MerchantVendorRule" mvr
+          WHERE mvr."ledgerPartyId" = ${input.ledgerPartyId}::uuid
+            AND mvr."normalizedMerchant" = lower(regexp_replace(trim(${financialTransaction.merchant}), '\\s+', ' ', 'g'))
+            AND mvr."vendorId" <> ${input.vendorId}::uuid
+        )`,
+        sql`NOT EXISTS (
+          SELECT 1 FROM "FinancialTransactionAllocation" fta
+          WHERE fta."transactionId" = ${financialTransaction.id}
+            AND fta."deletedAt" IS NULL
+        )`,
       ),
     );
-  const candidates = rows.flatMap((row) => {
+  return rows.flatMap((row) => {
     const date = row.transactionDate ?? row.postedDate;
-    return date
-      ? [
-          {
-            id: row.id,
-            amount: row.amount,
-            kind: financialTransactionKind.parse(row.kind),
-            occurredAt: new Date(`${date}T12:00:00.000Z`),
-            cardLastFours: cardLastFoursOn(row.accountCardNumbers, date),
-          },
-        ]
-      : [];
+    const kind = financialTransactionKind.parse(row.kind);
+    if (
+      !date ||
+      financialTransactionSettlementViolation({
+        linked: true,
+        kind,
+        amount: row.amount,
+      })
+    )
+      return [];
+    return [
+      {
+        id: row.id,
+        amount: row.amount,
+        kind,
+        occurredAt: new Date(`${date}T12:00:00.000Z`),
+        cardLastFours: cardLastFoursOn(row.accountCardNumbers, date),
+      },
+    ];
   });
-  const matches = matchCompletePaymentSet(
-    payments.map((payment) => ({
-      amount: payment.amount,
-      chargedAt: payment.chargedAt?.toISOString(),
-      cardLastFour: payment.cardLastFour ?? undefined,
-    })),
-    candidates,
-  );
-  if (!matches) return "incomplete";
-
-  // No competing claim: another unsettled Purchase whose own retained payment
-  // line could take the same charge makes the choice a review decision.
-  for (const match of matches) {
-    const charge = candidates.find(
-      (candidate) => candidate.id === match.transactionId,
-    );
-    if (!charge) return "incomplete";
-    const [competitor] = await tx
-      .select({ purchaseId: purchasePaymentEvidence.purchaseId })
-      .from(purchasePaymentEvidence)
-      .innerJoin(
-        purchase,
-        and(
-          eq(purchase.id, purchasePaymentEvidence.purchaseId),
-          notDeleted(purchase),
-        ),
-      )
-      .where(
-        and(
-          ne(purchasePaymentEvidence.purchaseId, input.purchaseId),
-          sql`round(${purchasePaymentEvidence.amount} * 100) = ${cents(charge.amount)}`,
-          sql`(${purchasePaymentEvidence.chargedAt} IS NULL OR abs(extract(epoch FROM (${purchasePaymentEvidence.chargedAt} - ${charge.occurredAt.toISOString()}::timestamptz))) <= ${POSTING_WINDOW_DAYS * 86_400})`,
-          sql`NOT EXISTS (
-            SELECT 1 FROM "FinancialTransactionAllocation" fta
-            WHERE fta."purchaseId" = ${purchasePaymentEvidence.purchaseId}
-              AND fta."deletedAt" IS NULL
-          )`,
-        ),
-      )
-      .limit(1);
-    if (competitor) return "competing";
-  }
-
-  for (const match of matches) {
-    const charge = candidates.find(
-      (candidate) => candidate.id === match.transactionId,
-    )!;
-    await allocateUnsettledCharge(tx, {
-      transactionId: parseEntityId("financialTransaction", charge.id),
-      transactionAmount: charge.amount,
-      kind: charge.kind,
-      next: [{ purchaseId: input.purchaseId, amount: match.amount }],
-      actor: input.actor,
-    });
-  }
-  return "allocated";
 }
 
+const toPolicyPayments = (payments: RetainedPayment[]) =>
+  payments.map((payment) => ({
+    amount: payment.amount,
+    chargedAt: payment.chargedAt?.toISOString(),
+    cardLastFour: payment.cardLastFour ?? undefined,
+  }));
+
 /**
- * Write one complete allocation set for a charge that is still unallocated,
- * under a row lock, through the same validation and audit as a reviewed
- * allocation. A concurrent writer that allocated it first wins and this
- * becomes a no-op.
+ * Other live Purchases still short of their own payment total whose retained
+ * payment line could take this charge. Deliberately wide (any member, any
+ * vendor): a spurious competitor only sends the choice to review.
  */
-async function allocateUnsettledCharge(
+async function competingClaimants(
   tx: DrizzleTransaction,
-  input: {
-    transactionId: FinancialTransactionId;
-    transactionAmount: number;
-    kind: Parameters<typeof assertAllocationSetValid>[0]["kind"];
-    next: { purchaseId: PurchaseId; amount: number }[];
-    actor: ActorContext;
-  },
-): Promise<boolean> {
-  await tx
-    .select({ id: financialTransaction.id })
-    .from(financialTransaction)
-    .where(eq(financialTransaction.id, input.transactionId))
-    .for("update");
-  const before = await readAllocations(tx, [input.transactionId]);
-  if ((before.get(input.transactionId) ?? []).length > 0) return false;
-  assertAllocationSetValid({
-    transactionAmount: input.transactionAmount,
-    kind: input.kind,
-    next: input.next,
-  });
-  await assertPurchasesLive(
-    tx,
-    input.next.map((row) => row.purchaseId),
-  );
-  await writeAllocationSet(tx, input.transactionId, input.next, before);
-  await applyAllocationChanges(tx, {
-    transactionIds: [input.transactionId],
-    before,
-    actor: input.actor,
-  });
-  return true;
-}
-
-/** The member who owns a ledger party acts for its unattended settlement. */
-async function memberActor(
-  db: Database | DrizzleTransaction,
-  ledgerPartyId: string,
-): Promise<ActorContext | null> {
-  const client = "rollback" in db ? db : getDb(db);
-  const [owner] = await client
-    .select({ userId: ledgerParty.userId })
-    .from(ledgerParty)
-    .where(eq(ledgerParty.id, parseEntityId("ledgerParty", ledgerPartyId)))
-    .limit(1);
-  return owner?.userId ? buildActorContext(owner.userId, "system") : null;
-}
-
-/**
- * Before any mailbox or browser hunt, settle every unsettled Purchase whose
- * retained payment lines now uniquely meet a charge that arrived later (a
- * statement imported after the order). Each Purchase settles in its own
- * transaction; ambiguity leaves it for review.
- */
-export async function settleRetainedPaymentEvidence(
-  db: Database,
-): Promise<{ allocated: number; reviewable: number }> {
-  const pending = await getDb(db)
-    .selectDistinct({
-      purchaseId: purchasePaymentEvidence.purchaseId,
-      ledgerPartyId: sql<string>`(
-        SELECT va."ledgerPartyId" FROM "VendorAccount" va
-        WHERE va."id" = "Purchase"."vendorAccountId"
-      )`,
-    })
+  charge: Charge,
+  excludePurchaseId: PurchaseId,
+): Promise<PurchaseId[]> {
+  const epoch = Math.floor(charge.occurredAt.getTime() / 1_000);
+  const cards = charge.cardLastFours;
+  const rows = await tx
+    .selectDistinct({ purchaseId: purchasePaymentEvidence.purchaseId })
     .from(purchasePaymentEvidence)
     .innerJoin(
       purchase,
@@ -314,150 +235,373 @@ export async function settleRetainedPaymentEvidence(
         notDeleted(purchase),
       ),
     )
-    .leftJoin(
-      financialTransactionAllocation,
+    .where(
       and(
-        eq(financialTransactionAllocation.purchaseId, purchase.id),
+        sql`${purchasePaymentEvidence.purchaseId} <> ${excludePurchaseId}::uuid`,
+        sql`round(${purchasePaymentEvidence.amount} * 100) = ${cents(charge.amount)}`,
+        // Both sides as UTC epochs, independent of the session time zone.
+        sql`(${purchasePaymentEvidence.chargedAt} IS NULL
+          OR abs(extract(epoch FROM ${purchasePaymentEvidence.chargedAt}) - ${epoch}) <= ${POSTING_WINDOW_DAYS * 86_400})`,
+        cards.length > 0
+          ? sql`(${purchasePaymentEvidence.cardLastFour} IS NULL
+              OR ${purchasePaymentEvidence.cardLastFour} IN (${sql.join(
+                cards.map((four) => sql`${four}`),
+                sql`, `,
+              )}))`
+          : undefined,
+        // A Purchase whose allocations already cover its payment lines makes
+        // no further claim; a partly settled one still does.
+        sql`coalesce((
+          SELECT sum(fta."amount") FROM "FinancialTransactionAllocation" fta
+          WHERE fta."purchaseId" = ${purchasePaymentEvidence.purchaseId}
+            AND fta."deletedAt" IS NULL
+        ), 0) < (
+          SELECT sum(ppe."amount") FROM "PurchasePaymentEvidence" ppe
+          WHERE ppe."purchaseId" = ${purchasePaymentEvidence.purchaseId}
+        )`,
+      ),
+    );
+  return rows.map((row) => row.purchaseId);
+}
+
+type PlannedAllocation = {
+  charge: Charge;
+  next: { purchaseId: PurchaseId; amount: number }[];
+};
+
+/**
+ * Several orders whose own payment lines each name the same combined charge,
+ * and nothing else, form a group when their printed totals conserve it. Every
+ * member must be live, unsettled, of the same member and vendor, and match no
+ * other charge; any doubt leaves the charge for review. Orders whose totals
+ * merely add up to a charge are never a group: that is amount coincidence.
+ */
+async function evidencedChargeGroup(
+  tx: DrizzleTransaction,
+  input: {
+    charge: Charge;
+    members: PurchaseId[];
+    ledgerPartyId: LedgerPartyId;
+    vendorId: string;
+  },
+): Promise<PlannedAllocation["next"] | null> {
+  const members = [...new Set(input.members)].sort();
+  const rows = await tx
+    .select({
+      id: purchase.id,
+      vendorId: purchase.vendorId,
+      statedTotal: purchase.statedTotal,
+    })
+    .from(purchase)
+    .where(and(inArray(purchase.id, members), notDeleted(purchase)))
+    .orderBy(asc(purchase.id))
+    .for("update");
+  if (rows.length !== members.length) return null;
+  const [allocated] = await tx
+    .select({ id: financialTransactionAllocation.id })
+    .from(financialTransactionAllocation)
+    .where(
+      and(
+        inArray(financialTransactionAllocation.purchaseId, members),
         notDeleted(financialTransactionAllocation),
       ),
     )
-    .where(isNull(financialTransactionAllocation.id));
-  let allocated = 0;
-  let reviewable = 0;
-  for (const row of pending) {
-    if (!row.ledgerPartyId) continue;
-    const actor = await memberActor(db, row.ledgerPartyId);
-    if (!actor) continue;
-    const outcome = await withTransaction(db, (tx) =>
-      settlePurchaseFromRetainedPayments(tx, {
-        purchaseId: row.purchaseId,
-        actor,
-      }),
-    );
-    if (outcome === "allocated") allocated += 1;
-    else if (outcome === "competing" || outcome === "incomplete")
-      reviewable += 1;
+    .limit(1);
+  if (allocated) return null;
+  for (const row of rows) {
+    if (!(await namesOnlyThisCharge(tx, { ...input, row }))) return null;
   }
-  return { allocated, reviewable };
+  const total = rows.reduce((sum, row) => sum + cents(row.statedTotal ?? 0), 0);
+  if (total !== cents(input.charge.amount)) return null;
+  return rows.map((row) => ({
+    purchaseId: row.id,
+    amount: row.statedTotal ?? 0,
+  }));
+}
+
+/** One group member: a single payment line naming this charge and no other. */
+async function namesOnlyThisCharge(
+  tx: DrizzleTransaction,
+  input: {
+    charge: Charge;
+    ledgerPartyId: LedgerPartyId;
+    vendorId: string;
+    row: {
+      id: PurchaseId;
+      vendorId: string | null;
+      statedTotal: number | null;
+    };
+  },
+): Promise<boolean> {
+  const { row } = input;
+  if (
+    row.vendorId !== input.vendorId ||
+    row.statedTotal === null ||
+    cents(row.statedTotal) <= 0
+  )
+    return false;
+  const [claim] = await tx
+    .select({ ledgerPartyId: importSourceClaim.ledgerPartyId })
+    .from(importSourceClaim)
+    .where(eq(importSourceClaim.purchaseId, row.id))
+    .limit(1);
+  if (claim?.ledgerPartyId !== input.ledgerPartyId) return false;
+  const payments = await loadPaymentSet(tx, row.id);
+  if (payments === "conflicting_sources" || payments.length !== 1) return false;
+  if (cents(payments[0]?.amount ?? 0) !== cents(input.charge.amount))
+    return false;
+  const own = matchCompletePaymentSet(
+    toPolicyPayments(payments),
+    await settleableCharges(tx, {
+      ledgerPartyId: input.ledgerPartyId,
+      vendorId: input.vendorId,
+      payments,
+    }),
+  );
+  return own?.[0]?.transactionId === input.charge.id;
 }
 
 /**
- * A charge the mailbox proved to be one unique set of orders is allocated
- * across those orders once every one of them is imported, each at its printed
- * total, and only when those totals conserve the charge exactly and none of
- * the orders is already settled elsewhere. Refund groups stay reviewable: a
- * credit's split across orders is not stated by their totals.
+ * Settle one Purchase from the payment lines its own order evidence retained.
+ *
+ * Only a complete, unique, conserved set is written. Every retained payment
+ * must match exactly one settleable charge (amount, card, posting window). A
+ * charge another unsettled Purchase could also claim is written only when
+ * every claimant's own single payment line names that charge and their printed
+ * totals conserve it (a combined charge); otherwise it stays for review. All
+ * matched charges are locked and re-checked before the first write, so the
+ * whole set lands or nothing does. Stock is never touched.
  */
-export async function settleMatchedChargeGroups(
-  db: Database,
-): Promise<{ allocated: number }> {
-  const hunts = await getDb(db)
-    .select({
-      id: importHunt.id,
-      ledgerPartyId: importHunt.ledgerPartyId,
-      vendorId: importHunt.vendorId,
-      transactionId: importHunt.financialTransactionId,
-      matchedOrderIds: importHunt.matchedOrderIds,
-    })
-    .from(importHunt)
+export async function settlePurchaseFromRetainedPayments(
+  tx: DrizzleTransaction,
+  input: {
+    purchaseId: PurchaseId;
+    ledgerPartyId: LedgerPartyId;
+    actor: ActorContext;
+  },
+): Promise<RetainedSettlementOutcome> {
+  await lockPartySettlement(tx, input.ledgerPartyId);
+  const [target] = await tx
+    .select({ vendorId: purchase.vendorId, statedTotal: purchase.statedTotal })
+    .from(purchase)
+    .where(and(eq(purchase.id, input.purchaseId), notDeleted(purchase)))
+    .limit(1)
+    .for("update");
+  if (!target?.vendorId) return "no_evidence";
+  const [existing] = await tx
+    .select({ id: financialTransactionAllocation.id })
+    .from(financialTransactionAllocation)
     .where(
       and(
-        inArray(importHunt.state, ["pending_browser", "browser_queued"]),
-        sql`jsonb_array_length(${importHunt.matchedOrderIds}) > 1`,
+        eq(financialTransactionAllocation.purchaseId, input.purchaseId),
+        notDeleted(financialTransactionAllocation),
+      ),
+    )
+    .limit(1);
+  if (existing) return "already_allocated";
+
+  const payments = await loadPaymentSet(tx, input.purchaseId);
+  if (payments === "conflicting_sources") return payments;
+  // Without a dated payment line there is no posting window to bound the
+  // search; an amount alone is coincidence, not evidence.
+  if (!payments.some((payment) => payment.chargedAt)) return "no_evidence";
+  const charges = await settleableCharges(tx, {
+    ledgerPartyId: input.ledgerPartyId,
+    vendorId: target.vendorId,
+    payments,
+  });
+  const matches = matchCompletePaymentSet(toPolicyPayments(payments), charges);
+  if (!matches) return "incomplete";
+
+  // Payment lines that exceed the order's own printed total describe a
+  // combined charge: this order alone may never absorb it.
+  const paid = payments.reduce(
+    (sum, payment) => sum + cents(payment.amount),
+    0,
+  );
+  const sharesCharge =
+    target.statedTotal !== null && paid > cents(target.statedTotal);
+  const plan: PlannedAllocation[] = [];
+  for (const match of matches) {
+    const charge = charges.find((row) => row.id === match.transactionId);
+    if (!charge) return "incomplete";
+    const claimants = await competingClaimants(tx, charge, input.purchaseId);
+    if (claimants.length === 0 && !sharesCharge) {
+      plan.push({
+        charge,
+        next: [{ purchaseId: input.purchaseId, amount: match.amount }],
+      });
+      continue;
+    }
+    // A combined charge is a group only when this order's single payment line
+    // names it too; a multi-payment order sharing a charge is a review case.
+    if (payments.length !== 1) return "competing";
+    // The rest of a combined charge has not been imported yet.
+    if (claimants.length === 0) return "incomplete";
+    const group = await evidencedChargeGroup(tx, {
+      charge,
+      members: [input.purchaseId, ...claimants],
+      ledgerPartyId: input.ledgerPartyId,
+      vendorId: target.vendorId,
+    });
+    if (!group) return "competing";
+    plan.push({ charge, next: group });
+  }
+  return (await writePlan(tx, plan, input.actor)) ? "allocated" : "incomplete";
+}
+
+/**
+ * Lock every planned charge in id order, re-check that none was allocated
+ * meanwhile, then write. A lost race writes nothing.
+ */
+async function writePlan(
+  tx: DrizzleTransaction,
+  plan: PlannedAllocation[],
+  actor: ActorContext,
+): Promise<boolean> {
+  const chargeIds = plan
+    .map((entry) => parseEntityId("financialTransaction", entry.charge.id))
+    .sort();
+  await tx
+    .select({ id: financialTransaction.id })
+    .from(financialTransaction)
+    .where(inArray(financialTransaction.id, chargeIds))
+    .orderBy(asc(financialTransaction.id))
+    .for("update");
+  const before = await readAllocations(tx, chargeIds);
+  if (chargeIds.some((id) => (before.get(id) ?? []).length > 0)) return false;
+  for (const entry of plan) {
+    assertAllocationSetValid({
+      transactionAmount: entry.charge.amount,
+      kind: entry.charge.kind,
+      next: entry.next,
+    });
+    await assertPurchasesLive(
+      tx,
+      entry.next.map((row) => row.purchaseId),
+    );
+    await writeAllocationSet(
+      tx,
+      parseEntityId("financialTransaction", entry.charge.id),
+      entry.next,
+      before,
+    );
+  }
+  await applyAllocationChanges(tx, {
+    transactionIds: chargeIds,
+    before,
+    actor,
+  });
+  await resolveSettledHunts(tx, chargeIds);
+  return true;
+}
+
+/** A hunt for a charge that is now settled has nothing left to find. */
+async function resolveSettledHunts(
+  tx: DrizzleTransaction,
+  transactionIds: readonly FinancialTransactionId[],
+) {
+  if (transactionIds.length === 0) return;
+  await tx
+    .update(importHunt)
+    .set({ state: "resolved", updatedAt: new Date() })
+    .where(
+      and(
+        inArray(importHunt.financialTransactionId, [...transactionIds]),
+        notInArray(importHunt.state, ["resolved", "exhausted"]),
       ),
     );
-  let allocated = 0;
-  for (const hunt of hunts) {
-    const vendorId = hunt.vendorId;
-    if (!vendorId) continue;
-    const actor = await memberActor(db, hunt.ledgerPartyId);
+}
+
+/**
+ * Before any mailbox or browser hunt, settle each unsettled Purchase whose
+ * retained payment lines now meet a charge that arrived later (a statement
+ * imported after the order). Only Purchases with an unallocated charge of a
+ * matching amount near a payment date are visited, each in its own
+ * transaction; one failure is logged and never stops the pass.
+ */
+export async function settleRetainedPaymentEvidence(
+  db: Database,
+): Promise<{ allocated: number; reviewable: number; failed: number }> {
+  const pending = await getDb(db)
+    .selectDistinct({
+      purchaseId: purchasePaymentEvidence.purchaseId,
+      ledgerPartyId: importSourceClaim.ledgerPartyId,
+    })
+    .from(purchasePaymentEvidence)
+    .innerJoin(
+      importSourceClaim,
+      eq(importSourceClaim.id, purchasePaymentEvidence.sourceClaimId),
+    )
+    .innerJoin(
+      purchase,
+      and(
+        eq(purchase.id, purchasePaymentEvidence.purchaseId),
+        notDeleted(purchase),
+      ),
+    )
+    .where(
+      and(
+        sql`${purchasePaymentEvidence.chargedAt} IS NOT NULL`,
+        sql`NOT EXISTS (
+          SELECT 1 FROM "FinancialTransactionAllocation" fta
+          WHERE fta."purchaseId" = ${purchase.id} AND fta."deletedAt" IS NULL
+        )`,
+        sql`EXISTS (
+          SELECT 1 FROM "FinancialTransaction" ft
+          JOIN "FinancialAccount" fa
+            ON fa."id" = ft."accountId" AND fa."deletedAt" IS NULL
+          WHERE fa."ledgerPartyId" = ${importSourceClaim.ledgerPartyId}
+            AND ft."deletedAt" IS NULL
+            AND ft."status" IN ('posted', 'pending')
+            AND round(ft."amount" * 100) = round(${purchasePaymentEvidence.amount} * 100)
+            AND abs(coalesce(ft."transactionDate", ft."postedDate") - (${purchasePaymentEvidence.chargedAt})::date) <= ${POSTING_WINDOW_DAYS}
+            AND NOT EXISTS (
+              SELECT 1 FROM "FinancialTransactionAllocation" ofta
+              WHERE ofta."transactionId" = ft."id" AND ofta."deletedAt" IS NULL
+            )
+        )`,
+      ),
+    );
+  const actors = new Map<string, ActorContext | null>();
+  const tally = { allocated: 0, reviewable: 0, failed: 0 };
+  for (const row of pending) {
+    const ledgerPartyId = parseEntityId("ledgerParty", row.ledgerPartyId);
+    if (!actors.has(ledgerPartyId))
+      actors.set(ledgerPartyId, await memberActor(db, ledgerPartyId));
+    const actor = actors.get(ledgerPartyId);
     if (!actor) continue;
-    const written = await withTransaction(db, async (tx) => {
-      const [charge] = await tx
-        .select({
-          amount: financialTransaction.amount,
-          kind: financialTransaction.kind,
-          status: financialTransaction.status,
-        })
-        .from(financialTransaction)
-        .where(
-          and(
-            eq(financialTransaction.id, hunt.transactionId),
-            notDeleted(financialTransaction),
-          ),
-        )
-        .limit(1);
-      if (
-        !charge ||
-        charge.amount <= 0 ||
-        !["posted", "pending"].includes(charge.status)
-      )
-        return false;
-      const orders = await tx
-        .select({
-          id: purchase.id,
-          orderId: purchase.orderId,
-          statedTotal: purchase.statedTotal,
-        })
-        .from(purchase)
-        .where(
-          and(
-            eq(purchase.vendorId, vendorId),
-            inArray(purchase.orderId, hunt.matchedOrderIds),
-            notDeleted(purchase),
-            sql`EXISTS (
-              SELECT 1 FROM "VendorAccount" va
-              WHERE va."id" = "Purchase"."vendorAccountId"
-                AND va."ledgerPartyId" = ${hunt.ledgerPartyId}::uuid
-                AND va."deletedAt" IS NULL
-            )`,
-          ),
-        )
-        .for("update");
-      // Every matched order exactly once, each with a printed total.
-      if (
-        orders.length !== hunt.matchedOrderIds.length ||
-        new Set(orders.map((order) => order.orderId)).size !== orders.length ||
-        orders.some((order) => order.statedTotal === null)
-      )
-        return false;
-      const total = orders.reduce(
-        (sum, order) => sum + cents(order.statedTotal ?? 0),
-        0,
+    try {
+      const outcome = await withTransaction(db, (tx) =>
+        settlePurchaseFromRetainedPayments(tx, {
+          purchaseId: row.purchaseId,
+          ledgerPartyId,
+          actor,
+        }),
       );
-      if (total !== cents(charge.amount)) return false;
-      const [settledElsewhere] = await tx
-        .select({ id: financialTransactionAllocation.id })
-        .from(financialTransactionAllocation)
-        .where(
-          and(
-            inArray(
-              financialTransactionAllocation.purchaseId,
-              orders.map((order) => order.id),
-            ),
-            notDeleted(financialTransactionAllocation),
-          ),
-        )
-        .limit(1);
-      if (settledElsewhere) return false;
-      const wrote = await allocateUnsettledCharge(tx, {
-        transactionId: hunt.transactionId,
-        transactionAmount: charge.amount,
-        kind: financialTransactionKind.parse(charge.kind),
-        next: orders.map((order) => ({
-          purchaseId: order.id,
-          amount: order.statedTotal ?? 0,
-        })),
-        actor,
+      if (outcome === "allocated") tally.allocated += 1;
+      else if (outcome !== "already_allocated" && outcome !== "no_evidence")
+        tally.reviewable += 1;
+    } catch (error) {
+      tally.failed += 1;
+      log.warn("Retained settlement failed for one Purchase", {
+        purchaseId: row.purchaseId,
+        error: error instanceof Error ? error.message : String(error),
       });
-      if (wrote)
-        await tx
-          .update(importHunt)
-          .set({ state: "resolved", updatedAt: new Date() })
-          .where(eq(importHunt.id, hunt.id));
-      return wrote;
-    });
-    if (written) allocated += 1;
+    }
   }
-  return { allocated };
+  return tally;
+}
+
+/** The member who owns a ledger party acts for its unattended settlement. */
+async function memberActor(
+  db: Database,
+  ledgerPartyId: LedgerPartyId,
+): Promise<ActorContext | null> {
+  const [owner] = await getDb(db)
+    .select({ userId: ledgerParty.userId })
+    .from(ledgerParty)
+    .where(and(eq(ledgerParty.id, ledgerPartyId), notDeleted(ledgerParty)))
+    .limit(1);
+  return owner?.userId ? buildActorContext(owner.userId, "system") : null;
 }

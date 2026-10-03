@@ -18,10 +18,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
-import {
-  settleMatchedChargeGroups,
-  settleRetainedPaymentEvidence,
-} from "./retained-settlement";
+import { settleRetainedPaymentEvidence } from "./retained-settlement";
 import { startOrResumeRun } from "./run-service";
 
 const checksum = (seed: number) => seed.toString(16).padStart(64, "0");
@@ -65,10 +62,11 @@ describe("settlement from retained order evidence", () => {
       orderId: string;
       total: number;
       payments: { amount: number; chargedAt: string }[];
+      source?: string;
     },
   ) {
     seed += 2;
-    const stable = `order-${order.orderId}`;
+    const stable = `order-${order.orderId}-${order.source ?? "browser"}`;
     await preparePurchaseImport(
       ctx.db,
       {
@@ -83,7 +81,7 @@ describe("settlement from retained order evidence", () => {
             itemOperationId: `prepare-item:${stable}`,
             source: {
               kind: "browser_order" as const,
-              externalKey: `shop:order:${order.orderId}`,
+              externalKey: `shop:${order.source ?? "browser"}:${order.orderId}`,
               checksum: checksum(seed),
             },
             evidenceChecksum: checksum(seed + 1),
@@ -264,41 +262,24 @@ describe("settlement from retained order evidence", () => {
     expect(await allocationsFor(purchases)).toEqual([]);
   });
 
-  it("allocates a combined charge across every matched order atomically once the last one is imported", async () => {
-    const { party, vendor, account, card, run } = await world();
+  it("allocates a combined charge across orders whose own payment lines each name it", async () => {
+    const { card, run } = await world();
     const combined = await charge(card.id, {
       amount: 50,
       postedDate: "2026-09-04",
     });
-    const [hunt] = await getDb(ctx.db)
-      .insert(importHunt)
-      .values({
-        ledgerPartyId: party.id,
-        financialTransactionId: combined.id,
-        vendorId: vendor.id,
-        vendorAccountId: account.id,
-        state: "pending_browser",
-        dateFrom: "2026-08-28",
-        dateTo: "2026-09-11",
-        matchedOrderIds: ["FW-4001", "FW-4002"],
-      })
-      .returning({ id: importHunt.id });
-
     const first = await importOrder(run.id, {
       orderId: "FW-4001",
       total: 20,
-      payments: [],
+      payments: [{ amount: 50, chargedAt: "2026-09-03T12:00:00.000Z" }],
     });
-    await settleMatchedChargeGroups(ctx.db);
+    // Until the second order arrives, the first order's line overstates its
+    // own total and nothing claims the rest: no settlement yet.
     expect(await allocationsFor([first])).toEqual([]);
-
     const second = await importOrder(run.id, {
       orderId: "FW-4002",
       total: 30,
-      payments: [],
-    });
-    await expect(settleMatchedChargeGroups(ctx.db)).resolves.toMatchObject({
-      allocated: 1,
+      payments: [{ amount: 50, chargedAt: "2026-09-03T12:00:00.000Z" }],
     });
     expect(
       (await allocationsFor([first, second])).sort(
@@ -308,17 +289,12 @@ describe("settlement from retained order evidence", () => {
       { transactionId: combined.id, purchaseId: first, amount: 20 },
       { transactionId: combined.id, purchaseId: second, amount: 30 },
     ]);
-    const [resolved] = await getDb(ctx.db)
-      .select({ state: importHunt.state })
-      .from(importHunt)
-      .where(eq(importHunt.id, hunt!.id));
-    expect(resolved?.state).toBe("resolved");
   });
 
-  it("leaves a combined charge unresolved when the matched orders' totals do not conserve it", async () => {
+  it("never treats orders whose totals merely add up to a charge as a group", async () => {
     const { party, vendor, account, card, run } = await world();
     const combined = await charge(card.id, {
-      amount: 55,
+      amount: 50,
       postedDate: "2026-09-04",
     });
     await getDb(ctx.db)
@@ -345,7 +321,82 @@ describe("settlement from retained order evidence", () => {
         payments: [],
       }),
     ];
-    await settleMatchedChargeGroups(ctx.db);
+    await settleRetainedPaymentEvidence(ctx.db);
     expect(await allocationsFor(purchases)).toEqual([]);
+  });
+
+  it("ignores a same-amount card payment or transfer instead of failing the pass", async () => {
+    const { card, run } = await world();
+    await insertWithShortcode(ctx.db, "financialTransaction", {
+      accountId: card.id,
+      kind: "credit_card_payment",
+      status: "posted",
+      amount: 44,
+      transactionDate: null,
+      postedDate: "2026-09-03",
+      merchant: "FORGEWEAR",
+    });
+    const purchaseId = await importOrder(run.id, {
+      orderId: "FW-6001",
+      total: 44,
+      payments: [{ amount: 44, chargedAt: "2026-09-02T12:00:00.000Z" }],
+    });
+    await expect(settleRetainedPaymentEvidence(ctx.db)).resolves.toMatchObject({
+      allocated: 0,
+      failed: 0,
+    });
+    expect(await allocationsFor([purchaseId])).toEqual([]);
+  });
+
+  it("leaves an order whose sources disagree about its payments for review", async () => {
+    const { card, run } = await world();
+    const purchaseId = await importOrder(run.id, {
+      orderId: "FW-8001",
+      total: 40,
+      payments: [{ amount: 40, chargedAt: "2026-09-02T12:00:00.000Z" }],
+    });
+    await importOrder(run.id, {
+      orderId: "FW-8001",
+      total: 40,
+      source: "export",
+      payments: [
+        { amount: 20, chargedAt: "2026-09-02T12:00:00.000Z" },
+        { amount: 20, chargedAt: "2026-09-02T12:00:00.000Z" },
+      ],
+    });
+    await charge(card.id, { amount: 40, postedDate: "2026-09-03" });
+    await settleRetainedPaymentEvidence(ctx.db);
+    expect(await allocationsFor([purchaseId])).toEqual([]);
+  });
+
+  it("treats a partly settled order with an open payment line as a competitor", async () => {
+    const { card, run } = await world();
+    const settledLeg = await charge(card.id, {
+      amount: 30,
+      postedDate: "2026-09-03",
+    });
+    const partly = await importOrder(run.id, {
+      orderId: "FW-7001",
+      total: 55,
+      payments: [
+        { amount: 30, chargedAt: "2026-09-02T12:00:00.000Z" },
+        { amount: 25, chargedAt: "2026-09-02T12:00:00.000Z" },
+      ],
+    });
+    // The second leg never arrived, so the order stays unsettled; record the
+    // first leg by hand, as a reviewer would.
+    await getDb(ctx.db).insert(financialTransactionAllocation).values({
+      transactionId: settledLeg.id,
+      purchaseId: partly,
+      amount: 30,
+    });
+    await charge(card.id, { amount: 25, postedDate: "2026-09-03" });
+    const other = await importOrder(run.id, {
+      orderId: "FW-7002",
+      total: 25,
+      payments: [{ amount: 25, chargedAt: "2026-09-02T12:00:00.000Z" }],
+    });
+    await settleRetainedPaymentEvidence(ctx.db);
+    expect(await allocationsFor([other])).toEqual([]);
   });
 });

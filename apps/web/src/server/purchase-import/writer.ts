@@ -69,7 +69,10 @@ import {
   learnPurchaseProductExternalId,
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
-import { settlePurchaseFromRetainedPayments } from "./retained-settlement";
+import {
+  lockPartySettlement,
+  settlePurchaseFromRetainedPayments,
+} from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
 import { decideLineWrite, type ExistingExpenseSnapshot } from "./writer-policy";
 
@@ -1231,6 +1234,9 @@ export async function importVendorOrder(
     });
     if (!claim) throw new Error("Import source claim was not persisted");
 
+    // Taken before this order's payment lines become visible to the same
+    // transaction, so a concurrent settlement pass cannot miss them.
+    await lockPartySettlement(tx, partyId);
     if (isSourceRefresh) {
       await tx
         .delete(purchasePaymentEvidence)
@@ -1252,6 +1258,7 @@ export async function importVendorOrder(
     // same function before any hunt opens (retained-settlement.ts).
     await settlePurchaseFromRetainedPayments(tx, {
       purchaseId,
+      ledgerPartyId: partyId,
       actor: buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
         runId: runEntityId.parse(input.runId),
       }),

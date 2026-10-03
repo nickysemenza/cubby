@@ -132,7 +132,6 @@ import {
 import { attachPendingOrderMailEvidence } from "./gmail/process";
 import { classifyOrderCapture } from "./order-list";
 import { loadReceiptEvidenceForRun } from "./receipt-evidence";
-import { settleMatchedChargeGroups } from "./retained-settlement";
 import { importVendorOrder } from "./writer";
 
 /** The Flue coordinator model for a run purpose; purchase-agent reads the same manifest. */
@@ -2198,8 +2197,6 @@ export async function importBrowserOrderEvidence(
         ),
       );
   }
-  // The order just imported may complete a mail-proven combined charge.
-  await settleMatchedChargeGroups(db);
   await settleAllocatedBrowserHunt(
     db,
     vendorAccountId.parse(scope.public.vendorAccountId),

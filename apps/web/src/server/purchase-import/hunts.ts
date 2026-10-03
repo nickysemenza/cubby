@@ -27,10 +27,7 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { dispatchRunEvent } from "./dispatch";
 import { matchProcessedOrderMail } from "./gmail/match";
-import {
-  settleMatchedChargeGroups,
-  settleRetainedPaymentEvidence,
-} from "./retained-settlement";
+import { settleRetainedPaymentEvidence } from "./retained-settlement";
 import { startOrResumeRun } from "./run-service";
 
 const normalizeMerchant = (value: string) =>
@@ -103,9 +100,8 @@ export async function listMerchantVendorRules(
  */
 export async function discoverImportHunts(db: Database): Promise<number> {
   // Retained order evidence settles first: a charge that a Purchase's own
-  // payment line or a mail-proven order group uniquely explains needs no hunt.
+  // payment lines uniquely explain needs no hunt.
   await settleRetainedPaymentEvidence(db);
-  await settleMatchedChargeGroups(db);
   const database = getDb(db);
   const expectation = routedChargeEvidenceExpectationSql(
     "FinancialTransaction",
