@@ -553,6 +553,8 @@ jobs:
           CI: "1"
           SIMULATOR_JOURNEY: ${{ inputs.simulator_journey }}
         run: |
+          # Keep generated WASM metadata identical to this checkout, as in Build Workers.
+          git restore -- packages/wasm/package.json
           if [[ "$SIMULATOR_JOURNEY" == "inputs" ]]; then
             pnpm test:e2e:sim -- --input-journey
           else
