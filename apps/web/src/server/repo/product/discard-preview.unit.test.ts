@@ -44,6 +44,28 @@ describe("describeDiscard", () => {
     expect(describeDiscard([tray, box], input()).defaultQuantity).toBe(1);
   });
 
+  it("caps a caller's requested default at the selected shelf", () => {
+    // Ledger expects 5, the sole shelf holds 2.
+    const two = shelf("INV-DDDD", "LOC-DDDD", "Tray", 2);
+    expect(
+      describeDiscard([two], input({ requestedQuantity: 5 })).defaultQuantity,
+    ).toBe(2);
+    expect(
+      describeDiscard([box], input({ requestedQuantity: 5 })).defaultQuantity,
+    ).toBe(5);
+  });
+
+  it("keeps the default positive for an empty or negative shelf", () => {
+    for (const value of [0, -1]) {
+      const stale = shelf("INV-EEEE", "LOC-EEEE", "Shelf", value);
+      expect(describeDiscard([stale], input()).defaultQuantity).toBe(1);
+      expect(
+        describeDiscard([stale], input({ requestedQuantity: 4 }))
+          .defaultQuantity,
+      ).toBe(4);
+    }
+  });
+
   it("selects the sole shelf without asking", () => {
     expect(describeDiscard([tray], input())).toMatchObject({
       selectedShelf: tray,

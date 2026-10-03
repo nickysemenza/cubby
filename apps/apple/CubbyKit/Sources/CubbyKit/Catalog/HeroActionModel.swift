@@ -13,7 +13,7 @@ public final class HeroActionModel: Identifiable {
     public let row: EntityRow
     private let runner: HeroActionRunner
 
-    public var values: [String: JSONValue]
+    public private(set) var values: [String: JSONValue]
     public private(set) var preview: HeroActionPreview?
     public private(set) var previewError: String?
     public private(set) var isRunning = false
@@ -21,7 +21,8 @@ public final class HeroActionModel: Identifiable {
     /// The (normalized) values the current `preview` was computed for. A preview is only the
     /// answer to the form as it stood then; it never vouches for later edits.
     private var previewValues: [String: JSONValue]?
-    private let initialValues: [String: JSONValue]
+    /// Keys the person has set. A server default only fills a key that is not in here.
+    private var edited: Set<String> = []
 
     public init(
         plan: HeroActionPlan, entity: EntityKey, row: EntityRow, runner: HeroActionRunner,
@@ -35,7 +36,13 @@ public final class HeroActionModel: Identifiable {
         // A field picker starts on the row's current value.
         if case .setField(let field) = plan.kind, let current = row.raw[field] { seed[field] = current }
         values = seed
-        initialValues = seed
+    }
+
+    /// The one way the form changes: marks the key as the person's own, so a later server default
+    /// never overwrites it (and an edit back to the seed value still counts as an edit).
+    public func setValue(_ key: String, _ value: JSONValue) {
+        edited.insert(key)
+        values[key] = value
     }
 
     /// Fields whose `showWhen` toggle is on (or that have none).
@@ -126,10 +133,10 @@ public final class HeroActionModel: Identifiable {
     /// The server owns the defaults: seed the shelf and the proposed quantity/amount the first
     /// time they are known, but only where the person has not already chosen something.
     private func applyServerDefaults(from preview: HeroActionPreview) {
-        func untouched(_ key: String) -> Bool { values[key] == initialValues[key] }
+        func untouched(_ key: String) -> Bool { !edited.contains(key) }
         switch preview {
         case .discard(let discard):
-            if let shelf = discard.selectedShelf, values["inventoryEntryId"].map(isBlank) ?? true {
+            if let shelf = discard.selectedShelf, untouched("inventoryEntryId") {
                 values["inventoryEntryId"] = .string(shelf.id.rawValue)
             }
             if untouched("quantity") { values["quantity"] = .number(discard.defaultQuantity) }
@@ -142,10 +149,6 @@ public final class HeroActionModel: Identifiable {
         case .deleteImpact:
             break
         }
-    }
-
-    private func isBlank(_ value: JSONValue) -> Bool {
-        value == .null || value.stringValue?.isEmpty == true
     }
 
     /// Starts the action. `isRunning` flips synchronously, before the work is scheduled, so a

@@ -51,7 +51,7 @@ struct HeroActionSheet: View {
             .sheet(isPresented: $pickingLocation) {
                 EntityPickerSheet(target: .location) { picks in
                     guard let pick = picks.first else { return }
-                    model.values["location"] = .string(pick.id)
+                    model.setValue("location", .string(pick.id))
                     pickedLocationTitle = pick.title
                 }
                 .environment(appModel)
@@ -183,19 +183,19 @@ struct HeroActionSheet: View {
     private func stringBinding(_ key: String) -> Binding<String> {
         Binding(
             get: { model.values[key]?.stringValue ?? "" },
-            set: { model.values[key] = .string($0) })
+            set: { model.setValue(key, .string($0)) })
     }
 
     private func boolBinding(_ key: String) -> Binding<Bool> {
         Binding(
             get: { model.values[key]?.boolValue ?? false },
-            set: { model.values[key] = .bool($0) })
+            set: { model.setValue(key, .bool($0)) })
     }
 
     private func numberBinding(_ key: String) -> Binding<Double?> {
         Binding(
             get: { model.values[key]?.doubleValue },
-            set: { model.values[key] = $0.map(JSONValue.number) ?? .null })
+            set: { model.setValue(key, $0.map(JSONValue.number) ?? .null) })
     }
 
     private func amountValueBinding(_ key: String) -> Binding<Double?> {
@@ -204,7 +204,7 @@ struct HeroActionSheet: View {
             set: { value in
                 var amount = model.values[key]?.objectValue ?? [:]
                 amount["value"] = value.map(JSONValue.number) ?? .null
-                model.values[key] = .object(amount)
+                model.setValue(key, .object(amount))
             })
     }
 
@@ -214,7 +214,7 @@ struct HeroActionSheet: View {
             set: { unit in
                 var amount = model.values[key]?.objectValue ?? [:]
                 amount["unit"] = .string(unit)
-                model.values[key] = .object(amount)
+                model.setValue(key, .object(amount))
             })
     }
 
@@ -228,6 +228,6 @@ struct HeroActionSheet: View {
     private func dateBinding(_ key: String) -> Binding<Date> {
         Binding(
             get: { model.values[key]?.stringValue.flatMap(Self.plainDate.date(from:)) ?? Date() },
-            set: { model.values[key] = .string(Self.plainDate.string(from: $0)) })
+            set: { model.setValue(key, .string(Self.plainDate.string(from: $0))) })
     }
 }

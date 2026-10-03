@@ -271,12 +271,20 @@ struct HeroActionRunnerTests {
         #expect(model.canSubmit)
     }
 
+    @MainActor @Test func aServerDefaultNeverOverwritesAnEditEvenBackToTheSeed() async throws {
+        let (model, _) = try discardModel(Self.oneShelf)
+        // The person types the same value the form was seeded with: still their choice.
+        model.setValue("quantity", 1)
+        await model.refreshPreview()
+        #expect(model.values["quantity"] == 1)
+    }
+
     @MainActor @Test func aStalePreviewNeverEnablesSubmit() async throws {
         let (model, _) = try discardModel(Self.oneShelf)
         await model.refreshPreview()
         await model.refreshPreview()
         #expect(model.canSubmit)
-        model.values["quantity"] = 7
+        model.setValue("quantity", 7)
         #expect(!model.canSubmit)
         #expect(model.advisory == nil)
     }
@@ -287,7 +295,7 @@ struct HeroActionRunnerTests {
         await model.refreshPreview()
         #expect(model.canSubmit)
         _ = capture { _ in (500, Data()) }
-        model.values["quantity"] = 2
+        model.setValue("quantity", 2)
         await model.refreshPreview()
         #expect(model.preview == nil)
         #expect(!model.canSubmit)
@@ -295,7 +303,7 @@ struct HeroActionRunnerTests {
 
     @MainActor @Test func previewsSendNormalizedValues() async throws {
         let (model, recorder) = try discardModel(Self.twoShelves)
-        model.values["inventoryEntryId"] = ""
+        model.setValue("inventoryEntryId", "")
         await model.refreshPreview()
         let query = try #require(recorder.queries.first)
         // A blank shelf is null (omitted), never an empty string the server would reject.

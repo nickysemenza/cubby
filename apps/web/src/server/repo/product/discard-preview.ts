@@ -20,7 +20,7 @@ export const describeDiscard = (
   shelves: readonly DiscardShelf[],
   input: Pick<
     ProductDiscardPreviewInput,
-    "quantity" | "adjustInventory" | "inventoryEntryId"
+    "quantity" | "adjustInventory" | "inventoryEntryId" | "requestedQuantity"
   >,
 ): Omit<ProductDiscardPreviewOut, "productName" | "shelves"> => {
   const sole = shelves.length === 1 ? shelves[0] : undefined;
@@ -59,10 +59,13 @@ export const describeDiscard = (
 
   // "Threw away the rest" is the common case on a part-used shelf, so a 0.5
   // entry prefills 0.5 — but a shelf of 12 still prefills 1, not the lot.
-  const defaultQuantity = Math.min(
-    1,
-    selectedShelf?.amount.value ?? Number.POSITIVE_INFINITY,
-  );
+  // A caller that knows better (the triage proposes what the ledger expects)
+  // asks for it; the shelf still caps it, so a part-used shelf never proposes
+  // binning more than it holds. A shelf at or below zero cannot cap: the
+  // default must stay positive.
+  const requested = input.requestedQuantity ?? 1;
+  const held = selectedShelf?.amount.value ?? 0;
+  const defaultQuantity = held > 0 ? Math.min(requested, held) : requested;
 
   return {
     defaultQuantity,

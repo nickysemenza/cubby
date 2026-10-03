@@ -471,12 +471,13 @@ export const productDiscardInput = z.object({
       "Free text stored as the Expense notes — broken, thrown away, given away.",
     ),
   /**
-   * Inventory never auto-decrements (a binding tenet). Clearing the shelf here
-   * is not an auto-decrement: it is an explicit instruction on a dialog that
-   * names the entry and the count. Opt-OUT rather than implicit, and no other
-   * write path may take units off a shelf as a side effect of money.
+   * Inventory never auto-decrements (a binding tenet). Taking units off the
+   * shelf is an explicit instruction on a screen that names the entry and the
+   * count, so it is opt-IN: omitted means the shelf is left alone, and every
+   * client sends this field explicitly. No other write path may take units off
+   * a shelf as a side effect of money.
    */
-  adjustInventory: z.boolean().default(true),
+  adjustInventory: z.boolean().default(false),
   /**
    * Which shelf to take the units from. Required whenever `adjustInventory` is
    * set and the product sits in more than one location — never guessed, since
@@ -514,8 +515,10 @@ export const productDiscardPreviewInput = z.object({
     .nullable()
     .default(null)
     .describe("Units about to be discarded; null while the quantity is unset."),
-  adjustInventory: z.boolean().default(true),
+  adjustInventory: z.boolean().default(false),
   inventoryEntryId: inventoryShortcode.nullable().default(null),
+  /** The quantity the caller wants prefilled (the triage proposes what the ledger expects). */
+  requestedQuantity: z.number().positive().nullable().default(null),
 });
 export type ProductDiscardPreviewInput = z.infer<
   typeof productDiscardPreviewInput

@@ -103,6 +103,7 @@ function useDiscardPreview(input: {
   quantity: number | null;
   adjustInventory: boolean;
   inventoryEntryId: string;
+  requestedQuantity?: number;
 }) {
   const parsedQuantity = z.number().positive().safeParse(input.quantity);
   const { data: preview } = useQuery({
@@ -110,6 +111,7 @@ function useDiscardPreview(input: {
       productId: input.productId,
       quantity: parsedQuantity.success ? parsedQuantity.data : null,
       adjustInventory: input.adjustInventory,
+      requestedQuantity: input.requestedQuantity ?? null,
       inventoryEntryId: input.inventoryEntryId
         ? parseShortcodeFor("inventory", input.inventoryEntryId)
         : null,
@@ -138,8 +140,8 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   const form = useForm<DiscardValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      // The server's preview supplies the default when the caller has none
-      // (see the effect below); a caller that knows better seeds it here.
+      // The server caps the caller's requested default at the selected shelf
+      // (see the effect below); this is only the first paint.
       quantity: defaultQuantity ?? 1,
       date: format(new Date(), "yyyy-MM-dd"),
       reason: "",
@@ -189,6 +191,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
     quantity,
     adjustInventory,
     inventoryEntryId,
+    requestedQuantity: defaultQuantity,
   });
 
   // Only blocks when a choice is genuinely owed: several shelves, and the
@@ -199,14 +202,10 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
 
   const quantityDirty = form.formState.dirtyFields.quantity === true;
   useEffect(() => {
-    if (
-      defaultQuantity === undefined &&
-      serverDefaultQuantity !== null &&
-      !quantityDirty
-    ) {
+    if (serverDefaultQuantity !== null && !quantityDirty) {
       form.setValue("quantity", serverDefaultQuantity);
     }
-  }, [defaultQuantity, serverDefaultQuantity, quantityDirty, form]);
+  }, [serverDefaultQuantity, quantityDirty, form]);
 
   const submit = form.handleSubmit((values) => {
     discard.mutate({
