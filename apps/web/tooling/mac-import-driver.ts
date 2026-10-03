@@ -222,6 +222,42 @@ export class MacImportDriver {
     if (this.aborted) throw new Error("Mac driver interrupted");
     if (!this.bundleID) throw new Error("No owned Mac fixture session");
     if (!this.pid) throw new Error("No verified fixture PID");
+    let activationOutput: string;
+    try {
+      activationOutput = execFileSync(
+        "osascript",
+        [
+          "-l",
+          "JavaScript",
+          "-e",
+          'ObjC.import("AppKit"); function run(argv) { const expectedPID=Number(argv[0]); const app=$.NSRunningApplication.runningApplicationWithProcessIdentifier(expectedPID); if (!app || app.isTerminated || ObjC.unwrap(app.bundleIdentifier)!==argv[1]) throw Error("Owned fixture PID/bundle is not running"); const alreadyFront=$.NSWorkspace.sharedWorkspace.frontmostApplication; const accepted=Number(alreadyFront.processIdentifier)===expectedPID || app.activateWithOptions(3); const deadline=Date.now()+3000; let front; do { front=$.NSWorkspace.sharedWorkspace.frontmostApplication; if (Number(front.processIdentifier)===expectedPID && ObjC.unwrap(front.bundleIdentifier)===argv[1]) break; $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.05)); } while(Date.now()<deadline); return JSON.stringify({accepted:Boolean(accepted),bundleId:ObjC.unwrap(front.bundleIdentifier)||"",pid:Number(front.processIdentifier),appName:ObjC.unwrap(front.localizedName)||""}); }',
+          String(this.pid),
+          this.bundleID,
+        ],
+        { encoding: "utf8", timeout: 10000 },
+      );
+    } catch (error) {
+      const lookup = z
+        .object({ status: z.literal(1), stderr: z.string() })
+        .safeParse(error);
+      // Failure evidence can observe the same PID after a transient AppKit lookup miss.
+      if (
+        attempt < 2 &&
+        lookup.success &&
+        lookup.data.stderr.includes(
+          "Owned fixture PID/bundle is not running (-2700)",
+        )
+      ) {
+        this.record(
+          ["foreground-lookup-retry", String(attempt + 1)],
+          1,
+          lookup.data.stderr,
+        );
+        execFileSync("osascript", ["-e", "delay 0.1"], { timeout: 1000 });
+        return this.guardForeground(attempt + 1);
+      }
+      throw error;
+    }
     const activation = z
       .object({
         accepted: z.boolean(),
@@ -229,22 +265,7 @@ export class MacImportDriver {
         pid: z.number(),
         appName: z.string(),
       })
-      .parse(
-        JSON.parse(
-          execFileSync(
-            "osascript",
-            [
-              "-l",
-              "JavaScript",
-              "-e",
-              'ObjC.import("AppKit"); function run(argv) { const expectedPID=Number(argv[0]); const app=$.NSRunningApplication.runningApplicationWithProcessIdentifier(expectedPID); if (!app || app.isTerminated || ObjC.unwrap(app.bundleIdentifier)!==argv[1]) throw Error("Owned fixture PID/bundle is not running"); const alreadyFront=$.NSWorkspace.sharedWorkspace.frontmostApplication; const accepted=Number(alreadyFront.processIdentifier)===expectedPID || app.activateWithOptions(3); const deadline=Date.now()+3000; let front; do { front=$.NSWorkspace.sharedWorkspace.frontmostApplication; if (Number(front.processIdentifier)===expectedPID && ObjC.unwrap(front.bundleIdentifier)===argv[1]) break; $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.05)); } while(Date.now()<deadline); return JSON.stringify({accepted:Boolean(accepted),bundleId:ObjC.unwrap(front.bundleIdentifier)||"",pid:Number(front.processIdentifier),appName:ObjC.unwrap(front.localizedName)||""}); }',
-              String(this.pid),
-              this.bundleID,
-            ],
-            { encoding: "utf8", timeout: 10000 },
-          ),
-        ),
-      );
+      .parse(JSON.parse(activationOutput));
     this.record(
       ["foreground-activation"],
       activation.accepted &&
