@@ -207,12 +207,12 @@ See also the image operational passes at the end of this file.
 
 ### Review and apply corrections
 
-- 🟢 **Apply a reviewed purchase-validation diff.** Validation currently
-  records a read-only semantic diff. Show before/after values, let the person
-  select corrections, revalidate affected records against the proposal, and
-  apply the accepted set atomically. Preserve explicit Product assignments
-  and existing typed approval boundaries across Purchases, Expenses,
-  settlement, and evidence (`purchase-import/import-orders.ts`).
+- 🟢 **Review validation corrections on native.** Web now shows field-level
+  before/after corrections, revalidates stale targets, and applies the selected
+  set atomically (`purchaseImport.applyValidationCorrections`, person-only).
+  Expose the same operation and v2 diff in the Apple run review. A Purchase has
+  no currency column, so a non-USD order remains write-blocked rather than a
+  correction.
 
 - 🟢 **Generalize evidence-backed Product enrichment beyond Amazon.** Extend
   verified adapters for retailer SKU, catalog/item number, and GTIN; use agent
