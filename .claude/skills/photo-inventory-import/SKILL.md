@@ -62,8 +62,9 @@ Use `entity_read.resolve` or `search.similar` only
 when the candidate response leaves a concrete identity question unanswered;
 avoid repeating broad catalog reads for every photo of the same item. A
 purchase-created Product without an own photo deserves close inspection even
-when it came from a vendor import. An exact identifier read off a label or box (SKU/UPC/model)
-that matches a candidate supports `existingId`. A strong combination of
+when it came from a vendor import. An exact-variant identifier read off a label or box (UPC or a
+per-variant SKU) that matches a candidate supports `existingId`; a style or
+model number shared across sizes or colors only ranks candidates. A strong combination of
 visible brand, garment features, color, and variant evidence may also support
 proposing that existing Product for human approval; explain any unreadable size
 or color in the proposal evidence so the reviewer can switch Products. If
