@@ -1,5 +1,5 @@
 name: Setup Apple test runner cache
-description: Restore agent-device's validated Apple test runner build products.
+description: Restore validated Apple runner products and Simulator AX helper binaries.
 inputs:
   toolchain-hash:
     required: true
@@ -7,7 +7,7 @@ inputs:
 outputs:
   cache-paths:
     value: ${{ steps.paths.outputs.paths }}
-    description: Certified runner products and metadata shared by restore and save
+    description: Certified runner products and snapshot helpers shared by restore and save
   cache-key:
     value: ${{ steps.runner.outputs.cache-primary-key }}
     description: Primary test runner cache key
@@ -20,20 +20,45 @@ outputs:
 runs:
   using: composite
   steps:
+    - id: host-version
+      uses: ./.github/actions/toolchain-hash
+      with:
+        command: |
+          sw_vers -productVersion
+          sw_vers -buildVersion
     # The SDK certifies products and metadata. Xcode build databases and
     # workspace state are host-specific and must not cross runners.
     - id: paths
       shell: bash
       run: |
-        cat >> "$GITHUB_OUTPUT" <<'EOF'
-        paths<<RUNNER_CACHE_PATHS
+        runner_paths=$(cat <<'EOF'
         ~/.agent-device/apple-runner/derived/**/Build/Products
         ~/.agent-device/apple-runner/derived/**/.agent-device-runner-cache.json
         !~/.agent-device/apple-runner/derived/**/AgentDeviceRunner.env.session-*
-        RUNNER_CACHE_PATHS
         EOF
+        )
+        {
+          echo 'products<<RUNNER_PRODUCTS'
+          echo "$runner_paths"
+          echo 'RUNNER_PRODUCTS'
+          echo 'paths<<RUNNER_CACHE_PATHS'
+          echo "$runner_paths"
+          echo '~/.agent-device/snapshot-source/*/snapshot-bridge'
+          echo '~/.agent-device/snapshot-source/*/manifest.json'
+          echo '!~/.agent-device/snapshot-source/.*/**'
+          echo 'RUNNER_CACHE_PATHS'
+        } >> "$GITHUB_OUTPUT"
     - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       id: runner
       with:
         path: ${{ steps.paths.outputs.paths }}
-        key: agent-device-apple-runner-v4-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolchain-hash }}-${{ hashFiles('.github/actions/setup-apple-test-runner-cache/action.yml', 'node_modules/agent-device/package.json', 'patches/agent-device@0.21.20.patch') }}
+        key: agent-device-apple-runner-v5-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolchain-hash }}-${{ steps.host-version.outputs.hash }}-${{ hashFiles('.github/actions/setup-apple-test-runner-cache/action.yml', '.github/actions/save-apple-test-runner-cache/action.yml', 'node_modules/agent-device/package.json', 'patches/agent-device@0.21.20.patch') }}
+    # v4 has a different path version. Reuse only its certified products on a
+    # v5 miss; publish v5 only after a snapshot helper has completed building.
+    - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      if: steps.runner.outputs.cache-hit != 'true'
+      with:
+        path: ${{ steps.paths.outputs.products }}
+        key: agent-device-apple-runner-v4-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolchain-hash }}-legacy
+        restore-keys: |
+          agent-device-apple-runner-v4-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolchain-hash }}-

@@ -550,7 +550,7 @@ jobs:
         run: pnpm test:e2e:sim
       - name: Save Apple test runner cache
         if: always()
-        uses: ./.github/actions/save-cache-main-only
+        uses: ./.github/actions/save-apple-test-runner-cache
         with:
           path: ${{ steps.test-runner.outputs.cache-paths }}
           key: ${{ steps.test-runner.outputs.cache-key }}
@@ -671,7 +671,7 @@ jobs:
       - run: pnpm test:e2e:agent:ios
       - name: Save Apple test runner cache
         if: always()
-        uses: ./.github/actions/save-cache-main-only
+        uses: ./.github/actions/save-apple-test-runner-cache
         with:
           path: ${{ steps.test-runner.outputs.cache-paths }}
           key: ${{ steps.test-runner.outputs.cache-key }}
