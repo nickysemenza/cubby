@@ -28,11 +28,11 @@ import { unwrapDb, uuidArrayParam } from "~/server/repo/database-helpers";
 
 import { exceptionReasonsFor } from "./exception-reasons";
 import {
+  checkMissingCondition,
   checksOf,
   entryFor,
   expectedCondition,
   fingerprintSql,
-  rawGapCondition,
 } from "./sql";
 
 /**
@@ -198,7 +198,9 @@ const loadEvaluations = async (
   const withFingerprints = dataQualityExceptionEntities[entity];
   const columns = checks.flatMap((check, index) => [
     sql`${expectedCondition(entity, check, t)} AS ${sql.identifier(expectedKey(index))}`,
-    sql`${rawGapCondition(entity, check, t)} AS ${sql.identifier(gapKey(index))}`,
+    // `missing` alone; `evaluateRow` requires `expected` too. `rawGapCondition`
+    // would plan every `expected` twice (see `scoreSql`).
+    sql`${checkMissingCondition(entity, check, t)} AS ${sql.identifier(gapKey(index))}`,
     ...(withFingerprints
       ? [
           sql`${fingerprintSql(entity, check, t)} AS ${sql.identifier(fingerprintKey(index))}`,
@@ -249,7 +251,7 @@ const evaluateRow = (
   > = [];
   checks.forEach((check, index) => {
     if (row[expectedKey(index)] === true) expectedChecks.push(check);
-    if (row[gapKey(index)] !== true) return;
+    if (row[expectedKey(index)] !== true || row[gapKey(index)] !== true) return;
     rawGaps.push({
       check,
       facet: dataCheckFacet[check],

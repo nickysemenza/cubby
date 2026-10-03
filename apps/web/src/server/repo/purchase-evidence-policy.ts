@@ -149,14 +149,20 @@ const evidencePresence = (present: SQL, expectation: SQL): SQL => sql`(CASE
   WHEN ${expectation} = 'not_expected' THEN 'not_expected'
   ELSE 'unknown' END)`;
 
+// Each line's expectation is evaluated once in an `OFFSET 0` fence: Postgres
+// has no common-subexpression elimination, so repeating it per FILTER planned
+// its category-resolution CTE four times, and this axis is itself repeated by
+// every data-quality score, status, and hydration that reads it.
 const purchaseProductsSql = (alias: string): SQL => sql`(SELECT CASE
-  WHEN count(*) FILTER (WHERE ${expenseProductExpectedSql("ep_goods")} AND ep_goods."productId" IS NULL) > 0
-    THEN CASE WHEN count(*) FILTER (WHERE ${expenseProductExpectedSql("ep_goods")} AND ep_goods."productId" IS NOT NULL) > 0
+  WHEN count(*) FILTER (WHERE ep_goods_policy.expectation = 'required' AND ep_goods."productId" IS NULL) > 0
+    THEN CASE WHEN count(*) FILTER (WHERE ep_goods_policy.expectation = 'required' AND ep_goods."productId" IS NOT NULL) > 0
       THEN 'partial' ELSE 'missing' END
-  WHEN count(*) FILTER (WHERE ${expenseProductExpectationSql("ep_goods")} = 'unknown') > 0 THEN 'unknown'
-  WHEN count(*) FILTER (WHERE ${expenseProductExpectedSql("ep_goods")}) > 0 THEN 'present'
+  WHEN count(*) FILTER (WHERE ep_goods_policy.expectation = 'unknown') > 0 THEN 'unknown'
+  WHEN count(*) FILTER (WHERE ep_goods_policy.expectation = 'required') > 0 THEN 'present'
   ELSE 'not_expected' END
-  FROM "Expense" ep_goods WHERE ep_goods."purchaseId" = ${column(alias, "id")}
+  FROM "Expense" ep_goods
+  CROSS JOIN LATERAL (SELECT ${expenseProductExpectationSql("ep_goods")} AS expectation OFFSET 0) ep_goods_policy
+  WHERE ep_goods."purchaseId" = ${column(alias, "id")}
     AND ep_goods."deletedAt" IS NULL
 )`;
 
@@ -204,26 +210,36 @@ const linkedPurchaseEvidenceExpectationSql = (
   purchaseOverride !== undefined
     ? sql`(SELECT ${purchaseEvidenceExpectationSql("ep_linked")} FROM "Purchase" ep_linked WHERE ep_linked.id = ${purchaseOverride} AND ep_linked."deletedAt" IS NULL)`
     : sql`(SELECT CASE
-    WHEN bool_or(${purchaseEvidenceExpectationSql("ep_linked")} = 'required') THEN 'required'
-    WHEN bool_or(${purchaseEvidenceExpectationSql("ep_linked")} = 'unknown') THEN 'unknown'
+    WHEN bool_or(ep_linked_policy.expectation = 'required') THEN 'required'
+    WHEN bool_or(ep_linked_policy.expectation = 'unknown') THEN 'unknown'
     WHEN count(*) > 0 THEN 'not_expected' ELSE NULL END
    FROM "FinancialTransactionAllocation" ep_allocation
    JOIN "Purchase" ep_linked ON ep_linked.id = ep_allocation."purchaseId" AND ep_linked."deletedAt" IS NULL
+   CROSS JOIN LATERAL (SELECT ${purchaseEvidenceExpectationSql("ep_linked")} AS expectation OFFSET 0) ep_linked_policy
    WHERE ep_allocation."transactionId" = ${column(alias, "id")} AND ep_allocation."deletedAt" IS NULL)`;
+
+const financialTransactionPolicyExpectationSql = (
+  alias: string,
+  purchaseOverride?: SQL,
+): SQL =>
+  sql`COALESCE(${linkedPurchaseEvidenceExpectationSql(alias, purchaseOverride)},${categoryPolicy(column(alias, "spendingCategoryId"), "evidenceExpectation")},'unknown')`;
 
 const financialTransactionEvidenceFallbackSql = (
   alias: string,
   purchaseOverride?: SQL,
 ): SQL => sql`CASE
   WHEN ${financialTransactionIsReimbursementSql(alias)} THEN 'not_expected'
-  ELSE COALESCE(${linkedPurchaseEvidenceExpectationSql(alias, purchaseOverride)},${categoryPolicy(column(alias, "spendingCategoryId"), "evidenceExpectation")},'unknown') END`;
+  ELSE ${financialTransactionPolicyExpectationSql(alias, purchaseOverride)} END`;
 
+// Not `COALESCE(override, fallback)`: the fallback would re-test reimbursement
+// that this CASE already excluded, and this expectation is inlined many times
+// per data-quality score.
 export const financialTransactionEvidenceExpectationSql = (
   alias: string,
   purchaseOverride?: SQL,
 ): SQL => sql`CASE
   WHEN ${financialTransactionIsReimbursementSql(alias)} THEN 'not_expected'
-  ELSE COALESCE(${column(alias, "evidenceExpectation")},${financialTransactionEvidenceFallbackSql(alias, purchaseOverride)}) END`;
+  ELSE COALESCE(${column(alias, "evidenceExpectation")},${financialTransactionPolicyExpectationSql(alias, purchaseOverride)}) END`;
 
 /**
  * Whether a not-yet-allocated charge, already routed to a vendor, wants
