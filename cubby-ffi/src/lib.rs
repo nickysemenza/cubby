@@ -155,9 +155,18 @@ pub enum EstimateFigure {
 }
 
 /// A `{ value, unit }` amount as the web renders it (`2 cup`, `3 each`,
-/// `2 - 3 tsp`), through the same Rust the web calls as WASM.
+/// `2 - 3 tsp`), through the same Rust the web calls as WASM. An empty unit is a
+/// bare count: a plain number (`1.5`, not the unit formatter's `1½`).
 #[uniffi::export]
 pub fn format_amount(unit: String, value: f64, upper_value: Option<f64>) -> String {
+    if unit.is_empty() && upper_value.is_none() {
+        return recipebridge::format_number_plain(value);
+    }
+    let unit = if unit.is_empty() {
+        "whole".to_string()
+    } else {
+        unit
+    };
     recipebridge::format_amount_labeled(recipebridge::WAmount {
         unit,
         value,
@@ -225,6 +234,8 @@ mod tests {
         assert_eq!(format_currency(-2.675, 2, 2), "-$2.68");
         assert_eq!(format_number(1234.5678), "1234.5678");
         assert_eq!(format_amount("each".to_string(), 3.0, None), "3 each");
+        // A bare count stays a plain number rather than a unit-formatted fraction.
+        assert_eq!(format_amount(String::new(), 1.5, None), "1.5");
         assert_eq!(
             format_compact_range(1500.0, Some(2250.4), CompactUnit::Kcal),
             "1,500–2,250"

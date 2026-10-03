@@ -82,10 +82,9 @@ public enum ValueFormat {
         CubbyFFI.formatNumber(value: value)
     }
 
-    /// `2 cups`, `3 each`, `2 - 3 tsp`; a missing unit renders a bare count.
+    /// `2 cups`, `3 each`, `2 - 3 tsp`; a missing unit renders a bare count (`1.5`).
     public static func amount(unit: String?, value: Double, upperValue: Double? = nil) -> String {
-        CubbyFFI.formatAmount(
-            unit: unit.flatMap { $0.isEmpty ? nil : $0 } ?? "whole", value: value, upperValue: upperValue)
+        CubbyFFI.formatAmount(unit: unit ?? "", value: value, upperValue: upperValue)
     }
 
     /// A compact nutrition figure or range, without the partial marker.
