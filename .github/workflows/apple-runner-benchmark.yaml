@@ -1,0 +1,31 @@
+name: Apple runner benchmark
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  startup:
+    name: Simulator startup (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-26, macos-26-intel]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          pnpm-store-cache: "false"
+      - name: Measure cold and warm Simulator and XCTest readiness
+        run: node scripts/benchmark-apple-runner.ts
+      - name: Preserve sanitized timing evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: apple-runner-benchmark-${{ matrix.runner }}
+          path: artifacts/apple-runner-benchmark/
+          if-no-files-found: warn
