@@ -215,6 +215,13 @@ export async function runWithTestServices(
       "shared_buffers=512MB",
       "-c",
       "max_connections=200",
+      // Production (Neon) has no JIT provider (`pg_jit_available()` is false),
+      // but this image ships LLVM. The data-quality status/coverage SQL costs
+      // far above `jit_above_cost`, so JIT compiled thousands of expressions:
+      // one `dataStatus: "complete"` FinancialTransaction list took ~25 s and
+      // >1.5 GB here, OOM-killing PostgreSQL and stalling other files' hooks.
+      "-c",
+      "jit=off",
       "-c",
       "log_destination=stderr",
     ];
