@@ -1,6 +1,7 @@
 import {
   orderMailImportInput,
   orderMailImportOut,
+  orderMailImportSelectedInput,
   orderMailDecisionInput,
   orderMailDecisionOut,
   purchaseOrderMailOut,
@@ -40,6 +41,11 @@ export const vendorContract = defineContract("vendor", {
   }),
   importOrderMail: mutation({
     input: orderMailImportInput,
+    output: orderMailImportOut,
+    invalidates: ["vendor"],
+  }),
+  importSelectedOrderMail: mutation({
+    input: orderMailImportSelectedInput,
     output: orderMailImportOut,
     invalidates: ["vendor"],
   }),

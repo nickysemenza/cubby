@@ -32,6 +32,9 @@ services:
     # the container's json.log to 56 GB. To debug queries, re-enable it for one
     # session with a compose override rather than making every run pay it:
     #   docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
+    #
+    # `jit=off` matches production, which has no JIT provider; see
+    # scripts/test-services.ts for the measured failure.
     command:
       [
         "postgres",
@@ -45,6 +48,8 @@ services:
         "shared_buffers=512MB",
         "-c",
         "max_connections=200",
+        "-c",
+        "jit=off",
         "-c",
         "log_destination=stderr",
         "-c",

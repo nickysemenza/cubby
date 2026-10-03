@@ -132,6 +132,7 @@ import type { PurchaseImportDurableObjectRpc } from "./contracts";
 import { resolveRunFinding } from "./findings";
 import {
   loadOrderMailImportEvidence,
+  markOrderMailCandidateImported,
   orderMailImportedPurchase,
 } from "./gmail/import";
 import { attachPendingOrderMailEvidence } from "./gmail/process";
@@ -1481,10 +1482,19 @@ export async function claimNextImportWork(
   const scope = await loadRunScope(db, runId);
   if (scope.public.status === "paused_approval")
     return { kind: "paused_approval" as const };
-  const mail = await loadOrderMailImportEvidence(db, scope.public.runId);
+  const mail = await loadOrderMailImportEvidence(db, scope.public.runId, {
+    allowComplete: true,
+  });
   if (mail) {
     assertRunActive(scope.public.status);
     const purchaseId = await orderMailImportedPurchase(db, mail);
+    // A selected order another run already imported is settled work here.
+    if (purchaseId && mail.selected)
+      await markOrderMailCandidateImported(
+        db,
+        scope.public.runId,
+        mail.orderId,
+      );
     return purchaseId
       ? {
           kind: "settlement_verification" as const,
@@ -2890,6 +2900,18 @@ async function accountSyncFinishStatus(db: Database, runId: RunId) {
   return (deferred?.value ?? 0) > 0 ? "needs_review" : "completed";
 }
 
+/** A single-confirmation mail run finishes only once its order is committed. */
+async function assertSingleMailImported(db: Database, runId: RunId) {
+  // A selected-orders run is gated by its pending candidates instead.
+  const mail = await loadOrderMailImportEvidence(db, runId, {
+    allowComplete: true,
+  });
+  if (mail && !mail.selected && !(await orderMailImportedPurchase(db, mail)))
+    throw new Error(
+      "Import run still has uncommitted order confirmation mail.",
+    );
+}
+
 export async function finishRun(
   db: Database,
   namespace: PurchaseImportNamespace,
@@ -2929,11 +2951,7 @@ export async function finishRun(
         })
         .where(and(eq(runTable.id, runId), eq(runTable.status, "running")));
     } else {
-      const mail = await loadOrderMailImportEvidence(db, runId);
-      if (mail && !(await orderMailImportedPurchase(db, mail)))
-        throw new Error(
-          "Import run still has uncommitted order confirmation mail.",
-        );
+      await assertSingleMailImported(db, runId);
       const [pendingHunt] = scope.public.vendorAccountId
         ? await getDb(db)
             .select({ id: importHunt.id })
