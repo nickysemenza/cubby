@@ -162,14 +162,6 @@ See also the image operational passes at the end of this file.
   Preserve same-day order ids and never rewind the incremental cursor
   (`purchase-import/run-service.ts`, `VendorAccount.cursor`).
 
-- 🟢 **Vendor evidence classification and policy.** Automatically classify
-  `orderEvidence` only from clear deterministic evidence; review uncertain
-  inference and preserve explicit choices. Resolved `evidenceExpectation`
-  governs whether evidence is wanted; source classification guides where to
-  look, never silently suppressing required discovery. Surface contradictory
-  choices in one review path, without another policy or confidence setting
-  (`repo/purchase-evidence-policy.ts`, `purchase-import/hunts.ts`).
-
 - 🟢 **Finish the input-first retailer and statement journey.** Join saved
   synthetic order-history and Product HTML through browser capture,
   prepare/commit, and purchase approval. Cover both statement/order sequences,
@@ -528,13 +520,12 @@ See also the image operational passes at the end of this file.
   Flue supports modern version negotiation; its current MCP client defaults
   to legacy requests without exposing a negotiation option.
 
-- 🤔 **Remove duplicate record checks and expose useful exceptions.** Coverage
-  Problems already consume declared checks. Identify demonstrated duplicate
-  per-record predicates and move each onto its existing declaration/binding;
-  keep operational Problems and aggregate rules, including subtree budgets,
-  explicit. Durable evidence-bound exceptions already work through entity
-  declarations; identify only missing surfaces needed by real workflows, not
-  a second exception system, global weight tuning, or a universal ignore
+- 🟢 **Record evidence-bound exceptions from web and native.** Duplicate
+  per-record predicates now use their declared bindings, and every exemptible
+  check has reasons. Recording or clearing an exception still needs MCP: add
+  one generic accept/clear action with the check's reason list to the field
+  explanation on web and native, reusing `dataQuality.setException`. Keep
+  operational Problems and aggregate rules explicit; no universal ignore
   control. Contract: [data quality](entities.md#data-quality).
 
 - 🟢 **Declare non-entity child tables in the manifest (`children:`)** so

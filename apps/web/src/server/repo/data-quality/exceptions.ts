@@ -68,9 +68,30 @@ const EXCEPTION_REASONS = {
   vendor_logo: ["unavailable"],
   vendor_website: ["unavailable", "not_applicable"],
   vendor_order_evidence: ["not_applicable"],
+  // A price that enrichment could not find stays unknowable; a freebie or
+  // sample has none to find.
+  product_price: ["unavailable", "not_applicable"],
+  // Gifts and previously owned items are already out of scope via
+  // `acquisitionOrigin`; this covers stock acquired without a receipt, such as
+  // a market stall or hand-me-down recorded under another origin.
+  product_unpurchased: ["not_issued", "unavailable"],
+  purchase_date: ["unavailable"],
+  unpriced_expense: ["unavailable", "history_expired"],
+  expense_cost: ["unavailable", "history_expired"],
+  expense_product_resolution: ["unavailable", "insufficient_detail"],
+  // Statement-sourced facts that no source states: a blank merchant, or a
+  // booking that cannot be allocated from the detail the statement carries.
+  financial_transaction_merchant: ["unavailable"],
+  financial_transaction_allocation: ["unavailable", "insufficient_detail"],
+  financial_transaction_booking: ["unavailable", "insufficient_detail"],
+  // Checks whose gap is closed by classifying the record (category origin,
+  // receipt expectation, transaction kind, duplicate ids) declare
+  // `exceptions: "forbidden"` instead of carrying a reason list.
 } satisfies Partial<Record<DataCheck, readonly DataExceptionReason[]>>;
 
-const reasonsFor = (check: DataCheck): readonly DataExceptionReason[] =>
+export const exceptionReasonsFor = (
+  check: DataCheck,
+): readonly DataExceptionReason[] =>
   dataCheckExemptible[check]
     ? (Object.entries(EXCEPTION_REASONS).find(([key]) => key === check)?.[1] ??
       [])
@@ -115,7 +136,10 @@ const mutateException = async (
       `${input.check} does not apply to ${entityKind} data quality.`,
     );
   }
-  if ("reason" in input && !reasonsFor(input.check).includes(input.reason)) {
+  if (
+    "reason" in input &&
+    !exceptionReasonsFor(input.check).includes(input.reason)
+  ) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       `${input.reason} is not allowed for ${input.check}.`,

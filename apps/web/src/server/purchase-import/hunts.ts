@@ -22,6 +22,7 @@ import {
 import type { PurchaseAgentQueueProducer } from "~/server/purchase-agent-queue-types";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { currentMemberLedgerParty } from "~/server/repo/member-login";
+import { routedChargeEvidenceExpectationSql } from "~/server/repo/purchase-evidence-policy";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { dispatchRunEvent } from "./dispatch";
@@ -91,8 +92,17 @@ export async function listMerchantVendorRules(
   return { rules, vendors };
 }
 
+/**
+ * Open a hunt for each unallocated, vendor-routed charge whose resolved
+ * `evidenceExpectation` wants evidence. The vendor's `orderEvidence` only
+ * chooses where discovery looks first; it never suppresses a required hunt.
+ */
 export async function discoverImportHunts(db: Database): Promise<number> {
   const database = getDb(db);
+  const expectation = routedChargeEvidenceExpectationSql(
+    "FinancialTransaction",
+    sql`${vendor.evidenceExpectation}`,
+  );
   const rows = await database
     .select({
       financialTransactionId: financialTransaction.id,
@@ -147,7 +157,8 @@ export async function discoverImportHunts(db: Database): Promise<number> {
       and(
         notDeleted(financialTransaction),
         isNull(financialTransactionAllocation.id),
-        sql`${vendor.orderEvidence} IS DISTINCT FROM 'not_expected'`,
+        sql`(${expectation} = 'required'
+          OR (${expectation} = 'unknown' AND ${vendor.orderEvidence} IS DISTINCT FROM 'not_expected'))`,
       ),
     );
 
@@ -165,8 +176,12 @@ export async function discoverImportHunts(db: Database): Promise<number> {
         financialTransactionId: row.financialTransactionId,
         vendorId: row.vendorId,
         vendorAccountId: row.vendorAccountId,
+        // Required evidence from a vendor classified as having no order trail
+        // can only come from a human: surface it as the existing receipt
+        // problem rather than skipping it or searching mail and browser.
         state:
-          row.orderEvidence === "receipt_only"
+          row.orderEvidence === "receipt_only" ||
+          row.orderEvidence === "not_expected"
             ? "receipt_required"
             : "pending_mail",
         ...window,

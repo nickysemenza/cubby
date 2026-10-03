@@ -33,6 +33,20 @@ export const vendorChecks = defineEntityChecks({
       missing: (t) => sql`${t.orderEvidence} IS NULL`,
       fingerprint: (t) => [sql`${t.orderEvidence}`],
     },
+    // Source classification only guides where to look; the evidence
+    // expectation decides whether evidence is wanted. Either contradiction
+    // is resolved by changing one of the two, so no exception reason exists.
+    vendor_order_evidence_conflict: {
+      missing: (t) => sql`(
+        (${t.orderEvidence} = 'not_expected' AND ${t.evidenceExpectation} = 'required')
+        OR (${t.evidenceExpectation} = 'not_expected'
+          AND ${t.orderEvidence} IN ('online_account', 'receipt_only'))
+      )`,
+      fingerprint: (t) => [
+        sql`${t.orderEvidence}`,
+        sql`${t.evidenceExpectation}`,
+      ],
+    },
     vendor_logo: {
       expected: hasLivePurchase,
       missing: (t) => sql`NOT ${hasDisplayableLogo(t)}`,
