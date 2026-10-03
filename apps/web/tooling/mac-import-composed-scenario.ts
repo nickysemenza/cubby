@@ -648,6 +648,56 @@ export async function createMacComposedScenario(input: Input) {
           projection: await project(),
         });
       }
+      // Settlement links preserve receipt classifications. Review an unclassified
+      // receipt line in its own editor rather than treating booking as an override.
+      if ((await project()).categorizedExpenses === 0) {
+        input.onStage("native-expense-classification-review");
+        const [expense] = await database
+          .select({ code: schema.expense.shortcode })
+          .from(schema.expense)
+          .innerJoin(
+            schema.purchase,
+            eq(schema.purchase.id, schema.expense.purchaseId),
+          )
+          .where(
+            and(
+              eq(schema.purchase.vendorId, vendorId),
+              notDeleted(schema.expense),
+              notDeleted(schema.purchase),
+            ),
+          );
+        if (!expense)
+          throw new Error(
+            "Canonical receipt Expense is missing for category review",
+          );
+        await input.driver.openEntity(expense.code, input.appPath());
+        await input.driver.wait("id=detail.expense.edit");
+        await input.driver.click("id=detail.expense.edit");
+        await input.driver.wait("id=editor.expense");
+        await input.driver.scrollTo(
+          'label="Spending category, None" role=Button',
+          "editor.expense",
+        );
+        await input.driver.click(
+          'label="Spending category, None" role=Button',
+          "editor.expense",
+        );
+        await input.driver.action(["picker-search", categoryName]);
+        await input.driver.wait(`contains="${categoryName}" role=Button`);
+        await input.driver.click(`contains="${categoryName}" role=Button`);
+        await input.driver.wait("id=editor.expense.save");
+        await input.driver.screenshot("native-expense-category-review");
+        if ((await project()).categorizedExpenses !== 0)
+          throw new Error(
+            "Native category selection wrote before explicit Save",
+          );
+        await input.driver.click("id=editor.expense.save");
+        await eventually(
+          async () =>
+            (await project()).categorizedExpenses === 1 ? true : undefined,
+          "native saved Expense category",
+        );
+      }
       // The photo review already recorded ownership. Dismiss receipt arrival
       // through the native review instead of receiving a second owned unit.
       const [arrival] = await database

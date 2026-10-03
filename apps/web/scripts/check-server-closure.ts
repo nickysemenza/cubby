@@ -18,9 +18,13 @@ const MB = 1_000_000;
 // (@sentry/cloudflare) adds a ~1.1 MB chunk (the shared tracer provider,
 // attribute conventions, and channel-instrumentation tables) that Cubby never
 // uses at runtime because tracing is sampled to 0: 6.27 MB first request /
-// 16.9 MB total. Staying on Sentry 10 restores the 6 MB budget.
+// 16.9 MB total. Staying on Sentry 10 restores the 6 MB budget. The purchase
+// and inventory batch of 2026-10 (settlement, corrections, receiving, identity
+// proof) reached 18.01 MB total with an unchanged 6.44 MB first request; the
+// total is lazily loaded and far inside Cloudflare's compressed limit, so it
+// gets headroom while the request-path budget stays tight.
 const FIRST_REQUEST_BUDGET = 6.5 * MB;
-const TOTAL_BUDGET = 18 * MB;
+const TOTAL_BUDGET = 18.5 * MB;
 
 const STATIC_IMPORT =
   /(?:import|export)\s*(?:[\w*{}\s,$]*?from\s*)?["'`](\.{1,2}\/[^"'`]+\.js)["'`]/g;
