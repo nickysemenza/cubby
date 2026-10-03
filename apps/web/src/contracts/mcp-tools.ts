@@ -824,7 +824,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   data_exception: {
     description:
-      "Explicit negative knowledge on one Purchase or Product completeness check; each call returns the recomputed dataQuality.",
+      "Explicit negative knowledge on one completeness check of a Product, Vendor, Purchase, FinancialTransaction, or Expense; each call returns the recomputed dataQuality.",
     actions: {
       set: mcpAction({
         op: dataQualityContract.ops.setException,

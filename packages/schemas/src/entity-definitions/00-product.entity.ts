@@ -3038,6 +3038,7 @@ export default defineEntity({
           id: "duplicate_external_id",
           facet: "integrity",
           kind: "defect",
+          exceptions: "forbidden",
           label: "Duplicate external ID",
           message:
             "An exact external identifier is shared with another live product.",
