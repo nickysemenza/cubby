@@ -105,7 +105,11 @@ export class ImageProcessingDurableObject
         const capable =
           command.kind === "subject_lift"
             ? attachment.data.capabilities.visionSubjectLift.available
-            : attachment.data.capabilities.actualImageDescription.available;
+            : command.analysisOutput
+              ? attachment.data.capabilities.jpegNormalization?.available ===
+                  true &&
+                attachment.data.capabilities.jpegNormalization.revision === 1
+              : attachment.data.capabilities.actualImageDescription.available;
         // iOS processing is only valid while foregrounded. macOS continuously
         // advertises foreground=true for its resident companion worker.
         return capable &&
@@ -126,8 +130,8 @@ export class ImageProcessingDurableObject
       await import("~/server/repo/image-processing-history");
     const assigned = await withRequestDbClient(
       this.env.HYPERDRIVE.connectionString,
-      () =>
-        assignImageProcessingExecutor(db, {
+      async () => {
+        const assigned = await assignImageProcessingExecutor(db, {
           jobId: command.jobId,
           attemptId: command.attemptId,
           executor: {
@@ -140,7 +144,11 @@ export class ImageProcessingDurableObject
           },
           userId: target.attachment.userId,
           connectionId: target.attachment.connectionId,
-        }),
+        });
+        if (!assigned) return false;
+        const { reserveCompanionAnalysisOutput } = await import("./dispatch");
+        return reserveCompanionAnalysisOutput(db, command);
+      },
     );
     if (!assigned) return false;
     target.socket.send(

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -41,6 +41,7 @@ export async function reserveImageAnalysisInput(
   db: Database,
   attemptId: string,
   key: string,
+  expectedInputKey?: string,
 ) {
   return withTransaction(db, async (tx) => {
     const [attempt] = await tx
@@ -54,8 +55,15 @@ export async function reserveImageAnalysisInput(
       .where(
         and(
           eq(imageProcessingAttempt.id, attemptId),
+          expectedInputKey === undefined
+            ? undefined
+            : eq(imageProcessingAttempt.inputKey, expectedInputKey),
           eq(imageProcessingJob.attemptId, attemptId),
           eq(imageProcessingJob.state, "leased"),
+          gt(imageProcessingJob.leaseExpiresAt, sql`now()`),
+          eq(image.status, "UPLOADED"),
+          eq(image.sha256, imageProcessingJob.sourceContentHash),
+          isNull(image.deletedAt),
         ),
       )
       .for("update");
@@ -81,10 +89,21 @@ export async function retainImageAnalysisInput(
     const [attempt] = await tx
       .select({ id: imageProcessingAttempt.id })
       .from(imageProcessingAttempt)
+      .innerJoin(
+        imageProcessingJob,
+        eq(imageProcessingJob.id, imageProcessingAttempt.jobId),
+      )
+      .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
       .where(
         and(
           eq(imageProcessingAttempt.id, attemptId),
           eq(imageProcessingAttempt.inputKey, key),
+          eq(imageProcessingJob.attemptId, attemptId),
+          eq(imageProcessingJob.state, "leased"),
+          gt(imageProcessingJob.leaseExpiresAt, sql`now()`),
+          eq(image.status, "UPLOADED"),
+          eq(image.sha256, imageProcessingJob.sourceContentHash),
+          isNull(image.deletedAt),
         ),
       )
       .for("update");

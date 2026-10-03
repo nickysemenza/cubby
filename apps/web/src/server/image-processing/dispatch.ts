@@ -1,34 +1,31 @@
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
-  IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
-  IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
   imageProcessingCommand,
 } from "@cubby/schemas/image-processing";
+import type { ImageProcessingCommand } from "@cubby/schemas/image-processing";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
 import { providerFor } from "~/server/ai/models";
 import { getImageProcessingNamespace } from "~/server/cf-env";
 import type { Database } from "~/server/db";
+import { reserveImageAnalysisInput } from "~/server/repo/activity-input";
 import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   claimImageProcessingJob,
   completeImageProcessingJob,
-  findImageProcessingWakeupsForImage,
   getCurrentImageCutoutEligibility,
   markImageProcessingWaitingForDevice,
   reclaimExpiredImageProcessingLeases,
 } from "~/server/repo/image-processing";
 import { assignImageProcessingExecutor } from "~/server/repo/image-processing-history";
 import { readImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
-import { refreshDirectImageOwnerSearchDocuments } from "~/server/repo/search-document";
-import { ensureRun, systemActor } from "~/server/runs/ensure-run";
-import { describeOriginalImage } from "~/server/services/image-description.service";
 import {
   generatePresignedDownloadUrl,
   generatePresignedUploadUrl,
 } from "~/server/utils/s3";
 
+import { completeCloudImageDescription } from "./cloud-description";
 import type { ImageProcessingCompanionRpc } from "./contracts";
 import { safeImageProcessingError } from "./safe-error";
 
@@ -60,7 +57,9 @@ export async function dispatchImageProcessingWakeup(
   try {
     if (
       claimed.kind === "describe_image" &&
-      claimed.processorRevision !== IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION
+      claimed.processorRevision !==
+        IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION &&
+      claimed.originalContentType !== "image/avif"
     ) {
       const assigned = await assignImageProcessingExecutor(db, {
         jobId: claimed.id,
@@ -75,58 +74,14 @@ export async function dispatchImageProcessingWakeup(
         },
       });
       if (!assigned) return "skipped";
-      // Use the run that requested this job when one was recorded at
-      // scheduling time, so its AI usage is attributed to that run's actor
-      // rather than a fresh background run. No user rides along with a job
-      // that has none, so it books under the system actor like every other
-      // background AI call.
-      const runId =
-        claimed.runId ??
-        (await ensureRun(db, systemActor(), {
-          purpose: "background",
-        }));
-      const { result, fingerprint } = await describeOriginalImage(db, {
-        imageId: claimed.imageId,
+      return (await completeCloudImageDescription(db, {
+        jobId: claimed.id,
         attemptId: claimed.attemptId,
-        runId,
-      });
-      const completion = await completeImageProcessingJob(db, {
-        result: {
-          jobId: claimed.id,
-          attemptId: claimed.attemptId,
-          completedAt: new Date().toISOString(),
-          outcome: {
-            kind: "describe_image",
-            status: "completed",
-            description: result,
-            runtime: {
-              platform: "cloud",
-              model: IMAGE_DESCRIPTION_FEATURE.model,
-            },
-          },
-        },
-        cloudAnalysis: {
-          provider: providerFor(IMAGE_DESCRIPTION_FEATURE.model),
-          model: IMAGE_DESCRIPTION_FEATURE.model,
-          promptRevision: IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
-          resultSchemaRevision: IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
-          inputFingerprint: fingerprint,
-        },
-        runtime: {
-          provider: providerFor(IMAGE_DESCRIPTION_FEATURE.model),
-          model: IMAGE_DESCRIPTION_FEATURE.model,
-          feature: "image-description",
-        },
-      });
-      if (!completion.adopted) return "skipped";
-      await refreshDirectImageOwnerSearchDocuments(db, claimed.imageId);
-      const { publishImageProcessingWakeups } =
-        await import("~/server/services/image-processing.service");
-      await publishImageProcessingWakeups(
-        db,
-        await findImageProcessingWakeupsForImage(db, claimed.imageId),
-      );
-      return "completed";
+        imageId: claimed.imageId,
+        runId: claimed.runId,
+      }))
+        ? "completed"
+        : "skipped";
     }
 
     const namespace = getImageProcessingNamespace();
@@ -176,8 +131,8 @@ export async function prepareCompanionImageCommand(
   db: Database,
   claimed: NonNullable<Awaited<ReturnType<typeof claimImageProcessingJob>>>,
 ) {
-  if (claimed.kind === "describe_image")
-    return imageProcessingCommand.parse({
+  if (claimed.kind === "describe_image") {
+    const command = imageProcessingCommand.parse({
       kind: "describe_image",
       jobId: claimed.id,
       attemptId: claimed.attemptId,
@@ -190,6 +145,24 @@ export async function prepareCompanionImageCommand(
       promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
       resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
     });
+    if (command.kind !== "describe_image")
+      throw new Error("Expected description command");
+    if (
+      claimed.originalContentType === "image/avif" &&
+      claimed.processorRevision !== IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION
+    ) {
+      const key = `cubby/analysis-staging/${claimed.attemptId}.jpg`;
+      command.analysisOutput = {
+        key,
+        contentType: "image/jpeg",
+        uploadUrl: await generatePresignedUploadUrl({
+          key,
+          contentType: "image/jpeg",
+        }),
+      };
+    }
+    return command;
+  }
   const eligibility = await getCurrentImageCutoutEligibility(
     db,
     claimed.imageId,
@@ -244,4 +217,20 @@ export async function prepareCompanionImageCommand(
       contentType: "image/png",
     },
   });
+}
+
+/** Reserve only after assignment creates the attempt, before either transport delivers its PUT. */
+export async function reserveCompanionAnalysisOutput(
+  db: Database,
+  command: ImageProcessingCommand,
+) {
+  return (
+    command.kind !== "describe_image" ||
+    !command.analysisOutput ||
+    (await reserveImageAnalysisInput(
+      db,
+      command.attemptId,
+      command.analysisOutput.key,
+    ))
+  );
 }

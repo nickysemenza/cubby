@@ -11,11 +11,7 @@ struct CompanionImageProcessorTests {
     @Test("Decodes a checksum-verified AVIF catalog source")
     func decodesAVIFCatalogSource() async throws {
         // Synthetic 2 × 3 white image; exercises ImageIO rather than a MIME-only check.
-        let bytes = try #require(
-            Data(
-                base64Encoded:
-                    "AAAAHGZ0eXBhdmlmAAAAAG1pZjFhdmlmbWlhZgAAANZtZXRhAAAAAAAAACFoZGxyAAAAAAAAAABwaWN0AAAAAAAAAAAAAAAAAAAAACJpbG9jAAAAAERAAAEAAQAAAAAA+gABAAAAAAAAACEAAAAjaWluZgAAAAAAAQAAABVpbmZlAgAAAAABAABhdjAxAAAAAA5waXRtAAAAAAABAAAAVmlwcnAAAAA4aXBjbwAAAAxhdjFDgUBsAAAAABRpc3BlAAAAAAAAAAIAAAADAAAAEHBpeGkAAAAAAwwMDAAAABZpcG1hAAAAAAAAAAEAAQOBAgMAAAApbWRhdBIACghYAHNaAhoNwjITGUeHhiGJpppmgAAAkD+bDGCKZg=="
-            ))
+        let bytes = try Self.syntheticAVIF()
         let processor = CompanionImageProcessor(
             download: { _ in bytes },
             put: { _, _, _ in Issue.record("Decoding must not upload a replacement") })
@@ -26,6 +22,48 @@ struct CompanionImageProcessorTests {
         #expect(decoded.image.width == 2)
         #expect(decoded.image.height == 3)
         #expect(decoded.diagnostics.decodeMilliseconds != nil)
+    }
+
+    // Normalization must work without Foundation Models, emit real JPEG bytes, and retain
+    // the verified original. Oversized sources must be decoded as bounded thumbnails.
+    @Test("Normalizes an AVIF for cloud analysis without a native model")
+    func normalizesAVIFWithoutNativeModel() async throws {
+        let bytes = try Self.syntheticAVIF()
+        let upload = UploadProbe()
+        let processor = CompanionImageProcessor(
+            download: { _ in bytes },
+            put: { data, url, contentType in await upload.record(data, url: url, contentType: contentType) })
+        let uploadURL = "https://uploads.example.invalid/analysis-stage.jpg"
+        let commandBytes = try JSONSerialization.data(withJSONObject: [
+            "kind": "describe_image", "jobId": UUID().uuidString,
+            "attemptId": UUID().uuidString,
+            "deadline": ISO8601DateFormatter().string(from: .now.addingTimeInterval(60)),
+            "source": [
+                "url": "https://images.example.invalid/catalog.avif",
+                "sha256": Self.sha256(bytes), "contentType": "image/avif",
+            ],
+            "promptRevision": 1, "resultSchemaRevision": 1,
+            "analysisOutput": [
+                "key": "analysis-stage.jpg", "uploadUrl": uploadURL,
+                "contentType": "image/jpeg",
+            ],
+        ])
+        let command = try JSONDecoder.companionImageProcessing.decode(
+            ImageProcessingCommand.self, from: commandBytes)
+        let result = await CompanionImageCommandExecutor(
+            processor: processor, describer: UnavailableDescriber()
+        ).execute(command)
+        let encoded = try JSONEncoder.companionImageProcessing.encode(result)
+        #expect(String(decoding: encoded, as: UTF8.self).contains("\"status\":\"normalized\""))
+        let captured = try #require(await upload.latest)
+        #expect(captured.url.absoluteString == uploadURL)
+        #expect(captured.contentType == "image/jpeg")
+        #expect(captured.data.prefix(3) == Data([0xFF, 0xD8, 0xFF]))
+        let size = try #require(ImageEncoding.pixelSize(of: captured.data))
+        #expect(size.width == 2 && size.height == 3)
+        #expect(captured.data != bytes)
+        #expect(String(decoding: encoded, as: UTF8.self).contains(Self.sha256(captured.data)))
+        #expect(await upload.count == 1)
     }
 
     @Test("Uploads a transparent PNG derived from an unchanged source", .requiresVisionHardware)
@@ -234,6 +272,14 @@ struct CompanionImageProcessorTests {
         #expect(await download.count == 0)
     }
 
+    private static func syntheticAVIF() throws -> Data {
+        return try #require(
+            Data(
+                base64Encoded:
+                    "AAAAHGZ0eXBhdmlmAAAAAG1pZjFhdmlmbWlhZgAAANZtZXRhAAAAAAAAACFoZGxyAAAAAAAAAABwaWN0AAAAAAAAAAAAAAAAAAAAACJpbG9jAAAAAERAAAEAAQAAAAAA+gABAAAAAAAAACEAAAAjaWluZgAAAAAAAQAAABVpbmZlAgAAAAABAABhdjAxAAAAAA5waXRtAAAAAAABAAAAVmlwcnAAAAA4aXBjbwAAAAxhdjFDgUBsAAAAABRpc3BlAAAAAAAAAAIAAAADAAAAEHBpeGkAAAAAAwwMDAAAABZpcG1hAAAAAAAAAAEAAQOBAgMAAAApbWRhdBIACghYAHNaAhoNwjITGUeHhiGJpppmgAAAkD+bDGCKZg=="
+            ))
+    }
+
     private static func sha256(_ data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
@@ -336,5 +382,13 @@ private actor DownloadProbe {
     func fetch(_: URL) throws -> Data {
         count += 1
         return Data()
+    }
+}
+
+private struct UnavailableDescriber: CompanionImageDescribing {
+    func availability() -> CompanionImageDescriptionAvailability { .unavailable }
+    func describe(_ image: CGImage) async throws -> CompanionImageDescription {
+        Issue.record("JPEG normalization must not invoke Foundation Models")
+        throw CompanionImageDescriptionFailure.unavailable
     }
 }

@@ -94,6 +94,16 @@ export interface SpecAreaEntry {
 
 /** Hand-written globs per spec; see the header for what belongs here. */
 export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
+  "companion-analysis.spec.ts": [
+    `${WEB}/src/server/image-processing/**`,
+    `${WEB}/src/server/repo/image-processing*.ts`,
+    `${WEB}/src/server/repo/activity-input.ts`,
+    `${WEB}/src/server/services/image-description.service.ts`,
+    `${WEB}/src/server/services/image-processing.service.ts`,
+    `${WEB}/src/server/operations/image-processing.server.ts`,
+    `${WEB}/src/contracts/image-processing.contract.ts`,
+    "packages/schemas/src/image-processing.ts",
+  ],
   "label-nutrition-review.spec.ts": [
     `${WEB}/src/app/products/**`,
     `${WEB}/src/features/nutrition/**`,

@@ -117,6 +117,28 @@ public struct CompanionImageCommandExecutor: Sendable {
     private func executeDescription(
         _ command: ImageProcessingCommandDescribeImage
     ) async throws -> Execution {
+        if let output = command.analysisOutput {
+            guard let sourceURL = URL(string: command.source.url),
+                let uploadURL = URL(string: output.uploadUrl)
+            else { throw URLError(.badURL) }
+            let artifact = try await processor.makeAnalysisJPEG(
+                source: .init(
+                    url: sourceURL, sha256: command.source.sha256,
+                    contentType: command.source.contentType.rawValue),
+                output: .init(uploadURL: uploadURL, contentType: output.contentType.rawValue))
+            guard command.deadline > .now else {
+                return .init(
+                    outcome: failed(.describeImage, retryable: false, reason: "deadline_exceeded"),
+                    diagnostics: artifact.diagnostics)
+            }
+            return .init(
+                outcome: .init(
+                    value4: .init(
+                        kind: .describeImage, status: .normalized,
+                        key: output.key, sha256: artifact.sha256,
+                        contentType: .imageJpeg, width: artifact.width, height: artifact.height)),
+                diagnostics: artifact.diagnostics)
+        }
         guard describer.availability() == .available else {
             return .init(
                 outcome: failed(.describeImage, retryable: true, reason: "model_unavailable"),
@@ -199,7 +221,9 @@ public struct CompanionImageCommandExecutor: Sendable {
     private func processorName(_ command: ImageProcessingCommand) -> String {
         switch command {
         case .subjectLift: "Vision.SubjectLift"
-        case .describeImage: "FoundationModels.SystemLanguageModel"
+        case .describeImage(let value):
+            value.analysisOutput == nil
+                ? "FoundationModels.SystemLanguageModel" : "ImageIO.JPEGNormalization"
         }
     }
 
