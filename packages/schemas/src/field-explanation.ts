@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dataExceptionReason } from "./data-quality-shape";
 import { entityRefSchema } from "./entity";
 import {
   fieldResolutionSchema,
@@ -29,6 +30,22 @@ export const qualityBreakdown = z.object({
       weight: z.number(),
       state: z.enum(["satisfied", "gap", "excepted"]),
       description: z.string(),
+      /**
+       * Reasons the server accepts for `dataQuality.setException` on this
+       * check; empty when the check forbids exceptions, so no client restates
+       * the list.
+       */
+      exceptionReasons: z.array(
+        z.object({ reason: dataExceptionReason, label: z.string() }),
+      ),
+      /** The recorded exception, active or stale, that `clearException` removes. */
+      exception: z
+        .object({
+          reason: dataExceptionReason,
+          note: z.string(),
+          state: z.enum(["active", "stale"]),
+        })
+        .optional(),
     }),
   ),
 });
