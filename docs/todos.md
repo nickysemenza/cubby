@@ -122,12 +122,12 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
-- 🟢 **Manual purchase lifecycle.** Account-sync runs handle several listed
-  orders, defer one ambiguous order for review without blocking the rest, and
-  carry unfinished orders into a restart. Remaining: start a run from a
-  selected set of mail or charge candidates (today mail is one run per message
-  and hunts join the account run), with each candidate's terminal outcome
-  recorded. Reuse the bounded prepare/commit and approval paths in
+- 🟢 **Select statement charges for one run.** Account-sync and selected
+  order-mail runs record each order's terminal outcome, defer one ambiguous
+  order without blocking the rest, and carry unfinished orders into a restart.
+  Charge hunts still join the next account run as a queue: let a member choose
+  a subset of charge candidates and record each hunt's outcome per run. Reuse
+  the bounded prepare/commit and approval paths in
   [purchase import](../.claude/skills/purchase-import/SKILL.md).
 
 - ⏳ **Conditional purchase-import browser extension.** Promote only if the
