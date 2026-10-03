@@ -1,7 +1,7 @@
 context platform=ios timeout=240000
 
 open com.nickysemenza.cubby
-wait "role=Button label=Library" 60000 --scope Library --depth 2
+wait "role=Button label=Library" 60000
 # A timed-out launch capture can still occupy the runner after it returns a tree.
 # Allow that abandoned read to drain before submitting the first input.
 wait 10000
