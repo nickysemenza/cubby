@@ -534,6 +534,14 @@ export default defineEntity({
         urlOnly: true,
       },
       {
+        columnId: "locationSubtree",
+        field: "locationSubtreeFilter",
+        kind: "idMulti",
+        placeholder: "Filter by location, including contents...",
+        brandRef: { entity: "location" },
+        urlOnly: true,
+      },
+      {
         columnId: "product",
         field: "productNameFilter",
         kind: "text",
