@@ -243,7 +243,9 @@ describe("MCP catalog", () => {
     expect(
       await call("imports_read", {
         action: "external_id_collisions",
-        source: "amazon",
+        identifiers: [
+          { source: "amazon", kind: "asin", externalId: "B0SYNTH001" },
+        ],
       }),
     ).toBeDefined();
     expect(await call("activity", { action: "recent" })).toHaveProperty(

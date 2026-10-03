@@ -18,7 +18,7 @@ weakest identity first (heavier identity checks â€” manufacturer, external ID â€
 outweigh lighter ones), in pages of 25. Narrow to a specific gap with
 `filters.dataGap` on a check id: `product_manufacturer`, `product_external_id`,
 `product_category`, `product_model`, `product_price`, `product_image`,
-`amazon_asin`, `duplicate_external_id`. Start with summary/count reads, then
+`amazon_asin`. Start with summary/count reads, then
 request the relevant page; request full records only for candidates being
 researched.
 
