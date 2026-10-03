@@ -261,12 +261,6 @@ See also the image operational passes at the end of this file.
      equivalences report (`lib/harvest-equivalences.ts`) then writes accepted
      suggestions into.
 
-- 🟢 **One external-id product lookup.** `repo/product/find-by-external-ids.ts`
-  batches `(source, externalId)` lookups for `entity_read.resolve`; purchase
-  import (`purchase-import/writer.ts` `productsByExternalIdentity`,
-  `import-orders.ts`) and `repo/product-match.ts` still query per line. Move
-  them onto the batched helper, keeping the writer's in-run cache.
-
 - 🧱 **Inferred-zero nutrients for label data.** Decided: yes. Label-sourced
   records (USDA `branded_food`, `labelNutrition`) print only FDA-mandatory
   nutrients plus extras, and a mandatory one may be omitted only as "not a
@@ -363,11 +357,13 @@ See also the image operational passes at the end of this file.
   in inventory/Product filtering through the generic filter path. Reuse a
   scoped descendant-id helper rather than loading the whole-tree CTE.
 
-- 🟢 **Product external-ID collision review.** Make collisions encountered
-  during imports/enrichment actionable through existing
-  `product.externalIdCollisions` and collision review paths. Keep exact
-  variants and explicit merges; never silently reassign an identifier. Add no
-  separate persistent queue unless real unresolved volume demonstrates a need.
+- 🟢 **Product external-ID collision review.** Purchase import now keeps the
+  reviewed Product and proposes the colliding pair in the Product match queue.
+  Finish the enrichment path the same way: a proven identifier owned by another
+  Product is skipped and proposed, never reassigned or fatal to the commit. The
+  live unique index makes `duplicate_external_id` and the `collision` result of
+  `product.externalIdCollisions` unreachable; retire them rather than keep a
+  second path. Add no separate persistent queue.
 
 ---
 

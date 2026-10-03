@@ -3,7 +3,7 @@ import { eq, getTableColumns, inArray, or, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { productMatchCandidate } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, unwrapDb } from "~/server/repo/database-helpers";
 
 /**
  * Persistence for the product match queue's durable half: agent proposals
@@ -27,14 +27,14 @@ export const productPairKey = (a: string, b: string): string =>
  * stands, and the returned `state` tells the agent so.
  */
 export async function upsertAgentProductMatch(
-  db: Database,
+  db: Database | DrizzleTransaction,
   input: {
     productIds: readonly [ProductId, ProductId];
     evidence: string;
     sourceUrls: string[];
   },
 ): Promise<ProductMatchCandidateRow & { created: boolean }> {
-  const [row] = await getDb(db)
+  const [row] = await unwrapDb(db)
     .insert(productMatchCandidate)
     .values({
       ...canonicalProductPair(...input.productIds),
