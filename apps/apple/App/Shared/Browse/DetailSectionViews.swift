@@ -492,6 +492,17 @@ struct FieldExplanationLabel: View {
                                 )
                                 .font(.caption).foregroundStyle(.secondary)
                                 if check.state.rawValue == "gap" { Text(check.description).font(.callout) }
+                                DataExceptionControl(
+                                    draft: .init(entityID: subject.id, check: check.check),
+                                    isGap: check.state.rawValue == "gap",
+                                    options: check.exceptionReasons.map {
+                                        .init(reason: $0.reason, label: $0.label)
+                                    },
+                                    recorded: check.exception.map {
+                                        ($0.reason, $0.note, $0.state.rawValue == "stale")
+                                    },
+                                    onChanged: reloadExplanation
+                                )
                                 Text("\(check.facet) · \(check.check)").font(.caption.monospaced())
                                     .foregroundStyle(.secondary)
                             }
@@ -545,6 +556,12 @@ struct FieldExplanationLabel: View {
         #endif
         .accessibilityIdentifier("field.explanation.popover")
         .presentationCompactAdaptation(.sheet)
+    }
+
+    /// Re-explains after an exception changed; `resolved` is shadowed inside the popover body.
+    private func reloadExplanation() {
+        resolved = nil
+        Task { await loadExplanation() }
     }
 
     private func loadExplanation() async {
