@@ -1,8 +1,8 @@
 context platform=ios timeout=240000
 
 open com.nickysemenza.cubby
-wait "label=Library" 60000
-click "label=Library"
+wait "role=Button label=Library" 60000
+click "role=Button label=Library"
 wait text "Browse catalog" 30000
 click "label=\"Browse catalog\""
 wait "id=browse.importStatement" 30000
@@ -15,8 +15,8 @@ wait text "On My iPhone" 30000
 click "label=\"On My iPhone\""
 wait "id=\"Cubby, Container\"" 30000
 click "id=\"Cubby, Container\""
-wait text "synthetic-input-statement" 30000
-click "label=synthetic-input-statement"
+wait "id=\"synthetic-input-statement, csv\"" 30000
+click "id=\"synthetic-input-statement, csv\""
 wait text "Synthetic Input Card" 30000
 wait "id=statement.csv.select.1" 30000
 click "id=statement.csv.select.1"

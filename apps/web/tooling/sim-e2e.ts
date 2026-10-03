@@ -12,7 +12,6 @@ import {
   stampSimulatorBuild,
 } from "../../../scripts/apple-simulator-build-cache.ts";
 import { createHash, randomBytes } from "node:crypto";
-import { homedir } from "node:os";
 import {
   appendFileSync,
   existsSync,
@@ -1175,12 +1174,22 @@ function retainRunDiagnostics(failure: Error | undefined): string[] {
     execFileSync("git", ["status", "--porcelain"], { cwd: repoRoot }),
   );
   evidenceFiles.push(sourceStatus);
+  const wasmDiff = path.join(artifacts, "wasm-package-diff.patch");
+  writeFileSync(
+    wasmDiff,
+    execFileSync("git", ["diff", "--", "packages/wasm/package.json"], {
+      cwd: repoRoot,
+    }),
+  );
+  evidenceFiles.push(wasmDiff);
   for (const name of [
     "failure.txt",
     "failure.png",
     "failure-ui-tree.ndjson",
     "diagnostic-error.txt",
     "fixture-app-settings.json",
+    "input-statement.xml",
+    "input-photo.xml",
   ]) {
     const evidence = path.join(artifacts, name);
     if (!existsSync(evidence)) continue;

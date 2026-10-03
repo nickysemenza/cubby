@@ -95,6 +95,13 @@ export async function createSimulatorInputJourney(input: {
       "--artifacts-dir",
       path.join(input.artifacts, script),
       "--reporter",
+      "default",
+      "--reporter",
+      path.join(
+        input.repoRoot,
+        "apps/web/tooling/native-replay-progress-reporter.ts",
+      ),
+      "--reporter",
       `junit:${path.join(input.artifacts, `${script}.xml`)}`,
     ]);
   return {
