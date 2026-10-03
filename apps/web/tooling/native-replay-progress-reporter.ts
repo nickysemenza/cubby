@@ -6,7 +6,7 @@ import { z } from "zod";
 import { readReplayTextEntryDiagnostics } from "./native-text-entry-diagnostics.ts";
 
 const resultSchema = z.object({
-  status: z.literal("failed"),
+  status: z.literal("fail"),
   session: z.string().min(1).max(512),
 });
 

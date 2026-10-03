@@ -1,7 +1,13 @@
 // Failed replay logs disappear with their daemon. Retain numeric commit evidence
 // before cleanup without copying field contents, credentials or raw diagnostics.
 import { strict as assert } from "node:assert";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -119,5 +125,48 @@ test("reads only the completed replay session before its temporary daemon is rem
     assert.equal(readReplayTextEntryDiagnostics(root, ".."), undefined);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// SDK progress uses "fail"; the final suite summary separately uses "failed".
+test("captures the SDK fail callback before replay daemon cleanup", async () => {
+  const daemon = mkdtempSync(join(tmpdir(), "agent-device-replay-daemon-"));
+  const output = mkdtempSync(join(tmpdir(), "native-text-result-"));
+  const previous = process.env.CUBBY_NATIVE_DIAGNOSTICS_DIR;
+  try {
+    const session = "synthetic:replay:attempt-1";
+    const directory = join(daemon, "sessions", "synthetic_replay_attempt-1");
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(
+      join(directory, "runner.log"),
+      "[DEBUG-1874] wait start expectedLen=22 route=replacement",
+    );
+    process.env.CUBBY_NATIVE_DIAGNOSTICS_DIR = output;
+    const reporter = (
+      await import("../apps/web/tooling/native-replay-progress-reporter.ts")
+    ).default;
+    reporter.onTestResult({
+      status: "fail",
+      session,
+      message: "synthetic-private",
+    });
+    rmSync(daemon, { recursive: true, force: true });
+    assert.deepEqual(
+      JSON.parse(
+        readFileSync(
+          join(output, "native-text-entry-diagnostics.json"),
+          "utf8",
+        ),
+      ),
+      {
+        schemaVersion: 1,
+        events: [{ phase: "commit-start", expectedLength: 22 }],
+      },
+    );
+  } finally {
+    if (previous === undefined) delete process.env.CUBBY_NATIVE_DIAGNOSTICS_DIR;
+    else process.env.CUBBY_NATIVE_DIAGNOSTICS_DIR = previous;
+    rmSync(daemon, { recursive: true, force: true });
+    rmSync(output, { recursive: true, force: true });
   }
 });
