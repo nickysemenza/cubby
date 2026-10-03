@@ -1,11 +1,13 @@
+import { productWithFoodMcpEntityOut } from "@cubby/schemas/product";
 import type { NutrientSummary } from "@cubby/usda";
 import { describe, expect, it } from "vitest";
 
 import { buildNutritionDisplay } from "./nutrition-display";
 
-const usda = (nutrientSummary: NutrientSummary[]) => ({
-  nutritionInfo: { nutrientSummary, nutrientsPer100: {} },
-});
+const usda = (
+  nutrientsPer100: Record<string, number>,
+  nutrientSummary: NutrientSummary[] = [],
+) => ({ nutritionInfo: { nutrientSummary, nutrientsPer100 } });
 
 // Failure modes: a label silently losing to USDA (or the reverse) on one
 // platform; a per-serving label labelled "Per 100 g"; an inferred zero shown
@@ -16,7 +18,7 @@ describe("product nutrition display", () => {
     expect(
       buildNutritionDisplay({
         labelNutrition: null,
-        food: usda([]),
+        food: usda({}),
       }),
     ).toMatchObject({ source: "none", rows: [] });
     expect(
@@ -37,7 +39,7 @@ describe("product nutrition display", () => {
         inferenceEvidence: "Panel lists no fiber",
         source: "Synthetic package label",
       },
-      food: usda([{ name: "Protein", amount: 9, unit: "G" }]),
+      food: usda({ "203": 9 }),
     });
     expect(display).toEqual({
       source: "label",
@@ -46,32 +48,61 @@ describe("product nutrition display", () => {
       sourceNote: "Synthetic package label",
       inferenceEvidence: "Panel lists no fiber",
       rows: [
-        { key: "protein", label: "Protein (g)", value: "3" },
-        { key: "sodium", label: "Sodium (mg)", value: "210.5" },
-        { key: "fiber", label: "Fiber (g)", value: "0 · inferred from label" },
+        { key: "protein", label: "Protein (g)", amount: 3, inferred: false },
+        { key: "sodium", label: "Sodium (mg)", amount: 210.5, inferred: false },
+        { key: "fiber", label: "Fiber (g)", amount: 0, inferred: true },
       ],
     });
   });
 
-  it("falls back to the USDA nutrient summary per 100 g", () => {
-    expect(
-      buildNutritionDisplay({
-        labelNutrition: null,
-        food: usda([
-          { name: "Protein", amount: 12.34567, unit: "G" },
-          { name: "Energy", amount: 250, unit: "KCAL" },
-        ]),
+  it("falls back to the tier-1 per-100 g figures, not the full USDA table", () => {
+    const fullTable: NutrientSummary[] = Array.from(
+      { length: 115 },
+      (_, i) => ({
+        name: `Nutrient ${i}`,
+        amount: i,
+        unit: "G",
       }),
-    ).toEqual({
+    );
+    const display = buildNutritionDisplay({
+      labelNutrition: null,
+      food: usda({ "203": 12.34567, "208": 1046 }, fullTable),
+    });
+    expect(display).toEqual({
       source: "usda",
       title: "From USDA",
       basis: "Per 100 g",
       sourceNote: null,
       inferenceEvidence: null,
       rows: [
-        { key: "Protein", label: "Protein (G)", value: "12.346" },
-        { key: "Energy", label: "Energy (KCAL)", value: "250" },
+        {
+          key: "protein",
+          label: "Protein (g)",
+          amount: 12.346,
+          inferred: false,
+        },
+        {
+          key: "kcal",
+          label: "Calories (kcal)",
+          amount: 1046,
+          inferred: false,
+        },
       ],
     });
+  });
+
+  it("does not claim USDA when only the untracked summary has data", () => {
+    expect(
+      buildNutritionDisplay({
+        labelNutrition: null,
+        food: usda({}, [{ name: "Zinc", amount: 1, unit: "MG" }]),
+      }).source,
+    ).toBe("none");
+  });
+
+  it("the MCP product projection carries no full nutrient table", () => {
+    const nutritionInfo =
+      productWithFoodMcpEntityOut.shape.food.unwrap().shape.nutritionInfo.shape;
+    expect(nutritionInfo).not.toHaveProperty("nutrientSummary");
   });
 });

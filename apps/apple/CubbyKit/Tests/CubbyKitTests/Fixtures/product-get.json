@@ -16,7 +16,7 @@
     "basis": "Per serving · 30 g",
     "sourceNote": "Synthetic package label",
     "inferenceEvidence": null,
-    "rows": [{ "key": "protein", "label": "Protein (g)", "value": "3" }]
+    "rows": [{ "key": "protein", "label": "Protein (g)", "amount": 3, "inferred": false }]
   },
   "aliases": [],
   "tags": [],

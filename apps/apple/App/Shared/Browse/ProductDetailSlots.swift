@@ -15,7 +15,13 @@ struct ProductNutritionDetailSlot: View {
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                     Text(display.title).font(.headline)
                     Text(display.basis).font(.caption).foregroundStyle(.secondary)
-                    ForEach(display.rows, id: \.key) { LabeledContent($0.label, value: $0.value) }
+                    ForEach(display.rows, id: \.key) { nutrient in
+                        LabeledContent(
+                            nutrient.label,
+                            value: nutrient.inferred
+                                ? "0 · inferred from label"
+                                : nutrient.amount.formatted(.number.precision(.fractionLength(0...3))))
+                    }
                     if let evidence = display.inferenceEvidence {
                         Text(evidence).font(.caption).foregroundStyle(.secondary)
                     }

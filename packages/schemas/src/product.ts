@@ -822,8 +822,17 @@ export const productNutritionDisplay = z.object({
   sourceNote: z.string().nullable(),
   /** Label evidence for any inferred-zero rows; null when there are none. */
   inferenceEvidence: z.string().nullable(),
+  /**
+   * Numbers, not strings, so each client formats with its own locale;
+   * `inferred` marks a zero the label implies rather than states.
+   */
   rows: z.array(
-    z.object({ key: z.string(), label: z.string(), value: z.string() }),
+    z.object({
+      key: z.string(),
+      label: z.string(),
+      amount: z.number(),
+      inferred: z.boolean(),
+    }),
   ),
 });
 export type ProductNutritionDisplay = z.infer<typeof productNutritionDisplay>;
