@@ -75,7 +75,11 @@ export const fingerprintSql = (
   )})`;
 };
 
-const activeExceptionSql = (
+/**
+ * An exception row whose stored fingerprint still matches the live evidence;
+ * `null` when the check cannot be excepted. A stale exception is not active.
+ */
+export const activeExceptionSql = (
   entity: ScoredEntity,
   check: DataCheck,
   t: ScoredTable,

@@ -5,26 +5,13 @@ import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
  */
 import type { ProductCategory } from "@cubby/schemas/product";
 import { isCollectionTag } from "@cubby/shared/collection-tag";
-import {
-  and,
-  arrayOverlaps,
-  eq,
-  isNull,
-  ne,
-  notExists,
-  sql,
-} from "drizzle-orm";
+import { and, arrayOverlaps, eq, isNull, ne, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import {
-  entityAttachment,
-  entityExternalId,
-  image,
-  inventoryEntry,
-  product,
-} from "~/server/db/schema";
+import { entityExternalId, inventoryEntry, product } from "~/server/db/schema";
+import { activeExceptionSql } from "~/server/repo/data-quality/sql";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { displayableImageWhere } from "~/server/repo/image-displayability";
+import { productHasDisplayableImageSql } from "~/server/repo/image-displayability";
 import { categorySummarySql } from "~/server/repo/product-category-sql";
 
 import { loadPrimaryGtins, productHasAnyGtin } from "./gtin";
@@ -62,6 +49,11 @@ export const findDuplicateUniqueProducts = async (
   });
 };
 
+// `activeExceptionSql` is null for a check that cannot be excepted; a
+// `product_image` exception is declared, so the COALESCE only satisfies types.
+const noActiveImageException = (): SQL =>
+  sql`NOT COALESCE(${activeExceptionSql("product", "product_image", product)}, false)`;
+
 export const findProductsWithNoImages = async (
   db: Database,
   { excludeIngredients = false } = {},
@@ -81,8 +73,8 @@ export const findProductsWithNoImages = async (
     conditions.push(isNull(product.ingredientId));
   }
 
-  // PDF manuals live in the same Image table/join — count only displayable
-  // (non-PDF) attachments so a manual-only product still reads as "no images".
+  // A product whose recorded `product_image` exception is still active has
+  // a documented dead end; the backfill must not re-research it every sweep.
   const results = await dbClient
     .select({
       id: product.id,
@@ -91,21 +83,13 @@ export const findProductsWithNoImages = async (
       manufacturer: product.manufacturer,
     })
     .from(product)
-    .leftJoin(
-      entityAttachment,
+    .where(
       and(
-        eq(entityAttachment.entityId, product.id),
-        notDeleted(entityAttachment),
-        sql`${entityAttachment.purpose} IS DISTINCT FROM 'label'`,
+        ...conditions,
+        sql`NOT ${productHasDisplayableImageSql(product.id)}`,
+        noActiveImageException(),
       ),
-    )
-    .leftJoin(
-      image,
-      and(eq(image.id, entityAttachment.imageId), displayableImageWhere),
-    )
-    .where(and(...conditions))
-    .groupBy(product.id)
-    .having(sql`count(${image.id}) = 0`);
+    );
 
   // The barcode is what the image backfill looks the product up BY, so it is
   // carried on the row rather than re-fetched per candidate downstream.
@@ -137,20 +121,8 @@ export const countProductsWithNoImagesWithGtin = async (
         notDeleted(product),
         isNull(product.ingredientId),
         productHasAnyGtin(),
-        notExists(
-          dbClient
-            .select({ one: sql`1` })
-            .from(entityAttachment)
-            .innerJoin(image, eq(image.id, entityAttachment.imageId))
-            .where(
-              and(
-                eq(entityAttachment.entityId, product.id),
-                notDeleted(entityAttachment),
-                sql`${entityAttachment.purpose} IS DISTINCT FROM 'label'`,
-                displayableImageWhere,
-              ),
-            ),
-        ),
+        sql`NOT ${productHasDisplayableImageSql(product.id)}`,
+        noActiveImageException(),
       ),
     );
   return row?.count ?? 0;

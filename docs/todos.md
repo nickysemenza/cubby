@@ -520,13 +520,12 @@ See also the image operational passes at the end of this file.
   Flue supports modern version negotiation; its current MCP client defaults
   to legacy requests without exposing a negotiation option.
 
-- 🤔 **Remove duplicate record checks and expose useful exceptions.** Coverage
-  Problems already consume declared checks. Identify demonstrated duplicate
-  per-record predicates and move each onto its existing declaration/binding;
-  keep operational Problems and aggregate rules, including subtree budgets,
-  explicit. Durable evidence-bound exceptions already work through entity
-  declarations; identify only missing surfaces needed by real workflows, not
-  a second exception system, global weight tuning, or a universal ignore
+- 🟢 **Record evidence-bound exceptions from web and native.** Duplicate
+  per-record predicates now use their declared bindings, and every exemptible
+  check has reasons. Recording or clearing an exception still needs MCP: add
+  one generic accept/clear action with the check's reason list to the field
+  explanation on web and native, reusing `dataQuality.setException`. Keep
+  operational Problems and aggregate rules explicit; no universal ignore
   control. Contract: [data quality](entities.md#data-quality).
 
 - 🟢 **Declare non-entity child tables in the manifest (`children:`)** so

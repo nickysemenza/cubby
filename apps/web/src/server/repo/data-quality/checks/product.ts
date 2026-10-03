@@ -2,7 +2,7 @@ import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 
 import { product } from "~/server/db/schema";
-import { displayableImageRawSql } from "~/server/repo/image-displayability";
+import { productHasDisplayableImageSql } from "~/server/repo/image-displayability";
 import { categoryFeatureSql } from "~/server/repo/product-category-sql";
 import { orphanedProductCondition } from "~/server/repo/product/orphan-condition";
 import { derivedPriceFilterSql } from "~/server/repo/product/pricing";
@@ -42,17 +42,10 @@ const hasStock = (t: Product) => sql`EXISTS (
 /** Everything except the image and price checks is in scope on spend OR stock. */
 const inScope = (t: Product) => sql`(${hasExpenses(t)} OR ${hasInventory(t)})`;
 
-// Must agree with `productIdsWithImages` (product/crud.ts), findProductsWithNoImages
-// (product/analytics.ts) and the problems detector: ProductImage is soft-deletable
-// separately from Image, and a PDF manual is not a photo. Joining ProductImage
-// alone reads `true` for a product whose only attachment is a manual.
-const hasDisplayableImage = (t: Product) => sql`EXISTS (
-  SELECT 1 FROM "EntityAttachment" dq_pimg
-  JOIN "Image" dq_img ON dq_img."id" = dq_pimg."imageId" AND dq_img."deletedAt" IS NULL
-  WHERE dq_pimg."entityId" = ${t.id}
-    AND dq_pimg."deletedAt" IS NULL AND dq_pimg."purpose" IS DISTINCT FROM 'label'
-    AND ${sql.raw(displayableImageRawSql("dq_img"))}
-)`;
+// The shared definition (live attachment, live Image, not a `label`, not a PDF
+// manual) also drives the image presence filter, the backfill selections and
+// the UPC-gap detector.
+const hasDisplayableImage = (t: Product) => productHasDisplayableImageSql(t.id);
 
 const hasAmazonPurchase = (t: Product) => sql`EXISTS (
   SELECT 1
