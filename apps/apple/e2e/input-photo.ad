@@ -1,7 +1,7 @@
 context platform=ios timeout=600000
 
 open com.nickysemenza.cubby
-# Verify the previous phase before the fresh test runner starts navigating.
+# Verify the previous phase in the shared prepared runner session.
 wait text "Transactions recorded" 240000
 back
 back

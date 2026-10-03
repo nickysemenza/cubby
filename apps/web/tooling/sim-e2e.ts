@@ -1190,6 +1190,9 @@ function retainRunDiagnostics(failure: Error | undefined): string[] {
     "fixture-app-settings.json",
     "input-statement.xml",
     "input-photo.xml",
+    "input-statement.json",
+    "input-photo.json",
+    "input-photo-approval.json",
   ]) {
     const evidence = path.join(artifacts, name);
     if (!existsSync(evidence)) continue;
@@ -1411,9 +1414,25 @@ async function main(): Promise<void> {
   let restoreEnvironment = () => {};
   let productId = "";
   let disposableSimulatorID: string | undefined;
+  let inputDriverSessionArgs: string[] | undefined;
   let failure: Error | undefined;
+  const closeInputDriver = async (): Promise<Error[]> => {
+    if (!inputDriverSessionArgs) return [];
+    try {
+      await run(
+        "pnpm",
+        ["exec", "agent-device", "close", ...inputDriverSessionArgs],
+        repoRoot,
+        undefined,
+        true,
+      );
+      return [];
+    } catch (error) {
+      return [error instanceof Error ? error : new Error(String(error))];
+    }
+  };
   const cleanup = async (): Promise<Error[]> => {
-    const errors: Error[] = [];
+    const errors = await closeInputDriver();
     try {
       await suggestionPeer?.close();
     } catch (error) {
@@ -1786,6 +1805,8 @@ async function main(): Promise<void> {
       try {
         await install();
         const driverStarted = performance.now();
+        if (inputJourney)
+          inputDriverSessionArgs = [...common, "--session", session];
         try {
           await run("pnpm", [
             "exec",
@@ -1794,6 +1815,7 @@ async function main(): Promise<void> {
             "ios-runner",
             "--debug",
             ...common,
+            ...(inputJourney ? ["--session", session] : []),
             "--timeout",
             "240000",
           ]);
@@ -1823,7 +1845,8 @@ async function main(): Promise<void> {
               repoRoot,
               artifacts,
               deviceID: device.udid,
-              common,
+              session,
+              common: inputDriverSessionArgs ?? common,
               run: (command, args, stdoutFile) =>
                 run(command, args, repoRoot, stdoutFile),
             });
