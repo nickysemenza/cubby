@@ -25,6 +25,8 @@ Keep the maintenance record, product identity, and inventory receipt separate.
 5. Receive or move Inventory only when the user explicitly asks to inventory or
    place the durable. Read the Product and Location first, avoid a duplicate,
    and use `1 each` only when the evidence establishes one item.
+   Record a known earlier acquisition with unknown cost and date as an Expense
+   with `cost: null` and no `date`; that adds to the ledger, not to Inventory.
 
 Read back the affected Tasks and any Product, Expense, or Inventory row in
 batched id reads. Confirm the date, status, Project, durable subject, quantity,

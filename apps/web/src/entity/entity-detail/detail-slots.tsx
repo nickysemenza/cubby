@@ -226,6 +226,11 @@ export const detailSlots = {
         default: m.PurchaseProjectAllocation,
       })),
     ),
+    receiving: slot(() =>
+      import("~/app/purchases/receive-purchase-section").then((m) => ({
+        default: m.PurchaseReceiving,
+      })),
+    ),
     reconciliation: slot(() =>
       import("~/app/purchases/slots").then((m) => ({
         default: m.PurchaseReconciliation,

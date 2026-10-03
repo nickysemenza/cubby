@@ -36,6 +36,49 @@ describe("loadProductQuantityLedgers", () => {
   const ledgerFor = async (productId: ProductId) =>
     (await loadProductQuantityLedgers(ctx.db, [productId])).get(productId);
 
+  // A discard/sale whose earlier acquisition was never recorded drives the
+  // expected quantity negative. Recording the historical acquisition (known
+  // quantity, unknown cost, unknown date) corrects it — and only the ledger
+  // moves: no InventoryEntry is created as a side effect.
+  it("corrects a negative expected quantity with an unknown-cost undated acquisition", async () => {
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Historical Hinge" }),
+      ctx.actor,
+    );
+    await seed({
+      name: "sold 2",
+      cost: -10,
+      date: "2026-02-01",
+      productId: prod.id,
+      productQuantity: -2,
+    });
+    expect(await ledgerFor(prod.entityId)).toMatchObject({
+      acquiredUnits: 0,
+      exitedUnits: 2,
+      expectedQuantity: -2,
+    });
+
+    await seed({
+      name: "historical acquisition",
+      cost: null,
+      date: null,
+      productId: prod.id,
+      productQuantity: 5,
+    });
+    expect(await ledgerFor(prod.entityId)).toMatchObject({
+      acquiredUnits: 5,
+      exitedUnits: 2,
+      expectedQuantity: 3,
+      unknownAcquisitionLines: 0,
+      locationCount: 0,
+    });
+    const inventory = await getDb(ctx.db).execute(
+      sql`SELECT count(*)::int AS n FROM "InventoryEntry" WHERE "productId" = ${prod.entityId}`,
+    );
+    expect(inventory.rows[0]).toMatchObject({ n: 0 });
+  });
+
   it("nets acquisitions against every kind of exit", async () => {
     const prod = await createProduct(
       ctx.db,

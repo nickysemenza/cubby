@@ -13,6 +13,7 @@ source-backed batch report.
 
 Use supplied `PRD-` identifiers regardless of inventory. Enrichment never
 decides whether an import line becomes a Product and never receives inventory.
+Enrichment never invents a price or date; a historical acquisition of unknown cost is an Expense with `cost: null` and no `date`.
 For a backlog, `entity_read.list product` with `sort=dataQuality` ascending puts the
 weakest identity first (heavier identity checks — manufacturer, external ID —
 outweigh lighter ones), in pages of 25. Narrow to a specific gap with
@@ -63,6 +64,10 @@ other side (a photo Product for a purchase-created one, or vice versa) per
 [product identity](references/product-identity.md)'s either-side-first
 contract; propose it with `product_enrichment.propose_match` rather than enriching two
 records that should converge into one.
+
+Set `kind` (`consumable` or `durable`) only when the published product or the
+order context makes it clear; never guess, and leave it unset when uncertain. It
+only informs project suggestions and is independent of `stockTracked`.
 
 Use `product_enrichment.patch_external_ids` for exact slot changes and preserve unrelated
 IDs; use a full `entity.update product` external-ID set only when deliberately

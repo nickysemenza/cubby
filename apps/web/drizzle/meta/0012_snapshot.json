@@ -1,5 +1,5 @@
 {
-  "id": "f85ed054-ceda-4690-b0d4-d6822665c76b",
+  "id": "513037ed-c5a7-45f4-96a6-a403797796bd",
   "prevId": "05a26579-74cb-443f-9e74-b095d9e0cbd4",
   "version": "7",
   "dialect": "postgresql",
@@ -1749,11 +1749,11 @@
       "checkConstraints": {
         "EntityExternalId_kind_check": {
           "name": "EntityExternalId_kind_check",
-          "value": "(\"entityKind\", \"kind\") IN (('product', 'asin'), ('product', 'retailer_sku'), ('product', 'internet_number'), ('product', 'item_number'), ('product', 'catalog_number'), ('product', 'manufacturer_part'), ('product', 'gtin_14'), ('product', 'legacy_unspecified'), ('financialTransaction', 'settlement_ref'), ('expense', 'page'), ('task', 'page'), ('project', 'page'), ('recipe', 'page'), ('project', 'folder'))"
+          "value": "(\"entityKind\", \"kind\") IN (('product', 'asin'), ('product', 'retailer_sku'), ('product', 'internet_number'), ('product', 'item_number'), ('product', 'catalog_number'), ('product', 'gtin_14'), ('product', 'legacy_unspecified'), ('financialTransaction', 'settlement_ref'), ('expense', 'page'), ('task', 'page'), ('project', 'page'), ('recipe', 'page'), ('project', 'folder'))"
         },
         "EntityExternalId_primary_check": {
           "name": "EntityExternalId_primary_check",
-          "value": "CASE WHEN \"kind\" IN ('asin', 'retailer_sku', 'internet_number', 'item_number', 'catalog_number', 'manufacturer_part', 'gtin_14', 'legacy_unspecified', 'page', 'folder') THEN \"isPrimary\" IS NOT NULL ELSE \"isPrimary\" IS NULL END"
+          "value": "CASE WHEN \"kind\" IN ('asin', 'retailer_sku', 'internet_number', 'item_number', 'catalog_number', 'gtin_14', 'legacy_unspecified', 'page', 'folder') THEN \"isPrimary\" IS NOT NULL ELSE \"isPrimary\" IS NULL END"
         },
         "EntityExternalId_gtin_check": {
           "name": "EntityExternalId_gtin_check",
@@ -12670,6 +12670,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "labelNutrition": {
           "name": "labelNutrition",
           "type": "jsonb",
@@ -12918,7 +12924,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "Product_kind_check": {
+          "name": "Product_kind_check",
+          "value": "\"Product\".\"kind\" IS NULL OR \"Product\".\"kind\" IN ('consumable', 'durable')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.ProductCategory": {

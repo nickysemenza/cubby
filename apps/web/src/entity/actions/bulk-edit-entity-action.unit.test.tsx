@@ -142,6 +142,24 @@ describe("BulkEditDialogBody", () => {
     expect(screen.getByRole("button", { name: "Date unknown" })).toBeDisabled();
   });
 
+  it("offers unknown dates when every selected expense is free or of unknown cost", () => {
+    render(
+      <BulkEditDialogBody
+        entity="expense"
+        items={[
+          { id: "EXP-ABCD", name: "Free supplies", cost: 0 },
+          { id: "EXP-BCDE", name: "Historical supplies", cost: null },
+        ]}
+        fieldKeys={["date"]}
+        onOpenChange={vi.fn()}
+        onSubmit={vi.fn()}
+        isPending={false}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(screen.getByRole("button", { name: "Date unknown" })).toBeEnabled();
+  });
+
   // One dirtied field, several untouched siblings, across entities with
   // different bulk-update rosters (task's five vs. planting's three) — the
   // payload must carry exactly the touched key either way.

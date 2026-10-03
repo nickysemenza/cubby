@@ -118,7 +118,7 @@ describe("attentionEvidence", () => {
   it("says so rather than showing nothing when an expense has no date", () => {
     expect(
       attentionEvidence(item("unclassified_expense", { date: null })),
-    ).toBe("No date · no trade, no cost");
+    ).toBe("Date unknown · no trade, no cost");
   });
 
   it("never emits a bare ISO date", () => {

@@ -1,8 +1,12 @@
+import { scoredEntities } from "@cubby/schemas/data-quality";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { type SQL, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
+import { unwrapDb } from "~/server/repo/database-helpers";
 import { createExpense } from "~/server/repo/expense/crud";
 import { productList } from "~/server/repo/product/crud";
 import { purchaseList } from "~/server/repo/purchase";
@@ -17,6 +21,8 @@ import {
 
 import { clearDataException, setDataException } from "./exceptions";
 import { loadDataQualities } from "./hydrate";
+import type { ScoredTable } from "./registry";
+import { entryFor, scoreSql, statusSql } from "./sql";
 
 const page = { pageIndex: 0, pageSize: 50 };
 
@@ -229,5 +235,43 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(quality?.gaps.map((gap) => gap.check)).not.toContain(
       "product_image",
     );
+  });
+});
+
+/**
+ * Postgres has no common-subexpression elimination: every inlined copy of a
+ * correlated policy subquery is planned separately, and planner memory grows
+ * with each copy until the statement ends. The FinancialTransaction score once
+ * planned ~0.4 GB by itself (its list rows and hydration statements ~0.85 GB
+ * together), which OOM-killed the 2 GB test PostgreSQL under four concurrent
+ * list-smoke probes and costs the same on every production list request.
+ * Planning cost is independent of row count, so an empty table measures it.
+ */
+describe("data quality: score and status SQL planning", () => {
+  const ctx = withTestDb();
+  const PLANNER_BUDGET_KB = 128 * 1024;
+  const explained = z.tuple([
+    z.object({ Planning: z.object({ "Memory Used": z.number() }) }),
+  ]);
+
+  it("plans every scored entity's score and status within the budget", async () => {
+    const plannerKb = async (expression: SQL, t: ScoredTable) => {
+      const result = await unwrapDb(ctx.db).execute(
+        sql`EXPLAIN (MEMORY, FORMAT JSON) SELECT ${expression} FROM ${t}`,
+      );
+      return explained.parse(result.rows[0]?.["QUERY PLAN"])[0].Planning[
+        "Memory Used"
+      ];
+    };
+    const used: Record<string, number> = {};
+    for (const entity of scoredEntities) {
+      const t = entryFor(entity).table;
+      used[`${entity} score`] = await plannerKb(scoreSql(entity, t), t);
+      used[`${entity} status`] = await plannerKb(statusSql(entity, t), t);
+    }
+    // Names each statement over budget with its planner kB.
+    expect(
+      Object.entries(used).filter(([, kb]) => kb > PLANNER_BUDGET_KB),
+    ).toEqual([]);
   });
 });

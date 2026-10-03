@@ -87,7 +87,10 @@ import {
   learnPurchaseProductExternalId,
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
-import { loadOrderMailImportEvidence } from "./gmail/import";
+import {
+  loadOrderMailImportEvidence,
+  markOrderMailCandidateImported,
+} from "./gmail/import";
 import {
   attachPendingOrderMailEvidence,
   type OrderMailEvidencePorts,
@@ -737,7 +740,9 @@ export async function commitPurchaseImport(
           scope.public.runId,
           input.prepareOperationId,
         );
-        await loadOrderMailImportEvidence(transactionDb, scope.public.runId);
+        await loadOrderMailImportEvidence(transactionDb, scope.public.runId, {
+          allowComplete: true,
+        });
         const defaultProjectId = input.defaultProjectId
           ? await resolveOrThrow(
               transactionDb,
@@ -914,6 +919,14 @@ export async function commitPurchaseImport(
               },
               mailEvidencePorts,
             );
+            // A selected-mail run records this order's outcome; every other
+            // run has no pending mail candidate, so this is a no-op there.
+            if (order.sourceKind === "mail_message")
+              await markOrderMailCandidateImported(
+                transactionDb,
+                scope.public.runId,
+                extraction.candidate.orderId,
+              );
           }
           items.push({
             stableOrderId: order.stableOrderId,

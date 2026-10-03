@@ -1634,10 +1634,10 @@ const DECLARED_SECTIONS = [
           {[
             item.expenseDate
               ? `Expense ${formatCalendarDay(item.expenseDate, "dateShort")}`
-              : "Expense undated",
+              : "Expense date unknown",
             item.purchaseDate
               ? `purchase ${formatCalendarDay(item.purchaseDate, "dateShort")}`
-              : "purchase undated",
+              : "purchase date unknown",
           ].join(" · ")}
         </div>,
       ],

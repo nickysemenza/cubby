@@ -68,6 +68,7 @@ export function slimProduct<TInput>(row: TInput) {
     name: product.name,
     manufacturer: product.manufacturer,
     model: product.model,
+    kind: product.kind ?? null,
     notes: product.notes,
     primaryGtin: product.primaryGtin,
     category: product.category,

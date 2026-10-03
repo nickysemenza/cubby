@@ -57,7 +57,7 @@ export function attentionEvidence(item: ProjectAttentionItem): string {
     .with(
       { type: "unclassified_expense" },
       ({ facts }) =>
-        `${facts.date ? `Dated ${d(facts.date)}` : "No date"} · no trade, no cost`,
+        `${facts.date ? `Dated ${d(facts.date)}` : "Date unknown"} · no trade, no cost`,
     )
     .with({ type: "date_window_drift" }, ({ facts }) =>
       facts.side === "start"

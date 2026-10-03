@@ -56,13 +56,6 @@ history is the archive. Permanent product constraints live in the
   analysis measurably slows while the sweep runs: add a `PhotoVisionGate`
   actor both acquire, with the sheet yielding the sweep.
 
-- 🟢 **Receiving an already-photographed purchase.** Keep import stock-neutral.
-  Surface existing photo inventory and pending Product matches before offering
-  receive; resolve identity first, then explicitly confirm whether additional
-  units arrived and their quantity. Never treat a merge or later purchase
-  evidence as another receipt of already-counted stock. Contract:
-  [product identity](product-identity-journey.md).
-
 - ⏳ **Product match queue recall and cost.** Each unfocused queue read now
   logs `queue read coverage`: vector lookups, unseeded photo Products, and
   photo Products with no candidate at all, split by whether they were seeded.
@@ -123,12 +116,12 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
-- 🟢 **Manual purchase lifecycle.** Account-sync runs handle several listed
-  orders, defer one ambiguous order for review without blocking the rest, and
-  carry unfinished orders into a restart. Remaining: start a run from a
-  selected set of mail or charge candidates (today mail is one run per message
-  and hunts join the account run), with each candidate's terminal outcome
-  recorded. Reuse the bounded prepare/commit and approval paths in
+- 🟢 **Select statement charges for one run.** Account-sync and selected
+  order-mail runs record each order's terminal outcome, defer one ambiguous
+  order without blocking the rest, and carry unfinished orders into a restart.
+  Charge hunts still join the next account run as a queue: let a member choose
+  a subset of charge candidates and record each hunt's outcome per run. Reuse
+  the bounded prepare/commit and approval paths in
   [purchase import](../.claude/skills/purchase-import/SKILL.md).
 
 - ⏳ **Conditional purchase-import browser extension.** Promote only if the
@@ -238,26 +231,6 @@ See also the image operational passes at the end of this file.
 ---
 
 ## Inventory, products & locations
-
-- 🧱 **Consumable vs durable as a Product attribute.** Add optional
-  `Product.kind: consumable | durable`, independent of the choice to count
-  stock (`stockTracked`). Use kind for useful worklist filters and contextual
-  import project suggestions: routine supplies suggest Household, project
-  materials use order/project evidence, and explicit choices win. Leave kind
-  unset when uncertain, with no completeness penalty or classification wizard;
-  do not rewrite existing Expenses. Plan schema and generated-client
-  compatibility before adding the field.
-
-- 🧱 **Record historical acquisitions with unknown cost and date.** Record a
-  known acquired quantity through the existing Expense path with `cost: null`
-  and an absent date when unknown; never invent quantity, price, or date, and
-  never receive stock as a side effect. The current date contract allows an
-  absent date only for zero cost: plan its cross-client compatibility change
-  and distinguish undated history in date-based reports
-  (`packages/schemas/src/expense-fields.ts`,
-  `repo/product/quantity-ledger.ts`). This
-  addresses negative expected quantities from exits whose earlier acquisition
-  is missing; filling known acquisition quantities remains an operational pass.
 
 ---
 

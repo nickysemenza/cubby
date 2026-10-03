@@ -30,12 +30,14 @@ runs:
         fi
         wait
         docker network create cubby-test
+        # jit=off matches production, which has no JIT provider; see the same
+        # setting in scripts/test-services.ts for the measured failure.
         docker run -d --name postgres --network cubby-test -p 5432:5432 \
           -e POSTGRES_USER=postgres -e POSTGRES_DB=cubby \
           -e POSTGRES_HOST_AUTH_METHOD=trust \
           --health-cmd "pg_isready -U postgres" --health-interval 2s \
           --health-timeout 5s --health-retries 10 --health-start-period 3s \
-          pgvector/pgvector:pg17
+          pgvector/pgvector:pg17 postgres -c jit=off
         if [ "$START_INTEGRESQL" = "true" ]; then
           docker run -d --name integresql --network cubby-test -p 5000:5000 \
             -e PGHOST=postgres -e PGUSER=postgres -e PGPASSWORD=password \
