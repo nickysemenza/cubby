@@ -280,12 +280,6 @@ See also the image operational passes at the end of this file.
   addresses negative expected quantities from exits whose earlier acquisition
   is missing; filling known acquisition quantities remains an operational pass.
 
-- 🟢 **Retire unreachable external-ID collision paths.** Import and
-  enrichment now propose colliding pairs in the Product match queue. The live
-  unique index makes `duplicate_external_id` and the `collision` result of
-  `product.externalIdCollisions` unreachable; remove them rather than keep a
-  second path.
-
 ---
 
 ## Tasks, projects & garden
