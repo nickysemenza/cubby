@@ -63,12 +63,12 @@ history is the archive. Permanent product constraints live in the
   evidence as another receipt of already-counted stock. Contract:
   [product identity](product-identity-journey.md).
 
-- 🤔 **Product match queue recall and cost.** A full queue read makes up to 60
-  vector lookups (top 20 neighbours each), and a photo↔purchase pair is missed
-  when the purchase Product is outside that neighbourhood and shares no name
-  token. Measure misses on real wardrobe imports before widening, caching, or
-  moving detection to write time
-  (`apps/web/src/server/services/product-match.service.ts`).
+- ⏳ **Product match queue recall and cost.** Each unfocused queue read now
+  logs `queue read coverage`: vector lookups, unseeded photo Products, and
+  photo Products with no candidate at all, split by whether they were seeded.
+  Promote widening, caching, or write-time detection only when those logs from
+  a real wardrobe import show unseeded photos without candidates that a person
+  later matched (`apps/web/src/server/services/product-match.service.ts`).
 
 - 🤔 **Reproduce macOS photo-match export inside the sandbox.** Capture the
   error chain and sandbox denial for Downloads, Desktop, and an iCloud
