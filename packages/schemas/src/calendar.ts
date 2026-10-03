@@ -222,6 +222,8 @@ export const calendarDaySummary = z.object({
   expenseCount: z.number().int(),
   mealCount: z.number().int(),
   projectCount: z.number().int(),
+  /** Every item (any kind, plantings included) whose span covers this day. */
+  itemIds: z.array(z.string()),
 });
 export type CalendarDaySummary = z.infer<typeof calendarDaySummary>;
 

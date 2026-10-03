@@ -105,6 +105,18 @@ private extension Array where Element: Hashable {
 
 // MARK: - meal.calendar
 
+/// A month of meals. `dayItemIDs` is the server's `days[day].itemIds` (which items cover each
+/// day), narrowed to the filtered set — the client never compares spans itself.
+private struct MealCalendarData {
+    let items: [JSONValue]
+    let dayItemIDs: [String: [String]]
+
+    func meals(on day: String) -> [JSONValue] {
+        let ids = Set(dayItemIDs[day] ?? [])
+        return items.filter { $0["id"]?.stringValue.map(ids.contains) ?? false }
+    }
+}
+
 struct MealCalendarListView: View {
     let client: CubbyClient
     let filters: EntityFilterState
@@ -117,14 +129,14 @@ struct MealCalendarListView: View {
         SpecialistLoadView(
             loadingLabel: "Loading calendar", filters: filters, reloadKey: month,
             fetch: { filters in try await Self.meals(client: client, month: month, filters: filters) }
-        ) { items, _ in
+        ) { data, _ in
             ScrollView {
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                    monthGrid(items)
+                    monthGrid(data)
                     Panel {
                         Text("\(selectedDay) \(month.formatted(.dateTime.month(.wide)))")
                             .font(.fieldGuideTitle)
-                        let meals = items.filter { contains($0, on: selectedDay) }
+                        let meals = data.meals(on: dayKey(selectedDay))
                         if meals.isEmpty {
                             Text("No meals planned").foregroundStyle(.secondary)
                         }
@@ -153,24 +165,25 @@ struct MealCalendarListView: View {
 
     private static func meals(
         client: CubbyClient, month: Date, filters: EntityFilterState
-    ) async throws -> [JSONValue] {
+    ) async throws -> MealCalendarData {
         let end = Calendar.current.date(byAdding: .month, value: 1, to: month) ?? month
-        let response = try await client.mealCalendar(from: isoDay(month), to: isoDay(end))
-        let monthItems = wire(response)["items"]?.arrayValue ?? []
-        if filters.isEmpty { return monthItems }
+        let response = wire(try await client.mealCalendar(from: isoDay(month), to: isoDay(end)))
+        let items = response["items"]?.arrayValue ?? []
+        let days = (response["days"]?.objectValue ?? [:]).mapValues {
+            $0["itemIds"]?.arrayValue?.compactMap(\.stringValue) ?? []
+        }
+        if filters.isEmpty { return MealCalendarData(items: items, dayItemIDs: days) }
         let matched = try await client.listAllIDs(EntityCatalog[.meal], filters: filters)
-        return monthItems.filter { $0["id"]?.stringValue.map(matched.contains) ?? false }
+        return MealCalendarData(
+            items: items.filter { $0["id"]?.stringValue.map(matched.contains) ?? false },
+            dayItemIDs: days.mapValues { $0.filter(matched.contains) })
     }
 
-    private func contains(_ item: JSONValue, on day: Int) -> Bool {
-        let date = isoDay(Calendar.current.date(byAdding: .day, value: day - 1, to: month) ?? month)
-        guard let start = item["startDate"]?.stringValue,
-            let end = item["endDateExclusive"]?.stringValue
-        else { return false }
-        return start <= date && date < end
+    private func dayKey(_ day: Int) -> String {
+        isoDay(Calendar.current.date(byAdding: .day, value: day - 1, to: month) ?? month)
     }
 
-    private func monthGrid(_ items: [JSONValue]) -> some View {
+    private func monthGrid(_ data: MealCalendarData) -> some View {
         let calendar = Calendar.current
         let count = calendar.range(of: .day, in: .month, for: month)?.count ?? 30
         let leading = (calendar.component(.weekday, from: month) - calendar.firstWeekday + 7) % 7
@@ -195,7 +208,7 @@ struct MealCalendarListView: View {
                         Color.clear.frame(height: 44)
                     } else {
                         let day = slot - leading + 1
-                        let number = items.filter { contains($0, on: day) }.count
+                        let number = data.meals(on: dayKey(day)).count
                         Button {
                             selectedDay = day
                         } label: {

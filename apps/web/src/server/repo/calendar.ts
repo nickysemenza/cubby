@@ -74,6 +74,7 @@ const emptyDaySummary = (): CalendarDaySummary => ({
   expenseCount: 0,
   mealCount: 0,
   projectCount: 0,
+  itemIds: [],
 });
 
 const itemOrder = {
@@ -454,6 +455,7 @@ const summarizeCalendarDays = (
     ) {
       const summary = days[day];
       if (!summary) continue;
+      summary.itemIds.push(item.id);
       if (item.kind === "meal") {
         summary.mealCount += 1;
         mealTotalsByDay[day]?.push(item.mealTotals);

@@ -17,6 +17,7 @@ const EMPTY_DAY_SUMMARY: CalendarDaySummary = {
   expenseCount: 0,
   mealCount: 0,
   projectCount: 0,
+  itemIds: [],
 };
 
 function WeekSummaryGrid({
