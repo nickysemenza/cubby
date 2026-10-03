@@ -161,22 +161,22 @@ WHERE c.client_id = 'cubby-purchase-agent'
 GROUP BY c.client_id, c.public, c.require_pkce;
 ```
 
-The deterministic fixture suite is local and free. The live Terra gate drives
-the deployed authenticated Flue conversation itself, then reads the fixture
-result endpoint and applies the same prohibited-call, Product-reuse,
-idempotency, and final-state assertions:
+Two local suites exercise the real Flue agent in the coupled workerd harness.
+`apps/web/src/server/purchase-import/purchase-agent-scenarios.integration.test.ts`
+(PostgreSQL tier) scripts only the coordinator model and the web Worker's
+extractor/audit model, and asserts the database graph, run status, findings,
+approvals, and replay fences of whole purchase journeys; it proves
+orchestration, not model judgment. The opt-in, billed decision eval runs live
+candidate models on synthetic Product-identity, line-role, reversal,
+settlement, and incomplete-evidence cases and scores each outcome correct,
+unsafe, or reviewable miss, with latency and token cost:
 
 ```bash
-pnpm --dir apps/purchase-agent eval:fixture
-PURCHASE_AGENT_EVAL_AGENT_URL='https://cubby.nickysemenza.com/api/import/runs/PIR-XXXXXXXXXX/agent' \
-PURCHASE_AGENT_EVAL_RESULT_URL='<authenticated-fixture-result-url>' \
-PURCHASE_AGENT_EVAL_SESSION_COOKIE='REDACTED' \
-  pnpm --dir apps/purchase-agent eval:live
+pnpm --dir apps/web eval:purchase-decisions
+# FLUE_EVAL_CANDIDATES=gpt-6-sol:high PURCHASE_EVAL_CASES=identity-exact-variant-sku
 ```
 
-The live gate requires a deliberately provisioned fixture run and an
-authenticated household session. Never save the session cookie in shell
-history, CI logs, repository files, or Flue messages.
+Neither uses an authenticated household session or production data.
 
 Rollback is additive: pause the `cubby-purchase-agent` consumer and deploy the
 previous web and Apple versions. Postgres import rows and the retained

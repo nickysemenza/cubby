@@ -165,12 +165,12 @@ See also the image operational passes at the end of this file.
   requiring size/color/model corroboration. Do not add a Product-family entity
   or merge automatically (`packages/schemas/src/external-id.ts`).
 
-- 🤔 **Import decision evaluation.** Build a synthetic outcome corpus for
-  identity, variants, line roles, reversals, ambiguous matches, and grouped
-  settlement. Measure correctness, unsafe decisions, latency, and cost before
-  changing matching or model routing; choose model candidates when the
-  comparison runs. The static Product reuse fixture checks shape, not
-  accuracy; evaluation must establish behavior, not another routing control.
+- 🤔 **Run the purchase decision evaluation.** A 12-case synthetic corpus and
+  scorer (correct, unsafe, reviewable miss; latency, tokens, cost) exist behind
+  `pnpm --dir apps/web eval:purchase-decisions` (opt-in, billed). Run it on
+  candidate coordinator models before changing matching or purchase-run model
+  routing; purchase runs stay on Sol until it does. Scripted Flue scenarios
+  prove orchestration, not model judgment.
 
 ---
 
