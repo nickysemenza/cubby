@@ -2,196 +2,44 @@ import CubbyKit
 
 /// The native implementation boundary for manifest-declared presentation names.
 ///
-/// Every generated renderer id is classified here so a new manifest declaration cannot
-/// accidentally look native merely because a generic value happens to be printable. A
-/// non-nil unsupported reason is intentional: callers surface one web disclosure instead
-/// of silently dropping a field or slot.
+/// Status and reason are not decided here: they are read from the generated
+/// `native-coverage.json`, declared once in `packages/schemas/src/native-coverage.ts`, which the
+/// generator refuses to build unless every renderer, slot, and hero action is classified. A
+/// non-nil unsupported reason is intentional: callers surface one web disclosure instead of
+/// silently dropping a field or slot. To change a status, edit that declaration (and implement
+/// the native view path for `implemented`; `NativeCoverageViewPathTests` enforces both).
 enum NativePresentationCoverage {
-    enum Status: Equatable, Sendable {
-        case implemented
-        case generic
-        case ownedElsewhere
-        case unsupported(String)
+    typealias Status = NativeCoverageStatus
 
-        var isUnsupported: Bool {
-            if case .unsupported = self { return true }
-            return false
-        }
-    }
+    private static var coverage: NativeCoverageManifest { .shared }
 
-    /// Control renderers with a typed native control of their own.
-    private static let implementedControls: Set<ControlRendererID> = [
-        .amount, .entityMultiSelect, .ledgerAttributions, .tagList, .vendorName,
-    ]
-    /// Control renderers drawn by the primitive control of their `controlKind`. `upcLookup`/
-    /// `usdaFood` are plain text/number fields on web too once their AI action strips away —
-    /// the native shell just draws the primitive control and skips the action.
-    private static let genericControls: Set<ControlRendererID> = [
-        .entitySelect, .money, .url, .upcLookup, .usdaFood,
-    ]
-    /// Control renderers the editor's image block owns; never a field control.
-    private static let imageBlockControls: Set<ControlRendererID> = [.imageOrder]
-
-    /// An explicit allowlist rather than an exhaustive switch: `ControlRendererID` is generated
-    /// from the manifest, so a renderer a web-only field declares (`unit-mappings`,
-    /// `label-nutrition`, …) exists here the moment it is declared, and must classify as
-    /// unsupported until a native control is written for it — not break the build or fall
-    /// through as generic.
     static func control(_ renderer: ControlRendererID) -> Status {
-        if implementedControls.contains(renderer) { return .implemented }
-        if genericControls.contains(renderer) { return .generic }
-        if imageBlockControls.contains(renderer) { return .ownedElsewhere }
-        if renderer == .structuredField {
-            return .unsupported("Structured fields are available on web.")
-        }
-        return .unsupported("No native control for \(renderer.rawValue); edit it on web.")
+        coverage.control[renderer.rawValue]
+            ?? .unsupported("No native control for \(renderer.rawValue); edit it on web.")
     }
 
     static func list(_ renderer: ListRendererID) -> Status {
-        switch renderer {
-        case .recipeSource, .spendingCategorySummary, .dataQuality: .implemented
-        case .expectedQuantity, .quantityVariance, .estimateCost, .estimateKcal, .totalTime,
-            .mealCost, .unitPrice, .valuationSummary, .financialSettlement,
-            .reconciliationStatus, .expenseCount:
-            .unsupported("This computed figure is available on web.")
-        case .tagLinks, .recipeLinks, .productLink, .usdaFoodLink, .vendorCell, .orderLink,
-            .possibleVendor:
-            .unsupported("This linked cell is available on web; the field reads as a reference natively.")
-        case .uploadedImage:
-            .unsupported("The thumbnail is drawn from the row image natively.")
-        }
+        coverage.list[renderer.rawValue] ?? .unsupported("This computed figure is available on web.")
     }
 
     static func detail(_ renderer: DetailRendererID) -> Status {
-        switch renderer {
-        case .expenseProject,
-            .ownerLedgerPartyId,
-            .ownershipMode,
-            .productCategory,
-            .productFdcId,
-            .productExternalIds,
-            .productId,
-            .productIngredient,
-            .productPrimaryGtin,
-            .productTags,
-            .financialTransactionAllocations,
-            .runFailureDetails:
-            .generic
-        case .recipeSource, .expenseSpendingCategory, .spendingCategorySummary:
-            .implemented
-        case .effectiveOwnership, .imageCaptureLocation:
-            // `imageCaptureLocation` is `ImageEntityDetailView`'s own Provenance map row, not a
-            // generic renderer — Image never uses the generic detail view (`image.detail`, not
-            // `resources.image.get`; see this file's own doc comment), so this case can only be
-            // reached defensively, but the dedicated screen already covers it.
-            .ownedElsewhere
-        case .productCategoryPath,
-            .financialAccountIdentity,
-            .financialAccountSourceAliases,
-            .financialAccountCardNumbers,
-            .financialTransactionSourceRefs,
-            .financialTransactionVendorInference,
-            .ledgerTransferClassification,
-            .recipeMeta,
-            .recipeSections,
-            .recipeTotals,
-            .vendorAgentHints,
-            .wishCandidates,
-            .recipeYield,
-            .imageProvenanceEvidence,
-            .imageSightings:
-            .unsupported("This structured detail is available on web.")
-        }
+        coverage.detail[renderer.rawValue] ?? .unsupported("This structured detail is available on web.")
     }
 
-    /// Hero actions are declaration-owned verbs. `edit` stays in the screen toolbar; every
-    /// other declared hero verb currently has a web implementation only. Add a native handler
-    /// and mark its verb implemented together when one becomes available.
     static func heroAction(_ action: EntityHeroActionID) -> Status {
-        switch action {
-        case .edit:
-            .ownedElsewhere
-        case .addToInventory, .bulkEdit, .delete, .discard, .markPurchased, .recordSale, .setStatus:
-            .unsupported("This action is available on web.")
-        }
+        coverage.heroAction[action.rawValue] ?? .unsupported("This action is available on web.")
     }
 
-    /// Detail slots are entity-qualified in the generated catalog. Keep every declared id in
-    /// this switch, including slots that currently have no native body, so an unqualified id or
-    /// a newly copied slot cannot accidentally select the wrong entity's implementation.
+    /// Detail slots are entity-qualified, so an unqualified id or a newly copied slot cannot
+    /// accidentally select the wrong entity's implementation.
     static func detailSlot(_ id: String) -> Status {
-        guard let id = EntityDetailSlotID(rawValue: id) else {
-            return .unsupported("Unknown native detail slot.")
-        }
-        return switch id {
-        case .ledgerPartyWardrobe, .mealNutrition, .runImportControls, .runPhotoBatch,
-            .purchaseOrderMail, .purchaseReceiving, .vendorOrderMail, .vendorAccountOrderMail,
-            .vendorSpendingClassification,
-            .productCategorySpendingClassification, .productOwnership, .productNutrition,
-            .productUnitMappings, .productFitsWith, .productRuns:
-            .implemented
-        case .productLabels,
-            .productCookbooks,
-            .productRecipeAppearances,
-            .recipeWorkflow,
-            .ingredientNutritionProduct,
-            .ingredientRecipeUsages,
-            .cookbookToc,
-            .cookbookImportProgress,
-            .locationContentsValuation,
-            .locationAiDescription,
-            .mealComposition,
-            .projectBudget,
-            .projectContribution,
-            .projectAnalytics,
-            .projectSchedule,
-            .purchaseProjectAllocation,
-            .purchaseRuns,
-            .purchaseReceiving,
-            .purchaseReconciliation,
-            .purchaseFinancialSettlement,
-            .expenseSettlement,
-            .imageAssociations,
-            .runAiUsage,
-            .runLiveProgress,
-            .runChanges,
-            .runImportAgentLive,
-            .runImportAgentStopped,
-            .runImportApprovals,
-            .runImportDebugLog,
-            .runImportEvidence,
-            .runImportFindings,
-            .runImportPreparedOrders,
-            .runImportProgressLive,
-            .runImportProgressStopped,
-            .runImportPurchases,
-            .runImportStats,
-            .runImportTargets,
-            .runImportTimeline,
-            .vendorAccountChargeSearch:
-            .unsupported("This detail is available on web.")
-        }
+        coverage.detailSlot[id] ?? .unsupported("Unknown native detail slot.")
     }
 
-    /// Only slots with dedicated native views are selectable.
     static func listSlot(_ id: String) -> Status {
-        switch id {
-        case "location.gallery", "meal.calendar", "project.analytics", "task.board", "expense.analytics":
-            .implemented
-        case "location.visualizations",
-            "meal.nutrition",
-            "productCategory.hierarchy",
-            "project.overview",
-            "project.schedule",
-            "project.gallery",
-            "planting.schedule",
-            "run.history",
-            "task.agenda":
-            .ownedElsewhere
-        default:
-            .unsupported("Unknown native list slot.")
-        }
+        coverage.listSlot[id] ?? .unsupported("Unknown native list slot.")
     }
+
     static func unsupportedControl(_ field: FieldDescriptor) -> String? {
         guard let renderer = field.controlRenderer else { return nil }
         guard case .unsupported(let reason) = control(renderer) else { return nil }

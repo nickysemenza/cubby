@@ -46,6 +46,21 @@ private final class SpecialistLoader<Value> {
     }
 }
 
+/// The declared list slots native draws. Exactly the slots `packages/schemas/src/native-coverage.ts`
+/// marks `implemented`; `NativeCoverageViewPathTests` fails when the two sets differ.
+enum ListSlotRegistry {
+    typealias Builder = @MainActor (_ client: CubbyClient, _ filters: EntityFilterState) -> AnyView
+
+    @MainActor
+    static let builders: [EntityListSlotID: Builder] = [
+        .mealCalendar: { AnyView(MealCalendarListView(client: $0, filters: $1)) },
+        .taskBoard: { AnyView(TaskBoardListView(client: $0, filters: $1)) },
+        .locationGallery: { AnyView(LocationGalleryListView(client: $0, filters: $1)) },
+        .projectAnalytics: { AnyView(ProjectAnalyticsListView(client: $0, filters: $1)) },
+        .expenseAnalytics: { AnyView(ExpenseAnalyticsListView(client: $0, filters: $1)) },
+    ]
+}
+
 private struct SpecialistLoadView<Value, Content: View>: View {
     private struct ReloadKey: Hashable {
         let filters: EntityFilterState

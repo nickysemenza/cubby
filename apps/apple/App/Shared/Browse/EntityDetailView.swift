@@ -471,9 +471,7 @@ struct EntityDetailContent: View {
                 EntityTimelineView(timeline: timeline)
             }
         case .slot:
-            if let view = DetailSlotRegistry.view(
-                for: descriptor.key, slot: section.id, row: row, appModel: appModel)
-            {
+            if let view = DetailSlotRegistry.view(slot: section.id, row: row) {
                 if let explanationField = section.explanationField,
                     let field = descriptor.field(explanationField)
                 {

@@ -69,9 +69,13 @@ let package = Package(
                 .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
                 .product(name: "GRDB", package: "GRDB.swift"),
             ],
-            // `EntityCatalog`'s descriptors, written by `pnpm generate` (gitignored) and decoded
-            // by the hand-written types in Catalog/EntityManifest.swift.
-            resources: [.copy("Generated/entity-manifest.json")]
+            // `EntityCatalog`'s descriptors and the native coverage record, written by
+            // `pnpm generate` (gitignored) and decoded by the hand-written types in
+            // Catalog/EntityManifest.swift and Catalog/NativeCoverage.swift.
+            resources: [
+                .copy("Generated/entity-manifest.json"),
+                .copy("Generated/native-coverage.json"),
+            ]
         ),
         .executableTarget(
             name: "cubby",

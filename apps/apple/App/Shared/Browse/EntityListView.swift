@@ -311,13 +311,10 @@ struct EntityListView: View {
     @ViewBuilder
     private func specialistSlot(_ id: String, model: GenericEntityListModel) -> some View {
         let filters = specialistFilters(model)
-        switch id {
-        case "meal.calendar": MealCalendarListView(client: appModel.client, filters: filters)
-        case "task.board": TaskBoardListView(client: appModel.client, filters: filters)
-        case "location.gallery": LocationGalleryListView(client: appModel.client, filters: filters)
-        case "project.analytics": ProjectAnalyticsListView(client: appModel.client, filters: filters)
-        case "expense.analytics": ExpenseAnalyticsListView(client: appModel.client, filters: filters)
-        default: ContentUnavailableView("View unavailable", systemImage: "square.dashed")
+        if let slot = EntityListSlotID(rawValue: id), let build = ListSlotRegistry.builders[slot] {
+            build(appModel.client, filters)
+        } else {
+            ContentUnavailableView("View unavailable", systemImage: "square.dashed")
         }
     }
 

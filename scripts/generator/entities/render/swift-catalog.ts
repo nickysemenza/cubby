@@ -9,6 +9,10 @@ import {
   WAYFINDING_DOMAINS,
 } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
 import { connectedViews } from "../../../../packages/schemas/src/connected-view-definitions.ts";
+import {
+  type NativeCoverageEntry,
+  nativeCoverage,
+} from "../../../../packages/schemas/src/native-coverage.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 
@@ -749,33 +753,61 @@ export const renderSwiftEntityCatalog = (
   vocabulary.exactly("EntityFieldKind", entityFieldKinds);
   vocabulary.exactly("EntityControlKind", entityFieldControlKinds);
   vocabulary.exactly("EntityFilterKind", FILTER_KINDS);
-  vocabulary.exactly("ControlRendererID", rendererIds("control"));
-  vocabulary.exactly("ListRendererID", rendererIds("list"));
-  vocabulary.exactly("DetailRendererID", rendererIds("detail"));
-  vocabulary.exactly(
-    "EntityHeroActionID",
-    used(entities.flatMap((entity) => entity.inspector.detail.hero.actions)),
-  );
-  vocabulary.exactly(
-    "EntityDetailSlotID",
-    used(
+  // Each Swift id enum must match the ids the declarations use, and the same ids must be
+  // classified in `packages/schemas/src/native-coverage.ts` (the generated native-coverage.json).
+  const coverageVocabulary = {
+    control: rendererIds("control"),
+    list: rendererIds("list"),
+    detail: rendererIds("detail"),
+    heroAction: used(
+      entities.flatMap((entity) => entity.inspector.detail.hero.actions),
+    ),
+    detailSlot: used(
       entities.flatMap((entity) =>
         entity.inspector.detail.sections.flatMap((section) =>
           section.kind === "slot" ? [`${entity.key}.${section.id}`] : [],
         ),
       ),
     ),
-  );
-  vocabulary.exactly(
-    "EntityListSlotID",
-    used(
+    listSlot: used(
       entities.flatMap((entity) =>
         entity.inspector.list.views.flatMap((view) =>
           isSlotListView(view) ? [`${entity.key}.${view.id}`] : [],
         ),
       ),
     ),
-  );
+  } as const;
+  vocabulary.exactly("ControlRendererID", coverageVocabulary.control);
+  vocabulary.exactly("ListRendererID", coverageVocabulary.list);
+  vocabulary.exactly("DetailRendererID", coverageVocabulary.detail);
+  vocabulary.exactly("EntityHeroActionID", coverageVocabulary.heroAction);
+  vocabulary.exactly("EntityDetailSlotID", coverageVocabulary.detailSlot);
+  vocabulary.exactly("EntityListSlotID", coverageVocabulary.listSlot);
+  const classified = (
+    kind: keyof typeof nativeCoverage,
+    ids: readonly string[],
+  ) => {
+    const declared: Readonly<Record<string, NativeCoverageEntry>> =
+      nativeCoverage[kind];
+    return Object.fromEntries(
+      ids.map((id) => {
+        const entry = declared[id];
+        if (entry === undefined)
+          throw new Error(
+            `packages/schemas/src/native-coverage.ts does not classify ${kind} ${JSON.stringify(id)}.`,
+          );
+        return [id, entry];
+      }),
+    );
+  };
+  const nativeCoverageJSON = {
+    control: classified("control", coverageVocabulary.control),
+    list: classified("list", coverageVocabulary.list),
+    detail: classified("detail", coverageVocabulary.detail),
+    heroAction: classified("heroAction", coverageVocabulary.heroAction),
+    detailSlot: classified("detailSlot", coverageVocabulary.detailSlot),
+    listSlot: classified("listSlot", coverageVocabulary.listSlot),
+  };
   vocabulary.exactly("WayfindingDomain", WAYFINDING_DOMAINS);
   vocabulary.exactly(
     "ListPresentationChoice",
@@ -841,6 +873,11 @@ export const renderSwiftEntityCatalog = (
         null,
         2,
       )}\n`,
+    },
+    {
+      relativePath:
+        "apps/apple/CubbyKit/Sources/CubbyKit/Generated/native-coverage.json",
+      source: `${JSON.stringify(nativeCoverageJSON, null, 2)}\n`,
     },
   ];
 };
