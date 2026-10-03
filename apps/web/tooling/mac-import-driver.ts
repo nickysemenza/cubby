@@ -73,7 +73,7 @@ export class MacImportDriver {
   }
 
   private presentationAction(
-    action: "press" | "scroll" | "fill",
+    action: "press" | "scroll" | "fill" | "raise",
     containerID: string,
     value: string,
   ): boolean {
@@ -796,15 +796,7 @@ export class MacImportDriver {
     this.guardForeground();
     // View commands can change the main destination while Settings remains key.
     // Raise the owned main window before invoking a file importer or sheet.
-    execFileSync(
-      "osascript",
-      [
-        "-e",
-        'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set mainWindow to first window of ownedProcess whose value of attribute "AXIdentifier" is "main"\n perform action "AXRaise" of mainWindow\n end tell\nend run',
-        String(this.pid),
-      ],
-      { encoding: "utf8", timeout: 10000 },
-    );
+    this.presentationAction("raise", "main", "");
     this.record(["raise-main-window", label], 0, this.observe());
   }
   private nativeShortcut(keyCode: number, label: string): void {
@@ -841,15 +833,7 @@ export class MacImportDriver {
     const existing = this.matching("id=com_apple_SwiftUI_Settings_window");
     // Browser capture changes focus; raise the existing owned window directly.
     if (existing.length) {
-      execFileSync(
-        "osascript",
-        [
-          "-e",
-          'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set settingsWindow to first window of ownedProcess whose value of attribute "AXIdentifier" is "com_apple_SwiftUI_Settings_window"\n perform action "AXRaise" of settingsWindow\n end tell\nend run',
-          String(this.pid),
-        ],
-        { timeout: 10000 },
-      );
+      this.presentationAction("raise", "com_apple_SwiftUI_Settings_window", "");
       this.record(["raise-settings-window"], 0, this.observe());
     } else {
       this.nativeShortcut(43, "Settings");
