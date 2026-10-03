@@ -246,7 +246,8 @@ async function assertNativeEdit(
 ): Promise<void> {
   const checkPool = new Pool({ connectionString: databaseURL });
   try {
-    const { SIM_PRODUCT_UPDATED_NAME } = await import("./scenarios/simulator");
+    const { SIM_PRODUCT_UPDATED_NAME } =
+      await import("./scenarios/simulator-product-fixture");
     const targetName =
       expectedName ??
       (emojiReview
@@ -628,8 +629,9 @@ async function runWarmSimulator(options: {
   install: () => Promise<void>;
   launch: () => Promise<void>;
 }): Promise<void> {
-  const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME, seedSimulatorScenario } =
-    await import("./scenarios/simulator");
+  const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME } =
+    await import("./scenarios/simulator-product-fixture");
+  const { seedSimulatorScenario } = await import("./scenarios/simulator");
   const { deviceID, common, session, productId, userId, install, launch } =
     options;
   const stateDir = path.join(artifacts, "agent-device-state");
@@ -971,7 +973,7 @@ async function runHeadlessProductScenario(
   userId: string,
 ): Promise<void> {
   const { SIM_PRODUCT_NAME, SIM_PRODUCT_UPDATED_NAME } =
-    await import("./scenarios/simulator");
+    await import("./scenarios/simulator-product-fixture");
   let builtVersion: string | undefined;
   const runNative = async (
     id: string,

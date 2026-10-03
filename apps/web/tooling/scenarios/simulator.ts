@@ -9,9 +9,7 @@ import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { startPhotoInventoryRun } from "~/server/purchase-import/run-service";
 import { attachPurchaseProducts } from "~/server/repo/purchase-products";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
-
-export const SIM_PRODUCT_NAME = "Synthetic Atlas Lantern";
-export const SIM_PRODUCT_UPDATED_NAME = "Synthetic Atlas Lantern Updated";
+import { SIM_PRODUCT_NAME } from "./simulator-product-fixture";
 
 export async function seedSimulatorPhotoActor(pool: Pool, userId: string) {
   const existing = await pool.query(
