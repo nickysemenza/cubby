@@ -1783,6 +1783,7 @@ export default defineEntity({
         {
           id: "expense_spending_category",
           facet: "identity",
+          exceptions: "forbidden",
           weight: 1,
           label: "Spending category",
           message:

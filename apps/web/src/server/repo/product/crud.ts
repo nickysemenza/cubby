@@ -120,7 +120,7 @@ import {
   productExpenseTotalSql,
 } from "~/server/repo/expense-aggregate-sql";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
-import { displayableImageWhere } from "~/server/repo/image-displayability";
+import { productHasDisplayableImageSql } from "~/server/repo/image-displayability";
 import {
   enrichProductRowsWithInventoryValuations,
   loadInventoryValuations,
@@ -755,23 +755,6 @@ export const buildProductWhere = async (
       ),
     );
 
-  // Joins Image so this matches what the thumbnail cell actually renders — it
-  // drops PDF manuals, and Image is separately soft-deletable from ProductImage.
-  const productIdsWithImages = dbClient
-    .select({ productId: entityAttachment.entityId })
-    .from(entityAttachment)
-    .innerJoin(
-      image,
-      and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
-    )
-    .where(
-      and(
-        notDeleted(entityAttachment),
-        sql`${entityAttachment.purpose} IS DISTINCT FROM 'label'`,
-        displayableImageWhere,
-      ),
-    );
-
   const productIdsWithUnitMappings = dbClient
     .select({ productId: productUnitMappings.productId })
     .from(productUnitMappings)
@@ -1001,11 +984,12 @@ export const buildProductWhere = async (
   ];
 
   const associationConditions = () => [
-    idSetPresence(
-      product.id,
-      filters.imagePresenceFilter,
-      productIdsWithImages,
-    ),
+    // The shared displayable-image definition: what the thumbnail cell renders.
+    filters.imagePresenceFilter === "has"
+      ? productHasDisplayableImageSql(product.id)
+      : filters.imagePresenceFilter === "none"
+        ? sql`NOT ${productHasDisplayableImageSql(product.id)}`
+        : undefined,
     filters.kitId === undefined
       ? undefined
       : sql`EXISTS (

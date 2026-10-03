@@ -225,6 +225,19 @@ export const financialTransactionEvidenceExpectationSql = (
   WHEN ${financialTransactionIsReimbursementSql(alias)} THEN 'not_expected'
   ELSE COALESCE(${column(alias, "evidenceExpectation")},${financialTransactionEvidenceFallbackSql(alias, purchaseOverride)}) END`;
 
+/**
+ * Whether a not-yet-allocated charge, already routed to a vendor, wants
+ * evidence. It follows the Purchase precedence (transaction override, then
+ * vendor, then spending category, then unknown) because the eventual Purchase
+ * inherits the vendor; a reviewed reimbursement is never vendor evidence.
+ */
+export const routedChargeEvidenceExpectationSql = (
+  alias: string,
+  vendorExpectation: SQL,
+): SQL => sql`CASE
+  WHEN ${financialTransactionIsReimbursementSql(alias)} THEN 'not_expected'
+  ELSE COALESCE(${column(alias, "evidenceExpectation")},${vendorExpectation},${categoryPolicy(column(alias, "spendingCategoryId"), "evidenceExpectation")},'unknown') END`;
+
 export const financialTransactionEvidenceFieldResolutionsSql = (
   alias: string,
   purchaseOverride?: SQL,
