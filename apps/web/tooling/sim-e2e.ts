@@ -1597,7 +1597,12 @@ async function main(): Promise<void> {
               "COMPILER_INDEX_STORE_ENABLE=NO",
             ];
         let certifiedInput: string | undefined;
-        if (hosted) {
+        // A certificate already binds the resolved package state to this app.
+        // Resolve again only when current inputs or bundle bytes do not match.
+        let reuseCertifiedApp =
+          hosted &&
+          hasMatchingSimulatorBuild(repoRoot, nativeToolchain, buildArgs);
+        if (hosted && !reuseCertifiedApp) {
           await run("xcodebuild", [
             ...buildArgs,
             "-resolvePackageDependencies",
@@ -1613,11 +1618,13 @@ async function main(): Promise<void> {
               `[${lane}] Simulator cache unavailable: ${String(error)}`,
             );
           }
+          reuseCertifiedApp = hasMatchingSimulatorBuild(
+            repoRoot,
+            nativeToolchain,
+            buildArgs,
+          );
         }
-        if (
-          hosted &&
-          hasMatchingSimulatorBuild(repoRoot, nativeToolchain, buildArgs)
-        ) {
+        if (reuseCertifiedApp) {
           console.log(`[${lane}] Reusing the verified simulator app bundle`);
         } else {
           await run("xcodebuild", [...buildArgs, "build"]);
