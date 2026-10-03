@@ -443,6 +443,8 @@ export async function processOrderMails(
             amount: financialTransaction.amount,
             dateFrom: importHunt.dateFrom,
             dateTo: importHunt.dateTo,
+            state: importHunt.state,
+            updatedAt: importHunt.updatedAt,
           })
           .from(importHunt)
           .innerJoin(
@@ -492,6 +494,11 @@ export async function processOrderMails(
               ledgerPartyId: mail.ledgerPartyId,
               vendorId: matchedVendor.id,
               ...candidate,
+              // A reopened charge sums only mail saved after it was left.
+              savedAfter:
+                candidate.state === "pending_mail"
+                  ? undefined
+                  : candidate.updatedAt,
             });
             const orderIds = uniqueOrderSubsetIds(candidate.amount, orders);
             if (orderIds) subsetMatches.push({ id: candidate.id, orderIds });

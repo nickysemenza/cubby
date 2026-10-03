@@ -46,6 +46,3 @@ export const unfinishedChargeRunOwns = (
 
 /** No working charge run holds the hunt (a review-parked one does not). */
 export const notHeldByChargeRun = sql`NOT ${unfinishedChargeRunOwns()}`;
-
-/** No unfinished charge run, including one parked in review, owns the hunt. */
-export const notOwnedByUnfinishedChargeRun = sql`NOT ${unfinishedChargeRunOwns({ includeReview: true })}`;

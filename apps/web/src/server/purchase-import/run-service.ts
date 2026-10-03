@@ -132,7 +132,7 @@ import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { loadPurchaseAuditBatch } from "./audit-batch";
 import {
-  notOwnedByUnfinishedChargeRun,
+  notHeldByChargeRun,
   unfinishedChargeRunOwns,
 } from "./charge-hunt-state";
 import type { PurchaseImportDurableObjectRpc } from "./contracts";
@@ -1842,7 +1842,7 @@ export async function claimNextImportWork(
         eq(importHunt.state, "browser_queued"),
         chargeHuntIds
           ? inArray(importHunt.id, chargeHuntIds)
-          : notOwnedByUnfinishedChargeRun,
+          : notHeldByChargeRun,
       ),
     )
     .orderBy(
@@ -2891,7 +2891,7 @@ export async function stopRunForReview(
             ),
             eq(importHunt.state, "browser_queued"),
             // Hunts a member's selected-charges run holds are not this run's.
-            notOwnedByUnfinishedChargeRun,
+            notHeldByChargeRun,
           ),
         );
     }
@@ -3255,7 +3255,7 @@ export async function finishRun(
                 // A charge run answers only for its own selection.
                 chargeHuntIds
                   ? inArray(importHunt.id, chargeHuntIds)
-                  : notOwnedByUnfinishedChargeRun,
+                  : notHeldByChargeRun,
               ),
             )
             .limit(1)

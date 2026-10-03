@@ -61,6 +61,9 @@ type RunOwner = { shortcode: string; status: string };
  * starting a second one over the same evidence.
  */
 function refusalFor(state: string, owner: RunOwner | undefined) {
+  // Fresh mail evidence puts a charge back on the queue; whatever run once
+  // parked it no longer decides its state.
+  if (state === "pending_mail" || state === "pending_browser") return null;
   if (owner)
     return `Already on run ${owner.shortcode} (${owner.status}); use or restart that run.`;
   if (state === CHARGE_HUNT_STATE.queued)
@@ -208,7 +211,9 @@ export async function listChargeHunts(
           hunt.state !== "dismissed",
       )
       .map((hunt) => {
-        const owner = owned.get(hunt.id);
+        const fresh =
+          hunt.state === "pending_mail" || hunt.state === "pending_browser";
+        const owner = fresh ? undefined : owned.get(hunt.id);
         return {
           transactionId: hunt.transactionId,
           merchant: hunt.merchant,

@@ -652,27 +652,6 @@ describe("selected statement-charge runs", () => {
     expect((await huntOf(s.b.shortcode)).state).toBe("browser_queued");
   });
 
-  it("does not exhaust a charge run's queued hunts when an implicit run stops", async () => {
-    const s = await threeCharges();
-    const first = await start(s, [s.a]);
-    await getDb(ctx.db)
-      .update(runTable)
-      .set({ status: "needs_review" })
-      .where(eq(runTable.id, first.run.id));
-    const implicit = await startOrResumeRun(ctx.db, {
-      ledgerPartyId: s.party.id,
-      vendorAccountId: s.account.id,
-      trigger: "manual",
-    });
-    await stopRunForReview(ctx.db, {
-      runId: implicit.id,
-      operationId: "stop:implicit",
-      kind: "other",
-      summary: "Implicit run stopped.",
-    });
-    expect((await huntOf(s.a.shortcode)).state).toBe("browser_queued");
-  });
-
   it("ends in review when a deferred order candidate sits on an otherwise settled charge run", async () => {
     const s = await threeCharges();
     const started = await start(s, [s.a]);
@@ -751,5 +730,50 @@ describe("selected statement-charge runs", () => {
         action: "restart",
       }),
     ).rejects.toThrow("no unresolved charges");
+  });
+
+  it("lets an implicit run claim and finish a charge re-matched after its charge run parked in review", async () => {
+    const s = await threeCharges();
+    const first = await start(s, [s.a]);
+    await stopRunForReview(ctx.db, {
+      runId: first.run.id,
+      operationId: "stop:parked",
+      kind: "other",
+      summary: "Parked.",
+    });
+    const a = await huntOf(s.a.shortcode);
+    expect(a.state).toBe("deferred_for_review");
+    // New order mail re-matches the deferred charge.
+    await getDb(ctx.db)
+      .update(importHunt)
+      .set({ state: "pending_browser", matchedOrderIds: ["ORDER-1"] })
+      .where(eq(importHunt.id, a.id));
+    // It is selectable again, not "Needs review" on the parked run.
+    const listed = await listChargeHunts(
+      ctx.db,
+      vendorChargeHuntsInput.parse({ vendorAccountId: s.account.shortcode }),
+      ctx.actor,
+    );
+    expect(
+      listed.items.find((item) => item.transactionId === s.a.shortcode),
+    ).toMatchObject({ reason: null, runId: null });
+
+    await expect(dispatchImportHunts(ctx.db, queue().producer)).resolves.toBe(
+      1,
+    );
+    const implicit = await startOrResumeRun(ctx.db, {
+      ledgerPartyId: s.party.id,
+      vendorAccountId: s.account.id,
+      trigger: "discovery",
+    });
+    await expect(
+      claimNextImportWork(ctx.db, broker, implicit.id),
+    ).resolves.toMatchObject({ kind: "hunt", id: a.id });
+    await expect(
+      finishRun(ctx.db, broker, {
+        runId: implicit.id,
+        operationId: "finish:implicit",
+      }),
+    ).rejects.toThrow("unsettled browser hunt work");
   });
 });

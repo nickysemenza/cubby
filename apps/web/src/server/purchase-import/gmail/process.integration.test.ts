@@ -619,7 +619,11 @@ describe("Gmail order mail processing", () => {
       .from(importHunt);
     await getDb(ctx.db)
       .update(importHunt)
-      .set({ state: "deferred_for_review" })
+      // Left a minute before the mail arrives (clock-skew safe).
+      .set({
+        state: "deferred_for_review",
+        updatedAt: new Date(Date.now() - 60_000),
+      })
       .where(eq(importHunt.id, hunt!.id));
     await receiveMail(
       seed,
