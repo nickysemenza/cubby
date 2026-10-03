@@ -131,12 +131,6 @@ See also the image operational passes at the end of this file.
   recorded. Reuse the bounded prepare/commit and approval paths in
   [purchase import](../.claude/skills/purchase-import/SKILL.md).
 
-- 🟢 **Start a historical backfill from the Mac app.** The server accepts an
-  inclusive date range on `/api/import/agent/sync`, walks it newest first, and
-  never moves the incremental cursor; the Mac Settings sync section needs the
-  range control. Pace by the browser bridge's one-command handoff unless a
-  vendor proves a stricter limit.
-
 - ⏳ **Conditional purchase-import browser extension.** Promote only if the
   Apple-event browser bridge repeatedly fails to background its window, cannot
   avoid Chrome's JavaScript-from-Apple-Events setting, or cannot provide
@@ -162,13 +156,6 @@ See also the image operational passes at the end of this file.
 ### Reconcile charges and refunds
 
 ### Review and apply corrections
-
-- 🟢 **Review validation corrections on native.** Web now shows field-level
-  before/after corrections, revalidates stale targets, and applies the selected
-  set atomically (`purchaseImport.applyValidationCorrections`, person-only).
-  Expose the same operation and v2 diff in the Apple run review. A Purchase has
-  no currency column, so a non-USD order remains write-blocked rather than a
-  correction.
 
 - 🧱 **Cross-vendor manufacturer identifiers.** Add manufacturer-scoped
   part/style identity distinct from retailer SKU, with contract/generation
