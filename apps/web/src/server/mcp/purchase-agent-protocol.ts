@@ -5,6 +5,7 @@ import type { CubbyMcpMutationAction } from "@cubby/schemas/mcp-tools";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import { parseShortcode } from "@cubby/shared";
 import { and, desc, eq, inArray } from "drizzle-orm";
+import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -243,7 +244,8 @@ export async function executePurchaseAgentMutation<T>(input: {
     approval.argsFingerprint !== argsFingerprint ||
     approval.targetFingerprint !== targetFingerprint ||
     approval.evidenceFingerprint !== evidenceFingerprint ||
-    JSON.stringify(approval.args) !== JSON.stringify(args)
+    // jsonb preserves values and array order, but reorders object keys.
+    !isEqual(approval.args, args)
   )
     throw new Error("Exact mutation approval is missing or target changed");
 
