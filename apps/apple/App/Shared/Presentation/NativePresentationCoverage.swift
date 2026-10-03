@@ -167,7 +167,8 @@ enum NativePresentationCoverage {
             .runImportPurchases,
             .runImportStats,
             .runImportTargets,
-            .runImportTimeline:
+            .runImportTimeline,
+            .vendorAccountChargeSearch:
             .unsupported("This detail is available on web.")
         }
     }

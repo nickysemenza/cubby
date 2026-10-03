@@ -12,8 +12,10 @@ import {
   isNotNull,
   isNull,
   like,
+  lt,
   lte,
   notInArray,
+  or,
 } from "drizzle-orm";
 
 import { classifyOrderMail } from "~/server/agents/purchase-import/extract";
@@ -44,6 +46,10 @@ import {
 import { sha256Hex } from "~/server/semantic/hash";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
 
+import {
+  MAIL_MATCHABLE_HUNT_STATES,
+  notHeldByChargeRun,
+} from "../charge-hunt-state";
 import { refundTally } from "../findings";
 import {
   productionOrderMailAttachmentStorage,
@@ -437,6 +443,8 @@ export async function processOrderMails(
             amount: financialTransaction.amount,
             dateFrom: importHunt.dateFrom,
             dateTo: importHunt.dateTo,
+            state: importHunt.state,
+            updatedAt: importHunt.updatedAt,
           })
           .from(importHunt)
           .innerJoin(
@@ -447,7 +455,13 @@ export async function processOrderMails(
             and(
               eq(importHunt.ledgerPartyId, mail.ledgerPartyId),
               eq(importHunt.vendorId, matchedVendor.id),
-              eq(importHunt.state, "pending_mail"),
+              inArray(importHunt.state, [...MAIL_MATCHABLE_HUNT_STATES]),
+              notHeldByChargeRun,
+              // A reopened charge re-matches only mail saved after it was left.
+              or(
+                eq(importHunt.state, "pending_mail"),
+                lt(importHunt.updatedAt, mail.createdAt),
+              ),
               lte(importHunt.dateFrom, date),
               gte(importHunt.dateTo, date),
             ),
@@ -480,6 +494,11 @@ export async function processOrderMails(
               ledgerPartyId: mail.ledgerPartyId,
               vendorId: matchedVendor.id,
               ...candidate,
+              // A reopened charge sums only mail saved after it was left.
+              savedAfter:
+                candidate.state === "pending_mail"
+                  ? undefined
+                  : candidate.updatedAt,
             });
             const orderIds = uniqueOrderSubsetIds(candidate.amount, orders);
             if (orderIds) subsetMatches.push({ id: candidate.id, orderIds });
@@ -495,7 +514,12 @@ export async function processOrderMails(
               matchedOrderIds: matchedHunt.orderIds,
               updatedAt: new Date(),
             })
-            .where(eq(importHunt.id, matchedHunt.id));
+            .where(
+              and(
+                eq(importHunt.id, matchedHunt.id),
+                inArray(importHunt.state, [...MAIL_MATCHABLE_HUNT_STATES]),
+              ),
+            );
         }
       }
 

@@ -6,7 +6,7 @@ import {
   confirmMerchantVendorRuleOut,
   type ConfirmMerchantVendorRuleInput,
 } from "@cubby/schemas/purchase-import";
-import { and, asc, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import { shiftPlainDate } from "~/lib/plain-date";
 import type { Database } from "~/server/db";
@@ -16,6 +16,7 @@ import {
   financialTransactionAllocation,
   importHunt,
   merchantVendorRule,
+  run as runTable,
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
@@ -25,10 +26,18 @@ import { currentMemberLedgerParty } from "~/server/repo/member-login";
 import { routedChargeEvidenceExpectationSql } from "~/server/repo/purchase-evidence-policy";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
+import {
+  MAIL_MATCHABLE_HUNT_STATES,
+  notHeldByChargeRun,
+} from "./charge-hunt-state";
 import { dispatchRunEvent } from "./dispatch";
 import { matchProcessedOrderMail } from "./gmail/match";
 import { settleRetainedPaymentEvidence } from "./retained-settlement";
-import { startOrResumeRun } from "./run-service";
+import {
+  ActiveChargeRunError,
+  CHARGE_HOLDING_STATUSES,
+  startOrResumeRun,
+} from "./run-service";
 
 const normalizeMerchant = (value: string) =>
   value.trim().toLowerCase().replaceAll(/\s+/g, " ");
@@ -192,22 +201,53 @@ export async function discoverImportHunts(db: Database): Promise<number> {
       })
       .onConflictDoNothing()
       .returning({ id: importHunt.id, state: importHunt.state });
-    const [hunt] = inserted;
     created += inserted.length;
+    // A hunt a selected run left deferred or not found may now be matched by
+    // mail, unless an unfinished run still holds it.
+    const [reopened] = inserted.length
+      ? []
+      : await database
+          .select({
+            id: importHunt.id,
+            state: importHunt.state,
+            updatedAt: importHunt.updatedAt,
+          })
+          .from(importHunt)
+          .where(
+            and(
+              eq(importHunt.financialTransactionId, row.financialTransactionId),
+              inArray(importHunt.state, [...MAIL_MATCHABLE_HUNT_STATES]),
+              notHeldByChargeRun,
+            ),
+          );
+    const [hunt] = inserted.length ? inserted : reopened ? [reopened] : [];
     // Order confirmations usually arrive days before the statement charge,
     // so mail processing found no hunt to resolve; match that mail now.
-    if (hunt?.state !== "pending_mail") continue;
+    if (
+      !hunt ||
+      !MAIL_MATCHABLE_HUNT_STATES.some((state) => state === hunt.state)
+    )
+      continue;
     const matchedOrderIds = await matchProcessedOrderMail(db, {
       ledgerPartyId: row.ledgerPartyId,
       vendorId: row.vendorId,
       amount: row.amount,
       ...window,
+      savedAfter:
+        reopened && reopened.state !== "pending_mail"
+          ? reopened.updatedAt
+          : undefined,
     });
     if (!matchedOrderIds) continue;
     await database
       .update(importHunt)
       .set({ state: "pending_browser", matchedOrderIds, updatedAt: new Date() })
-      .where(eq(importHunt.id, hunt.id));
+      .where(
+        and(
+          eq(importHunt.id, hunt.id),
+          inArray(importHunt.state, [...MAIL_MATCHABLE_HUNT_STATES]),
+        ),
+      );
   }
   return created;
 }
@@ -255,20 +295,46 @@ export async function dispatchImportHunts(
         ),
       ),
     );
+  // An account running a member's selected charges does only that: another
+  // hunt must not join it, so it waits for the next implicit run.
+  const selectedChargeAccounts = new Set<string | null>(
+    (
+      await database
+        .select({ accountId: runTable.vendorAccountId })
+        .from(runTable)
+        .where(
+          and(
+            sql`${runTable.input}->>'kind' = 'charge_hunts'`,
+            inArray(runTable.status, [...CHARGE_HOLDING_STATUSES]),
+          ),
+        )
+    ).map((row) => row.accountId),
+  );
   let dispatched = 0;
   const runsByAccount = new Map<
     string,
     Awaited<ReturnType<typeof startOrResumeRun>>
   >();
   for (const hunt of hunts) {
-    if (!hunt.vendorAccountId) continue;
+    if (
+      !hunt.vendorAccountId ||
+      selectedChargeAccounts.has(hunt.vendorAccountId)
+    )
+      continue;
     let run = runsByAccount.get(hunt.vendorAccountId);
     if (!run) {
-      run = await startOrResumeRun(db, {
-        ledgerPartyId: hunt.ledgerPartyId,
-        vendorAccountId: vendorAccountId.parse(hunt.vendorAccountId),
-        trigger: "discovery",
-      });
+      try {
+        run = await startOrResumeRun(db, {
+          ledgerPartyId: hunt.ledgerPartyId,
+          vendorAccountId: vendorAccountId.parse(hunt.vendorAccountId),
+          trigger: "discovery",
+        });
+      } catch (error) {
+        // A selected-charges run began after the read above: leave the hunt.
+        if (!(error instanceof ActiveChargeRunError)) throw error;
+        selectedChargeAccounts.add(hunt.vendorAccountId);
+        continue;
+      }
       runsByAccount.set(hunt.vendorAccountId, run);
       await dispatchRunEvent(db, queue, {
         version: 1,
@@ -286,7 +352,12 @@ export async function dispatchImportHunts(
         attempts: sql`${importHunt.attempts} + 1`,
         updatedAt: new Date(),
       })
-      .where(eq(importHunt.id, hunt.id));
+      .where(
+        and(
+          eq(importHunt.id, hunt.id),
+          inArray(importHunt.state, ["pending_browser", "pending_mail"]),
+        ),
+      );
     dispatched += 1;
   }
   return dispatched;

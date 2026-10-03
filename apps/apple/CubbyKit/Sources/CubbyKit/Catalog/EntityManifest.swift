@@ -198,6 +198,7 @@ public enum EntityDetailSlotID: String, CaseIterable, Codable, Sendable {
     case runPhotoBatch = "run.photo-batch"
     case vendorOrderMail = "vendor.order-mail"
     case vendorSpendingClassification = "vendor.spending-classification"
+    case vendorAccountChargeSearch = "vendorAccount.charge-search"
     case vendorAccountOrderMail = "vendorAccount.order-mail"
 }
 

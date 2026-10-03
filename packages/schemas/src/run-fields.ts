@@ -122,8 +122,47 @@ export const orderBackfillRunInput = z
     path: ["from"],
   });
 export type OrderBackfillRunInput = z.infer<typeof orderBackfillRunInput>;
+/**
+ * `Run.input` for a browser run over charge hunts a member selected: exactly
+ * these `ImportHunt` ids are its work. Their outcomes live on the hunts
+ * themselves (see `chargeHuntOutcome`), so no migration or per-run table is
+ * needed; a hunt belongs to at most one unfinished run.
+ */
+export const chargeHuntRunInput = z.object({
+  kind: z.literal("charge_hunts"),
+  huntIds: z.array(z.uuid()).min(1).max(50),
+});
+/** `ImportHunt.state` values a selected-charges run writes (plain text column). */
+export const CHARGE_HUNT_STATE = {
+  queued: "browser_queued",
+  resolved: "resolved",
+  deferred: "deferred_for_review",
+  notFound: "expected_order_not_found",
+} as const;
+/** A selected hunt's outcome on its run; `pending` blocks finishing. */
+export const chargeHuntOutcome = z.enum([
+  "pending",
+  "resolved",
+  "deferred",
+  "not_found",
+]);
+export const chargeHuntOutcomeOf = (
+  state: string,
+): z.infer<typeof chargeHuntOutcome> => {
+  switch (state) {
+    case CHARGE_HUNT_STATE.queued:
+      return "pending";
+    case CHARGE_HUNT_STATE.resolved:
+      return "resolved";
+    case CHARGE_HUNT_STATE.notFound:
+      return "not_found";
+    default:
+      return "deferred";
+  }
+};
 export type RunInput =
   | MailSearchRunInput
   | z.infer<typeof orderMailImportRunInput>
-  | OrderBackfillRunInput;
+  | OrderBackfillRunInput
+  | z.infer<typeof chargeHuntRunInput>;
 export type RunProgress = MailSearchRunProgress;

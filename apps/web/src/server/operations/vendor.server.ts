@@ -7,6 +7,10 @@ import { executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
+  listChargeHunts,
+  startSelectedChargeRun,
+} from "~/server/purchase-import/charge-runs";
+import {
   startOrderMailImport,
   startSelectedOrderMailImport,
 } from "~/server/purchase-import/gmail/import";
@@ -63,6 +67,18 @@ export const vendorHandlers = implementOperationDomain(vendorContract, {
     const queue = getPurchaseAgentQueue();
     if (!queue) throw new Error("Purchase Agent queue is unavailable");
     return startSelectedOrderMailImport(
+      context.db,
+      input,
+      context.actorContext,
+      queue,
+    );
+  },
+  chargeHunts: (context, input) =>
+    listChargeHunts(context.db, input, context.actorContext),
+  startChargeRun: (context, input) => {
+    const queue = getPurchaseAgentQueue();
+    if (!queue) throw new Error("Purchase Agent queue is unavailable");
+    return startSelectedChargeRun(
       context.db,
       input,
       context.actorContext,

@@ -1,6 +1,7 @@
 import { aiRunUsageInput, aiRunUsageOut } from "@cubby/schemas/ai";
 import {
   runShortcode,
+  financialTransactionShortcode,
   imageShortcode,
   productShortcode,
   purchaseShortcode,
@@ -27,6 +28,7 @@ import {
   type TargetedImportStartOutput,
 } from "@cubby/schemas/run";
 import {
+  chargeHuntOutcome,
   runOrderCandidateState,
   runPurpose,
   runStatus,
@@ -344,6 +346,13 @@ export const runContract = defineContract("run", {
         /** A selected-orders mail import's per-order outcomes; empty otherwise. */
         orders: z.array(
           z.object({ orderId: z.string(), state: runOrderCandidateState }),
+        ),
+        /** A selected-charges run's per-charge outcomes; empty otherwise. */
+        charges: z.array(
+          z.object({
+            chargeId: financialTransactionShortcode,
+            outcome: chargeHuntOutcome,
+          }),
         ),
       })
       .nullable(),

@@ -27,6 +27,7 @@ describe("purchase-import agent tool authority", () => {
       "finish_import_run",
       "stop_import_run_for_review",
       "defer_order_for_review",
+      "settle_charge_hunt",
     ]);
     expect(
       tools

@@ -51,7 +51,10 @@ export const Route = createFileRoute("/api/import/agent/sync")({
         }
         // Loaded on request: run-service reaches the AI SDK stack, which would
         // otherwise load into every Worker request.
-        const [{ dispatchRunEvent }, { startOrResumeRun }] = await Promise.all([
+        const [
+          { dispatchRunEvent },
+          { ActiveChargeRunError, startOrResumeRun },
+        ] = await Promise.all([
           import("~/server/purchase-import/dispatch"),
           import("~/server/purchase-import/run-service"),
         ]);
@@ -67,7 +70,8 @@ export const Route = createFileRoute("/api/import/agent/sync")({
         } catch (error) {
           // A refused backfill (occupied account, invalid range) is the
           // member's to act on; return the server's own reason.
-          if (!body.data.backfill) throw error;
+          if (!body.data.backfill && !(error instanceof ActiveChargeRunError))
+            throw error;
           return Response.json(
             { error: error instanceof Error ? error.message : String(error) },
             { status: 409 },

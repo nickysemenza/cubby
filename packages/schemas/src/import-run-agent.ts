@@ -59,6 +59,7 @@ const IMPORT_RUN_AGENT_TOOLS = [
   "finish_import_run",
   "stop_import_run_for_review",
   "defer_order_for_review",
+  "settle_charge_hunt",
 ] as const;
 export type ImportRunAgentToolName = (typeof IMPORT_RUN_AGENT_TOOLS)[number];
 

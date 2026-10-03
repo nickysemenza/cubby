@@ -209,6 +209,11 @@ export const detailSlots = {
         default: m.VendorAccountOrderMail,
       })),
     ),
+    "charge-search": slot(() =>
+      import("~/app/vendors/charge-search").then((m) => ({
+        default: m.VendorAccountChargeSearch,
+      })),
+    ),
   },
   purchase: {
     "order-mail": slot(() =>

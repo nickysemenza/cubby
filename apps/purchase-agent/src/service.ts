@@ -19,6 +19,7 @@ import type {
   purchaseAgentRunRef,
   reconcileSettledRunInput,
   saveNavigationHintsInput,
+  settleChargeHuntInput,
   stopForReviewInput,
 } from "@cubby/schemas/purchase-agent-rpc";
 import { z } from "zod";
@@ -77,6 +78,9 @@ export interface PurchaseImportService {
   ): Promise<PurchaseImportServiceResult>;
   deferOrderForReview(
     input: z.infer<typeof deferOrderForReviewInput>,
+  ): Promise<PurchaseImportServiceResult>;
+  settleChargeHunt(
+    input: z.infer<typeof settleChargeHuntInput>,
   ): Promise<PurchaseImportServiceResult>;
   recordAgentUsage(input: AgentUsageEvent): Promise<void>;
   updateAgentProgress(

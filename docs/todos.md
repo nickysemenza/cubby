@@ -116,14 +116,6 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
-- 🟢 **Select statement charges for one run.** Account-sync and selected
-  order-mail runs record each order's terminal outcome, defer one ambiguous
-  order without blocking the rest, and carry unfinished orders into a restart.
-  Charge hunts still join the next account run as a queue: let a member choose
-  a subset of charge candidates and record each hunt's outcome per run. Reuse
-  the bounded prepare/commit and approval paths in
-  [purchase import](../.claude/skills/purchase-import/SKILL.md).
-
 - ⏳ **Conditional purchase-import browser extension.** Promote only if the
   Apple-event browser bridge repeatedly fails to background its window, cannot
   avoid Chrome's JavaScript-from-Apple-Events setting, or cannot provide

@@ -311,6 +311,24 @@ export function purchaseImportTools(
         ),
       }),
     }),
+    defineTool({
+      name: "settle_charge_hunt",
+      description:
+        "Record the outcome of one statement charge this run was asked to find, when importing evidence did not settle it. Use not_found after searching the vendor account for the charge's amount and date window without a matching order; use needs_review when a candidate order exists but stays ambiguous or unreadable. The server records the outcome for that one charge and the run continues with the remaining charges; it then ends in review instead of claiming a complete import. A charge the server already settled is recorded as resolved.",
+      input: v.object({
+        operationId,
+        huntId: v.pipe(v.string(), v.uuid()),
+        outcome: v.picklist(["not_found", "needs_review"]),
+        detail: v.pipe(v.string(), v.minLength(1), v.maxLength(1_000)),
+      }),
+      output: serviceResult,
+      durable: true,
+      run: async ({ data, step }) => ({
+        output: await step.do(`settle-charge-hunt:${data.operationId}`, () =>
+          serviceForRun().settleChargeHunt({ runId, ...data }),
+        ),
+      }),
+    }),
   ] as const;
 }
 

@@ -1,5 +1,6 @@
 /* eslint-disable anti-slop/no-unsafe-dictionary-type -- Browser outcomes and extractor outputs are external wire payloads. */
 import { runEntityId } from "@cubby/schemas/identifiers";
+import { chargeRunStartInput } from "@cubby/schemas/order-mail-review";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   awaitBrowserResult,
@@ -16,8 +17,10 @@ import { z } from "zod";
 
 import {
   expense,
+  financialTransactionAllocation,
   importSourceClaim,
   inventoryEntry,
+  merchantVendorRule,
   orderMail,
   orderMailEvent,
   product,
@@ -33,13 +36,16 @@ import {
   createProductFixture,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
+import { getRunLiveProgress } from "~/server/repo/run-progress";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
+import { startSelectedChargeRun } from "./charge-runs";
 import { learnPurchaseProductExternalId } from "./external-id-learning";
 import {
   startOrderMailImport,
   startSelectedOrderMailImport,
 } from "./gmail/import";
+import { discoverImportHunts } from "./hunts";
 import {
   authorizePurchaseAgent,
   type ScenarioHarness,
@@ -1151,6 +1157,115 @@ describe("purchase-agent scripted Flue scenarios", () => {
     expect(
       (await findings(runId)).filter((f) => f.status === "open"),
     ).toMatchObject([{ summary: expect.stringContaining("SCN70002") }]);
+    expect(await scenario.violations()).toEqual([]);
+  }, 90_000);
+
+  it("charge search: one run over three selected charges settles one, records one as not found and one for review, and finishes for review", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Scenario charge member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const card = await insertWithShortcode(ctx.db, "financialAccount", {
+      name: "Scenario card",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      ledgerPartyId: party.id,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: `Scenario charge shop ${crypto.randomUUID()}`,
+      website: `https://${SHOP_HOST}/orders`,
+      browserDomains: [SHOP_HOST],
+      orderEvidence: "online_account",
+    });
+    await getDb(ctx.db).insert(merchantVendorRule).values({
+      ledgerPartyId: party.id,
+      normalizedMerchant: "scenario charge shop",
+      vendorId: vendor.id,
+      confirmedByUserId: ctx.actor.userId,
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      label: "Scenario charge account",
+      vendorId: vendor.id,
+      ledgerPartyId: party.id,
+    });
+    const charge = (amount: number, date: string) =>
+      insertWithShortcode(ctx.db, "financialTransaction", {
+        accountId: card.id,
+        kind: "purchase",
+        status: "posted",
+        amount,
+        merchant: "SCENARIO CHARGE SHOP",
+        transactionDate: date,
+        postedDate: date,
+      });
+    const [a, b, c] = [
+      await charge(11, "2026-09-01"),
+      await charge(22, "2026-09-02"),
+      await charge(33, "2026-09-03"),
+    ];
+    await discoverImportHunts(ctx.db);
+    const sent: Array<Record<string, unknown>> = [];
+    const started = await startSelectedChargeRun(
+      ctx.db,
+      chargeRunStartInput.parse({
+        vendorAccountId: account.shortcode,
+        transactionIds: [a.shortcode, b.shortcode, c.shortcode],
+      }),
+      ctx.actor,
+      { send: async (value) => void sent.push(value) },
+    );
+    const [row] = await getDb(ctx.db)
+      .select({ id: runTable.id })
+      .from(runTable)
+      .where(eq(runTable.shortcode, started.runId));
+    if (!row || !sent[0]) throw new Error("Selected charges did not dispatch");
+    const runId = row.id;
+    scenarioRunId = runId;
+    // Another path settles the newest charge before the agent reaches it.
+    const settled = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      vendorAccountId: account.id,
+      date: "2026-09-03",
+      displayLabel: "Settled elsewhere",
+    });
+    await getDb(ctx.db)
+      .insert(financialTransactionAllocation)
+      .values({ transactionId: c.id, purchaseId: settled.id, amount: 33 });
+    await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
+    scenario = await startScenarioHarness(ctx.databaseUrl, {
+      steps: [
+        call("claim-1", "claim_next_import_work"),
+        { check: "claim-1", includes: "hunt" },
+        call("settle-1", "settle_charge_hunt", {
+          huntId: from("claim-1", "id"),
+          outcome: "not_found",
+          detail: "No order near this amount in the vendor history.",
+        }),
+        call("claim-2", "claim_next_import_work"),
+        { check: "claim-2", includes: "hunt" },
+        call("settle-2", "settle_charge_hunt", {
+          huntId: from("claim-2", "id"),
+          outcome: "needs_review",
+          detail: "Two orders fit this amount and date.",
+        }),
+        call("claim-done", "claim_next_import_work"),
+        { check: "claim-done", includes: "none" },
+        call("finish-1", "finish_import_run"),
+      ],
+      extractions: [],
+    });
+    await scenario.dispatch(sent[0]);
+    await waitForStatus(runId, "needs_review");
+
+    const progress = await getRunLiveProgress(ctx.db, started.runId);
+    expect(progress?.charges).toEqual([
+      { chargeId: a.shortcode, outcome: "not_found" },
+      { chargeId: b.shortcode, outcome: "deferred" },
+      { chargeId: c.shortcode, outcome: "resolved" },
+    ]);
+    expect(
+      (await findings(runId)).filter((f) => f.status === "open"),
+    ).toMatchObject([{ summary: expect.stringContaining(b.shortcode) }]);
     expect(await scenario.violations()).toEqual([]);
   }, 90_000);
 });
