@@ -1707,9 +1707,6 @@ async function main(): Promise<void> {
       };
       try {
         await install();
-        // First app launch can settle while XCTest starts. Input fixtures must
-        // instead reach the installed app's container before its first launch.
-        if (!inputJourney) await launch();
         const driverStarted = performance.now();
         try {
           await run("pnpm", [
@@ -1772,7 +1769,7 @@ async function main(): Promise<void> {
             throw error;
           }
         }
-        if (inputJourney) await launch();
+        await launch();
         if (journey && journeyPool) {
           try {
             scenarioEvidence.push(await journey.execute());
