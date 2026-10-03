@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { z } from "zod";
+import { readReplayDriverDiagnostics } from "./native-driver-diagnostics.ts";
 import { readReplayTextEntryDiagnostics } from "./native-text-entry-diagnostics.ts";
 
 const resultSchema = z.object({
@@ -52,14 +53,23 @@ export default {
       tmpdir(),
       parsed.data.session,
     );
-    if (!diagnostics) return;
+    const driverDiagnostics = readReplayDriverDiagnostics(
+      tmpdir(),
+      parsed.data.session,
+    );
     try {
-      writeFileSync(
-        join(directory, "native-text-entry-diagnostics.json"),
-        `${JSON.stringify(diagnostics, null, 2)}\n`,
-      );
+      if (driverDiagnostics)
+        writeFileSync(
+          join(directory, "native-replay-driver-diagnostics.json"),
+          `${JSON.stringify(driverDiagnostics, null, 2)}\n`,
+        );
+      if (diagnostics)
+        writeFileSync(
+          join(directory, "native-text-entry-diagnostics.json"),
+          `${JSON.stringify(diagnostics, null, 2)}\n`,
+        );
     } catch {
-      console.warn("[native-replay] Text entry diagnostics unavailable");
+      console.warn("[native-replay] Replay diagnostics unavailable");
     }
   },
 };

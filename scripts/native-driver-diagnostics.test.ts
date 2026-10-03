@@ -1,7 +1,13 @@
 // Startup traces carry selectors, credentials, paths and device identifiers.
 // Projection must discard those, reject malformed records and exclude old runs.
 import { strict as assert } from "node:assert";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -195,5 +201,90 @@ test("ignores old, incomplete, malformed and unsupported diagnostics", async () 
     );
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// Replay cleanup removes request traces before the harness's async collector.
+// Capture them synchronously in the SDK callback, without another session's
+// events or raw selectors, paths, record content and credentials.
+test("seals replay snapshot timings before SDK cleanup without exporting raw traces", async () => {
+  const daemon = mkdtempSync(join(tmpdir(), "agent-device-replay-daemon-"));
+  const output = mkdtempSync(join(tmpdir(), "native-replay-driver-result-"));
+  const previous = process.env.CUBBY_NATIVE_DIAGNOSTICS_DIR;
+  try {
+    const requests = join(
+      daemon,
+      "sessions",
+      "synthetic_replay_driver",
+      "requests",
+    );
+    const other = join(
+      daemon,
+      "sessions",
+      "synthetic_other_driver",
+      "requests",
+    );
+    mkdirSync(requests, { recursive: true });
+    mkdirSync(other, { recursive: true });
+    const event = {
+      ts: new Date().toISOString(),
+      phase: "ios.snapshot-source.prepare",
+      durationMs: 1234,
+      session: "synthetic-private-session",
+      data: {
+        selector: "synthetic-private-query",
+        token: "synthetic-private-secret",
+      },
+    };
+    writeFileSync(
+      join(requests, "capture.ndjson"),
+      [
+        JSON.stringify(event),
+        JSON.stringify({
+          ...event,
+          phase: "ios.snapshot-source.acquire",
+          durationMs: 56,
+        }),
+        JSON.stringify({ ...event, phase: "synthetic-private-phase" }),
+        JSON.stringify({ ...event, durationMs: -1 }),
+        JSON.stringify({ ...event, token: "x".repeat(100_001) }),
+        "not json synthetic-private",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(other, "capture.ndjson"),
+      JSON.stringify({ ...event, durationMs: 999 }),
+    );
+    process.env.CUBBY_NATIVE_DIAGNOSTICS_DIR = output;
+    const reporter = (
+      await import("../apps/web/tooling/native-replay-progress-reporter.ts")
+    ).default;
+    reporter.onTestResult({
+      status: "fail",
+      session: "synthetic:replay:driver",
+    });
+    rmSync(daemon, { recursive: true, force: true });
+    const result = JSON.parse(
+      readFileSync(
+        join(output, "native-replay-driver-diagnostics.json"),
+        "utf8",
+      ),
+    );
+    assert.deepEqual(result, {
+      schemaVersion: 1,
+      events: [
+        { phase: "ios.snapshot-source.prepare", durationMs: 1234, data: {} },
+        { phase: "ios.snapshot-source.acquire", durationMs: 56, data: {} },
+      ],
+    });
+    assert.doesNotMatch(
+      JSON.stringify(result),
+      /synthetic-private|secret|selector|session|2026/,
+    );
+  } finally {
+    if (previous === undefined) delete process.env.CUBBY_NATIVE_DIAGNOSTICS_DIR;
+    else process.env.CUBBY_NATIVE_DIAGNOSTICS_DIR = previous;
+    rmSync(daemon, { recursive: true, force: true });
+    rmSync(output, { recursive: true, force: true });
   }
 });

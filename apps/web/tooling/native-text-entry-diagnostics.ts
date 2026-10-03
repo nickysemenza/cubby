@@ -1,6 +1,7 @@
-import { closeSync, fstatSync, openSync, readSync, readdirSync } from "node:fs";
+import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 import { basename, join } from "node:path";
 import { z } from "zod";
+import { replaySessionRoots } from "./native-replay-session.ts";
 
 const count = z.number().int().safe().nonnegative();
 const eventSchema = z.discriminatedUnion("phase", [
@@ -76,25 +77,10 @@ export function readReplayTextEntryDiagnostics(
   temporaryRoot: string,
   session: string,
 ) {
-  // agent-device 0.21.20 exposes the replay session in progress events, but
-  // supplies its log path only after deleting the isolated daemon directory.
-  const name = session.replaceAll(/[^a-zA-Z0-9._-]/gu, "_");
-  if (!name || name === "." || name === "..") return;
-  try {
-    for (const directory of readdirSync(temporaryRoot, {
-      withFileTypes: true,
-    })) {
-      if (
-        !directory.isDirectory() ||
-        !directory.name.startsWith("agent-device-replay-daemon-")
-      )
-        continue;
-      const result = readNativeTextEntryDiagnostics(
-        join(temporaryRoot, directory.name, "sessions", name, "runner.log"),
-      );
-      if (result) return result;
-    }
-  } catch {
-    return;
+  for (const directory of replaySessionRoots(temporaryRoot, session)) {
+    const result = readNativeTextEntryDiagnostics(
+      join(directory, "runner.log"),
+    );
+    if (result) return result;
   }
 }

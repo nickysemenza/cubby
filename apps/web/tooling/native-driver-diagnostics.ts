@@ -1,7 +1,16 @@
-import { createReadStream } from "node:fs";
+import {
+  closeSync,
+  constants,
+  createReadStream,
+  fstatSync,
+  openSync,
+  readSync,
+} from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { z } from "zod";
+
+import { replaySessionRoots } from "./native-replay-session.ts";
 
 import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
 
@@ -93,6 +102,8 @@ const timingSchema = z.object({
 const eventSchema = z.object({
   ts: z.iso.datetime({ offset: true }),
   phase: z.enum([
+    "ios.snapshot-source.prepare",
+    "ios.snapshot-source.acquire",
     "exec_command",
     "daemon_startup",
     "daemon_request_timeout",
@@ -136,6 +147,73 @@ const eventSchema = z.object({
     .optional(),
 });
 
+function projectDiagnosticLine(line: string, threshold = 0) {
+  if (line.length > 100_000) return;
+  try {
+    const parsed = eventSchema.safeParse(JSON.parse(line));
+    if (!parsed.success || Date.parse(parsed.data.ts) < threshold) return;
+    const { ts: _timestamp, ...event } = parsed.data;
+    return event;
+  } catch {
+    return;
+  }
+}
+
+// Reporter callbacks are not awaited. Read a bounded prefix and tail of only
+// this session's requests before SDK cleanup, retaining the same projection.
+export function readReplayDriverDiagnostics(
+  temporaryRoot: string,
+  session: string,
+) {
+  const events: Omit<z.infer<typeof eventSchema>, "ts">[] = [];
+  for (const directory of replaySessionRoots(temporaryRoot, session)) {
+    let files: string[];
+    try {
+      files = walkFiles(join(directory, "requests"))
+        .filter((file) => file.endsWith(".ndjson"))
+        .slice(0, 20);
+    } catch {
+      continue;
+    }
+    for (const file of files) {
+      let descriptor: number | undefined;
+      try {
+        descriptor = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+        const stat = fstatSync(descriptor);
+        if (!stat.isFile()) continue;
+        const length = Math.min(stat.size, 256_000);
+        const buffer = Buffer.alloc(length);
+        const prefix = stat.size > length ? length / 2 : length;
+        const bytes = readSync(descriptor, buffer, 0, prefix, 0);
+        const tail =
+          stat.size > length
+            ? readSync(
+                descriptor,
+                buffer,
+                prefix,
+                length - prefix,
+                stat.size - (length - prefix),
+              )
+            : 0;
+        const content =
+          buffer.subarray(0, bytes).toString("utf8") +
+          "\n" +
+          buffer.subarray(prefix, prefix + tail).toString("utf8");
+        for (const line of content.split(/\r?\n/u)) {
+          const event = projectDiagnosticLine(line);
+          if (event) events.push(event);
+          if (events.length >= 1_000) return { schemaVersion: 1, events };
+        }
+      } catch {
+        // A disappearing or unreadable trace must not change the test result.
+      } finally {
+        if (descriptor !== undefined) closeSync(descriptor);
+      }
+    }
+    if (events.length) return { schemaVersion: 1, events };
+  }
+}
+
 // SDK traces contain argv, responses, credentials, selectors and device/session
 // identifiers. Serialize only the schema projection, never an original record.
 export async function collectNativeDriverDiagnostics(
@@ -156,16 +234,8 @@ export async function collectNativeDriverDiagnostics(
     const lines = createInterface({ input: stream, crlfDelay: Infinity });
     try {
       for await (const line of lines) {
-        if (line.length > 100_000) continue;
-        let parsed: ReturnType<typeof eventSchema.safeParse>;
-        try {
-          parsed = eventSchema.safeParse(JSON.parse(line));
-        } catch {
-          continue;
-        }
-        if (!parsed.success || Date.parse(parsed.data.ts) < threshold) continue;
-        const { ts: _timestamp, ...event } = parsed.data;
-        events.push(event);
+        const event = projectDiagnosticLine(line, threshold);
+        if (event) events.push(event);
       }
     } finally {
       lines.close();

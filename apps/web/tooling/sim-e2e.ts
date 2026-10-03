@@ -1913,6 +1913,11 @@ async function main(): Promise<void> {
       "native-text-entry-diagnostics.json",
     );
     if (existsSync(textDiagnostics)) scenarioEvidence.push(textDiagnostics);
+    const replayDiagnostics = path.join(
+      artifacts,
+      "native-replay-driver-diagnostics.json",
+    );
+    if (existsSync(replayDiagnostics)) scenarioEvidence.push(replayDiagnostics);
   }
   failure = finishE2ERun(failure);
   if (failure !== undefined) throw failure;
