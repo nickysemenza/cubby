@@ -43,10 +43,12 @@ import {
   type RunTrigger,
   type RunPurpose,
 } from "@cubby/schemas/purchase-import";
+import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import {
   orderBackfillRunInput,
   orderMailImportRunInput,
 } from "@cubby/schemas/run-fields";
+import type { Trade } from "@cubby/schemas/task-fields";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
 import { vendorAgentHints } from "@cubby/schemas/vendor-import-fields";
 import {
@@ -1162,6 +1164,105 @@ export async function expireOfflineRuns(db: Database, now = new Date()) {
 const STALE_RUN_MS = 2 * 60 * 60_000;
 
 /**
+ * A settling submission no longer speaks for the run when a newer submission
+ * has started since it began, or a member decided an approval since then: that
+ * decision delivers its own wake event. Either way the run is not abandoned.
+ */
+const isSubmissionSettle = (operationId: string) =>
+  /^submission-settled:./u.test(operationId);
+
+async function submissionStart(
+  db: Database,
+  runId: RunId,
+  operationId: string,
+): Promise<{ submissionId: string; since: Date } | null> {
+  const submissionId = /^submission-settled:(.+)$/u.exec(operationId)?.[1];
+  if (!submissionId) return null;
+  const [started] = await getDb(db)
+    .select({ at: sql<Date | null>`min(${runProgress.createdAt})` })
+    .from(runProgress)
+    .where(
+      and(
+        eq(runProgress.runId, runId),
+        sql`${runProgress.eventId} LIKE ${`submission-running:${submissionId}:%`}`,
+      ),
+    );
+  return started?.at ? { submissionId, since: new Date(started.at) } : null;
+}
+
+async function supersededSubmission(
+  db: Database,
+  runId: RunId,
+  start: { submissionId: string; since: Date } | null,
+): Promise<boolean> {
+  if (!start) return false;
+  const { submissionId, since } = start;
+  const [newer] = await getDb(db)
+    .select({ id: runProgress.id })
+    .from(runProgress)
+    .where(
+      and(
+        eq(runProgress.runId, runId),
+        sql`${runProgress.eventId} LIKE 'submission-running:%'`,
+        sql`${runProgress.eventId} NOT LIKE ${`submission-running:${submissionId}:%`}`,
+        sql`${runProgress.createdAt} > ${since.toISOString()}::timestamptz`,
+      ),
+    )
+    .limit(1);
+  if (newer) return true;
+  const [decided] = await getDb(db)
+    .select({ id: runApproval.id })
+    .from(runApproval)
+    .where(
+      and(
+        eq(runApproval.runId, runId),
+        sql`greatest(${runApproval.decidedAt}, ${runApproval.invalidatedAt}) > ${since.toISOString()}::timestamptz`,
+      ),
+    )
+    .limit(1);
+  return decided !== undefined;
+}
+
+/**
+ * Whether a browser command issued since `since` has been answered. A pending
+ * browser command ends its submission, so its answer resumes the
+ * conversation in a newer submission, possibly before this settle event is
+ * handled; the broker forgets a result once it is imported, so any later
+ * operation also shows that newer submission at work.
+ */
+async function answeredCommandSince(
+  db: Database,
+  broker: ReturnType<PurchaseImportNamespace["getByName"]>,
+  runId: RunId,
+  since: Date,
+): Promise<boolean> {
+  const operations = await getDb(db)
+    .select({
+      kind: runOperation.kind,
+      result: runOperation.result,
+      createdAt: runOperation.createdAt,
+    })
+    .from(runOperation)
+    .where(
+      and(
+        eq(runOperation.runId, runId),
+        sql`${runOperation.createdAt} >= ${since.toISOString()}::timestamptz`,
+      ),
+    )
+    .orderBy(asc(runOperation.createdAt));
+  for (const [index, row] of operations.entries()) {
+    if (row.kind !== "browser_command") continue;
+    if (index < operations.length - 1) return true;
+    const command = z
+      .object({ commandId: z.uuid(), command: browserBridgeRequest })
+      .safeParse(row.result);
+    if (command.success && (await broker.result(command.data.commandId)))
+      return true;
+  }
+  return false;
+}
+
+/**
  * A run still `running` after its Flue submission settled means the
  * coordinator stopped without a terminal tool call: a `review` progress
  * report, a turn budget, or a model that simply ended its turn. The one
@@ -1184,6 +1285,18 @@ export async function reconcileSettledRun(
   const scope = await loadRunScope(db, input.runId);
   if (scope.public.status !== "running")
     return { reconciled: false as const, status: scope.public.status };
+  const start = await submissionStart(
+    db,
+    scope.public.runId,
+    input.operationId,
+  );
+  // A signal that joined a live submission settles without ever running; it
+  // speaks for nothing, and the submission that did the work settles itself.
+  // A lost start event leaves the run to the stale-run sweep.
+  if (isSubmissionSettle(input.operationId) && !start)
+    return { reconciled: false as const, status: "running" as const };
+  if (await supersededSubmission(db, scope.public.runId, start))
+    return { reconciled: false as const, status: "running" as const };
   if (scope.public.purpose === "photo_inventory") {
     const awaitingPhotoReview = await withTransaction(db, async (tx) => {
       const [locked] = await tx
@@ -1237,6 +1350,15 @@ export async function reconcileSettledRun(
       (command) => cutoff === undefined || command.createdAt >= cutoff,
     );
     if (live.length > 0)
+      return { reconciled: false as const, status: "running" as const };
+    // The Mac can answer before the submission that issued the command ends.
+    // Its result is then queued as a browser_result event that resumes this
+    // conversation, so the run is still working, not abandoned. The stale-run
+    // sweep remains the backstop if that event is lost.
+    if (
+      start &&
+      (await answeredCommandSince(db, broker, scope.public.runId, start.since))
+    )
       return { reconciled: false as const, status: "running" as const };
     // A command the Mac never answered within the stale window is not work
     // in flight; it is the reason the run stalled. Its 25-hour deadline is
@@ -1976,7 +2098,13 @@ export async function readBrowserCommandResult(
 export async function importBrowserOrderEvidence(
   db: Database,
   namespace: PurchaseImportNamespace,
-  input: { runId: string; operationId: string; commandId: string },
+  input: {
+    runId: string;
+    operationId: string;
+    commandId: string;
+    defaultTrade?: Trade;
+    defaultProjectId?: string;
+  },
 ) {
   const scope = await loadRunScope(db, input.runId);
   assertRunActive(scope.public.status);
@@ -2231,6 +2359,10 @@ export async function importBrowserOrderEvidence(
         checksum,
       },
       extraction,
+      defaultTrade: input.defaultTrade,
+      defaultProjectId: input.defaultProjectId
+        ? await resolveOrThrow(db, "project", input.defaultProjectId)
+        : undefined,
       primaryDocumentImageId: primary
         ? await resolveOrThrow(db, "image", primary.id)
         : null,
@@ -3425,6 +3557,24 @@ function operationLogEntry(
   };
 }
 
+/**
+ * The queue event an approval decision delivers to its parked conversation.
+ * Without it the coordinator only resumes when a member prompts it. A retry
+ * signal is not fenced by the dispatch generation, and its id names the
+ * decision so the agent reads the persisted approval before continuing.
+ */
+export function approvalWakeEvent(
+  control: Awaited<ReturnType<typeof controlRun>>,
+): Extract<PurchaseAgentEvent, { type: "retry" }> | null {
+  if (!("wakeRunId" in control) || !control.wakeRunId) return null;
+  return {
+    version: 1,
+    runId: control.wakeRunId,
+    eventId: `approval:${control.approvalId}:${control.decision}`,
+    type: "retry",
+  };
+}
+
 /** Server tool calls and Mac bridge debug events, in occurrence order. */
 export async function loadRunLog(db: Database, shortcode: string) {
   const database = getDb(db);
@@ -4294,6 +4444,7 @@ export async function controlRun(
           status,
           approvalId,
           decision: "rejected" as const,
+          wakeRunId: scope.public.runId,
         };
       }
       if (
@@ -4336,6 +4487,7 @@ export async function controlRun(
             status: "running" as const,
             approvalId,
             decision: "invalidated" as const,
+            wakeRunId: scope.public.runId,
           };
         }
       }
@@ -4367,6 +4519,7 @@ export async function controlRun(
         status: "paused_approval" as const,
         approvalId,
         decision: "approved" as const,
+        wakeRunId: scope.public.runId,
       };
     },
   );

@@ -58,8 +58,11 @@ final class MacBrowserBridgeController: BrowserBridgeControlling {
         try await coordinator.connect(browser: browser, enhancedEvidence: enhancedEvidence)
     }
 
-    func syncNow(browser: BrowserChoice, enhancedEvidence: Bool) async throws {
-        _ = try await coordinator.syncNow(browser: browser, enhancedEvidence: enhancedEvidence)
+    func syncNow(
+        browser: BrowserChoice, enhancedEvidence: Bool, backfill: BrowserBridgeBackfillRange?
+    ) async throws {
+        _ = try await coordinator.syncNow(
+            browser: browser, enhancedEvidence: enhancedEvidence, backfill: backfill)
     }
 
     func disconnect() async {

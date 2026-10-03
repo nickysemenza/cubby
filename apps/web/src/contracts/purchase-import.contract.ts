@@ -51,6 +51,7 @@ export const purchaseImportContract = defineContract("purchaseImport", {
   applyValidationCorrections: mutation({
     input: applyValidationCorrectionsInput,
     output: applyValidationCorrectionsOut,
+    native: "Apply a reviewed subset of purchase-validation corrections",
     invalidates: ["purchase", "expense", "runOnly"],
   }),
   // Agent-facing (MCP `purchase_import`, `product_enrichment`, `imports_read`):

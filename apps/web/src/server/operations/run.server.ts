@@ -2,6 +2,7 @@ import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { runContract } from "~/contracts/run.contract";
+import { getPurchaseAgentQueue } from "~/server/cf-env";
 import { oauthRefreshToken } from "~/server/db/schema";
 import { executeEntityAs } from "~/server/entity-kernel";
 import { implementOperationDomain } from "~/server/operation-domain.server";
@@ -9,12 +10,14 @@ import {
   findActivePurchaseAgentGrant,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/purchase-import/agent-auth";
+import { dispatchRunEvent } from "~/server/purchase-import/dispatch";
 import {
   confirmMerchantVendorRule,
   listMerchantVendorRules,
 } from "~/server/purchase-import/hunts";
 import { commitPurchaseImport } from "~/server/purchase-import/import-orders";
 import {
+  approvalWakeEvent,
   controlRun,
   loadRunDetail,
   loadRunLog,
@@ -140,6 +143,9 @@ export const runHandlers = implementOperationDomain(runContract, {
       runPublicId: runId,
       ...input,
     });
+    const wake = approvalWakeEvent(control);
+    const queue = wake ? getPurchaseAgentQueue() : null;
+    if (wake && queue) await dispatchRunEvent(context.db, queue, wake);
     if (
       "dispatchRunId" in control &&
       control.dispatchRunId &&

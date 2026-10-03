@@ -3034,15 +3034,6 @@ export default defineEntity({
           label: "Not purchased",
           message: "Stocked product has no Purchase or acquiring Expense.",
         },
-        {
-          id: "duplicate_external_id",
-          facet: "integrity",
-          kind: "defect",
-          exceptions: "forbidden",
-          label: "Duplicate external ID",
-          message:
-            "An exact external identifier is shared with another live product.",
-        },
       ],
     },
     images: {
