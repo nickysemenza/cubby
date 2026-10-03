@@ -14,12 +14,19 @@ runs:
         # cannot satisfy the harness's exact-source provenance contract.
         runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yaml/runs" \
           --method GET -f head_sha="$GITHUB_SHA" \
-          -f status=completed -f per_page=10 \
-          --jq '.workflow_runs[] | select(.conclusion == "success" and (.event == "push" or .event == "workflow_dispatch")) | .id')
+          -f per_page=10 \
+          --jq '.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch") | .id')
         for run_id in $runs; do
           artifact=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
             --jq '.artifacts[] | select(.name == "worker-build" and .expired == false) | .id')
           if [[ -n "$artifact" ]]; then
+            # The producer certifies the artifact; unrelated test lanes need not
+            # finish before an optional native run can verify and consume it.
+            producer=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" \
+              --jq '.jobs[] | select(.name == "Build Workers" and .status == "completed" and .conclusion == "success") | .id')
+            if [[ -z "$producer" ]]; then
+              continue
+            fi
             echo "run-id=$run_id" >> "$GITHUB_OUTPUT"
             break
           fi
