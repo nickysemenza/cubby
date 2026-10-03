@@ -1,4 +1,6 @@
-import { format_currency } from "~/lib/wasm-format";
+import { wasmFormat } from "~/lib/wasm";
+
+export { roundTo } from "~/lib/round-to";
 
 // Pure number formatters, kept free of UI dependencies so chart theme modules
 // can import them. `lib/utils` re-exports everything here.
@@ -53,7 +55,11 @@ export function formatCurrency(
   options: { minimumFractionDigits?: number } = {},
 ): string {
   const minimum = options.minimumFractionDigits ?? Math.min(2, decimals);
-  return format_currency(value, minimum, Math.max(decimals, minimum));
+  return wasmFormat.format_currency(
+    value,
+    minimum,
+    Math.max(decimals, minimum),
+  );
 }
 
 /** Format currency in compact notation (e.g. "$1.2M"). */
@@ -84,12 +90,6 @@ export function formatCompactCount(
 /** `$1.23`, or `<$0.01` for a positive cost too small to show at cent precision. */
 export function formatSmallCurrency(value: number): string {
   return value > 0 && value < 0.01 ? "<$0.01" : formatCurrency(value);
-}
-
-/** Round to `digits` decimals as a number (`roundTo(1.2345, 2) === 1.23`). */
-export function roundTo(value: number, digits: number): number {
-  const factor = 10 ** digits;
-  return Math.round((value + Number.EPSILON) * factor) / factor;
 }
 
 /**

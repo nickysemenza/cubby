@@ -11,11 +11,7 @@ import {
   type NutrientKey,
 } from "@cubby/usda";
 
-import { roundTo } from "~/lib/utils";
-import {
-  format_compact_estimate,
-  format_compact_number,
-} from "~/lib/wasm-format";
+import { roundTo } from "~/lib/round-to";
 
 /** One decimal place, dropping a trailing `.0` (`12.0` → `12`, `0.25` → `0.3`). */
 export const trimAmount = (v: number) => roundTo(v, 1).toString();
@@ -47,27 +43,6 @@ export function formatEstimate(
     ? `${confidence} · includes inferred zero`
     : confidence;
 }
-
-export type CompactEstimateUnit = "kcal" | "macro";
-
-/**
- * A figure in a compact nutrition cell: kcal rounds half-up to a whole number,
- * a macro to one decimal, both grouped en-US. Formatted by the Rust
- * implementation native shares (`golden-vectors/display-format.json`).
- */
-export const compactNumberText = (
-  value: number,
-  unit: CompactEstimateUnit,
-): string => format_compact_number(value, unit);
-
-/**
- * The one-line macro cell: a range joins with an en dash, a partial estimate
- * ends in `+`, and anything unavailable or pending is `—`.
- */
-export const compactEstimateText = (
-  estimate: MeasureEstimate,
-  unit: CompactEstimateUnit,
-): string => format_compact_estimate(estimate, unit);
 
 /** Accessible detail for an otherwise compact unavailable/pending cell. */
 export function estimateStatusText(estimate: MeasureEstimate): string | null {

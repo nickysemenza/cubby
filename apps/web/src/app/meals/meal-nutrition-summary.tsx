@@ -19,9 +19,8 @@ import { getErrorMessage } from "~/lib/error-utils";
 import {
   compactEstimateText,
   compactNumberText,
-  estimateStatusText,
-  formatEstimate,
-} from "~/lib/nutrition-format";
+} from "~/lib/nutrition-compact-format";
+import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";

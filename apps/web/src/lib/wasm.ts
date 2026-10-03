@@ -36,6 +36,20 @@ type ImmutableWasm<T> = {
 const instance: WasmType = await import("@cubby/recipebridge");
 
 /**
+ * Untraced, uncached access to the pure value formatters (recipebridge
+ * `display_format`). They run once per table cell and cost microseconds, so
+ * the proxy's trace span and JSON-keyed LRU would dominate. Taken from this
+ * module's instance because the Worker build initializes WASM only through
+ * this loader; a second direct import breaks under workerd.
+ */
+export const wasmFormat = {
+  format_currency: instance.format_currency,
+  format_number: instance.format_number,
+  format_compact_number: instance.format_compact_number,
+  format_compact_estimate: instance.format_compact_estimate,
+};
+
+/**
  * Memoize results for these methods, keyed by their args. They are *pure*
  * (output depends only on input) and get called with identical args many times
  * per page as React re-renders during query streaming — profiling showed ~23×
