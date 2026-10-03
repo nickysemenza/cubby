@@ -162,14 +162,6 @@ See also the image operational passes at the end of this file.
   Preserve same-day order ids and never rewind the incremental cursor
   (`purchase-import/run-service.ts`, `VendorAccount.cursor`).
 
-- 🟢 **Vendor evidence classification and policy.** Automatically classify
-  `orderEvidence` only from clear deterministic evidence; review uncertain
-  inference and preserve explicit choices. Resolved `evidenceExpectation`
-  governs whether evidence is wanted; source classification guides where to
-  look, never silently suppressing required discovery. Surface contradictory
-  choices in one review path, without another policy or confidence setting
-  (`repo/purchase-evidence-policy.ts`, `purchase-import/hunts.ts`).
-
 - 🟢 **Finish the input-first retailer and statement journey.** Join saved
   synthetic order-history and Product HTML through browser capture,
   prepare/commit, and purchase approval. Cover both statement/order sequences,

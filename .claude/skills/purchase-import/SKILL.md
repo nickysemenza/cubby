@@ -137,7 +137,16 @@ correction creates a linked successor run and new decision revision.
 
 Create or update the Vendor deliberately, then configure:
 
-- `orderEvidence`: `online_account`, `receipt_only`, or `not_expected`;
+- `orderEvidence`: `online_account`, `receipt_only`, or `not_expected`. It says
+  where to look, never whether evidence is wanted; the resolved
+  `evidenceExpectation` (transaction, then vendor, then category) decides
+  that, so a required charge from a `not_expected` vendor still opens a
+  `receipt_required` hunt. Creating a browser-synced account for a vendor with
+  `browserDomains` fills only an unset value with `online_account`; an
+  explicit choice is never overwritten and weaker signals stay unset for the
+  `vendor_order_evidence` gap. Contradictory choices (`not_expected` source
+  with a required vendor policy, or a not-expected policy with a source) show
+  as `vendor_order_evidence_conflict`; resolve by changing one field;
 - `browserDomains` and `orderUrlTemplate` for online accounts;
 - `orderEmailSenders` only for verified senders outside the website domain;
 - `returnWindowDays` only when the policy is known.
