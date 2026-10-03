@@ -28,10 +28,10 @@ wait text "Synthetic Input Card" 30000
 wait "id=statement.csv.select.1" 30000
 # The switch's AX bounds include its label; tap the thumb in this fixed fixture.
 press 338 650
-wait "label=Kind" 30000
-click "label=Kind"
-wait "label=Purchase" 30000
-click "label=Purchase"
+wait "role=Button label=\"Kind, Purchase\"" 30000
+click "role=Button label=\"Kind, Purchase\""
+wait "role=Button label=Purchase" 30000
+click "role=Button label=Purchase"
 wait "id=statement.csv.confirm" 30000
 click "id=statement.csv.confirm"
 wait text "Transactions recorded" 30000
