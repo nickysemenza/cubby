@@ -2,6 +2,11 @@ name: Apple runner benchmark
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/apple-runner-benchmark.yaml
+      - scripts/benchmark-apple-runner.ts
+      - scripts/apple-simulator-selection.ts
 
 permissions:
   contents: read
