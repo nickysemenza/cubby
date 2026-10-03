@@ -59,6 +59,7 @@ import {
 import {
   getDb,
   notDeleted,
+  unwrapDb,
   withTransaction,
   withTransactionDatabase,
 } from "~/server/repo/database-helpers";
@@ -94,6 +95,12 @@ import {
   attachPendingOrderMailEvidence,
   type OrderMailEvidencePorts,
 } from "./gmail/process";
+import {
+  MODEL_STYLE_MATCH_REASON,
+  manufacturerPartRequests,
+  modelStyleTokens,
+  sharesModelWithinManufacturer,
+} from "./manufacturer-identity";
 import { productEnrichmentTarget } from "./product-enrichment-target";
 import { recordRunWrites } from "./run-audit";
 import { auditAllImportBatches, loadRunScope } from "./run-service";
@@ -184,6 +191,7 @@ const lineIdentifierRequests = (
         ? [{ source: GTIN_SOURCE, externalId: gtin, kind: GTIN_KIND }]
         : [];
     }),
+    ...manufacturerPartRequests(line),
   ];
 };
 
@@ -222,12 +230,49 @@ async function productCandidates(
         .limit(20)
     : [];
   const exactProductIds = new Set(exact.map(({ id }) => id));
-  return [...exact, ...fuzzy.filter(({ id }) => !exactProductIds.has(id))]
+  const modelTokens = modelStyleTokens(line.title).map((token) =>
+    token.toLowerCase(),
+  );
+  const sharedModel = modelTokens.length
+    ? await database
+        .select({
+          id: product.id,
+          shortcode: product.shortcode,
+          name: product.name,
+          manufacturer: product.manufacturer,
+          model: product.model,
+        })
+        .from(product)
+        .where(
+          and(
+            notDeleted(product),
+            inArray(sql`lower(${product.model})`, modelTokens),
+          ),
+        )
+        .limit(20)
+    : [];
+  // A shared model/style number only ranks: it never claims an exact variant.
+  const modelRanked = sharedModel.filter(
+    (hit) =>
+      !exactProductIds.has(hit.id) &&
+      sharesModelWithinManufacturer(line.title, hit),
+  );
+  const modelRankedIds = new Set(modelRanked.map(({ id }) => id));
+  return [
+    ...exact,
+    ...modelRanked,
+    ...fuzzy.filter(
+      ({ id }) => !exactProductIds.has(id) && !modelRankedIds.has(id),
+    ),
+  ]
     .slice(0, 20)
     .map(({ id, shortcode, ...candidate }) => ({
       productId: shortcode,
       ...candidate,
       exactIdentifierMatch: exactProductIds.has(id),
+      matchReason: modelRankedIds.has(id)
+        ? MODEL_STYLE_MATCH_REASON
+        : undefined,
     }));
 }
 
@@ -1206,6 +1251,18 @@ async function productIdentifierCandidates(
   return candidates;
 }
 
+const productProofOwner = async (
+  db: Database | DrizzleTransaction,
+  productId: ProductId,
+) => {
+  const [owner] = await unwrapDb(db)
+    .select({ manufacturer: product.manufacturer })
+    .from(product)
+    .where(eq(product.id, productId))
+    .limit(1);
+  return owner ?? {};
+};
+
 const withoutUnlearnedIdentifiers = <T extends string>(
   fields: readonly T[],
   learnedIdentifier: boolean,
@@ -1247,6 +1304,7 @@ async function commitEnrichmentIdentifier(
     )
     .limit(1);
   const observed = retainedCaptureMetadata.safeParse(evidence?.metadata);
+  const owner = await productProofOwner(tx, productId);
   const amazonId = identifier.externalId.toUpperCase();
   const amazonProven =
     observed.success &&
@@ -1256,7 +1314,12 @@ async function commitEnrichmentIdentifier(
   const proof = amazonProven
     ? { proven: true as const, externalId: amazonId }
     : observed.success
-      ? proveStructuredIdentifier(identifier, observed.data, input.allowedHosts)
+      ? proveStructuredIdentifier(
+          identifier,
+          observed.data,
+          input.allowedHosts,
+          owner,
+        )
       : { proven: false as const };
   if (!proof.proven)
     throw new Error(
@@ -1383,6 +1446,7 @@ export async function commitProductEnrichment(
             ),
             metadata.data,
             scope.public.allowedHosts,
+            await productProofOwner(db, productId),
           ));
     const verified =
       metadata.success && exactVariant

@@ -63,6 +63,8 @@ export interface ProductMatchPoolEntry {
   id: ProductId;
   name: string;
   rootCategoryId: string | null;
+  manufacturer: string;
+  model: string | null;
   createdAt: Date;
 }
 
@@ -82,6 +84,8 @@ export async function loadProductMatchPools(db: Database): Promise<{
         id: product.id,
         name: product.name,
         categoryId: product.categoryId,
+        manufacturer: product.manufacturer,
+        model: product.model,
         createdAt: product.createdAt,
         hasInventory: sql<boolean>`${HAS_LIVE_INVENTORY}`,
         hasPurchase: sql<boolean>`${HAS_LIVE_PURCHASE_LINK}`,
@@ -106,6 +110,8 @@ export async function loadProductMatchPools(db: Database): Promise<{
       rootCategoryId: row.categoryId
         ? (categories.get(row.categoryId) ?? null)
         : null,
+      manufacturer: row.manufacturer,
+      model: row.model,
       createdAt: row.createdAt,
     };
     if (row.hasPurchase) purchasePool.push(entry);

@@ -49,7 +49,9 @@ import {
   describeSignals,
   matchReadCoverage,
   type MatchSignals,
+  sharesModel,
   matchSurvivorImageOrder,
+  pairByModel,
   pairByNameTokens,
   rankMatches,
 } from "./product-match-ranking";
@@ -270,6 +272,9 @@ export async function getProductMatchQueue(
       item.rootCategoryId,
     ]),
   );
+  const byId = new Map(
+    [...pools.photo, ...pools.purchase].map((item) => [item.id, item]),
+  );
   const signals = new Map<string, MatchSignals<ProductId>>();
   const upsert = (
     photoId: ProductId,
@@ -288,6 +293,10 @@ export async function getProductMatchQueue(
       sameCategory:
         photoRoot && purchaseRoot ? photoRoot === purchaseRoot : null,
       sameOwner: null,
+      sameModel:
+        byId.has(photoId) && byId.has(purchaseId)
+          ? sharesModel(byId.get(photoId)!, byId.get(purchaseId)!)
+          : false,
       ...signals.get(key),
       ...patch,
     });
@@ -298,6 +307,11 @@ export async function getProductMatchQueue(
       overlap: pair.overlap,
     });
   for (const { photoId, purchaseId } of semantic.pairs.values())
+    upsert(photoId, purchaseId, {});
+  for (const { photoId, purchaseId } of pairByModel(
+    focus && !photoPool.length ? pools.photo : photoPool,
+    purchasePool,
+  ))
     upsert(photoId, purchaseId, {});
   const detector = [...signals.values()].filter(
     (item) =>

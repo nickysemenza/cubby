@@ -69,6 +69,7 @@ import {
   learnPurchaseProductExternalId,
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
+import { manufacturerPartRequests } from "./manufacturer-identity";
 import {
   lockPartySettlement,
   settlePurchaseFromRetainedPayments,
@@ -428,12 +429,13 @@ async function decideLineIdentities(
   const decisionsByExternalIdentity = new Map<string, LineIdentityDecision>();
   const candidate = input.extraction.candidate;
   if (!candidate) return [];
-  const exactRequests = candidate.lines.map((line) =>
-    lineIdentifiers(line).map((identifier) => ({
+  const exactRequests = candidate.lines.map((line) => [
+    ...lineIdentifiers(line).map((identifier) => ({
       ...identifier,
       source: externalSource(line.productUrl, input.vendorId),
     })),
-  );
+    ...manufacturerPartRequests(line),
+  ]);
   const exactHits = await findProductsByExternalIds(db, exactRequests.flat());
   for (const [index, line] of candidate.lines.entries()) {
     const role = await chooseLineStage(db, input.runId, index, line, "role");

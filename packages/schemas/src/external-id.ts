@@ -22,6 +22,11 @@ export const externalIdKind = z.enum([
   "internet_number",
   "item_number",
   "catalog_number",
+  // A manufacturer's part/MPN that names ONE exact variant (a size/color), with
+  // `source` = `manufacturerSource(Product.manufacturer)`. Distinct from
+  // `item_number`'s vendor-scoped meaning and from `Product.model`: a shared
+  // family/style number stays descriptive in `model` and only ranks candidates.
+  "manufacturer_part",
   // Barcodes. They live here rather than in a scalar column because a product
   // routinely carries more than one — a manufacturer reissues a SKU, a retailer
   // relabels, two listings of one item disagree — and `Product.upc` could hold
@@ -38,6 +43,30 @@ export const externalIdKind = z.enum([
   "legacy_unspecified",
 ]);
 export type ExternalIdKind = z.infer<typeof externalIdKind>;
+
+/**
+ * The `source` slug for a manufacturer-scoped identifier. Mirrors the vendor
+ * slug rule (lowercase kebab) so one function names both sides of a comparison.
+ * Null when the name has no letters or digits.
+ */
+export const manufacturerSource = (manufacturer: string): string | null =>
+  manufacturer
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/gu, "-")
+    .replaceAll(/^-|-$/gu, "") || null;
+
+/**
+ * Comparison key for a descriptive `Product.model` / style number: lowercase
+ * alphanumerics, and only when it is distinctive enough to corroborate (3+
+ * characters with a digit). A family/style number shared by sibling sizes and
+ * colors is ranking evidence, never identity.
+ */
+export const comparableModel = (model: string | null | undefined) => {
+  const key = (model ?? "").toLowerCase().replaceAll(/[^\p{L}\p{N}]+/gu, "");
+  return key.length >= 3 && /\d/u.test(key) ? key : null;
+};
 
 export const GTIN_SOURCE = "gtin";
 
@@ -240,6 +269,7 @@ export const EXTERNAL_ID_KINDS = {
   internet_number: { entities: ["product"], primarySlot: true },
   item_number: { entities: ["product"], primarySlot: true },
   catalog_number: { entities: ["product"], primarySlot: true },
+  manufacturer_part: { entities: ["product"], primarySlot: true },
   gtin_14: { entities: ["product"], primarySlot: true },
   legacy_unspecified: { entities: ["product"], primarySlot: true },
   settlement_ref: { entities: ["financialTransaction"], primarySlot: false },

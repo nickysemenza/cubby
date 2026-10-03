@@ -150,14 +150,6 @@ See also the image operational passes at the end of this file.
 
 ### Review and apply corrections
 
-- 🧱 **Cross-vendor manufacturer identifiers.** Add manufacturer-scoped
-  part/style identity distinct from retailer SKU, with contract/generation
-  compatibility planned across clients. Only identifiers proven to name an
-  exact variant may resolve identity in the unique external-ID namespace;
-  shared family/style numbers remain descriptive candidate-ranking evidence
-  requiring size/color/model corroboration. Do not add a Product-family entity
-  or merge automatically (`packages/schemas/src/external-id.ts`).
-
 - 🤔 **Run the purchase decision evaluation.** A 12-case synthetic corpus and
   scorer (correct, unsafe, reviewable miss; latency, tokens, cost) exist behind
   `pnpm --dir apps/web eval:purchase-decisions` (opt-in, billed). Run it on

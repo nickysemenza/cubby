@@ -42,6 +42,14 @@ match below. Never store a shared style number as `retailer_sku` or any other
 external id: it would claim one variant and collide with its siblings. Keep it
 in `model` or `notes`.
 
+An exact manufacturer part number (MPN that names one size and color) is the
+exception: store it as `manufacturer_part` with `source` set to the kebab slug
+of the Product's `manufacturer` (not the seller's slug). Commits prove it only
+from the page's `mpns` on a single-Product vendor page; a ProductGroup page does
+not prove it. Purchase prep still ranks a shared model/style number
+(`Product.model` within the same manufacturer) as a candidate with "confirm size
+and color", never as `exactIdentifierMatch`.
+
 Purchase prep only reports `exactIdentifierMatch` for identifiers stored as
 external ids, never for text in `notes`. When a photo shows a legible barcode,
 record it with `product_enrichment.patch_external_ids` (`source: "gtin"`,

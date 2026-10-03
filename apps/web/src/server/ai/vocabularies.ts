@@ -202,6 +202,8 @@ export const EXTERNAL_ID_KIND_DESCRIPTIONS = {
     "The manufacturer's own model/part number, as printed on the product or its packaging",
   catalog_number:
     "A professional distributor's catalog/part number (McMaster-Carr, Grainger, DigiKey, …)",
+  manufacturer_part:
+    "A manufacturer's part number (MPN) that names ONE exact size/color variant; source is the manufacturer, not a seller. A shared family or style number is NOT this",
   gtin_14: "A barcode — UPC, EAN, or GTIN — 8 to 14 digits",
 } satisfies Record<Exclude<ExternalIdKind, "legacy_unspecified">, string>;
 
