@@ -137,16 +137,6 @@ See also the image operational passes at the end of this file.
   range control. Pace by the browser bridge's one-command handoff unless a
   vendor proves a stricter limit.
 
-- ⏳ **Finish the input-first retailer and statement journey.** Browser
-  capture, prepared-order Product conflict review and merge, purchase approval,
-  both statement/order arrival sequences, CSV refunds and grouped settlement,
-  and Gmail Connect/callback/discovery are verified locally. The Mac
-  CSV → photo → receipt and receipt → photo → CSV input journeys passed on clean
-  `f3daf8676` with matching builds and sealed, checksum-verified artifacts. iOS
-  interactive CSV/photo review still awaits a passing artifact.
-  Acceptance and external model/provider boundaries:
-  [core journey E2E](agents/core-journey-e2e.md).
-
 - ⏳ **Conditional purchase-import browser extension.** Promote only if the
   Apple-event browser bridge repeatedly fails to background its window, cannot
   avoid Chrome's JavaScript-from-Apple-Events setting, or cannot provide
