@@ -258,12 +258,22 @@ See also the image operational passes at the end of this file.
   the local-work Live Activity feed separate.
 
 - ⏳ **Native workflow parity with web.** Promote when a recurring household
-  task still needs the web. Concrete gap: `NativePresentationCoverage.heroAction`
-  marks add-to-inventory, bulk edit, delete, discard, mark-purchased,
-  record-sale, and set-status unsupported; port recurring verbs first,
-  preserving web confirmations and impact previews. Add editor focus order or
-  comprehensive sheet lifecycle only on demonstrated friction. Owners:
-  `apps/apple/App/Shared`, generated `EntityCatalog`.
+  task still needs the web. Coverage is declared once in
+  `packages/schemas/src/native-coverage.ts` with a shrink-only unsupported
+  ceiling per kind; hero actions and list cells are covered. Remaining gaps
+  are bespoke detail slots (the Run import console is 16 of them; project
+  budget/schedule/analytics; recipe workflow; cookbook TOC; settlement and
+  reconciliation), structured detail renderers (recipe sections/totals/yield,
+  financial identity and source refs), and the controls below. Known native
+  divergences: task board lanes show project ids, not names; record-sale has
+  no disposition title. Add editor focus order or comprehensive sheet
+  lifecycle only on demonstrated friction. Owners: `apps/apple/App/Shared`,
+  generated `EntityCatalog`.
+
+- ⏳ **Single-source amount formatting.** Field formats are pinned by
+  `packages/shared/golden-vectors/display-format.json`, but `{value, unit}`
+  amounts still format separately (web `wasm.format_amount`, native Swift).
+  Export the formatter through `cubby-ffi` when a native amount view drifts.
 
 - ⏳ **Native specialized-renderer editors.** Promote per field as a native
   workflow needs it: product `unitMappings`/`labelNutrition` (read-only today),
