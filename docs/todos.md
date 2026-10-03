@@ -359,10 +359,6 @@ See also the image operational passes at the end of this file.
   addresses negative expected quantities from exits whose earlier acquisition
   is missing; filling known acquisition quantities remains an operational pass.
 
-- 🟢 **Location subtree filters.** Include descendants of a selected Location
-  in inventory/Product filtering through the generic filter path. Reuse a
-  scoped descendant-id helper rather than loading the whole-tree CTE.
-
 - 🟢 **Product external-ID collision review.** Make collisions encountered
   during imports/enrichment actionable through existing
   `product.externalIdCollisions` and collision review paths. Keep exact
