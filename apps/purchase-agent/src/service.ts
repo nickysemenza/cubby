@@ -9,6 +9,7 @@ import type {
   AgentProgressEvent,
   AgentUsageEvent,
   auditBatchInput,
+  deferOrderForReviewInput,
   importOrderEvidenceInput,
   issueBrowserCommandInput,
   markHistoryExpiredInput,
@@ -73,6 +74,9 @@ export interface PurchaseImportService {
   finishRun(input: OperationRef): Promise<PurchaseImportServiceResult>;
   stopForReview(
     input: z.infer<typeof stopForReviewInput>,
+  ): Promise<PurchaseImportServiceResult>;
+  deferOrderForReview(
+    input: z.infer<typeof deferOrderForReviewInput>,
   ): Promise<PurchaseImportServiceResult>;
   recordAgentUsage(input: AgentUsageEvent): Promise<void>;
   updateAgentProgress(

@@ -4,6 +4,7 @@ import type {
   AgentProgressEvent,
   AgentUsageEvent,
   auditBatchInput,
+  deferOrderForReviewInput,
   importOrderEvidenceInput,
   issueBrowserCommandInput,
   markHistoryExpiredInput,
@@ -1166,6 +1167,22 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
             operationId: input.operationId,
             kind,
             summary: input.detail ?? input.reason.replaceAll("_", " "),
+          }),
+      ),
+    );
+  }
+
+  deferOrderForReview(input: z.infer<typeof deferOrderForReviewInput>) {
+    return this.withDatabase((db, service) =>
+      service.runImportOperation(
+        db,
+        { ...input, kind: "defer_order_for_review", payload: input },
+        () =>
+          service.deferOrderForReview(db, {
+            runId: input.runId,
+            operationId: input.operationId,
+            orderId: input.orderId,
+            summary: input.detail,
           }),
       ),
     );
