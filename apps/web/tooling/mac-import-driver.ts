@@ -793,17 +793,37 @@ export class MacImportDriver {
     // CubbyCommands binds Photos/Browse to the fourth/fifth AppSection tabs.
     this.nativeShortcut(label === "Photos" ? 21 : 23, label);
     await this.wait(`label="${label}" role=window`);
-    this.guardForeground();
     // View commands can change the main destination while Settings remains key.
     // Raise the owned main window before invoking a file importer or sheet.
-    execFileSync(
-      "osascript",
-      [
-        "-e",
-        'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set mainWindow to first window of ownedProcess whose value of attribute "AXIdentifier" is "main"\n perform action "AXRaise" of mainWindow\n end tell\nend run',
-        String(this.pid),
-      ],
-      { encoding: "utf8", timeout: 10000 },
+    await pollUntil(
+      () => {
+        this.guardForeground();
+        try {
+          execFileSync(
+            "osascript",
+            [
+              "-e",
+              'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set mainWindow to first window of ownedProcess whose value of attribute "AXIdentifier" is "main"\n perform action "AXRaise" of mainWindow\n end tell\nend run',
+              String(this.pid),
+            ],
+            { encoding: "utf8", timeout: 10000 },
+          );
+          return true;
+        } catch (error) {
+          const lookup = z
+            .object({ status: z.literal(1), stderr: z.string() })
+            .safeParse(error);
+          // System Events can lag the owned window's accessibility snapshot.
+          if (
+            lookup.success &&
+            lookup.data.stderr.includes("AXIdentifier") &&
+            lookup.data.stderr.includes("Invalid index. (-1719)")
+          )
+            return undefined;
+          throw error;
+        }
+      },
+      { label: "raise owned main window", timeoutMs: 10000, intervalMs: 100 },
     );
     this.record(["raise-main-window", label], 0, this.observe());
   }
