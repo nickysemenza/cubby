@@ -21,7 +21,7 @@ click "label=\"Browse catalog\""
 scroll down 0.5 --until "id=browse.catalog.product"
 wait "id=browse.catalog.product" 30000
 click "id=browse.catalog.product label=Products"
-wait "id=browse.product.list" 30000
+wait text "Synthetic Atlas Lantern Updated" 30000
 wait "id=browse.product.row.${PRODUCT_ID}" 30000
 wait "label=\"List controls\"" 30000
 click "label=\"List controls\""
