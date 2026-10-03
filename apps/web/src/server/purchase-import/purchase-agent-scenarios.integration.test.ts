@@ -1,9 +1,6 @@
 /* eslint-disable anti-slop/no-unsafe-dictionary-type -- Browser outcomes and extractor outputs are external wire payloads. */
 import { runEntityId } from "@cubby/schemas/identifiers";
-import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
-import { testShortcode } from "@cubby/schemas/testing";
 import { and, eq, inArray } from "drizzle-orm";
-import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import {
   awaitBrowserResult,
   awaitEvent,
@@ -24,7 +21,6 @@ import {
   orderMail,
   orderMailEvent,
   product,
-  project,
   purchase,
   runApproval,
   runFinding,
@@ -48,7 +44,7 @@ import {
   waitFor,
   workerdDiagnostic,
 } from "./purchase-agent-workerd.fixtures";
-import { controlRun, startOrResumeRun } from "./run-service";
+import { approvalWakeEvent, controlRun, startOrResumeRun } from "./run-service";
 
 // Each scenario drives the production Flue agent, its tools, the MCP server,
 // queue delivery, the browser broker, and the web Worker's writers end to
@@ -281,23 +277,13 @@ describe("purchase-agent scripted Flue scenarios", () => {
           })),
         );
     await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
-    // A pantry staple this vendor already sold the household, by its exact
-    // SKU. A principal Expense needs a trade, and the browser import path
-    // supplies none of its own (reported finding): a food Product inherits
-    // the household Project's trade, so re-buying one imports cleanly.
-    await getDb(ctx.db)
-      .insert(project)
-      .values({
-        shortcode: testShortcode("project", "PRJ-HSHD"),
-        name: "Household project",
-        defaultTrade: "other",
-      });
+    // A product this vendor already sold the household, by its exact SKU.
+    // It is deliberately not food, so no Project trade is inherited: the
+    // principal line's trade comes from the import call's defaultTrade, as it
+    // does for purchase_import.commit.
     const pantry = await createProductFixture(
       ctx.db,
-      makeProductInput({
-        name: "Scenario rolled oats, 1 kg",
-        categoryId: taxonomyShortcode("food"),
-      }),
+      makeProductInput({ name: "Scenario rolled oats, 1 kg" }),
       ctx.actor,
     );
     await withTransaction(ctx.db, (tx) =>
@@ -340,6 +326,7 @@ describe("purchase-agent scripted Flue scenarios", () => {
     awaitBrowserResult(`browser-${suffix}`),
     call(`import-${suffix}`, "import_browser_order_evidence", {
       commandId: from(`browser-${suffix}`, "commandId"),
+      defaultTrade: "other",
     }),
   ];
 
@@ -356,6 +343,7 @@ describe("purchase-agent scripted Flue scenarios", () => {
     awaitBrowserResult("browser-1"),
     call("import-1", "import_browser_order_evidence", {
       commandId: from("browser-1", "commandId"),
+      defaultTrade: "other",
     }),
   ];
 
@@ -481,6 +469,7 @@ describe("purchase-agent scripted Flue scenarios", () => {
         // and resumed coordinator would: the source claim must hold.
         call("import-1-replay", "import_browser_order_evidence", {
           commandId: from("browser-1", "commandId"),
+          defaultTrade: "other",
         }),
         settlementRead("settlement-1"),
         ...captureAndImport("SCN20002", "2"),
@@ -527,11 +516,8 @@ describe("purchase-agent scripted Flue scenarios", () => {
           "Order SCN20002. Loading order details…",
         ),
       },
-      // A real capture takes seconds, so the submission that issued the
-      // second command settles before its result. Finding: when the result
-      // lands first, that submission's settle-time reconcile sees no pending
-      // command and moves the still-working run to review.
-      1_500,
+      // No capture delay: the browser may answer before the submission that
+      // issued the command settles, and the run must keep working.
     );
     await waitForStatus(seeded.run.id, "needs_review");
 
@@ -605,11 +591,11 @@ describe("purchase-agent scripted Flue scenarios", () => {
         call("claim-1", "claim_next_import_work"),
         note("note-granted-propose", "Granted scenario note"),
         awaitApproval("await-granted"),
-        { await: ["Approval granted for note-granted"] },
+        { await: [":approved"] },
         note("note-granted-replay", "Granted scenario note"),
         note("note-rejected-propose", "Rejected scenario note"),
         awaitApproval("await-rejected"),
-        { await: ["Approval rejected for note-rejected"] },
+        { await: [":rejected"] },
         call("finish-1", "finish_import_run"),
       ],
     });
@@ -622,37 +608,25 @@ describe("purchase-agent scripted Flue scenarios", () => {
       operationId: "note-granted",
     });
     expect(approve).toMatchObject({ decision: "approved" });
-    // Finding: a grant records the approval but delivers no queue event, so
-    // the coordinator stays parked until a member speaks to it.
-    await expectQuiet(async () => [
-      await scenario?.emitted(),
-      (await runRow(seeded.run.id)).status,
-    ]);
-    expect((await runRow(seeded.run.id)).status).toBe("paused_approval");
-    const agentId = importRunAgentIdentity(seeded.run.id, "account_sync");
-    await scenario.prompt(
-      agentId,
-      "Approval granted for note-granted; continue the run.",
-    );
+    // The decision's own wake event resumes the parked conversation; no
+    // member prompt is needed (the run-control handler dispatches it).
+    const approvalWake = approvalWakeEvent(approve);
+    if (!approvalWake) throw new Error("A grant must wake the coordinator");
+    await scenario.dispatch(approvalWake);
     await waitForEmitted(seeded.run.id, "await-rejected");
     await waitForStatus(seeded.run.id, "paused_approval");
-    // Let the parked submission's settle event land first. A rejection
-    // returns the run to `running` with no coordinator, so a settle processed
-    // after it moves the run to review (reported as a finding).
-    await expectQuiet(async () => [
-      await scenario?.emitted(),
-      (await runRow(seeded.run.id)).status,
-    ]);
-    await controlRun(ctx.db, ctx.actor, {
+    // Reject immediately: a settle event from the parked submission that
+    // lands after the decision must not move the run to review.
+    const reject = await controlRun(ctx.db, ctx.actor, {
       runPublicId: seeded.run.publicId,
       action: "reject",
       operationId: "note-rejected",
     });
     expect((await runRow(seeded.run.id)).status).toBe("running");
-    await scenario.prompt(
-      agentId,
-      "Approval rejected for note-rejected; do not retry it.",
-    );
+    const rejectionWake = approvalWakeEvent(reject);
+    if (!rejectionWake)
+      throw new Error("A rejection must wake the coordinator");
+    await scenario.dispatch(rejectionWake);
     await waitForStatus(seeded.run.id, "completed");
 
     const [updated] = await getDb(ctx.db)

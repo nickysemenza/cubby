@@ -1,6 +1,8 @@
 import { defineTool } from "@flue/runtime";
 import * as v from "valibot";
 
+import { tradeValues } from "@cubby/schemas/task-fields";
+
 import type {
   PurchaseImportService,
   PurchaseImportServiceResult,
@@ -151,8 +153,13 @@ export function purchaseImportTools(
     defineTool({
       name: "import_browser_order_evidence",
       description:
-        "Bind a completed browser command's retained evidence to its exact run target before preparation or enrichment. Use the commandId returned by the browser result.",
-      input: v.object({ operationId, commandId: v.pipe(v.string(), v.uuid()) }),
+        "Bind a completed browser command's retained evidence to its exact run target before preparation or enrichment. Use the commandId returned by the browser result. For an order page, pass defaultTrade (and defaultProjectId when known) exactly as for purchase_import.commit: a principal line without a trade from its Purchase or Project is refused.",
+      input: v.object({
+        operationId,
+        commandId: v.pipe(v.string(), v.uuid()),
+        defaultTrade: v.optional(v.picklist(tradeValues)),
+        defaultProjectId: v.optional(v.pipe(v.string(), v.minLength(1))),
+      }),
       output: serviceResult,
       durable: true,
       run: async ({ data, step }) => ({
