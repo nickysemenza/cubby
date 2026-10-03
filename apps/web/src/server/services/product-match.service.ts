@@ -47,6 +47,7 @@ import {
 
 import {
   describeSignals,
+  matchReadCoverage,
   type MatchSignals,
   sharesModel,
   matchSurvivorImageOrder,
@@ -231,6 +232,7 @@ export async function getProductMatchQueue(
       productId: input.productId,
       candidateId: input.candidateId,
     });
+  const startedAt = Date.now();
   const focus = input.productId
     ? await resolveOrThrow(db, "product", input.productId)
     : undefined;
@@ -368,10 +370,27 @@ export async function getProductMatchQueue(
         : [];
     },
   );
-  return {
-    semanticRanking: semantic.used,
-    items: [...agentItems, ...detectorItems].slice(0, QUEUE_LIMIT),
-  };
+  const items = [...agentItems, ...detectorItems].slice(0, QUEUE_LIMIT);
+  if (!focus)
+    log.info("queue read coverage", {
+      ...matchReadCoverage({
+        photoIds: pools.photo.map((item) => item.id),
+        purchaseCount: pools.purchase.length,
+        seeds,
+        semanticUsed: semantic.used,
+        pairs: [
+          ...tokenPairs.map((pair) => ({ ...pair, source: "token" as const })),
+          ...[...semantic.pairs.values()].map((pair) => ({
+            ...pair,
+            source: "semantic" as const,
+          })),
+        ],
+        returned: items.length,
+        queueLimit: QUEUE_LIMIT,
+      }),
+      elapsedMs: Date.now() - startedAt,
+    });
+  return { semanticRanking: semantic.used, items };
 }
 
 async function resolvePair(
