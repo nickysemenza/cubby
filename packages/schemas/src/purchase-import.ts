@@ -574,6 +574,30 @@ export const browserPaymentEvidence = z.object({
   lastFour: z.string().nullish(),
   amountText: z.string().nullish(),
 });
+const structuredIdentifierValues = z
+  .array(z.string().trim().min(1).max(100))
+  .max(10)
+  .default([]);
+/**
+ * One schema.org Product node's identifier fields, read verbatim from the
+ * page's `application/ld+json` block (never from page text). `gtins` merges
+ * `gtin` and `gtin8/12/13/14`.
+ */
+export const browserStructuredProduct = z.object({
+  skus: structuredIdentifierValues,
+  mpns: structuredIdentifierValues,
+  gtins: structuredIdentifierValues,
+  productIds: structuredIdentifierValues,
+});
+export const browserStructuredProducts = z.object({
+  products: z.array(browserStructuredProduct).max(20),
+  /** A ProductGroup (or its variants) was present: no single variant is shown. */
+  variantGroup: z.boolean(),
+});
+export type BrowserStructuredProducts = z.infer<
+  typeof browserStructuredProducts
+>;
+
 export const browserPageCapture = z.object({
   sourceURL: z.url(),
   canonicalUrl: z.url().nullish(),
@@ -597,6 +621,8 @@ export const browserPageCapture = z.object({
   images: z.array(browserCapturedImage).max(200),
   paymentEvidence: z.array(browserPaymentEvidence).max(100),
   evidence: z.array(browserEvidenceReference).max(10),
+  /** Optional: Mac clients older than capture version 2 do not send it. */
+  structuredProducts: browserStructuredProducts.nullish(),
 });
 export const browserBridgeFailureCode = z.enum([
   "cancelled",
@@ -1014,6 +1040,20 @@ export const commitProductEnrichmentOut = z.object({
   changedFields: z.array(
     z.enum(["manufacturer", "categoryId", "model", "identifiers", "image"]),
   ),
+  /**
+   * Proven identifiers another Product already owns. They are never
+   * reassigned; the pair is proposed in the Product match queue instead.
+   */
+  skippedIdentifiers: z
+    .array(
+      z.object({
+        source: externalIdSource,
+        kind: externalIdKind,
+        externalId: z.string(),
+        ownerProductId: productShortcode,
+      }),
+    )
+    .default([]),
 });
 
 export const overwriteProductEnrichmentInput = z.object({

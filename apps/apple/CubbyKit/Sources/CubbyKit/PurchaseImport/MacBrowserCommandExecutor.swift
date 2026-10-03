@@ -13,8 +13,22 @@
             let evidence: BrowserLocalEvidence
             let image: CGImage
         }
-        private struct FixedCapturePayload: Decodable {
+        /// Bumped when the fixed capture script's output shape changes. Version 2 adds
+        /// schema.org Product identifiers (`structuredProducts`).
+        static let captureVersion = 2
+
+        struct FixedCapturePayload: Decodable {
             struct Link: Decodable { let url: String; let label: String? }
+            struct StructuredProduct: Decodable {
+                let skus: [String]
+                let mpns: [String]
+                let gtins: [String]
+                let productIds: [String]
+            }
+            struct StructuredProducts: Decodable {
+                let products: [StructuredProduct]
+                let variantGroup: Bool
+            }
             struct Image: Decodable {
                 let url: String
                 let alt: String?
@@ -30,6 +44,7 @@
             let text: String
             let links: [Link]
             let images: [Image]
+            let structuredProducts: StructuredProducts?
             let authenticationRequired: Bool
         }
 
@@ -414,7 +429,7 @@
             let capturedAt = Date.now
             let normalized = try await NormalizedEvidencePDF.makeFile(
                 NormalizedBrowserEvidence(
-                    sourceURL: sourceURL, capturedAt: capturedAt, captureVersion: 1,
+                    sourceURL: sourceURL, capturedAt: capturedAt, captureVersion: Self.captureVersion,
                     readableText: payload.text))
             defer { try? FileManager.default.removeItem(at: normalized.url) }
             try Task.checkCancellation()
@@ -432,12 +447,14 @@
                     throw ExecutionFailure.uploadFailed
                 }
                 return BrowserPageCapture(
-                    sourceURL: sourceURL, title: payload.title, capturedAt: capturedAt, captureVersion: 1,
+                    sourceURL: sourceURL, title: payload.title, capturedAt: capturedAt,
+                    captureVersion: Self.captureVersion,
                     readableText: payload.text, links: Array(links), images: images,
                     evidence: references, canonicalURL: canonicalURL,
                     requestedAmazonASIN: Self.amazonASIN(in: targetURL),
                     servedAmazonASIN: payload.servedAmazonAsin,
-                    variantMarkers: payload.variantMarkers)
+                    variantMarkers: payload.variantMarkers,
+                    structuredProducts: payload.structuredProducts?.capture)
             }
 
             BrowserBridgeDebugLog.emit(.visualCaptureStarted, command: command)
@@ -474,12 +491,14 @@
                 throw ExecutionFailure.uploadFailed
             }
             return BrowserPageCapture(
-                sourceURL: sourceURL, title: payload.title, capturedAt: capturedAt, captureVersion: 1,
+                sourceURL: sourceURL, title: payload.title, capturedAt: capturedAt,
+                captureVersion: Self.captureVersion,
                 readableText: payload.text, links: Array(links), images: images,
                 evidence: references, canonicalURL: canonicalURL,
                 requestedAmazonASIN: Self.amazonASIN(in: targetURL),
                 servedAmazonASIN: payload.servedAmazonAsin,
-                variantMarkers: payload.variantMarkers)
+                variantMarkers: payload.variantMarkers,
+                structuredProducts: payload.structuredProducts?.capture)
         }
 
         private func captureBrowserScreenshot() async throws -> BrowserScreenshot {
@@ -625,6 +644,48 @@
                 variantMarkers: Array.from(document.querySelectorAll(
                   '#variation_color_name .selection, #variation_size_name .selection, [data-asin][aria-checked="true"], select[name*="variation"] option:checked'
                 )).map(node => clean(node.getAttribute('data-asin') || node.textContent)).filter(Boolean).slice(0, 50),
+                structuredProducts: (() => {
+                  // Only schema.org Product nodes in ld+json blocks; never page text.
+                  const values = (node, keys) => {
+                    const out = [];
+                    for (const key of keys) {
+                      for (const item of [].concat(node[key] ?? [])) {
+                        if (typeof item !== 'string' && typeof item !== 'number') continue;
+                        const text = clean(item).slice(0, 100);
+                        if (text && !out.includes(text)) out.push(text);
+                      }
+                    }
+                    return out.slice(0, 10);
+                  };
+                  const hasType = (node, name) => [].concat(node['@type'] ?? []).includes(name);
+                  const products = [];
+                  let variantGroup = false;
+                  let visited = 0;
+                  const walk = (value, depth) => {
+                    if (!value || typeof value !== 'object' || depth > 8 || ++visited > 500) return;
+                    if (Array.isArray(value)) { value.forEach(item => walk(item, depth + 1)); return; }
+                    if (hasType(value, 'ProductGroup')) variantGroup = true;
+                    if (hasType(value, 'Product')) {
+                      products.push({
+                        skus: values(value, ['sku']),
+                        mpns: values(value, ['mpn']),
+                        gtins: values(value, ['gtin', 'gtin8', 'gtin12', 'gtin13', 'gtin14']),
+                        productIds: values(value, ['productID'])
+                      });
+                    }
+                    for (const key of ['@graph', 'hasVariant', 'mainEntity', 'itemListElement', 'item']) {
+                      walk(value[key], depth + 1);
+                    }
+                  };
+                  const blocks = document.querySelectorAll('script[type="application/ld+json"]');
+                  for (const script of Array.from(blocks).slice(0, 20)) {
+                    try {
+                      const raw = script.textContent || '';
+                      if (raw.length <= 524288) walk(JSON.parse(raw), 0);
+                    } catch {}
+                  }
+                  return { products: products.slice(0, 20), variantGroup };
+                })(),
                 title: clean(document.title).slice(0, 500),
                 text: clean(document.body?.innerText).slice(0, 24576),
                 links: Array.from(document.querySelectorAll('a[href]')).slice(0, 200).map(a => ({
@@ -780,6 +841,19 @@
             case .hostNotAllowed: "The browser URL is outside the Vendor allowlist."
             case .fragmentForbidden: "Browser URL fragments are not allowed."
             }
+        }
+    }
+
+    extension MacBrowserCommandExecutor.FixedCapturePayload.StructuredProducts {
+        /// The bounded wire shape; the server proves identifiers from this, never from page text.
+        var capture: BrowserStructuredProducts {
+            BrowserStructuredProducts(
+                products: products.prefix(20).map {
+                    BrowserStructuredProduct(
+                        skus: Array($0.skus.prefix(10)), mpns: Array($0.mpns.prefix(10)),
+                        gtins: Array($0.gtins.prefix(10)), productIds: Array($0.productIds.prefix(10)))
+                },
+                variantGroup: variantGroup)
         }
     }
 

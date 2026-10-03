@@ -3,6 +3,8 @@ import { GTIN_KIND, GTIN_SOURCE } from "@cubby/schemas/external-id";
 import {
   type LedgerPartyId,
   parseEntityId,
+  type ProductId,
+  productShortcode,
   type VendorId,
   runEntityId,
 } from "@cubby/schemas/identifiers";
@@ -10,6 +12,7 @@ import {
   commitPurchaseImportInput,
   commitPurchaseImportOut,
   commitProductEnrichmentInput,
+  browserStructuredProducts,
   commitProductEnrichmentOut,
   extractedPurchaseLine,
   importExtractionOutcome,
@@ -34,9 +37,10 @@ import { and, asc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityAttachment,
+  entityExternalId,
   expense,
   image,
   importHunt,
@@ -59,6 +63,7 @@ import {
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { deleteImages } from "~/server/repo/image";
 import { validateLiveEffectiveTrades } from "~/server/repo/inheritance-validation";
+import { upsertAgentProductMatch } from "~/server/repo/product-match-candidate";
 import { assertProductCategoryChange } from "~/server/repo/product/classification";
 import {
   externalIdKey,
@@ -75,7 +80,10 @@ import {
 } from "~/server/services/image-storage.service";
 
 import { assertRunCapability } from "./capabilities";
-import { learnPurchaseProductExternalId } from "./external-id-learning";
+import {
+  learnPurchaseProductExternalId,
+  PurchaseProductExternalIdCollisionError,
+} from "./external-id-learning";
 import { loadOrderMailImportEvidence } from "./gmail/import";
 import {
   attachPendingOrderMailEvidence,
@@ -84,6 +92,11 @@ import {
 import { productEnrichmentTarget } from "./product-enrichment-target";
 import { recordRunWrites } from "./run-audit";
 import { auditAllImportBatches, loadRunScope } from "./run-service";
+import {
+  proveStructuredIdentifier,
+  structuredPageProvesExactVariant,
+  type ProvableIdentifier,
+} from "./structured-identifier-proof";
 import { buildPurchaseImportPlan, importVendorOrder } from "./writer";
 
 const operationArgs = (input: {
@@ -1140,7 +1153,166 @@ export async function validatePurchaseImport(
   );
 }
 
+/** What a targeted browser capture retains in `RunEvidence.sourceMetadata`. */
+const retainedCaptureMetadata = z.object({
+  requestedAmazonAsin: z.string().nullish(),
+  servedAmazonAsin: z.string().nullish(),
+  sourceURL: z.url().optional(),
+  canonicalUrl: z.url().nullish(),
+  structuredProducts: browserStructuredProducts.nullish(),
+  variantMarkers: z.array(z.string()).default([]),
+  images: z
+    .array(
+      z.object({
+        url: z.url(),
+        naturalWidth: z.number().int().positive().nullable(),
+        naturalHeight: z.number().int().positive().nullable(),
+        highResolutionUrl: z.url().nullable(),
+      }),
+    )
+    .default([]),
+});
+
+/**
+ * Identifiers this Product carries or is committing, for proving which exact
+ * variant a catalog page shows. A committed identifier another Product owns
+ * does not count: it will be proposed for a match, not learned.
+ */
+async function productIdentifierCandidates(
+  db: Database,
+  productId: ProductId,
+  committing: NonNullable<
+    CommitProductEnrichmentInput["changes"]["identifiers"]
+  >,
+): Promise<ProvableIdentifier[]> {
+  const database = getDb(db);
+  const stored = await database
+    .select({
+      source: entityExternalId.source,
+      kind: entityExternalId.kind,
+      externalId: entityExternalId.externalId,
+    })
+    .from(entityExternalId)
+    .where(
+      and(
+        eq(entityExternalId.entityId, productId),
+        notDeleted(entityExternalId),
+      ),
+    );
+  const candidates: ProvableIdentifier[] = [...stored];
+  for (const identifier of committing) {
+    const [owned] = await database
+      .select({ entityId: entityExternalId.entityId })
+      .from(entityExternalId)
+      .where(
+        and(
+          eq(entityExternalId.source, identifier.source),
+          eq(entityExternalId.kind, identifier.kind),
+          eq(entityExternalId.externalId, identifier.externalId),
+          notDeleted(entityExternalId),
+        ),
+      )
+      .limit(1);
+    if (!owned || owned.entityId === productId) candidates.push(identifier);
+  }
+  return candidates;
+}
+
+const withoutUnlearnedIdentifiers = <T extends string>(
+  fields: readonly T[],
+  learnedIdentifier: boolean,
+) => fields.filter((field) => field !== "identifiers" || learnedIdentifier);
+
+type SkippedEnrichmentIdentifier = z.output<
+  typeof commitProductEnrichmentOut
+>["skippedIdentifiers"][number];
+
+/**
+ * Prove one identifier from this target's retained browser evidence and learn
+ * it. A proven identifier another Product owns is never reassigned and never
+ * aborts the commit: it becomes a match proposal. An unproven one throws,
+ * because that is write authority, not a collision.
+ */
+async function commitEnrichmentIdentifier(
+  tx: DrizzleTransaction,
+  input: {
+    productId: ProductId;
+    identifier: NonNullable<
+      CommitProductEnrichmentInput["changes"]["identifiers"]
+    >[number];
+    runId: string;
+    targetId: string;
+    allowedHosts: string[];
+  },
+): Promise<{ skipped?: SkippedEnrichmentIdentifier }> {
+  const { productId, identifier } = input;
+  const [evidence] = await tx
+    .select({ metadata: runEvidence.sourceMetadata })
+    .from(runEvidence)
+    .where(
+      and(
+        eq(runEvidence.id, identifier.evidenceId),
+        eq(runEvidence.runId, input.runId),
+        eq(runEvidence.targetId, input.targetId),
+        eq(runEvidence.kind, "browser_capture"),
+      ),
+    )
+    .limit(1);
+  const observed = retainedCaptureMetadata.safeParse(evidence?.metadata);
+  const amazonId = identifier.externalId.toUpperCase();
+  const amazonProven =
+    observed.success &&
+    identifier.kind === "asin" &&
+    observed.data.requestedAmazonAsin?.toUpperCase() === amazonId &&
+    observed.data.servedAmazonAsin?.toUpperCase() === amazonId;
+  const proof = amazonProven
+    ? { proven: true as const, externalId: amazonId }
+    : observed.success
+      ? proveStructuredIdentifier(identifier, observed.data, input.allowedHosts)
+      : { proven: false as const };
+  if (!proof.proven)
+    throw new Error(
+      "Product identifier was not proven by this target's retained evidence",
+    );
+  try {
+    await learnPurchaseProductExternalId(tx, {
+      productId,
+      source: identifier.source,
+      kind: identifier.kind,
+      externalId: proof.externalId,
+      url: identifier.url,
+    });
+    return {};
+  } catch (error) {
+    if (!(error instanceof PurchaseProductExternalIdCollisionError))
+      throw error;
+    await upsertAgentProductMatch(tx, {
+      productIds: [productId, error.ownerProductId],
+      evidence: `Retained browser evidence proves ${error.source}/${error.kind} ${error.externalId} for this Product's exact variant, but it already identifies the other Product. Confirm whether both are the same exact variant before merging.`,
+      sourceUrls:
+        observed.success && observed.data.sourceURL
+          ? [observed.data.sourceURL]
+          : [],
+    });
+    const [owner] = await tx
+      .select({ shortcode: product.shortcode })
+      .from(product)
+      .where(eq(product.id, error.ownerProductId))
+      .limit(1);
+    if (!owner) throw error;
+    return {
+      skipped: {
+        source: error.source,
+        kind: error.kind,
+        externalId: error.externalId,
+        ownerProductId: productShortcode.parse(owner.shortcode),
+      },
+    };
+  }
+}
+
 /** Fill only blank Product identity fields for an explicit enrichment target. */
+// eslint-disable-next-line complexity -- Each approved field class and evidence kind is verified in one bounded commit.
 export async function commitProductEnrichment(
   db: Database,
   rawInput: CommitProductEnrichmentInput,
@@ -1210,26 +1382,20 @@ export async function commitProductEnrichment(
         ),
       )
       .limit(1);
-    const metadata = z
-      .object({
-        requestedAmazonAsin: z.string().nullable(),
-        servedAmazonAsin: z.string().nullable(),
-        sourceURL: z.url().optional(),
-        variantMarkers: z.array(z.string()),
-        images: z.array(
-          z.object({
-            url: z.url(),
-            naturalWidth: z.number().int().positive().nullable(),
-            naturalHeight: z.number().int().positive().nullable(),
-            highResolutionUrl: z.url().nullable(),
-          }),
-        ),
-      })
-      .safeParse(evidence?.metadata);
+    const metadata = retainedCaptureMetadata.safeParse(evidence?.metadata);
     const exactVariant =
       metadata.success &&
-      metadata.data.requestedAmazonAsin !== null &&
-      metadata.data.requestedAmazonAsin === metadata.data.servedAmazonAsin;
+      (metadata.data.requestedAmazonAsin != null
+        ? metadata.data.requestedAmazonAsin === metadata.data.servedAmazonAsin
+        : structuredPageProvesExactVariant(
+            await productIdentifierCandidates(
+              db,
+              productId,
+              changes.identifiers ?? [],
+            ),
+            metadata.data,
+            scope.public.allowedHosts,
+          ));
     const verified =
       metadata.success && exactVariant
         ? metadata.data.images.some(
@@ -1255,8 +1421,9 @@ export async function commitProductEnrichment(
     importedImageCreated = imported.created;
     importedImageSourcePageUrl = metadata.data!.sourceURL ?? null;
   }
+  let committed: z.output<typeof commitProductEnrichmentOut>;
   try {
-    await withTransaction(
+    committed = await withTransaction(
       db,
       // eslint-disable-next-line complexity -- The bounded commit revalidates every approved field and evidence class atomically.
       async (tx) => {
@@ -1330,42 +1497,18 @@ export async function commitProductEnrichment(
           .where(eq(product.id, productId));
         if (changes.categoryId !== undefined)
           await validateLiveEffectiveTrades(tx);
+        let learnedIdentifier = false;
+        const skippedIdentifiers: SkippedEnrichmentIdentifier[] = [];
         for (const identifier of changes.identifiers ?? []) {
-          const [identifierEvidence] = await tx
-            .select({ metadata: runEvidence.sourceMetadata })
-            .from(runEvidence)
-            .where(
-              and(
-                eq(runEvidence.id, identifier.evidenceId),
-                eq(runEvidence.runId, scope.public.runId),
-                eq(runEvidence.targetId, target.id),
-                eq(runEvidence.kind, "browser_capture"),
-              ),
-            )
-            .limit(1);
-          const observed = z
-            .object({
-              requestedAmazonAsin: z.string().nullable(),
-              servedAmazonAsin: z.string().nullable(),
-            })
-            .safeParse(identifierEvidence?.metadata);
-          const externalId = identifier.externalId.toUpperCase();
-          if (
-            !observed.success ||
-            identifier.kind !== "asin" ||
-            observed.data.requestedAmazonAsin?.toUpperCase() !== externalId ||
-            observed.data.servedAmazonAsin?.toUpperCase() !== externalId
-          )
-            throw new Error(
-              "Product identifier was not proven by this target's retained evidence",
-            );
-          await learnPurchaseProductExternalId(tx, {
+          const outcome = await commitEnrichmentIdentifier(tx, {
             productId,
-            source: identifier.source,
-            kind: identifier.kind,
-            externalId,
-            url: identifier.url,
+            identifier,
+            runId: scope.public.runId,
+            targetId: target.id,
+            allowedHosts: scope.public.allowedHosts,
           });
+          if (outcome.skipped) skippedIdentifiers.push(outcome.skipped);
+          else learnedIdentifier = true;
         }
         if (importedImageId) {
           const existingAttachment = await tx.query.entityAttachment.findFirst({
@@ -1427,6 +1570,11 @@ export async function commitProductEnrichment(
             });
           }
         }
+        // An identifier that only produced a match proposal changed nothing.
+        const committedFields = withoutUnlearnedIdentifiers(
+          changedFields,
+          learnedIdentifier,
+        );
         await recordRunWrites(
           tx,
           actorInRun(actor, runEntityId.parse(scope.public.runId)),
@@ -1435,7 +1583,7 @@ export async function commitProductEnrichment(
               entityKind: "product",
               entityId: productId,
               action: "update",
-              fields: changedFields,
+              fields: committedFields,
             },
           ],
         );
@@ -1453,7 +1601,8 @@ export async function commitProductEnrichment(
           operationId,
           productId: input.productId,
           status: "running",
-          changedFields,
+          changedFields: committedFields,
+          skippedIdentifiers,
         });
         await tx
           .update(runOperation)
@@ -1469,6 +1618,7 @@ export async function commitProductEnrichment(
               eq(runOperation.operationId, operationId),
             ),
           );
+        return result;
       },
     );
   } catch (error) {
@@ -1494,13 +1644,7 @@ export async function commitProductEnrichment(
       });
     }
   }
-  return commitProductEnrichmentOut.parse({
-    runId: scope.public.shortcode,
-    operationId,
-    productId: input.productId,
-    status: "running",
-    changedFields,
-  });
+  return committed;
 }
 
 /** One populated-field replacement, executed only by the exact-argument approval wrapper. */
