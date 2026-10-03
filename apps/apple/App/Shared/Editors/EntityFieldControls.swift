@@ -138,36 +138,49 @@ struct EntityFieldControl: View {
 
     // MARK: - Specialized
 
-    /// Dispatches the generated semantic renderer first. Generic entity-select/money/url
-    /// renderers still use the same primitive controls as their `controlKind`; specialized
-    /// amount, multi-select, tags, vendor-name, and ledger-attribution controls keep their typed
-    /// behavior. The `default` arm is deliberate, not exhaustive-by-accident: `ControlRendererID`
-    /// is generated from the manifest, so a renderer only web draws (`.structuredField`, the
-    /// image block's `.imageOrder`, any id a future field declares) must compile here and draw
-    /// nothing — `NativePresentationCoverage.control` is what reports it unsupported.
+    /// The native control a specialized renderer draws. nil means none: a renderer only web
+    /// draws (`.structuredField`, the image block's `.imageOrder`, any id a future field declares)
+    /// draws nothing, and `NativePresentationCoverage.control` reports it unsupported. This is
+    /// exactly the set `packages/schemas/src/native-coverage.ts` marks `implemented` or `generic`;
+    /// `NativeCoverageViewPathTests` fails when they differ.
+    enum Drawing {
+        case entityReference, entityMultiReference, amount, tokens, text, money, ledgerAttributions
+    }
+
+    static func drawing(for renderer: ControlRendererID) -> Drawing? {
+        switch renderer {
+        case .entitySelect: .entityReference
+        case .entityMultiSelect: .entityMultiReference
+        case .amount: .amount
+        case .tagList: .tokens
+        case .vendorName, .url: .text
+        case .money: .money
+        case .ledgerAttributions: .ledgerAttributions
+        default: nil
+        }
+    }
+
     @ViewBuilder
     private var specialized: some View {
-        if let renderer = field.controlRenderer {
-            switch renderer {
-            case .entitySelect:
+        if let renderer = field.controlRenderer, let drawing = Self.drawing(for: renderer) {
+            switch drawing {
+            case .entityReference:
                 if let reference = field.reference {
                     if reference.multiple { multiReference(reference) } else { singleReference(reference) }
                 }
-            case .entityMultiSelect:
+            case .entityMultiReference:
                 if let reference = field.reference { multiReference(reference) }
             case .amount:
                 amountControl
-            case .tagList:
+            case .tokens:
                 tokenControl
-            case .vendorName, .url:
+            case .text:
                 textControl
             case .money:
                 moneyControl
             case .ledgerAttributions:
                 LedgerAttributionsControl(
                     field: field, model: model, pickedTitles: $pickedTitles)
-            default:
-                EmptyView()
             }
         } else {
             EmptyView()

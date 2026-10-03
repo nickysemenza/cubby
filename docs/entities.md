@@ -213,6 +213,19 @@ signal, e.g. a Location only reads as a growing area once it has Plantings.
 `collapseWhenEmpty: true` instead keeps the header, `0` count and create
 button and folds only the body away.
 
+**Native coverage.** Which of these presentation ids the Apple app does not draw
+is declared once, in `packages/schemas/src/native-coverage.ts`: every control,
+list, and detail renderer id, hero action, and (entity-qualified) detail and
+list slot has a status (`implemented`, `generic`, `ownedElsewhere`, or
+`unsupported` with a reason). The records are typed against the generated id
+unions, `native-coverage.unit.test.ts` fails when a new declared id is
+unclassified, and `NATIVE_UNSUPPORTED_CEILING` pins the per-kind unsupported
+count so the set only shrinks. `pnpm generate` writes it to the CubbyKit bundle
+as `native-coverage.json`, which `NativePresentationCoverage` reads. To add a
+web-only renderer, slot, or action, classify it `unsupported` and raise the
+ceiling with a justification in review; to close a gap, build the native view
+path, flip the status, and lower the ceiling.
+
 `detail.overviewSections` optionally selects which section IDs appear in the
 Overview. Other sections remain available through their existing section links;
 the compiler emits independent `overview` metadata for web and Swift. Omission

@@ -112,6 +112,13 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
 
 ## Generated files (read-only)
 
+- `CubbyKit/Sources/CubbyKit/Generated/native-coverage.json` — which manifest renderer, slot, and
+  hero-action ids native draws, from `packages/schemas/src/native-coverage.ts` (the single
+  declaration; `NativePresentationCoverage` only reads it). A new web-only id must be classified
+  there (`unsupported` + reason, raising `NATIVE_UNSUPPORTED_CEILING` with a justification in
+  review); an `implemented` slot or control needs its view path (`DetailSlotRegistry`,
+  `ListSlotRegistry`, `EntityFieldControl.drawing(for:)`), which `NativeCoverageViewPathTests`
+  checks in both directions.
 - `CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json` and
   `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift` — from
   `scripts/generator/entities/render/swift-catalog.ts`. Regenerate with `pnpm generate`

@@ -1,65 +1,65 @@
 import CubbyKit
 import SwiftUI
 
-/// The one sanctioned `switch (key, id)` in the App: which declared detail slots native fills and
-/// which entity-specific supplements appear. Unsupported declaration features are surfaced by
-/// the detail screen.
+/// Which declared detail slots native fills, and which entity-specific supplements appear.
+/// Unsupported declaration features are surfaced by the detail screen. The slot ids are
+/// entity-qualified, so no `(entity, slot)` pairing is needed.
 enum DetailSlotRegistry {
-    /// Section content for `slot` on `key`'s detail; nil renders nothing (the section is skipped).
+    typealias Builder = @MainActor (_ row: EntityRow) -> AnyView?
+
+    /// Exactly the slots `packages/schemas/src/native-coverage.ts` marks `implemented`;
+    /// `NativeCoverageViewPathTests` fails when the two sets differ. A builder may still return
+    /// nil for a row it does not apply to (the section is then skipped).
     @MainActor
-    static func view(for key: EntityKey, slot: String, row: EntityRow, appModel: AppModel) -> AnyView? {
-        guard let slot = EntityDetailSlotID(rawValue: slot) else { return nil }
-        switch (key, slot) {
-        case (.product, .productNutrition):
-            return AnyView(ProductNutritionDetailSlot(row: row))
-        case (.product, .productUnitMappings):
-            return AnyView(ProductUnitMappingsDetailSlot(row: row))
-        case (.product, .productFitsWith):
-            return AnyView(ProductSimilarityDetailSlot(productID: row.id))
-        case (.product, .productRuns):
-            return AnyView(ProductEnrichmentHistorySlot(productID: row.id))
-        case (.product, .productOwnership):
+    static let builders: [EntityDetailSlotID: Builder] = [
+        .productNutrition: { AnyView(ProductNutritionDetailSlot(row: $0)) },
+        .productUnitMappings: { AnyView(ProductUnitMappingsDetailSlot(row: $0)) },
+        .productFitsWith: { AnyView(ProductSimilarityDetailSlot(productID: $0.id)) },
+        .productRuns: { AnyView(ProductEnrichmentHistorySlot(productID: $0.id)) },
+        .productOwnership: { row in
             guard let detail = try? row.decode(ProductDetail.self) else { return nil }
             return AnyView(ProductJourneySummaryView(product: detail))
-        case (.meal, .mealNutrition):
-            return AnyView(MealNutritionSlot(mealID: row.id))
-        case (.ledgerParty, .ledgerPartyWardrobe):
-            return AnyView(WardrobeDetailSlot(ownerID: row.id, ownerName: row.title))
-        case (.vendor, .vendorOrderMail):
-            return AnyView(OrderMailDetailSlot(scope: .vendor(row.id, nil)))
-        case (.vendor, .vendorSpendingClassification):
-            return AnyView(SpendingClassificationView(key: key, row: row))
-        case (.productCategory, .productCategorySpendingClassification):
-            return AnyView(SpendingClassificationView(key: key, row: row))
-        case (.vendorAccount, .vendorAccountOrderMail):
+        },
+        .mealNutrition: { AnyView(MealNutritionSlot(mealID: $0.id)) },
+        .ledgerPartyWardrobe: { AnyView(WardrobeDetailSlot(ownerID: $0.id, ownerName: $0.title)) },
+        .vendorOrderMail: { AnyView(OrderMailDetailSlot(scope: .vendor($0.id, nil))) },
+        .vendorSpendingClassification: { AnyView(SpendingClassificationView(key: .vendor, row: $0)) },
+        .productCategorySpendingClassification: {
+            AnyView(SpendingClassificationView(key: .productCategory, row: $0))
+        },
+        .vendorAccountOrderMail: { row in
             guard let vendorID = row.raw["vendorId"]?.stringValue else { return nil }
             return AnyView(
                 OrderMailDetailSlot(
-                    scope: .vendor(
-                        vendorID, row.raw["ledgerPartyId"]?.stringValue)))
-        case (.purchase, .purchaseReceiving):
-            return AnyView(PurchaseReceivingSlot(purchaseID: row.id))
-        case (.purchase, .purchaseOrderMail):
-            return AnyView(OrderMailDetailSlot(scope: .purchase(row.id)))
-        case (.run, .runImportControls)
-        where row.raw["purpose"]?.stringValue != "photo_inventory":
+                    scope: .vendor(vendorID, row.raw["ledgerPartyId"]?.stringValue)))
+        },
+        .purchaseReceiving: { AnyView(PurchaseReceivingSlot(purchaseID: $0.id)) },
+        .purchaseOrderMail: { AnyView(OrderMailDetailSlot(scope: .purchase($0.id))) },
+        .runImportControls: { row in
+            guard row.raw["purpose"]?.stringValue != "photo_inventory" else { return nil }
             return AnyView(
                 NavigationLink {
                     RunReviewView(runID: row.id)
                 } label: {
                     Label("Open live run", systemImage: "arrow.up.right.square")
                 })
-        case (.run, .runPhotoBatch)
-        where row.raw["purpose"]?.stringValue == "photo_inventory":
+        },
+        .runPhotoBatch: { row in
+            guard row.raw["purpose"]?.stringValue == "photo_inventory" else { return nil }
             return AnyView(
                 NavigationLink {
                     RunReviewView(runID: row.id)
                 } label: {
                     Label("Review photos and items", systemImage: "photo.on.rectangle")
                 })
-        default:
-            return nil
-        }
+        },
+    ]
+
+    /// Section content for `slot` on a detail screen; nil renders nothing (the section is skipped).
+    @MainActor
+    static func view(slot: String, row: EntityRow) -> AnyView? {
+        guard let slot = EntityDetailSlotID(rawValue: slot) else { return nil }
+        return builders[slot]?(row)
     }
 
     /// Ownership is a dedicated, evidence-aware inventory affordance. It is not a manifest hero
