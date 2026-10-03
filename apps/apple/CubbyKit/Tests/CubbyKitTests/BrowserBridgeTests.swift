@@ -28,6 +28,56 @@ struct BrowserBridgeTests {
         #expect(object["evidence"] == nil)
     }
 
+    @Test("A sync request without a backfill range encodes only the account")
+    func syncRequestOmitsAbsentBackfill() throws {
+        let data = try JSONEncoder().encode(BrowserBridgeSyncRequest(vendorAccount: "VACCT-4K7M"))
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["vendorAccount"] as? String == "VACCT-4K7M")
+        #expect(object["backfill"] == nil)
+    }
+
+    @Test("A sync request with a backfill range encodes inclusive ISO dates")
+    func syncRequestEncodesBackfill() throws {
+        let range = try #require(
+            BrowserBridgeBackfillRange(
+                from: Self.day(2025, 3, 9), to: Self.day(2026, 3, 9), calendar: Self.calendar))
+        let data = try JSONEncoder().encode(
+            BrowserBridgeSyncRequest(vendorAccount: "VACCT-4K7M", backfill: range))
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let backfill = try #require(object["backfill"] as? [String: String])
+        #expect(backfill == ["from": "2025-03-09", "to": "2026-03-09"])
+    }
+
+    @Test("A backfill range may be a single day but never inverted")
+    func backfillRangeValidation() {
+        let day = Self.day(2026, 1, 5)
+        #expect(BrowserBridgeBackfillRange(from: day, to: day, calendar: Self.calendar) != nil)
+        // A later time on the same day is still the same inclusive day.
+        let evening = Self.calendar.date(byAdding: .hour, value: 20, to: day)!
+        #expect(BrowserBridgeBackfillRange(from: evening, to: day, calendar: Self.calendar) != nil)
+        #expect(
+            BrowserBridgeBackfillRange(
+                from: Self.day(2026, 1, 6), to: day, calendar: Self.calendar) == nil)
+    }
+
+    @Test("The default backfill range ends today and starts a year earlier")
+    func defaultBackfillRange() {
+        let today = Self.day(2026, 3, 1)
+        let range = BrowserBridgeBackfillRange.defaultDates(today: today, calendar: Self.calendar)
+        #expect(range.to == today)
+        #expect(range.from == Self.day(2025, 3, 1))
+    }
+
+    private static var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        return calendar
+    }
+
+    private static func day(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        calendar.date(from: DateComponents(year: year, month: month, day: day))!
+    }
+
     @Test("Every safe operation has a stable versioned round trip", arguments: operations)
     func protocolRoundTrip(operation: BrowserBridgeOperation) throws {
         let command = BrowserBridgeCommand(

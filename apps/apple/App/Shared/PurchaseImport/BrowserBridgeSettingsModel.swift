@@ -5,7 +5,9 @@ import Observation
 @MainActor
 protocol BrowserBridgeControlling: AnyObject {
     func connect(browser: BrowserChoice, enhancedEvidence: Bool) async throws
-    func syncNow(browser: BrowserChoice, enhancedEvidence: Bool) async throws
+    func syncNow(
+        browser: BrowserChoice, enhancedEvidence: Bool, backfill: BrowserBridgeBackfillRange?
+    ) async throws
     func disconnect() async
     func raiseAuthenticationWindow(for accountID: String)
     func appDidBecomeActive()
@@ -133,14 +135,17 @@ final class BrowserBridgeSettingsModel {
         }
     }
 
-    func syncNow(browser: BrowserChoice, enhancedEvidence: Bool) {
+    func syncNow(
+        browser: BrowserChoice, enhancedEvidence: Bool, backfill: BrowserBridgeBackfillRange? = nil
+    ) {
         guard let controller, !isSyncing else { return }
         isSyncing = true
         syncStartedAt = .now
         error = nil
         Task { [weak self] in
             do {
-                try await controller.syncNow(browser: browser, enhancedEvidence: enhancedEvidence)
+                try await controller.syncNow(
+                    browser: browser, enhancedEvidence: enhancedEvidence, backfill: backfill)
                 guard let self else { return }
                 lastCompletedAt = .now
                 isSyncing = false
