@@ -347,10 +347,7 @@ See also the image operational passes at the end of this file.
 - 🟢 **Product external-ID collision review.** Purchase import now keeps the
   reviewed Product and proposes the colliding pair in the Product match queue.
   Finish the enrichment path the same way: a proven identifier owned by another
-  Product is skipped and proposed, never reassigned or fatal to the commit. The
-  live unique index makes `duplicate_external_id` and the `collision` result of
-  `product.externalIdCollisions` unreachable; retire them rather than keep a
-  second path. Add no separate persistent queue.
+  Product is skipped and proposed, never reassigned or fatal to the commit. Add no separate persistent queue.
 
 ---
 

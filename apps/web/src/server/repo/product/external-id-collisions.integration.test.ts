@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -38,12 +39,15 @@ describe("product external-id ownership", () => {
       });
     });
     const shortcode = async (id: typeof owner.entityId) =>
-      (
-        await getDb(ctx.db)
-          .select({ shortcode: product.shortcode })
-          .from(product)
-          .where(eq(product.id, id))
-      )[0]!.shortcode;
+      parseShortcodeFor(
+        "product",
+        (
+          await getDb(ctx.db)
+            .select({ shortcode: product.shortcode })
+            .from(product)
+            .where(eq(product.id, id))
+        )[0]!.shortcode,
+      );
     const identifiers = [
       { source: "Amazon", kind: "asin", externalId: "B0OWNED001" },
       { source: "amazon", kind: "asin", externalId: "B0MISSING1" },
