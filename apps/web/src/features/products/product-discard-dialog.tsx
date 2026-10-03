@@ -22,6 +22,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
  */
 import { tradeSchema } from "@cubby/schemas/task-fields";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { type FC, useId, useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -87,6 +88,41 @@ interface ProductDiscardDialogProps {
   onComplete?: () => void;
 }
 
+/**
+ * The server decides which shelf the discard touches, whether a shelf choice is
+ * still owed, and the warning (that this removes the shelf row rather than
+ * reducing it, removes more than it holds, or leaves a row claiming stock that
+ * was just written off). Warnings, not blocks: see `describeDiscard`.
+ * `needsEntryChoice` defaults to true until the first answer so submit never
+ * races ahead of the verdict.
+ */
+function useDiscardPreview(input: {
+  open: boolean;
+  productId: ProductShortcode;
+  quantity: number | null;
+  adjustInventory: boolean;
+  inventoryEntryId: string;
+}) {
+  const parsedQuantity = z.number().positive().safeParse(input.quantity);
+  const { data: preview } = useQuery({
+    ...productOperations.discardPreview.queryOptions({
+      productId: input.productId,
+      quantity: parsedQuantity.success ? parsedQuantity.data : null,
+      adjustInventory: input.adjustInventory,
+      inventoryEntryId: input.inventoryEntryId
+        ? parseShortcodeFor("inventory", input.inventoryEntryId)
+        : null,
+    }),
+    enabled: input.open,
+    placeholderData: keepPreviousData,
+  });
+  return {
+    selectedEntry: preview?.selectedShelf ?? null,
+    needsEntryChoice: preview?.needsShelfChoice ?? true,
+    warning: preview?.warning ?? null,
+  };
+}
+
 export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   open,
   onOpenChange,
@@ -150,59 +186,13 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   const adjustInventory = form.watch("adjustInventory");
   const inventoryEntryId = form.watch("inventoryEntryId");
   const quantity = form.watch("quantity");
-  // Whichever shelf the discard will actually touch. The sole-entry case never
-  // renders the picker, so it has no id to match on.
-  const selectedEntry =
-    soleEntry ?? entries.find((entry) => entry.id === inventoryEntryId);
-  // Only blocks when a choice is genuinely owed: several shelves, and the
-  // operator has asked for one of them to be decremented.
-  const needsEntryChoice =
-    adjustInventory && entries.length > 1 && inventoryEntryId === "";
-
-  /**
-   * What the operator cannot see from the numbers alone: that this discard
-   * *removes* the shelf row rather than reducing it, that it removes more than
-   * the row holds, or that declining the checkbox leaves a row claiming stock
-   * that was just written off.
-   *
-   * Warnings, not blocks. Tenet 1 makes the shelf a stale-tolerant ballpark, so
-   * "shelf says 3, all 5 went in the bin" is a legitimate discard — see the note
-   * on the else-branch in repo/product/discard.ts for why this is the one
-   * inventory subtraction that does not refuse over-subtraction server-side.
-   */
-  const warning = ((): {
-    tone: "warning" | "destructive";
-    message: string;
-  } | null => {
-    const parsedQuantity = z.number().positive().safeParse(quantity);
-    if (!selectedEntry || !parsedQuantity.success) {
-      return null;
-    }
-    const validQuantity = parsedQuantity.data;
-    const { value: held, unit } = selectedEntry.amount;
-    const where = selectedEntry.location.name;
-    if (!adjustInventory) {
-      return validQuantity >= held
-        ? {
-            tone: "warning",
-            message: `${where} will still show ${held} ${unit} even though you are recording these as gone.`,
-          }
-        : null;
-    }
-    if (validQuantity > held) {
-      return {
-        tone: "destructive",
-        message: `That is more than ${where} holds (${held} ${unit}). The whole entry will be removed, and the ledger will still record −${validQuantity}.`,
-      };
-    }
-    if (validQuantity === held) {
-      return {
-        tone: "warning",
-        message: `This empties ${where} — the entry is removed from that shelf, not just reduced.`,
-      };
-    }
-    return null;
-  })();
+  const { selectedEntry, needsEntryChoice, warning } = useDiscardPreview({
+    open,
+    productId: product.id,
+    quantity,
+    adjustInventory,
+    inventoryEntryId,
+  });
 
   const submit = form.handleSubmit((values) => {
     discard.mutate({

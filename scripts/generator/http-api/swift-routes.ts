@@ -106,6 +106,20 @@ export const requestBodyRef = (document: OpenApiDocument, route: string) =>
     )
     .data?.$ref.replace("#/components/schemas/", "");
 
+/** The component schema name of an operation's JSON request body, whatever its method. */
+export const operationBodyRef = (
+  document: OpenApiDocument,
+  route: string,
+  method: string,
+) =>
+  componentRef
+    .safeParse(
+      document.paths[route]?.[method.slice(1)]?.requestBody?.content?.[
+        "application/json"
+      ]?.schema,
+    )
+    .data?.$ref.replace("#/components/schemas/", "");
+
 /** Entity keys whose `resources.<key>.update` body declares `property`. */
 export const updateBodyHas = (
   document: OpenApiDocument,

@@ -50,7 +50,10 @@ import {
   productSearch,
   quickCreateProduct,
 } from "~/server/repo/product/crud";
-import { discardProductUnits } from "~/server/repo/product/discard";
+import {
+  discardProductUnits,
+  previewProductDiscard,
+} from "~/server/repo/product/discard";
 import { findProductExternalIdCollisions } from "~/server/repo/product/external-id-collisions";
 import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
 import { previewProductMergeDecisions } from "~/server/repo/product/merge";
@@ -563,6 +566,12 @@ export const productHandlers = implementOperationDomain(productContract, {
     ),
   setProjectUses,
   discard: discardProductWorkflow,
+  discardPreview: async (context, input) =>
+    previewProductDiscard(
+      context.db,
+      await productShortcodes.one(context.db, input.productId),
+      input,
+    ),
   lookupUpc: (context, input) =>
     lookupUPC(
       context.db,

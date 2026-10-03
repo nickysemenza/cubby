@@ -34,6 +34,10 @@ import type {
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type {
+  ProductDiscardPreviewInput,
+  ProductDiscardPreviewOut,
+} from "@cubby/schemas/product";
 import { tradeSchema, type Trade } from "@cubby/schemas/task-fields";
 import { and, eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -45,9 +49,12 @@ import { logAuditEntry } from "~/server/repo/audit-log";
 import { touchDataQualityTargets } from "~/server/repo/data-quality/touch";
 import {
   amountFromColumns,
+  getDb,
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { describeDiscard } from "~/server/repo/product/discard-preview";
+import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
 import {
   pricingProductIds,
   syncChangedEffectivePrices,
@@ -381,3 +388,37 @@ export const discardFromInventoryEntries = async (
 
     return { items, priceAffectedProductIds };
   });
+
+/**
+ * The advisory preview behind the discard confirmation (web dialog and native
+ * hero action). Read-only: `discardProductUnits` re-checks everything.
+ */
+export const previewProductDiscard = async (
+  db: Database,
+  productId: ProductId,
+  input: Pick<
+    ProductDiscardPreviewInput,
+    "quantity" | "adjustInventory" | "inventoryEntryId"
+  >,
+): Promise<ProductDiscardPreviewOut> => {
+  const prod = await getDb(db).query.product.findFirst({
+    where: and(eq(product.id, productId), notDeleted(product)),
+    columns: { name: true },
+  });
+  if (!prod) {
+    throw createAppError("PRODUCT_NOT_FOUND", "Product not found.");
+  }
+  const entries = (await loadProductInventoryEntries(db, [productId])).get(
+    productId,
+  );
+  const shelves = (entries ?? []).map((entry) => ({
+    id: entry.id,
+    amount: entry.amount,
+    location: { id: entry.location.id, name: entry.location.name },
+  }));
+  return {
+    productName: prod.name,
+    shelves,
+    ...describeDiscard(shelves, input),
+  };
+};

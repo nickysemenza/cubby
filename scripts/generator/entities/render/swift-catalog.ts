@@ -10,7 +10,9 @@ import {
 import { connectedViews } from "../../../../packages/schemas/src/connected-view-definitions.ts";
 import {
   type NativeCoverageEntry,
+  type NativeHeroActionPlan,
   nativeCoverage,
+  nativeHeroActionPlans,
 } from "../../../../packages/schemas/src/native-coverage.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
@@ -799,6 +801,26 @@ export const renderSwiftEntityCatalog = (
       }),
     );
   };
+  // An `implemented` hero verb runs through exactly one plan, and only on entities the plan
+  // names; a plan for a verb that is not `implemented` would be dead configuration.
+  const plans: Readonly<Record<string, NativeHeroActionPlan>> =
+    nativeHeroActionPlans;
+  for (const [verb, entry] of Object.entries(nativeCoverage.heroAction)) {
+    if ((entry.status === "implemented") !== verb in plans)
+      throw new Error(
+        `native-coverage.ts: hero action ${JSON.stringify(verb)} must be implemented exactly when nativeHeroActionPlans has a plan for it`,
+      );
+  }
+  for (const entity of entities) {
+    for (const verb of entity.inspector.detail.hero.actions) {
+      const plan = plans[verb];
+      if (plan === undefined || plan.kind === "delete") continue;
+      if (!plan.entities.some((allowed) => allowed === entity.key))
+        throw new Error(
+          `native-coverage.ts: hero action ${JSON.stringify(verb)} on ${entity.key} is not in its plan's entities`,
+        );
+    }
+  }
   const nativeCoverageJSON = {
     control: classified("control", coverageVocabulary.control),
     list: classified("list", coverageVocabulary.list),
@@ -806,6 +828,7 @@ export const renderSwiftEntityCatalog = (
     heroAction: classified("heroAction", coverageVocabulary.heroAction),
     detailSlot: classified("detailSlot", coverageVocabulary.detailSlot),
     listSlot: classified("listSlot", coverageVocabulary.listSlot),
+    heroActionPlan: nativeHeroActionPlans,
   };
   vocabulary.exactly("WayfindingDomain", WAYFINDING_DOMAINS);
   vocabulary.exactly(

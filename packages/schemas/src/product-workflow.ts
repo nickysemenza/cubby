@@ -10,6 +10,8 @@ import {
   productCategoryDistributionOut,
   productDiscardInput,
   productDiscardOut,
+  productDiscardPreviewInput,
+  productDiscardPreviewOut,
   productExternalIdSourceOptionsOut,
   productFiltersSchema,
   productFindOrCreateByCodeInput,
@@ -161,4 +163,8 @@ export const productWorkflowSchemas = {
     output: productProjectUsesSetOut,
   },
   discard: { input: productDiscardInput, output: productDiscardOut },
+  discardPreview: {
+    input: productDiscardPreviewInput,
+    output: productDiscardPreviewOut,
+  },
 } as const;

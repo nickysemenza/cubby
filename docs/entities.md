@@ -226,6 +226,17 @@ web-only renderer, slot, or action, classify it `unsupported` and raise the
 ceiling with a justification in review; to close a gap, build the native view
 path, flip the status, and lower the ceiling.
 
+An `implemented` hero action also needs a plan in `nativeHeroActionPlans` (same
+file, emitted as `heroActionPlan`): the declared verb maps to one generated
+operation (flag its contract member `native:`), an input form, and a
+confirmation (`destructive` for delete and discard). The native
+`HeroActionRunner` executes every plan, and `pnpm generate` fails when the
+operation is not on the generated client or the body names a field the
+operation does not declare. A server `*Preview` query supplies any
+"what will this do" text (`product.discardPreview`, `entity.connections` for
+delete), so web and native show the same verdict. A list/multi-select verb
+(`bulkEdit`) is `ownedElsewhere`, not a plan.
+
 `detail.overviewSections` optionally selects which section IDs appear in the
 Overview. Other sections remain available through their existing section links;
 the compiler emits independent `overview` metadata for web and Swift. Omission

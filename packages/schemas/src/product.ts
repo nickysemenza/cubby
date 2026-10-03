@@ -501,6 +501,57 @@ export const productDiscardOut = z.object({
 });
 export type ProductDiscardOut = z.infer<typeof productDiscardOut>;
 
+/**
+ * Advisory preview of a discard, computed on the server so every client reads
+ * one verdict. Never gates the discard: the mutation re-checks, and it
+ * deliberately allows discarding more than the shelf holds.
+ */
+export const productDiscardPreviewInput = z.object({
+  productId: productShortcode,
+  quantity: z
+    .number()
+    .positive()
+    .nullable()
+    .default(null)
+    .describe("Units about to be discarded; null while the quantity is unset."),
+  adjustInventory: z.boolean().default(true),
+  inventoryEntryId: inventoryShortcode.nullable().default(null),
+});
+export type ProductDiscardPreviewInput = z.infer<
+  typeof productDiscardPreviewInput
+>;
+
+export const productDiscardPreviewOut = z.object({
+  productName: z.string(),
+  /** Live shelves the discard could draw from, oldest first. */
+  shelves: z.array(
+    z.object({
+      id: inventoryShortcode,
+      amount,
+      location: z.object({ id: locationShortcode, name: z.string() }),
+    }),
+  ),
+  /** Not stocked anywhere: the discard only records the ledger exit. */
+  ledgerOnly: z.boolean(),
+  /** The shelf the discard will touch; null when none, or when a choice is owed. */
+  selectedShelf: z
+    .object({
+      id: inventoryShortcode,
+      amount,
+      location: z.object({ id: locationShortcode, name: z.string() }),
+    })
+    .nullable(),
+  /** Several shelves, shelf adjustment requested, none named — the server never guesses. */
+  needsShelfChoice: z.boolean(),
+  warning: z
+    .object({
+      tone: z.enum(["warning", "destructive"]),
+      message: z.string(),
+    })
+    .nullable(),
+});
+export type ProductDiscardPreviewOut = z.infer<typeof productDiscardPreviewOut>;
+
 export type ProductPricingOut = z.infer<typeof productPricingOut>;
 
 const productTopLevelFields = generatedProductFieldSchemas.read;

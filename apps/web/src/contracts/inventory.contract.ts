@@ -45,6 +45,7 @@ export const inventoryContract = defineContract("inventory", {
     output: inventoryReceivingContextOut,
   }),
   bulkAdd: mutation({
+    native: "Add to inventory from the hero action",
     input: inventoryBulkAddPayload,
     output: inventoryBulkAddOut,
     invalidates: ["inventory"],

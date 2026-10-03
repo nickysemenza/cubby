@@ -132,8 +132,15 @@ export const productContract = defineContract("product", {
     invalidates: ["projectResource"],
   }),
   discard: mutation({
+    native: "Discard product units from the hero action",
     ...productWorkflowSchemas.discard,
     invalidates: ["expense"],
+  }),
+  /** Which shelf a discard touches and what it will warn about, before it commits. */
+  discardPreview: query({
+    native: "Discard preview for the hero action confirmation",
+    ...productWorkflowSchemas.discardPreview,
+    cache: { tags: [["product"], ["inventory"]] },
   }),
   // Agent-facing (MCP `imports_read`, `product_enrichment`): off the HTTP API.
   /** What a barcode names in every source at once, creating nothing. */
