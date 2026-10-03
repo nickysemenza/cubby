@@ -295,6 +295,10 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/api/browser/dispatch.ts",
     "apps/web/src/routes/api/v1/$resource/$operation.ts",
   ],
+  "receive-after-photo-inventory.spec.ts": [
+    "apps/web/src/routes/_authenticated/expenses.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/purchases.$shortcode.tsx",
+  ],
   "recipe-flow.spec.ts": [
     "apps/web/src/routes/_authenticated/recipes.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/recipes.new.tsx",
