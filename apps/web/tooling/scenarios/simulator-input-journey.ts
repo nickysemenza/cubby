@@ -87,7 +87,7 @@ export async function createSimulatorInputJourney(input: {
     image,
   );
   const sha256 = createHash("sha256").update(readFileSync(image)).digest("hex");
-  const replay = async (script: string) => {
+  const replay = async (script: string, extension: "ad" | "yaml" = "ad") => {
     const report = path.join(input.artifacts, `${script}.json`);
     // Suite test creates a new runner owner; these phases share the prepared session.
     await input.run(
@@ -96,7 +96,8 @@ export async function createSimulatorInputJourney(input: {
         "exec",
         "agent-device",
         "replay",
-        `apps/apple/e2e/${script}.ad`,
+        `apps/apple/e2e/${script}.${extension}`,
+        ...(extension === "yaml" ? ["--maestro"] : []),
         ...input.common,
         "--timeout",
         "600000",
@@ -127,6 +128,8 @@ export async function createSimulatorInputJourney(input: {
       await input.run("xcrun", ["simctl", "addmedia", input.deviceID, image]);
     },
     async execute() {
+      await replay("input-statement-open");
+      await replay("input-statement-files", "yaml");
       await replay("input-statement");
       const transactions = await database.query.financialTransaction.findMany({
         where: notDeleted(schema.financialTransaction),

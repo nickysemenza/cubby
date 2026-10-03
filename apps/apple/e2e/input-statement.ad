@@ -1,19 +1,5 @@
 context platform=ios timeout=600000
 
-open com.nickysemenza.cubby
-# The harness and all three input phases share one prepared runner session.
-wait "role=Button label=Library" 240000
-click "role=Button label=Library"
-wait text "Browse catalog" 30000
-click "label=\"Browse catalog\""
-wait "id=browse.importStatement" 30000
-click "id=browse.importStatement"
-wait "id=statement.csv.chooseFile" 30000
-click "id=statement.csv.chooseFile"
-wait "id=DOC.browsingModeTabBar" 30000
-click "label=Browse"
-wait "role=Button label=\"On My iPhone\"" 30000
-click "role=Button label=\"On My iPhone\""
 wait "id=\"Cubby, Container\"" 30000
 click "id=\"Cubby, Container\""
 wait "id=\"synthetic-input-statement, csv\"" 30000

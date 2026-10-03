@@ -1191,8 +1191,11 @@ function retainRunDiagnostics(failure: Error | undefined): string[] {
     "input-statement.xml",
     "input-photo.xml",
     "input-statement.json",
+    "input-statement-open.json",
+    "input-statement-files.json",
     "input-photo.json",
     "input-photo-approval.json",
+    "input-driver-close.json",
   ]) {
     const evidence = path.join(artifacts, name);
     if (!existsSync(evidence)) continue;
@@ -1418,17 +1421,32 @@ async function main(): Promise<void> {
   let failure: Error | undefined;
   const closeInputDriver = async (): Promise<Error[]> => {
     if (!inputDriverSessionArgs) return [];
+    const report = path.join(artifacts, "input-driver-close.json");
     try {
       await run(
         "pnpm",
-        ["exec", "agent-device", "close", ...inputDriverSessionArgs],
+        ["exec", "agent-device", "close", ...inputDriverSessionArgs, "--json"],
         repoRoot,
-        undefined,
+        report,
         true,
       );
       return [];
     } catch (error) {
-      return [error instanceof Error ? error : new Error(String(error))];
+      // A failed one-shot replay can already have closed its owned session.
+      let alreadyClosed = false;
+      try {
+        alreadyClosed = z
+          .object({
+            success: z.literal(false),
+            error: z.object({ code: z.literal("SESSION_NOT_FOUND") }),
+          })
+          .safeParse(JSON.parse(readFileSync(report, "utf8"))).success;
+      } catch {
+        // Missing or malformed output preserves the original cleanup failure.
+      }
+      return alreadyClosed
+        ? []
+        : [error instanceof Error ? error : new Error(String(error))];
     }
   };
   const cleanup = async (): Promise<Error[]> => {
