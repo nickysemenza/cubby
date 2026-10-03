@@ -13,7 +13,7 @@ import type {
  * settlement, and when to stop — not the extractor. Vendors, products,
  * identifiers, and amounts are invented.
  */
-export type DecisionCatalogProduct = {
+type DecisionCatalogProduct = {
   key: string;
   name: string;
   manufacturer?: string;
@@ -22,7 +22,7 @@ export type DecisionCatalogProduct = {
   sku?: string;
 };
 
-export type DecisionLine = {
+type DecisionLine = {
   key: string;
   title: string;
   amount: number;
