@@ -83,7 +83,7 @@ history is the archive. Permanent product constraints live in the
 - 🟢 **Receive on native.** Web now shows existing stock and pending Product
   matches before receiving, defaults to "nothing new arrived", and requires an
   explicit quantity for additional units, from an Expense or the Purchase's
-  Receive section (\`inventory.receivingContext\`). Build the same Expense and
+  Receive section (`inventory.receivingContext`). Build the same Expense and
   Purchase receive slots in the Apple app.
 
 - 🤔 **Product match queue recall and cost.** A full queue read makes up to 60
