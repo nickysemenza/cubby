@@ -2,12 +2,14 @@ import { runShortcode } from "@cubby/schemas/identifiers";
 import {
   mailSearchRunInput,
   mailSearchRunProgress,
+  orderMailImportRunInput,
+  runOrderCandidateState,
   runStatus,
 } from "@cubby/schemas/run-fields";
-import { desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { run, runProgress } from "~/server/db/schema";
+import { run, runOrderCandidate, runProgress } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
 /** The small, durable progress read shared by every Run detail page. */
@@ -38,8 +40,27 @@ export async function getRunLiveProgress(db: Database, shortcode: string) {
     .where(eq(runProgress.runId, record.run.id))
     .orderBy(desc(runProgress.createdAt), desc(runProgress.id))
     .limit(100);
+  const selected = orderMailImportRunInput.safeParse(record.run.input);
+  const orders =
+    selected.success && "orders" in selected.data
+      ? await database
+          .select({
+            orderId: runOrderCandidate.orderId,
+            state: runOrderCandidate.state,
+          })
+          .from(runOrderCandidate)
+          .where(eq(runOrderCandidate.runId, record.run.id))
+          .orderBy(
+            asc(runOrderCandidate.orderedAt),
+            asc(runOrderCandidate.orderId),
+          )
+      : [];
   return {
     status: runStatus.parse(record.run.status),
+    orders: orders.map((order) => ({
+      orderId: order.orderId,
+      state: runOrderCandidateState.parse(order.state),
+    })),
     progress: events.reverse().map((event) => ({
       ...event,
       createdAt: event.createdAt.toISOString(),

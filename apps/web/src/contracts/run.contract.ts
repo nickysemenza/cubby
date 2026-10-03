@@ -26,7 +26,11 @@ import {
   type TargetedImportStartInput,
   type TargetedImportStartOutput,
 } from "@cubby/schemas/run";
-import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
+import {
+  runOrderCandidateState,
+  runPurpose,
+  runStatus,
+} from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
@@ -337,6 +341,10 @@ export const runContract = defineContract("run", {
             error: z.string().nullable(),
           })
           .nullable(),
+        /** A selected-orders mail import's per-order outcomes; empty otherwise. */
+        orders: z.array(
+          z.object({ orderId: z.string(), state: runOrderCandidateState }),
+        ),
       })
       .nullable(),
     cache: { tags: [["run"]] },

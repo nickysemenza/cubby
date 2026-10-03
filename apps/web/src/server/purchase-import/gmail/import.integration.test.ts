@@ -11,13 +11,24 @@ import {
   expense,
   inventoryEntry as inventory,
   run as runTable,
+  runOrderCandidate,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { getRunLiveProgress } from "~/server/repo/run-progress";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { commitPurchaseImport, preparePurchaseImport } from "../import-orders";
-import { claimNextImportWork, finishRun, controlRun } from "../run-service";
-import { loadOrderMailImportEvidence, startOrderMailImport } from "./import";
+import {
+  claimNextImportWork,
+  controlRun,
+  deferOrderForReview,
+  finishRun,
+} from "../run-service";
+import {
+  loadOrderMailImportEvidence,
+  startOrderMailImport,
+  startSelectedOrderMailImport,
+} from "./import";
 
 // A confirmation must import without a browser, retain immutable member-owned
 // evidence on retries, and refuse stale, shipping-only, or foreign-member mail.
@@ -375,6 +386,409 @@ describe("saved confirmation imports", () => {
     ).toMatchObject({
       orderId: "EXAMPLE-123",
       evidenceChecksum: mail.rawChecksum,
+    });
+  });
+
+  // A member selects several saved confirmations of one Vendor and gets one
+  // run whose per-order outcomes are RunOrderCandidate rows.
+  describe("selected confirmations", () => {
+    const seedPair = async () => {
+      const first = await seed();
+      const [secondMail] = await getDb(ctx.db)
+        .insert(orderMail)
+        .values({
+          ledgerPartyId: first.mail.ledgerPartyId,
+          vendorId: first.mail.vendorId,
+          messageId: `synthetic-confirmation-${crypto.randomUUID()}`,
+          sender: "orders@seed.example.test",
+          subject: "Order confirmation",
+          receivedAt: new Date("2026-09-02T12:00:00Z"),
+          rawChecksum: "c".repeat(64),
+          content: {
+            snippet: null,
+            bodyHtml: null,
+            bodyText:
+              "Order EXAMPLE-456. One trowel, SKU TOOL-1, quantity 1, $9.00. Grand Total $9.00 USD.",
+          },
+        })
+        .returning();
+      if (!secondMail) throw new Error("Missing second synthetic mail");
+      const [secondEvent] = await getDb(ctx.db)
+        .insert(orderMailEvent)
+        .values({
+          orderMailId: secondMail.id,
+          event: "placed",
+          orderId: "EXAMPLE-456",
+          amount: 9,
+          currency: "USD",
+          sourceKey: `synthetic:${secondMail.id}`,
+        })
+        .returning();
+      if (!secondEvent) throw new Error("Missing second synthetic event");
+      const orders = [
+        { eventId: first.event.id, evidenceChecksum: first.mail.rawChecksum },
+        {
+          eventId: secondEvent.id,
+          evidenceChecksum: secondMail.rawChecksum,
+        },
+      ] as const;
+      return {
+        first,
+        second: { mail: secondMail, event: secondEvent },
+        orders,
+        selection: { orders: [...orders] },
+      };
+    };
+    const candidateStates = async (runId: string) =>
+      Object.fromEntries(
+        (
+          await getDb(ctx.db)
+            .select()
+            .from(runOrderCandidate)
+            .where(eq(runOrderCandidate.runId, runId))
+        ).map((row) => [row.orderId, row.state]),
+      );
+    const noChrome = {
+      getByName: () => {
+        throw new Error("A mail import must not contact Chrome");
+      },
+    };
+    const mailOrder = (
+      evidence: NonNullable<
+        Awaited<ReturnType<typeof loadOrderMailImportEvidence>>
+      >,
+    ) => ({
+      stableOrderId: `mail:${evidence.eventId}`,
+      itemOperationId: `mail:${evidence.eventId}`,
+      source: evidence.source,
+      evidenceChecksum: evidence.evidenceChecksum,
+      extractionRevision: "order-mail@1",
+      extraction: {
+        status: "ready" as const,
+        candidate: {
+          orderId: evidence.orderId,
+          orderedAt: "2026-09-01T12:00:00Z",
+          merchant: "Example Seed Shop",
+          currency: "USD",
+          printedGrandTotal: 5,
+          lines: [
+            {
+              title: "Synthetic selected item",
+              amount: 5,
+              quantity: 1,
+              lineKind: "principal" as const,
+            },
+          ],
+          payments: [],
+          allShipmentsDelivered: null,
+        },
+      },
+      lineIds: ["item"],
+      primaryDocumentImageId: null,
+      screenshotImageId: null,
+    });
+    const prepareAndCommit = async (
+      runId: string,
+      evidence: NonNullable<
+        Awaited<ReturnType<typeof loadOrderMailImportEvidence>>
+      >,
+      tag: string,
+    ) => {
+      const product = await insertWithShortcode(ctx.db, "product", {
+        name: `Synthetic selected item ${tag}`,
+        manufacturer: "Synthetic Seed Shop",
+      });
+      await preparePurchaseImport(
+        ctx.db,
+        {
+          _runExecution: { runId, operationId: `prepare-${tag}` },
+          orders: [mailOrder(evidence)],
+        },
+        ctx.actor,
+      );
+      return commitPurchaseImport(
+        ctx.db,
+        {
+          _runExecution: { runId, operationId: `commit-${tag}` },
+          prepareOperationId: `prepare-${tag}`,
+          defaultTrade: "other" as const,
+          resolutions: [
+            {
+              stableOrderId: `mail:${evidence.eventId}`,
+              stableLineId: "item",
+              resolution: {
+                kind: "existing" as const,
+                productId: product.shortcode,
+              },
+            },
+          ],
+        },
+        ctx.actor,
+      );
+    };
+
+    it("records each selected order's terminal outcome on one run and carries the deferred one on restart", async () => {
+      const { first, second, orders, selection } = await seedPair();
+      const sent: PurchaseAgentEvent[] = [];
+      const queue = {
+        send: async (value: PurchaseAgentEvent) => {
+          sent.push(value);
+        },
+      };
+      const started = await startSelectedOrderMailImport(
+        ctx.db,
+        selection,
+        ctx.actor,
+        queue,
+      );
+      expect(sent).toHaveLength(1);
+      const [run] = await getDb(ctx.db)
+        .select()
+        .from(runTable)
+        .where(eq(runTable.shortcode, started.runId));
+      if (!run) throw new Error("Missing selected run");
+      expect(await candidateStates(run.id)).toEqual({
+        "EXAMPLE-123": "pending",
+        "EXAMPLE-456": "pending",
+      });
+      // Replaying the identical selection reuses the run.
+      expect(
+        (
+          await startSelectedOrderMailImport(
+            ctx.db,
+            selection,
+            ctx.actor,
+            queue,
+          )
+        ).runId,
+      ).toBe(started.runId);
+      expect(sent).toHaveLength(1);
+
+      expect(await claimNextImportWork(ctx.db, noChrome, run.id)).toMatchObject(
+        { kind: "mail_evidence", orderId: "EXAMPLE-123" },
+      );
+      const firstEvidence = await loadOrderMailImportEvidence(ctx.db, run.id);
+      if (!firstEvidence) throw new Error("Missing claimed mail");
+      expect(firstEvidence.eventId).toBe(first.event.id);
+      // Preparation stays restricted to the claimed order: the second
+      // confirmation cannot be prepared before the first is resolved.
+      await expect(
+        preparePurchaseImport(
+          ctx.db,
+          {
+            _runExecution: { runId: run.id, operationId: "prepare-early" },
+            orders: [
+              mailOrder({
+                ...firstEvidence,
+                eventId: second.event.id,
+                orderId: "EXAMPLE-456",
+                evidenceChecksum: second.mail.rawChecksum,
+                source: {
+                  kind: "mail_message",
+                  externalKey: `gmail:${second.mail.messageId}:order:EXAMPLE-456`,
+                  checksum: second.mail.rawChecksum,
+                },
+              }),
+            ],
+          },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(/assigned/i);
+      await expect(
+        finishRun(ctx.db, noChrome, {
+          runId: run.id,
+          operationId: "finish-early",
+        }),
+      ).rejects.toThrow(/confirmation|order/i);
+
+      await prepareAndCommit(run.id, firstEvidence, "first");
+      expect(await candidateStates(run.id)).toEqual({
+        "EXAMPLE-123": "imported",
+        "EXAMPLE-456": "pending",
+      });
+      expect(await claimNextImportWork(ctx.db, noChrome, run.id)).toMatchObject(
+        { kind: "mail_evidence", orderId: "EXAMPLE-456" },
+      );
+      expect((await loadOrderMailImportEvidence(ctx.db, run.id))?.eventId).toBe(
+        second.event.id,
+      );
+
+      await deferOrderForReview(ctx.db, {
+        runId: run.id,
+        operationId: "defer-second",
+        orderId: "EXAMPLE-456",
+        summary: "The confirmation has no readable itemization.",
+      });
+      expect(await candidateStates(run.id)).toEqual({
+        "EXAMPLE-123": "imported",
+        "EXAMPLE-456": "skipped",
+      });
+      expect(await claimNextImportWork(ctx.db, noChrome, run.id)).toEqual({
+        kind: "none",
+      });
+      // finish_import_run would run the LLM auditor over the committed
+      // Purchase (an external seam); the Flue scenario covers that finish.
+      await getDb(ctx.db)
+        .update(runTable)
+        .set({ status: "needs_review", endedAt: new Date() })
+        .where(eq(runTable.id, run.id));
+      // The Run page lists each selected order's recorded outcome.
+      expect((await getRunLiveProgress(ctx.db, run.shortcode))?.orders).toEqual(
+        [
+          { orderId: "EXAMPLE-123", state: "imported" },
+          { orderId: "EXAMPLE-456", state: "skipped" },
+        ],
+      );
+
+      // Already imported: never a second run.
+      await expect(
+        startSelectedOrderMailImport(
+          ctx.db,
+          { orders: [orders[0]] },
+          ctx.actor,
+          queue,
+        ),
+      ).rejects.toThrow(/already imported/i);
+
+      const successor = await controlRun(ctx.db, ctx.actor, {
+        runPublicId: run.shortcode,
+        action: "restart",
+      });
+      if (!successor.successorRunId) throw new Error("Missing successor");
+      expect(await candidateStates(successor.successorRunId)).toEqual({
+        "EXAMPLE-456": "pending",
+      });
+      expect(
+        await claimNextImportWork(ctx.db, noChrome, successor.successorRunId),
+      ).toMatchObject({ kind: "mail_evidence", orderId: "EXAMPLE-456" });
+    });
+
+    it("finishes for review once every selected order is deferred, and not before", async () => {
+      const { orders, selection } = await seedPair();
+      const started = await startSelectedOrderMailImport(
+        ctx.db,
+        selection,
+        ctx.actor,
+        { send: async () => {} },
+      );
+      const [run] = await getDb(ctx.db)
+        .select()
+        .from(runTable)
+        .where(eq(runTable.shortcode, started.runId));
+      if (!run) throw new Error("Missing selected run");
+      const defer = (orderId: string) =>
+        deferOrderForReview(ctx.db, {
+          runId: run.id,
+          operationId: `defer-${orderId}`,
+          orderId,
+          summary: "The confirmation has no readable itemization.",
+        });
+      await defer("EXAMPLE-123");
+      expect(await claimNextImportWork(ctx.db, noChrome, run.id)).toMatchObject(
+        { kind: "mail_evidence", orderId: "EXAMPLE-456" },
+      );
+      await expect(
+        finishRun(ctx.db, noChrome, {
+          runId: run.id,
+          operationId: "finish-with-pending",
+        }),
+      ).rejects.toThrow(/1 listed order/i);
+      await defer("EXAMPLE-456");
+      const finished = await finishRun(ctx.db, noChrome, {
+        runId: run.id,
+        operationId: "finish-selected",
+      });
+      expect(finished.status).toBe("needs_review");
+      expect(await candidateStates(run.id)).toEqual({
+        "EXAMPLE-123": "skipped",
+        "EXAMPLE-456": "skipped",
+      });
+      // Deferred, not imported: the review run still owns the orders, so a
+      // new selection is refused (the member restarts that run instead).
+      await expect(
+        startSelectedOrderMailImport(
+          ctx.db,
+          { orders: [orders[0]] },
+          ctx.actor,
+          { send: async () => {} },
+        ),
+      ).rejects.toThrow(new RegExp(`already on run ${started.runId}`, "i"));
+    });
+
+    it("refuses a selection that is mixed, stale, duplicated, or already on a live run", async () => {
+      const queue = { send: async () => {} };
+      const { first, second, orders, selection } = await seedPair();
+      const other = await seed();
+      await expect(
+        startSelectedOrderMailImport(
+          ctx.db,
+          {
+            orders: [
+              orders[0],
+              {
+                eventId: other.event.id,
+                evidenceChecksum: other.mail.rawChecksum,
+              },
+            ],
+          },
+          ctx.actor,
+          queue,
+        ),
+      ).rejects.toThrow(/same Vendor/i);
+      await expect(
+        startSelectedOrderMailImport(
+          ctx.db,
+          {
+            orders: [
+              orders[0],
+              { ...orders[1], evidenceChecksum: "d".repeat(64) },
+            ],
+          },
+          ctx.actor,
+          queue,
+        ),
+      ).rejects.toThrow(/changed/i);
+      await expect(
+        startSelectedOrderMailImport(
+          ctx.db,
+          { orders: [orders[0], orders[0]] },
+          ctx.actor,
+          queue,
+        ),
+      ).rejects.toThrow(/more than once/i);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(runTable)
+          .where(eq(runTable.vendorId, first.mail.vendorId!)),
+      ).toHaveLength(0);
+
+      const started = await startSelectedOrderMailImport(
+        ctx.db,
+        selection,
+        ctx.actor,
+        queue,
+      );
+      // A different selection and the single-order path both see the live run.
+      await expect(
+        startSelectedOrderMailImport(
+          ctx.db,
+          { orders: [orders[1]] },
+          ctx.actor,
+          queue,
+        ),
+      ).rejects.toThrow(new RegExp(`already on run ${started.runId}`, "i"));
+      await expect(
+        startOrderMailImport(
+          ctx.db,
+          {
+            eventId: second.event.id,
+            evidenceChecksum: second.mail.rawChecksum,
+          },
+          ctx.actor,
+          queue,
+        ),
+      ).rejects.toThrow(new RegExp(`already on run ${started.runId}`, "i"));
     });
   });
 });

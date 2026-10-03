@@ -351,3 +351,63 @@ test("starts Flue from saved itemized email and exposes errors and the import Ru
     article.getByRole("button", { name: "Import order", exact: true }),
   ).toHaveCount(0);
 });
+
+test("selects several saved confirmations and starts one import Run for them", async ({
+  page,
+}) => {
+  const seed = await seedUnimportedOrderMail(
+    page,
+    `Synthetic selected vendor ${Date.now()}`,
+    3,
+  );
+  const starts: unknown[] = [];
+  await page.route(`**${BROWSER_OPERATION_PATH}`, async (route) => {
+    if (await unbatchFor(route, ["vendor.importSelectedOrderMail"])) return;
+    if (
+      route.request().headers()["x-cubby-operation"] !==
+      "vendor.importSelectedOrderMail"
+    )
+      return route.fallback();
+    const payload = superjson.deserialize<{ input: unknown }>(
+      JSON.parse(route.request().postData() ?? "{}"),
+    );
+    starts.push(payload.input);
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(
+        superjson.serialize({ ok: true, data: { runId: "RUN-TEST" } }),
+      ),
+    });
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/vendors/${seed.vendor.shortcode}`,
+    page.getByText("Synthetic itemized confirmation", { exact: true }),
+  );
+  await expect(
+    page.getByRole("button", { name: /Import selected/u }),
+  ).toHaveCount(0);
+  const [first, , third] = seed.events;
+  if (!first || !third) throw new Error("Missing seeded confirmations");
+  for (const order of [first, third])
+    await page
+      .getByRole("checkbox", {
+        name: `Select order ${order.orderId} to import with others`,
+      })
+      .click();
+  await page.getByRole("button", { name: "Import selected (2)" }).click();
+  await expect(
+    page.getByRole("link", { name: "View selected import" }),
+  ).toHaveAttribute("href", "/runs/RUN-TEST");
+  expect(starts).toEqual([
+    {
+      orders: expect.arrayContaining([
+        { eventId: first.eventId, evidenceChecksum: first.checksum },
+        { eventId: third.eventId, evidenceChecksum: third.checksum },
+      ]),
+    },
+  ]);
+  await expect(
+    page.getByRole("button", { name: /Import selected/u }),
+  ).toHaveCount(0);
+});

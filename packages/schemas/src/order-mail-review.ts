@@ -96,6 +96,13 @@ export const orderMailImportInput = orderMailDecisionInput.pick({
   evidenceChecksum: true,
 });
 export type OrderMailImportInput = z.infer<typeof orderMailImportInput>;
+/** Several saved confirmations of one member and Vendor, imported as one run. */
+export const orderMailImportSelectedInput = z.object({
+  orders: z.array(orderMailImportInput).min(1).max(50),
+});
+export type OrderMailImportSelectedInput = z.infer<
+  typeof orderMailImportSelectedInput
+>;
 export const orderMailImportOut = z.object({ runId: runShortcode });
 
 export const purchaseOrderMailInput = z.object({

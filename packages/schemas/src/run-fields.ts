@@ -66,12 +66,46 @@ export const mailSearchRunProgress = z.object({
   error: z.string().nullable().optional(),
 });
 export type MailSearchRunProgress = z.infer<typeof mailSearchRunProgress>;
-export const orderMailImportRunInput = z.object({
-  kind: z.literal("order_mail_import"),
+/** A listed or selected order's terminal outcome on one Run. */
+export const runOrderCandidateState = z.enum([
+  "pending",
+  "covered",
+  "imported",
+  "skipped",
+]);
+/** One saved placement confirmation a mail import run is assigned. */
+export const orderMailImportOrder = z.object({
   eventId: z.uuid(),
   evidenceChecksum: z.string().min(1),
   orderId: z.string().min(1),
 });
+export type OrderMailImportOrder = z.infer<typeof orderMailImportOrder>;
+/**
+ * `Run.input` for mail-only imports. The single form (one confirmation) is
+ * what every run started before multi-select carries and stays readable; the
+ * `orders` form is one run over several selected confirmations of one member
+ * and Vendor, each tracked as a `RunOrderCandidate`.
+ */
+export const orderMailImportRunInput = z.union([
+  orderMailImportOrder.extend({ kind: z.literal("order_mail_import") }),
+  z.object({
+    kind: z.literal("order_mail_import"),
+    orders: z.array(orderMailImportOrder).min(1).max(50),
+  }),
+]);
+/** Every confirmation a mail import run was assigned, in claim order. */
+export const orderMailImportRunOrders = (
+  input: z.infer<typeof orderMailImportRunInput>,
+): OrderMailImportOrder[] =>
+  "orders" in input
+    ? input.orders
+    : [
+        {
+          eventId: input.eventId,
+          evidenceChecksum: input.evidenceChecksum,
+          orderId: input.orderId,
+        },
+      ];
 /**
  * `Run.input` for an explicit historical backfill: list and import only
  * orders placed within the inclusive range, newest first. It never moves the
