@@ -197,6 +197,7 @@ export class MacImportDriver {
     return schema.parse(envelope.data);
   }
 
+  // Re-activating an already-owned foreground app can disrupt its menu or key window.
   private guardForeground(attempt = 0): void {
     if (this.aborted) throw new Error("Mac driver interrupted");
     if (!this.bundleID) throw new Error("No owned Mac fixture session");
@@ -216,7 +217,7 @@ export class MacImportDriver {
               "-l",
               "JavaScript",
               "-e",
-              'ObjC.import("AppKit"); function run(argv) { const expectedPID=Number(argv[0]); const app=$.NSRunningApplication.runningApplicationWithProcessIdentifier(expectedPID); if (!app || app.isTerminated || ObjC.unwrap(app.bundleIdentifier)!==argv[1]) throw Error("Owned fixture PID/bundle is not running"); const accepted=app.activateWithOptions(3); const deadline=Date.now()+3000; let front; do { front=$.NSWorkspace.sharedWorkspace.frontmostApplication; if (Number(front.processIdentifier)===expectedPID && ObjC.unwrap(front.bundleIdentifier)===argv[1]) break; $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.05)); } while(Date.now()<deadline); return JSON.stringify({accepted:Boolean(accepted),bundleId:ObjC.unwrap(front.bundleIdentifier)||"",pid:Number(front.processIdentifier),appName:ObjC.unwrap(front.localizedName)||""}); }',
+              'ObjC.import("AppKit"); function run(argv) { const expectedPID=Number(argv[0]); const app=$.NSRunningApplication.runningApplicationWithProcessIdentifier(expectedPID); if (!app || app.isTerminated || ObjC.unwrap(app.bundleIdentifier)!==argv[1]) throw Error("Owned fixture PID/bundle is not running"); const alreadyFront=$.NSWorkspace.sharedWorkspace.frontmostApplication; const accepted=Number(alreadyFront.processIdentifier)===expectedPID || app.activateWithOptions(3); const deadline=Date.now()+3000; let front; do { front=$.NSWorkspace.sharedWorkspace.frontmostApplication; if (Number(front.processIdentifier)===expectedPID && ObjC.unwrap(front.bundleIdentifier)===argv[1]) break; $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.05)); } while(Date.now()<deadline); return JSON.stringify({accepted:Boolean(accepted),bundleId:ObjC.unwrap(front.bundleIdentifier)||"",pid:Number(front.processIdentifier),appName:ObjC.unwrap(front.localizedName)||""}); }',
               String(this.pid),
               this.bundleID,
             ],
