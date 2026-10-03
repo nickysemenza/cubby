@@ -1,0 +1,164 @@
+{
+  "_doc": "Field value display formats shared by web and native (en-US). Read by apps/web/src/lib/display-format.unit.test.ts and apps/apple CubbyKit DisplayFormatTests. `currency`/`signedCurrency` map a number to USD text (signedCurrency adds no '+'; sign colour is a web-only concern). `plainDate` maps a YYYY-MM-DD string to 'MMM d, yyyy' and returns anything that is not a real calendar day unchanged. `number` is a bare numeric field: the shortest round-trip decimal, no grouping, no rounding. `compactEstimate` is the one-line macro/cost cell: `kcal` rounds to a whole number half-up, `macro` to one decimal half-up (dropping a trailing .0), both with thousands grouping; a range joins with an en dash; a partial estimate appends '+'; anything unavailable or pending is an em dash.",
+  "currency": [
+    { "value": 0, "out": "$0.00" },
+    { "value": 1234.5, "out": "$1,234.50" },
+    { "value": 1234567.891, "out": "$1,234,567.89" },
+    { "value": -5, "out": "-$5.00" },
+    { "value": 0.125, "out": "$0.13" },
+    { "value": 1.005, "out": "$1.01" },
+    { "value": -2.675, "out": "-$2.68" },
+    { "value": 0.004, "out": "$0.00" }
+  ],
+  "signedCurrency": [
+    { "value": 12.5, "out": "$12.50" },
+    { "value": -12.5, "out": "-$12.50" },
+    { "value": 0, "out": "$0.00" }
+  ],
+  "plainDate": [
+    { "in": "2026-01-05", "out": "Jan 5, 2026" },
+    { "in": "2026-09-30", "out": "Sep 30, 2026" },
+    { "in": "2026-12-31", "out": "Dec 31, 2026" },
+    { "in": "2028-02-29", "out": "Feb 29, 2028" },
+    { "in": "2026-02-30", "out": "2026-02-30" },
+    { "in": "2026-13-01", "out": "2026-13-01" },
+    { "in": "2026-01-05T10:00:00Z", "out": "2026-01-05T10:00:00Z" },
+    { "in": "not a date", "out": "not a date" }
+  ],
+  "number": [
+    { "value": 0, "out": "0" },
+    { "value": 12, "out": "12" },
+    { "value": -3, "out": "-3" },
+    { "value": 0.5, "out": "0.5" },
+    { "value": 0.1, "out": "0.1" },
+    { "value": 1234567, "out": "1234567" },
+    { "value": 1234.5678, "out": "1234.5678" }
+  ],
+  "compactEstimate": [
+    {
+      "unit": "kcal",
+      "estimate": {
+        "status": "complete",
+        "lower": 1234.4,
+        "upper": null,
+        "coverage": { "covered": 1, "total": 1 }
+      },
+      "out": "1,234"
+    },
+    {
+      "unit": "kcal",
+      "estimate": {
+        "status": "complete",
+        "lower": 0.5,
+        "upper": null,
+        "coverage": { "covered": 1, "total": 1 }
+      },
+      "out": "1"
+    },
+    {
+      "unit": "kcal",
+      "estimate": {
+        "status": "complete",
+        "lower": 2.5,
+        "upper": null,
+        "coverage": { "covered": 1, "total": 1 }
+      },
+      "out": "3"
+    },
+    {
+      "unit": "kcal",
+      "estimate": {
+        "status": "complete",
+        "lower": 100,
+        "upper": 100,
+        "coverage": { "covered": 1, "total": 1 }
+      },
+      "out": "100"
+    },
+    {
+      "unit": "kcal",
+      "estimate": {
+        "status": "complete",
+        "lower": 1500,
+        "upper": 2250.4,
+        "coverage": { "covered": 2, "total": 2 }
+      },
+      "out": "1,500–2,250"
+    },
+    {
+      "unit": "macro",
+      "estimate": {
+        "status": "complete",
+        "lower": 12,
+        "upper": null,
+        "coverage": { "covered": 1, "total": 1 }
+      },
+      "out": "12"
+    },
+    {
+      "unit": "macro",
+      "estimate": {
+        "status": "complete",
+        "lower": 12.25,
+        "upper": null,
+        "coverage": { "covered": 1, "total": 1 }
+      },
+      "out": "12.3"
+    },
+    {
+      "unit": "macro",
+      "estimate": {
+        "status": "complete",
+        "lower": 1234.56,
+        "upper": null,
+        "coverage": { "covered": 1, "total": 1 }
+      },
+      "out": "1,234.6"
+    },
+    {
+      "unit": "macro",
+      "estimate": {
+        "status": "complete",
+        "lower": 10,
+        "upper": 12.5,
+        "coverage": { "covered": 2, "total": 2 }
+      },
+      "out": "10–12.5"
+    },
+    {
+      "unit": "macro",
+      "estimate": {
+        "status": "partial",
+        "lower": 5,
+        "upper": null,
+        "coverage": { "covered": 1, "total": 2 }
+      },
+      "out": "5+"
+    },
+    {
+      "unit": "macro",
+      "estimate": {
+        "status": "partial",
+        "lower": 5,
+        "upper": 6.5,
+        "coverage": { "covered": 1, "total": 3 }
+      },
+      "out": "5–6.5+"
+    },
+    {
+      "unit": "macro",
+      "estimate": { "status": "unavailable", "reason": "no_data" },
+      "out": "—"
+    },
+    {
+      "unit": "macro",
+      "estimate": { "status": "unavailable", "reason": "not_applicable" },
+      "out": "—"
+    },
+    {
+      "unit": "kcal",
+      "estimate": { "status": "pending", "reason": "totals_stale" },
+      "out": "—"
+    }
+  ]
+}

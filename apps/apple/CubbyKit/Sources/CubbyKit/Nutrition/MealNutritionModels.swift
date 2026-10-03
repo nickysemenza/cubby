@@ -3,7 +3,8 @@ import Foundation
 /// Calendar-day helpers for the household's configured time zone. Meal planning and logging use
 /// this boundary even while the device is travelling elsewhere.
 public enum HouseholdDay {
-    public static let timeZone = TimeZone(identifier: "America/Los_Angeles")!
+    /// Generated from `HOUSEHOLD_TIMEZONE` (`packages/shared/src/client-constants.ts`).
+    public static let timeZone = TimeZone(identifier: SharedConstants.householdTimeZoneIdentifier)!
 
     public static func string(for date: Date) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)

@@ -5,10 +5,6 @@ import Testing
 
 @Suite("ImageTransform")
 struct ImageTransformTests {
-    @Test func widthLadderIsThreeRungs() {
-        #expect(ImageTransform.widths == [128, 640, 2048])
-    }
-
     @Test(
         "snaps a rendered width up to the next rung",
         arguments: [
@@ -20,11 +16,11 @@ struct ImageTransformTests {
     }
 
     @Test func rewritesBucketURLExactly() throws {
-        let url = try #require(URL(string: "https://media.nickysemenza.com/products/abc.jpg"))
+        let url = try #require(URL(string: "\(SharedConstants.mediaOrigin)/products/abc.jpg"))
         let result = ImageTransform.transformed(url, renderedWidth: 64)
         #expect(
             result.absoluteString
-                == "https://media.nickysemenza.com/cdn-cgi/image/width=128,quality=80,format=auto,fit=scale-down/products/abc.jpg"
+                == "\(SharedConstants.mediaOrigin)/cdn-cgi/image/width=128,quality=80,format=auto,fit=scale-down/products/abc.jpg"
         )
     }
 
@@ -38,26 +34,26 @@ struct ImageTransformTests {
         let url = try #require(
             URL(
                 string:
-                    "https://media.nickysemenza.com/cdn-cgi/image/width=640,quality=80,format=auto,fit=scale-down/products/abc.jpg"
+                    "\(SharedConstants.mediaOrigin)/cdn-cgi/image/width=640,quality=80,format=auto,fit=scale-down/products/abc.jpg"
             ))
         let result = ImageTransform.transformed(url, renderedWidth: 64)
         #expect(result == url)
     }
 
     @Test func preservesQueryString() throws {
-        let url = try #require(URL(string: "https://media.nickysemenza.com/products/abc.jpg?v=2"))
+        let url = try #require(URL(string: "\(SharedConstants.mediaOrigin)/products/abc.jpg?v=2"))
         let result = ImageTransform.transformed(url, renderedWidth: 64)
         #expect(
             result.absoluteString
-                == "https://media.nickysemenza.com/cdn-cgi/image/width=128,quality=80,format=auto,fit=scale-down/products/abc.jpg?v=2"
+                == "\(SharedConstants.mediaOrigin)/cdn-cgi/image/width=128,quality=80,format=auto,fit=scale-down/products/abc.jpg?v=2"
         )
     }
 
     @Test func hashSourceBoundsBothDimensionsAndPinsJPEG() throws {
-        let url = try #require(URL(string: "https://media.nickysemenza.com/products/abc.heic?v=2"))
+        let url = try #require(URL(string: "\(SharedConstants.mediaOrigin)/products/abc.heic?v=2"))
         #expect(
             ImageTransform.hashSource(url).absoluteString
-                == "https://media.nickysemenza.com/cdn-cgi/image/width=256,height=256,quality=80,format=jpeg,fit=scale-down/products/abc.heic?v=2"
+                == "\(SharedConstants.mediaOrigin)/cdn-cgi/image/width=256,height=256,quality=80,format=jpeg,fit=scale-down/products/abc.heic?v=2"
         )
     }
 
@@ -79,7 +75,7 @@ struct ImageTransformTests {
             let rewrites: [Rewrite]
         }
         let file = try GoldenVectors.decode(File.self, named: "image-url")
-        let bucket = "https://media.nickysemenza.com"
+        let bucket = SharedConstants.mediaOrigin
         #expect(ImageTransform.widths == file.rungs)
         for width in file.widths {
             #expect(

@@ -1,0 +1,21 @@
+{
+  "_doc": "Household calendar-day boundary. Read by apps/web/src/lib/household-date.unit.test.ts and apps/apple CubbyKit HouseholdDayTests. `timeZone` is the household zone both clients derive from packages/shared/src/client-constants.ts; each `days` row maps an instant (UTC) to the household-local YYYY-MM-DD it falls on, including the DST changeovers where the offset moves between -8 and -7.",
+  "timeZone": "America/Los_Angeles",
+  "days": [
+    { "instant": "2026-01-05T07:59:59Z", "day": "2026-01-04" },
+    { "instant": "2026-01-05T08:00:00Z", "day": "2026-01-05" },
+    { "instant": "2026-03-08T07:59:59Z", "day": "2026-03-07" },
+    { "instant": "2026-03-08T08:00:00Z", "day": "2026-03-08" },
+    { "instant": "2026-03-09T06:59:59Z", "day": "2026-03-08" },
+    { "instant": "2026-03-09T07:00:00Z", "day": "2026-03-09" },
+    { "instant": "2026-07-05T06:59:59Z", "day": "2026-07-04" },
+    { "instant": "2026-07-05T07:00:00Z", "day": "2026-07-05" },
+    { "instant": "2026-11-01T06:59:59Z", "day": "2026-10-31" },
+    { "instant": "2026-11-01T07:00:00Z", "day": "2026-11-01" },
+    { "instant": "2026-11-02T07:59:59Z", "day": "2026-11-01" },
+    { "instant": "2026-11-02T08:00:00Z", "day": "2026-11-02" },
+    { "instant": "2026-12-31T23:59:59Z", "day": "2026-12-31" },
+    { "instant": "2027-01-01T07:59:59Z", "day": "2026-12-31" },
+    { "instant": "2027-01-01T08:00:00Z", "day": "2027-01-01" }
+  ]
+}

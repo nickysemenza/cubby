@@ -1,6 +1,8 @@
+import dayVectors from "@cubby/shared/golden-vectors/household-day.json";
 import { describe, expect, it } from "vitest";
 
 import {
+  HOUSEHOLD_TIMEZONE,
   householdDateTime,
   householdDaysAgo,
   householdDaysFromNow,
@@ -57,5 +59,17 @@ describe("householdDateTime", () => {
 
   it("rejects a value that is not a plain date", () => {
     expect(() => householdDateTime("2026-08")).toThrow(/plain date/);
+  });
+});
+
+// Native reads the same file (CubbyKit HouseholdDayTests): the zone and the
+// day boundaries cannot be changed on one client without the other failing.
+describe("household day golden vectors", () => {
+  it("uses the shared household zone", () => {
+    expect(HOUSEHOLD_TIMEZONE).toBe(dayVectors.timeZone);
+  });
+
+  it.each(dayVectors.days)("$instant falls on $day", ({ instant, day }) => {
+    expect(householdLocalDate(new Date(instant))).toBe(day);
   });
 });

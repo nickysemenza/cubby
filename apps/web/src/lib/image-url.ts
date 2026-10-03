@@ -1,3 +1,5 @@
+import { IMAGE_WIDTHS } from "@cubby/shared/client-constants";
+
 // Cloudflare Image Transformations URL rewriting (client-safe, pure).
 //
 // Stored image URLs are absolute R2 public URLs on our bucket host. Cloudflare's
@@ -13,18 +15,16 @@ const BUCKET_ORIGIN = __R2_PUBLIC_URL__;
 const BUCKET_HOST = new URL(BUCKET_ORIGIN).hostname;
 
 /**
- * Three variants per image, ever. Every request asks for 2× its rendered CSS
- * width (retina is the primary client) and snaps UP to a rung, so a 16px
- * identity mark, a 40px card and a 64px table cell of the same photo are one
- * URL — one CF edge-cache entry, one browser-cache entry, one billed
- * transformation. The native app mints the same URLs (`ImageTransform.swift`),
- * so the edge cache is shared across clients too.
+ * Three variants per image, ever (`IMAGE_WIDTHS`). Every request asks for 2×
+ * its rendered CSS width (retina is the primary client) and snaps UP to a
+ * rung, so a 16px identity mark, a 40px card and a 64px table cell of the same
+ * photo are one URL — one CF edge-cache entry, one browser-cache entry, one
+ * billed transformation. The native app mints the same URLs
+ * (`ImageTransform.swift`, rungs and bucket host generated from the same
+ * declarations), so the edge cache is shared across clients too.
  */
-export const IMAGE_WIDTHS = [128, 640, 2048] as const;
-
-/** Transform width for a rendered CSS width: 2× for retina, snapped up. */
 export const transformWidth = (renderedWidth: number): number =>
-  IMAGE_WIDTHS.find((rung) => rung >= renderedWidth * 2) ?? 2048;
+  IMAGE_WIDTHS.find((rung) => rung >= renderedWidth * 2) ?? IMAGE_WIDTHS[2];
 
 const isTransformable = (parsed: URL): boolean =>
   parsed.hostname === BUCKET_HOST && !parsed.pathname.startsWith("/cdn-cgi/");

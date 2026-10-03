@@ -32,6 +32,9 @@ const INPUTS = [
   "packages",
   "apps/web/src",
   "apps/web/scripts/apple-preview-fixtures.ts",
+  // The R2 public origin generated into `SharedConstants.swift`.
+  "apps/web/wrangler.jsonc",
+  "apps/web/tooling/wrangler-public-config.ts",
   "apps/apple/CubbyKit/Sources/CubbyKit/Catalog/EntityManifest.swift",
   "apps/web/tsconfig.json",
   "package.json",

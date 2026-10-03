@@ -100,7 +100,7 @@ private struct TimelineEventRow: View {
             }
             Spacer(minLength: FieldGuideTokens.Space.sm)
             if let amount = event.amount {
-                Text(EntityFieldValue.format(amount))
+                Text(EntityFieldValue.quantity(amount))
                     .font(.fieldGuideData)
                     .foregroundStyle(FieldGuideTokens.graphiteSecondary)
             }

@@ -44,6 +44,38 @@ export function formatEstimate(
     : confidence;
 }
 
+export type CompactEstimateUnit = "kcal" | "macro";
+
+/**
+ * A figure in a compact nutrition cell: kcal rounds half-up to a whole number,
+ * a macro to one decimal (`roundTo`), both grouped en-US. The native app
+ * renders the same cell from `golden-vectors/display-format.json`.
+ */
+export const compactNumberText = (
+  value: number,
+  unit: CompactEstimateUnit,
+): string =>
+  (unit === "kcal" ? Math.round(value) : roundTo(value, 1)).toLocaleString(
+    "en-US",
+  );
+
+/**
+ * The one-line macro cell: a range joins with an en dash, a partial estimate
+ * ends in `+`, and anything unavailable or pending is `—`.
+ */
+export function compactEstimateText(
+  estimate: MeasureEstimate,
+  unit: CompactEstimateUnit,
+): string {
+  if (!hasKnownEstimate(estimate)) return "—";
+  const lower = compactNumberText(estimate.lower, unit);
+  const value =
+    estimate.upper != null && estimate.upper !== estimate.lower
+      ? `${lower}–${compactNumberText(estimate.upper, unit)}`
+      : lower;
+  return `${value}${estimate.status === "partial" ? "+" : ""}`;
+}
+
 /** Accessible detail for an otherwise compact unavailable/pending cell. */
 export function estimateStatusText(estimate: MeasureEstimate): string | null {
   if (hasKnownEstimate(estimate))

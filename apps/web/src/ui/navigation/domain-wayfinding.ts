@@ -3,6 +3,7 @@ import { allEntities } from "@cubby/schemas/entity-manifest";
 import {
   entitySummary,
   type WayfindingDomain,
+  WAYFINDING_DOMAIN_PRESENTATION,
 } from "@cubby/schemas/entity-summary";
 
 /** The stable wayfinding families used by the Field Guide shell. */
@@ -31,7 +32,7 @@ export type DomainWayfinding = {
 export const DOMAIN_WAYFINDING = {
   cook: {
     id: "cook",
-    label: "Cook",
+    label: WAYFINDING_DOMAIN_PRESENTATION.cook.label,
     accentToken: "--domain-cook",
     surfaceToken: "--domain-cook-surface",
     entities: entitiesOn("cook"),
@@ -39,7 +40,7 @@ export const DOMAIN_WAYFINDING = {
   },
   pantry: {
     id: "pantry",
-    label: "Pantry",
+    label: WAYFINDING_DOMAIN_PRESENTATION.pantry.label,
     accentToken: "--domain-pantry",
     surfaceToken: "--domain-pantry-surface",
     entities: entitiesOn("pantry"),
@@ -55,7 +56,7 @@ export const DOMAIN_WAYFINDING = {
   },
   plan: {
     id: "plan",
-    label: "Plan",
+    label: WAYFINDING_DOMAIN_PRESENTATION.plan.label,
     accentToken: "--domain-plan",
     surfaceToken: "--domain-plan-surface",
     entities: entitiesOn("plan"),
@@ -63,7 +64,7 @@ export const DOMAIN_WAYFINDING = {
   },
   house: {
     id: "house",
-    label: "House",
+    label: WAYFINDING_DOMAIN_PRESENTATION.house.label,
     accentToken: "--domain-house",
     surfaceToken: "--domain-house-surface",
     entities: entitiesOn("house"),
@@ -78,7 +79,7 @@ export const DOMAIN_WAYFINDING = {
   },
   finance: {
     id: "finance",
-    label: "Finance",
+    label: WAYFINDING_DOMAIN_PRESENTATION.finance.label,
     accentToken: "--domain-finance",
     surfaceToken: "--domain-finance-surface",
     entities: entitiesOn("finance"),

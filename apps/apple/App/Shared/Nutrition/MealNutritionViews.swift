@@ -188,35 +188,19 @@ private struct MacroGrid: View {
 }
 
 private extension MeasureEstimate {
+    /// The cell text pinned by `golden-vectors/display-format.json`, shared with the web.
     func formatted(calories: Bool) -> String {
-        switch self {
-        case .complete(let estimate): format(lower: estimate.lower, upper: estimate.upper, calories: calories)
-        case .partial(let estimate):
-            "\(format(lower: estimate.lower, upper: estimate.upper, calories: calories))+"
-        case .unavailable: isNotApplicable ? "N/A" : "—"
-        case .pending: "—"
-        }
+        DisplayFormat.compactEstimate(self, unit: calories ? .kcal : .macro)
     }
 
     func accessibilityValue(calories: Bool) -> String {
-        switch self {
-        case .complete(let estimate): format(lower: estimate.lower, upper: estimate.upper, calories: calories)
-        case .partial(let estimate):
-            "\(format(lower: estimate.lower, upper: estimate.upper, calories: calories)), known subtotal"
+        let known = DisplayFormat.knownRange(self, unit: calories ? .kcal : .macro)
+        return switch self {
+        case .complete: known ?? ""
+        case .partial: "\(known ?? ""), known subtotal"
         case .unavailable: isNotApplicable ? "not applicable" : "unavailable"
         case .pending: "pending"
         }
-    }
-
-    private func format(lower: Double, upper: Double?, calories: Bool) -> String {
-        let lowerText = number(lower, calories: calories)
-        guard let upper, upper != lower else { return lowerText }
-        return "\(lowerText)–\(number(upper, calories: calories))"
-    }
-
-    private func number(_ value: Double, calories: Bool) -> String {
-        if calories { return value.formatted(.number.precision(.fractionLength(0))) }
-        return value.formatted(.number.precision(.fractionLength(0...1)))
     }
 }
 

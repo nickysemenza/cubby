@@ -23,6 +23,7 @@ import { browserRoutes, lowerCamelCase } from "./routes.ts";
 import { kernelEntitiesFor } from "./shared.ts";
 import { hasGenericListOperation } from "../list-capabilities.ts";
 import { renderSwiftEntityCatalog } from "./swift-catalog.ts";
+import { renderSwiftSharedConstants } from "./swift-shared-constants.ts";
 import { renderDataQualityArtifacts } from "./data-quality.ts";
 import { renderImagePolicyArtifacts } from "./image-policy.ts";
 import { renderCoverageTotalsArtifacts } from "./coverage-totals.ts";
@@ -1107,7 +1108,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         // larger) manifest module.
         'import type { Entity } from "../entity-core";\n' +
         'import type { CompiledEntityPresentation } from "../entity-definitions/definition";\n\n' +
-        'export { WAYFINDING_DOMAINS } from "../entity-definitions/definition";\n' +
+        'export { WAYFINDING_DOMAINS, WAYFINDING_DOMAIN_PRESENTATION } from "../entity-definitions/definition";\n' +
         'export type { CompiledEntityPresentation as EntityPresentation, EntityDetailSection, EntityListView, WayfindingDomain } from "../entity-definitions/definition";\n\n' +
         "/**\n" +
         " * Display names for one entity, exactly as its literal declares them.\n" +
@@ -1480,6 +1481,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         `export const HTTP_RESOURCES = {\n${httpResources}\n} as const satisfies Record<string, { basePath: string; verbs: readonly ("list" | "timeline" | "get" | "create" | "update" | "delete")[] }>;\n`,
     },
     ...renderSwiftEntityCatalog(entities),
+    ...renderSwiftSharedConstants(),
     {
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
       source:

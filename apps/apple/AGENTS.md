@@ -137,9 +137,18 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
 - `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` — from `uniffi-bindgen`. Regenerate with
   `node scripts/ensure-apple-ffi.ts` (or `apps/apple/scripts/build-rust.sh` directly).
 - Rules that exist on both platforms but are not shared code are pinned by JSON vectors in
-  `packages/shared/golden-vectors/` (`gtin.json`, `image-url.json`, `bin-plan.json`). The Swift
-  tests (`ScanCodeTests`, `ImageTransformTests`, `BinPlanTests`) and the web/Rust tests read the
-  same files; change a rule by editing the vector first, then both implementations. The GTIN
+  `packages/shared/golden-vectors/` (`gtin.json`, `image-url.json`, `bin-plan.json`,
+  `display-format.json`, `household-day.json`). The Swift tests (`ScanCodeTests`,
+  `ImageTransformTests`, `BinPlanTests`, `DisplayFormatTests`, `HouseholdDayTests`) and the
+  web/Rust tests read the same files; change a rule by editing the vector first, then both
+  implementations. Field display text (`currency`, `signedCurrency`, `plainDate`, bare numbers, the
+  compact nutrition cell) goes through `DisplayFormat`, fixed en-US like the web — never format a
+  catalog value with `.formatted()` in a view.
+- `CubbyKit/Sources/CubbyKit/Generated/SharedConstants.swift` — constants and vocabulary with one
+  TypeScript declaration: the image-transform rungs (`IMAGE_WIDTHS`) and household zone
+  (`HOUSEHOLD_TIMEZONE`) from `packages/shared/src/client-constants.ts`, the media origin from
+  `apps/web/wrangler.jsonc`, and each wayfinding domain's `title`/`sfSymbol` from
+  `WAYFINDING_DOMAIN_PRESENTATION`. Never restate one in Swift. The GTIN
   rule itself is single-sourced in `recipebridge::scan_code_gtin14` (ISBN-10/13 or 8/12/13/14
   digits; general GTIN check digits are not enforced).
 - The `CubbyAPI` target — swift-openapi-generator's typed client and schema types, generated at

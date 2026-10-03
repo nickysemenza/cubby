@@ -1,9 +1,7 @@
+import { HOUSEHOLD_TIMEZONE } from "@cubby/shared/client-constants";
 import { TZDate } from "@date-fns/tz";
 
-/**
- * Single-user household — hardcoded rather than configurable.
- */
-export const HOUSEHOLD_TIMEZONE = "America/Los_Angeles";
+export { HOUSEHOLD_TIMEZONE };
 
 /**
  * The instant at which `minutes` past midnight on `plainDate` occurs in the

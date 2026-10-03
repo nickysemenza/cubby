@@ -1,7 +1,8 @@
+import { IMAGE_WIDTHS } from "@cubby/shared/client-constants";
 import imageVectors from "@cubby/shared/golden-vectors/image-url.json";
 import { describe, expect, it } from "vitest";
 
-import { IMAGE_WIDTHS, transformWidth, transformedImageUrl } from "./image-url";
+import { transformWidth, transformedImageUrl } from "./image-url";
 
 const BUCKET_SRC = `${__R2_PUBLIC_URL__}/cubby/images/a.jpg`;
 

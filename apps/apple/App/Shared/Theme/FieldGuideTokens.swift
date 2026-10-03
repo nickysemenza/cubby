@@ -58,15 +58,19 @@ enum AppDomain: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
+    /// The manifest's own line, whose title and glyph are generated from
+    /// `WAYFINDING_DOMAIN_PRESENTATION` so native and web name every domain alike.
+    var wayfinding: WayfindingDomain {
         switch self {
-        case .house: "House"
-        case .cook: "Cook"
-        case .pantry: "Pantry"
-        case .plan: "Plan"
-        case .finance: "Finance"
+        case .house: .house
+        case .cook: .cook
+        case .pantry: .pantry
+        case .plan: .plan
+        case .finance: .finance
         }
     }
+
+    var title: String { wayfinding.title }
 
     var color: Color {
         switch self {
@@ -80,15 +84,7 @@ enum AppDomain: String, CaseIterable, Identifiable {
 
     /// The group glyph, used where a domain itself is the subject (a Browse header, a Mac sidebar
     /// row) rather than one entity within it.
-    var symbol: String {
-        switch self {
-        case .house: "house"
-        case .cook: "fork.knife"
-        case .pantry: "shippingbox"
-        case .plan: "hammer"
-        case .finance: "creditcard"
-        }
-    }
+    var symbol: String { wayfinding.sfSymbol }
 }
 
 extension AppDomain {

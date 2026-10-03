@@ -56,6 +56,24 @@ export const WAYFINDING_DOMAINS = [
 export type WayfindingDomain = (typeof WAYFINDING_DOMAINS)[number];
 
 /**
+ * What each line is called and drawn as. The web shell reads `label`; the
+ * Swift `WayfindingDomain.title`/`.sfSymbol` are generated from this table
+ * (`Generated/SharedConstants.swift`). The group glyph is used where a domain
+ * itself is the subject (a Browse header, a Mac sidebar row), not one entity
+ * within it.
+ */
+export const WAYFINDING_DOMAIN_PRESENTATION = {
+  cook: { label: "Cook", sfSymbol: "fork.knife" },
+  pantry: { label: "Pantry", sfSymbol: "shippingbox" },
+  plan: { label: "Plan", sfSymbol: "hammer" },
+  house: { label: "House", sfSymbol: "house" },
+  finance: { label: "Finance", sfSymbol: "creditcard" },
+} as const satisfies Record<
+  WayfindingDomain,
+  { label: string; sfSymbol: string }
+>;
+
+/**
  * The closed vocabulary of table-filter shapes. Schema-free (unlike most of
  * this file) so `compile.ts`, the web `FilterKind` type, and the Swift
  * catalog generator can all read the same list without importing each other.
