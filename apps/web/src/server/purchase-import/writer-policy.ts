@@ -125,7 +125,10 @@ export const uniqueOrderSubsetForCharge = (
   maxOrders = 8,
 ): OrderAmountCandidate[] | null => {
   const target = cents(chargeAmount);
-  const bounded = orders.slice(0, maxOrders);
+  // Uniqueness among a truncated list is not uniqueness: with more candidates
+  // than the search covers, the subset is unknown and stays reviewable.
+  if (orders.length > maxOrders) return null;
+  const bounded = orders;
   const matches: OrderAmountCandidate[][] = [];
 
   const visit = (

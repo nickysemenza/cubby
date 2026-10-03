@@ -3,7 +3,6 @@ import {
   expenseLineKindValues,
   type ExpenseLineKind,
 } from "@cubby/schemas/expense-line-kind";
-import { cardLastFoursOn } from "@cubby/schemas/financial-account";
 import {
   parseEntityId,
   userId as userIdSchema,
@@ -18,16 +17,7 @@ import {
   type ImportWriterOutput,
   type ProposedImportFix,
 } from "@cubby/schemas/purchase-import";
-import {
-  and,
-  between,
-  eq,
-  ilike,
-  isNotNull,
-  isNull,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
 
 import {
   PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
@@ -41,9 +31,6 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   entityAttachment,
   expense,
-  financialAccount,
-  financialTransaction,
-  financialTransactionAllocation,
   importSourceClaim,
   ledgerParty,
   ledgerSourceClaim,
@@ -64,10 +51,6 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
-import {
-  applyAllocationChanges,
-  readAllocations,
-} from "~/server/repo/financial-transaction-allocations";
 import { upsertAgentProductMatch } from "~/server/repo/product-match-candidate";
 import {
   externalIdKey,
@@ -86,12 +69,9 @@ import {
   learnPurchaseProductExternalId,
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
+import { settlePurchaseFromRetainedPayments } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
-import {
-  decideLineWrite,
-  matchCompletePaymentSet,
-  type ExistingExpenseSnapshot,
-} from "./writer-policy";
+import { decideLineWrite, type ExistingExpenseSnapshot } from "./writer-policy";
 
 const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
 export const PRODUCT_IDENTITY_RULES =
@@ -1267,102 +1247,15 @@ export async function importVendorOrder(
         evidenceIndex,
       });
     }
-    const paymentDates = candidate.payments
-      .flatMap((payment) =>
-        payment.chargedAt ? [new Date(payment.chargedAt)] : [],
-      )
-      .filter((date) => !Number.isNaN(date.getTime()));
-    if (candidate.payments.length > 0 && paymentDates.length > 0) {
-      const low = new Date(
-        Math.min(...paymentDates.map((date) => date.getTime())) -
-          3 * 86_400_000,
-      )
-        .toISOString()
-        .slice(0, 10);
-      const high = new Date(
-        Math.max(...paymentDates.map((date) => date.getTime())) +
-          3 * 86_400_000,
-      )
-        .toISOString()
-        .slice(0, 10);
-      const candidates = await tx
-        .select({
-          id: financialTransaction.id,
-          amount: financialTransaction.amount,
-          transactionDate: financialTransaction.transactionDate,
-          postedDate: financialTransaction.postedDate,
-          accountCardNumbers: financialAccount.cardNumbers,
-        })
-        .from(financialTransaction)
-        .innerJoin(
-          financialAccount,
-          and(
-            eq(financialAccount.id, financialTransaction.accountId),
-            eq(financialAccount.ledgerPartyId, partyId),
-            notDeleted(financialAccount),
-          ),
-        )
-        .leftJoin(
-          financialTransactionAllocation,
-          and(
-            eq(
-              financialTransactionAllocation.transactionId,
-              financialTransaction.id,
-            ),
-            notDeleted(financialTransactionAllocation),
-          ),
-        )
-        .where(
-          and(
-            notDeleted(financialTransaction),
-            between(
-              sql<string>`coalesce(${financialTransaction.transactionDate}, ${financialTransaction.postedDate})`,
-              low,
-              high,
-            ),
-            isNull(financialTransactionAllocation.id),
-          ),
-        );
-      const matches = matchCompletePaymentSet(
-        candidate.payments,
-        candidates.flatMap((row) => {
-          const date = row.transactionDate ?? row.postedDate;
-          return date
-            ? [
-                {
-                  id: row.id,
-                  amount: row.amount,
-                  occurredAt: new Date(`${date}T12:00:00.000Z`),
-                  cardLastFours: cardLastFoursOn(row.accountCardNumbers, date),
-                },
-              ]
-            : [];
-        }),
-      );
-      if (matches) {
-        const transactionIds = matches.map((match) =>
-          parseEntityId("financialTransaction", match.transactionId),
-        );
-        const before = await readAllocations(tx, transactionIds);
-        await tx.insert(financialTransactionAllocation).values(
-          matches.map((match) => ({
-            transactionId: parseEntityId(
-              "financialTransaction",
-              match.transactionId,
-            ),
-            purchaseId,
-            amount: match.amount,
-          })),
-        );
-        await applyAllocationChanges(tx, {
-          transactionIds,
-          before,
-          actor: buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
-            runId: runEntityId.parse(input.runId),
-          }),
-        });
-      }
-    }
+    // Settle from the payment lines this order retained, against charges
+    // already on the member's statements. Later charges settle through the
+    // same function before any hunt opens (retained-settlement.ts).
+    await settlePurchaseFromRetainedPayments(tx, {
+      purchaseId,
+      actor: buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
+        runId: runEntityId.parse(input.runId),
+      }),
+    });
     if (replacementExpenseId) {
       const preview = await loadAggregateReplacementSnapshot(
         tx,
