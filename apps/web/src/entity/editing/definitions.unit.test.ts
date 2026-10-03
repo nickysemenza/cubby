@@ -522,11 +522,25 @@ describe("entity edit definitions", () => {
           surface: "calendar",
           record: { id: "EXP-PLANNED", future: true },
         },
-        { name: "Upcoming", cost: null, date: null },
+        { name: "Upcoming", cost: 12, date: null },
       ),
     ).toMatchObject({
       ok: false,
       issues: [{ field: "date", message: EXPENSE_DATE_REQUIRED_MESSAGE }],
     });
+    // Unknown cost (a historical acquisition) may keep an unknown date.
+    expect(
+      buildEntityEdit(
+        plannedExpense,
+        {
+          entity: "expense",
+          operation: "update",
+          intent: "planned",
+          surface: "calendar",
+          record: { id: "EXP-PLANNED", future: true },
+        },
+        { name: "Upcoming", cost: null, date: null },
+      ),
+    ).toMatchObject({ ok: true });
   });
 });

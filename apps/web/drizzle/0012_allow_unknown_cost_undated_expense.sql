@@ -1,0 +1,2 @@
+ALTER TABLE "Expense" DROP CONSTRAINT "Expense_date_cost_check";--> statement-breakpoint
+ALTER TABLE "Expense" ADD CONSTRAINT "Expense_date_cost_check" CHECK ("Expense"."date" IS NOT NULL OR "Expense"."cost" IS NULL OR "Expense"."cost" = 0);

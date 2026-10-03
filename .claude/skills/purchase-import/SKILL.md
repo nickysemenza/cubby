@@ -187,6 +187,7 @@ Monarch rows prove settlement, not itemization or exact Product identity. Use
 email/order lines for items and prefer matching existing photo-created Products
 when variant evidence agrees. Keep historical Expense attribution separate from
 current inventory ownership. Reconciliation never receives that inventory again.
+Record a historical acquisition (a known quantity whose earlier purchase is missing) as an Expense with `cost: null`, no `date`, and the known `productQuantity`; never invent price or date, and it receives no inventory.
 
 ## Enrichment fallback
 

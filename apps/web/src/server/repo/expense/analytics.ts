@@ -112,10 +112,10 @@ export async function expenseAnalytics(
     whereClause,
     ne(expense.lineKind, "principal"),
   );
-  // $0 events can have an unknown date —
-  // exclude null-date rows from the month-bucketed breakdowns only (can't
-  // bucket what has no date); summary/byCostType/byTrade/byProject still
-  // include them.
+  // $0 events and unknown-cost historical acquisitions can have an unknown
+  // date — exclude null-date rows from the month-bucketed breakdowns only
+  // (can't bucket what has no date); summary/byCostType/byTrade/byProject still
+  // include them. A null cost adds nothing to any sum; it is never a $0 spend.
   const datedWhereClause = and(whereClause, isNotNull(expense.date));
 
   const [

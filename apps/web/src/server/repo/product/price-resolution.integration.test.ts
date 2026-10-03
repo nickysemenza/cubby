@@ -33,6 +33,54 @@ const priceRead = z.object({
 describe("Product valuation price resolution on canonical reads", () => {
   const ctx = withTestDb();
 
+  // An unknown-cost historical acquisition (null cost, no date) carries a
+  // quantity but no price: it must never become a price sample or dilute the
+  // unit price of the priced lines beside it.
+  it("never derives a price from an unknown-cost undated acquisition", async () => {
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic historical acquisition" }),
+      ctx.actor,
+    );
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Synthetic historical stock",
+        cost: null,
+        date: null,
+        productId: product.id,
+        productQuantity: 6,
+      }),
+    );
+    const only = priceRead.parse(
+      await getProductByShortcode(ctx.db, product.id),
+    );
+    expect(only.pricing).toEqual({ effectivePrice: null, derivedPrice: null });
+    const unpriced = await productList(
+      ctx.db,
+      { pricePresenceFilter: "none" },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(unpriced.data.map((row) => row.id)).toContain(product.id);
+
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Synthetic priced purchase",
+        cost: 20,
+        productId: product.id,
+        productQuantity: 4,
+      }),
+    );
+    const mixed = priceRead.parse(
+      await getProductByShortcode(ctx.db, product.id),
+    );
+    expect(mixed.pricing.derivedPrice).toBe(5);
+  });
+
   it("preserves stored overrides, expense-derived fallback and explicit reset without changing ledger cost", async () => {
     const product = await createProductFixture(
       ctx.db,

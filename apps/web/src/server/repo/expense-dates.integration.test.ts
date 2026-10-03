@@ -29,8 +29,8 @@ import {
 describe("unknown expense dates", () => {
   const ctx = withTestDb();
 
-  it.each([12, -12, null])(
-    "refuses an unknown date with cost %s at every write boundary",
+  it.each([12, -12])(
+    "refuses an unknown date with known non-zero cost %s at every write boundary",
     async (cost) => {
       const input = makeExpenseInput({ cost, date: null });
       expect(expenseCreateInput.safeParse(input).success).toBe(false);
@@ -65,6 +65,29 @@ describe("unknown expense dates", () => {
       ).toMatchObject({ output: { cost, date: "2026-01-02" } });
     },
   );
+
+  it("allows an unknown date with unknown cost, and re-requires a date once a cost is known", async () => {
+    const input = makeExpenseInput({ cost: null, date: null });
+    expect(expenseCreateInput.safeParse(input).success).toBe(true);
+    const { output: unknown } = await createExpense(ctx.db, input, ctx.actor);
+    expect(await getExpenseByShortcode(ctx.db, unknown.id)).toMatchObject({
+      cost: null,
+      date: null,
+    });
+    await expect(
+      updateExpense(ctx.db, unknown.id, { cost: 12 }, ctx.actor),
+    ).rejects.toThrow("A date is required");
+    await expect(
+      getDb(ctx.db)
+        .update(expense)
+        .set({ cost: 12 })
+        .where(eq(expense.shortcode, unknown.id)),
+    ).rejects.toThrow(/Expense_date_cost_check|Failed query/);
+    // Unknown cost is never $0 spend in the date-based reports.
+    const analytics = await expenseAnalytics(ctx.db, {});
+    expect(analytics.summary.net).toBe(0);
+    expect(analytics.monthly).toEqual([]);
+  });
 
   it("clears a zero-cost selection and refuses a mixed-cost selection atomically", async () => {
     const { output: free } = await createExpense(

@@ -13,6 +13,7 @@ source-backed batch report.
 
 Use supplied `PRD-` identifiers regardless of inventory. Enrichment never
 decides whether an import line becomes a Product and never receives inventory.
+Enrichment never invents a price or date; a historical acquisition of unknown cost is an Expense with `cost: null` and no `date`.
 For a backlog, `entity_read.list product` with `sort=dataQuality` ascending puts the
 weakest identity first (heavier identity checks — manufacturer, external ID —
 outweigh lighter ones), in pages of 25. Narrow to a specific gap with
