@@ -1,7 +1,10 @@
 context platform=ios timeout=240000
 
 open com.nickysemenza.cubby
-wait "role=Button label=Library" 60000
+wait "role=Button label=Library" 60000 --scope Library --depth 2
+# A timed-out launch capture can still occupy the runner after it returns a tree.
+# Allow that abandoned read to drain before submitting the first input.
+wait 10000
 # Tap the visible tab in the fixed simulator; the selector click can leave Work selected.
 press 257 822
 wait text "Browse catalog" 30000
