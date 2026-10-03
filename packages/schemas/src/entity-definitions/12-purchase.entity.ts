@@ -68,6 +68,7 @@ export default defineEntity({
           collapseWhenEmpty: true,
         },
         { kind: "slot", id: "project-allocation", title: "Project allocation" },
+        { kind: "slot", id: "receiving", title: "Receive into Inventory" },
         { kind: "slot", id: "runs", title: "Import runs" },
         { kind: "slot", id: "order-mail", title: "Order email" },
         {

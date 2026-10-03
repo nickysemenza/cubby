@@ -13,6 +13,7 @@ import {
 } from "./base-entity";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { positiveAmount } from "./codec";
+import { productMatchSide, productMatchSource } from "./recommendations";
 import { externalIdOut, gtin } from "./external-id";
 import { moneyNullable } from "./money";
 import { imageOut } from "./image";
@@ -370,6 +371,37 @@ export const inventoryReceiveExpenseInput = z.object({
 });
 export type InventoryReceiveExpenseInput = z.infer<
   typeof inventoryReceiveExpenseInput
+>;
+/**
+ * What already counts for an Expense's Product before anything is received:
+ * its own live stock, and open Product match candidates (agent proposals and
+ * detector pairs) that may be the same item already counted, e.g. a photo
+ * import. Read-only; receiving stays an explicit separate act.
+ */
+export const inventoryReceivingContextInput = z.object({
+  productId: productShortcode,
+});
+export const inventoryReceivingContextOut = z.object({
+  productId: productShortcode,
+  stock: z.array(
+    z.object({
+      id: inventoryShortcode,
+      locationId: locationShortcode,
+      locationName: z.string(),
+      amount: z.object({ value: z.number(), unit: z.string() }),
+    }),
+  ),
+  matches: z.array(
+    z.object({
+      source: productMatchSource,
+      evidence: z.string().nullable(),
+      candidate: productMatchSide,
+      warnings: z.array(z.string()),
+    }),
+  ),
+});
+export type InventoryReceivingContextOut = z.infer<
+  typeof inventoryReceivingContextOut
 >;
 export const inventoryReceiveExpenseOut = z.object({
   item: inventoryWithLocationAndProductOut,
