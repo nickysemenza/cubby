@@ -6,6 +6,7 @@ import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.
 import { uniqueBy } from "./base-entity";
 import {
   expenseShortcode,
+  financialTransactionShortcode,
   imageShortcode,
   productShortcode,
   projectShortcode,
@@ -68,6 +69,67 @@ export const purchaseSettlementCandidatesOut = z.object({
     )
     .max(10),
 });
+
+/** Deterministic rank tier: an exact stated-total charge outranks a vendor-name
+ * match, which outranks a bare date-proximity hit (the repo orders by exactly
+ * these two flags before days). */
+function settlementTier(candidate: {
+  exactAmount: boolean;
+  merchantMatches: boolean;
+}): number {
+  return (candidate.exactAmount ? 2 : 0) + (candidate.merchantMatches ? 1 : 0);
+}
+
+/**
+ * The candidates tied at the top deterministic tier, or `[]` unless two or
+ * more are tied. Days-apart only breaks ties inside the repo ordering, so it
+ * does not separate a tier: a person has no better reason to prefer the
+ * nearer of two equally plausible charges. Both the server (before it spends
+ * a model call) and the review UI (before it offers the button) use this.
+ */
+export function tiedTopSettlementCandidates<
+  T extends { exactAmount: boolean; merchantMatches: boolean },
+>(candidates: readonly T[]): T[] {
+  const top = Math.max(-1, ...candidates.map(settlementTier));
+  const tied = candidates.filter((c) => settlementTier(c) === top);
+  return tied.length >= 2 ? tied : [];
+}
+
+export const purchaseSettlementSuggestInput = z.object({
+  purchaseId: purchaseShortcode,
+});
+
+export const purchaseSettlementSuggestOut = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("not_ambiguous"),
+  }),
+  z.object({
+    status: z.literal("unavailable"),
+    error: z.string().describe("Raw diagnostic from the failed model call."),
+  }),
+  z.object({
+    status: z.literal("ranked"),
+    advisory: z
+      .literal(true)
+      .describe(
+        "A ranking of the tied candidates only; it never allocates settlement evidence.",
+      ),
+    selectedTransactionId: financialTransactionShortcode
+      .nullable()
+      .describe("The model's pick, or null when it judged none a fit."),
+    ranked: z
+      .array(
+        z.object({
+          transactionId: financialTransactionShortcode,
+          probability: z.number().min(0).max(1),
+        }),
+      )
+      .max(10),
+  }),
+]);
+export type PurchaseSettlementSuggestOut = z.infer<
+  typeof purchaseSettlementSuggestOut
+>;
 
 const purchaseCreateFields = {
   ...generatedPurchaseFieldSchemas.create,

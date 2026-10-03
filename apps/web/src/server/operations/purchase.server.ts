@@ -10,11 +10,14 @@ import {
 } from "@cubby/schemas/purchase";
 
 import { purchaseContract } from "~/contracts/purchase.contract";
+import { suggestSettlementMatch } from "~/server/ai/settlement-candidate-rank";
 import { executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { listPurchaseOrderMail } from "~/server/purchase-import/gmail/review";
 import {
+  getPurchaseByShortcode,
   linkExpensesToPurchase,
   reclassifyPurchaseDocument,
   splitExpense,
@@ -26,6 +29,7 @@ import {
   resolveOrThrow,
   resolveShortcode,
 } from "~/server/repo/shortcode-resolver";
+import { aiCallRunInput, ensureRun } from "~/server/runs/ensure-run";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
 import {
   mutationEvents,
@@ -107,6 +111,22 @@ export async function purchaseProductsWorkflow(
   );
 }
 
+async function loadSettlementTransaction(
+  context: EntityKernelContext,
+  transactionId: string,
+) {
+  const result = await executeEntityAs(context, "get", {
+    entity: "financialTransaction",
+    id: parseShortcodeFor("financialTransaction", transactionId),
+    missing: "error",
+  });
+  if (!result.item)
+    throw new Error(
+      "Entity kernel returned the wrong financial transaction detail",
+    );
+  return financialTransactionOut.parse(result.item);
+}
+
 export const purchaseHandlers = implementOperationDomain(purchaseContract, {
   settlementCandidates: async (context, input) => {
     const candidates = await listPurchaseSettlementCandidates(
@@ -116,23 +136,42 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
     return {
       advisory: true,
       candidates: await Promise.all(
-        candidates.map(async ({ transactionId, ...rank }) => {
-          const result = await executeEntityAs(context, "get", {
-            entity: "financialTransaction",
-            id: parseShortcodeFor("financialTransaction", transactionId),
-            missing: "error",
-          });
-          if (!result.item)
-            throw new Error(
-              "Entity kernel returned the wrong financial transaction detail",
-            );
-          return {
-            ...rank,
-            transaction: financialTransactionOut.parse(result.item),
-          };
-        }),
+        candidates.map(async ({ transactionId, ...rank }) => ({
+          ...rank,
+          transaction: await loadSettlementTransaction(context, transactionId),
+        })),
       ),
     } satisfies typeof purchaseSettlementCandidatesOut._output;
+  },
+  suggestSettlementMatch: async (context, input) => {
+    const purchase = await getPurchaseByShortcode(context.db, input.purchaseId);
+    if (!purchase)
+      throw createAppError("PURCHASE_NOT_FOUND", "Purchase not found");
+    // Recomputed here, never taken from the client: the tie is a server fact.
+    return suggestSettlementMatch({
+      subject: {
+        vendorName: purchase.vendorName,
+        date: purchase.date,
+        statedTotal: purchase.statedTotal,
+        orderId: purchase.orderId,
+      },
+      ranks: await listPurchaseSettlementCandidates(
+        context.db,
+        input.purchaseId,
+      ),
+      loadTransaction: (id) => loadSettlementTransaction(context, id),
+      openUsage: async () => ({
+        db: context.db,
+        runId: await ensureRun(
+          context.db,
+          context.actorContext,
+          aiCallRunInput(context.actorContext),
+        ),
+        operation: "purchase.suggestSettlementMatch",
+        entity: { entityKind: "purchase", entityId: input.purchaseId },
+        cacheStatus: "none",
+      }),
+    });
   },
   orderMail: (context, input) => listPurchaseOrderMail(context.db, input),
   products: (context, input) => purchaseProductsWorkflow(context, input),
