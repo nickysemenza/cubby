@@ -56,12 +56,6 @@ history is the archive. Permanent product constraints live in the
   analysis measurably slows while the sweep runs: add a `PhotoVisionGate`
   actor both acquire, with the sheet yielding the sweep.
 
-- 🟢 **Receive on native.** Web now shows existing stock and pending Product
-  matches before receiving, defaults to "nothing new arrived", and requires an
-  explicit quantity for additional units, from an Expense or the Purchase's
-  Receive section (`inventory.receivingContext`). Build the same Expense and
-  Purchase receive slots in the Apple app.
-
 - ⏳ **Product match queue recall and cost.** Each unfocused queue read now
   logs `queue read coverage`: vector lookups, unseeded photo Products, and
   photo Products with no candidate at all, split by whether they were seeded.
