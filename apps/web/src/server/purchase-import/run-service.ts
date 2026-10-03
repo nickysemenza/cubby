@@ -45,6 +45,9 @@ import {
 } from "@cubby/schemas/purchase-import";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import {
+  CHARGE_HUNT_STATE,
+  chargeHuntOutcomeOf,
+  chargeHuntRunInput,
   orderBackfillRunInput,
   orderMailImportRunInput,
 } from "@cubby/schemas/run-fields";
@@ -175,7 +178,7 @@ function selectRestartTargets(
     .orderBy(asc(runTarget.position), asc(runTarget.createdAt));
 }
 
-const ACTIVE_RUN_STATUSES = [
+export const ACTIVE_RUN_STATUSES = [
   "running",
   "paused_auth",
   "paused_offline",
@@ -370,6 +373,11 @@ export async function startOrResumeRun(
     trigger: RunTrigger;
     /** Inclusive order-date range for an explicit `backfill` run. */
     backfill?: { from: string; to: string };
+    /**
+     * Charge hunts a member selected: the run's only work. Never joins a run
+     * already holding the account, which would silently drop the selection.
+     */
+    chargeHuntIds?: readonly string[];
     predecessorRunId?: string;
     skillRevision?: string;
     runtimeRevision?: string;
@@ -381,6 +389,14 @@ export async function startOrResumeRun(
     : null;
   if ((trigger === "backfill") !== (backfill !== null))
     throw new Error("A backfill run requires exactly one explicit date range");
+  const chargeHunts = input.chargeHuntIds
+    ? chargeHuntRunInput.parse({
+        kind: "charge_hunts",
+        huntIds: [...input.chargeHuntIds],
+      })
+    : null;
+  if (chargeHunts && backfill)
+    throw new Error("A run cannot be both a backfill and a charge search");
   return withTransaction(db, async (tx) => {
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${input.vendorAccountId}))`,
@@ -445,6 +461,22 @@ export async function startOrResumeRun(
           "Vendor account already has an active import run; finish or stop it before starting this backfill",
         );
     }
+    if (chargeHunts) {
+      const [active] = await tx
+        .select({ shortcode: runTable.shortcode })
+        .from(runTable)
+        .where(
+          and(
+            eq(runTable.vendorAccountId, input.vendorAccountId),
+            inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+          ),
+        )
+        .limit(1);
+      if (active)
+        throw new Error(
+          `Vendor account already has an active import run (${active.shortcode}); finish or stop it before searching for selected charges`,
+        );
+    }
     const result = await findOrCreateWithShortcode(tx, "run", {
       where: and(
         eq(runTable.vendorAccountId, input.vendorAccountId),
@@ -467,7 +499,7 @@ export async function startOrResumeRun(
             ? runEntityId.parse(input.predecessorRunId)
             : null,
           trigger,
-          input: backfill,
+          input: backfill ?? chargeHunts,
           coordinatorModel: coordinatorModelFor("account_sync"),
           skillRevision: input.skillRevision ?? "purchase-import@1",
           runtimeRevision: input.runtimeRevision ?? "flue@1",
@@ -1473,6 +1505,45 @@ async function settleAllocatedBrowserHunt(
     .where(eq(importHunt.id, queuedHunt.id));
 }
 
+/** The hunts a charge-search run was assigned, or null for every other run. */
+async function runChargeHuntIds(
+  db: Database,
+  runId: string,
+): Promise<string[] | null> {
+  const [row] = await getDb(db)
+    .select({ input: runTable.input })
+    .from(runTable)
+    .where(eq(runTable.id, runEntityId.parse(runId)))
+    .limit(1);
+  const parsed = chargeHuntRunInput.safeParse(row?.input);
+  return parsed.success ? parsed.data.huntIds : null;
+}
+
+/**
+ * A selected hunt whose charge is now allocated has nothing left to find,
+ * whichever path allocated it (this run's commit, retained evidence, or a
+ * member). Only a queued hunt moves; a recorded outcome stays.
+ */
+async function resolveAllocatedChargeHunts(
+  db: Database,
+  huntIds: readonly string[],
+) {
+  await getDb(db)
+    .update(importHunt)
+    .set({ state: CHARGE_HUNT_STATE.resolved, updatedAt: new Date() })
+    .where(
+      and(
+        inArray(importHunt.id, [...huntIds]),
+        eq(importHunt.state, CHARGE_HUNT_STATE.queued),
+        sql`EXISTS (
+          SELECT 1 FROM "FinancialTransactionAllocation" a
+          WHERE a."transactionId" = ${importHunt.financialTransactionId}
+            AND a."deletedAt" IS NULL
+        )`,
+      ),
+    );
+}
+
 // eslint-disable-next-line complexity -- Purpose-specific work selection is an explicit authority boundary.
 export async function claimNextImportWork(
   db: Database,
@@ -1672,6 +1743,10 @@ export async function claimNextImportWork(
   }
   if (!scope.public.vendorAccountId || !scope.vendorId)
     return { kind: "none" as const };
+  // A charge-search run works exactly its selected hunts and never walks
+  // order history, so unselected hunts and unrelated orders stay out of it.
+  const chargeHuntIds = await runChargeHuntIds(db, scope.public.runId);
+  if (chargeHuntIds) await resolveAllocatedChargeHunts(db, chargeHuntIds);
   const [hunt] = await getDb(db)
     .select({
       id: importHunt.id,
@@ -1689,9 +1764,15 @@ export async function claimNextImportWork(
       and(
         eq(importHunt.vendorAccountId, scope.public.vendorAccountId),
         eq(importHunt.state, "browser_queued"),
+        chargeHuntIds ? inArray(importHunt.id, chargeHuntIds) : undefined,
       ),
     )
-    .orderBy(asc(importHunt.updatedAt))
+    .orderBy(
+      // Selected charges are searched oldest first, so a restart is stable.
+      ...(chargeHuntIds
+        ? [asc(importHunt.dateFrom), asc(importHunt.id)]
+        : [asc(importHunt.updatedAt)]),
+    )
     .limit(1);
   const hints = vendorAgentHints.parse(scope.public.navigationHints);
   const startUrl = hints.ordersListUrl ?? scope.website;
@@ -1751,6 +1832,7 @@ export async function claimNextImportWork(
     .limit(1);
   if (enrichment[0]?.startUrl)
     return { kind: "product_enrichment" as const, ...enrichment[0] };
+  if (chargeHuntIds) return { kind: "none" as const };
   const [scanFinished] = await getDb(db)
     .select({ id: runOperation.id })
     .from(runOperation)
@@ -2696,7 +2778,27 @@ export async function stopRunForReview(
             ),
           )
           .limit(1);
-    if (
+    const stoppedHuntIds = await runChargeHuntIds(
+      databaseForTransaction(tx),
+      runId,
+    );
+    if (stoppedHuntIds) {
+      // A stopped charge search found nothing wrong with its charges, so its
+      // unfinished ones are left for review and carried by a restart.
+      await tx
+        .update(importHunt)
+        .set({
+          state: CHARGE_HUNT_STATE.deferred,
+          error: summary,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            inArray(importHunt.id, stoppedHuntIds),
+            eq(importHunt.state, CHARGE_HUNT_STATE.queued),
+          ),
+        );
+    } else if (
       scope.public.purpose === "account_sync" &&
       scope.public.vendorAccountId
     ) {
@@ -2823,6 +2925,79 @@ export async function deferOrderForReview(
 }
 
 /**
+ * Record one selected charge hunt's outcome when its evidence did not settle
+ * it, then let the run continue with the rest. A charge the server already
+ * settled reads as resolved whatever the agent said, so a later allocation is
+ * never overwritten by a stale "not found". `not_found` is searched-and-absent
+ * (surfaced as an expected-order Problem); `needs_review` leaves one finding
+ * naming the charge. Neither is resolved: the run ends in review and a restart
+ * carries both forward.
+ */
+export async function settleChargeHunt(
+  db: Database,
+  input: {
+    runId: string;
+    operationId: string;
+    huntId: string;
+    outcome: "not_found" | "needs_review";
+    summary: string;
+  },
+) {
+  const scope = await loadRunScope(db, input.runId);
+  assertRunActive(scope.public.status);
+  const huntIds = await runChargeHuntIds(db, input.runId);
+  if (!huntIds) throw new Error("Only a charge-search run has charge hunts");
+  const huntId = z.uuid().parse(input.huntId);
+  if (!huntIds.includes(huntId))
+    throw new Error(`Charge hunt ${huntId} is not on this run`);
+  const summary = z.string().trim().min(1).max(1_000).parse(input.summary);
+  const runId = runEntityId.parse(input.runId);
+  await resolveAllocatedChargeHunts(db, [huntId]);
+  const fingerprint = await sha256Hex(`deferred-charge:${huntId}`);
+  return withTransaction(db, async (tx) => {
+    const [hunt] = await tx
+      .select({
+        state: importHunt.state,
+        charge: financialTransaction.shortcode,
+      })
+      .from(importHunt)
+      .innerJoin(
+        financialTransaction,
+        eq(financialTransaction.id, importHunt.financialTransactionId),
+      )
+      .where(eq(importHunt.id, huntId))
+      .limit(1)
+      .for("update", { of: importHunt });
+    if (!hunt) throw new Error(`Charge hunt ${huntId} was not found`);
+    const state =
+      input.outcome === "not_found"
+        ? CHARGE_HUNT_STATE.notFound
+        : CHARGE_HUNT_STATE.deferred;
+    // Replays and already-recorded outcomes are answered, not rewritten.
+    if (hunt.state !== CHARGE_HUNT_STATE.queued)
+      return { huntId, outcome: chargeHuntOutcomeOf(hunt.state) };
+    await tx
+      .update(importHunt)
+      .set({ state, error: summary, updatedAt: new Date() })
+      .where(eq(importHunt.id, huntId));
+    if (input.outcome === "needs_review")
+      await tx
+        .insert(runFinding)
+        .values({
+          runId,
+          ledgerPartyId: scope.ledgerPartyId,
+          entityKind: "run",
+          entityId: runId,
+          kind: "other",
+          summary: `Charge ${hunt.charge} needs review: ${summary}`,
+          evidenceFingerprint: fingerprint,
+        })
+        .onConflictDoNothing();
+    return { huntId, outcome: chargeHuntOutcomeOf(state) };
+  });
+}
+
+/**
  * Move the account cursor forward to the newest order this run handled
  * (imported or already covered). Only forward: a run that walked an old page
  * never rewinds `newestOrderAt`, and `orderIdsOnNewestDate` disambiguates
@@ -2835,6 +3010,8 @@ async function advanceAccountCursor(
   // A backfill walks older history; only incremental runs own the
   // newest-order cursor, which therefore never rewinds or jumps.
   if (await runBackfillRange(db, input.runId)) return null;
+  // A charge search imports what it was pointed at, not a listing prefix.
+  if (await runChargeHuntIds(db, input.runId)) return null;
   const handled = await getDb(db)
     .select({
       orderId: runOrderCandidate.orderId,
@@ -2888,6 +3065,19 @@ async function advanceAccountCursor(
  * order must not read as a complete import; its finding names the order.
  */
 async function accountSyncFinishStatus(db: Database, runId: RunId) {
+  const huntIds = await runChargeHuntIds(db, runId);
+  if (huntIds) {
+    const [unresolved] = await getDb(db)
+      .select({ value: count() })
+      .from(importHunt)
+      .where(
+        and(
+          inArray(importHunt.id, huntIds),
+          sql`${importHunt.state} <> ${CHARGE_HUNT_STATE.resolved}`,
+        ),
+      );
+    return (unresolved?.value ?? 0) > 0 ? "needs_review" : "completed";
+  }
   const [deferred] = await getDb(db)
     .select({ value: count() })
     .from(runOrderCandidate)
@@ -2952,6 +3142,8 @@ export async function finishRun(
         .where(and(eq(runTable.id, runId), eq(runTable.status, "running")));
     } else {
       await assertSingleMailImported(db, runId);
+      const chargeHuntIds = await runChargeHuntIds(db, runId);
+      if (chargeHuntIds) await resolveAllocatedChargeHunts(db, chargeHuntIds);
       const [pendingHunt] = scope.public.vendorAccountId
         ? await getDb(db)
             .select({ id: importHunt.id })
@@ -3948,6 +4140,28 @@ export async function controlRun(
                 state: "pending" as const,
               })),
             );
+          // Selected charges the predecessor never resolved (still queued,
+          // deferred, or not found) are searched again; a resolved one stays.
+          const chargeHuntIds = chargeHuntRunInput.safeParse(locked.input);
+          if (chargeHuntIds.success)
+            await tx
+              .update(importHunt)
+              .set({
+                state: CHARGE_HUNT_STATE.queued,
+                error: null,
+                attempts: sql`${importHunt.attempts} + 1`,
+                updatedAt: new Date(),
+              })
+              .where(
+                and(
+                  inArray(importHunt.id, chargeHuntIds.data.huntIds),
+                  inArray(importHunt.state, [
+                    CHARGE_HUNT_STATE.queued,
+                    CHARGE_HUNT_STATE.deferred,
+                    CHARGE_HUNT_STATE.notFound,
+                  ]),
+                ),
+              );
         }
         return {
           publicId: input.runPublicId,

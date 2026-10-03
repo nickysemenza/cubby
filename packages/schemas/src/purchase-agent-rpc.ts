@@ -71,6 +71,16 @@ export const deferOrderForReviewInput = purchaseAgentOperationRef.extend({
   detail: z.string(),
 });
 
+/**
+ * Record a selected charge hunt's outcome when its evidence did not settle it:
+ * no matching order was found, or one stayed ambiguous and needs review.
+ */
+export const settleChargeHuntInput = purchaseAgentOperationRef.extend({
+  huntId: z.uuid(),
+  outcome: z.enum(["not_found", "needs_review"]),
+  detail: z.string(),
+});
+
 export const markRunFailedInput = purchaseAgentOperationRef.extend({
   failureCode: z.enum(["flue_failed", "flue_aborted"]),
   detail: z.string().optional(),

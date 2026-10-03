@@ -117,7 +117,23 @@ then hunts and enrichment; `finish_import_run` refuses while a listed order
 is still pending. A backfill run walks an explicit date range of older history
 and never moves the incremental cursor. `defer_order_for_review` leaves one
 ambiguous order for review while the others continue; the run then ends in
-review rather than reporting a complete import, and a restart retries it. A `receipt_evidence` item must go through
+review rather than reporting a complete import, and a restart retries it.
+A member can also select statement charges for one run
+(`vendor.startChargeRun`, from the Vendor account's Statement charges
+section): the run's work is exactly those charge hunts, each claimed as a
+`hunt` item with its `id`, and it never walks order history or joins another
+hunt. Find the charge's order on the vendor account and import it normally;
+the server settles the hunt only when the charge is uniquely and conservatively
+allocated (an amount or date coincidence, or your ranking, is review, never a
+settlement). When a hunt stays unsettled, record it with
+`settle_charge_hunt`: `not_found` after searching the vendor account's history
+for the charge's amount and date window without a matching order, or
+`needs_review` when a candidate order stays ambiguous or unreadable (it leaves
+one finding naming the charge). A charge the server already settled reads as
+resolved whatever you report. `finish_import_run` refuses while any selected
+hunt is still queued, and the run ends in review unless every charge resolved;
+a restart retries every unresolved selected charge. Imports and settlement
+never change stock. A `receipt_evidence` item must go through
 `extract_receipt_evidence`, whose immutable source/checksum/extraction payload
 is passed unchanged to `purchase_import.prepare`; it is not a separate writer.
 For browser evidence, continue every selected order or hunt before calling

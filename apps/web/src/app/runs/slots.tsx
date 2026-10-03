@@ -36,6 +36,13 @@ const orderOutcomeLabel = {
   covered: "Already covered",
 } as const;
 
+const chargeOutcomeLabel = {
+  pending: "Searching",
+  resolved: "Settled",
+  deferred: "Needs review",
+  not_found: "Order not found",
+} as const;
+
 const phaseLabel = (phase: string) =>
   phase.replaceAll("_", " ").replace(/^./u, (letter) => letter.toUpperCase());
 
@@ -155,6 +162,31 @@ export function RunLiveProgress({ record }: { record: RunOut }) {
                   variant={order.state === "skipped" ? "outline" : "secondary"}
                 >
                   {orderOutcomeLabel[order.state]}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {progress.charges.length > 0 ? (
+        <section
+          aria-label="Selected charges"
+          className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm"
+        >
+          <h3 className="font-medium">Selected charges</h3>
+          <ul className="mt-1 grid gap-1">
+            {progress.charges.map((charge) => (
+              <li
+                key={charge.chargeId}
+                className="flex flex-wrap items-center justify-between gap-2"
+              >
+                <span className="font-mono">{charge.chargeId}</span>
+                <Badge
+                  variant={
+                    charge.outcome === "resolved" ? "secondary" : "outline"
+                  }
+                >
+                  {chargeOutcomeLabel[charge.outcome]}
                 </Badge>
               </li>
             ))}

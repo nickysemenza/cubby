@@ -6,7 +6,7 @@ import {
   confirmMerchantVendorRuleOut,
   type ConfirmMerchantVendorRuleInput,
 } from "@cubby/schemas/purchase-import";
-import { and, asc, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import { shiftPlainDate } from "~/lib/plain-date";
 import type { Database } from "~/server/db";
@@ -16,6 +16,7 @@ import {
   financialTransactionAllocation,
   importHunt,
   merchantVendorRule,
+  run as runTable,
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
@@ -28,7 +29,7 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { dispatchRunEvent } from "./dispatch";
 import { matchProcessedOrderMail } from "./gmail/match";
 import { settleRetainedPaymentEvidence } from "./retained-settlement";
-import { startOrResumeRun } from "./run-service";
+import { ACTIVE_RUN_STATUSES, startOrResumeRun } from "./run-service";
 
 const normalizeMerchant = (value: string) =>
   value.trim().toLowerCase().replaceAll(/\s+/g, " ");
@@ -255,13 +256,32 @@ export async function dispatchImportHunts(
         ),
       ),
     );
+  // An account running a member's selected charges does only that: another
+  // hunt must not join it, so it waits for the next implicit run.
+  const selectedChargeAccounts = new Set<string | null>(
+    (
+      await database
+        .select({ accountId: runTable.vendorAccountId })
+        .from(runTable)
+        .where(
+          and(
+            sql`${runTable.input}->>'kind' = 'charge_hunts'`,
+            inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+          ),
+        )
+    ).map((row) => row.accountId),
+  );
   let dispatched = 0;
   const runsByAccount = new Map<
     string,
     Awaited<ReturnType<typeof startOrResumeRun>>
   >();
   for (const hunt of hunts) {
-    if (!hunt.vendorAccountId) continue;
+    if (
+      !hunt.vendorAccountId ||
+      selectedChargeAccounts.has(hunt.vendorAccountId)
+    )
+      continue;
     let run = runsByAccount.get(hunt.vendorAccountId);
     if (!run) {
       run = await startOrResumeRun(db, {
