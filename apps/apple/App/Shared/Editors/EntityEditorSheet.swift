@@ -183,7 +183,7 @@ struct EntityEditorSheet: View {
             }
         }
         .formStyle(.grouped)
-        .disabled(isSaving)
+        .disabled(isSaving || model.isLoading)
         .accessibilityIdentifier("editor.\(key.rawValue)")
     }
 
