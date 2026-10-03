@@ -279,6 +279,7 @@ targets:
       - path: App/Tests/Photos/EntityPickerIdentityTests.swift
       - path: App/Tests/Photos/PhotoTestStores.swift
       - path: App/Tests/Participation/AppInstallationIDTests.swift
+      - path: App/Tests/PurchaseImport
     dependencies:
       - target: Cubby-macOS
     settings:
