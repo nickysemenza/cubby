@@ -790,7 +790,8 @@ export class MacImportDriver {
     );
   }
   async clickSidebar(label: "Browse" | "Photos"): Promise<void> {
-    this.nativeMenu("View", label);
+    // CubbyCommands binds Photos/Browse to the fourth/fifth AppSection tabs.
+    this.nativeShortcut(label === "Photos" ? 21 : 23, label);
     await this.wait(`label="${label}" role=window`);
     this.guardForeground();
     // View commands can change the main destination while Settings remains key.
@@ -806,20 +807,21 @@ export class MacImportDriver {
     );
     this.record(["raise-main-window", label], 0, this.observe());
   }
-  private nativeMenu(menu: string, item: string): void {
+  private nativeShortcut(keyCode: number, label: string): void {
     this.guardForeground();
     execFileSync(
       "osascript",
       [
+        "-l",
+        "JavaScript",
         "-e",
-        'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set ownedMenu to menu bar item (item 2 of argv) of menu bar 1 of ownedProcess\n click ownedMenu\n click menu item (item 3 of argv) of menu 1 of ownedMenu\n end tell\nend run',
+        'ObjC.import("CoreGraphics"); function run(argv) { const pid=Number(argv[0]); const key=Number(argv[1]); for (const down of [true,false]) { const event=$.CGEventCreateKeyboardEvent(null,key,down); $.CGEventSetFlags(event,1<<20); $.CGEventPostToPid(pid,event); } }',
         String(this.pid),
-        menu,
-        item,
+        String(keyCode),
       ],
       { timeout: 10000 },
     );
-    this.record(["native-menu", menu, item], 0, this.observe());
+    this.record(["owned-shortcut", label], 0, this.observe());
   }
   async openStatementImport(): Promise<void> {
     await this.click("id=browse.importStatement");
@@ -850,20 +852,7 @@ export class MacImportDriver {
       );
       this.record(["raise-settings-window"], 0, this.observe());
     } else {
-      this.guardForeground();
-      // Post to the verified PID: the desktop-wide shortcut can reach another app.
-      execFileSync(
-        "osascript",
-        [
-          "-l",
-          "JavaScript",
-          "-e",
-          'ObjC.import("CoreGraphics"); function run(argv) { const pid=Number(argv[0]); for (const down of [true,false]) { const event=$.CGEventCreateKeyboardEvent(null,43,down); $.CGEventSetFlags(event,1<<20); $.CGEventPostToPid(pid,event); } }',
-          String(this.pid),
-        ],
-        { timeout: 10000 },
-      );
-      this.record(["owned-settings-shortcut"], 0, this.observe());
+      this.nativeShortcut(43, "Settings");
     }
     await this.wait('label="Settings" role=window');
     await this.wait("id=settings.purchaseImport.syncNow");
