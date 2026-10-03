@@ -141,8 +141,9 @@ See also the image operational passes at the end of this file.
   capture, prepared-order Product conflict review and merge, purchase approval,
   both statement/order arrival sequences, CSV refunds and grouped settlement,
   and Gmail Connect/callback/discovery are verified locally. The Mac
-  CSV → photo → receipt input journey also passed. iOS interactive CSV/photo
-  review and the Mac receipt → photo → CSV order still await passing artifacts.
+  CSV → photo → receipt and receipt → photo → CSV input journeys passed on clean
+  `720068012` with matching builds and sealed, checksum-verified artifacts. iOS
+  interactive CSV/photo review still awaits a passing artifact.
   Acceptance and external model/provider boundaries:
   [core journey E2E](agents/core-journey-e2e.md).
 
