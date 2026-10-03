@@ -131,6 +131,10 @@ import { finalizeImportedImages } from "~/server/services/photo-import-finalize.
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { loadPurchaseAuditBatch } from "./audit-batch";
+import {
+  notOwnedByUnfinishedChargeRun,
+  unfinishedChargeRunOwns,
+} from "./charge-hunt-state";
 import type { PurchaseImportDurableObjectRpc } from "./contracts";
 import { resolveRunFinding } from "./findings";
 import {
@@ -460,6 +464,20 @@ export async function startOrResumeRun(
         throw new Error(
           "Vendor account already has an active import run; finish or stop it before starting this backfill",
         );
+    }
+    if (!chargeHunts) {
+      const [active] = await tx
+        .select({ shortcode: runTable.shortcode, input: runTable.input })
+        .from(runTable)
+        .where(
+          and(
+            eq(runTable.vendorAccountId, input.vendorAccountId),
+            inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+          ),
+        )
+        .limit(1);
+      if (active && chargeHuntRunInput.safeParse(active.input).success)
+        throw new ActiveChargeRunError(active.shortcode);
     }
     if (chargeHunts) {
       const [active] = await tx
@@ -1191,6 +1209,8 @@ export async function expireOfflineRuns(db: Database, now = new Date()) {
       ),
     )
     .returning({ id: runTable.id });
+  for (const { id } of expired)
+    await deferQueuedChargeHunts(db, id, "Run expired while offline");
   return { expired: expired.length };
 }
 
@@ -1544,6 +1564,43 @@ async function resolveAllocatedChargeHunts(
     );
 }
 
+/**
+ * A charge run that ends without finishing (cancelled, failed, expired) leaves
+ * its still-queued selected hunts for review: they stay reselectable and a
+ * restart can carry them, instead of being queued under a dead run.
+ */
+async function deferQueuedChargeHunts(
+  db: Database,
+  runId: string,
+  reason: string,
+) {
+  const huntIds = await runChargeHuntIds(db, runId);
+  if (!huntIds) return;
+  await getDb(db)
+    .update(importHunt)
+    .set({
+      state: CHARGE_HUNT_STATE.deferred,
+      error: reason,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        inArray(importHunt.id, huntIds),
+        eq(importHunt.state, CHARGE_HUNT_STATE.queued),
+      ),
+    );
+}
+
+/** An implicit start must not silently join a member's selected-charges run. */
+export class ActiveChargeRunError extends Error {
+  constructor(runShortcode: string) {
+    super(
+      `Vendor account is running a selected charge search (${runShortcode}); finish or stop it first`,
+    );
+    this.name = "ActiveChargeRunError";
+  }
+}
+
 // eslint-disable-next-line complexity -- Purpose-specific work selection is an explicit authority boundary.
 export async function claimNextImportWork(
   db: Database,
@@ -1619,6 +1676,11 @@ export async function claimNextImportWork(
               eq(runTable.status, "paused_offline"),
             ),
           );
+        await deferQueuedChargeHunts(
+          db,
+          scope.public.runId,
+          "Run expired while offline",
+        );
         return { kind: "failed" as const, failureCode: "offline_expired" };
       }
       return { kind: "paused_offline" as const };
@@ -2812,6 +2874,8 @@ export async function stopRunForReview(
               vendorAccountId.parse(scope.public.vendorAccountId),
             ),
             eq(importHunt.state, "browser_queued"),
+            // Hunts a member's selected-charges run holds are not this run's.
+            notOwnedByUnfinishedChargeRun,
           ),
         );
     }
@@ -2952,7 +3016,6 @@ export async function settleChargeHunt(
     throw new Error(`Charge hunt ${huntId} is not on this run`);
   const summary = z.string().trim().min(1).max(1_000).parse(input.summary);
   const runId = runEntityId.parse(input.runId);
-  await resolveAllocatedChargeHunts(db, [huntId]);
   const fingerprint = await sha256Hex(`deferred-charge:${huntId}`);
   return withTransaction(db, async (tx) => {
     const [hunt] = await tx
@@ -2969,6 +3032,13 @@ export async function settleChargeHunt(
       .limit(1)
       .for("update", { of: importHunt });
     if (!hunt) throw new Error(`Charge hunt ${huntId} was not found`);
+    // Decide on the allocation under the row lock, not before it.
+    await resolveAllocatedChargeHunts(databaseForTransaction(tx), [huntId]);
+    const [current] = await tx
+      .select({ state: importHunt.state })
+      .from(importHunt)
+      .where(eq(importHunt.id, huntId));
+    hunt.state = current?.state ?? hunt.state;
     const state =
       input.outcome === "not_found"
         ? CHARGE_HUNT_STATE.notFound
@@ -3076,7 +3146,18 @@ async function accountSyncFinishStatus(db: Database, runId: RunId) {
           sql`${importHunt.state} <> ${CHARGE_HUNT_STATE.resolved}`,
         ),
       );
-    return (unresolved?.value ?? 0) > 0 ? "needs_review" : "completed";
+    const [skipped] = await getDb(db)
+      .select({ value: count() })
+      .from(runOrderCandidate)
+      .where(
+        and(
+          eq(runOrderCandidate.runId, runId),
+          eq(runOrderCandidate.state, "skipped"),
+        ),
+      );
+    return (unresolved?.value ?? 0) + (skipped?.value ?? 0) > 0
+      ? "needs_review"
+      : "completed";
   }
   const [deferred] = await getDb(db)
     .select({ value: count() })
@@ -3155,6 +3236,10 @@ export async function finishRun(
                   vendorAccountId.parse(scope.public.vendorAccountId),
                 ),
                 eq(importHunt.state, "browser_queued"),
+                // A charge run answers only for its own selection.
+                chargeHuntIds
+                  ? inArray(importHunt.id, chargeHuntIds)
+                  : undefined,
               ),
             )
             .limit(1)
@@ -3283,6 +3368,7 @@ export async function markRunFailed(
       ),
     )
     .returning({ vendorAccountId: runTable.vendorAccountId });
+  if (run) await deferQueuedChargeHunts(db, runId, "Run failed");
   if (run?.vendorAccountId) {
     await getDb(db)
       .update(vendorAccount)
@@ -4072,6 +4158,41 @@ export async function controlRun(
           throw new Error(
             "This account run has no vendor account to start again",
           );
+        const restartCharges = chargeHuntRunInput.safeParse(locked.input);
+        let carriedChargeHuntIds: string[] = [];
+        if (restartCharges.success && locked.vendorAccountId) {
+          // Same admission fence as starting a run on this account.
+          await tx.execute(
+            sql`SELECT pg_advisory_xact_lock(hashtext(${locked.vendorAccountId}))`,
+          );
+          const [active] = await tx
+            .select({ shortcode: runTable.shortcode })
+            .from(runTable)
+            .where(
+              and(
+                eq(runTable.vendorAccountId, locked.vendorAccountId),
+                inArray(runTable.status, [...ACTIVE_RUN_STATUSES]),
+              ),
+            )
+            .limit(1);
+          if (active)
+            throw new Error(
+              `Vendor account already has an active import run (${active.shortcode}); finish or stop it before restarting`,
+            );
+          const taken = await tx
+            .select({ id: importHunt.id })
+            .from(importHunt)
+            .where(
+              and(
+                inArray(importHunt.id, restartCharges.data.huntIds),
+                unfinishedChargeRunOwns(scope.public.runId),
+              ),
+            );
+          const takenIds = new Set(taken.map((hunt) => hunt.id));
+          carriedChargeHuntIds = restartCharges.data.huntIds.filter(
+            (id) => !takenIds.has(id),
+          );
+        }
         const successorId = runEntityId.parse(crypto.randomUUID());
         const dispatchEventId = crypto.randomUUID();
         // An unfinished backfill resumes from the history page it reached; a
@@ -4142,8 +4263,7 @@ export async function controlRun(
             );
           // Selected charges the predecessor never resolved (still queued,
           // deferred, or not found) are searched again; a resolved one stays.
-          const chargeHuntIds = chargeHuntRunInput.safeParse(locked.input);
-          if (chargeHuntIds.success)
+          if (carriedChargeHuntIds.length > 0)
             await tx
               .update(importHunt)
               .set({
@@ -4154,7 +4274,7 @@ export async function controlRun(
               })
               .where(
                 and(
-                  inArray(importHunt.id, chargeHuntIds.data.huntIds),
+                  inArray(importHunt.id, carriedChargeHuntIds),
                   inArray(importHunt.state, [
                     CHARGE_HUNT_STATE.queued,
                     CHARGE_HUNT_STATE.deferred,
@@ -4474,6 +4594,11 @@ export async function controlRun(
             updatedAt: new Date(),
           })
           .where(eq(runTable.id, scope.public.runId));
+        await deferQueuedChargeHunts(
+          databaseForTransaction(tx),
+          scope.public.runId,
+          "Run cancelled by its owner",
+        );
         await tx
           .update(runApproval)
           .set({ state: "invalidated", invalidatedAt: new Date() })

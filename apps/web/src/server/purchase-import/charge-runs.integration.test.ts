@@ -35,6 +35,7 @@ import {
   importHunt,
   merchantVendorRule,
   run as runTable,
+  runOrderCandidate,
   runFinding,
   vendorAccount,
 } from "~/server/db/schema";
@@ -52,6 +53,9 @@ import { fakeBroker } from "./order-history.fixtures";
 import {
   claimNextImportWork,
   controlRun,
+  expireOfflineRuns,
+  markRunFailed,
+  startOrResumeRun,
   finishRun,
   settleChargeHunt,
   stopRunForReview,
@@ -523,5 +527,162 @@ describe("selected statement-charge runs", () => {
     expect((await huntOf(s.a.shortcode)).state).toBe("deferred_for_review");
     expect((await huntOf(s.b.shortcode)).state).toBe("deferred_for_review");
     expect((await huntOf(s.c.shortcode)).state).toBe("pending_mail");
+  });
+
+  it("finishes a charge run even when an unselected hunt is queued on the same account", async () => {
+    const s = await threeCharges();
+    const started = await start(s, [s.a]);
+    // An orphan queued hunt (unselected) must not gate this run.
+    await getDb(ctx.db)
+      .update(importHunt)
+      .set({ state: "browser_queued" })
+      .where(eq(importHunt.id, (await huntOf(s.c.shortcode)).id));
+    await allocate(s, s.a);
+    await expect(
+      finishRun(ctx.db, broker, {
+        runId: started.run.id,
+        operationId: "finish:orphan",
+      }),
+    ).resolves.toMatchObject({ status: "completed" });
+  });
+
+  it("leaves selected charges reselectable when the run is cancelled, fails, or expires offline", async () => {
+    const s = await threeCharges();
+    const cancelled = await start(s, [s.a]);
+    await controlRun(ctx.db, ctx.actor, {
+      runPublicId: cancelled.runId,
+      action: "cancel",
+    });
+    expect((await huntOf(s.a.shortcode)).state).toBe("deferred_for_review");
+
+    const failed = await start(s, [s.a]);
+    await markRunFailed(ctx.db, {
+      runId: failed.run.id,
+      failureCode: "flue_failed",
+    });
+    expect((await huntOf(s.a.shortcode)).state).toBe("deferred_for_review");
+
+    const offline = await start(s, [s.a]);
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "paused_offline", updatedAt: new Date(0) })
+      .where(eq(runTable.id, offline.run.id));
+    await expireOfflineRuns(ctx.db);
+    expect((await huntOf(s.a.shortcode)).state).toBe("deferred_for_review");
+
+    // And the list says it can be selected again.
+    const listed = await listChargeHunts(
+      ctx.db,
+      vendorChargeHuntsInput.parse({ vendorAccountId: s.account.shortcode }),
+      ctx.actor,
+    );
+    expect(
+      listed.items.find((item) => item.transactionId === s.a.shortcode)?.reason,
+    ).toBeNull();
+  });
+
+  it("never lets an implicit start join an active charge run", async () => {
+    const s = await threeCharges();
+    await start(s, [s.a]);
+    await expect(
+      startOrResumeRun(ctx.db, {
+        ledgerPartyId: s.party.id,
+        vendorAccountId: s.account.id,
+        trigger: "manual",
+      }),
+    ).rejects.toThrow("charge search");
+    // The implicit dispatcher skips the account instead of throwing.
+    await getDb(ctx.db)
+      .update(importHunt)
+      .set({ state: "pending_browser" })
+      .where(eq(importHunt.id, (await huntOf(s.c.shortcode)).id));
+    await expect(dispatchImportHunts(ctx.db, queue().producer)).resolves.toBe(
+      0,
+    );
+    expect((await huntOf(s.c.shortcode)).state).toBe("pending_browser");
+  });
+
+  it("refuses to restart a charge run onto a busy account and skips hunts another unfinished run owns", async () => {
+    const s = await threeCharges();
+    const first = await start(s, [s.a, s.b]);
+    await stopRunForReview(ctx.db, {
+      runId: first.run.id,
+      operationId: "stop:r1",
+      kind: "other",
+      summary: "Site down.",
+    });
+    const busy = await startOrResumeRun(ctx.db, {
+      ledgerPartyId: s.party.id,
+      vendorAccountId: s.account.id,
+      trigger: "manual",
+    });
+    await expect(
+      controlRun(ctx.db, ctx.actor, {
+        runPublicId: first.runId,
+        action: "restart",
+      }),
+    ).rejects.toThrow("active");
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "failed" })
+      .where(eq(runTable.id, busy.id));
+
+    // Another unfinished charge run owns hunt A: a restart of the first run
+    // re-queues only B.
+    const a = await huntOf(s.a.shortcode);
+    const { id: _id, shortcode: _shortcode, ...template } = first.run;
+    await insertWithShortcode(ctx.db, "run", {
+      ...template,
+      status: "needs_review",
+      clientKey: null,
+      dispatchEventId: null,
+      agentSessionId: null,
+      predecessorRunId: null,
+      input: { kind: "charge_hunts", huntIds: [a.id] },
+    });
+    await controlRun(ctx.db, ctx.actor, {
+      runPublicId: first.runId,
+      action: "restart",
+    });
+    expect((await huntOf(s.a.shortcode)).state).toBe("deferred_for_review");
+    expect((await huntOf(s.b.shortcode)).state).toBe("browser_queued");
+  });
+
+  it("does not exhaust a charge run's queued hunts when an implicit run stops", async () => {
+    const s = await threeCharges();
+    const first = await start(s, [s.a]);
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "needs_review" })
+      .where(eq(runTable.id, first.run.id));
+    const implicit = await startOrResumeRun(ctx.db, {
+      ledgerPartyId: s.party.id,
+      vendorAccountId: s.account.id,
+      trigger: "manual",
+    });
+    await stopRunForReview(ctx.db, {
+      runId: implicit.id,
+      operationId: "stop:implicit",
+      kind: "other",
+      summary: "Implicit run stopped.",
+    });
+    expect((await huntOf(s.a.shortcode)).state).toBe("browser_queued");
+  });
+
+  it("ends in review when a deferred order candidate sits on an otherwise settled charge run", async () => {
+    const s = await threeCharges();
+    const started = await start(s, [s.a]);
+    await getDb(ctx.db).insert(runOrderCandidate).values({
+      runId: started.run.id,
+      orderId: "ORDER-SKIPPED",
+      state: "skipped",
+    });
+    await allocate(s, s.a);
+    await expect(
+      finishRun(ctx.db, broker, {
+        runId: started.run.id,
+        operationId: "finish:skipped",
+      }),
+    ).resolves.toMatchObject({ status: "needs_review" });
   });
 });

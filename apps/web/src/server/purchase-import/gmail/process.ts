@@ -44,6 +44,10 @@ import {
 import { sha256Hex } from "~/server/semantic/hash";
 import { attachFileToEntity } from "~/server/services/image-storage.service";
 
+import {
+  MAIL_MATCHABLE_HUNT_STATES,
+  notOwnedByUnfinishedChargeRun,
+} from "../charge-hunt-state";
 import { refundTally } from "../findings";
 import {
   productionOrderMailAttachmentStorage,
@@ -447,7 +451,8 @@ export async function processOrderMails(
             and(
               eq(importHunt.ledgerPartyId, mail.ledgerPartyId),
               eq(importHunt.vendorId, matchedVendor.id),
-              eq(importHunt.state, "pending_mail"),
+              inArray(importHunt.state, [...MAIL_MATCHABLE_HUNT_STATES]),
+              notOwnedByUnfinishedChargeRun,
               lte(importHunt.dateFrom, date),
               gte(importHunt.dateTo, date),
             ),
@@ -495,7 +500,12 @@ export async function processOrderMails(
               matchedOrderIds: matchedHunt.orderIds,
               updatedAt: new Date(),
             })
-            .where(eq(importHunt.id, matchedHunt.id));
+            .where(
+              and(
+                eq(importHunt.id, matchedHunt.id),
+                inArray(importHunt.state, [...MAIL_MATCHABLE_HUNT_STATES]),
+              ),
+            );
         }
       }
 

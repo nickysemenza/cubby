@@ -610,6 +610,29 @@ describe("Gmail order mail processing", () => {
     });
   });
 
+  it("lets order mail re-match a charge a selected run left deferred, but not one an unfinished run still owns", async () => {
+    const seed = await seedForgeWear();
+    const charge = await statementRow(seed, 64.25, "2026-09-10");
+    await discoverImportHunts(ctx.db);
+    const [hunt] = await getDb(ctx.db)
+      .select({ id: importHunt.id })
+      .from(importHunt);
+    await getDb(ctx.db)
+      .update(importHunt)
+      .set({ state: "deferred_for_review" })
+      .where(eq(importHunt.id, hunt!.id));
+    await receiveMail(
+      seed,
+      "msg-late-confirmation",
+      "2026-09-10T15:00:00.000Z",
+      placed("FW-SYN-1001", 64.25, "2026-09-10T15:00:00.000Z"),
+    );
+    expect(await huntFor(charge.id)).toMatchObject({
+      state: "pending_browser",
+      matchedOrderIds: ["FW-SYN-1001"],
+    });
+  });
+
   it("never matches a refund mail to a charge hunt, or an order confirmation to a statement credit", async () => {
     const seed = await seedForgeWear();
     const charge = await statementRow(seed, 42, "2026-09-10");
