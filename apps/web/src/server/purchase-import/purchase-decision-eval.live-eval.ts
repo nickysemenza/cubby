@@ -66,6 +66,21 @@ const repeats = Number(process.env.FLUE_EVAL_REPEATS ?? "1");
 const RUN_TIMEOUT_MS = 8 * 60_000;
 const SETTLED = new Set(["completed", "needs_review", "failed"]);
 
+/** The fixture input for a catalog entry; an explicit undefined would
+ * override the fixture's own manufacturer and model defaults. */
+function catalogProductInput(entry: {
+  name: string;
+  manufacturer?: string;
+  model?: string;
+}) {
+  const defaults = makeProductInput({ name: entry.name });
+  return makeProductInput({
+    name: entry.name,
+    manufacturer: entry.manufacturer ?? defaults.manufacturer,
+    model: entry.model ?? defaults.model,
+  });
+}
+
 describe("purchase coordinator decision eval", () => {
   const ctx = withTestDb();
 
@@ -112,11 +127,7 @@ describe("purchase coordinator decision eval", () => {
         for (const entry of decision.catalog) {
           const created = await createProductFixture(
             ctx.db,
-            makeProductInput({
-              name: entry.name,
-              manufacturer: entry.manufacturer,
-              model: entry.model,
-            }),
+            catalogProductInput(entry),
             ctx.actor,
           );
           catalog.set(created.entityId, entry.key);
