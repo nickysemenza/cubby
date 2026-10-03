@@ -32,7 +32,10 @@ import { Pool } from "pg";
 import { z } from "zod";
 
 import { writeE2ERunBundle } from "./e2e-run-bundle";
-import { collectNativeDriverDiagnostics } from "./native-driver-diagnostics";
+import {
+  collectNativeDriverDiagnostics,
+  projectNativeNavigationSnapshot,
+} from "./native-driver-diagnostics";
 import { simulatorInventorySchema } from "./simulator-inventory-schema";
 import {
   iosSimulatorDeviceType,
@@ -1830,6 +1833,7 @@ async function main(): Promise<void> {
               "agent-device",
               "snapshot",
               "--raw",
+              "--json",
               ...common,
               "--session",
               diagnosticSession,
@@ -1880,8 +1884,26 @@ async function main(): Promise<void> {
         path.join(homedir(), ".agent-device"),
         new Date(performance.timeOrigin + runStartedAt).toISOString(),
       );
+      let navigation:
+        | ReturnType<typeof projectNativeNavigationSnapshot>
+        | undefined;
+      const snapshot = path.join(artifacts, "failure-ui-tree.ndjson");
+      if (existsSync(snapshot)) {
+        try {
+          navigation = projectNativeNavigationSnapshot(
+            statSync(snapshot).size <= 2_000_000
+              ? JSON.parse(readFileSync(snapshot, "utf8"))
+              : undefined,
+          );
+        } catch {
+          navigation = projectNativeNavigationSnapshot(undefined);
+        }
+      }
       const output = path.join(artifacts, "native-driver-diagnostics.json");
-      writeFileSync(output, `${JSON.stringify(diagnostics, null, 2)}\n`);
+      writeFileSync(
+        output,
+        `${JSON.stringify({ ...diagnostics, ...(navigation && { navigation }) }, null, 2)}\n`,
+      );
       scenarioEvidence.push(output);
     } catch {
       console.warn(`[${lane}] Native driver diagnostics unavailable`);

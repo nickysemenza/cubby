@@ -6,6 +6,74 @@ import { z } from "zod";
 import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
 
 const milliseconds = z.number().finite().nonnegative();
+const rectangleSchema = z.object({
+  x: z.number().finite(),
+  y: z.number().finite(),
+  width: z.number().finite().nonnegative(),
+  height: z.number().finite().nonnegative(),
+});
+const navigationNodeSchema = z.object({
+  type: z.string().optional(),
+  kind: z.string().optional(),
+  label: z.string().optional(),
+  rect: rectangleSchema.optional().catch(undefined),
+  selected: z.boolean().optional().catch(undefined),
+  enabled: z.boolean().optional().catch(undefined),
+  hittable: z.boolean().optional().catch(undefined),
+});
+const navigationSnapshotSchema = z.object({
+  nodes: z.array(navigationNodeSchema).max(5_000),
+});
+const navigationFactsSchema = navigationNodeSchema.pick({
+  rect: true,
+  selected: true,
+  enabled: true,
+  hittable: true,
+});
+
+// A raw snapshot can contain record values, identifiers and credentials. Expose
+// only fixed control counts and bounded geometry, including off-screen rects.
+export function projectNativeNavigationSnapshot(payload: unknown) {
+  const parsed = z
+    .union([
+      navigationSnapshotSchema,
+      z.object({
+        success: z.literal(true).optional(),
+        data: navigationSnapshotSchema,
+      }),
+    ])
+    .safeParse(payload);
+  if (!parsed.success) return { status: "unavailable" } as const;
+  const { nodes } = "data" in parsed.data ? parsed.data.data : parsed.data;
+  const hasRole = (node: z.infer<typeof navigationNodeSchema>, role: string) =>
+    [node.kind, node.type].some(
+      (value) => value?.replaceAll("-", "").toLowerCase() === role,
+    );
+  const find = nodes.filter(
+    (node) => node.label === "Find" && hasRole(node, "button"),
+  );
+  return {
+    status: "available",
+    findButtonCount: find.length,
+    findButtons: find
+      .slice(0, 8)
+      .map((node) => navigationFactsSchema.parse(node)),
+    searchFieldCount: nodes.filter((node) => hasRole(node, "searchfield"))
+      .length,
+    searchButtonCount: nodes.filter(
+      (node) =>
+        hasRole(node, "button") &&
+        ["Search", "Search Cubby"].includes(node.label ?? ""),
+    ).length,
+    searchNavigationCount: nodes.filter(
+      (node) => hasRole(node, "navigationbar") && node.label === "Search",
+    ).length,
+    windowRects: nodes
+      .filter((node) => hasRole(node, "window") && node.rect !== undefined)
+      .slice(0, 8)
+      .map((node) => node.rect),
+  } as const;
+}
 const timingSchema = z.object({
   adopt_detached_runner: milliseconds.optional(),
   allocate_port: milliseconds.optional(),
