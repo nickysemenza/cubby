@@ -329,7 +329,13 @@ describe("purchase coordinator decision eval", () => {
       for (const choice of candidates)
         for (const decision of cases)
           for (let attempt = 0; attempt < repeats; attempt += 1) {
-            const caseStartedAt = new Date();
+            // The database clock, not the host's: a container clock can lag
+            // the host by seconds, which would miss this run's rows.
+            const [clock] = await getDb(ctx.db)
+              .select({ now: sql<string>`clock_timestamp()` })
+              .from(sql`(select 1) as clock`);
+            if (!clock) throw new Error("Database clock was unavailable");
+            const caseStartedAt = new Date(clock.now);
             results.push(await runCase(decision, choice));
             // Product names are unique per manufacturer: retire every Product
             // this run seeded or created so the next run can reuse the same
