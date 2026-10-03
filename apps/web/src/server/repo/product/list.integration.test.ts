@@ -1,15 +1,25 @@
-import { and, inArray, sql } from "drizzle-orm";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { LocationCreateInput } from "@cubby/schemas/location";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { TEST_ACTOR, withTestDb, countTestDbQueries } from "tooling/test-setup";
+import {
+  TEST_ACTOR,
+  TEST_HOME_SHORTCODE,
+  withTestDb,
+  countTestDbQueries,
+} from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { product } from "~/server/db/schema";
+import { location, product } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { createIngredient } from "~/server/repo/ingredient/crud";
 import { attachProductComponents } from "~/server/repo/product-components";
 import {
+  createInventoryFixture,
+  createLocationFixture,
   createPlantFixture,
   createProductFixture,
+  makeLocationInput,
   makeExpenseInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
@@ -456,5 +466,142 @@ describe("product list staged projections", () => {
     const summary = await productListSummary(ctx.db, filters);
     expect(summary).toEqual(full.sums);
     expect(summary).toEqual({ price: 10, expenseTotal: -5 });
+  });
+});
+
+/**
+ * The Product `locationIdFilter` selects a Location's whole subtree: a person
+ * filtering by "Garage" expects what sits on its shelves. Failure modes: only
+ * the exact Location matches; a soft-deleted descendant or the walk through
+ * one leaks stock; a parentId cycle loops; a Product stocked in two selected
+ * nodes duplicates its row; a deleted or unknown selection widens instead of
+ * matching nothing.
+ */
+describe("productList location subtree filter", () => {
+  const ctx = withTestDb();
+
+  const place = async (
+    name: string,
+    parentCode: NonNullable<LocationCreateInput["parentId"]>,
+    type: "room" | "shelf" = "shelf",
+  ) => {
+    const loc = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name, type, parentId: parentCode }),
+      ctx.actor,
+    );
+    return { id: loc.id, entityId: loc.entityId };
+  };
+  const stock = async (name: string, where: { id: string }[]) => {
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name }),
+      ctx.actor,
+    );
+    for (const loc of where) {
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: item.id,
+          locationId: loc.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+    }
+    return item;
+  };
+  const listAt = async (
+    locationIdFilter: NonNullable<
+      Parameters<typeof productList>[1]["locationIdFilter"]
+    >,
+  ): Promise<string[]> => {
+    const { data } = await productList(ctx.db, { locationIdFilter }, [], {
+      pageIndex: 0,
+      pageSize: 50,
+    });
+    return data.map((row) => row.id);
+  };
+
+  it("includes products stocked in descendants, one row each, and nothing outside the subtree", async () => {
+    const garage = await place("Subtree garage", TEST_HOME_SHORTCODE, "room");
+    const rack = await place("Subtree rack", garage.id);
+    const bin = await place("Subtree bin", rack.id);
+    const attic = await place("Subtree attic", TEST_HOME_SHORTCODE, "room");
+    const direct = await stock("Direct widget", [garage]);
+    const deep = await stock("Deep widget", [bin]);
+    const twice = await stock("Twice widget", [garage, rack, bin]);
+    const outside = await stock("Outside widget", [attic]);
+
+    const ids = await listAt(garage.id);
+    expect(ids).toHaveLength(3);
+    expect(new Set(ids)).toEqual(new Set([direct.id, deep.id, twice.id]));
+    expect(ids).not.toContain(outside.id);
+    // Selecting a leaf stays narrow.
+    const leafIds = await listAt(bin.id);
+    expect(new Set(leafIds)).toEqual(new Set([deep.id, twice.id]));
+  });
+
+  it("unions overlapping multi-selections without duplicating rows", async () => {
+    const shed = await place("Overlap shed", TEST_HOME_SHORTCODE, "room");
+    const shelf = await place("Overlap shelf", shed.id);
+    const item = await stock("Overlap widget", [shelf]);
+    const ids = await listAt([shed.id, shelf.id]);
+    expect(ids.filter((id) => id === item.id)).toHaveLength(1);
+  });
+
+  it("ignores soft-deleted descendants and does not walk through them", async () => {
+    const cellar = await place("Deleted cellar", TEST_HOME_SHORTCODE, "room");
+    const live = await place("Deleted live shelf", cellar.id);
+    const gone = await place("Deleted gone shelf", cellar.id);
+    const beyond = await place("Deleted beyond bin", gone.id);
+    const kept = await stock("Kept widget", [live]);
+    const lost = await stock("Lost widget", [gone]);
+    const beyondItem = await stock("Beyond widget", [beyond]);
+    await getDb(ctx.db)
+      .update(location)
+      .set({ deletedAt: new Date() })
+      .where(eq(location.id, gone.entityId));
+
+    const ids = await listAt(cellar.id);
+    expect(ids).toContain(kept.id);
+    expect(ids).not.toContain(lost.id);
+    expect(ids).not.toContain(beyondItem.id);
+  });
+
+  it("matches nothing for a deleted or unknown selected Location", async () => {
+    const closet = await place("Deleted closet", TEST_HOME_SHORTCODE, "room");
+    const shelf = await place("Closet shelf", closet.id);
+    await stock("Closet widget", [shelf]);
+    await getDb(ctx.db)
+      .update(location)
+      .set({ deletedAt: new Date() })
+      .where(eq(location.id, closet.entityId));
+    expect(await listAt(closet.id)).toEqual([]);
+    expect(await listAt(parseShortcodeFor("location", "LOC-ZZZZ"))).toEqual([]);
+  });
+
+  it("terminates on a parentId cycle", async () => {
+    const a = await place("Cycle A", TEST_HOME_SHORTCODE, "room");
+    const b = await place("Cycle B", a.id);
+    const item = await stock("Cycle widget", [b]);
+    await getDb(ctx.db)
+      .update(location)
+      .set({ parentId: b.entityId })
+      .where(eq(location.id, a.entityId));
+    expect(await listAt(a.id)).toEqual([item.id]);
+  });
+
+  it("stops at the shared tree depth cap", async () => {
+    const root = await place("Depth root", TEST_HOME_SHORTCODE, "room");
+    const chain = [root];
+    for (let level = 1; level <= 12; level += 1) {
+      chain.push(await place(`Depth level ${level}`, chain[level - 1]!.id));
+    }
+    const nearItem = await stock("Near widget", [chain[10]!]);
+    const farItem = await stock("Far widget", [chain[12]!]);
+    const ids = await listAt(root.id);
+    expect(ids).toContain(nearItem.id);
+    expect(ids).not.toContain(farItem.id);
   });
 });

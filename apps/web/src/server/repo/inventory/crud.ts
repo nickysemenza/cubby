@@ -56,6 +56,7 @@ import {
   wantsListGroup,
   type ListProjection,
 } from "~/server/repo/list-projection";
+import { locationDescendantsSql } from "~/server/repo/location/descendants-sql";
 import { categoryDescendantsSql } from "~/server/repo/product-category-sql";
 import {
   effectiveProductPriceSql,
@@ -217,6 +218,12 @@ interface InventoryFilters {
   // `resolveFilterIds`. A code naming no live row narrows to nothing; it is
   // not a 404 for the whole list.
   locationIdFilter?: LocationShortcode | typeof UNRESOLVABLE_ENTITY_FILTER;
+  // Selected Locations plus their live descendants; `locationIdFilter` stays
+  // exact because the Location detail page lists only direct stock.
+  locationSubtreeFilter?:
+    | LocationShortcode
+    | typeof UNRESOLVABLE_ENTITY_FILTER
+    | (LocationShortcode | typeof UNRESOLVABLE_ENTITY_FILTER)[];
   productIdFilter?: ProductShortcode | typeof UNRESOLVABLE_ENTITY_FILTER;
   manufacturerFilter?: string;
   categoryFilter?: ProductCategoryShortcode | ProductCategoryShortcode[];
@@ -309,11 +316,13 @@ export const buildInventoryWhere = async (
     filters.valuationStatus === undefined
       ? undefined
       : (loadedValuations ?? (await loadLiveInventoryValuations(db)));
-  const [locationIds, productIds, categoryIds] = await Promise.all([
-    resolveFilterIds(db, "location", filters.locationIdFilter),
-    resolveFilterIds(db, "product", filters.productIdFilter),
-    resolveFilterIds(db, "productCategory", filters.categoryFilter),
-  ]);
+  const [locationIds, subtreeLocationIds, productIds, categoryIds] =
+    await Promise.all([
+      resolveFilterIds(db, "location", filters.locationIdFilter),
+      resolveFilterIds(db, "location", filters.locationSubtreeFilter),
+      resolveFilterIds(db, "product", filters.productIdFilter),
+      resolveFilterIds(db, "productCategory", filters.categoryFilter),
+    ]);
 
   return buildSearchConditions(
     inventoryEntry,
@@ -331,6 +340,11 @@ export const buildInventoryWhere = async (
       listIdsCondition(inventoryEntry.shortcode, filters),
       lexicalEligibility("inventory", inventoryEntry.id, filters.searchQuery),
       eqAnyRequested(inventoryEntry.locationId, locationIds),
+      subtreeLocationIds === undefined
+        ? undefined
+        : subtreeLocationIds.length === 0
+          ? sql`false`
+          : sql`${inventoryEntry.locationId} IN ${locationDescendantsSql(subtreeLocationIds)}`,
       eqAnyRequested(inventoryEntry.productId, productIds),
       categoryIds === undefined
         ? undefined
