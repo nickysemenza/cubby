@@ -23,7 +23,8 @@ import { saveImageDescriptionAnalysis } from "~/server/repo/image-processing";
 import { updateImageProcessingSettings } from "~/server/repo/image-processing-maintenance";
 import { imageDescriptionInputFingerprint } from "~/server/services/image-description.service";
 import { scheduleImageProcessingJobs } from "~/server/services/image-processing.service";
-import { getFixtureDb } from "./fixtures-core";
+import { ensureRun } from "~/server/runs/ensure-run";
+import { createEvidenceHarnessContext } from "./fixtures-core";
 import { expect, test } from "./e2e-test";
 
 const original = readFileSync(
@@ -45,11 +46,13 @@ type CompanionRequest =
 // inputs must never change the preferred cloud snapshot.
 test("companion normalization preserves originals and rejects stale or corrupt results", async ({
   request,
+  page,
   baseURL,
   e2eRuntime,
 }) => {
   if (!baseURL) throw new Error("Worker URL missing");
-  const db = getFixtureDb();
+  const { db, actor } = await createEvidenceHarnessContext(page);
+  const runId = await ensureRun(db, actor, { purpose: "background" });
   const database = getDb(db);
   await updateImageProcessingSettings(db, { enabled: false, paused: false });
   const hello = imageProcessingHello.parse({
@@ -117,6 +120,7 @@ test("companion normalization preserves originals and rejects stale or corrupt r
       id: source.shortcode,
       kinds: ["describe_image"],
       publish: false,
+      runId,
     });
     return { source, jobId: scheduled.jobIds[0] };
   }
@@ -208,7 +212,7 @@ test("companion normalization preserves originals and rejects stale or corrupt r
     .select()
     .from(imageProcessingAttempt)
     .where(eq(imageProcessingAttempt.id, command.attemptId));
-  expect(finished?.state).toBe("ready");
+  expect(finished?.state, finished?.error ?? "No attempt error").toBe("ready");
   expect(finished?.inputKey).toMatch(/^cubby\/analysis-inputs\//);
   expect(finished?.inputKey).not.toBe(output.key);
   expect(finished?.diagnostics).toMatchObject({
