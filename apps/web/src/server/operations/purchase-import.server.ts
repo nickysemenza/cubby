@@ -15,6 +15,8 @@ import {
   submitReceiptEvidence,
 } from "~/server/purchase-import/receipt-evidence";
 import { initiateRunEvidenceUpload } from "~/server/purchase-import/run-evidence";
+import { applyValidationCorrections } from "~/server/purchase-import/validation-corrections";
+import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
 
 export const purchaseImportHandlers = implementOperationDomain(
   purchaseImportContract,
@@ -32,6 +34,21 @@ export const purchaseImportHandlers = implementOperationDomain(
         context.actorContext,
         queue,
       );
+    },
+    applyValidationCorrections: async (context, input) => {
+      const { result, priceAffectedProductIds } =
+        await applyValidationCorrections(
+          context.db,
+          input,
+          context.actorContext,
+        );
+      await recomputeRecipesForPriceAffectedProducts(
+        context.db,
+        context.services.recipeCosting,
+        priceAffectedProductIds,
+        "purchase_import.apply_validation_corrections",
+      );
+      return result;
     },
     prepare: (context, input) =>
       preparePurchaseImport(context.db, input, context.actorContext),

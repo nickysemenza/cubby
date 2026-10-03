@@ -7,20 +7,33 @@ import {
 import { defineContract, mutation } from "~/contracts/define";
 
 /**
- * Explicit negative knowledge on a Purchase or Product completeness check
+ * Explicit negative knowledge on a completeness check of any exceptions-enabled
+ * entity (product, vendor, purchase, financialTransaction, expense)
  * (MCP `data_exception`); each write returns the recomputed dataQuality.
  */
 export const dataQualityContract = defineContract("dataQuality", {
   setException: mutation({
-    http: false,
+    native: "Accept a data gap as a recorded exception",
     input: setDataExceptionInput,
     output: dataQuality,
-    invalidates: ["purchase", "product"],
+    invalidates: [
+      "product",
+      "vendor",
+      "purchase",
+      "financialTransaction",
+      "expense",
+    ],
   }),
   clearException: mutation({
-    http: false,
+    native: "Clear a recorded data exception",
     input: clearDataExceptionInput,
     output: dataQuality,
-    invalidates: ["purchase", "product"],
+    invalidates: [
+      "product",
+      "vendor",
+      "purchase",
+      "financialTransaction",
+      "expense",
+    ],
   }),
 });

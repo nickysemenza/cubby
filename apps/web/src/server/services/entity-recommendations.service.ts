@@ -4,6 +4,7 @@ import type {
   ExpenseProjectProposal,
 } from "@cubby/schemas/entity-recommendations";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
@@ -41,12 +42,20 @@ async function expenseRecommendations(
     counts.set(item.projectId, cell);
   }
   const proposals: ExpenseProjectProposal[] = rankProjectSuggestions(
-    { date: row.date, trade: row.trade, projectId: currentTarget?.id },
+    {
+      date: row.date,
+      trade: row.trade,
+      projectId: currentTarget?.id,
+      productKind: row.productKind,
+    },
     projects,
     [...counts.values()],
     householdLocalDate(),
   ).map((suggestion) => {
     const window = projects.find((item) => item.id === suggestion.id)!;
+    const routineSupply =
+      suggestion.id === HOUSEHOLD_PROJECT_SHORTCODE &&
+      row.productKind === "consumable";
     const supportingExpenses = history
       .filter((item) => item.projectId === suggestion.id)
       .sort(
@@ -68,7 +77,14 @@ async function expenseRecommendations(
       exactProductCount: suggestion.exactProductCount,
       supportingExpenses,
       reasons: [
-        `Active on ${row.date}: ${window.effectiveStart} to ${window.effectiveEnd ?? "present"}`,
+        ...(routineSupply
+          ? ["Consumable product: routine supplies default to Household"]
+          : []),
+        ...(window.effectiveStart
+          ? [
+              `Active on ${row.date}: ${window.effectiveStart} to ${window.effectiveEnd ?? "present"}`,
+            ]
+          : []),
         `${suggestion.affinity} other ${row.trade} expenses`,
         ...(suggestion.exactProductCount > 0
           ? [
@@ -85,6 +101,7 @@ async function expenseRecommendations(
       row.date,
       row.trade,
       row.productId,
+      row.productKind,
       currentTarget?.id,
       row.updatedAt,
     ].join("|"),

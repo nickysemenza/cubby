@@ -75,7 +75,11 @@ export const fingerprintSql = (
   )})`;
 };
 
-const activeExceptionSql = (
+/**
+ * An exception row whose stored fingerprint still matches the live evidence;
+ * `null` when the check cannot be excepted. A stale exception is not active.
+ */
+export const activeExceptionSql = (
   entity: ScoredEntity,
   check: DataCheck,
   t: ScoredTable,
@@ -98,17 +102,22 @@ export const expectedCondition = (
   return group(binding.expected ? binding.expected(t) : sql`true`);
 };
 
-/** `expected AND missing`, before any exception is applied. */
-export const rawGapCondition = (
+/** The check's `missing` predicate alone; a gap only where also expected. */
+export const checkMissingCondition = (
   entity: ScoredEntity,
   check: DataCheck,
   t: ScoredTable = entryFor(entity).table,
-): SQL => {
-  const binding = bindingFor(entity, check);
-  return group(
-    sql`${expectedCondition(entity, check, t)} AND ${group(binding.missing(t))}`,
+): SQL => group(bindingFor(entity, check).missing(t));
+
+/** `expected AND missing`, before any exception is applied. */
+const rawGapCondition = (
+  entity: ScoredEntity,
+  check: DataCheck,
+  t: ScoredTable = entryFor(entity).table,
+): SQL =>
+  group(
+    sql`${expectedCondition(entity, check, t)} AND ${checkMissingCondition(entity, check, t)}`,
   );
-};
 
 /** A live gap: expected, missing, and not covered by an active exception. */
 export const gapCondition = (
@@ -180,32 +189,55 @@ export const statusSql = (
  * expected; an excepted check counts as satisfied because `gapCondition`
  * already excludes it. Same arithmetic as `calculateDataQualityScore`, so
  * `ORDER BY dataQualityScore` agrees with the hydrated `score`.
+ *
+ * Each check's `expected` and unexcepted `missing` are evaluated ONCE in an
+ * `OFFSET 0` subquery (the offset stops Postgres pulling it up and
+ * re-inlining them). Postgres has no common-subexpression elimination, and
+ * planner memory grows with every inlined copy of a correlated policy
+ * subquery until the statement ends: spelling each `expected` in both sums
+ * and again inside `gapCondition` helped one FinancialTransaction list plan
+ * ~0.5 GB. `expected AND NOT (expected AND unexcepted)` is the former
+ * `expected AND NOT gapCondition` over the same values.
  */
 export const scoreSql = (
   entity: ScoredEntity,
   t: ScoredTable = entryFor(entity).table,
 ): SQL => {
-  const terms = checksOf(entity).map((check) => ({
-    weight: dataCheckWeight[check],
-    expected: expectedCondition(entity, check, t),
-    gap: gapCondition(entity, check, t),
-  }));
+  const terms = checksOf(entity).map((check, index) => {
+    const active = activeExceptionSql(entity, check, t);
+    const missing = checkMissingCondition(entity, check, t);
+    return {
+      weight: sql.raw(String(dataCheckWeight[check])),
+      expectedKey: sql.identifier(`e${index}`),
+      unexceptedKey: sql.identifier(`m${index}`),
+      expected: expectedCondition(entity, check, t),
+      unexcepted:
+        active === null ? missing : group(sql`${missing} AND NOT ${active}`),
+    };
+  });
+  const inputs = sql.join(
+    terms.map(
+      ({ expectedKey, unexceptedKey, expected, unexcepted }) =>
+        sql`${expected} AS ${expectedKey}, ${unexcepted} AS ${unexceptedKey}`,
+    ),
+    sql`, `,
+  );
   const satisfied = sql.join(
     terms.map(
-      ({ weight, expected, gap }) =>
-        sql`CASE WHEN ${expected} AND NOT ${gap} THEN ${sql.raw(String(weight))} ELSE 0 END`,
+      ({ weight, expectedKey, unexceptedKey }) =>
+        sql`CASE WHEN dq_score.${expectedKey} AND NOT (dq_score.${expectedKey} AND dq_score.${unexceptedKey}) THEN ${weight} ELSE 0 END`,
     ),
     sql` + `,
   );
   const expected = sql.join(
     terms.map(
-      ({ weight, expected }) =>
-        sql`CASE WHEN ${expected} THEN ${sql.raw(String(weight))} ELSE 0 END`,
+      ({ weight, expectedKey }) =>
+        sql`CASE WHEN dq_score.${expectedKey} THEN ${weight} ELSE 0 END`,
     ),
     sql` + `,
   );
   return group(
-    sql`COALESCE(round(100.0 * (${satisfied}) / NULLIF((${expected}), 0), 2), 100)`,
+    sql`(SELECT COALESCE(round(100.0 * (${satisfied}) / NULLIF((${expected}), 0), 2), 100) FROM (SELECT ${inputs} OFFSET 0) dq_score)`,
   );
 };
 

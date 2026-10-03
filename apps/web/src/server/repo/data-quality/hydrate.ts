@@ -11,6 +11,7 @@ import {
   dataCheckWeight,
   dataCheckExemptible,
   dataException,
+  dataExceptionReasonLabel,
   dataQualityExceptionEntities,
   dataQualityFacets,
   relatedDataQualityEntities,
@@ -25,12 +26,13 @@ import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/repo/database-helpers";
 
+import { exceptionReasonsFor } from "./exception-reasons";
 import {
+  checkMissingCondition,
   checksOf,
   entryFor,
   expectedCondition,
   fingerprintSql,
-  rawGapCondition,
 } from "./sql";
 
 /**
@@ -59,10 +61,27 @@ export const calculateDataQualityScore = (
   return Math.max(0, score);
 };
 
+const exceptionOf = (
+  recorded: readonly DataQualityException[],
+  check: string,
+) => {
+  const found = recorded.find((exception) => exception.check === check);
+  return found
+    ? {
+        exception: {
+          reason: found.reason,
+          note: found.note,
+          state: found.state,
+        },
+      }
+    : {};
+};
+
 export const buildQualityBreakdown = (
   expectedChecks: readonly DataCheck[],
   unresolvedChecks: readonly DataCheck[],
   activeExceptions: readonly DataCheck[],
+  recorded: readonly DataQualityException[] = [],
 ): z.infer<typeof qualityBreakdown> => {
   const expected = [...new Set(expectedChecks)];
   const gaps = new Set(unresolvedChecks);
@@ -92,6 +111,11 @@ export const buildQualityBreakdown = (
           ? "excepted"
           : "satisfied",
       description: dataCheckMessage[check],
+      exceptionReasons: exceptionReasonsFor(check).map((reason) => ({
+        reason,
+        label: dataExceptionReasonLabel[reason],
+      })),
+      ...exceptionOf(recorded, check),
     })),
   });
 };
@@ -127,6 +151,7 @@ export const loadQualityBreakdown = async (
     evaluation.exceptions
       .filter((exception) => exception.state === "active")
       .map((exception) => dataCheck.parse(exception.check)),
+    evaluation.exceptions,
   );
 };
 
@@ -173,7 +198,9 @@ const loadEvaluations = async (
   const withFingerprints = dataQualityExceptionEntities[entity];
   const columns = checks.flatMap((check, index) => [
     sql`${expectedCondition(entity, check, t)} AS ${sql.identifier(expectedKey(index))}`,
-    sql`${rawGapCondition(entity, check, t)} AS ${sql.identifier(gapKey(index))}`,
+    // `missing` alone; `evaluateRow` requires `expected` too. `rawGapCondition`
+    // would plan every `expected` twice (see `scoreSql`).
+    sql`${checkMissingCondition(entity, check, t)} AS ${sql.identifier(gapKey(index))}`,
     ...(withFingerprints
       ? [
           sql`${fingerprintSql(entity, check, t)} AS ${sql.identifier(fingerprintKey(index))}`,
@@ -224,7 +251,7 @@ const evaluateRow = (
   > = [];
   checks.forEach((check, index) => {
     if (row[expectedKey(index)] === true) expectedChecks.push(check);
-    if (row[gapKey(index)] !== true) return;
+    if (row[expectedKey(index)] !== true || row[gapKey(index)] !== true) return;
     rawGaps.push({
       check,
       facet: dataCheckFacet[check],

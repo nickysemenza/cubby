@@ -69,9 +69,10 @@ public final class GenericEntityEditModel {
         return nil
     }
 
-    /// Fetches the record for an update editor constructed without `original`.
+    /// Fetches the current update record. A supplied detail projection may predate a save's
+    /// asynchronous refresh, so it is only an initial presentation, never the edit baseline.
     public func load() async {
-        guard case .update(let id) = mode, original == nil, !isLoading else { return }
+        guard case .update(let id) = mode, !isLoading else { return }
         isLoading = true
         defer { isLoading = false }
         do {

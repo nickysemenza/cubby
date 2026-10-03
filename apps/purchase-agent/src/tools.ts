@@ -1,6 +1,8 @@
 import { defineTool } from "@flue/runtime";
 import * as v from "valibot";
 
+import { tradeValues } from "@cubby/schemas/task-fields";
+
 import type {
   PurchaseImportService,
   PurchaseImportServiceResult,
@@ -151,8 +153,13 @@ export function purchaseImportTools(
     defineTool({
       name: "import_browser_order_evidence",
       description:
-        "Bind a completed browser command's retained evidence to its exact run target before preparation or enrichment. Use the commandId returned by the browser result.",
-      input: v.object({ operationId, commandId: v.pipe(v.string(), v.uuid()) }),
+        "Bind a completed browser command's retained evidence to its exact run target before preparation or enrichment. Use the commandId returned by the browser result. For an order page, pass defaultTrade (and defaultProjectId when known) exactly as for purchase_import.commit: a principal line without a trade from its Purchase or Project is refused.",
+      input: v.object({
+        operationId,
+        commandId: v.pipe(v.string(), v.uuid()),
+        defaultTrade: v.optional(v.picklist(tradeValues)),
+        defaultProjectId: v.optional(v.pipe(v.string(), v.minLength(1))),
+      }),
       output: serviceResult,
       durable: true,
       run: async ({ data, step }) => ({
@@ -286,6 +293,41 @@ export function purchaseImportTools(
           ),
           terminate: true,
         }),
+    }),
+    defineTool({
+      name: "defer_order_for_review",
+      description:
+        "Leave one listed order from this account-sync worklist for human review when its evidence stays ambiguous or unreadable, then continue with the remaining orders. The server records one finding naming the order and marks it skipped; the run then ends in review instead of claiming a complete import.",
+      input: v.object({
+        operationId,
+        orderId: v.pipe(v.string(), v.minLength(1), v.maxLength(200)),
+        detail: v.pipe(v.string(), v.minLength(1), v.maxLength(1_000)),
+      }),
+      output: serviceResult,
+      durable: true,
+      run: async ({ data, step }) => ({
+        output: await step.do(`defer-order:${data.operationId}`, () =>
+          serviceForRun().deferOrderForReview({ runId, ...data }),
+        ),
+      }),
+    }),
+    defineTool({
+      name: "settle_charge_hunt",
+      description:
+        "Record the outcome of one statement charge this run was asked to find, when importing evidence did not settle it. Use not_found after searching the vendor account for the charge's amount and date window without a matching order; use needs_review when a candidate order exists but stays ambiguous or unreadable. The server records the outcome for that one charge and the run continues with the remaining charges; it then ends in review instead of claiming a complete import. A charge the server already settled is recorded as resolved.",
+      input: v.object({
+        operationId,
+        huntId: v.pipe(v.string(), v.uuid()),
+        outcome: v.picklist(["not_found", "needs_review"]),
+        detail: v.pipe(v.string(), v.minLength(1), v.maxLength(1_000)),
+      }),
+      output: serviceResult,
+      durable: true,
+      run: async ({ data, step }) => ({
+        output: await step.do(`settle-charge-hunt:${data.operationId}`, () =>
+          serviceForRun().settleChargeHunt({ runId, ...data }),
+        ),
+      }),
     }),
   ] as const;
 }

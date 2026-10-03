@@ -37,11 +37,9 @@ import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database } from "~/server/db";
 import {
-  entityAttachment,
   entityExternalId,
   entityLink,
   expense,
-  image,
   ingredient,
   location,
   product,
@@ -54,7 +52,7 @@ import {
 import { gapCondition } from "~/server/repo/data-quality/sql";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { liveLinks } from "~/server/repo/entity-links";
-import { displayableImageWhere } from "~/server/repo/image-displayability";
+import { productHasDisplayableImageSql } from "~/server/repo/image-displayability";
 import { canonicalLabelKey } from "~/server/repo/label-canonical";
 import {
   categoryFeatureSql,
@@ -493,29 +491,11 @@ export const findProductsWithUpcGaps = async (
       name: product.name,
       manufacturer: product.manufacturer,
       price: product.price,
-      // Must agree with `productIdsWithImages` in product/crud.ts, and with
-      // findProductsWithNoImages in product/analytics.ts: Image is separately
-      // soft-deletable from ProductImage, and a PDF is a manual, not a photo.
-      // Checking ProductImage alone reads `true` for a product whose only
-      // attachment is a PDF, which then gets filtered out of the candidate list
-      // below and never gets the UPC lookup that would fetch it a real photo —
-      // hitting tools and hardware hardest.
-      hasImage: exists(
-        dbClient
-          .select({ id: sql`1` })
-          .from(entityAttachment)
-          .innerJoin(
-            image,
-            and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
-          )
-          .where(
-            and(
-              eq(entityAttachment.entityId, product.id),
-              notDeleted(entityAttachment),
-              displayableImageWhere,
-            ),
-          ),
-      ),
+      // The shared displayable-image definition: a PDF-only or label-only
+      // product still needs the UPC lookup that would fetch a real photo.
+      // Qualified by hand: a single-table select renders its column list
+      // unqualified, which the subquery's own `id` would make ambiguous.
+      hasImage: productHasDisplayableImageSql(sql.raw('"Product"."id"')),
     })
     .from(product)
     .where(and(notDeleted(product), productHasAnyGtin()));

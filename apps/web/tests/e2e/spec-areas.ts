@@ -94,6 +94,16 @@ export interface SpecAreaEntry {
 
 /** Hand-written globs per spec; see the header for what belongs here. */
 export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
+  "companion-analysis.spec.ts": [
+    `${WEB}/src/server/image-processing/**`,
+    `${WEB}/src/server/repo/image-processing*.ts`,
+    `${WEB}/src/server/repo/activity-input.ts`,
+    `${WEB}/src/server/services/image-description.service.ts`,
+    `${WEB}/src/server/services/image-processing.service.ts`,
+    `${WEB}/src/server/operations/image-processing.server.ts`,
+    `${WEB}/src/contracts/image-processing.contract.ts`,
+    "packages/schemas/src/image-processing.ts",
+  ],
   "label-nutrition-review.spec.ts": [
     `${WEB}/src/app/products/**`,
     `${WEB}/src/features/nutrition/**`,
@@ -474,6 +484,13 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/app/purchases/**`,
     `${WEB}/src/server/repo/financial-transaction.ts`,
     `${WEB}/src/server/repo/purchase.ts`,
+  ],
+  "receive-after-photo-inventory.spec.ts": [
+    `${WEB}/src/app/expenses/**`,
+    `${WEB}/src/app/purchases/**`,
+    `${WEB}/src/server/services/receiving-context.service.ts`,
+    `${WEB}/src/server/services/product-match.service.ts`,
+    `${WEB}/src/server/repo/inventory/**`,
   ],
   "relationship-discovery.spec.ts": [
     `${WEB}/tests/e2e/relationship-discovery-contract.ts`,

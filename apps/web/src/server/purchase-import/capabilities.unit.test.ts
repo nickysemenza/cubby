@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import { MCP_TOOLS } from "~/contracts/mcp-tools";
+import { purchaseImportContract } from "~/contracts/purchase-import.contract";
+import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
+
 import {
   assertRunCapability,
   capabilityForPurchaseAgentAction,
@@ -66,5 +70,22 @@ describe("targeted import capabilities", () => {
         assertRunCapability(purpose, "match_proposal"),
       ).not.toThrow();
     }
+  });
+});
+
+describe("person-only validation corrections", () => {
+  it("is not an MCP action, so no purchase agent can call it", () => {
+    const person = purchaseImportContract.ops.applyValidationCorrections;
+    const exposed = Object.values(MCP_TOOLS).flatMap((tool) =>
+      Object.values(tool.actions),
+    );
+    expect(exposed.some((action) => action.op === person)).toBe(false);
+    expect(
+      Object.values(MCP_TOOL_BINDINGS).flatMap((tool) =>
+        Object.keys(tool.actions).filter((name) =>
+          /apply_validation/i.test(name),
+        ),
+      ),
+    ).toEqual([]);
   });
 });

@@ -80,6 +80,7 @@ export const makeProduct = (
   usdaUnavailable: null,
   acquisitionOrigin: "unknown",
   stockTracked: null,
+  kind: null,
   labelNutrition: opts.labelNutrition ?? null,
   images: [],
   coverImageUrl: null,

@@ -26,23 +26,6 @@ history is the archive. Permanent product constraints live in the
 
 ## Images & photos
 
-- 🟢 **Turn on automatic image description.** Decided: yes; attempts are now
-  recorded only when an executor takes the job. Production settings are
-  `enabled: false` (`repo/image-processing-maintenance.ts`), so new uploads stay
-  undescribed and category suggestions see only text. Flip "Enable new upload
-  processing" on `/problems` (it also schedules subject lift), then run
-  `backfillImageProcessing` with `kinds: ["describe_image"]` for existing
-  images (~5.5k; measured about $1.10 per 1,000 at ~7 s each). Unblocks the
-  label-nutrition extraction, the suggestion sweep, and a useful image search
-  backfill.
-
-- 🟢 **Label photo → `labelNutrition`.** Reuse the existing Product attachment
-  `purpose: "label"` (no new purpose): when the description pass finds a
-  Nutrition Facts panel on a label photo, propose `labelNutrition` for review
-  and record the image shortcode in its `source`. A Product may carry several
-  label photos (front, panel, ingredients). Pairs with inferred-zero nutrients
-  in Ingredients, recipes & nutrition.
-
 - 🧱 **Full capture metadata from the Photos library.** The library match path
   (`LibraryMetadataSync` → `image.recordSightings`) already backfills
   `capturedAt` and location for every strong perceptual-hash match across the
@@ -57,13 +40,6 @@ history is the archive. Permanent product constraints live in the
   (`services/image-metadata.ts`, `embeddedMetadata`) keep the same raw
   dictionaries for uploads that still carry EXIF. Nothing reads shutter,
   aperture, or ISO yet; they are kept so the bytes never need refetching.
-
-- 🟢 **Companion work in the background window.** Library scan and sighting
-  sync already resume in the `com.nickysemenza.cubby.library-sync`
-  `BGProcessingTask` (external power). Run companion jobs (subject lift,
-  on-device description) in the same window; today they are pushed over a live
-  websocket, so the background path needs a server endpoint to pull leased
-  work and finish or release it before expiry.
 
 - 🤔 **Identify what is in a photo.** Photo import stops at the entity type,
   and web location detection matches by name only. In order:
@@ -80,19 +56,12 @@ history is the archive. Permanent product constraints live in the
   analysis measurably slows while the sweep runs: add a `PhotoVisionGate`
   actor both acquire, with the sheet yielding the sweep.
 
-- 🟢 **Receiving an already-photographed purchase.** Keep import stock-neutral.
-  Surface existing photo inventory and pending Product matches before offering
-  receive; resolve identity first, then explicitly confirm whether additional
-  units arrived and their quantity. Never treat a merge or later purchase
-  evidence as another receipt of already-counted stock. Contract:
-  [product identity](product-identity-journey.md).
-
-- 🤔 **Product match queue recall and cost.** A full queue read makes up to 60
-  vector lookups (top 20 neighbours each), and a photo↔purchase pair is missed
-  when the purchase Product is outside that neighbourhood and shares no name
-  token. Measure misses on real wardrobe imports before widening, caching, or
-  moving detection to write time
-  (`apps/web/src/server/services/product-match.service.ts`).
+- ⏳ **Product match queue recall and cost.** Each unfocused queue read now
+  logs `queue read coverage`: vector lookups, unseeded photo Products, and
+  photo Products with no candidate at all, split by whether they were seeded.
+  Promote widening, caching, or write-time detection only when those logs from
+  a real wardrobe import show unseeded photos without candidates that a person
+  later matched (`apps/web/src/server/services/product-match.service.ts`).
 
 - 🤔 **Reproduce macOS photo-match export inside the sandbox.** Capture the
   error chain and sandbox denial for Downloads, Desktop, and an iCloud
@@ -147,38 +116,6 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
-- 🟢 **Manual purchase lifecycle.** Use the existing run machinery to expand
-  selected order, mail, or charge candidates into retained evidence, receipts
-  with attachment ids and classifications, itemization, and settlement.
-  Record confirmed and terminal outcomes so interruption resumes without
-  duplicate writes; handle several orders in one run and leave ambiguous
-  decisions reviewable. Reuse the bounded prepare/commit and approval paths in
-  [purchase import](../.claude/skills/purchase-import/SKILL.md).
-
-- 🟢 **Resumable historical backfill.** Successful completed imports already
-  advance the account's newest-order cursor. Add explicit date-range backfill,
-  newest first, with progress persisted after confirmed outcomes and pacing
-  according to vendor constraints rather than a fixed orders/hour promise.
-  Preserve same-day order ids and never rewind the incremental cursor
-  (`purchase-import/run-service.ts`, `VendorAccount.cursor`).
-
-- 🟢 **Vendor evidence classification and policy.** Automatically classify
-  `orderEvidence` only from clear deterministic evidence; review uncertain
-  inference and preserve explicit choices. Resolved `evidenceExpectation`
-  governs whether evidence is wanted; source classification guides where to
-  look, never silently suppressing required discovery. Surface contradictory
-  choices in one review path, without another policy or confidence setting
-  (`repo/purchase-evidence-policy.ts`, `purchase-import/hunts.ts`).
-
-- 🟢 **Finish the input-first retailer and statement journey.** Join saved
-  synthetic order-history and Product HTML through browser capture,
-  prepare/commit, and purchase approval. Cover both statement/order sequences,
-  refunds and grouped settlement with synthetic CSV; keep account identity
-  and Product merges explicit. Include native CSV/photo review and Gmail
-  connection through itemized-order approval. These are acceptance checks for
-  the purchase outcomes, tracked in [core journey E2E](agents/core-journey-e2e.md),
-  seeding only account/login prerequisites.
-
 - ⏳ **Conditional purchase-import browser extension.** Promote only if the
   Apple-event browser bridge repeatedly fails to background its window, cannot
   avoid Chrome's JavaScript-from-Apple-Events setting, or cannot provide
@@ -203,48 +140,15 @@ See also the image operational passes at the end of this file.
 
 ### Reconcile charges and refunds
 
-- 🟢 **Complete charge-to-order discovery and grouped settlement.** Consult
-  retained shipment/payment evidence before mailbox matching, then use a
-  bounded Jev tie-break to rank ambiguous candidates. Automatically allocate
-  only a uniquely evidenced full payment set, including groups: account/vendor
-  scope, charge/refund direction, conserved amounts, and no competing
-  allocations must agree. Amount/date coincidence or AI ranking alone stays
-  reviewable. Apply confirmed groups atomically and leave incomplete evidence
-  unresolved; settlement never changes stock. Contract:
-  [product identity and settlement](product-identity-journey.md).
-
 ### Review and apply corrections
 
-- 🟢 **Apply a reviewed purchase-validation diff.** Validation currently
-  records a read-only semantic diff. Show before/after values, let the person
-  select corrections, revalidate affected records against the proposal, and
-  apply the accepted set atomically. Preserve explicit Product assignments
-  and existing typed approval boundaries across Purchases, Expenses,
-  settlement, and evidence (`purchase-import/import-orders.ts`).
-
-- 🟢 **Generalize evidence-backed Product enrichment beyond Amazon.** Extend
-  verified adapters for retailer SKU, catalog/item number, and GTIN; use agent
-  research when adapters cannot establish facts. Primary manufacturer/retailer
-  evidence must prove the exact variant; search results and free-text hints
-  are leads, not write authority. Batches retain expected current/replacement
-  values and existing approvals; uncertain identity remains reviewable and
-  merges explicit. Reuse [Product enrichment](../.claude/skills/product-enrichment/SKILL.md),
-  without a new enrichment queue or evidence table.
-
-- 🧱 **Cross-vendor manufacturer identifiers.** Add manufacturer-scoped
-  part/style identity distinct from retailer SKU, with contract/generation
-  compatibility planned across clients. Only identifiers proven to name an
-  exact variant may resolve identity in the unique external-ID namespace;
-  shared family/style numbers remain descriptive candidate-ranking evidence
-  requiring size/color/model corroboration. Do not add a Product-family entity
-  or merge automatically (`packages/schemas/src/external-id.ts`).
-
-- 🤔 **Import decision evaluation.** Build a synthetic outcome corpus for
-  identity, variants, line roles, reversals, ambiguous matches, and grouped
-  settlement. Measure correctness, unsafe decisions, latency, and cost before
-  changing matching or model routing; choose model candidates when the
-  comparison runs. The static Product reuse fixture checks shape, not
-  accuracy; evaluation must establish behavior, not another routing control.
+- ⏳ **Re-run the purchase decision evaluation before rerouting.** Run
+  `pnpm --dir apps/web eval:purchase-decisions` (opt-in, billed) before
+  changing matching or purchase-run model routing. Baseline, 2026-10-03:
+  GPT-6 Sol high 12/12 correct, 0 unsafe, about $0.58 per run; GPT-6 Luna
+  high 8/12, 1 unsafe (duplicate Product) and three runs that misread the
+  extractor result, so purchase runs stay on Sol. Scripted Flue scenarios
+  prove orchestration, not model judgment.
 
 ---
 
@@ -261,19 +165,9 @@ See also the image operational passes at the end of this file.
      equivalences report (`lib/harvest-equivalences.ts`) then writes accepted
      suggestions into.
 
-- 🟢 **One external-id product lookup.** `repo/product/find-by-external-ids.ts`
-  batches `(source, externalId)` lookups for `entity_read.resolve`; purchase
-  import (`purchase-import/writer.ts` `productsByExternalIdentity`,
-  `import-orders.ts`) and `repo/product-match.ts` still query per line. Move
-  them onto the batched helper, keeping the writer's in-run cache.
-
-- 🧱 **Inferred-zero nutrients for label data.** Decided: yes. Label-sourced
-  records (USDA `branded_food`, `labelNutrition`) print only FDA-mandatory
-  nutrients plus extras, and a mandatory one may be omitted only as "not a
-  significant source". Model values as `measured | inferred-zero | unknown`;
-  count inferred zeros as covered but flagged; micronutrients stay unknown.
-  Manual override: extend ingredient `naKinds` with nutrient keys, but not for
-  salt, whose "to taste" line is planned at 1% of pot weight (sanity-check it).
+- 🧱 **Salt amounts for “to taste” recipe lines.** Sanity-check the proposed
+  1% of pot weight and define its applicability and evidence before changing
+  parser or costing contracts. This estimation policy remains future work.
 
 - 🧱 **Cookbook identity merge.** Give cookbooks durable identity plus a
   merge/repoint path to stop same-title collisions and renamed-EPUB forks. A
@@ -281,14 +175,6 @@ See also the image operational passes at the end of this file.
   sanctioned path; record `cookbookId` changes in the recipe audit roster
   (`server/repo/recipe/crud.ts`) and decide whether the recipe form's cookbook
   picker (`recipe-cookbook-field.tsx`, `resolveCookbookRepoint`) stays.
-
-- 🟢 **Import extracted cookbook bundles.** Accept ingredient-parser
-  `.cookbook` archives through the existing review/import flow
-  (`recipe/cookbook-import/cookbook-dropzone.tsx`). Read ZIP entries
-  incrementally in a Web Worker, upload assets with bounded concurrency, keep
-  validation and creation on the server; never load the whole archive into
-  memory. Requires an open tab; add R2 staging or Workflows only when
-  unattended imports are a demonstrated need.
 
 - 🧱 **Portion shares alongside grams.** Accept `{share}` per portion in
   `meal_recipe.save_preparation` and derive grams at read time from the
@@ -338,36 +224,6 @@ See also the image operational passes at the end of this file.
 ---
 
 ## Inventory, products & locations
-
-- 🧱 **Consumable vs durable as a Product attribute.** Add optional
-  `Product.kind: consumable | durable`, independent of the choice to count
-  stock (`stockTracked`). Use kind for useful worklist filters and contextual
-  import project suggestions: routine supplies suggest Household, project
-  materials use order/project evidence, and explicit choices win. Leave kind
-  unset when uncertain, with no completeness penalty or classification wizard;
-  do not rewrite existing Expenses. Plan schema and generated-client
-  compatibility before adding the field.
-
-- 🧱 **Record historical acquisitions with unknown cost and date.** Record a
-  known acquired quantity through the existing Expense path with `cost: null`
-  and an absent date when unknown; never invent quantity, price, or date, and
-  never receive stock as a side effect. The current date contract allows an
-  absent date only for zero cost: plan its cross-client compatibility change
-  and distinguish undated history in date-based reports
-  (`packages/schemas/src/expense-fields.ts`,
-  `repo/product/quantity-ledger.ts`). This
-  addresses negative expected quantities from exits whose earlier acquisition
-  is missing; filling known acquisition quantities remains an operational pass.
-
-- 🟢 **Location subtree filters.** Include descendants of a selected Location
-  in inventory/Product filtering through the generic filter path. Reuse a
-  scoped descendant-id helper rather than loading the whole-tree CTE.
-
-- 🟢 **Product external-ID collision review.** Make collisions encountered
-  during imports/enrichment actionable through existing
-  `product.externalIdCollisions` and collision review paths. Keep exact
-  variants and explicit merges; never silently reassign an identifier. Add no
-  separate persistent queue unless real unresolved volume demonstrates a need.
 
 ---
 
@@ -461,11 +317,6 @@ See also the image operational passes at the end of this file.
   actions are eligible for mixed entity types before enabling batch work;
   build on `EntityRecordsTab` and shared RTable behavior.
 
-- 🟢 **Web `src/` layout.** UI code lives in `components/`,
-  `app/_components/`, `hooks/`, `app/_components/hooks/`, `lib/`, `misc/` and
-  `server-functions/`. Move to `ui/`, `features/<domain>/`, `entity/`, and
-  `lib/` in one codemod commit with nothing else in flight.
-
 - 🤔 **Make narrow web layouts device agnostic.** The compact shell still uses
   phone-style tabs and overlays. Design one compact navigation and overlay
   pattern for narrow widths on desktop and iPhone, keyed on width, keeping
@@ -531,18 +382,6 @@ See also the image operational passes at the end of this file.
   MCP Apps, and Cloudflare-safe validation. Keep legacy protocol support until
   Flue supports modern version negotiation; its current MCP client defaults
   to legacy requests without exposing a negotiation option.
-
-- 🤔 **Remove duplicate record checks and expose useful exceptions.** Coverage
-  Problems already consume declared checks. Identify demonstrated duplicate
-  per-record predicates and move each onto its existing declaration/binding;
-  keep operational Problems and aggregate rules, including subtree budgets,
-  explicit. Durable evidence-bound exceptions already work through entity
-  declarations; identify only missing surfaces needed by real workflows, not
-  a second exception system, global weight tuning, or a universal ignore
-  control. Contract: [data quality](entities.md#data-quality).
-
-- 🟢 **Declare non-entity child tables in the manifest (`children:`)** so
-  their DDL is generated like entity tables.
 
 - 🤔 **One FROM context per entity list.** Each list repo pairs a relational
   `findMany` (root aliased) with an unaliased `$count`, so a predicate
@@ -660,12 +499,6 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   subagent output on Opus/Fable. Keep the rule if shares fell without slower or
   lower-quality sessions.
 
-- 🟢 **Profile test cost before another pruning pass.**
-  [PR #1273](https://github.com/nickysemenza/cubby/pull/1273) reduced test
-  declarations without an overall CI speed gain. Compare several exact-head
-  runs and per-suite timings, then consolidate costly duplicate coverage or
-  fixture setup without weakening the merge gate.
-
 - 🤔 **Spike Drizzle 1.0 RC for test factories.** `drizzle-orm@1.0` RC
   exports `./zod` and `drizzle-seed` generates seeded rows; installed is
   0.45.2. `server/db/create-shape-drift.unit.test.ts` records a decision
@@ -716,14 +549,6 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   consumers hold messages: a normally returning handler acks them, and
   `retry()` spends `max_retries: 3` with no dead-letter queue, so either call
   the Queues pause-delivery API from the toggle or retry with long delays.
-
-- 🟢 **Move E2E object storage onto the local R2 binding.** Local dev already
-  serves R2 through the S3-shaped `tooling/dev/storage.ts` handler; the
-  Playwright, simulator, and Mac import harnesses still start the in-memory
-  Node server in `tooling/local-object-storage.ts`. Point them at the binding
-  with a bucket per run, keeping the workerd CI gate. A production binding
-  adapter behind `server/utils/s3.ts` is separate: it must keep presigned
-  browser and native upload/download URLs and changes the deploy surface.
 
 - 🤔 **Evaluate Cloudflare Workflows across durable background work.** Start
   with vendor Gmail discovery: one instance per Run, bounded pages, a

@@ -138,4 +138,13 @@ describe("purchase import writer policy", () => {
       ]),
     ).toBeNull();
   });
+
+  it("refuses to call a subset unique when there are more orders than it searches", () => {
+    // 10 + 40 is the only subset of the first eight orders summing to 50, but
+    // the ninth (50 alone) makes the choice ambiguous.
+    const orders = [10, 40, 60, 70, 80, 90, 100, 110, 50].map(
+      (amount, index) => ({ id: `o${index}`, amount }),
+    );
+    expect(uniqueOrderSubsetForCharge(50, orders)).toBeNull();
+  });
 });

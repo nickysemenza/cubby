@@ -77,16 +77,21 @@ function workerdWebConfig(databaseUrl: string) {
   config.main = `dist/server/${config.main ?? "index.js"}`;
   const assets = config.assets as Record<string, unknown> | undefined;
   if (assets) assets.directory = "dist/client";
-  config.services = (config.services ?? []).map((service) => {
-    const replacements: Record<string, string> = {
-      USDA_API: "local-offline-peers",
-      PURCHASE_AGENT: "purchase-agent",
-    };
-    const binding = String(service.binding ?? "");
-    return replacements[binding]
-      ? { ...service, service: replacements[binding] }
-      : service;
-  });
+  config.services = [
+    ...(config.services ?? []).map((service) => {
+      const replacements: Record<string, string> = {
+        USDA_API: "local-offline-peers",
+        PURCHASE_AGENT: "purchase-agent",
+      };
+      const binding = String(service.binding ?? "");
+      return replacements[binding]
+        ? { ...service, service: replacements[binding] }
+        : service;
+    }),
+    // Harness-only: the web Worker's own structured AI features (extraction,
+    // the required import audit) answer from a deterministic peer.
+    { binding: "CUBBY_TEST_AI_GATEWAY", service: "cubby-test-gateway" },
+  ];
   return config;
 }
 
@@ -169,6 +174,13 @@ export function createWorkerdHarness(
         },
         vars: modelWorker.vars,
         secrets: modelWorker.secrets,
+      },
+      {
+        config: {
+          name: "cubby-test-gateway",
+          main: "tests/e2e/harness-services/purchase-import-test-gateway.ts",
+          compatibility_date: "2026-09-19",
+        },
       },
       {
         config: {

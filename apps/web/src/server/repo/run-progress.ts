@@ -1,13 +1,23 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
 import {
+  chargeHuntOutcomeOf,
+  chargeHuntRunInput,
   mailSearchRunInput,
   mailSearchRunProgress,
+  orderMailImportRunInput,
+  runOrderCandidateState,
   runStatus,
 } from "@cubby/schemas/run-fields";
-import { desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { run, runProgress } from "~/server/db/schema";
+import {
+  financialTransaction,
+  importHunt,
+  run,
+  runOrderCandidate,
+  runProgress,
+} from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
 /** The small, durable progress read shared by every Run detail page. */
@@ -38,8 +48,49 @@ export async function getRunLiveProgress(db: Database, shortcode: string) {
     .where(eq(runProgress.runId, record.run.id))
     .orderBy(desc(runProgress.createdAt), desc(runProgress.id))
     .limit(100);
+  const selected = orderMailImportRunInput.safeParse(record.run.input);
+  const orders =
+    selected.success && "orders" in selected.data
+      ? await database
+          .select({
+            orderId: runOrderCandidate.orderId,
+            state: runOrderCandidate.state,
+          })
+          .from(runOrderCandidate)
+          .where(eq(runOrderCandidate.runId, record.run.id))
+          .orderBy(
+            asc(runOrderCandidate.orderedAt),
+            asc(runOrderCandidate.orderId),
+          )
+      : [];
+  const chargeRun = chargeHuntRunInput.safeParse(record.run.input);
+  const charges = chargeRun.success
+    ? await database
+        .select({
+          chargeId: financialTransaction.shortcode,
+          state: importHunt.state,
+        })
+        .from(importHunt)
+        .innerJoin(
+          financialTransaction,
+          eq(financialTransaction.id, importHunt.financialTransactionId),
+        )
+        .where(inArray(importHunt.id, chargeRun.data.huntIds))
+        .orderBy(
+          asc(financialTransaction.transactionDate),
+          asc(financialTransaction.shortcode),
+        )
+    : [];
   return {
     status: runStatus.parse(record.run.status),
+    charges: charges.map((charge) => ({
+      chargeId: charge.chargeId,
+      outcome: chargeHuntOutcomeOf(charge.state),
+    })),
+    orders: orders.map((order) => ({
+      orderId: order.orderId,
+      state: runOrderCandidateState.parse(order.state),
+    })),
     progress: events.reverse().map((event) => ({
       ...event,
       createdAt: event.createdAt.toISOString(),

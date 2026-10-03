@@ -55,6 +55,8 @@ describe("cubbyMcpConnection", () => {
       markHistoryExpired: unavailable,
       finishRun: unavailable,
       stopForReview: unavailable,
+      deferOrderForReview: unavailable,
+      settleChargeHunt: unavailable,
       recordAgentUsage: unavailable,
       updateAgentProgress: unavailable,
       markRunFailed: unavailable,

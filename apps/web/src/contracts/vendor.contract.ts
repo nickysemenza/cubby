@@ -1,9 +1,14 @@
 import {
+  chargeRunStartInput,
+  chargeRunStartOut,
   orderMailImportInput,
   orderMailImportOut,
+  orderMailImportSelectedInput,
   orderMailDecisionInput,
   orderMailDecisionOut,
   purchaseOrderMailOut,
+  vendorChargeHuntsInput,
+  vendorChargeHuntsOut,
   vendorOrderMailInput,
   vendorSearchMailInput,
   vendorSearchMailOut,
@@ -42,6 +47,21 @@ export const vendorContract = defineContract("vendor", {
     input: orderMailImportInput,
     output: orderMailImportOut,
     invalidates: ["vendor"],
+  }),
+  importSelectedOrderMail: mutation({
+    input: orderMailImportSelectedInput,
+    output: orderMailImportOut,
+    invalidates: ["vendor"],
+  }),
+  chargeHunts: query({
+    input: vendorChargeHuntsInput,
+    output: vendorChargeHuntsOut,
+    cache: { tags: [["vendor"], ["run"]] },
+  }),
+  startChargeRun: mutation({
+    input: chargeRunStartInput,
+    output: chargeRunStartOut,
+    invalidates: ["vendor", "runOnly"],
   }),
   decideOrderMail: mutation({
     native: "Confirm or dismiss an order email Purchase match in Apple apps",

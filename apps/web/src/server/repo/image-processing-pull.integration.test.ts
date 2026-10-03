@@ -34,11 +34,11 @@ describe("background companion leases", () => {
       paused: false,
     });
   });
-  async function job(processorRevision: number) {
+  async function job(processorRevision: number, contentType = "image/jpeg") {
     const row = await createUploadedImageRecord(ctx.db, {
       key: `tests/${crypto.randomUUID()}.jpg`,
       filename: "panel.jpg",
-      contentType: "image/jpeg",
+      contentType,
       size: 512,
     });
     const hash = "b".repeat(64);
@@ -71,6 +71,31 @@ describe("background companion leases", () => {
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, cloud));
     expect(saved?.state).toBe("pending");
+  });
+  it("leases only cloud AVIF work for a normalization-only companion", async () => {
+    const jpeg = await job(IMAGE_DESCRIPTION_PROCESSOR_REVISION);
+    const apple = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    const avif = await job(IMAGE_DESCRIPTION_PROCESSOR_REVISION, "image/avif");
+    const lease = await claimImageProcessingJob(ctx.db, {
+      kinds: ["describe_image"],
+      leaseMs: 60_000,
+      processorRevisions: [],
+      allowAvifNormalization: true,
+    });
+    expect(lease?.id).toBe(avif);
+    expect(
+      await claimImageProcessingJob(ctx.db, {
+        kinds: ["describe_image"],
+        leaseMs: 60_000,
+        processorRevisions: [],
+        allowAvifNormalization: true,
+      }),
+    ).toBeNull();
+    const remaining = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingJob)
+      .where(sql`${imageProcessingJob.id} in (${jpeg}, ${apple})`);
+    expect(remaining.map((row) => row.state)).toEqual(["pending", "pending"]);
   });
   it("rejects another device's release and rejects a released attempt's late result", async () => {
     await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);

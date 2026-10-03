@@ -1,5 +1,8 @@
 import { flueImportRunPurpose } from "@cubby/schemas/import-run-agent";
-import { initiateRunEvidenceUploadInput } from "@cubby/schemas/purchase-import";
+import {
+  initiateRunEvidenceUploadInput,
+  validationDiff,
+} from "@cubby/schemas/purchase-import";
 import type { RunOut } from "@cubby/schemas/run";
 import {
   createFlueClient,
@@ -67,6 +70,7 @@ import {
 } from "./agent-work-summary";
 import { PreparedPurchaseReview } from "./prepared-purchase-review";
 import { RunFindingActions } from "./run-finding-actions";
+import { ValidationCorrectionsReview } from "./validation-corrections-review";
 
 const ACTIVE_RUN_STATUSES = new Set([
   "running",
@@ -1534,6 +1538,39 @@ export function RunImportFindings({ record }: { record: RunOut }) {
   );
 }
 
+/**
+ * A validation target's difference. A v2 diff is a reviewable before/after
+ * table; a diff recorded before corrections existed stays raw JSON.
+ */
+function TargetDiff({
+  runId,
+  target,
+}: {
+  runId: RunDetail["publicId"];
+  target: RunDetail["targets"][number];
+}) {
+  if (target.diff === null) return null;
+  const parsed = validationDiff.safeParse(target.diff);
+  if (parsed.success && target.targetShortcode)
+    return (
+      <ValidationCorrectionsReview
+        // A refreshed diff starts a fresh selection and operation id.
+        key={`${parsed.data.corrections.map((item) => `${item.id}:${item.fingerprint}`).join("|")}#${parsed.data.notes.length}`}
+        runId={runId}
+        purchaseId={target.targetShortcode}
+        diff={parsed.data}
+      />
+    );
+  return (
+    <details className="border border-border bg-muted/30 p-2 text-xs">
+      <summary className="cursor-pointer font-medium">
+        Review semantic difference
+      </summary>
+      <ToolValue label="Difference" value={target.diff} />
+    </details>
+  );
+}
+
 /** Run detail slot: the frozen source and target of each account-sync target. */
 export function RunImportTargets({ record }: { record: RunOut }) {
   return (
@@ -1567,14 +1604,7 @@ export function RunImportTargets({ record }: { record: RunOut }) {
                 {target.warning ? (
                   <StatusText tone="warning">{target.warning}</StatusText>
                 ) : null}
-                {target.diff !== null ? (
-                  <details className="border border-border bg-muted/30 p-2 text-xs">
-                    <summary className="cursor-pointer font-medium">
-                      Review semantic difference
-                    </summary>
-                    <ToolValue label="Difference" value={target.diff} />
-                  </details>
-                ) : null}
+                <TargetDiff runId={run.publicId} target={target} />
               </>
             ),
           })}

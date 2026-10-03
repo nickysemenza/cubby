@@ -8,6 +8,8 @@
  */
 import { z } from "zod";
 
+import { tradeSchema } from "./task-fields";
+
 export const purchaseAgentRunRef = z.object({ runId: z.string() });
 
 export const purchaseAgentOperationRef = purchaseAgentRunRef.extend({
@@ -36,6 +38,10 @@ export const issueBrowserCommandInput = purchaseAgentOperationRef.extend({
 
 export const importOrderEvidenceInput = purchaseAgentOperationRef.extend({
   commandId: z.string(),
+  /** As for `purchase_import.commit`: a principal line needs a trade. */
+  defaultTrade: tradeSchema.optional(),
+  /** A Project shortcode, resolved and authorized by the web Worker. */
+  defaultProjectId: z.string().optional(),
 });
 
 export const saveNavigationHintsInput = purchaseAgentOperationRef.extend({
@@ -58,6 +64,21 @@ export const stopForReviewInput = purchaseAgentOperationRef.extend({
     "other",
   ]),
   detail: z.string().optional(),
+});
+
+export const deferOrderForReviewInput = purchaseAgentOperationRef.extend({
+  orderId: z.string(),
+  detail: z.string(),
+});
+
+/**
+ * Record a selected charge hunt's outcome when its evidence did not settle it:
+ * no matching order was found, or one stayed ambiguous and needs review.
+ */
+export const settleChargeHuntInput = purchaseAgentOperationRef.extend({
+  huntId: z.uuid(),
+  outcome: z.enum(["not_found", "needs_review"]),
+  detail: z.string(),
 });
 
 export const markRunFailedInput = purchaseAgentOperationRef.extend({

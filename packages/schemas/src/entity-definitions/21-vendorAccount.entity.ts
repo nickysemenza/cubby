@@ -45,6 +45,7 @@ export default defineEntity({
     detail: {
       additionalSectionOverrides: [
         { kind: "slot", id: "order-mail", title: "Order email" },
+        { kind: "slot", id: "charge-search", title: "Statement charges" },
       ],
     },
   },

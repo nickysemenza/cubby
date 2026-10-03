@@ -63,6 +63,8 @@ same outcome without prescribing an agent runtime.
 - Inventory never auto-increments. An `arrived` finding asks a human to receive.
 - Use source totals and itemization exactly as printed. Never scale lines to
   `statedTotal`, infer tax, or fabricate a transaction to close a gap.
+- Unknown facts stay unknown. A missing cost, date, quantity, or order id is
+  recorded as absent, never as zero or a guessed value.
 - Vendor-account imports are member-owned. The authenticated user must own the
   named VendorAccount through `LedgerParty.userId`.
 - Public identifiers are shortcodes. Never expose private UUIDs to the user.
@@ -85,12 +87,14 @@ same outcome without prescribing an agent runtime.
    inspect the order page for itemization.
 3. Call `purchase_import.prepare` in batches of at most 50 orders. Preserve its
    preparation revision and stable line ids.
-4. Resolve every principal line. Prefer exact retailer SKU, ASIN, UPC/GTIN, or
-   manufacturer model; then inspect Product aliases, names, and details. Before
+4. Resolve every principal line. Prefer exact-variant identifiers: a
+   per-variant retailer SKU, ASIN, UPC/GTIN, or exact manufacturer part number.
+   A style, family, or model number shared by sizes or colors only ranks
+   candidates. Then inspect Product aliases, names, and details. Before
    choosing `new`, check inventory-first Products (`dataGap: product_unpurchased`,
    same category/owner) — see the either-side-first contract in
    [product identity](../product-enrichment/references/product-identity.md).
-   An exact identifier match resolves the line straight to that Product
+   An exact-variant identifier match resolves the line straight to that Product
    (`existingId`); a descriptive-only match does not — choose `new` for this
    line's own vendor Product instead, then call `product_enrichment.propose_match` with
    the candidate pair and evidence for human review. Otherwise choose an
@@ -110,7 +114,26 @@ path and after each committed item. Account-sync work is a `cursor_walk`
 orders with `nextPageUrl`, or `null` once the page predates the account
 cursor), then one `order` at a time (capture and import its detail page),
 then hunts and enrichment; `finish_import_run` refuses while a listed order
-is still pending. A `receipt_evidence` item must go through
+is still pending. A backfill run walks an explicit date range of older history
+and never moves the incremental cursor. `defer_order_for_review` leaves one
+ambiguous order for review while the others continue; the run then ends in
+review rather than reporting a complete import, and a restart retries it.
+A member can also select statement charges for one run
+(`vendor.startChargeRun`, from the Vendor account's Statement charges
+section): the run's work is exactly those charge hunts, each claimed as a
+`hunt` item with its `id`, and it never walks order history or joins another
+hunt. Find the charge's order on the vendor account and import it normally;
+the server settles the hunt only when the charge is uniquely and conservatively
+allocated (an amount or date coincidence, or your ranking, is review, never a
+settlement). When a hunt stays unsettled, record it with
+`settle_charge_hunt`: `not_found` after searching the vendor account's history
+for the charge's amount and date window without a matching order, or
+`needs_review` when a candidate order stays ambiguous or unreadable (it leaves
+one finding naming the charge). A charge the server already settled reads as
+resolved whatever you report. `finish_import_run` refuses while any selected
+hunt is still queued, and the run ends in review unless every charge resolved;
+a restart retries every unresolved selected charge. Imports and settlement
+never change stock. A `receipt_evidence` item must go through
 `extract_receipt_evidence`, whose immutable source/checksum/extraction payload
 is passed unchanged to `purchase_import.prepare`; it is not a separate writer.
 For browser evidence, continue every selected order or hunt before calling
@@ -133,7 +156,16 @@ correction creates a linked successor run and new decision revision.
 
 Create or update the Vendor deliberately, then configure:
 
-- `orderEvidence`: `online_account`, `receipt_only`, or `not_expected`;
+- `orderEvidence`: `online_account`, `receipt_only`, or `not_expected`. It says
+  where to look, never whether evidence is wanted; the resolved
+  `evidenceExpectation` (transaction, then vendor, then category) decides
+  that, so a required charge from a `not_expected` vendor still opens a
+  `receipt_required` hunt. Creating a browser-synced account for a vendor with
+  `browserDomains` fills only an unset value with `online_account`; an
+  explicit choice is never overwritten and weaker signals stay unset for the
+  `vendor_order_evidence` gap. Contradictory choices (`not_expected` source
+  with a required vendor policy, or a not-expected policy with a source) show
+  as `vendor_order_evidence_conflict`; resolve by changing one field;
 - `browserDomains` and `orderUrlTemplate` for online accounts;
 - `orderEmailSenders` only for verified senders outside the website domain;
 - `returnWindowDays` only when the policy is known.
@@ -162,11 +194,16 @@ For a unique full payment set, verify amount, account/card identity and a
 bounded date window; a statement row may have only `postedDate`. A late
 statement still needs the same check against Purchases already imported.
 Same-amount nearby charges, split tender, wallet aliases, and shipment splits
-are review cases unless the full allocation is uniquely supported.
+are review cases unless the full allocation is uniquely supported. Amount or
+date coincidence, a subset of charges that happens to sum to the order total,
+the nearest date, and a model ranking only rank candidates; none settles by
+itself. When identical candidates stay indistinguishable, leave the choice for
+review instead of picking one.
 Monarch rows prove settlement, not itemization or exact Product identity. Use
 email/order lines for items and prefer matching existing photo-created Products
 when variant evidence agrees. Keep historical Expense attribution separate from
 current inventory ownership. Reconciliation never receives that inventory again.
+Record a historical acquisition (a known quantity whose earlier purchase is missing) as an Expense with `cost: null`, no `date`, and the known `productQuantity`; never invent price or date, and it receives no inventory.
 
 ## Enrichment fallback
 
@@ -181,7 +218,11 @@ a new purchase-import Product or inventory.
 Reads are available through Cubby's ordinary MCP catalog. The bounded
 prepare/commit workflow may write without a separate approval. Generic creates,
 updates, deletes, merges, and inventory receiving pause for an exact typed
-approval; prose in a prompt is never approval. Receiving remains a human
+approval in an agent run, including the `entity.create`/`entity.update` steps
+the settlement reference describes; prose in a prompt is never approval.
+Reference steps that use a live browser console, scripts, or file parsing
+(payment-ledger scraping, statement CSV parsing) are for an interactive Claude
+or Codex session; a Flue run uses only its mounted tools and retained evidence. Receiving remains a human
 decision and inventory never changes merely because an order arrived.
 
 ## Completion report

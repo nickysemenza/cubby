@@ -209,6 +209,11 @@ export const detailSlots = {
         default: m.VendorAccountOrderMail,
       })),
     ),
+    "charge-search": slot(() =>
+      import("~/app/vendors/charge-search").then((m) => ({
+        default: m.VendorAccountChargeSearch,
+      })),
+    ),
   },
   purchase: {
     "order-mail": slot(() =>
@@ -224,6 +229,11 @@ export const detailSlots = {
     "project-allocation": slot(() =>
       import("~/app/purchases/slots").then((m) => ({
         default: m.PurchaseProjectAllocation,
+      })),
+    ),
+    receiving: slot(() =>
+      import("~/app/purchases/receive-purchase-section").then((m) => ({
+        default: m.PurchaseReceiving,
       })),
     ),
     reconciliation: slot(() =>

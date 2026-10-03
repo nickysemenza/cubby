@@ -1,6 +1,7 @@
 import { aiRunUsageInput, aiRunUsageOut } from "@cubby/schemas/ai";
 import {
   runShortcode,
+  financialTransactionShortcode,
   imageShortcode,
   productShortcode,
   purchaseShortcode,
@@ -26,7 +27,12 @@ import {
   type TargetedImportStartInput,
   type TargetedImportStartOutput,
 } from "@cubby/schemas/run";
-import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
+import {
+  chargeHuntOutcome,
+  runOrderCandidateState,
+  runPurpose,
+  runStatus,
+} from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
@@ -337,6 +343,17 @@ export const runContract = defineContract("run", {
             error: z.string().nullable(),
           })
           .nullable(),
+        /** A selected-orders mail import's per-order outcomes; empty otherwise. */
+        orders: z.array(
+          z.object({ orderId: z.string(), state: runOrderCandidateState }),
+        ),
+        /** A selected-charges run's per-charge outcomes; empty otherwise. */
+        charges: z.array(
+          z.object({
+            chargeId: financialTransactionShortcode,
+            outcome: chargeHuntOutcome,
+          }),
+        ),
       })
       .nullable(),
     cache: { tags: [["run"]] },
@@ -396,6 +413,7 @@ export const runContract = defineContract("run", {
     cache: { tags: [["run"]] },
   }),
   work: query({
+    native: "Review a purchase-validation run's targets and corrections",
     input: z.object({ runId: runShortcode }),
     output: runDetail,
     cache: { tags: [["run"]] },

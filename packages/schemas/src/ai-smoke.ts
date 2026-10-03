@@ -16,6 +16,7 @@ export const aiSmokeInputs = {
   usdaFoodBatch: z.object({ ingredientIds: sourceIds }),
   ingredientMerge: z.object({ ingredientIds: sourceIds }),
   selectionOverflow: z.object({ fixture }),
+  settlementCandidateRank: z.object({ fixture }),
   productIdentification: z.object({
     imageIds: z.array(sourceId).min(1).max(5),
   }),

@@ -294,7 +294,11 @@ export const productFilterFields = {
   servingAsLocationPresenceFilter: presenceFilter.describe(
     "Filter to products that are / aren't in service as a Location.",
   ),
-  locationIdFilter: entityFilterList(locationShortcode).optional(),
+  locationIdFilter: entityFilterList(locationShortcode)
+    .optional()
+    .describe(
+      "Filter to products with stock in the selected Locations or any of their descendants.",
+    ),
   ingredientPresenceFilter: presenceFilter,
   ingredientIdFilter: entityFilterList(ingredientShortcode).optional(),
   growsPlantIdFilter: entityFilterList(plantShortcode).optional(),
@@ -308,6 +312,11 @@ export const productFilterFields = {
    * than narrowing it (see `taskFilterFields.projectPresenceFilter`).
    */
   tagsPresenceFilter: presenceFilter,
+  /**
+   * `"none"` is the worklist of Products with no consumable/durable kind yet;
+   * OR-ed with the `kind` filter. A worklist only — not a data-quality check.
+   */
+  kindPresenceFilter: presenceFilter,
   categoryFilter: oneOrMany(productCategoryShortcode).optional(),
   categoryFeatureFilter: oneOrMany(productCategoryFeature).optional(),
   categoryPresenceFilter: presenceFilter,
@@ -1003,6 +1012,7 @@ export const productMcpOut = z
     fdc_id: true,
     usdaUnavailable: true,
     stockTracked: true,
+    kind: true,
     labelNutrition: true,
     dataQuality: true,
   })
@@ -1063,65 +1073,43 @@ export type ProductMcpDetailOut = z.infer<typeof productMcpDetailOut>;
 
 export const productMcpListOut = createPaginatedResponseSchema(productMcpOut);
 
+/**
+ * Exact identifier ownership. The live unique index on (source, kind,
+ * externalId) means an identifier has at most one live owner, so there is no
+ * "shared by two products" state to report.
+ */
 export const productExternalIdCollisionsOut = z.object({
-  items: z.array(
+  results: z.array(
     z.object({
       source: z.string(),
       kind: externalIdKind,
       externalId: z.string(),
+      /**
+       * `unique` means one live owner — but not necessarily the product you
+       * asked about, which is how three duplicate pairs were nearly missed in
+       * one import session. Pass `productId` and the answer splits into
+       * `owned_by_this` and `owned_by_other`; without it the vocabulary is
+       * unchanged.
+       */
+      status: z.enum(["missing", "unique", "owned_by_this", "owned_by_other"]),
       products: z.array(z.object({ id: productShortcode, name: z.string() })),
     }),
   ),
-  results: z
-    .array(
-      z.object({
-        source: z.string(),
-        kind: externalIdKind,
-        externalId: z.string(),
-        /**
-         * `unique` means one live owner — but not necessarily the product you
-         * asked about, which is how three duplicate pairs were nearly missed in
-         * one import session. Pass `productId` and the answer splits into
-         * `owned_by_this` and `owned_by_other`; without it the vocabulary is
-         * unchanged.
-         */
-        status: z.enum([
-          "missing",
-          "unique",
-          "owned_by_this",
-          "owned_by_other",
-          "collision",
-        ]),
-        products: z.array(z.object({ id: productShortcode, name: z.string() })),
-      }),
-    )
-    .default([]),
 });
 
-export const productExternalIdCollisionInput = z
-  .object({
-    source: z.union([externalIdSource, z.array(externalIdSource)]).optional(),
-    productId: productShortcode.optional(),
-    identifiers: z
-      .array(
-        z.object({
-          source: externalIdSource,
-          kind: externalIdKind,
-          externalId: z.string().min(1),
-        }),
-      )
-      .min(1)
-      .max(100)
-      .optional(),
-  })
-  .superRefine((value, ctx) => {
-    if (value.source !== undefined && value.identifiers !== undefined)
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "source and identifiers cannot be used together",
-        path: ["identifiers"],
-      });
-  });
+export const productExternalIdCollisionInput = z.object({
+  productId: productShortcode.optional(),
+  identifiers: z
+    .array(
+      z.object({
+        source: externalIdSource,
+        kind: externalIdKind,
+        externalId: z.string().min(1),
+      }),
+    )
+    .min(1)
+    .max(100),
+});
 
 export const patchProductExternalIdsInput = z
   .object({

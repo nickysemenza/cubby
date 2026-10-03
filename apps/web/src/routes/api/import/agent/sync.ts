@@ -12,12 +12,21 @@ export const Route = createFileRoute("/api/import/agent/sync")({
         const context = requireActor(
           await createRequestContext({ headers: request.headers }),
         );
+        // An optional inclusive date range turns the request into an
+        // explicit historical backfill instead of an incremental sync.
         const body = z
-          .object({ vendorAccount: z.string().min(1) })
+          .object({
+            vendorAccount: z.string().min(1),
+            backfill: z
+              .object({ from: z.iso.date(), to: z.iso.date() })
+              .optional(),
+          })
           .safeParse(await request.json());
         if (!body.success) {
           return Response.json(
-            { error: "vendorAccount is required" },
+            {
+              error: body.error.issues.map((issue) => issue.message).join("; "),
+            },
             { status: 400 },
           );
         }
@@ -42,15 +51,32 @@ export const Route = createFileRoute("/api/import/agent/sync")({
         }
         // Loaded on request: run-service reaches the AI SDK stack, which would
         // otherwise load into every Worker request.
-        const [{ dispatchRunEvent }, { startOrResumeRun }] = await Promise.all([
+        const [
+          { dispatchRunEvent },
+          { ActiveChargeRunError, startOrResumeRun },
+        ] = await Promise.all([
           import("~/server/purchase-import/dispatch"),
           import("~/server/purchase-import/run-service"),
         ]);
-        const run = await startOrResumeRun(context.db, {
-          ledgerPartyId: party.id,
-          vendorAccountId: accountId,
-          trigger: "manual",
-        });
+        let run: Awaited<ReturnType<typeof startOrResumeRun>>;
+        try {
+          run = await startOrResumeRun(context.db, {
+            ledgerPartyId: party.id,
+            vendorAccountId: accountId,
+            ...(body.data.backfill
+              ? { trigger: "backfill" as const, backfill: body.data.backfill }
+              : { trigger: "manual" as const }),
+          });
+        } catch (error) {
+          // A refused backfill (occupied account, invalid range) is the
+          // member's to act on; return the server's own reason.
+          if (!body.data.backfill && !(error instanceof ActiveChargeRunError))
+            throw error;
+          return Response.json(
+            { error: error instanceof Error ? error.message : String(error) },
+            { status: 409 },
+          );
+        }
         await dispatchRunEvent(context.db, queue, {
           version: 1,
           runId: run.id,

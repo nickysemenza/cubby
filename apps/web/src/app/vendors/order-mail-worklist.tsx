@@ -19,12 +19,17 @@ import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
 import { NativeSelect } from "~/ui/primitives/native-select";
 import { StatusText } from "~/ui/primitives/status-text";
 import { TechnicalError } from "~/ui/primitives/technical-error";
 
 type MailEvent = VendorOrderMailOut["items"][number]["events"][number];
 type MailCandidate = MailEvent["candidates"][number];
+type MailSelection = Map<
+  string,
+  { evidenceChecksum: string; ledgerPartyId: string }
+>;
 
 const matchEvidence = (candidate: MailCandidate) => {
   switch (candidate.reason) {
@@ -55,7 +60,17 @@ const matchEvidence = (candidate: MailCandidate) => {
   }
 };
 
-function OrderMailEvent({ event }: { event: MailEvent }) {
+function OrderMailEvent({
+  event,
+  ledgerPartyId,
+  selection,
+  onSelect,
+}: {
+  event: MailEvent;
+  ledgerPartyId: string;
+  selection: MailSelection;
+  onSelect: (checked: boolean) => void;
+}) {
   const importOrder = useActionMutation({
     mutationFn: vendor.importOrderMail.mutationOptions,
     success: "Order import started",
@@ -87,6 +102,22 @@ function OrderMailEvent({ event }: { event: MailEvent }) {
       </Row>
       {canImport ? (
         <Stack gap="sm" className="mt-2">
+          {importOrder.data ? null : (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Checkbox
+                id={`select-${event.id}`}
+                checked={selection.has(event.id)}
+                // One run covers one member's mail.
+                disabled={[...selection.values()].some(
+                  (picked) => picked.ledgerPartyId !== ledgerPartyId,
+                )}
+                onCheckedChange={(checked) => onSelect(checked === true)}
+              />
+              <label htmlFor={`select-${event.id}`}>
+                Select order {event.orderId} to import with others
+              </label>
+            </div>
+          )}
           {importOrder.data ? (
             <Link
               to="/runs/$shortcode"
@@ -211,6 +242,12 @@ function OrderMailWorklist({
   const [searchPage, setSearchPage] = useState<VendorSearchMailOut | null>(
     null,
   );
+  const [selection, setSelection] = useState<MailSelection>(new Map());
+  const importSelected = useActionMutation({
+    mutationFn: vendor.importSelectedOrderMail.mutationOptions,
+    success: "Order import started",
+    onSuccess: () => setSelection(new Map()),
+  });
   const worklist = useQuery(
     vendor.orderMail.queryOptions({
       vendorId: vendorShortcode.parse(vendorId),
@@ -379,6 +416,55 @@ function OrderMailWorklist({
           ))}
         </NativeSelect>
       ) : null}
+      {selection.size > 0 || importSelected.data || importSelected.error ? (
+        <Stack gap="sm" aria-live="polite">
+          <Row align="center" gap="sm" className="flex-wrap">
+            {selection.size > 0 ? (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={importSelected.isPending}
+                  onClick={() =>
+                    importSelected.mutate({
+                      orders: [...selection].map(
+                        ([eventId, { evidenceChecksum }]) => ({
+                          eventId,
+                          evidenceChecksum,
+                        }),
+                      ),
+                    })
+                  }
+                >
+                  {importSelected.isPending
+                    ? "Starting import…"
+                    : `Import selected (${selection.size})`}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelection(new Map())}
+                >
+                  Clear selection
+                </Button>
+              </>
+            ) : null}
+            {importSelected.data ? (
+              <Link
+                to="/runs/$shortcode"
+                params={{ shortcode: importSelected.data.runId }}
+                className="text-primary underline underline-offset-4"
+              >
+                View selected import
+              </Link>
+            ) : null}
+          </Row>
+          {importSelected.error ? (
+            <TechnicalError error={getErrorMessage(importSelected.error)} />
+          ) : null}
+        </Stack>
+      ) : null}
       {worklist.data.items.length === 0 ? (
         <StatusText>
           {jobActive
@@ -411,7 +497,24 @@ function OrderMailWorklist({
             </Row>
             <div className="mt-2 grid gap-2">
               {mail.events.map((event) => (
-                <OrderMailEvent key={event.id} event={event} />
+                <OrderMailEvent
+                  key={event.id}
+                  event={event}
+                  ledgerPartyId={mail.ledgerPartyId}
+                  selection={selection}
+                  onSelect={(checked) =>
+                    setSelection((current) => {
+                      const next = new Map(current);
+                      if (checked)
+                        next.set(event.id, {
+                          evidenceChecksum: event.evidenceChecksum,
+                          ledgerPartyId: mail.ledgerPartyId,
+                        });
+                      else next.delete(event.id);
+                      return next;
+                    })
+                  }
+                />
               ))}
             </div>
             <details className="mt-2 text-xs text-muted-foreground">

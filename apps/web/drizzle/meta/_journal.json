@@ -85,6 +85,27 @@
       "when": 1790972905017,
       "tag": "0011_narrow_record_emoji",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790998124973,
+      "tag": "0012_uneven_shocker",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791014357667,
+      "tag": "0013_allow_unknown_cost_undated_expense",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791019065602,
+      "tag": "0014_manufacturer_part_kind",
+      "breakpoints": true
     }
   ]
 }

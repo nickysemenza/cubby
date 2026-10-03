@@ -51,6 +51,7 @@ const productAt = (shortcode: string, componentCount = 0) =>
     },
     usdaUnavailable: null,
     stockTracked: null,
+    kind: null,
     dataQuality: {
       status: "complete",
       facets: [],

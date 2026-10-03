@@ -202,7 +202,7 @@ public struct PhotoFile: Sendable, Hashable {
     }
 
     private static let supportedMIMETypes: Set<String> = [
-        "image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif",
+        "image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif", "image/avif",
     ]
 
     private static func inspect(

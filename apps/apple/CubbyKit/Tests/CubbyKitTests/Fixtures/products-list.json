@@ -28,6 +28,7 @@
       },
       "usdaUnavailable": null,
       "stockTracked": null,
+      "kind": null,
       "dataQuality": {
         "status": "complete",
         "score": 100,

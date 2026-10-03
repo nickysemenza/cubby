@@ -37,6 +37,8 @@ enum DetailSlotRegistry {
                 OrderMailDetailSlot(
                     scope: .vendor(
                         vendorID, row.raw["ledgerPartyId"]?.stringValue)))
+        case (.purchase, .purchaseReceiving):
+            return AnyView(PurchaseReceivingSlot(purchaseID: row.id))
         case (.purchase, .purchaseOrderMail):
             return AnyView(OrderMailDetailSlot(scope: .purchase(row.id)))
         case (.run, .runImportControls)
@@ -68,6 +70,9 @@ enum DetailSlotRegistry {
         case .inventory:
             guard let detail = try? row.decode(InventoryDetail.self) else { return nil }
             return AnyView(InventoryOwnershipControl(detail: detail, onChanged: onChanged))
+        case .expense:
+            guard let productID = row.raw["productId"]?.stringValue else { return nil }
+            return AnyView(ReceiveExpenseButton(expenseID: row.id, productID: productID))
         case .financialTransaction:
             return AnyView(FinancialTransactionEvidenceView(row: row, onChanged: onChanged))
         default:

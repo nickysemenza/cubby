@@ -30,8 +30,8 @@ aggregate reimbursement to its original Purchase or retire an unchanged
 aggregate and attach its bank evidence to a reviewed transfer. Edited,
 itemized, or source-claimed lines require individual review.
 
-CSV identity preserves each physical occurrence, including identical rows and
-zero-valued observations. Stable provider identifiers are retained; historical
+CSV identity preserves each physical nonzero occurrence, including identical
+rows; zero-valued placeholder rows are counted, not saved. Stable provider identifiers are retained; historical
 identity aliases remain recognized. A date/amount/status change is a reviewed
 candidate attachment, not an automatic merge. Ambiguous same-amount transactions
 remain separate candidates. Source rows and their original dates stay intact.

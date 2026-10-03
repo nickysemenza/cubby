@@ -13,12 +13,13 @@ source-backed batch report.
 
 Use supplied `PRD-` identifiers regardless of inventory. Enrichment never
 decides whether an import line becomes a Product and never receives inventory.
+Enrichment never invents a price or date; a historical acquisition of unknown cost is an Expense with `cost: null` and no `date`.
 For a backlog, `entity_read.list product` with `sort=dataQuality` ascending puts the
 weakest identity first (heavier identity checks — manufacturer, external ID —
 outweigh lighter ones), in pages of 25. Narrow to a specific gap with
 `filters.dataGap` on a check id: `product_manufacturer`, `product_external_id`,
 `product_category`, `product_model`, `product_price`, `product_image`,
-`amazon_asin`, `duplicate_external_id`. Start with summary/count reads, then
+`amazon_asin`. Start with summary/count reads, then
 request the relevant page; request full records only for candidates being
 researched.
 
@@ -43,6 +44,15 @@ SKUs in their typed slot. Use lowercase kebab-case source slugs. A source/kind/
 external-ID tuple has one live owner; do not invent, relabel, or choose between
 variants. Ambiguity is a reported skip.
 
+A targeted run's commit trusts only retained browser evidence of the exact
+variant. Besides an Amazon ASIN, the server proves a retailer SKU, item or
+catalog number, or GTIN from any run-vendor page that exposes exactly one
+schema.org Product (never a ProductGroup or several variants) whose matching
+field equals the identifier. Search results, aggregators, and free-text hints
+are leads, not proof; an identifier the page does not show is refused. A proven
+identifier another Product owns is skipped, reported in `skippedIdentifiers`, and
+proposed in the match queue, never reassigned.
+
 Read [source mechanics](references/sources.md) only for the source in hand.
 Read [write and image rules](references/writes-and-images.md) when preparing a
 write, collision, batch, kit, replacement, or verification.
@@ -55,9 +65,15 @@ other side (a photo Product for a purchase-created one, or vice versa) per
 contract; propose it with `product_enrichment.propose_match` rather than enriching two
 records that should converge into one.
 
+Set `kind` (`consumable` or `durable`) only when the published product or the
+order context makes it clear; never guess, and leave it unset when uncertain. It
+only informs project suggestions and is independent of `stockTracked`.
+
 Use `product_enrichment.patch_external_ids` for exact slot changes and preserve unrelated
 IDs; use a full `entity.update product` external-ID set only when deliberately
-replacing it. Check `imports_read.external_id_collisions` before each new ID.
+replacing it. Check `imports_read.external_id_collisions` before each new ID. Only an
+exact-variant part number goes in as `manufacturer_part` (source = manufacturer
+slug); a family/style number stays in `model`.
 A collision needs manual resolution, normally a proven merge, never a silent
 reassignment.
 

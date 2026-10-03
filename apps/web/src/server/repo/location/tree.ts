@@ -44,10 +44,8 @@ import { locationAiDescriptionSql } from "./ai-description";
 import { buildLocationWithChildren } from "./helpers";
 import type { LocationWithParentChild } from "./internal-types";
 import { loadStockItemsByLocation } from "./stock-items";
+import { MAX_TREE_DEPTH } from "./tree-depth";
 import { computeLocationValuations } from "./valuation";
-
-/** Depth cap shared by both recursive walks over the location tree. */
-const MAX_TREE_DEPTH = 10;
 
 const locationTreeRowSchema = z.object({
   id: locationIdSchema,

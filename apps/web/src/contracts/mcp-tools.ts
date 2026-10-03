@@ -532,7 +532,7 @@ export const MCP_TOOLS = defineMcpTools({
       external_id_collisions: mcpAction({
         op: productContract.ops.externalIdCollisions,
         description:
-          "Duplicate live Product external identifiers. Use source for a broad audit, or identifiers for ordered exact (source, kind, externalId) results including missing and unique slots. Pass productId — the product you are about to write these onto — and `unique` splits into `owned_by_this` and `owned_by_other`; without it, `unique` only means the id has ONE live owner, which reads as a clean pass even when that owner is a different product.",
+          "Who owns each exact (source, kind, externalId) Product identifier, in request order, including missing slots. An identifier has at most one live owner. Pass productId — the product you are about to write these onto — and `unique` splits into `owned_by_this` and `owned_by_other`; without it, `unique` only means the id has ONE live owner, which reads as a clean pass even when that owner is a different product.",
       }),
       upc_lookup: mcpAction({
         op: productContract.ops.lookupUpc,
@@ -824,7 +824,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   data_exception: {
     description:
-      "Explicit negative knowledge on one Purchase or Product completeness check; each call returns the recomputed dataQuality.",
+      "Explicit negative knowledge on one completeness check of a Product, Vendor, Purchase, FinancialTransaction, or Expense; each call returns the recomputed dataQuality.",
     actions: {
       set: mcpAction({
         op: dataQualityContract.ops.setException,

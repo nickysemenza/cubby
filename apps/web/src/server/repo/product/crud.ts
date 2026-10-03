@@ -120,7 +120,7 @@ import {
   productExpenseTotalSql,
 } from "~/server/repo/expense-aggregate-sql";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
-import { displayableImageWhere } from "~/server/repo/image-displayability";
+import { productHasDisplayableImageSql } from "~/server/repo/image-displayability";
 import {
   enrichProductRowsWithInventoryValuations,
   loadInventoryValuations,
@@ -132,6 +132,7 @@ import {
   wantsListGroup,
   type ListProjection,
 } from "~/server/repo/list-projection";
+import { locationDescendantsSql } from "~/server/repo/location/descendants-sql";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
 import {
   resolveProductCategory,
@@ -717,7 +718,7 @@ export const buildProductWhere = async (
       and(
         notDeleted(inventoryEntry),
         selectedLocationIds.length > 0
-          ? inArray(inventoryEntry.locationId, selectedLocationIds)
+          ? sql`${inventoryEntry.locationId} IN ${locationDescendantsSql(selectedLocationIds)}`
           : sql`false`,
       ),
     );
@@ -751,23 +752,6 @@ export const buildProductWhere = async (
         filters.taskDueTo
           ? sql`${task.dueDate} <= ${filters.taskDueTo}`
           : undefined,
-      ),
-    );
-
-  // Joins Image so this matches what the thumbnail cell actually renders — it
-  // drops PDF manuals, and Image is separately soft-deletable from ProductImage.
-  const productIdsWithImages = dbClient
-    .select({ productId: entityAttachment.entityId })
-    .from(entityAttachment)
-    .innerJoin(
-      image,
-      and(eq(image.id, entityAttachment.imageId), notDeleted(image)),
-    )
-    .where(
-      and(
-        notDeleted(entityAttachment),
-        sql`${entityAttachment.purpose} IS DISTINCT FROM 'label'`,
-        displayableImageWhere,
       ),
     );
 
@@ -1000,11 +984,12 @@ export const buildProductWhere = async (
   ];
 
   const associationConditions = () => [
-    idSetPresence(
-      product.id,
-      filters.imagePresenceFilter,
-      productIdsWithImages,
-    ),
+    // The shared displayable-image definition: what the thumbnail cell renders.
+    filters.imagePresenceFilter === "has"
+      ? productHasDisplayableImageSql(product.id)
+      : filters.imagePresenceFilter === "none"
+        ? sql`NOT ${productHasDisplayableImageSql(product.id)}`
+        : undefined,
     filters.kitId === undefined
       ? undefined
       : sql`EXISTS (
@@ -2555,7 +2540,7 @@ export const patchProductExternalIds = async (
     }
     const pricing = await loadProductPricing(tx, [before]);
     // Data quality depends on the external IDs this call just changed (the
-    // amazon_asin/duplicate_external_id checks), so it must be recomputed
+    // amazon_asin and product_external_id checks), so it must be recomputed
     // here rather than reused from `before`.
     const qualities = await loadProductDataQualities(tx, [before.id]);
     return dbProductToTopLevelAPI({

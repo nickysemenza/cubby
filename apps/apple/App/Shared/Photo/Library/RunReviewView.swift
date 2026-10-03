@@ -60,6 +60,9 @@ struct RunReviewView: View {
                 if snapshot.purpose == .photoInventory {
                     photoReview
                 }
+                if snapshot.purpose == .purchaseValidation {
+                    PurchaseValidationReviewSection(runID: runID)
+                }
                 findingsSection(snapshot)
                 workTimeline(snapshot)
             } else if let error = model.error {

@@ -1,4 +1,8 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
+import type {
+  ApplyValidationCorrectionsOut,
+  ValidationDiff,
+} from "@cubby/schemas/purchase-import";
 import type { RunOut } from "@cubby/schemas/run";
 import {
   fireEvent,
@@ -34,6 +38,7 @@ import {
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let detailRun: RunDetail;
+let applyResponse: ApplyValidationCorrectionsOut;
 let restoreDispatch: () => void;
 const operationCalls: Array<{ operation: string; input: unknown }> = [];
 
@@ -135,6 +140,8 @@ beforeEach(() => {
       return { ok: true, data: { entries: [], truncated: false } };
     if (operation === "run.control")
       return { ok: true, data: { run: detailRun, successor: null } };
+    if (operation === "purchaseImport.applyValidationCorrections")
+      return { ok: true, data: applyResponse };
     if (operation === "photoImport.review")
       return {
         ok: true,
@@ -306,6 +313,157 @@ describe("import run slots", () => {
     expect(
       screen.queryByRole("button", { name: "Abort agent" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("validation corrections review", () => {
+  const correction = (
+    id: string,
+    field: ValidationDiff["corrections"][number]["field"],
+    before: ValidationDiff["corrections"][number]["before"],
+    after: ValidationDiff["corrections"][number]["after"],
+  ): ValidationDiff["corrections"][number] => ({
+    id,
+    kind: "expense_field",
+    target: { kind: "expense", code: fromPartial("EXP-2A3B") },
+    field,
+    before,
+    after,
+    fingerprint: "a".repeat(64),
+  });
+  const validationDiff: ValidationDiff = {
+    version: 2,
+    expected: {
+      orderId: "fixture-order",
+      currency: "USD",
+      statedTotal: 12,
+      lines: [],
+      writeBlockReason: null,
+    },
+    actual: {
+      orderId: "fixture-order",
+      currency: "USD",
+      statedTotal: 10,
+      lines: [],
+    },
+    corrections: [
+      correction("expense:EXP-2A3B:amount", "amount", 10, 12),
+      correction("expense:EXP-2A3B:title", "title", "Widget", "Widget pro"),
+    ],
+    notes: [
+      {
+        id: "note:expense:EXP-2A3B:productId",
+        target: { kind: "expense", code: fromPartial("EXP-2A3B") },
+        field: "productId",
+        before: "PRD-4K7M",
+        after: "PRD-5K8N",
+        message:
+          "This line has an explicit Product assignment, which validation keeps.",
+      },
+    ],
+    rawEvidenceDrift: false,
+  };
+
+  beforeEach(() => {
+    applyResponse = {
+      status: "applied",
+      runId: run.publicId,
+      purchaseId: fromPartial("PUR-4K7M"),
+      operationId: "ignored",
+      applied: ["expense:EXP-2A3B:amount"],
+      outcome: "semantic_drift",
+      remainingCorrections: 1,
+    };
+    detailRun = {
+      ...run,
+      targets: [
+        {
+          ...run.targets[0]!,
+          targetShortcode: "PUR-4K7M",
+          state: "unresolved",
+          outcome: "semantic_drift",
+          diff: validationDiff,
+        },
+      ],
+    };
+  });
+
+  it("shows a before/after row per correction, an unselectable note, and applies only the checked set", async () => {
+    render(<RunImportTargets record={record} />, {
+      wrapper: harness.wrapper,
+    });
+
+    const amountRow = (await screen.findByText("amount")).closest("tr")!;
+    expect(within(amountRow).getByText("$10.00")).toBeInTheDocument();
+    expect(within(amountRow).getByText("$12.00")).toBeInTheDocument();
+    const boxes = screen.getAllByRole("checkbox");
+    expect(boxes).toHaveLength(2);
+    for (const box of boxes)
+      expect(box).toHaveAttribute("aria-checked", "true");
+    const noteRow = screen
+      .getByText(/explicit Product assignment/)
+      .closest("tr")!;
+    expect(within(noteRow).queryByRole("checkbox")).not.toBeInTheDocument();
+
+    fireEvent.click(
+      within(screen.getByText("title").closest("tr")!).getByRole("checkbox"),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply 1 selected correction" }),
+    );
+    await waitFor(() =>
+      expect(
+        operationCalls.find(
+          (call) =>
+            call.operation === "purchaseImport.applyValidationCorrections",
+        )?.input,
+      ).toMatchObject({
+        runId: "RUN-4K7M",
+        purchaseId: "PUR-4K7M",
+        correctionIds: ["expense:EXP-2A3B:amount"],
+      }),
+    );
+  });
+
+  it("shows the structured stale refusal inline with its raw diagnostic", async () => {
+    applyResponse = {
+      status: "stale",
+      runId: run.publicId,
+      purchaseId: fromPartial("PUR-4K7M"),
+      stale: [
+        {
+          correctionId: "expense:EXP-2A3B:amount",
+          reason: "fingerprint aaaa (reviewed) is now bbbb",
+        },
+      ],
+    };
+    render(<RunImportTargets record={record} />, {
+      wrapper: harness.wrapper,
+    });
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Apply 2 selected corrections",
+      }),
+    );
+    expect(
+      await screen.findByText(/fingerprint aaaa \(reviewed\) is now bbbb/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Nothing was changed/)).toBeInTheDocument();
+  });
+
+  it("keeps a legacy diff readable as raw JSON", async () => {
+    detailRun = {
+      ...run,
+      targets: [{ ...run.targets[0]!, diff: { expected: { lines: [] } } }],
+    };
+    render(<RunImportTargets record={record} />, {
+      wrapper: harness.wrapper,
+    });
+    expect(
+      await screen.findByText("Review semantic difference"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 });
 

@@ -241,6 +241,9 @@ const CARRIED_COLUMNS = [
   // state), so a deliberate `false` on a merged-away kit is a value the
   // survivor's null slot should adopt — not a default to be re-derived.
   "stockTracked",
+  // Undecided (null) is a legitimate state: a loser's kind fills an empty
+  // keeper slot only, and a conflicting value keeps the keeper's.
+  "kind",
 ] as const;
 type CarriedColumn = (typeof CARRIED_COLUMNS)[number];
 
@@ -254,6 +257,7 @@ const CARRIED_FIELD_LABELS = {
   ingredientId: "linked ingredient",
   expectedQuantity: "expected quantity",
   stockTracked: "stock-tracking decision",
+  kind: "consumable or durable kind",
 } satisfies Record<CarriedColumn, string>;
 
 type ProductMergeSource = Pick<
@@ -788,6 +792,7 @@ async function buildProductMergePlan(
         ingredientId: true,
         expectedQuantity: true,
         stockTracked: true,
+        kind: true,
       },
     })
   ).map((row): ProductMergeRow => ({
@@ -2405,6 +2410,7 @@ export async function previewProductMergeDecisions(
     ["Notes", "notes"],
     ["Expected quantity", "expectedQuantity"],
     ["Stock tracking", "stockTracked"],
+    ["Kind", "kind"],
     ["USDA food identity", "fdc_id"],
   ] as const) {
     const carried = plan.carriedFields.includes(column);

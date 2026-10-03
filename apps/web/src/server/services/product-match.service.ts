@@ -47,8 +47,11 @@ import {
 
 import {
   describeSignals,
+  matchReadCoverage,
   type MatchSignals,
+  sharesModel,
   matchSurvivorImageOrder,
+  pairByModel,
   pairByNameTokens,
   rankMatches,
 } from "./product-match-ranking";
@@ -229,6 +232,7 @@ export async function getProductMatchQueue(
       productId: input.productId,
       candidateId: input.candidateId,
     });
+  const startedAt = Date.now();
   const focus = input.productId
     ? await resolveOrThrow(db, "product", input.productId)
     : undefined;
@@ -268,6 +272,9 @@ export async function getProductMatchQueue(
       item.rootCategoryId,
     ]),
   );
+  const byId = new Map(
+    [...pools.photo, ...pools.purchase].map((item) => [item.id, item]),
+  );
   const signals = new Map<string, MatchSignals<ProductId>>();
   const upsert = (
     photoId: ProductId,
@@ -286,6 +293,10 @@ export async function getProductMatchQueue(
       sameCategory:
         photoRoot && purchaseRoot ? photoRoot === purchaseRoot : null,
       sameOwner: null,
+      sameModel:
+        byId.has(photoId) && byId.has(purchaseId)
+          ? sharesModel(byId.get(photoId)!, byId.get(purchaseId)!)
+          : false,
       ...signals.get(key),
       ...patch,
     });
@@ -296,6 +307,11 @@ export async function getProductMatchQueue(
       overlap: pair.overlap,
     });
   for (const { photoId, purchaseId } of semantic.pairs.values())
+    upsert(photoId, purchaseId, {});
+  for (const { photoId, purchaseId } of pairByModel(
+    focus && !photoPool.length ? pools.photo : photoPool,
+    purchasePool,
+  ))
     upsert(photoId, purchaseId, {});
   const detector = [...signals.values()].filter(
     (item) =>
@@ -354,10 +370,27 @@ export async function getProductMatchQueue(
         : [];
     },
   );
-  return {
-    semanticRanking: semantic.used,
-    items: [...agentItems, ...detectorItems].slice(0, QUEUE_LIMIT),
-  };
+  const items = [...agentItems, ...detectorItems].slice(0, QUEUE_LIMIT);
+  if (!focus)
+    log.info("queue read coverage", {
+      ...matchReadCoverage({
+        photoIds: pools.photo.map((item) => item.id),
+        purchaseCount: pools.purchase.length,
+        seeds,
+        semanticUsed: semantic.used,
+        pairs: [
+          ...tokenPairs.map((pair) => ({ ...pair, source: "token" as const })),
+          ...[...semantic.pairs.values()].map((pair) => ({
+            ...pair,
+            source: "semantic" as const,
+          })),
+        ],
+        returned: items.length,
+        queueLimit: QUEUE_LIMIT,
+      }),
+      elapsedMs: Date.now() - startedAt,
+    });
+  return { semanticRanking: semantic.used, items };
 }
 
 async function resolvePair(

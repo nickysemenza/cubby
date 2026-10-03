@@ -68,6 +68,7 @@ export default defineEntity({
           collapseWhenEmpty: true,
         },
         { kind: "slot", id: "project-allocation", title: "Project allocation" },
+        { kind: "slot", id: "receiving", title: "Receive into Inventory" },
         { kind: "slot", id: "runs", title: "Import runs" },
         { kind: "slot", id: "order-mail", title: "Order email" },
         {
@@ -1641,6 +1642,7 @@ export default defineEntity({
         {
           id: "purchase_spending_category_origin",
           facet: "identity",
+          exceptions: "forbidden",
           label: "Review legacy fallback",
           message:
             "This stored Purchase fallback predates classification provenance. Review it before treating it as a deliberate default.",
@@ -1648,6 +1650,7 @@ export default defineEntity({
         {
           id: "purchase_evidence_expectation",
           facet: "paperwork",
+          exceptions: "forbidden",
           label: "Receipt expectation",
           message: "Whether this Purchase needs a receipt is unclassified.",
         },

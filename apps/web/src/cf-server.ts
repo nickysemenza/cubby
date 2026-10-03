@@ -4,6 +4,7 @@ import type {
   AgentProgressEvent,
   AgentUsageEvent,
   auditBatchInput,
+  deferOrderForReviewInput,
   importOrderEvidenceInput,
   issueBrowserCommandInput,
   markHistoryExpiredInput,
@@ -13,6 +14,7 @@ import type {
   purchaseAgentRunRef,
   reconcileSettledRunInput,
   saveNavigationHintsInput,
+  settleChargeHuntInput,
   stopForReviewInput,
 } from "@cubby/schemas/purchase-agent-rpc";
 import { createLogger } from "@cubby/worker-tracing";
@@ -1166,6 +1168,39 @@ export class PurchaseImportService extends WorkerEntrypoint<Env> {
             operationId: input.operationId,
             kind,
             summary: input.detail ?? input.reason.replaceAll("_", " "),
+          }),
+      ),
+    );
+  }
+
+  deferOrderForReview(input: z.infer<typeof deferOrderForReviewInput>) {
+    return this.withDatabase((db, service) =>
+      service.runImportOperation(
+        db,
+        { ...input, kind: "defer_order_for_review", payload: input },
+        () =>
+          service.deferOrderForReview(db, {
+            runId: input.runId,
+            operationId: input.operationId,
+            orderId: input.orderId,
+            summary: input.detail,
+          }),
+      ),
+    );
+  }
+
+  settleChargeHunt(input: z.infer<typeof settleChargeHuntInput>) {
+    return this.withDatabase((db, service) =>
+      service.runImportOperation(
+        db,
+        { ...input, kind: "settle_charge_hunt", payload: input },
+        () =>
+          service.settleChargeHunt(db, {
+            runId: input.runId,
+            operationId: input.operationId,
+            huntId: input.huntId,
+            outcome: input.outcome,
+            summary: input.detail,
           }),
       ),
     );

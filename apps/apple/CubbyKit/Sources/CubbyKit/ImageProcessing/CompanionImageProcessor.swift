@@ -25,7 +25,7 @@ public struct CompanionImageOutput: Sendable, Hashable {
     }
 }
 
-public struct CompanionCutoutArtifact: Sendable, Hashable {
+public struct CompanionImageArtifact: Sendable, Hashable {
     public let sha256: String
     public let contentType: String
     public let width: Int
@@ -73,14 +73,14 @@ public struct CompanionDecodedImage: @unchecked Sendable {
 }
 
 public enum CompanionCutoutResult: Sendable, Hashable {
-    case completed(CompanionCutoutArtifact)
+    case completed(CompanionImageArtifact)
     case noSubject
     case unsupportedFormat
     case alreadyTransparent
 }
 
 /// Downloads immutable original bytes, verifies the server-provided digest, and uploads only the
-/// derived transparent PNG. The original is never rewritten or passed through an encoder.
+/// derived analysis JPEG or transparent PNG. The original is never rewritten.
 public struct CompanionImageProcessor: Sendable {
     public typealias Download = @Sendable (URL) async throws -> Data
     public typealias Put = PresignedUpload.Put
@@ -169,7 +169,7 @@ public struct CompanionImageProcessor: Sendable {
         try await put(png, output.uploadURL, output.contentType)
         let uploadMilliseconds = Self.milliseconds(since: uploadStarted)
         return .completed(
-            CompanionCutoutArtifact(
+            CompanionImageArtifact(
                 sha256: digest, contentType: output.contentType,
                 width: cutout.width, height: cutout.height,
                 diagnostics: .init(
@@ -203,11 +203,36 @@ public struct CompanionImageProcessor: Sendable {
         }
     }
 
+    /// A bounded, orientation-correct JPEG for the cloud model; no native model is involved.
+    public func makeAnalysisJPEG(
+        source: CompanionImageSource, output: CompanionImageOutput
+    ) async throws -> CompanionImageArtifact {
+        guard Self.isSecureOrLocalDevelopment(output.uploadURL) else {
+            throw Failure.insecureTransferURL
+        }
+        guard output.contentType == ImageEncoding.Format.jpeg.contentType else {
+            throw Failure.unsupportedOutputContentType(output.contentType)
+        }
+        let decoded = try await decodedSourceImage(source, maxPixelSize: 2048)
+        try Task.checkCancellation()
+        let processingStarted = ContinuousClock.now
+        let jpeg = try ImageEncoding.encode(decoded.image, as: .jpeg)
+        var diagnostics = decoded.diagnostics
+        diagnostics.processingMilliseconds = Self.milliseconds(since: processingStarted)
+        try Task.checkCancellation()
+        let uploadStarted = ContinuousClock.now
+        try await put(jpeg, output.uploadURL, output.contentType)
+        diagnostics.uploadMilliseconds = Self.milliseconds(since: uploadStarted)
+        return CompanionImageArtifact(
+            sha256: Self.sha256(jpeg), contentType: output.contentType,
+            width: decoded.image.width, height: decoded.image.height, diagnostics: diagnostics)
+    }
+
     public func sourceImage(_ source: CompanionImageSource) async throws -> CGImage {
         try await decodedSourceImage(source).image
     }
 
-    public func decodedSourceImage(_ source: CompanionImageSource) async throws
+    public func decodedSourceImage(_ source: CompanionImageSource, maxPixelSize: Int? = nil) async throws
         -> CompanionDecodedImage
     {
         guard Self.isSecureOrLocalDevelopment(source.url) else {
@@ -224,7 +249,8 @@ public struct CompanionImageProcessor: Sendable {
         let decodeStarted = ContinuousClock.now
         let file = try PhotoFile.materialize(
             data: data, filename: source.url.lastPathComponent, contentType: source.contentType)
-        let image = try file.decodeFullResolution()
+        let image =
+            try maxPixelSize.map { try file.thumbnail(maxPixelSize: $0) } ?? file.decodeFullResolution()
         return CompanionDecodedImage(
             image: image,
             diagnostics: .init(

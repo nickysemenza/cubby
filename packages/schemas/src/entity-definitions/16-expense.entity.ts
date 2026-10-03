@@ -666,14 +666,14 @@ export default defineEntity({
         validation: {
           read: signedProductQuantity
             .describe(
-              'Product units covered by this expense; fractional values are allowed (half a coil thrown away is -0.5). Null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon "Account adjustment", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt.',
+              'Product units covered by this expense; fractional values are allowed (half a coil thrown away is -0.5). Null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon "Account adjustment", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt. A positive quantity with cost null and no date records a historical acquisition whose price and date are unknown; it counts toward expected quantity but is never a price sample and never creates stock.',
             )
             .nullable(),
           create: signedProductQuantity
             .nullable()
             .default(null)
             .describe(
-              'Product units covered by this expense; fractional values are allowed (half a coil thrown away is -0.5). Null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon "Account adjustment", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt.',
+              'Product units covered by this expense; fractional values are allowed (half a coil thrown away is -0.5). Null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon "Account adjustment", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt. A positive quantity with cost null and no date records a historical acquisition whose price and date are unknown; it counts toward expected quantity but is never a price sample and never creates stock.',
             ),
           update: signedProductQuantity.nullable().optional(),
         },
@@ -1191,7 +1191,7 @@ export default defineEntity({
     checks: [
       {
         name: "Expense_date_cost_check",
-        sql: "{date} IS NOT NULL OR ({cost} IS NOT NULL AND {cost} = 0)",
+        sql: "{date} IS NOT NULL OR {cost} IS NULL OR {cost} = 0",
       },
       {
         name: "Expense_live_charge_assignment_check",
@@ -1783,6 +1783,7 @@ export default defineEntity({
         {
           id: "expense_spending_category",
           facet: "identity",
+          exceptions: "forbidden",
           weight: 1,
           label: "Spending category",
           message:

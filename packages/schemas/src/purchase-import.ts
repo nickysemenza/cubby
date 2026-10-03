@@ -574,6 +574,30 @@ export const browserPaymentEvidence = z.object({
   lastFour: z.string().nullish(),
   amountText: z.string().nullish(),
 });
+const structuredIdentifierValues = z
+  .array(z.string().trim().min(1).max(100))
+  .max(10)
+  .default([]);
+/**
+ * One schema.org Product node's identifier fields, read verbatim from the
+ * page's `application/ld+json` block (never from page text). `gtins` merges
+ * `gtin` and `gtin8/12/13/14`.
+ */
+export const browserStructuredProduct = z.object({
+  skus: structuredIdentifierValues,
+  mpns: structuredIdentifierValues,
+  gtins: structuredIdentifierValues,
+  productIds: structuredIdentifierValues,
+});
+export const browserStructuredProducts = z.object({
+  products: z.array(browserStructuredProduct).max(20),
+  /** A ProductGroup (or its variants) was present: no single variant is shown. */
+  variantGroup: z.boolean(),
+});
+export type BrowserStructuredProducts = z.infer<
+  typeof browserStructuredProducts
+>;
+
 export const browserPageCapture = z.object({
   sourceURL: z.url(),
   canonicalUrl: z.url().nullish(),
@@ -597,6 +621,8 @@ export const browserPageCapture = z.object({
   images: z.array(browserCapturedImage).max(200),
   paymentEvidence: z.array(browserPaymentEvidence).max(100),
   evidence: z.array(browserEvidenceReference).max(10),
+  /** Optional: Mac clients older than capture version 2 do not send it. */
+  structuredProducts: browserStructuredProducts.nullish(),
 });
 export const browserBridgeFailureCode = z.enum([
   "cancelled",
@@ -872,6 +898,8 @@ export const preparedProductCandidate = z.object({
   manufacturer: z.string().max(300),
   model: z.string().max(300).nullable(),
   exactIdentifierMatch: z.boolean(),
+  /** Why a non-exact candidate ranks (e.g. a shared model/style number). */
+  matchReason: z.string().max(300).optional(),
 });
 
 export const preparePurchaseImportOut = z.object({
@@ -966,6 +994,130 @@ export const validatePurchaseImportOut = z.object({
   ),
 });
 
+/**
+ * One line of the evidence plan as validation compares it. `productId` is a
+ * Product shortcode, `new`/`unresolved` (a resolution with no Product yet), or
+ * null for a non-principal line.
+ */
+export const validationPlanLine = z.object({
+  title: z.string(),
+  amount: z.number(),
+  lineKind: expenseLineKindSchema,
+  quantity: z.number().nullable(),
+  productId: z.string().nullable(),
+});
+export type ValidationPlanLine = z.infer<typeof validationPlanLine>;
+
+export const validationExpectedPlan = z.object({
+  orderId: z.string().nullable(),
+  currency: z.string().nullable(),
+  statedTotal: z.number().nullable(),
+  lines: z.array(validationPlanLine),
+  writeBlockReason: z.string().nullable(),
+});
+export type ValidationExpectedPlan = z.infer<typeof validationExpectedPlan>;
+
+const sha256Fingerprint = z.string().regex(/^[a-f0-9]{64}$/);
+
+/** A selectable, field-level change from the live Purchase toward the plan. */
+export const validationCorrection = z.object({
+  /** Stable across recomputation while the compared live values are unchanged. */
+  id: z.string().min(1).max(200),
+  kind: z.enum([
+    "purchase_stated_total",
+    "expense_field",
+    "expense_add",
+    "expense_remove",
+  ]),
+  target: z.object({
+    kind: z.enum(["purchase", "expense"]),
+    code: z.union([purchaseShortcode, expenseShortcode]),
+  }),
+  field: z.enum([
+    "statedTotal",
+    "title",
+    "amount",
+    "quantity",
+    "lineKind",
+    "productId",
+    "line",
+  ]),
+  before: z.json(),
+  after: z.json(),
+  /** Hash of the live values this correction was computed from. */
+  fingerprint: sha256Fingerprint,
+});
+export type ValidationCorrection = z.infer<typeof validationCorrection>;
+
+/** A visible, unselectable difference validation will not change on its own. */
+export const validationNote = z.object({
+  id: z.string().min(1).max(200),
+  target: validationCorrection.shape.target,
+  field: z.string().min(1),
+  before: z.json(),
+  after: z.json(),
+  message: z.string().min(1),
+});
+export type ValidationNote = z.infer<typeof validationNote>;
+
+/** The versioned `RunTarget.diff` a purchase-validation target stores. */
+export const validationDiff = z.object({
+  version: z.literal(2),
+  expected: validationExpectedPlan,
+  actual: z.object({
+    orderId: z.string().nullable(),
+    currency: z.string(),
+    statedTotal: z.number().nullable(),
+    lines: z.array(validationPlanLine),
+  }),
+  corrections: z.array(validationCorrection),
+  notes: z.array(validationNote),
+  /** Evidence bytes changed since the target was frozen; kept for the outcome after a correction. */
+  rawEvidenceDrift: z.boolean(),
+});
+export type ValidationDiff = z.infer<typeof validationDiff>;
+
+/**
+ * A person applies a reviewed subset of a validation diff. Never an agent
+ * tool: it is absent from the MCP catalog and the Flue capability matrix.
+ */
+export const applyValidationCorrectionsInput = z.object({
+  runId: runShortcode,
+  purchaseId: purchaseShortcode,
+  operationId: importOperationId,
+  correctionIds: z.array(z.string().min(1).max(200)).min(1).max(500),
+});
+export type ApplyValidationCorrectionsInput = z.infer<
+  typeof applyValidationCorrectionsInput
+>;
+
+export const applyValidationCorrectionsOut = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("applied"),
+    runId: runShortcode,
+    purchaseId: purchaseShortcode,
+    operationId: importOperationId,
+    applied: z.array(z.string()),
+    outcome: z.enum(["replayed", "raw_evidence_drift", "semantic_drift"]),
+    remainingCorrections: z.number().int().nonnegative(),
+  }),
+  /** Nothing was written: raw diagnostics name each selection that no longer holds. */
+  z.object({
+    status: z.literal("stale"),
+    runId: runShortcode,
+    purchaseId: purchaseShortcode,
+    stale: z.array(
+      z.object({
+        correctionId: z.string().nullable(),
+        reason: z.string().min(1),
+      }),
+    ),
+  }),
+]);
+export type ApplyValidationCorrectionsOut = z.infer<
+  typeof applyValidationCorrectionsOut
+>;
+
 /** Bounded Product enrichment write. Price is deliberately absent. */
 export const commitProductEnrichmentInput = z.object({
   _runExecution: purchaseImportRunExecution,
@@ -1014,6 +1166,20 @@ export const commitProductEnrichmentOut = z.object({
   changedFields: z.array(
     z.enum(["manufacturer", "categoryId", "model", "identifiers", "image"]),
   ),
+  /**
+   * Proven identifiers another Product already owns. They are never
+   * reassigned; the pair is proposed in the Product match queue instead.
+   */
+  skippedIdentifiers: z
+    .array(
+      z.object({
+        source: externalIdSource,
+        kind: externalIdKind,
+        externalId: z.string(),
+        ownerProductId: productShortcode,
+      }),
+    )
+    .default([]),
 });
 
 export const overwriteProductEnrichmentInput = z.object({

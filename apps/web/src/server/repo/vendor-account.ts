@@ -18,7 +18,7 @@ import { and, eq, inArray, max, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import { ledgerParty, run, vendorAccount } from "~/server/db/schema";
+import { ledgerParty, run, vendor, vendorAccount } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   notDeleted,
@@ -284,9 +284,42 @@ export async function createVendorAccount(
       entityId: row.id,
       action: "create",
     });
+    if (data.status === "active")
+      await classifyOnlineAccountVendor(tx, actor, refs.vendorId);
     return parseEntityId("vendorAccount", row.id);
   });
   return { output: await reader.getByID(db, id), entityId: id };
+}
+
+/**
+ * A browser-synced (default-on) account for a vendor with browser domains is
+ * the one deterministic signal of an online order trail. It fills only an
+ * unset `orderEvidence`; an explicit choice is never overwritten, and mail-only
+ * accounts (created disabled by mail processing) never reach this path.
+ */
+async function classifyOnlineAccountVendor(
+  tx: DrizzleTransaction,
+  actor: ActorContext,
+  vendorId: typeof vendor.$inferSelect.id,
+) {
+  const [row] = await tx
+    .select({
+      orderEvidence: vendor.orderEvidence,
+      browserDomains: vendor.browserDomains,
+    })
+    .from(vendor)
+    .where(and(eq(vendor.id, vendorId), notDeleted(vendor)))
+    .limit(1)
+    .for("update");
+  if (!row || row.orderEvidence !== null || row.browserDomains.length === 0)
+    return;
+  await patchEntityRows(
+    tx,
+    actor,
+    { entity: "vendor", table: vendor, fields: entityFieldModels.vendor.audit },
+    [vendorId],
+    { orderEvidence: "online_account" },
+  );
 }
 
 async function updateVendorAccount(

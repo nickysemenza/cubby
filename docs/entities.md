@@ -797,7 +797,8 @@ Durable "not available" exceptions (`data_exception.set`/
 `data_exception.clear`) live in the `DataException` table, keyed by an
 `Entity(id, kind)` FK, for every entity whose declaration sets `exceptions`.
 Enabling it requires fingerprint inputs for every check and an allowed-reason
-list per check (`EXCEPTION_REASONS` in `repo/data-quality/exceptions.ts`). An
+list per check (`EXCEPTION_REASONS` in `repo/data-quality/exception-reasons.ts`, exposed on each
+explained check as `exceptionReasons`). An
 exception goes with its entity when the entity is removed or merged away.
 
 ## Relations, deletion, and merge

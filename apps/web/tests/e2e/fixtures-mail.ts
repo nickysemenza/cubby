@@ -243,41 +243,61 @@ export async function seedPagedVendorMailSearchRun(page: Page, name: string) {
 }
 
 /** Saved itemized confirmation without a Purchase or browser account. */
-export async function seedUnimportedOrderMail(page: Page, name: string) {
+/**
+ * Saved placement confirmations for one member and Vendor that no Purchase
+ * covers yet; `count` > 1 seeds several so they can be imported together.
+ */
+export async function seedUnimportedOrderMail(
+  page: Page,
+  name: string,
+  count = 1,
+) {
   const db = getFixtureDb();
   const member = await ensureMemberParty(page, name);
   const vendor = await insertWithShortcode(db, "vendor", { name });
-  const checksum = "a".repeat(64);
-  const [mail] = await getDb(db)
-    .insert(schema.orderMail)
-    .values({
-      ledgerPartyId: member.id,
-      vendorId: vendor.id,
-      messageId: `synthetic-confirmation-${crypto.randomUUID()}`,
-      sender: "orders@example.test",
-      subject: "Synthetic itemized confirmation",
-      receivedAt: new Date("2026-09-10T15:00:00Z"),
-      rawChecksum: checksum,
-      content: {
-        snippet: null,
-        bodyHtml: null,
-        bodyText:
-          "Order SYN-CONFIRM-1. Herb packet, SKU HERB-1, qty 1, $5.00. Grand total $5.00 USD.",
-      },
-    })
-    .returning();
-  if (!mail) throw new Error("Synthetic confirmation was not saved");
-  const [event] = await getDb(db)
-    .insert(schema.orderMailEvent)
-    .values({
-      orderMailId: mail.id,
-      event: "placed",
-      orderId: "SYN-CONFIRM-1",
-      amount: 5,
-      currency: "USD",
-      sourceKey: `synthetic:${mail.id}`,
-    })
-    .returning();
-  if (!event) throw new Error("Synthetic event was not saved");
-  return { vendor, eventId: event.id, checksum };
+  const events: Array<{ eventId: string; checksum: string; orderId: string }> =
+    [];
+  for (let index = 1; index <= count; index += 1) {
+    const checksum = (index === 1 ? "a" : String(index)).repeat(64);
+    const orderId = `SYN-CONFIRM-${index}`;
+    const [mail] = await getDb(db)
+      .insert(schema.orderMail)
+      .values({
+        ledgerPartyId: member.id,
+        vendorId: vendor.id,
+        messageId: `synthetic-confirmation-${crypto.randomUUID()}`,
+        sender: "orders@example.test",
+        subject:
+          index === 1
+            ? "Synthetic itemized confirmation"
+            : `Synthetic itemized confirmation ${index}`,
+        receivedAt: new Date(
+          `2026-09-${String(9 + index).padStart(2, "0")}T15:00:00Z`,
+        ),
+        rawChecksum: checksum,
+        content: {
+          snippet: null,
+          bodyHtml: null,
+          bodyText: `Order ${orderId}. Herb packet, SKU HERB-1, qty 1, $5.00. Grand total $5.00 USD.`,
+        },
+      })
+      .returning();
+    if (!mail) throw new Error("Synthetic confirmation was not saved");
+    const [event] = await getDb(db)
+      .insert(schema.orderMailEvent)
+      .values({
+        orderMailId: mail.id,
+        event: "placed",
+        orderId,
+        amount: 5,
+        currency: "USD",
+        sourceKey: `synthetic:${mail.id}`,
+      })
+      .returning();
+    if (!event) throw new Error("Synthetic event was not saved");
+    events.push({ eventId: event.id, checksum, orderId });
+  }
+  const [first] = events;
+  if (!first) throw new Error("Synthetic confirmation was not seeded");
+  return { vendor, eventId: first.eventId, checksum: first.checksum, events };
 }

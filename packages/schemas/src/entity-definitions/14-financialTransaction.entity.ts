@@ -1550,6 +1550,7 @@ export default defineEntity({
         {
           id: "financial_transaction_classification",
           facet: "identity",
+          exceptions: "forbidden",
           weight: 1,
           label: "Transaction classification",
           message:
@@ -1572,6 +1573,7 @@ export default defineEntity({
         {
           id: "financial_transaction_evidence_expectation",
           facet: "paperwork",
+          exceptions: "forbidden",
           weight: 1,
           label: "Receipt expectation",
           message: "Whether this transaction needs a receipt is unclassified.",

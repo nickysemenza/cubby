@@ -125,7 +125,8 @@ enum NativePresentationCoverage {
         }
         return switch id {
         case .ledgerPartyWardrobe, .mealNutrition, .runImportControls, .runPhotoBatch,
-            .purchaseOrderMail, .vendorOrderMail, .vendorAccountOrderMail, .vendorSpendingClassification,
+            .purchaseOrderMail, .purchaseReceiving, .vendorOrderMail, .vendorAccountOrderMail,
+            .vendorSpendingClassification,
             .productCategorySpendingClassification, .productOwnership, .productNutrition,
             .productUnitMappings, .productFitsWith, .productRuns:
             .implemented
@@ -146,6 +147,7 @@ enum NativePresentationCoverage {
             .projectSchedule,
             .purchaseProjectAllocation,
             .purchaseRuns,
+            .purchaseReceiving,
             .purchaseReconciliation,
             .purchaseFinancialSettlement,
             .expenseSettlement,
@@ -165,7 +167,8 @@ enum NativePresentationCoverage {
             .runImportPurchases,
             .runImportStats,
             .runImportTargets,
-            .runImportTimeline:
+            .runImportTimeline,
+            .vendorAccountChargeSearch:
             .unsupported("This detail is available on web.")
         }
     }

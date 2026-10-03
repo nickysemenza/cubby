@@ -5,6 +5,9 @@
  * This pure module also excludes the current project before taking the limit.
  */
 
+import type { ProductKind } from "@cubby/schemas/product-fields";
+import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project";
+
 /**
  * Minimal shape of a project option — matches `projectOptionsOut`.
  *
@@ -61,14 +64,41 @@ const MAX_PROJECT_SUGGESTIONS = 3;
  * household's local day, not UTC.
  */
 export function rankProjectSuggestions(
-  expense: { date: string | null; trade: string; projectId?: string | null },
+  expense: {
+    date: string | null;
+    trade: string;
+    projectId?: string | null;
+    /** The linked Product's kind; unset (null) adds no evidence. */
+    productKind?: ProductKind | null;
+  },
   projects: readonly SuggestableProject[],
   affinity: readonly TradeAffinityCell[],
   today: string,
   limit: number = MAX_PROJECT_SUGGESTIONS,
 ): ProjectSuggestion[] {
+  // A consumable's routine supply default is Household — a suggestion only,
+  // for a person or agent to accept. It applies only while the expense has no
+  // effective project (`projectId` already folds explicit and inherited
+  // choices), never rewrites history, and is independent of the date window
+  // because Household is undated. `durable` leaves the order and project
+  // evidence below to decide.
+  const household =
+    expense.productKind === "consumable" && !expense.projectId
+      ? projects.find((project) => project.id === HOUSEHOLD_PROJECT_SHORTCODE)
+      : undefined;
+  const householdSuggestion: ProjectSuggestion[] = household
+    ? [
+        {
+          id: household.id,
+          name: household.name,
+          affinity: 0,
+          exactProductCount: 0,
+        },
+      ]
+    : [];
+
   // No date means no window to intersect — offer nothing rather than guess.
-  if (!expense.date) return [];
+  if (!expense.date) return householdSuggestion.slice(0, limit);
 
   const sameTradeCounts = new Map<string, number>();
   const exactProductCounts = new Map<string, number>();
@@ -79,11 +109,15 @@ export function rankProjectSuggestions(
     }
   }
 
-  return projects
+  const ranked = projects
     .filter((project) => {
       // A project with no effective start has no window to fall inside — no
       // override, no dated tasks or expenses, no dated sub-projects either.
-      if (project.id === expense.projectId || !project.effectiveStart)
+      if (
+        project.id === expense.projectId ||
+        project.id === household?.id ||
+        !project.effectiveStart
+      )
         return false;
       const end = project.effectiveEnd ?? today;
       return expense.date! >= project.effectiveStart && expense.date! <= end;
@@ -110,11 +144,11 @@ export function rankProjectSuggestions(
       }
       return a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
     })
-    .slice(0, limit)
     .map(({ id, name, affinity: score, exactProductCount }) => ({
       id,
       name,
       affinity: score,
       exactProductCount,
     }));
+  return [...householdSuggestion, ...ranked].slice(0, limit);
 }

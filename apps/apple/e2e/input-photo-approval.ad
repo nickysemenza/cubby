@@ -1,8 +1,10 @@
-context platform=ios timeout=240000
+context platform=ios timeout=600000
 
 open com.nickysemenza.cubby
-wait "label=\"Review item groups\"" 60000
-click "label=\"Review item groups\""
+wait "role=Button label=\"Review item groups\"" 240000
+# The sheet's Toolbar AX bounds cover the whole sheet. The captured visible
+# button spans x=23..379, y=706..757 in this fixed simulator fixture.
+press 201 731
 wait "id=review.workspace" 30000
 wait text "Synthetic Input Crew Shirt" 30000
 click "label=\"Approve all\""

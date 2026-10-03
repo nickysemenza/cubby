@@ -41,6 +41,9 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/app/calendar/**",
     "apps/web/src/routes/_authenticated/calendar.tsx",
   ],
+  "companion-analysis.spec.ts": [
+    "apps/web/src/routes/api/v1/$resource/$operation.ts",
+  ],
   "connected-records.spec.ts": [
     "apps/web/src/routes/_authenticated/plantings.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/plants.$shortcode.tsx",
@@ -291,6 +294,10 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/tasks.index.tsx",
     "apps/web/src/routes/api/browser/dispatch.ts",
     "apps/web/src/routes/api/v1/$resource/$operation.ts",
+  ],
+  "receive-after-photo-inventory.spec.ts": [
+    "apps/web/src/routes/_authenticated/expenses.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/purchases.$shortcode.tsx",
   ],
   "recipe-flow.spec.ts": [
     "apps/web/src/routes/_authenticated/recipes.$shortcode.tsx",

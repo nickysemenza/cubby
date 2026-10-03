@@ -15,10 +15,21 @@ import {
 import type {
   ImageProcessingJobKind,
   ImageProcessingJobState,
-  ImageProcessingResult,
+  ImageProcessingTerminalResult as ImageProcessingResult,
 } from "@cubby/schemas/image-processing";
 import type { ImageRepresentations } from "@cubby/schemas/image-summary";
-import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -423,6 +434,8 @@ export async function claimImageProcessingJob(
     jobId?: string;
     /** Device pulls can execute only declared processor revisions, never cloud jobs. */
     processorRevisions?: readonly number[];
+    /** A normalization-capable device may prepare cloud AVIF input, never other cloud jobs. */
+    allowAvifNormalization?: boolean;
   },
 ): Promise<ClaimedImageProcessingJob | null> {
   // Use the database clock for both eligibility and leases; worker clocks can drift.
@@ -472,9 +485,21 @@ export async function claimImageProcessingJob(
           inArray(imageProcessingJob.kind, [...input.kinds]),
           currentImageProcessingProcessor(),
           input.processorRevisions
-            ? inArray(imageProcessingJob.processorRevision, [
-                ...input.processorRevisions,
-              ])
+            ? or(
+                inArray(imageProcessingJob.processorRevision, [
+                  ...input.processorRevisions,
+                ]),
+                input.allowAvifNormalization
+                  ? and(
+                      eq(imageProcessingJob.kind, "describe_image"),
+                      eq(
+                        imageProcessingJob.processorRevision,
+                        IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+                      ),
+                      eq(image.contentType, "image/avif"),
+                    )
+                  : undefined,
+              )
             : undefined,
           or(
             eq(imageProcessingJob.state, "pending"),
@@ -609,29 +634,42 @@ export async function getLeasedImageProcessingOutputKey(
 export async function getLeasedImageProcessingJobContext(
   db: Database,
   input: { jobId: string; attemptId: string },
-): Promise<{
-  imageId: ImageId;
-  sourceShortcode: string;
-  sourceContentHash: string;
-  contentType: string;
-} | null> {
+) {
   const rows = await getDb(db)
     .select({
       imageId: imageProcessingJob.imageId,
       sourceShortcode: image.shortcode,
       sourceContentHash: imageProcessingJob.sourceContentHash,
       contentType: image.contentType,
+      kind: imageProcessingJob.kind,
+      processorRevision: imageProcessingJob.processorRevision,
+      runId: imageProcessingJob.runId,
+      attempts: imageProcessingJob.attempts,
+      inputKey: imageProcessingAttempt.inputKey,
     })
     .from(imageProcessingJob)
     .innerJoin(
+      imageProcessingAttempt,
+      and(
+        eq(imageProcessingAttempt.jobId, imageProcessingJob.id),
+        eq(imageProcessingAttempt.id, imageProcessingJob.attemptId),
+      ),
+    )
+    .innerJoin(
       image,
-      and(eq(image.id, imageProcessingJob.imageId), notDeleted(image)),
+      and(
+        eq(image.id, imageProcessingJob.imageId),
+        notDeleted(image),
+        eq(image.status, "UPLOADED"),
+        eq(image.sha256, imageProcessingJob.sourceContentHash),
+      ),
     )
     .where(
       and(
         eq(imageProcessingJob.id, input.jobId),
         eq(imageProcessingJob.attemptId, input.attemptId),
         eq(imageProcessingJob.state, "leased"),
+        gt(imageProcessingJob.leaseExpiresAt, sql`now()`),
       ),
     )
     .limit(1);

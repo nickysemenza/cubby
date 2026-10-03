@@ -11,6 +11,11 @@ on:
         description: Run the disposable-database iPhone simulator E2E lane
         type: boolean
         default: false
+      simulator_journey:
+        description: Journey for the manual iPhone simulator lane
+        type: choice
+        options: [search, inputs]
+        default: search
       tester_army:
         description: Run the experimental synthetic Tester Army journeys
         type: choice
@@ -18,7 +23,7 @@ on:
         default: none
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ inputs.simulator_e2e }}-${{ inputs.tester_army }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ inputs.simulator_e2e }}-${{ inputs.simulator_journey }}-${{ inputs.tester_army }}
   cancel-in-progress: true
 
 permissions:
@@ -547,7 +552,15 @@ jobs:
         env:
           CUBBY_SIM_DB_EXTERNAL: "1"
           CI: "1"
-        run: pnpm test:e2e:sim
+          SIMULATOR_JOURNEY: ${{ inputs.simulator_journey }}
+        run: |
+          # Keep generated WASM metadata identical to this checkout, as in Build Workers.
+          git restore -- packages/wasm/package.json
+          if [[ "$SIMULATOR_JOURNEY" == "inputs" ]]; then
+            pnpm test:e2e:sim -- --input-journey
+          else
+            pnpm test:e2e:sim
+          fi
       - name: Save Apple test runner cache
         if: always()
         uses: ./.github/actions/save-apple-test-runner-cache
@@ -564,6 +577,29 @@ jobs:
           key: ${{ steps.derived-data.outputs.cache-key }}
           cache-hit: ${{ steps.derived-data.outputs.cache-hit }}
           matched-key: ${{ steps.derived-data.outputs.save-matched-key }}
+      - name: Collect verified simulator E2E evidence
+        if: always()
+        shell: python
+        run: |
+          import hashlib
+          import pathlib
+          import shutil
+
+          for checksums in pathlib.Path("artifacts").glob("sim*-e2e/*/SHA256SUMS"):
+              source = checksums.parent
+              target = pathlib.Path("artifacts/sealed-simulator-e2e") / source.name
+              target.mkdir(parents=True, exist_ok=True)
+              for line in checksums.read_text().splitlines():
+                  digest, name = line.split("  ", 1)
+                  file = source / name
+                  if not file.resolve().is_relative_to(source.resolve()):
+                      raise ValueError("Sealed evidence escapes its run directory")
+                  if hashlib.sha256(file.read_bytes()).hexdigest() != digest:
+                      raise ValueError(f"Sealed evidence checksum mismatch: {name}")
+                  destination = target / name
+                  destination.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copyfile(file, destination)
+              shutil.copyfile(checksums, target / checksums.name)
       - name: Save simulator E2E run bundle
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -571,13 +607,7 @@ jobs:
           name: simulator-e2e-run
           if-no-files-found: error
           retention-days: 7
-          path: |
-            artifacts/sim-e2e/**/run-manifest.json
-            artifacts/sim-e2e/**/run-results.json
-            artifacts/sim-e2e/**/native-driver-diagnostics.json
-            artifacts/sim-e2e/**/native-text-entry-diagnostics.json
-            artifacts/sim-e2e/**/native-replay-driver-diagnostics.json
-            artifacts/sim-e2e/**/SHA256SUMS
+          path: artifacts/sealed-simulator-e2e
 
   tester-army-inputs:
     name: Tester Army dispatch inputs
