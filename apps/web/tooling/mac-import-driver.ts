@@ -9,6 +9,7 @@ import { z } from "zod";
 
 const nodeSchema = z.object({
   index: z.number(),
+  parentIndex: z.number().nullish(),
   type: z.string().nullish(),
   role: z.string().nullish(),
   subrole: z.string().nullish(),
@@ -383,6 +384,20 @@ export class MacImportDriver {
     );
   }
 
+  private buttonContainer(node: Node): string | undefined {
+    let current: Node | undefined = node;
+    for (let depth = 0; current && depth < 32; depth++) {
+      if (["window", "popover"].includes(role(current)) && current.identifier)
+        return current.identifier;
+      const parentIndex: Node["parentIndex"] = current.parentIndex;
+      current =
+        parentIndex == null
+          ? undefined
+          : this.nodes.find((entry) => entry.index === parentIndex);
+    }
+    return undefined;
+  }
+
   private press(selector: string, containerID?: string): string {
     const surface = /role=Menu/.test(selector) ? "menubar" : "frontmost-app";
     if (!selector.startsWith("@")) {
@@ -463,8 +478,9 @@ export class MacImportDriver {
       0,
       JSON.stringify({ x, y, text: hit.text, ownedPID: this.pid }),
     );
-    if (containerID && role(node) === "button" && node.identifier) {
-      this.presentationAction("press", containerID, node.identifier);
+    const buttonScope = containerID ?? this.buttonContainer(node);
+    if (buttonScope && role(node) === "button" && node.identifier) {
+      this.presentationAction("press", buttonScope, node.identifier);
     } else {
       this.invoke(
         [
