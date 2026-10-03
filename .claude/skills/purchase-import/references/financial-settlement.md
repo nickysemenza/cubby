@@ -25,7 +25,10 @@ member need not supply transaction or account candidates.
    mutations retain exact typed approval and stable run-operation identities.
 4. Report each order's settlement outcome: already matched, awaiting approval,
    ambiguous, or source evidence absent. Keep conflicting dispositions and
-   ambiguous allocations reviewable. An absent charge is a coverage gap unless
+   ambiguous allocations reviewable. In the web settlement review, the member
+   can ask for a ranked suggestion among candidates tied at the top
+   deterministic rank; it never settles, and agents keep the deterministic
+   candidates. An absent charge is a coverage gap unless
    the source window proves otherwise; an email total alone cannot create one.
 
 ## Authority and signs

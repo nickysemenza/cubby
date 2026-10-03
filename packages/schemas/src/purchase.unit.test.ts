@@ -7,6 +7,7 @@ import {
   reconcilePurchase,
   splitExpenseDelta,
   splitExpenseInput,
+  tiedTopSettlementCandidates,
 } from "./purchase";
 
 describe("purchase filter terminology", () => {
@@ -287,5 +288,46 @@ describe("splitExpenseDelta", () => {
       -0.01,
       10,
     );
+  });
+});
+
+describe("tiedTopSettlementCandidates", () => {
+  const row = (id: string, exactAmount: boolean, merchantMatches: boolean) => ({
+    id,
+    exactAmount,
+    merchantMatches,
+  });
+
+  it("returns only the candidates sharing the top tier", () => {
+    const tied = tiedTopSettlementCandidates([
+      row("a", true, true),
+      row("b", true, true),
+      row("c", true, false),
+      row("d", false, true),
+    ]);
+    expect(tied.map((c) => c.id)).toEqual(["a", "b"]);
+  });
+
+  it("is empty when the top tier holds a single candidate", () => {
+    expect(
+      tiedTopSettlementCandidates([
+        row("a", true, true),
+        row("b", true, false),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("is empty for no candidates or one", () => {
+    expect(tiedTopSettlementCandidates([])).toEqual([]);
+    expect(tiedTopSettlementCandidates([row("a", false, true)])).toEqual([]);
+  });
+
+  it("ties a lower tier when it is the best present, regardless of order", () => {
+    const tied = tiedTopSettlementCandidates([
+      row("a", false, false),
+      row("b", false, true),
+      row("c", false, true),
+    ]);
+    expect(tied.map((c) => c.id)).toEqual(["b", "c"]);
   });
 });
