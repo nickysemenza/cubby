@@ -7,7 +7,8 @@ import {
 import { defineContract, mutation } from "~/contracts/define";
 
 /**
- * Explicit negative knowledge on a Purchase or Product completeness check
+ * Explicit negative knowledge on a completeness check of any exceptions-enabled
+ * entity (product, vendor, purchase, financialTransaction, expense)
  * (MCP `data_exception`); each write returns the recomputed dataQuality.
  */
 export const dataQualityContract = defineContract("dataQuality", {
@@ -15,12 +16,24 @@ export const dataQualityContract = defineContract("dataQuality", {
     http: false,
     input: setDataExceptionInput,
     output: dataQuality,
-    invalidates: ["purchase", "product"],
+    invalidates: [
+      "product",
+      "vendor",
+      "purchase",
+      "financialTransaction",
+      "expense",
+    ],
   }),
   clearException: mutation({
     http: false,
     input: clearDataExceptionInput,
     output: dataQuality,
-    invalidates: ["purchase", "product"],
+    invalidates: [
+      "product",
+      "vendor",
+      "purchase",
+      "financialTransaction",
+      "expense",
+    ],
   }),
 });

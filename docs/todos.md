@@ -162,14 +162,6 @@ See also the image operational passes at the end of this file.
   Preserve same-day order ids and never rewind the incremental cursor
   (`purchase-import/run-service.ts`, `VendorAccount.cursor`).
 
-- 🟢 **Vendor evidence classification and policy.** Automatically classify
-  `orderEvidence` only from clear deterministic evidence; review uncertain
-  inference and preserve explicit choices. Resolved `evidenceExpectation`
-  governs whether evidence is wanted; source classification guides where to
-  look, never silently suppressing required discovery. Surface contradictory
-  choices in one review path, without another policy or confidence setting
-  (`repo/purchase-evidence-policy.ts`, `purchase-import/hunts.ts`).
-
 - 🟢 **Finish the input-first retailer and statement journey.** Join saved
   synthetic order-history and Product HTML through browser capture,
   prepare/commit, and purchase approval. Cover both statement/order sequences,
@@ -260,12 +252,6 @@ See also the image operational passes at the end of this file.
   2. 🧱 A durable ingredient-level unit mapping store, which the harvested
      equivalences report (`lib/harvest-equivalences.ts`) then writes accepted
      suggestions into.
-
-- 🟢 **One external-id product lookup.** `repo/product/find-by-external-ids.ts`
-  batches `(source, externalId)` lookups for `entity_read.resolve`; purchase
-  import (`purchase-import/writer.ts` `productsByExternalIdentity`,
-  `import-orders.ts`) and `repo/product-match.ts` still query per line. Move
-  them onto the batched helper, keeping the writer's in-run cache.
 
 - 🧱 **Inferred-zero nutrients for label data.** Decided: yes. Label-sourced
   records (USDA `branded_food`, `labelNutrition`) print only FDA-mandatory
@@ -363,11 +349,13 @@ See also the image operational passes at the end of this file.
   in inventory/Product filtering through the generic filter path. Reuse a
   scoped descendant-id helper rather than loading the whole-tree CTE.
 
-- 🟢 **Product external-ID collision review.** Make collisions encountered
-  during imports/enrichment actionable through existing
-  `product.externalIdCollisions` and collision review paths. Keep exact
-  variants and explicit merges; never silently reassign an identifier. Add no
-  separate persistent queue unless real unresolved volume demonstrates a need.
+- 🟢 **Product external-ID collision review.** Purchase import now keeps the
+  reviewed Product and proposes the colliding pair in the Product match queue.
+  Finish the enrichment path the same way: a proven identifier owned by another
+  Product is skipped and proposed, never reassigned or fatal to the commit. The
+  live unique index makes `duplicate_external_id` and the `collision` result of
+  `product.externalIdCollisions` unreachable; retire them rather than keep a
+  second path. Add no separate persistent queue.
 
 ---
 
@@ -532,13 +520,12 @@ See also the image operational passes at the end of this file.
   Flue supports modern version negotiation; its current MCP client defaults
   to legacy requests without exposing a negotiation option.
 
-- 🤔 **Remove duplicate record checks and expose useful exceptions.** Coverage
-  Problems already consume declared checks. Identify demonstrated duplicate
-  per-record predicates and move each onto its existing declaration/binding;
-  keep operational Problems and aggregate rules, including subtree budgets,
-  explicit. Durable evidence-bound exceptions already work through entity
-  declarations; identify only missing surfaces needed by real workflows, not
-  a second exception system, global weight tuning, or a universal ignore
+- 🟢 **Record evidence-bound exceptions from web and native.** Duplicate
+  per-record predicates now use their declared bindings, and every exemptible
+  check has reasons. Recording or clearing an exception still needs MCP: add
+  one generic accept/clear action with the check's reason list to the field
+  explanation on web and native, reusing `dataQuality.setException`. Keep
+  operational Problems and aggregate rules explicit; no universal ignore
   control. Contract: [data quality](entities.md#data-quality).
 
 - 🟢 **Declare non-entity child tables in the manifest (`children:`)** so
