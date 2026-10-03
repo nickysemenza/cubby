@@ -31,6 +31,8 @@ struct SettingsView: View {
         @AppStorage("purchaseImport.browser") private var purchaseImportBrowser = BrowserChoice.chrome
         @AppStorage("purchaseImport.enhancedEvidence") private var enhancedEvidence = false
         @State private var browserPermissions = MacBrowserPermissionSnapshot.current(browser: .chrome)
+        @State private var backfillFrom = BrowserBridgeBackfillRange.defaultDates().from
+        @State private var backfillTo = BrowserBridgeBackfillRange.defaultDates().to
     #endif
 
     var body: some View {
@@ -203,6 +205,37 @@ struct SettingsView: View {
     }
 
     #if os(macOS)
+        private var backfillRange: BrowserBridgeBackfillRange? {
+            BrowserBridgeBackfillRange(from: backfillFrom, to: backfillTo)
+        }
+
+        /// Rare, interactive work: collapsed by default and defaulted to the last year so the
+        /// common case is one click.
+        private var backfillControl: some View {
+            DisclosureGroup("Import order history…") {
+                DatePicker("From", selection: $backfillFrom, in: ...backfillTo, displayedComponents: .date)
+                    .accessibilityIdentifier("settings.purchaseImport.backfillFrom")
+                DatePicker("To", selection: $backfillTo, in: ...Date.now, displayedComponents: .date)
+                    .accessibilityIdentifier("settings.purchaseImport.backfillTo")
+                if backfillRange == nil {
+                    Text("The start date must be on or before the end date.")
+                        .foregroundStyle(FieldGuideTokens.destructive)
+                }
+                Button("Import this range", systemImage: "clock.arrow.circlepath") {
+                    guard let range = backfillRange else { return }
+                    model.browserBridge.syncNow(
+                        browser: purchaseImportBrowser, enhancedEvidence: enhancedEvidence,
+                        backfill: range)
+                }
+                .disabled(
+                    backfillRange == nil || !model.browserBridge.isConfigured
+                        || model.browserBridge.isSyncing
+                )
+                .accessibilityIdentifier("settings.purchaseImport.backfillStart")
+            }
+            .accessibilityIdentifier("settings.purchaseImport.backfill")
+        }
+
         private var purchaseImportSection: some View {
             Section {
                 Picker("Browser", selection: $purchaseImportBrowser) {
@@ -236,6 +269,7 @@ struct SettingsView: View {
                 }
                 .disabled(!model.browserBridge.isConfigured || model.browserBridge.isSyncing)
                 .accessibilityIdentifier("settings.purchaseImport.syncNow")
+                backfillControl
                 if model.browserBridge.status != .connected {
                     Button("Reconnect", systemImage: "arrow.trianglehead.clockwise") {
                         model.browserBridge.reconnect(

@@ -18,7 +18,7 @@ weakest identity first (heavier identity checks â€” manufacturer, external ID â€
 outweigh lighter ones), in pages of 25. Narrow to a specific gap with
 `filters.dataGap` on a check id: `product_manufacturer`, `product_external_id`,
 `product_category`, `product_model`, `product_price`, `product_image`,
-`amazon_asin`, `duplicate_external_id`. Start with summary/count reads, then
+`amazon_asin`. Start with summary/count reads, then
 request the relevant page; request full records only for candidates being
 researched.
 
@@ -42,6 +42,15 @@ maker MPN in `model`, Amazon ASIN as `externalIds` `amazon`/`asin`, and retailer
 SKUs in their typed slot. Use lowercase kebab-case source slugs. A source/kind/
 external-ID tuple has one live owner; do not invent, relabel, or choose between
 variants. Ambiguity is a reported skip.
+
+A targeted run's commit trusts only retained browser evidence of the exact
+variant. Besides an Amazon ASIN, the server proves a retailer SKU, item or
+catalog number, or GTIN from any run-vendor page that exposes exactly one
+schema.org Product (never a ProductGroup or several variants) whose matching
+field equals the identifier. Search results, aggregators, and free-text hints
+are leads, not proof; an identifier the page does not show is refused. A proven
+identifier another Product owns is skipped, reported in `skippedIdentifiers`, and
+proposed in the match queue, never reassigned.
 
 Read [source mechanics](references/sources.md) only for the source in hand.
 Read [write and image rules](references/writes-and-images.md) when preparing a

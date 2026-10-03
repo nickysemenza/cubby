@@ -1,4 +1,4 @@
-/* eslint-disable anti-slop/no-unknown-parameters, anti-slop/require-safety-comment-for-type-assertion -- This workerd-only transport shim receives Cloudflare Queue and WebSocket wire payloads. */
+/* eslint-disable anti-slop/no-unknown-parameters, anti-slop/no-unsafe-dictionary-type, anti-slop/require-safety-comment-for-type-assertion -- This workerd-only transport shim receives Cloudflare Queue and WebSocket wire payloads. */
 import type {
   DurableObjectNamespace,
   MessageEvent as CfMessageEvent,
@@ -22,16 +22,19 @@ export default {
       await env.PURCHASE_AGENT_QUEUE.send(await request.json());
       return new Response(null, { status: 202 });
     }
-    if (url.pathname !== "/browser-result")
+    if (url.pathname !== "/browser-connect")
       return new Response("Not found", { status: 404 });
 
+    // One simulated Mac browser for a vendor account. It stays connected and
+    // answers every command the broker dispatches, by the URL the command
+    // names, so a run can issue several commands over one connection.
     const input = (await request.json()) as {
       vendorAccountId: string;
       ledgerPartyId: string;
       userId: string;
-      runId: string;
-      commandId: string;
-      operationId: string;
+      outcomes?: Record<string, unknown>;
+      /** Capture latency before each result, as a real browser takes. */
+      delayMs?: number;
     };
     const response = await env.PURCHASE_IMPORT_CLIENT.getByName(
       input.vendorAccountId,
@@ -52,29 +55,35 @@ export default {
     socket.addEventListener("message", (event: CfMessageEvent) => {
       const message = JSON.parse(String(event.data)) as {
         type?: string;
-        command?: { id?: string };
-        commandID?: string;
+        command?: {
+          id: string;
+          operationId: string;
+          runID: string;
+          operation: { url?: string; recoveryURL?: string };
+        };
       };
-      if (message.type !== "command") return;
-      if (message.command?.id !== input.commandId) {
-        activeBrowserSockets.delete(socket);
-        socket.close(1008, "broker dispatched the wrong command");
-        return;
-      }
-      socket.send(
-        JSON.stringify({
-          protocolVersion: 2,
-          type: "result",
-          result: {
+      if (message.type !== "command" || !message.command) return;
+      const command = message.command;
+      const target = command.operation.recoveryURL ?? command.operation.url;
+      const reply = () =>
+        socket.send(
+          JSON.stringify({
             protocolVersion: 2,
-            commandID: input.commandId,
-            operationID: input.operationId,
-            runID: input.runId,
-            completedAt: new Date().toISOString(),
-            outcome: { status: "completed" },
-          },
-        }),
-      );
+            type: "result",
+            result: {
+              protocolVersion: 2,
+              commandID: command.id,
+              operationID: command.operationId,
+              runID: command.runID,
+              completedAt: new Date().toISOString(),
+              outcome: (target && input.outcomes?.[target]) ?? {
+                status: "completed",
+              },
+            },
+          }),
+        );
+      if (input.delayMs) setTimeout(reply, input.delayMs);
+      else reply();
     });
     socket.send(
       JSON.stringify({

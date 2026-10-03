@@ -147,6 +147,7 @@ enum NativePresentationCoverage {
             .projectSchedule,
             .purchaseProjectAllocation,
             .purchaseRuns,
+            .purchaseReceiving,
             .purchaseReconciliation,
             .purchaseFinancialSettlement,
             .expenseSettlement,

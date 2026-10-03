@@ -55,6 +55,9 @@ test("receiving after a photo import writes nothing until additional units are c
     name: uniqueName(testInfo, "Synthetic jacket line"),
     cost: 80,
     date: "2026-09-01",
+    // Raw inserts skip validation; a tradeless principal line would fail the
+    // global live-trade check for every later write in this shared database.
+    trade: "other",
     costType: "materials",
     purchaseId: purchase.id,
     productId: await resolveOrThrow(db, "product", bought.id),
@@ -90,9 +93,13 @@ test("receiving after a photo import writes nothing until additional units are c
   await expect(
     dialog.getByText(`This may already be counted as ${photoName}`),
   ).toBeVisible();
+  // Other seeded Products can also surface as candidates in a shared
+  // database; the photo match's own review link must target this pair.
   await expect(
-    dialog.getByRole("link", { name: "Review this match" }),
-  ).toHaveAttribute("href", new RegExp(`candidate=${photo.id}`));
+    dialog
+      .getByRole("link", { name: "Review this match" })
+      .and(dialog.locator(`a[href*="candidate=${photo.id}"]`)),
+  ).toHaveCount(1);
   // No location or quantity controls exist until units are confirmed.
   await expect(dialog.getByRole("combobox", { name: "Location" })).toHaveCount(
     0,

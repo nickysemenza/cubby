@@ -74,9 +74,10 @@
             try await replaceConnections(browser: browser, enhancedEvidence: enhancedEvidence)
         }
 
-        public func syncNow(browser: BrowserChoice, enhancedEvidence: Bool) async throws
-            -> [BrowserBridgeSyncResponse]
-        {
+        public func syncNow(
+            browser: BrowserChoice, enhancedEvidence: Bool,
+            backfill: BrowserBridgeBackfillRange? = nil
+        ) async throws -> [BrowserBridgeSyncResponse] {
             BrowserBridgeDebugLog.emit(.syncRequested, browser: browser)
             // Refresh the roster and browser preference first so a newly added or paused account is
             // reflected in this manual run, then enqueue one server-owned run per eligible account.
@@ -85,7 +86,8 @@
             var submitted: [BrowserBridgeSyncResponse] = []
             for account in accounts.values.sorted(by: { $0.id < $1.id }) {
                 do {
-                    submitted.append(try await syncClient.requestSync(vendorAccountID: account.id))
+                    submitted.append(
+                        try await syncClient.requestSync(vendorAccountID: account.id, backfill: backfill))
                 } catch {
                     failures.append("\(account.id): \(error.localizedDescription)")
                 }
