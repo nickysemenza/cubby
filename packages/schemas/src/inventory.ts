@@ -29,6 +29,7 @@ import {
   createItemsResponseSchema,
   createPaginatedResponseSchema,
   entityFilter,
+  entityFilterList,
   oneOrMany,
 } from "./pagination";
 import { unitMappingOut } from "./unitmapping";
@@ -90,7 +91,14 @@ export const inventoryFilterFields = {
     .describe("Filter by location name (substring)"),
   locationIdFilter: entityFilter(locationShortcode)
     .optional()
-    .describe("Filter by exact location ID"),
+    .describe(
+      "Filter by exact location ID (direct stock only; use locationSubtreeFilter to include descendants)",
+    ),
+  locationSubtreeFilter: entityFilterList(locationShortcode)
+    .optional()
+    .describe(
+      "Filter to stock in the selected locations or any of their descendants",
+    ),
   productIdFilter: entityFilter(productShortcode)
     .optional()
     .describe("Filter by exact product ID"),
