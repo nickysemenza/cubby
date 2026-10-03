@@ -178,15 +178,6 @@ See also the image operational passes at the end of this file.
   no currency column, so a non-USD order remains write-blocked rather than a
   correction.
 
-- 🟢 **Generalize evidence-backed Product enrichment beyond Amazon.** Extend
-  verified adapters for retailer SKU, catalog/item number, and GTIN; use agent
-  research when adapters cannot establish facts. Primary manufacturer/retailer
-  evidence must prove the exact variant; search results and free-text hints
-  are leads, not write authority. Batches retain expected current/replacement
-  values and existing approvals; uncertain identity remains reviewable and
-  merges explicit. Reuse [Product enrichment](../.claude/skills/product-enrichment/SKILL.md),
-  without a new enrichment queue or evidence table.
-
 - 🧱 **Cross-vendor manufacturer identifiers.** Add manufacturer-scoped
   part/style identity distinct from retailer SKU, with contract/generation
   compatibility planned across clients. Only identifiers proven to name an
@@ -297,13 +288,11 @@ See also the image operational passes at the end of this file.
   addresses negative expected quantities from exits whose earlier acquisition
   is missing; filling known acquisition quantities remains an operational pass.
 
-- 🟢 **Product external-ID collision review.** Purchase import now keeps the
-  reviewed Product and proposes the colliding pair in the Product match queue.
-  Finish the enrichment path the same way: a proven identifier owned by another
-  Product is skipped and proposed, never reassigned or fatal to the commit. The
-  live unique index makes `duplicate_external_id` and the `collision` result of
-  `product.externalIdCollisions` unreachable; retire them rather than keep a
-  second path. Add no separate persistent queue.
+- 🟢 **Retire unreachable external-ID collision paths.** Import and
+  enrichment now propose colliding pairs in the Product match queue. The live
+  unique index makes `duplicate_external_id` and the `collision` result of
+  `product.externalIdCollisions` unreachable; remove them rather than keep a
+  second path.
 
 ---
 

@@ -94,7 +94,8 @@ extension BrowserPageCapture {
         links: [BrowserCapturedLink], images: [BrowserCapturedImage],
         paymentEvidence: [BrowserPaymentEvidence] = [], evidence: [BrowserEvidenceReference] = [],
         canonicalURL: URL? = nil, requestedAmazonASIN: String? = nil,
-        servedAmazonASIN: String? = nil, variantMarkers: [String] = []
+        servedAmazonASIN: String? = nil, variantMarkers: [String] = [],
+        structuredProducts: BrowserStructuredProducts? = nil
     ) {
         self.init(
             sourceURL: sourceURL.absoluteString,
@@ -107,7 +108,8 @@ extension BrowserPageCapture {
             readableText: String(readableText.prefix(BrowserBridgeProtocol.maximumReadableTextCharacters)),
             links: Array(links.prefix(BrowserBridgeProtocol.maximumCapturedLinks)),
             images: Array(images.prefix(BrowserBridgeProtocol.maximumCapturedImages)),
-            paymentEvidence: paymentEvidence, evidence: evidence)
+            paymentEvidence: paymentEvidence, evidence: evidence,
+            structuredProducts: structuredProducts)
     }
 }
 
