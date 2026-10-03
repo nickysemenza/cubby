@@ -1824,7 +1824,13 @@ async function main(): Promise<void> {
         await install();
         const driverStarted = performance.now();
         if (inputJourney)
-          inputDriverSessionArgs = [...common, "--session", session];
+          inputDriverSessionArgs = [
+            ...common,
+            "--session",
+            session,
+            "--state-dir",
+            path.join(artifacts, "agent-device-state"),
+          ];
         try {
           await run("pnpm", [
             "exec",
@@ -1832,8 +1838,7 @@ async function main(): Promise<void> {
             "prepare",
             "ios-runner",
             "--debug",
-            ...common,
-            ...(inputJourney ? ["--session", session] : []),
+            ...(inputDriverSessionArgs ?? common),
             "--timeout",
             "240000",
           ]);
@@ -1926,27 +1931,22 @@ async function main(): Promise<void> {
         // Snapshot would retry the failed XCTest startup and hide its original cost.
         if (!driverPrepared) throw error;
         const diagnosticSession = `cubby-sim-diagnostic-${simName}`;
+        const diagnosticArgs = inputDriverSessionArgs ?? [
+          ...common,
+          "--session",
+          diagnosticSession,
+        ];
         try {
           await run("pnpm", [
             "exec",
             "agent-device",
             "open",
             "com.nickysemenza.cubby",
-            ...common,
-            "--session",
-            diagnosticSession,
+            ...diagnosticArgs,
           ]);
           await run(
             "pnpm",
-            [
-              "exec",
-              "agent-device",
-              "snapshot",
-              "--raw",
-              ...common,
-              "--session",
-              diagnosticSession,
-            ],
+            ["exec", "agent-device", "snapshot", "--raw", ...diagnosticArgs],
             repoRoot,
             path.join(artifacts, "failure-ui-tree.ndjson"),
           );
@@ -1960,9 +1960,7 @@ async function main(): Promise<void> {
             "exec",
             "agent-device",
             "close",
-            ...common,
-            "--session",
-            diagnosticSession,
+            ...diagnosticArgs,
           ]).catch(console.error);
         }
         throw error;
