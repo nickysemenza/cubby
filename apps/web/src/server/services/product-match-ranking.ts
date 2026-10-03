@@ -5,10 +5,55 @@
  * usually have neither, so both are only ranking signals.
  */
 
+import { comparableModel } from "@cubby/schemas/external-id";
+
 export interface MatchPoolProduct<Id extends string = string> {
   id: Id;
   name: string;
   rootCategoryId: string | null;
+  manufacturer?: string;
+  model?: string | null;
+}
+
+type ModelBearing = Pick<MatchPoolProduct, "manufacturer" | "model">;
+
+const makerKey = (manufacturer: string | undefined) =>
+  (manufacturer ?? "").trim().toLowerCase();
+
+/**
+ * Same manufacturer and the same distinctive model/style number. Sibling sizes
+ * and colors share these, so this ranks a pair and never proves it: a merge
+ * still needs size/color corroboration and a human.
+ */
+export function sharesModel(a: ModelBearing, b: ModelBearing): boolean {
+  const model = comparableModel(a.model);
+  return (
+    model !== null &&
+    model === comparableModel(b.model) &&
+    makerKey(a.manufacturer) !== "" &&
+    makerKey(a.manufacturer) === makerKey(b.manufacturer)
+  );
+}
+
+/** Photo × purchase pairs that share a manufacturer model, bucketed so a large pool is not compared exhaustively. */
+export function pairByModel<Id extends string>(
+  photo: readonly MatchPoolProduct<Id>[],
+  purchase: readonly MatchPoolProduct<Id>[],
+): { photoId: Id; purchaseId: Id }[] {
+  const byKey = new Map<string, Id[]>();
+  for (const item of purchase) {
+    const model = comparableModel(item.model);
+    if (!model || !makerKey(item.manufacturer)) continue;
+    const key = `${makerKey(item.manufacturer)}\0${model}`;
+    byKey.set(key, [...(byKey.get(key) ?? []), item.id]);
+  }
+  return photo.flatMap((item) => {
+    const model = comparableModel(item.model);
+    if (!model || !makerKey(item.manufacturer)) return [];
+    return (byKey.get(`${makerKey(item.manufacturer)}\0${model}`) ?? [])
+      .filter((purchaseId) => purchaseId !== item.id)
+      .map((purchaseId) => ({ photoId: item.id, purchaseId }));
+  });
 }
 
 export interface MatchSignals<Id extends string = string> {
@@ -23,6 +68,8 @@ export interface MatchSignals<Id extends string = string> {
   sameCategory: boolean | null;
   /** null when either owner is undeterminable. */
   sameOwner: boolean | null;
+  /** Same manufacturer and model/style number: ranks, never proves the variant. */
+  sameModel: boolean;
 }
 
 const STOPWORDS = new Set([
@@ -135,7 +182,12 @@ function matchScore(signals: MatchSignals<string>): number {
       : signals.sameCategory === false
         ? -0.2
         : 0) +
-    (signals.sameOwner === true ? 0.05 : signals.sameOwner === false ? -0.1 : 0)
+    (signals.sameOwner === true
+      ? 0.05
+      : signals.sameOwner === false
+        ? -0.1
+        : 0) +
+    (signals.sameModel ? 0.15 : 0)
   );
 }
 
@@ -174,6 +226,8 @@ export function describeSignals(signals: MatchSignals<string>): string[] {
     out.push(`Text similarity ${signals.similarity.toFixed(2)}`);
   if (signals.sharedTokens.length > 0)
     out.push(`Shared name words: ${signals.sharedTokens.join(", ")}`);
+  if (signals.sameModel)
+    out.push("Shared model/style number; confirm size and color");
   if (signals.sameCategory === true) out.push("Same top-level category");
   if (signals.sameCategory === false) out.push("Different top-level category");
   if (signals.sameOwner === true) out.push("Same owner");

@@ -66,7 +66,9 @@ records that should converge into one.
 
 Use `product_enrichment.patch_external_ids` for exact slot changes and preserve unrelated
 IDs; use a full `entity.update product` external-ID set only when deliberately
-replacing it. Check `imports_read.external_id_collisions` before each new ID.
+replacing it. Check `imports_read.external_id_collisions` before each new ID. Only an
+exact-variant part number goes in as `manufacturer_part` (source = manufacturer
+slug); a family/style number stays in `model`.
 A collision needs manual resolution, normally a proven merge, never a silent
 reassignment.
 

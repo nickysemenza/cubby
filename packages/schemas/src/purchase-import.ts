@@ -898,6 +898,8 @@ export const preparedProductCandidate = z.object({
   manufacturer: z.string().max(300),
   model: z.string().max(300).nullable(),
   exactIdentifierMatch: z.boolean(),
+  /** Why a non-exact candidate ranks (e.g. a shared model/style number). */
+  matchReason: z.string().max(300).optional(),
 });
 
 export const preparePurchaseImportOut = z.object({
