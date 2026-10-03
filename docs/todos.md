@@ -473,7 +473,6 @@ See also the image operational passes at the end of this file.
   Flue supports modern version negotiation; its current MCP client defaults
   to legacy requests without exposing a negotiation option.
 
-
 - 🤔 **One FROM context per entity list.** Each list repo pairs a relational
   `findMany` (root aliased) with an unaliased `$count`, so a predicate
   referencing the outer row compiles on one leg and fails on the other — six
