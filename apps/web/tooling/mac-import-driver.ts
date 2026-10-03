@@ -73,7 +73,7 @@ export class MacImportDriver {
   }
 
   private presentationAction(
-    action: "press" | "scroll",
+    action: "press" | "scroll" | "fill",
     containerID: string,
     value: string,
   ): void {
@@ -583,17 +583,7 @@ export class MacImportDriver {
         case "fill":
           this.press(args[1]!);
           if (args[1] === "id=PathTextField") {
-            this.guardForeground();
-            execFileSync(
-              "osascript",
-              [
-                "-e",
-                'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set pathSheet to sheet 1 of sheet 1 of window 1 of ownedProcess\n if value of attribute "AXIdentifier" of pathSheet is not "GoToWindow" then error "Expected the owned Go To sheet"\n set pathField to text field 1 of pathSheet\n if value of attribute "AXIdentifier" of pathField is not "PathTextField" then error "Expected the owned path field"\n set value of pathField to item 2 of argv\n end tell\nend run',
-                String(this.pid),
-                args[2]!,
-              ],
-              { timeout: 10000 },
-            );
+            this.presentationAction("fill", "PathTextField", args[2]!);
             output = this.observe();
           } else output = this.keyboard(args[2]!, true);
           break;

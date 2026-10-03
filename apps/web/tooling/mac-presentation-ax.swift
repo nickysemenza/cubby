@@ -107,6 +107,12 @@ case "press":
     fatalError("Expected one enabled scoped AX button; found \(buttons.count)")
   }
   status = AXUIElementPerformAction(buttons[0], kAXPressAction as CFString)
+case "fill":
+  guard attribute(containers[0], kAXRoleAttribute) as? String == kAXTextFieldRole,
+    attribute(containers[0], kAXEnabledAttribute) as? Bool != false
+  else { fatalError("Expected one enabled owned AX text field") }
+  status = AXUIElementSetAttributeValue(
+    containers[0], kAXValueAttribute as CFString, arguments[5] as CFString)
 case "scroll":
   let bars = descendants(containers[0]) {
     attribute($0, kAXRoleAttribute) as? String == kAXScrollBarRole
