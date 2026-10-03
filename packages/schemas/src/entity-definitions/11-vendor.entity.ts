@@ -1060,6 +1060,7 @@ export default defineEntity({
           id: "vendor_order_evidence_conflict",
           facet: "identity",
           weight: 2,
+          exceptions: "forbidden",
           label: "Order evidence conflict",
           message:
             "This vendor's order evidence contradicts its evidence expectation.",
