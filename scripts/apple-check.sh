@@ -111,6 +111,15 @@ build_args=(
   "${build_settings[@]}"
 )
 
+# The optional harness uses the same compiler profile and certifies its bytes.
+if [ "$mode" = "ci" ] && [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+  simulator_profile="$(node scripts/apple-simulator-build-cache.ts args)"
+  build_args=()
+  while IFS= read -r argument; do
+    build_args+=("$argument")
+  done <<< "$simulator_profile"
+fi
+
 simulator_cache_key=""
 if [ "$mode" = "ci" ] && [ "${GITHUB_ACTIONS:-}" = "true" ]; then
   xcodebuild "${build_args[@]}" -resolvePackageDependencies

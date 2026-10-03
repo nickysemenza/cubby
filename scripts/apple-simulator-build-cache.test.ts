@@ -1,4 +1,6 @@
 // A stale or corrupted compiled app must never bypass the native build.
+// Harness/workflow-only changes must retain a certified app; changed compiler
+// arguments must invalidate it even when all source files remain identical.
 import { strict as assert } from "node:assert";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -44,6 +46,51 @@ function fixture() {
     dispose: () => rmSync(root, { recursive: true, force: true }),
   };
 }
+
+test("retains a certified app through harness and workflow edits", () => {
+  const f = fixture();
+  try {
+    f.write("apps/web/tooling/sim-e2e.ts", "synthetic harness before");
+    f.write(".github/workflows/ci.yaml", "synthetic workflow before");
+    f.write("scripts/apple-simulator-build-cache.ts", "synthetic build driver");
+    const key = simulatorBuildFingerprint(f.root, "synthetic Xcode");
+    stampSimulatorBuild(f.root, "synthetic Xcode", key);
+    f.write("apps/web/tooling/sim-e2e.ts", "synthetic harness after");
+    f.write(".github/workflows/ci.yaml", "synthetic workflow after");
+    assert.equal(hasMatchingSimulatorBuild(f.root, "synthetic Xcode"), true);
+    f.write(
+      "scripts/apple-simulator-build-cache.ts",
+      "changed synthetic build driver",
+    );
+    assert.equal(hasMatchingSimulatorBuild(f.root, "synthetic Xcode"), false);
+  } finally {
+    f.dispose();
+  }
+});
+
+test("binds a certificate to the actual compiler arguments", () => {
+  const f = fixture();
+  try {
+    const args = ["-configuration", "Debug", "ARCHS=arm64"];
+    const key = simulatorBuildFingerprint(f.root, "synthetic Xcode", args);
+    stampSimulatorBuild(f.root, "synthetic Xcode", key, args);
+    assert.equal(
+      hasMatchingSimulatorBuild(f.root, "synthetic Xcode", args),
+      true,
+    );
+    const changed = ["-configuration", "Release", "ARCHS=arm64"];
+    assert.equal(
+      hasMatchingSimulatorBuild(f.root, "synthetic Xcode", changed),
+      false,
+    );
+    assert.throws(
+      () => stampSimulatorBuild(f.root, "synthetic Xcode", key, changed),
+      /changed/,
+    );
+  } finally {
+    f.dispose();
+  }
+});
 
 test("reuses a matching build but refuses changed native inputs and toolchains", () => {
   const f = fixture();

@@ -10,12 +10,12 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        # Push builds use the commit itself. PR builds use a merge commit and
+        # Push and manual builds use the commit itself. PR builds use a merge commit and
         # cannot satisfy the harness's exact-source provenance contract.
         runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yaml/runs" \
-          --method GET -f head_sha="$GITHUB_SHA" -f event=push \
+          --method GET -f head_sha="$GITHUB_SHA" \
           -f status=completed -f per_page=10 \
-          --jq '.workflow_runs[] | select(.conclusion == "success") | .id')
+          --jq '.workflow_runs[] | select(.conclusion == "success" and (.event == "push" or .event == "workflow_dispatch")) | .id')
         for run_id in $runs; do
           artifact=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" \
             --jq '.artifacts[] | select(.name == "worker-build" and .expired == false) | .id')
