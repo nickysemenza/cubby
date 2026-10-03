@@ -675,10 +675,13 @@ export async function createMacComposedScenario(input: Input) {
         await input.driver.click("id=detail.expense.edit");
         await input.driver.wait("id=editor.expense");
         await input.driver.scrollTo(
-          'contains="Spending category" role=Button',
+          'label="Spending category, None" role=Button',
           "editor.expense",
         );
-        await input.driver.click('contains="Spending category" role=Button');
+        await input.driver.click(
+          'label="Spending category, None" role=Button',
+          "editor.expense",
+        );
         await input.driver.action(["picker-search", categoryName]);
         await input.driver.wait(`contains="${categoryName}" role=Button`);
         await input.driver.click(`contains="${categoryName}" role=Button`);
