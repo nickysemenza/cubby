@@ -155,12 +155,6 @@ See also the image operational passes at the end of this file.
   recorded. Reuse the bounded prepare/commit and approval paths in
   [purchase import](../.claude/skills/purchase-import/SKILL.md).
 
-- 🟢 **Start a historical backfill from the Mac app.** The server accepts an
-  inclusive date range on `/api/import/agent/sync`, walks it newest first, and
-  never moves the incremental cursor; the Mac Settings sync section needs the
-  range control. Pace by the browser bridge's one-command handoff unless a
-  vendor proves a stricter limit.
-
 - 🟢 **Finish the input-first retailer and statement journey.** Join saved
   synthetic order-history and Product HTML through browser capture,
   prepare/commit, and purchase approval. Cover both statement/order sequences,
@@ -203,13 +197,6 @@ See also the image operational passes at the end of this file.
   Contract: [product identity and settlement](product-identity-journey.md).
 
 ### Review and apply corrections
-
-- 🟢 **Review validation corrections on native.** Web now shows field-level
-  before/after corrections, revalidates stale targets, and applies the selected
-  set atomically (`purchaseImport.applyValidationCorrections`, person-only).
-  Expose the same operation and v2 diff in the Apple run review. A Purchase has
-  no currency column, so a non-USD order remains write-blocked rather than a
-  correction.
 
 - 🟢 **Generalize evidence-backed Product enrichment beyond Amazon.** Extend
   verified adapters for retailer SKU, catalog/item number, and GTIN; use agent
