@@ -193,6 +193,9 @@ struct EntityRowTests {
         #expect(detail.name == row.title)
         #expect(detail.manufacturer == "Sample Manufacturer")
         #expect(detail.createdAt.timeIntervalSince1970 > 0)
+        // The nutrition slot renders the server's display verbatim, so it must survive the typed decode.
+        #expect(detail.nutritionDisplay.basis == "Per serving · 30 g")
+        #expect(detail.nutritionDisplay.rows.map(\.value) == ["3"])
     }
 
     /// Product image attachments carry their attachment purpose alongside the shared image

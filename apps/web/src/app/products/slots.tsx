@@ -39,15 +39,16 @@ export const ProductNutrition: DetailSlotComponent<"product"> = ({
   );
   const labelNutrition: ProductLabelNutrition | null = product.labelNutrition;
   const usdaNutritionInfo = product.food?.nutritionInfo ?? null;
-  const nutrients = labelNutrition
-    ? labelNutrientsPer100(labelNutrition)
-    : usdaNutritionInfo?.nutrientsPer100;
-  if (!nutrients)
-    return (
-      <Description>
-        No nutrition on file — link a USDA food or enter the package label.
-      </Description>
-    );
+  // Which source leads (and its captions) is the server's `nutritionDisplay`;
+  // this only picks the matching per-100 g figures for the interactive panels.
+  const display = product.nutritionDisplay;
+  const nutrients =
+    display.source === "label" && labelNutrition
+      ? labelNutrientsPer100(labelNutrition)
+      : display.source === "usda"
+        ? usdaNutritionInfo?.nutrientsPer100
+        : undefined;
+  if (!nutrients) return <Description>{display.title}</Description>;
   return (
     <Stack gap="md">
       <ProductNutritionLabel
@@ -57,10 +58,10 @@ export const ProductNutrition: DetailSlotComponent<"product"> = ({
         servingGrams={labelNutrition?.servingGrams}
         inferredZeroNutrients={labelNutrition?.inferredZeroNutrients}
       />
-      {labelNutrition && (
+      {display.source === "label" && (
         <Description size="xs">
-          From package label
-          {labelNutrition.source ? ` · ${labelNutrition.source}` : ""}
+          {display.title}
+          {display.sourceNote ? ` · ${display.sourceNote}` : ""}
         </Description>
       )}
       <NutrientDensityStats
@@ -75,7 +76,7 @@ export const ProductNutrition: DetailSlotComponent<"product"> = ({
       />
       {usdaNutritionInfo && (
         <>
-          {labelNutrition && (
+          {display.source === "label" && (
             <Description size="xs">
               Superseded by the package label above — the USDA food&apos;s
               portions still apply to unit conversions.

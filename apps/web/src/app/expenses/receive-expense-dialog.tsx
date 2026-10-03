@@ -33,10 +33,7 @@ import { z } from "zod";
 import { entityDetailFor } from "~/entity/entity-detail";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
-import {
-  AmountFieldGroup,
-  DEFAULT_AMOUNT_UNIT,
-} from "~/features/inventory/amount-field-group";
+import { AmountFieldGroup } from "~/features/inventory/amount-field-group";
 import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
 import { getOptionalLocationId, optionalLocationField } from "~/ui/form-fields";
@@ -134,20 +131,17 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
     (sum, entry) => sum + entry.amount.value,
     0,
   );
-  // Already counted: the shelf holds this Product, or a stocked Product that
-  // may be the same item. Importing the purchase never added to either.
-  const alreadyCounted = stockedMatches.length > 0 || context.stock.length > 0;
+  // Every receiving default (counted?, prefill, unit, move/add/create) is the
+  // server's; this dialog only renders it.
+  const { alreadyCounted, defaultQuantity, defaultUnit } = context;
   const [unitsConfirmed, setUnitsConfirmed] = useState(!alreadyCounted);
 
   const form = useForm<ReceiveValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       location: null,
-      addQuantity: alreadyCounted ? null : 1,
-      createAmount: {
-        value: alreadyCounted ? null : 1,
-        unit: DEFAULT_AMOUNT_UNIT,
-      },
+      addQuantity: defaultQuantity,
+      createAmount: { value: defaultQuantity, unit: defaultUnit },
     },
   });
   const locationId = getOptionalLocationId(form.watch("location"));
@@ -168,14 +162,13 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
     });
   };
 
-  const entries = product.inventoryEntry ?? [];
-  // `expectedQuantity: 1` marks a one-of-a-kind item. Such a product doesn't
-  // get a second entry when it turns up somewhere else — it moves.
-  const isUnique = product.expectedQuantity === 1;
-  const soleEntry = entries.length === 1 ? entries[0] : undefined;
-  const entryHere = locationId
-    ? entries.find((e) => e.location.id === locationId)
-    : undefined;
+  const plan =
+    context.locationPlans.find((entry) => entry.locationId === locationId)
+      ?.plan ?? context.suggestedPlan;
+  const entryHere =
+    plan.kind === "add"
+      ? context.stock.find((entry) => entry.id === plan.entryId)
+      : undefined;
 
   const countedNotice = alreadyCounted ? (
     <Stack gap="sm">
@@ -235,11 +228,15 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
     if (!unitsConfirmed) return null;
 
     // A unique item already on a shelf: offer the move, never a second entry.
-    if (isUnique && soleEntry) {
+    if (context.suggestedPlan.kind === "move") {
+      const move = context.suggestedPlan;
+      const soleEntry = context.stock.find(
+        (entry) => entry.id === move.entryId,
+      );
       return (
         <Stack gap="md">
           <Description>
-            {product.name} is already stocked at {soleEntry.location.name}. It's
+            {product.name} is already stocked at {soleEntry?.locationName}. It's
             a one-of-a-kind item, so receiving it again moves it rather than
             adding a second entry.
           </Description>
@@ -255,11 +252,11 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
               disabled={
                 receive.isPending ||
                 !locationId ||
-                locationId === soleEntry.location.id
+                locationId === move.fromLocationId
               }
               onClick={() => {
                 if (!locationId) return;
-                receiveAction({ kind: "move", entryId: soleEntry.id });
+                receiveAction({ kind: "move", entryId: move.entryId });
               }}
             >
               Move here

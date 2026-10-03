@@ -1,63 +1,27 @@
 import CubbyKit
 import SwiftUI
 
+/// Renders the server's `nutritionDisplay` (source, basis, rows); which source leads is not decided here.
 struct ProductNutritionDetailSlot: View {
     let row: EntityRow
 
-    private var label: JSONValue? { row.raw["labelNutrition"] }
-    private var hasLabel: Bool { label?.objectValue != nil }
-    private var nutrients: [String: JSONValue] { label?["nutrients"]?.objectValue ?? [:] }
-    private var inferredZeroNutrients: [String] {
-        (label?["inferredZeroNutrients"]?.arrayValue ?? []).compactMap(\.stringValue)
-            .filter { nutrients[$0]?.doubleValue == nil }
-            .sorted()
-    }
-    private var usdaNutrients: [JSONValue] {
-        row.raw["food"]?["nutritionInfo"]?["nutrientSummary"]?.arrayValue ?? []
-    }
+    private var display: ProductNutritionDisplay? { try? row.decode(ProductDetail.self).nutritionDisplay }
 
     var body: some View {
-        if !hasLabel && usdaNutrients.isEmpty {
-            Text("No nutrition on file — link a USDA food or enter the package label.")
-                .foregroundStyle(.secondary)
-        } else {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-                Text(hasLabel ? "From package label" : "From USDA")
-                    .font(.headline)
-                if hasLabel, let grams = label?["servingGrams"]?.doubleValue {
-                    Text("Per serving · \(grams.formatted()) g").font(.caption).foregroundStyle(.secondary)
-                } else {
-                    Text("Per 100 g").font(.caption).foregroundStyle(.secondary)
-                }
-                if hasLabel {
-                    ForEach(nutrients.keys.sorted(), id: \.self) { key in
-                        if let value = nutrients[key]?.doubleValue {
-                            LabeledContent(
-                                NutrientCatalog.labels[key] ?? key,
-                                value: value.formatted(.number.precision(.fractionLength(0...3))))
-                        }
-                    }
-                    ForEach(inferredZeroNutrients, id: \.self) { key in
-                        LabeledContent(NutrientCatalog.labels[key] ?? key, value: "0 · inferred from label")
-                    }
-                    if !inferredZeroNutrients.isEmpty, let evidence = label?["inferenceEvidence"]?.stringValue
-                    {
+        if let display {
+            if display.rows.isEmpty {
+                Text(display.title).foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                    Text(display.title).font(.headline)
+                    Text(display.basis).font(.caption).foregroundStyle(.secondary)
+                    ForEach(display.rows, id: \.key) { LabeledContent($0.label, value: $0.value) }
+                    if let evidence = display.inferenceEvidence {
                         Text(evidence).font(.caption).foregroundStyle(.secondary)
                     }
-                } else {
-                    ForEach(Array(usdaNutrients.enumerated()), id: \.offset) { indexed in
-                        let nutrient = indexed.element
-                        if let name = nutrient["name"]?.stringValue,
-                            let value = nutrient["amount"]?.doubleValue
-                        {
-                            LabeledContent(
-                                "\(name) (\(nutrient["unit"]?.stringValue ?? ""))",
-                                value: value.formatted(.number.precision(.fractionLength(0...3))))
-                        }
+                    if let source = display.sourceNote {
+                        Text(source).font(.caption).foregroundStyle(.secondary)
                     }
-                }
-                if let source = label?["source"]?.stringValue {
-                    Text(source).font(.caption).foregroundStyle(.secondary)
                 }
             }
         }

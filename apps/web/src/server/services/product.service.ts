@@ -29,6 +29,7 @@ import {
   updateProduct as updateProductRepo,
 } from "../repo/product/crud";
 import { foodLookupParamFromProduct } from "../repo/product/helpers";
+import { buildNutritionDisplay } from "../repo/product/nutrition-display";
 import { loadProductOwnershipEvidence } from "../repo/product/ownership-evidence";
 import { getProductUnitMappingsByProductIds } from "../repo/product/unit-mappings";
 import {
@@ -88,6 +89,10 @@ export const getProductWithFood = async (
   return {
     ...product,
     ownershipEvidence: ownership,
+    nutritionDisplay: buildNutritionDisplay({
+      labelNutrition: product.labelNutrition,
+      food,
+    }),
     food,
     recipeUsages,
   };

@@ -4,9 +4,11 @@ import Testing
 
 @testable import CubbyKit
 
-/// Receiving never changes stock by default: a Product that is already counted (its own stock, or
-/// a stocked match that may be the same item) opens on "Nothing new arrived", and units are only
-/// written after "Additional units arrived" plus a typed positive quantity and a location.
+/// Receiving never changes stock by default: a Product the server reports as already counted opens
+/// on "Nothing new arrived", and units are only written after "Additional units arrived" plus a typed
+/// positive quantity and a location. Which Products are counted, the prefill, the unit, and the
+/// move/add/create plan are the server's (`inventory.receivingContext`, tested in
+/// `receiving-guidance.unit.test.ts`); these tests pin that the model renders them as given.
 @Suite("receivingModel")
 @MainActor
 struct ReceivingModelTests {
@@ -53,12 +55,13 @@ struct ReceivingModelTests {
     nonisolated static let garage = LocationCode("LOC-BBBB")
 
     static func snapshot(
-        stock: [ReceivingStock] = [], matches: [ReceivingMatch] = [], expectedQuantity: Double? = nil
+        stock: [ReceivingStock] = [], matches: [ReceivingMatch] = [], alreadyCounted: Bool = false,
+        suggestedPlan: ReceivingPlan = .create, locationPlans: [LocationCode: ReceivingPlan] = [:]
     ) -> ReceivingSnapshot {
         ReceivingSnapshot(
-            productID: ProductCode("PRD-4K7M"), productName: "Sample flour",
-            expectedQuantity: expectedQuantity,
-            stock: stock, matches: matches)
+            productID: ProductCode("PRD-4K7M"), productName: "Sample flour", stock: stock,
+            matches: matches, alreadyCounted: alreadyCounted, defaultQuantity: alreadyCounted ? nil : 1,
+            defaultUnit: "each", suggestedPlan: suggestedPlan, locationPlans: locationPlans)
     }
 
     static let pantryStock = ReceivingStock(
@@ -79,7 +82,7 @@ struct ReceivingModelTests {
     }
 
     @Test func existingStockDefaultsToNothingNewAndBlocksReceiving() async {
-        let (model, fake) = await loaded(Self.snapshot(stock: [Self.pantryStock]))
+        let (model, fake) = await loaded(Self.snapshot(stock: [Self.pantryStock], alreadyCounted: true))
         #expect(model.alreadyCounted)
         #expect(model.decision == .nothingNew)
         model.locationID = Self.garage
@@ -90,14 +93,15 @@ struct ReceivingModelTests {
     }
 
     @Test func stockedMatchAloneAlsoDefaultsToNothingNew() async {
-        let (model, _) = await loaded(Self.snapshot(matches: [Self.stockedMatch]))
+        let (model, _) = await loaded(
+            Self.snapshot(matches: [Self.stockedMatch], alreadyCounted: true))
         #expect(model.decision == .nothingNew)
         #expect(model.stockedMatches.map(\.candidateName) == ["Flour 5 lb"])
         #expect(model.stockedMatches[0].noticeTitle == "This may already be counted as Flour 5 lb")
         #expect(model.stockedMatches[0].warnings == ["Both sides are stocked; merging sums them."])
     }
 
-    @Test func unstockedMatchIsNotACountedNotice() async {
+    @Test func serverVerdictDecidesCountedNotTheClient() async {
         let unstocked = ReceivingMatch(
             candidateID: ProductCode("PRD-8YYY"), candidateName: "Bagged flour", stockOnHand: 0,
             evidence: nil, warnings: [])
@@ -107,7 +111,7 @@ struct ReceivingModelTests {
     }
 
     @Test func additionalUnitsNeedAnExplicitPositiveQuantityAndLocation() async {
-        let (model, fake) = await loaded(Self.snapshot(stock: [Self.pantryStock]))
+        let (model, fake) = await loaded(Self.snapshot(stock: [Self.pantryStock], alreadyCounted: true))
         model.chooseAdditionalUnits()
         #expect(model.quantityText.isEmpty)
         model.locationID = Self.pantry
@@ -125,7 +129,10 @@ struct ReceivingModelTests {
     }
 
     @Test func entryAtChosenLocationAddsInItsUnit() async {
-        let (model, fake) = await loaded(Self.snapshot(stock: [Self.pantryStock]))
+        let (model, fake) = await loaded(
+            Self.snapshot(
+                stock: [Self.pantryStock], alreadyCounted: true,
+                locationPlans: [Self.pantry: .add(entry: Self.pantryStock.id, unit: "each")]))
         model.chooseAdditionalUnits()
         model.locationID = Self.pantry
         model.quantityText = "1.5"
@@ -139,7 +146,10 @@ struct ReceivingModelTests {
     }
 
     @Test func otherLocationCreatesWithTypedUnit() async {
-        let (model, fake) = await loaded(Self.snapshot(stock: [Self.pantryStock]))
+        let (model, fake) = await loaded(
+            Self.snapshot(
+                stock: [Self.pantryStock], alreadyCounted: true,
+                locationPlans: [Self.pantry: .add(entry: Self.pantryStock.id, unit: "each")]))
         model.chooseAdditionalUnits()
         model.locationID = Self.garage
         model.quantityText = "4"
@@ -150,9 +160,11 @@ struct ReceivingModelTests {
     }
 
     @Test func uniqueItemAlreadyStockedMovesAndNeedsADifferentLocation() async {
-        let (model, fake) = await loaded(Self.snapshot(stock: [Self.pantryStock], expectedQuantity: 1))
+        let move = ReceivingPlan.move(entry: Self.pantryStock.id, from: Self.pantry)
+        let (model, fake) = await loaded(
+            Self.snapshot(stock: [Self.pantryStock], alreadyCounted: true, suggestedPlan: move))
         model.chooseAdditionalUnits()
-        #expect(model.plan == .move(entry: Self.pantryStock.id))
+        #expect(model.plan == move)
         model.locationID = Self.pantry
         #expect(!model.canReceive)
         model.locationID = Self.garage
@@ -165,6 +177,7 @@ struct ReceivingModelTests {
         let (model, _) = await loaded(Self.snapshot())
         #expect(model.decision == .additionalUnits)
         #expect(model.quantityText == "1")
+        #expect(model.unit == "each")
         #expect(!model.canReceive)
         model.locationID = Self.garage
         #expect(model.canReceive)

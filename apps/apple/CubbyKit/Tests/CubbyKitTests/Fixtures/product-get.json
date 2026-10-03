@@ -10,6 +10,14 @@
     "exitedAt": null,
     "confidenceLostAt": null
   },
+  "nutritionDisplay": {
+    "source": "label",
+    "title": "From package label",
+    "basis": "Per serving · 30 g",
+    "sourceNote": "Synthetic package label",
+    "inferenceEvidence": null,
+    "rows": [{ "key": "protein", "label": "Protein (g)", "value": "3" }]
+  },
   "aliases": [],
   "tags": [],
   "primaryGtin": null,

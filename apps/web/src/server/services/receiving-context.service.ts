@@ -6,13 +6,17 @@ import type {
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { listProductStock } from "~/server/repo/inventory/product-stock";
+import {
+  getProductExpectedQuantity,
+  listProductStock,
+} from "~/server/repo/inventory/product-stock";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import {
   getProductMatchQueue,
   type ProductMatchDependencies,
 } from "./product-match.service";
+import { deriveReceivingGuidance } from "./receiving-guidance";
 
 /**
  * Read-only: what already counts for a Product before an Expense is received.
@@ -26,32 +30,40 @@ export async function getReceivingContext(
   deps?: ProductMatchDependencies,
 ): Promise<InventoryReceivingContextOut> {
   const productId = await resolveOrThrow(db, "product", input.productId);
-  const [stock, queue] = await Promise.all([
+  const [stockRows, queue, expectedQuantity] = await Promise.all([
     listProductStock(db, productId),
     getProductMatchQueue(db, { productId: input.productId }, deps),
+    getProductExpectedQuantity(db, productId),
   ]);
+  const stock = stockRows.map((row) => ({
+    id: parseShortcodeFor("inventory", row.shortcode),
+    locationId: parseShortcodeFor("location", row.locationShortcode),
+    locationName: row.locationName,
+    amount: { value: row.value, unit: row.unit },
+  }));
+  const matches = queue.items.flatMap((item) => {
+    const candidate = [item.keeper, item.other].find(
+      (side) => side.id !== input.productId,
+    );
+    return candidate
+      ? [
+          {
+            source: item.source,
+            evidence: item.evidence,
+            candidate,
+            warnings: item.warnings,
+          },
+        ]
+      : [];
+  });
   return {
     productId: input.productId,
-    stock: stock.map((row) => ({
-      id: parseShortcodeFor("inventory", row.shortcode),
-      locationId: parseShortcodeFor("location", row.locationShortcode),
-      locationName: row.locationName,
-      amount: { value: row.value, unit: row.unit },
-    })),
-    matches: queue.items.flatMap((item) => {
-      const candidate = [item.keeper, item.other].find(
-        (side) => side.id !== input.productId,
-      );
-      return candidate
-        ? [
-            {
-              source: item.source,
-              evidence: item.evidence,
-              candidate,
-              warnings: item.warnings,
-            },
-          ]
-        : [];
+    stock,
+    matches,
+    ...deriveReceivingGuidance({
+      expectedQuantity,
+      stock,
+      matches: matches.map((match) => match.candidate),
     }),
   };
 }

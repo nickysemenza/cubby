@@ -45,23 +45,44 @@ public struct ReceivingMatch: Sendable, Hashable, Identifiable {
     public var noticeTitle: String { "This may already be counted as \(candidateName)" }
 }
 
+/// What "receive" will do at a chosen location. The server picks it (`inventory.receivingContext`);
+/// the client only looks it up.
+public enum ReceivingPlan: Sendable, Hashable {
+    /// A one-of-a-kind item relocates; `from` is the shelf it already occupies.
+    case move(entry: InventoryEntryCode, from: LocationCode)
+    case add(entry: InventoryEntryCode, unit: String)
+    case create
+}
+
+/// The server's receiving context: stock, matches, and the defaults every client renders as-is.
 public struct ReceivingSnapshot: Sendable, Hashable {
     public let productID: ProductCode
     public let productName: String
-    /// `1` marks a one-of-a-kind item: it moves rather than gaining a second entry.
-    public let expectedQuantity: Double?
     public let stock: [ReceivingStock]
     public let matches: [ReceivingMatch]
+    public let alreadyCounted: Bool
+    /// `nil` when the Product is already counted, so units are never added without typing.
+    public let defaultQuantity: Double?
+    public let defaultUnit: String
+    /// The plan at a location that holds none of this Product's stock.
+    public let suggestedPlan: ReceivingPlan
+    /// The plan at each location that does hold stock; overrides `suggestedPlan` there.
+    public let locationPlans: [LocationCode: ReceivingPlan]
 
     public init(
-        productID: ProductCode, productName: String, expectedQuantity: Double?, stock: [ReceivingStock],
-        matches: [ReceivingMatch]
+        productID: ProductCode, productName: String, stock: [ReceivingStock], matches: [ReceivingMatch],
+        alreadyCounted: Bool, defaultQuantity: Double?, defaultUnit: String, suggestedPlan: ReceivingPlan,
+        locationPlans: [LocationCode: ReceivingPlan]
     ) {
         self.productID = productID
         self.productName = productName
-        self.expectedQuantity = expectedQuantity
         self.stock = stock
         self.matches = matches
+        self.alreadyCounted = alreadyCounted
+        self.defaultQuantity = defaultQuantity
+        self.defaultUnit = defaultUnit
+        self.suggestedPlan = suggestedPlan
+        self.locationPlans = locationPlans
     }
 }
 
@@ -117,14 +138,7 @@ public final class ReceivingModel {
         case nothingNew, additionalUnits
     }
 
-    /// What "receive" will do at the chosen location, mirroring the web dialog.
-    public enum Plan: Sendable, Hashable {
-        case move(entry: InventoryEntryCode)
-        case add(entry: InventoryEntryCode, unit: String)
-        case create
-    }
-
-    public static let defaultUnit = "each"
+    public typealias Plan = ReceivingPlan
 
     public let expenseID: String
     public let productID: ProductCode
@@ -137,7 +151,7 @@ public final class ReceivingModel {
     public private(set) var refusal: String?
     public var locationID: LocationCode?
     public var quantityText = ""
-    public var unit = ReceivingModel.defaultUnit
+    public var unit = ""
 
     private let service: any ReceivingService
 
@@ -155,21 +169,20 @@ public final class ReceivingModel {
             let (snapshot, locations) = try await (loadedSnapshot, loadedLocations)
             self.snapshot = snapshot
             self.locations = locations
-            let counted = Self.isCounted(snapshot)
-            decision = counted ? .nothingNew : .additionalUnits
-            // An already-counted Product starts blank so units can never be added without typing.
-            quantityText = counted ? "" : "1"
+            decision = snapshot.alreadyCounted ? .nothingNew : .additionalUnits
+            quantityText = snapshot.defaultQuantity.map(Self.quantityString) ?? ""
+            unit = snapshot.defaultUnit
             phase = .loaded
         } catch {
             phase = .failed(error.userMessage)
         }
     }
 
-    private static func isCounted(_ snapshot: ReceivingSnapshot) -> Bool {
-        !snapshot.stock.isEmpty || snapshot.matches.contains { $0.stockOnHand > 0 }
+    private static func quantityString(_ value: Double) -> String {
+        value == value.rounded() ? String(Int(value)) : String(value)
     }
 
-    public var alreadyCounted: Bool { snapshot.map(Self.isCounted) ?? false }
+    public var alreadyCounted: Bool { snapshot?.alreadyCounted ?? false }
     public var stockedMatches: [ReceivingMatch] { snapshot?.matches.filter { $0.stockOnHand > 0 } ?? [] }
     public var ownUnits: Double { snapshot?.stock.reduce(0) { $0 + $1.value } ?? 0 }
 
@@ -181,17 +194,9 @@ public final class ReceivingModel {
         return value
     }
 
-    private var soleUniqueEntry: ReceivingStock? {
-        guard let snapshot, snapshot.expectedQuantity == 1, snapshot.stock.count == 1 else { return nil }
-        return snapshot.stock[0]
-    }
-
     public var plan: Plan {
-        if let sole = soleUniqueEntry { return .move(entry: sole.id) }
-        if let locationID, let here = snapshot?.stock.first(where: { $0.locationID == locationID }) {
-            return .add(entry: here.id, unit: here.unit)
-        }
-        return .create
+        guard let snapshot else { return .create }
+        return locationID.flatMap { snapshot.locationPlans[$0] } ?? snapshot.suggestedPlan
     }
 
     public var canReceive: Bool {
@@ -199,7 +204,7 @@ public final class ReceivingModel {
             return false
         }
         switch plan {
-        case .move: return soleUniqueEntry?.locationID != locationID
+        case .move(_, let from): return from != locationID
         case .add, .create: return quantity != nil
         }
     }
@@ -208,7 +213,7 @@ public final class ReceivingModel {
         guard canReceive, let locationID else { return }
         let action: ReceivingAction
         switch plan {
-        case .move(let entry):
+        case .move(let entry, _):
             action = .move(entry: entry)
         case .add(let entry, let entryUnit):
             guard let quantity else { return }
@@ -217,7 +222,8 @@ public final class ReceivingModel {
             guard let quantity else { return }
             let trimmed = unit.trimmingCharacters(in: .whitespaces)
             action = .create(
-                amount: ReceivingAmount(value: quantity, unit: trimmed.isEmpty ? Self.defaultUnit : trimmed))
+                amount: ReceivingAmount(
+                    value: quantity, unit: trimmed.isEmpty ? (snapshot?.defaultUnit ?? "") : trimmed))
         }
         isReceiving = true
         refusal = nil
@@ -240,7 +246,6 @@ extension CubbyClient: ReceivingService {
         return ReceivingSnapshot(
             productID: productID,
             productName: productRow?.title ?? productID.rawValue,
-            expectedQuantity: productRow?.raw["expectedQuantity"]?.doubleValue,
             stock: loaded.stock.map {
                 ReceivingStock(
                     id: $0.id, locationID: $0.locationId, locationName: $0.locationName,
@@ -250,7 +255,12 @@ extension CubbyClient: ReceivingService {
                 ReceivingMatch(
                     candidateID: $0.candidate.id, candidateName: $0.candidate.name,
                     stockOnHand: $0.candidate.inventoryCount, evidence: $0.evidence, warnings: $0.warnings)
-            })
+            },
+            alreadyCounted: loaded.alreadyCounted, defaultQuantity: loaded.defaultQuantity,
+            defaultUnit: loaded.defaultUnit, suggestedPlan: ReceivingPlan(loaded.suggestedPlan),
+            locationPlans: Dictionary(
+                loaded.locationPlans.map { ($0.locationId, ReceivingPlan($0.plan)) },
+                uniquingKeysWith: { first, _ in first }))
     }
 
     public func receivingLocations() async throws -> [ReceivingLocation] {
@@ -274,5 +284,15 @@ extension CubbyClient: ReceivingService {
         }
         _ = try await receiveExpense(
             .init(expenseId: expenseID, expectedProductId: productID, locationId: locationID, action: wire))
+    }
+}
+
+extension ReceivingPlan {
+    init(_ wire: InventoryReceivingPlan) {
+        switch wire {
+        case .move(let move): self = .move(entry: move.entryId, from: move.fromLocationId)
+        case .add(let add): self = .add(entry: add.entryId, unit: add.unit)
+        case .create: self = .create
+        }
     }
 }

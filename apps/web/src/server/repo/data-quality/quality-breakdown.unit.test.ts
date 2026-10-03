@@ -2,6 +2,7 @@ import {
   dataCheck,
   dataCheckEntity,
   dataCheckExemptible,
+  dataCheckKind,
   dataCheckWeight,
   dataChecksByEntity,
   dataQualityExceptionEntities,
@@ -50,6 +51,51 @@ describe("quality explanation calculation", () => {
       satisfiedWeight: 0,
       checks: [],
     });
+  });
+
+  // The display wording lives here only; web and native render these strings,
+  // so a state/kind pair mapped to the wrong label would show on both.
+  it("serves the summary and per-check labels clients render verbatim", () => {
+    const defect = dataCheck.options.find(
+      (check) => dataCheckKind[check] === "defect",
+    )!;
+    const missing = dataCheck.options.find(
+      (check) => dataCheckKind[check] === "missing",
+    )!;
+    const result = buildQualityBreakdown(
+      [defect, missing],
+      [defect, missing],
+      [],
+    );
+    expect(result.checks.map((check) => check.stateLabel)).toEqual([
+      "Defect",
+      "Missing data",
+    ]);
+    expect(result.summary).toBe(
+      `0 satisfied weight ÷ ${result.expectedWeight} applicable weight × 100 = ${result.score}/100`,
+    );
+    const satisfied = buildQualityBreakdown([missing], [], []);
+    expect(satisfied.checks[0]!.stateLabel).toBe("Satisfied");
+    expect(satisfied.checks[0]!.weightLabel).toBe(
+      `weight ${dataCheckWeight[missing]}`,
+    );
+    const excepted = buildQualityBreakdown([missing], [], [missing]);
+    expect(excepted.checks[0]!.stateLabel).toBe("Accepted exception");
+    expect(
+      buildQualityBreakdown(dataCheck.options, [], []).checks.map(
+        ({ check, weightLabel }) => [check, weightLabel],
+      ),
+    ).toEqual(
+      dataCheck.options.map((check) => [
+        check,
+        dataCheckWeight[check] === 0
+          ? "Unscored diagnostic"
+          : `weight ${dataCheckWeight[check]}`,
+      ]),
+    );
+    expect(buildQualityBreakdown([], [], []).summary).toBe(
+      "No applicable weighted checks: the score is 100/100. Unscored diagnostics remain visible below.",
+    );
   });
 
   // Clients render the accept action from this list instead of restating the

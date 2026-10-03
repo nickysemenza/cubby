@@ -478,19 +478,12 @@ struct FieldExplanationLabel: View {
                     }
                     if let breakdown = resolved.qualityBreakdown {
                         Text("Score calculation").font(.headline)
-                        Text(
-                            breakdown.expectedWeight == 0
-                                ? "No applicable weighted checks: the score is 100/100. Unscored diagnostics remain visible below."
-                                : "\(breakdown.satisfiedWeight.formatted()) satisfied weight ÷ \(breakdown.expectedWeight.formatted()) applicable weight × 100 = \(breakdown.score.formatted())/100"
-                        )
-                        .font(.callout.monospacedDigit())
+                        Text(breakdown.summary).font(.callout.monospacedDigit())
                         ForEach(breakdown.checks, id: \.check) { check in
                             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                                 Text(check.label).font(.callout.weight(.semibold))
-                                Text(
-                                    "\(check.state.rawValue == "excepted" ? "Accepted exception" : check.state.rawValue == "gap" ? check.kind.rawValue == "defect" ? "Defect" : "Missing data" : "Satisfied") · \(check.weight == 0 ? "Unscored diagnostic" : "weight \(check.weight.formatted())")"
-                                )
-                                .font(.caption).foregroundStyle(.secondary)
+                                Text("\(check.stateLabel) · \(check.weightLabel)")
+                                    .font(.caption).foregroundStyle(.secondary)
                                 if check.state.rawValue == "gap" { Text(check.description).font(.callout) }
                                 DataExceptionControl(
                                     draft: .init(entityID: subject.id, check: check.check),

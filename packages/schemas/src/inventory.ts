@@ -381,8 +381,42 @@ export type InventoryReceiveExpenseInput = z.infer<
 export const inventoryReceivingContextInput = z.object({
   productId: productShortcode,
 });
+/**
+ * What "receive" will do. `move`: a one-of-a-kind item already on one shelf
+ * relocates (`fromLocationId` is the shelf it cannot move to). `add`: the
+ * chosen shelf already holds the Product, so top up that entry in its unit.
+ * `create`: a new entry at the chosen shelf.
+ */
+export const inventoryReceivingPlan = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("move"),
+    entryId: inventoryShortcode,
+    fromLocationId: locationShortcode,
+  }),
+  z.object({
+    kind: z.literal("add"),
+    entryId: inventoryShortcode,
+    unit: z.string(),
+  }),
+  z.object({ kind: z.literal("create") }),
+]);
 export const inventoryReceivingContextOut = z.object({
   productId: productShortcode,
+  /**
+   * Server-owned receiving defaults, rendered as-is by every client: the
+   * shelf (or a stocked match) already counts this Product; the quantity to
+   * prefill (`null` when counted, so units are never added without typing);
+   * the unit for a new entry; the plan at a shelf with no entry of this
+   * Product (`suggestedPlan`) and the plan at each shelf that has one
+   * (`locationPlans`, which overrides `suggestedPlan` for that location).
+   */
+  alreadyCounted: z.boolean(),
+  defaultQuantity: z.number().positive().nullable(),
+  defaultUnit: z.string(),
+  suggestedPlan: inventoryReceivingPlan,
+  locationPlans: z.array(
+    z.object({ locationId: locationShortcode, plan: inventoryReceivingPlan }),
+  ),
   stock: z.array(
     z.object({
       id: inventoryShortcode,

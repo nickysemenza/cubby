@@ -807,8 +807,30 @@ export type ProductOwnershipEvidenceOut = z.infer<
   typeof productOwnershipEvidenceOut
 >;
 
+/**
+ * Which nutrition a Product shows and how to caption it, chosen once on the
+ * server (package label > linked USDA food > none) so web and native render
+ * the same source, basis, and rows. `title` is the heading ("From package
+ * label", "From USDA") or, for `none`, the empty-state message.
+ */
+export const productNutritionDisplay = z.object({
+  source: z.enum(["label", "usda", "none"]),
+  title: z.string(),
+  /** "Per serving · 44 g" or "Per 100 g"; empty for `none`. */
+  basis: z.string(),
+  /** The label's provenance note (e.g. a package name). */
+  sourceNote: z.string().nullable(),
+  /** Label evidence for any inferred-zero rows; null when there are none. */
+  inferenceEvidence: z.string().nullable(),
+  rows: z.array(
+    z.object({ key: z.string(), label: z.string(), value: z.string() }),
+  ),
+});
+export type ProductNutritionDisplay = z.infer<typeof productNutritionDisplay>;
+
 export const productWithFoodOut = z.object({
   ownershipEvidence: productOwnershipEvidenceOut,
+  nutritionDisplay: productNutritionDisplay,
   ...productTopLevelFields,
   // Same derived cover rule as `productTopLevelOut`/the picker (see
   // `getProductCoverImageUrlsByProductIds`) — not a stored field.
