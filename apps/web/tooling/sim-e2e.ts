@@ -1157,7 +1157,7 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
       runtime: testerArmy
         ? {
             ...runtime,
-            testerArmy: "0.15.2",
+            testerArmy: "0.16.0",
             model: process.env.TESTER_ARMY_MODEL ?? "openai/gpt-6-luna",
             effort: "medium",
           }
