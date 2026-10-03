@@ -1641,6 +1641,7 @@ export default defineEntity({
         {
           id: "purchase_spending_category_origin",
           facet: "identity",
+          exceptions: "forbidden",
           label: "Review legacy fallback",
           message:
             "This stored Purchase fallback predates classification provenance. Review it before treating it as a deliberate default.",
@@ -1648,6 +1649,7 @@ export default defineEntity({
         {
           id: "purchase_evidence_expectation",
           facet: "paperwork",
+          exceptions: "forbidden",
           label: "Receipt expectation",
           message: "Whether this Purchase needs a receipt is unclassified.",
         },

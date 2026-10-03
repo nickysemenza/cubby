@@ -8,6 +8,7 @@ import {
   parseEntityId,
   userId as userIdSchema,
   runEntityId,
+  type ProductId,
 } from "@cubby/schemas/identifiers";
 import {
   importWriterInput,
@@ -67,6 +68,7 @@ import {
   applyAllocationChanges,
   readAllocations,
 } from "~/server/repo/financial-transaction-allocations";
+import { upsertAgentProductMatch } from "~/server/repo/product-match-candidate";
 import {
   externalIdKey,
   findProductsByExternalIds,
@@ -80,7 +82,10 @@ import {
   loadAggregateReplacementSnapshot,
   redistributeReplacementAttributions,
 } from "./aggregate-replacement";
-import { learnPurchaseProductExternalId } from "./external-id-learning";
+import {
+  learnPurchaseProductExternalId,
+  PurchaseProductExternalIdCollisionError,
+} from "./external-id-learning";
 import { recordRunWrites } from "./run-audit";
 import {
   decideLineWrite,
@@ -686,15 +691,7 @@ export async function resolveLineProduct(
       where: and(eq(product.id, productId), notDeleted(product)),
     });
     if (!liveProduct) throw new Error("The reviewed Product no longer exists.");
-    for (const identifier of lineIdentifiers(line)) {
-      await learnPurchaseProductExternalId(tx, {
-        productId,
-        source: externalSource(line.productUrl, vendorId),
-        kind: identifier.kind,
-        externalId: identifier.externalId,
-        url: line.productUrl,
-      });
-    }
+    await learnLineIdentifiers(tx, productId, line, source);
     if (externalIdentity)
       productsByExternalIdentity.set(externalIdentity, productId);
     return productId;
@@ -704,18 +701,43 @@ export async function resolveLineProduct(
     name: line.title,
     manufacturer: "",
   });
-  for (const identifier of lineIdentifiers(line)) {
-    await learnPurchaseProductExternalId(tx, {
-      productId: created.id,
-      source,
-      kind: identifier.kind,
-      externalId: identifier.externalId,
-      url: line.productUrl,
-    });
-  }
+  await learnLineIdentifiers(tx, created.id, line, source);
   if (externalIdentity)
     productsByExternalIdentity.set(externalIdentity, created.id);
   return created.id;
+}
+
+/**
+ * Learn a line's identifiers for the Product it resolved to. An identifier
+ * another Product already owns is never reassigned and never aborts the order:
+ * the reviewed or created Product keeps the line, and the pair is proposed for
+ * human identity review with the colliding identifier as evidence.
+ */
+async function learnLineIdentifiers(
+  tx: DrizzleTransaction,
+  productId: ProductId,
+  line: ExtractedPurchaseLine,
+  source: string,
+) {
+  for (const identifier of lineIdentifiers(line)) {
+    try {
+      await learnPurchaseProductExternalId(tx, {
+        productId,
+        source,
+        kind: identifier.kind,
+        externalId: identifier.externalId,
+        url: line.productUrl,
+      });
+    } catch (error) {
+      if (!(error instanceof PurchaseProductExternalIdCollisionError))
+        throw error;
+      await upsertAgentProductMatch(tx, {
+        productIds: [productId, error.ownerProductId],
+        evidence: `Order line "${line.title}" carries ${error.source}/${error.kind} ${error.externalId}, which already identifies the other Product. Confirm whether both are the same exact variant before merging.`,
+        sourceUrls: line.productUrl ? [line.productUrl] : [],
+      });
+    }
+  }
 }
 
 async function fileFinding(

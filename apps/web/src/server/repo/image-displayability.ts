@@ -1,5 +1,13 @@
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
-import { and, isNull, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  isNull,
+  ne,
+  or,
+  type SQL,
+  type SQLWrapper,
+  sql,
+} from "drizzle-orm";
 
 import { image } from "~/server/db/schema";
 
@@ -50,3 +58,23 @@ export const displayableImageRawSql = (alias: string): string =>
     AND ("${alias}"."renderStatus" IS NULL OR "${alias}"."renderStatus" <> 'failed')
     AND ("${alias}"."storageStatus" IS NULL
          OR "${alias}"."storageStatus" NOT IN ('missing', 'metadata_mismatch'))`;
+
+/**
+ * Whether a Product has a photo the thumbnail cell would render: a live
+ * attachment to a live, displayable Image, excluding `label` attachments (a
+ * photo of packaging text, not a representative picture). The one definition
+ * behind the `product_image` data-quality check, the image presence filter,
+ * the no-image backfill selections, and the UPC-gap detector — hand-copied
+ * variants omitted the Image soft-delete or the `label` exclusion, so a
+ * product could be "imageless" in one worklist and "imaged" in another.
+ */
+export const productHasDisplayableImageSql = (productId: SQLWrapper): SQL =>
+  sql`EXISTS (
+    SELECT 1 FROM "EntityAttachment" dimg_att
+    JOIN "Image" dimg_img
+      ON dimg_img."id" = dimg_att."imageId" AND dimg_img."deletedAt" IS NULL
+    WHERE dimg_att."entityId" = ${productId}
+      AND dimg_att."deletedAt" IS NULL
+      AND dimg_att."purpose" IS DISTINCT FROM 'label'
+      AND ${sql.raw(displayableImageRawSql("dimg_img"))}
+  )`;

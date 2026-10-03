@@ -596,7 +596,10 @@ const reconciliationCondition = (
       ? sql`${comparable} AND ${gapInCents} > ${toleranceInCents} AND ${refundAdjusted}`
       : undefined,
     selected.includes("mismatch")
-      ? sql`${comparable} AND ${gapInCents} > ${toleranceInCents} AND NOT (${refundAdjusted})`
+      ? // The `paperwork_mismatch` gap, not a restated predicate: the
+        // `purchasesNotReconciling` Problem must honour a recorded
+        // `expected_mismatch` exception, which only the gap condition applies.
+        gapCondition("purchase", "paperwork_mismatch", purchase)
       : undefined,
   );
 };
