@@ -30,4 +30,34 @@ struct NativeCoverageTests {
             }
         }
     }
+
+    /// Native draws no per-renderer list view: a `generic` list renderer prints the text the row
+    /// carries at the field's `labelPath`, so a field without one would draw nothing.
+    @Test func everyGenericListRendererFieldDeclaresALabelPath() {
+        var missing: [String] = []
+        for descriptor in EntityCatalog.all {
+            for field in descriptor.fields {
+                guard let renderer = field.listRenderer,
+                    coverage.list[renderer.rawValue] == .generic, field.labelPath == nil
+                else { continue }
+                missing.append("\(descriptor.key.rawValue).\(field.key) (\(renderer.rawValue))")
+            }
+        }
+        #expect(missing.isEmpty, "\(missing)")
+    }
+
+    @Test func serverComposedLabelsResolveFromTheRowTheServerSends() throws {
+        let product = try #require(EntityCatalog.all.first { $0.key == .product })
+        let expected = try #require(product.fields.first { $0.key == "ledgerExpectedQuantity" })
+        let row: JSONValue = ["ledgerExpectedQuantityLabel": "6 +2? −1?"]
+        #expect(expected.labelPath == "ledgerExpectedQuantityLabel")
+        #expect(row.pathText(try #require(expected.labelPath)) == "6 +2? −1?")
+
+        let meal = try #require(EntityCatalog.all.first { $0.key == .meal })
+        let recipes = try #require(meal.fields.first { $0.key == "recipes" })
+        let mealRow: JSONValue = [
+            "recipes": [["recipe": ["name": "Soup"]], ["recipe": ["name": "Bread"]]]
+        ]
+        #expect(mealRow.pathText(try #require(recipes.labelPath)) == "Soup, Bread")
+    }
 }

@@ -78,6 +78,7 @@ import {
 import { recipeHasImages } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list";
+import { recipeListLabels } from "~/server/repo/list-display-labels";
 import {
   hydrateListRead,
   type ListProjection,
@@ -611,11 +612,14 @@ export const recipeListRead = async (
             const result = dbRecipeToTopLevel(row);
             if (wantsListGroup(selected, "relations"))
               Object.assign(result, { meals: Number(row.mealCount) });
-            if (wantsListGroup(selected, "derived"))
+            if (wantsListGroup(selected, "derived")) {
+              const shallow = dbRecipeToAPIShallow(row);
               Object.assign(result, {
-                ...dbRecipeToAPIShallow(row),
+                ...shallow,
+                ...recipeListLabels(shallow),
                 sectionCount: Number(row.sectionCount),
               });
+            }
             return result;
           },
         }),

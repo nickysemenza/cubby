@@ -605,3 +605,45 @@ describe("productList location subtree filter", () => {
     expect(ids).not.toContain(farItem.id);
   });
 });
+
+// The Expected, Variance and Unit price cells print server-composed text
+// (`display.labelPath`), so no client re-derives the ledger's uncertainty.
+describe("product list display labels", () => {
+  const ctx = withTestDb();
+
+  it("discloses unquantified ledger lines in the Expected label", async () => {
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Label ledger bolt" }),
+      ctx.actor,
+    );
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Label bought 3",
+        productId: product.id,
+        cost: 30,
+        productQuantity: 3,
+      }),
+    );
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Label bought ?",
+        productId: product.id,
+        cost: 10,
+        productQuantity: null,
+      }),
+    );
+    const { data } = await productList(ctx.db, { ids: [product.id] }, [], {
+      pageIndex: 0,
+      pageSize: 10,
+    });
+    expect(data).toHaveLength(1);
+    expect(data[0]?.ledgerExpectedQuantityLabel).toBe("3 +1?");
+    // Nothing on the shelf: there is no shelf-versus-ledger variance to print.
+    expect(data[0]?.quantityVarianceLabel).toBeNull();
+  });
+});

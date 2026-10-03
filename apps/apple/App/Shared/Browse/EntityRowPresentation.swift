@@ -126,6 +126,12 @@ struct EntityRowPresentation: Sendable, Hashable {
                 facts.append(Fact(id: key, label: label ?? field.label, value: text))
                 return
             }
+            // A declared `labelPath` is the text the server composed (or the name of the record
+            // a reference cell links to); nothing here re-derives the figure.
+            if let path = field.labelPath, let text = row.raw.pathText(path) {
+                facts.append(Fact(id: key, label: label ?? field.label, value: text))
+                return
+            }
             if let renderer = field.listRenderer,
                 case .implemented = NativePresentationCoverage.list(renderer),
                 let source = RecipeSourcePresentation.parse(row.raw[key])
@@ -167,7 +173,7 @@ struct EntityRowPresentation: Sendable, Hashable {
         descriptor.fields
             .filter {
                 $0.showInList && !$0.listHidden && $0.key != descriptor.titleField && $0.key != "id"
-                    && ($0.kind != .json || $0.listRenderer != nil)
+                    && ($0.kind != .json || $0.listRenderer != nil || $0.labelPath != nil)
             }
             .sorted {
                 let left = ($0.listOrder ?? .max, $0.key)

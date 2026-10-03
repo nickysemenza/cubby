@@ -1,3 +1,4 @@
+import { labelField } from "./label-field.js";
 import { defineEntity } from "./definition.js";
 import { LOCATION_UNSPECIFIED_GROUP_KEY } from "../group-keys";
 import { selectControlOptions } from "./select-control-options.js";
@@ -161,7 +162,7 @@ export default defineEntity({
       ],
       read: {
         relations: ["product", "children", "parent", "inventoryEntries"],
-        derived: ["valuation"],
+        derived: ["valuation", "valuationLabel"],
         media: ["images", "displayImages"],
         quality: ["dataQuality"],
       },
@@ -371,6 +372,7 @@ export default defineEntity({
         labelOverride: "Is a",
         display: {
           list: true,
+          labelPath: "product.name",
           renderer: { list: "product-link" },
         },
         provenance: {
@@ -457,6 +459,7 @@ export default defineEntity({
           update: null,
         },
       },
+      labelField("valuationLabel", "Inventory valuation"),
       {
         key: "valuation",
         kind: "json",
@@ -464,6 +467,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: false,
+          labelPath: "valuationLabel",
           renderer: { list: "valuation-summary" },
         },
         provenance: { kind: "derived", sources: [{ entity: "location" }] },

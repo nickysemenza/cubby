@@ -3,7 +3,6 @@ import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowC
 
 import { totalsLookStuck } from "~/app/recipes/recipe-totals-staleness";
 import {
-  formatRecipeTime,
   getServingBasis,
   perUnitSuffix,
 } from "~/features/recipes/recipe-utils";
@@ -15,7 +14,6 @@ import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { NoneValue } from "~/ui/primitives/none-value";
 
 import type { ListRenderer, ListRowOf } from "../list-renderer-types";
 
@@ -72,6 +70,10 @@ const estimateColumn =
     const getEstimate = (row: RecipeRow) =>
       metric === "cost" ? row.totals?.cost : row.totals?.nutrition.kcal;
     const format = metric === "cost" ? formatCurrency : formatKcal;
+    // The primary figure is the server's text; only the per-serving subline
+    // below is still derived here.
+    const labelKey =
+      metric === "cost" ? "costTotalLabel" : "caloriesTotalLabel";
     return createCubbyColumnCollection((add) => {
       add(
         helper.accessor(
@@ -115,7 +117,7 @@ const estimateColumn =
                         : undefined
                     }
                   >
-                    {formatEstimate(estimate, format)}
+                    {recipe[labelKey]}
                   </span>
                   {perItem && hasKnownEstimate(estimate) && (
                     <div className="text-2xs text-muted-foreground">
@@ -135,31 +137,7 @@ const estimateColumn =
     });
   };
 
-// Accessor on `totalMinutes` so sorting and the range filter are the server's
-// column, while the cell prints the source's own prose.
-const time: ListRenderer<"recipe"> = (helper) =>
-  createCubbyColumnCollection((add) => {
-    add(
-      helper.accessor((row) => row.meta?.times?.totalMinutes ?? undefined, {
-        id: "totalMinutes",
-        header: "Time",
-        meta: {
-          numeric: true,
-          className: "w-24",
-          mobile: { slot: "meta", priority: 25 },
-        },
-        sortUndefined: "last",
-        cell: (info) => {
-          const times = info.row.original.meta?.times;
-          const label = formatRecipeTime(times?.total, times?.totalMinutes);
-          return label ?? <NoneValue />;
-        },
-      }),
-    );
-  });
-
 export const recipeListRenderers = {
   "estimate-cost": estimateColumn("cost"),
   "estimate-kcal": estimateColumn("kcal"),
-  "total-time": time,
 } as const;

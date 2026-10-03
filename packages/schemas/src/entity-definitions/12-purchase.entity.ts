@@ -1,3 +1,4 @@
+import { labelField } from "./label-field.js";
 import { purchaseChildren } from "../child-tables/purchase.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
 import { optionalFieldResolutionsSchema } from "../field-resolution";
@@ -127,6 +128,9 @@ export default defineEntity({
         ],
         media: ["vendorLogo", "images", "displayImages"],
         derived: [
+          "expenseCountLabel",
+          "reconciliationLabel",
+          "financialReconciliationLabel",
           "bookingCoverage",
           "documentCoverage",
           "itemizationCoverage",
@@ -458,6 +462,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          labelPath: "vendorName",
           renderer: { list: "vendor-cell" },
         },
         validation: {
@@ -478,6 +483,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          labelPath: "orderId",
           renderer: { list: "order-link" },
         },
         validation: {
@@ -667,7 +673,14 @@ export default defineEntity({
       {
         key: "expenseCount",
         kind: "number",
-        display: { list: true, renderer: { list: "expense-count" } },
+        // The count beside its unpriced lines ("5 · 2 unpriced"), composed by
+        // the server; the field itself stays the numeric sort value.
+        display: {
+          list: true,
+          labelPath: "expenseCountLabel",
+          width: "sm",
+          mobile: { slot: "meta", priority: 50 },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "expense", relation: "expenses" }],
@@ -733,6 +746,7 @@ export default defineEntity({
         kind: "json",
         display: {
           list: true,
+          labelPath: "reconciliationLabel",
           renderer: { list: "reconciliation-status" },
           valueOptions: [
             { value: "match", label: "Reconciles", color: "var(--positive)" },
@@ -774,12 +788,16 @@ export default defineEntity({
           update: null,
         },
       },
+      labelField("expenseCountLabel", "Live expense lines"),
+      labelField("reconciliationLabel", "Stated and expense totals"),
+      labelField("financialReconciliationLabel", "Settlement allocations"),
       {
         // Settlement evidence only; never participates in spend rollups.
         key: "financialReconciliation",
         kind: "json",
         display: {
           list: true,
+          labelPath: "financialReconciliationLabel",
           renderer: { list: "financial-settlement" },
           // Roster for `financialReconciliation.status`.
           valueOptions: [
@@ -1090,6 +1108,9 @@ export default defineEntity({
       "vendorLogo",
       "orderUrl",
       "expenseCount",
+      "expenseCountLabel",
+      "reconciliationLabel",
+      "financialReconciliationLabel",
       "unpricedExpenseCount",
       "expenseTotal",
       "reconciliation",

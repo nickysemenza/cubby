@@ -208,14 +208,10 @@ export const listRendererCoverage = {
     ...scoredCoverage<"recipe">(),
     "estimate-cost": implemented(recipeListRenderers["estimate-cost"]),
     "estimate-kcal": implemented(recipeListRenderers["estimate-kcal"]),
-    "total-time": implemented(recipeListRenderers["total-time"]),
   },
   product: {
     ...scoredCoverage<"product">(),
-    "expected-quantity": implemented(productListRenderers["expected-quantity"]),
-    "quantity-variance": implemented(productListRenderers["quantity-variance"]),
     "tag-links": implemented(productListRenderers["tag-links"]),
-    "unit-price": implemented(productListRenderers["unit-price"]),
     "usda-food-link": implemented(productListRenderers["usda-food-link"]),
   },
   purchase: {
@@ -225,7 +221,6 @@ export const listRendererCoverage = {
     ),
     "vendor-cell": implemented(purchaseListRenderers["vendor-cell"]),
     "order-link": implemented(purchaseListRenderers["order-link"]),
-    "expense-count": implemented(purchaseListRenderers["expense-count"]),
     "financial-settlement": implemented(
       purchaseListRenderers["financial-settlement"],
     ),
@@ -259,7 +254,6 @@ export const listRendererCoverage = {
   meal: {
     ...scoredCoverage<"meal">(),
     "recipe-links": implemented(mealListRenderers["recipe-links"]),
-    "meal-cost": implemented(mealListRenderers["meal-cost"]),
   },
   productCategory: scoredCoverage<"productCategory">(),
   // finance and project entities

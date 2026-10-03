@@ -6,6 +6,7 @@ import {
   recipeShortcode,
 } from "../identifier-fields.js";
 import { imageOut } from "./field-primitives.js";
+import { labelField } from "./label-field.js";
 import { recipeSectionsInput, recipeSectionsOut } from "../recipe-fields.js";
 import {
   recipeMeta,
@@ -79,6 +80,9 @@ export default defineEntity({
         derived: [
           "fieldResolutions",
           "totals",
+          "costTotalLabel",
+          "caloriesTotalLabel",
+          "totalMinutesLabel",
           "cost",
           "calories",
           "protein",
@@ -220,7 +224,11 @@ export default defineEntity({
         nullable: true,
         // Computed from `totals.cost` at read time — no column of its own
         // in the list row, so a named renderer builds the cell.
-        display: { list: true, renderer: { list: "estimate-cost" } },
+        display: {
+          list: true,
+          labelPath: "costTotalLabel",
+          renderer: { list: "estimate-cost" },
+        },
         provenance: { kind: "derived", sources: [{ entity: "recipe" }] },
         explanation: {
           ruleId: "recipe.cost-total",
@@ -241,7 +249,11 @@ export default defineEntity({
         kind: "number",
         nullable: true,
         // Computed from `totals.nutrition.kcal` at read time; see costTotal.
-        display: { list: true, renderer: { list: "estimate-kcal" } },
+        display: {
+          list: true,
+          labelPath: "caloriesTotalLabel",
+          renderer: { list: "estimate-kcal" },
+        },
         provenance: { kind: "derived", sources: [{ entity: "recipe" }] },
         explanation: {
           ruleId: "recipe.calories-total",
@@ -607,10 +619,17 @@ export default defineEntity({
         key: "totalMinutes",
         kind: "number",
         nullable: true,
-        // No row scalar of its own — the list column prints the source's
-        // own time prose (recipe.meta.times.total) when there is one, which
-        // doesn't always imply a present totalMinutes count.
-        display: { list: true, renderer: { list: "total-time" } },
+        // The cell prints the source's own time prose (recipe.meta.times.total)
+        // when there is one, which doesn't always imply a present totalMinutes
+        // count, so the server composes the text; sorting and the range filter
+        // stay on the minute count.
+        display: {
+          list: true,
+          readPath: "meta.times.totalMinutes",
+          labelPath: "totalMinutesLabel",
+          width: "sm",
+          mobile: { slot: "meta", priority: 25 },
+        },
         explanation: {
           ruleId: "recipe.total-time",
           description:
@@ -621,6 +640,10 @@ export default defineEntity({
           ],
         },
       },
+      // Server-composed text for the computed columns above (`display.labelPath`).
+      labelField("costTotalLabel", "Recipe cost total"),
+      labelField("caloriesTotalLabel", "Recipe calorie total"),
+      labelField("totalMinutesLabel", "Recipe time metadata"),
     ],
     storage: [
       {

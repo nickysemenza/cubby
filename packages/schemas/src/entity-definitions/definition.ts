@@ -378,6 +378,15 @@ const buildMetadataSchemas = () => {
        * `sourceRefs[].source`, `category.path[0].name`).
        */
       readPath: nonEmptyString().nullable().optional().default(null),
+      /**
+       * Where a list row carries the human-readable text of this field's
+       * value, in `readPath`'s grammar (a `[]` projection joins its strings
+       * with ", "). A server-composed figure (`quantityLedger.expectedLabel`)
+       * or the display name of a reference (`recipes[].recipe.name`): clients
+       * print it instead of re-deriving the figure, so a computed cell has one
+       * rule. The field's own value stays the sort and filter value.
+       */
+      labelPath: nonEmptyString().nullable().optional().default(null),
       /** List cell formatter chosen by the shared column compiler. */
       format: z.enum(displayFormats).nullable().optional().default(null),
       /**
@@ -462,6 +471,7 @@ const buildMetadataSchemas = () => {
         listOrderOverride,
         width,
         readPath,
+        labelPath,
         format,
         renderer,
         mobile,
@@ -478,6 +488,7 @@ const buildMetadataSchemas = () => {
         listOrder: listOrderOverride,
         width,
         readPath,
+        labelPath,
         format,
         renderer,
         mobile,

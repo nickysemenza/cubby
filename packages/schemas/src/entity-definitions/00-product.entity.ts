@@ -30,6 +30,7 @@ import { FILTER_ANY, FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
 import { productCategorySummary } from "../product-category-fields";
 import { productKindSchema } from "../product-fields";
+import { labelField } from "./label-field";
 import { selectControlOptions } from "./select-control-options";
 export default defineEntity({
   key: "product",
@@ -518,6 +519,9 @@ export default defineEntity({
           "quantityLedger",
           "onHandUnits",
           "quantityVariance",
+          "ledgerExpectedQuantityLabel",
+          "quantityVarianceLabel",
+          "unitPriceLabel",
         ],
       },
       totalOverrides: [
@@ -676,6 +680,7 @@ export default defineEntity({
           list: true,
           detail: true,
           listHidden: true,
+          labelPath: "tags[]",
           renderer: { list: "tag-links", detail: "product-tags" },
         },
         validation: {
@@ -1251,7 +1256,7 @@ export default defineEntity({
         nullable: true,
         labelOverride: "Unit price",
         // Display-only: the list query exposes no server sort for this value.
-        display: { list: true, renderer: { list: "unit-price" } },
+        display: { list: true, labelPath: "unitPriceLabel", width: "sm" },
         provenance: {
           kind: "derived",
           sources: [{ label: "Product price and unit mappings" }],
@@ -1279,7 +1284,11 @@ export default defineEntity({
         kind: "json",
         nullable: true,
         labelOverride: "USDA Food",
-        display: { list: true, renderer: { list: "usda-food-link" } },
+        display: {
+          list: true,
+          labelPath: "food.foodInfo.description",
+          renderer: { list: "usda-food-link" },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "usda-food" }],
@@ -1474,11 +1483,15 @@ export default defineEntity({
         key: "ledgerExpectedQuantity",
         kind: "number",
         // Nested under `quantityLedger.expectedQuantity` on the list row; the
-        // cell discloses the ledger's unquantified lines beside the number.
+        // server-composed label discloses the ledger's unquantified lines
+        // beside the number.
         display: {
           list: true,
           listHidden: true,
-          renderer: { list: "expected-quantity" },
+          readPath: "quantityLedger.expectedQuantity",
+          labelPath: "ledgerExpectedQuantityLabel",
+          width: "sm",
+          mobile: { slot: "meta", priority: 45 },
         },
         provenance: {
           kind: "derived",
@@ -1498,14 +1511,21 @@ export default defineEntity({
           ],
         },
       },
+      labelField("ledgerExpectedQuantityLabel", "Expense quantity ledger"),
+      labelField("quantityVarianceLabel", "Counted inventory and ledger"),
+      labelField("unitPriceLabel", "Product price and unit mappings"),
       {
         key: "quantityVariance",
         kind: "number",
         nullable: true,
+        // Shelf minus ledger; the label is absent when the product isn't
+        // stocked or its entries carry more than one unit.
         display: {
           list: true,
           listHidden: true,
-          renderer: { list: "quantity-variance" },
+          labelPath: "quantityVarianceLabel",
+          width: "sm",
+          mobile: { slot: "meta", priority: 44 },
         },
         provenance: {
           kind: "derived",

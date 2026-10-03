@@ -134,6 +134,7 @@ describe("progressive list readers", () => {
     expect(measured.result.data[0]).toEqual({
       id: created.output.id,
       totals: full.data[0]?.totals,
+      costTotalLabel: full.data[0]?.costTotalLabel,
       cost: full.data[0]?.cost,
       calories: full.data[0]?.calories,
     });

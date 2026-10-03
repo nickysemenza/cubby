@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { listLabel } from "./entity-definitions/label-field";
 import { mealBaseFilterFields } from "./generated/meal.gen";
 
 export {
@@ -343,6 +344,8 @@ export type MealOut = z.infer<typeof mealOut>;
 /** List-row projection: `mealOut` plus the server-resolved gallery cover(s). */
 export const mealListItemOut = mealOut.extend({
   displayImages: displayImagesField,
+  // Server-composed text for the Cost column.
+  costTotalLabel: listLabel,
 });
 export type MealListItemOut = z.infer<typeof mealListItemOut>;
 

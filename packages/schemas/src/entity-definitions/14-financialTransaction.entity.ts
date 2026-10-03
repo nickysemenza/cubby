@@ -737,6 +737,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
+          labelPath: "vendorInference.candidates[].vendorName",
           renderer: {
             list: "possible-vendor",
             detail: "financial-transaction-vendor-inference",
