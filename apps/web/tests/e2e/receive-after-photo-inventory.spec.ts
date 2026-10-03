@@ -55,6 +55,9 @@ test("receiving after a photo import writes nothing until additional units are c
     name: uniqueName(testInfo, "Synthetic jacket line"),
     cost: 80,
     date: "2026-09-01",
+    // Raw inserts skip validation; a tradeless principal line would fail the
+    // global live-trade check for every later write in this shared database.
+    trade: "other",
     costType: "materials",
     purchaseId: purchase.id,
     productId: await resolveOrThrow(db, "product", bought.id),
