@@ -270,11 +270,6 @@ See also the image operational passes at the end of this file.
   lifecycle only on demonstrated friction. Owners: `apps/apple/App/Shared`,
   generated `EntityCatalog`.
 
-- ⏳ **Single-source amount formatting.** Field formats are pinned by
-  `packages/shared/golden-vectors/display-format.json`, but `{value, unit}`
-  amounts still format separately (web `wasm.format_amount`, native Swift).
-  Export the formatter through `cubby-ffi` when a native amount view drifts.
-
 - ⏳ **Native specialized-renderer editors.** Promote per field as a native
   workflow needs it: product `unitMappings`/`labelNutrition` (read-only today),
   financialAccount `sourceAliases`, financialTransaction `sourceRefs`, and

@@ -9,6 +9,7 @@
 //! - [`costing`] — the recipe costing engine (consumption model, two-pass totals)
 //! - [`needs`] — sub-recipe expansion into flat, scaled ingredient needs
 //! - [`epub`] — EPUB cookbook extraction (re-exported from upstream `cookbook::wasm`)
+//! - [`display_format`] — currency, bare-number, and compact nutrition cell text shared with native
 //! - [`isbn`] — ISBN-10/ISBN-13 validation and GTIN-14 normalization
 //!
 //! Boundary types: `#[derive(Tsify)]` generates the `.d.ts` from the Rust
@@ -32,6 +33,7 @@ mod macros;
 mod availability;
 mod conversion;
 mod costing;
+mod display_format;
 // Upstream compiles `cookbook::wasm` only for wasm32, so the native
 // `cargo test` build of this crate has no EPUB module to re-export.
 #[cfg(target_arch = "wasm32")]
@@ -47,6 +49,7 @@ mod reconcile;
 pub use availability::*;
 pub use conversion::*;
 pub use costing::*;
+pub use display_format::*;
 #[cfg(target_arch = "wasm32")]
 pub use epub::*;
 pub use estimates::*;

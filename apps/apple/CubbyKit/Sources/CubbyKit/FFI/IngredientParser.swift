@@ -52,3 +52,58 @@ public enum ScanCodes {
         CubbyFFI.normalizeIsbn(value: raw)
     }
 }
+
+/// The value formats web and native print identically, from the Rust the web calls as WASM
+/// (`recipebridge/src/display_format.rs`; pinned by `golden-vectors/display-format.json`). Swift
+/// never formats a currency, bare number, amount, or nutrition cell itself.
+public enum ValueFormat {
+    public enum CompactUnit: Sendable {
+        case kcal
+        case macro
+
+        fileprivate var ffi: CubbyFFI.CompactUnit {
+            switch self {
+            case .kcal: .kcal
+            case .macro: .macro
+            }
+        }
+    }
+
+    /// USD, en-US, half away from zero (`-$5.00`).
+    public static func currency(_ value: Double, minFractionDigits: UInt32 = 2, maxFractionDigits: UInt32 = 2)
+        -> String
+    {
+        CubbyFFI.formatCurrency(
+            value: value, minFractionDigits: minFractionDigits, maxFractionDigits: maxFractionDigits)
+    }
+
+    /// The shortest round-trip decimal, no grouping.
+    public static func number(_ value: Double) -> String {
+        CubbyFFI.formatNumber(value: value)
+    }
+
+    /// `2 cups`, `3 each`, `2 - 3 tsp`; a missing unit renders a bare count.
+    public static func amount(unit: String?, value: Double, upperValue: Double? = nil) -> String {
+        CubbyFFI.formatAmount(
+            unit: unit.flatMap { $0.isEmpty ? nil : $0 } ?? "whole", value: value, upperValue: upperValue)
+    }
+
+    /// A compact nutrition figure or range, without the partial marker.
+    public static func compactRange(lower: Double, upper: Double?, unit: CompactUnit) -> String {
+        CubbyFFI.formatCompactRange(lower: lower, upper: upper, unit: unit.ffi)
+    }
+
+    /// The compact cell for a known figure (`partial` appends `+`) or `nil` for an unknown one
+    /// (`—`).
+    public static func compactEstimate(
+        known: (lower: Double, upper: Double?)?, partial: Bool, unit: CompactUnit
+    ) -> String {
+        let figure: EstimateFigure =
+            switch known {
+            case .some(let known) where partial: .partial(lower: known.lower, upper: known.upper)
+            case .some(let known): .complete(lower: known.lower, upper: known.upper)
+            case .none: .unknown
+            }
+        return CubbyFFI.formatCompactEstimate(figure: figure, unit: unit.ffi)
+    }
+}

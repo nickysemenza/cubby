@@ -84,7 +84,7 @@ export const tryFormatAmountShopper = (
 
 /**
  * Safely formats a measure, returning error string on failure.
- * Re-attaches "each" - WASM renders bare counts (Unit::Whole) unit-less.
+ * Native renders the same text through `cubby-ffi`'s `format_amount`.
  */
 export const tryFormatAmount = (
   // Accepts both the engine's WAmount (snake `upper_value`) and the persisted
@@ -104,13 +104,9 @@ export const tryFormatAmount = (
       unit: amount.unit,
     };
     if (upper != null) request.upper_value = upper;
-    const formatted = wasm.format_amount(request);
-    // "each" parses to Unit::Whole, which renders unit-less ("3", "2 - 4");
-    // re-attach the user's "each" so it stays visible ("3 each", "2 - 4 each").
-    if (amount.unit === "each") {
-      return `${formatted} each`;
-    }
-    return formatted;
+    // Rust re-attaches the user's "each" (Unit::Whole renders unit-less), so a
+    // count stays visible ("3 each", "2 - 4 each") on web and native alike.
+    return wasm.format_amount_labeled(request);
   } catch (error) {
     return `Error formatting amount: ${error}`;
   }

@@ -97,24 +97,17 @@ nonisolated enum EntityFieldValue {
         return DisplayFormat.currency(amount)
     }
 
-    /// `{ value, unit }` is Cubby's amount shape; a bare number means units. The web renders this
-    /// with the recipebridge unit formatter (`wasm.format_amount`), which native does not call
-    /// yet, so a quantity keeps its grouped, two-decimal form.
+    /// `{ value, unit }` is Cubby's amount shape; a bare number means units. Rendered by the
+    /// recipebridge unit formatter the web calls as WASM.
     static func amount(_ value: JSONValue?) -> String? {
         guard let value else { return nil }
         if let amount = number(value["value"]) {
-            let unit = value["unit"]?.stringValue
-            return unit.map { "\(quantity(amount)) \($0)" } ?? quantity(amount)
+            return ValueFormat.amount(
+                unit: value["unit"]?.stringValue, value: amount,
+                upperValue: number(value["upperValue"]) ?? number(value["upper_value"]))
         }
-        if let amount = number(value) { return quantity(amount) }
+        if let amount = number(value) { return ValueFormat.amount(unit: nil, value: amount) }
         return nil
-    }
-
-    /// Whole numbers print bare; fractions round to two places.
-    static func quantity(_ value: Double) -> String {
-        value == value.rounded() && abs(value) < 1e15
-            ? Int(value).formatted()
-            : value.formatted(.number.precision(.fractionLength(0...2)))
     }
 
     static func date(_ value: JSONValue?) -> String? {

@@ -1,3 +1,5 @@
+import { format_currency } from "~/lib/wasm-format";
+
 // Pure number formatters, kept free of UI dependencies so chart theme modules
 // can import them. `lib/utils` re-exports everything here.
 
@@ -38,7 +40,8 @@ function cachedNumberFormat(
 }
 
 /**
- * Format a number as USD currency.
+ * Format a number as USD currency (en-US, half away from zero) through the
+ * Rust formatter shared with native.
  * @param value - The number to format
  * @param decimals - Maximum fraction digits (default: 2)
  * @param options - `minimumFractionDigits`, for a precision that doesn't fit
@@ -49,12 +52,8 @@ export function formatCurrency(
   decimals = 2,
   options: { minimumFractionDigits?: number } = {},
 ): string {
-  return cachedNumberFormat({
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: decimals,
-    ...options,
-  }).format(value);
+  const minimum = options.minimumFractionDigits ?? Math.min(2, decimals);
+  return format_currency(value, minimum, Math.max(decimals, minimum));
 }
 
 /** Format currency in compact notation (e.g. "$1.2M"). */

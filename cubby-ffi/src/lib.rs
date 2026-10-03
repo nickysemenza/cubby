@@ -127,6 +127,78 @@ pub fn scan_code_gtin14(raw: String) -> Option<String> {
     recipebridge::scan_code_gtin14(&raw)
 }
 
+/// Which rounding convention a compact nutrition figure uses; mirrors
+/// `recipebridge::WCompactUnit`.
+#[derive(uniffi::Enum)]
+pub enum CompactUnit {
+    Kcal,
+    Macro,
+}
+
+impl From<CompactUnit> for recipebridge::WCompactUnit {
+    fn from(unit: CompactUnit) -> Self {
+        match unit {
+            CompactUnit::Kcal => Self::Kcal,
+            CompactUnit::Macro => Self::Macro,
+        }
+    }
+}
+
+/// The part of a nutrition/cost estimate a compact cell reads: a known figure
+/// (complete or partial) or nothing. Mirrors the status split of
+/// `recipebridge::WMeasureEstimate` without its coverage metadata.
+#[derive(uniffi::Enum)]
+pub enum EstimateFigure {
+    Complete { lower: f64, upper: Option<f64> },
+    Partial { lower: f64, upper: Option<f64> },
+    Unknown,
+}
+
+/// A `{ value, unit }` amount as the web renders it (`2 cup`, `3 each`,
+/// `2 - 3 tsp`), through the same Rust the web calls as WASM.
+#[uniffi::export]
+pub fn format_amount(unit: String, value: f64, upper_value: Option<f64>) -> String {
+    recipebridge::format_amount_labeled(recipebridge::WAmount {
+        unit,
+        value,
+        upper_value,
+    })
+}
+
+/// USD text with grouping and `min..=max` fraction digits (half away from
+/// zero); `-$5.00` for a negative, never `+`.
+#[uniffi::export]
+pub fn format_currency(value: f64, min_fraction_digits: u32, max_fraction_digits: u32) -> String {
+    recipebridge::format_currency_usd(value, min_fraction_digits, max_fraction_digits)
+}
+
+/// A bare numeric field: the shortest round-trip decimal, no grouping.
+#[uniffi::export]
+pub fn format_number(value: f64) -> String {
+    recipebridge::format_number_plain(value)
+}
+
+/// A compact nutrition figure or range without the partial marker (`1,500–2,250`).
+#[uniffi::export]
+pub fn format_compact_range(lower: f64, upper: Option<f64>, unit: CompactUnit) -> String {
+    recipebridge::compact_range_text(lower, upper, unit.into())
+}
+
+/// The one-line macro/cost cell: a partial figure ends in `+`, unknown is `—`.
+#[uniffi::export]
+pub fn format_compact_estimate(figure: EstimateFigure, unit: CompactUnit) -> String {
+    let unit = unit.into();
+    match figure {
+        EstimateFigure::Complete { lower, upper } => {
+            recipebridge::compact_range_text(lower, upper, unit)
+        }
+        EstimateFigure::Partial { lower, upper } => {
+            format!("{}+", recipebridge::compact_range_text(lower, upper, unit))
+        }
+        EstimateFigure::Unknown => "—".to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,6 +216,33 @@ mod tests {
         assert_eq!(amount.upper_value, None);
         assert_eq!(parsed.modifier, None);
         assert!(!parsed.optional);
+    }
+
+    #[test]
+    fn display_exports_are_wired_to_the_shared_formatters() {
+        // recipebridge's own suite walks every vector; this checks each export is wired to the
+        // right function and unit.
+        assert_eq!(format_currency(-2.675, 2, 2), "-$2.68");
+        assert_eq!(format_number(1234.5678), "1234.5678");
+        assert_eq!(format_amount("each".to_string(), 3.0, None), "3 each");
+        assert_eq!(
+            format_compact_range(1500.0, Some(2250.4), CompactUnit::Kcal),
+            "1,500–2,250"
+        );
+        assert_eq!(
+            format_compact_estimate(
+                EstimateFigure::Partial {
+                    lower: 5.0,
+                    upper: Some(6.5)
+                },
+                CompactUnit::Macro
+            ),
+            "5–6.5+"
+        );
+        assert_eq!(
+            format_compact_estimate(EstimateFigure::Unknown, CompactUnit::Kcal),
+            "—"
+        );
     }
 
     #[test]
