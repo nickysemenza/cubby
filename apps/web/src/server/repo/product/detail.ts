@@ -28,6 +28,7 @@ import {
   loadProductDetailQuantityLedgers,
 } from "~/server/repo/product/quantity-ledger";
 
+import { buildNutritionDisplay } from "./nutrition-display";
 import { loadProductOwnershipEvidence } from "./ownership-evidence";
 
 interface ProductDetailReadContext {
@@ -189,6 +190,10 @@ export async function readProductDetail(
   return {
     ...mapped,
     ownershipEvidence: ownership,
+    nutritionDisplay: buildNutritionDisplay({
+      labelNutrition: mapped.labelNutrition,
+      food,
+    }),
     food,
     recipeUsages: recipe.recipeUsages,
   };

@@ -21,6 +21,8 @@ export const qualityBreakdown = z.object({
   score: z.number(),
   expectedWeight: z.number(),
   satisfiedWeight: z.number(),
+  /** The score arithmetic as display text; clients render it verbatim. */
+  summary: z.string(),
   checks: z.array(
     z.object({
       check: z.string(),
@@ -29,6 +31,10 @@ export const qualityBreakdown = z.object({
       kind: z.enum(["missing", "defect"]),
       weight: z.number(),
       state: z.enum(["satisfied", "gap", "excepted"]),
+      /** Display text for `state` (and `kind` when a gap): "Defect", "Missing data", … */
+      stateLabel: z.string(),
+      /** Display text for `weight`: "weight 3" or "Unscored diagnostic". */
+      weightLabel: z.string(),
       description: z.string(),
       /**
        * Reasons the server accepts for `dataQuality.setException` on this

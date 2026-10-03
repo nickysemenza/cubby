@@ -290,28 +290,14 @@ function QualityCalculation({
   return (
     <div className="grid gap-3">
       <h4 className="font-medium">Score calculation</h4>
-      <p className="text-sm tabular-nums">
-        {breakdown.expectedWeight === 0
-          ? "No applicable weighted checks: the score is 100/100. Unscored diagnostics remain visible below."
-          : `${breakdown.satisfiedWeight} satisfied weight ÷ ${breakdown.expectedWeight} applicable weight × 100 = ${breakdown.score}/100`}
-      </p>
+      <p className="text-sm tabular-nums">{breakdown.summary}</p>
       <ul className="grid gap-3">
         {breakdown.checks.map((check) => (
           <li key={check.check} className="grid gap-1 text-sm">
             <div className="flex flex-wrap justify-between gap-2">
               <span className="font-medium">{check.label}</span>
               <span className="text-muted-foreground">
-                {check.state === "excepted"
-                  ? "Accepted exception"
-                  : check.state === "gap"
-                    ? check.kind === "defect"
-                      ? "Defect"
-                      : "Missing data"
-                    : "Satisfied"}{" "}
-                ·{" "}
-                {check.weight === 0
-                  ? "Unscored diagnostic"
-                  : `weight ${check.weight}`}
+                {check.stateLabel} · {check.weightLabel}
               </span>
             </div>
             {check.state === "gap" ? <p>{check.description}</p> : null}

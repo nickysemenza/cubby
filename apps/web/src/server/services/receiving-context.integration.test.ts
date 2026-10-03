@@ -110,6 +110,38 @@ describe("receiving context", () => {
     expect(context.matches).toEqual([]);
   });
 
+  it("serves the receiving defaults from the Product's own expectedQuantity and live stock", async () => {
+    const unique = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic heirloom clock",
+        model: null,
+        expectedQuantity: 1,
+      }),
+      ctx.actor,
+    );
+    const fresh = await read(unique.id);
+    expect(fresh).toMatchObject({
+      alreadyCounted: false,
+      defaultQuantity: 1,
+      defaultUnit: "each",
+      suggestedPlan: { kind: "create" },
+    });
+
+    await stockOf(unique.entityId, "Synthetic clock shelf");
+    const stocked = await read(unique.id);
+    expect(stocked).toMatchObject({
+      alreadyCounted: true,
+      defaultQuantity: null,
+      suggestedPlan: {
+        kind: "move",
+        entryId: stocked.stock[0]?.id,
+        fromLocationId: stocked.stock[0]?.locationId,
+      },
+      locationPlans: [],
+    });
+  });
+
   it("merging a counted photo Product only sums existing stock (BOTH_STOCKED_WARNING)", async () => {
     const photo = await product("Synthetic wool scarf");
     const bought = await product("Wool scarf, grey");

@@ -235,7 +235,7 @@ struct ReceiveExpenseSheet: View {
     private struct PreviewReceivingService: ReceivingService {
         func receivingSnapshot(productID: ProductCode) async throws -> ReceivingSnapshot {
             ReceivingSnapshot(
-                productID: productID, productName: "Sample flour", expectedQuantity: nil,
+                productID: productID, productName: "Sample flour",
                 stock: [
                     ReceivingStock(
                         id: InventoryEntryCode("INV-2345"), locationID: LocationCode("LOC-2345"),
@@ -245,6 +245,10 @@ struct ReceiveExpenseSheet: View {
                     ReceivingMatch(
                         candidateID: ProductCode("PRD-3456"), candidateName: "Flour 5 lb", stockOnHand: 3,
                         evidence: "same GTIN", warnings: ["Both sides are stocked; merging sums them."])
+                ],
+                alreadyCounted: true, defaultQuantity: nil, defaultUnit: "each", suggestedPlan: .create,
+                locationPlans: [
+                    LocationCode("LOC-2345"): .add(entry: InventoryEntryCode("INV-2345"), unit: "each")
                 ])
         }
         func receivingLocations() async throws -> [ReceivingLocation] {

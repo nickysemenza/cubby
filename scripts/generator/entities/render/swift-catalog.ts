@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { TIER1_NUTRIENTS } from "../../../../packages/usda/src/nutrient-codes.ts";
 import {
   entityFieldControlKinds,
   entityFieldKinds,
@@ -840,21 +839,6 @@ export const renderSwiftEntityCatalog = (
     .map(({ key }) => `  case ${swiftCaseName(key)} = ${swiftString(key)}`)
     .join("\n");
   return [
-    {
-      relativePath:
-        "apps/apple/CubbyKit/Sources/CubbyKit/Generated/NutrientCatalog.swift",
-      source:
-        generatedHeader +
-        "// swift-format-ignore-file\n\n" +
-        "public enum NutrientCatalog {\n    public static let labels: [String: String] = [\n" +
-        Object.entries(TIER1_NUTRIENTS)
-          .map(
-            ([key, nutrient]) =>
-              `        ${swiftString(key)}: ${swiftString(`${nutrient.displayName} (${nutrient.unit.toLowerCase()})`)}`,
-          )
-          .join(",\n") +
-        "\n    ]\n}\n",
-    },
     {
       relativePath:
         "apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift",

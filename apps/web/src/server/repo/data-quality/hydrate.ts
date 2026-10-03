@@ -86,19 +86,26 @@ export const buildQualityBreakdown = (
   const expected = [...new Set(expectedChecks)];
   const gaps = new Set(unresolvedChecks);
   const exceptions = new Set(activeExceptions);
+  const score = calculateDataQualityScore(
+    expected,
+    [...gaps].map((check) => ({ check })),
+  );
+  const expectedWeight = expected.reduce(
+    (sum, check) => sum + dataCheckWeight[check],
+    0,
+  );
+  const satisfiedWeight = expected.reduce(
+    (sum, check) => sum + (gaps.has(check) ? 0 : dataCheckWeight[check]),
+    0,
+  );
   return qualityBreakdown.parse({
-    score: calculateDataQualityScore(
-      expected,
-      [...gaps].map((check) => ({ check })),
-    ),
-    expectedWeight: expected.reduce(
-      (sum, check) => sum + dataCheckWeight[check],
-      0,
-    ),
-    satisfiedWeight: expected.reduce(
-      (sum, check) => sum + (gaps.has(check) ? 0 : dataCheckWeight[check]),
-      0,
-    ),
+    score,
+    expectedWeight,
+    satisfiedWeight,
+    summary:
+      expectedWeight === 0
+        ? "No applicable weighted checks: the score is 100/100. Unscored diagnostics remain visible below."
+        : `${satisfiedWeight} satisfied weight ÷ ${expectedWeight} applicable weight × 100 = ${score}/100`,
     checks: expected.map((check) => ({
       check,
       label: dataCheckLabel[check],
@@ -110,6 +117,17 @@ export const buildQualityBreakdown = (
         : exceptions.has(check)
           ? "excepted"
           : "satisfied",
+      stateLabel: gaps.has(check)
+        ? dataCheckKind[check] === "defect"
+          ? "Defect"
+          : "Missing data"
+        : exceptions.has(check)
+          ? "Accepted exception"
+          : "Satisfied",
+      weightLabel:
+        dataCheckWeight[check] === 0
+          ? "Unscored diagnostic"
+          : `weight ${dataCheckWeight[check]}`,
       description: dataCheckMessage[check],
       exceptionReasons: exceptionReasonsFor(check).map((reason) => ({
         reason,
