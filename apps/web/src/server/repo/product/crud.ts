@@ -2540,7 +2540,7 @@ export const patchProductExternalIds = async (
     }
     const pricing = await loadProductPricing(tx, [before]);
     // Data quality depends on the external IDs this call just changed (the
-    // amazon_asin/duplicate_external_id checks), so it must be recomputed
+    // amazon_asin and product_external_id checks), so it must be recomputed
     // here rather than reused from `before`.
     const qualities = await loadProductDataQualities(tx, [before.id]);
     return dbProductToTopLevelAPI({

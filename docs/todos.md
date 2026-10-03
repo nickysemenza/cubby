@@ -56,12 +56,11 @@ history is the archive. Permanent product constraints live in the
   analysis measurably slows while the sweep runs: add a `PhotoVisionGate`
   actor both acquire, with the sheet yielding the sweep.
 
-- 🟢 **Receiving an already-photographed purchase.** Keep import stock-neutral.
-  Surface existing photo inventory and pending Product matches before offering
-  receive; resolve identity first, then explicitly confirm whether additional
-  units arrived and their quantity. Never treat a merge or later purchase
-  evidence as another receipt of already-counted stock. Contract:
-  [product identity](product-identity-journey.md).
+- 🟢 **Receive on native.** Web now shows existing stock and pending Product
+  matches before receiving, defaults to "nothing new arrived", and requires an
+  explicit quantity for additional units, from an Expense or the Purchase's
+  Receive section (`inventory.receivingContext`). Build the same Expense and
+  Purchase receive slots in the Apple app.
 
 - ⏳ **Product match queue recall and cost.** Each unfocused queue read now
   logs `queue read coverage`: vector lookups, unseeded photo Products, and
@@ -131,12 +130,6 @@ See also the image operational passes at the end of this file.
   recorded. Reuse the bounded prepare/commit and approval paths in
   [purchase import](../.claude/skills/purchase-import/SKILL.md).
 
-- 🟢 **Start a historical backfill from the Mac app.** The server accepts an
-  inclusive date range on `/api/import/agent/sync`, walks it newest first, and
-  never moves the incremental cursor; the Mac Settings sync section needs the
-  range control. Pace by the browser bridge's one-command handoff unless a
-  vendor proves a stricter limit.
-
 - ⏳ **Conditional purchase-import browser extension.** Promote only if the
   Apple-event browser bridge repeatedly fails to background its window, cannot
   avoid Chrome's JavaScript-from-Apple-Events setting, or cannot provide
@@ -163,13 +156,6 @@ See also the image operational passes at the end of this file.
 
 ### Review and apply corrections
 
-- 🟢 **Review validation corrections on native.** Web now shows field-level
-  before/after corrections, revalidates stale targets, and applies the selected
-  set atomically (`purchaseImport.applyValidationCorrections`, person-only).
-  Expose the same operation and v2 diff in the Apple run review. A Purchase has
-  no currency column, so a non-USD order remains write-blocked rather than a
-  correction.
-
 - 🧱 **Cross-vendor manufacturer identifiers.** Add manufacturer-scoped
   part/style identity distinct from retailer SKU, with contract/generation
   compatibility planned across clients. Only identifiers proven to name an
@@ -178,12 +164,12 @@ See also the image operational passes at the end of this file.
   requiring size/color/model corroboration. Do not add a Product-family entity
   or merge automatically (`packages/schemas/src/external-id.ts`).
 
-- 🤔 **Import decision evaluation.** Build a synthetic outcome corpus for
-  identity, variants, line roles, reversals, ambiguous matches, and grouped
-  settlement. Measure correctness, unsafe decisions, latency, and cost before
-  changing matching or model routing; choose model candidates when the
-  comparison runs. The static Product reuse fixture checks shape, not
-  accuracy; evaluation must establish behavior, not another routing control.
+- 🤔 **Run the purchase decision evaluation.** A 12-case synthetic corpus and
+  scorer (correct, unsafe, reviewable miss; latency, tokens, cost) exist behind
+  `pnpm --dir apps/web eval:purchase-decisions` (opt-in, billed). Run it on
+  candidate coordinator models before changing matching or purchase-run model
+  routing; purchase runs stay on Sol until it does. Scripted Flue scenarios
+  prove orchestration, not model judgment.
 
 ---
 
@@ -270,12 +256,6 @@ See also the image operational passes at the end of this file.
   `repo/product/quantity-ledger.ts`). This
   addresses negative expected quantities from exits whose earlier acquisition
   is missing; filling known acquisition quantities remains an operational pass.
-
-- 🟢 **Retire unreachable external-ID collision paths.** Import and
-  enrichment now propose colliding pairs in the Product match queue. The live
-  unique index makes `duplicate_external_id` and the `collision` result of
-  `product.externalIdCollisions` unreachable; remove them rather than keep a
-  second path.
 
 ---
 
