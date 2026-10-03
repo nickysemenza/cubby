@@ -610,10 +610,9 @@ describe("declared entity displays", () => {
       expect(byId.manufacturer?.className).toBe("w-40");
       expect(byId.model?.className).toBe("w-40");
       expect(byId.notes?.className).toBe("w-40");
-      // No declared width (e.g. usdaUnavailable) stays unset; a named
-      // renderer's own column meta (expected-quantity's w-24) passes through.
+      // No declared width (e.g. usdaUnavailable) stays unset.
       expect(byId.usdaUnavailable?.className).toBeUndefined();
-      expect(byId.ledgerExpectedQuantity?.className).toBe("w-24");
+      expect(byId.ledgerExpectedQuantity?.className).toBe("w-28");
     });
 
     it("passes declared mobile placement straight through as column meta", () => {

@@ -13,6 +13,7 @@ import {
 } from "@cubby/schemas/meal-fields";
 import { mealDate } from "@cubby/schemas/meal-shared";
 import { imageOut } from "./field-primitives.js";
+import { labelField } from "./label-field.js";
 import { z } from "zod";
 export default defineEntity({
   key: "meal",
@@ -82,7 +83,7 @@ export default defineEntity({
       ],
       read: {
         relations: ["recipes", "recipeNames"],
-        derived: ["totals", "cost", "calories"],
+        derived: ["totals", "costTotalLabel", "cost", "calories"],
         media: ["images", "displayImages"],
         quality: ["dataQuality"],
         dependencies: { derived: ["relations"] },
@@ -218,7 +219,11 @@ export default defineEntity({
         key: "recipes",
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { list: true, renderer: { list: "recipe-links" } },
+        display: {
+          list: true,
+          labelPath: "recipes[].recipe.name",
+          renderer: { list: "recipe-links" },
+        },
         provenance: {
           kind: "relation",
           sources: [{ entity: "recipe", relation: "recipes" }],
@@ -362,10 +367,15 @@ export default defineEntity({
         kind: "json",
         nullable: true,
         labelOverride: "Cost",
+        // Not sortable: a read-time rollup of `recipe.totals x scale` through
+        // the estimate engine, which a SQL ORDER BY cannot reproduce for
+        // partial/pending/unavailable results. The server composes the text.
         display: {
           list: true,
           columnIdOverride: "cost",
-          renderer: { list: "meal-cost" },
+          labelPath: "costTotalLabel",
+          width: "xs",
+          mobile: { slot: "trailing", priority: 10 },
         },
         provenance: {
           kind: "derived",
@@ -386,6 +396,7 @@ export default defineEntity({
           ],
         },
       },
+      labelField("costTotalLabel", "Meal cost total"),
       {
         // The names of `recipes[].recipe`, so a generic row or facts list can
         // show what the meal is without decoding the composition.

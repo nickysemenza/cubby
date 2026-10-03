@@ -27,6 +27,7 @@ import {
   mapImages,
   type MappableImageRecord,
 } from "~/server/repo/database-helpers";
+import { mealCostLabel } from "~/server/repo/list-display-labels";
 import {
   type ListProjection,
   wantsListGroup,
@@ -167,7 +168,12 @@ export const dbMealListReadProjection = (
       recipes,
       recipeNames: recipes.map((recipe) => recipe.recipe.name),
     });
-  if (totals) Object.assign(result, { totals, ...totalsPreview(totals) });
+  if (totals)
+    Object.assign(result, {
+      totals,
+      ...totalsPreview(totals),
+      costTotalLabel: mealCostLabel(totals.cost),
+    });
   if (wantsListGroup(projection, "media"))
     result.images = mapImages(row.images);
   return result;

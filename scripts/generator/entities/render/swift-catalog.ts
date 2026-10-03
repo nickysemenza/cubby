@@ -370,6 +370,7 @@ const fieldDisplayJSON = (
   width: display.width ?? null,
   format: display.format ?? null,
   readPath: display.readPath ?? null,
+  labelPath: display.labelPath ?? null,
   listRenderer: optionalMember(
     vocabulary,
     "ListRendererID",

@@ -128,6 +128,11 @@ import {
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
 import { listScaffold } from "~/server/repo/list";
 import {
+  expectedQuantityLabel,
+  quantityVarianceLabel,
+  unitPriceLabel,
+} from "~/server/repo/list-display-labels";
+import {
   loadListGroup,
   wantsListGroup,
   type ListProjection,
@@ -1402,7 +1407,11 @@ export const listProductsRead = async (
           primaryGtin: primaryGtinOf(relations.externalIds),
           upcPresence: Boolean(primaryGtinOf(relations.externalIds)),
         });
-      if (wantsListGroup(projection, "derived"))
+      if (wantsListGroup(projection, "derived")) {
+        const quantity = deriveProductQuantitySummary(
+          inventory,
+          ledgerById.get(row.id)!,
+        );
         Object.assign(patch, {
           pricing: pricingById.get(row.id),
           fieldResolutions: {
@@ -1415,8 +1424,15 @@ export const listProductsRead = async (
           expenseTotal: Number(row.expenseTotal),
           componentCount: Number(row.componentCount),
           purchaseDate: row.purchaseDate,
-          ...deriveProductQuantitySummary(inventory, ledgerById.get(row.id)!),
+          ...quantity,
+          ledgerExpectedQuantityLabel: expectedQuantityLabel(
+            quantity.quantityLedger,
+          ),
+          quantityVarianceLabel: quantityVarianceLabel(
+            quantity.quantityVariance,
+          ),
         });
+      }
       return patch;
     },
   );
@@ -1435,7 +1451,9 @@ export const listProductsRead = async (
     }));
     const derived = await enrichProductListItems(seeds, usdaClient);
     derived.forEach((values, index) =>
-      Object.assign(deferredRows[index]!, values),
+      Object.assign(deferredRows[index]!, values, {
+        unitPriceLabel: unitPriceLabel(values.unitPrice),
+      }),
     );
   }
   const hydrated = wantsListGroup(projection, "media")

@@ -1227,6 +1227,9 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
  * `display.format` the cell renderer switches on — `external-link` copies
  * like the field's own kind (number or text), so it has no dedicated branch.
  */
+/** What a `display.labelPath` read may carry: text, or a `[]` projection of text. */
+const labelValue = z.union([z.string().min(1), z.array(z.string()).min(1)]);
+
 function cellDataForField<TRecord extends object>(
   entity: Entity,
   field: DisplayField,
@@ -1549,6 +1552,44 @@ export function createEntityDisplayColumns<TRecord extends object>(
               />
             ),
           }),
+        );
+        continue;
+      }
+      // A declared `labelPath` is text the server composed for the cell; the
+      // field's own value, when it has one, stays the sort value.
+      const labelPath = field.display.labelPath;
+      if (labelPath !== null) {
+        const labelOf = (record: TRecord) => {
+          const parsed = labelValue.safeParse(readPathValue(record, labelPath));
+          if (!parsed.success) return null;
+          return Array.isArray(parsed.data)
+            ? parsed.data.join(", ")
+            : parsed.data;
+        };
+        add(
+          helper.accessor(
+            (record) =>
+              field.readKey !== null || field.display.readPath !== null
+                ? readScalarField(entity, record, field).raw
+                : labelOf(record),
+            {
+              id: columnId,
+              header: field.label,
+              enableSorting: defaultEnableSorting,
+              meta: attachCubbyColumnMeta({
+                entityColumnRole: "fact",
+                provenance: field.provenance ?? undefined,
+                explanation: field.explanation
+                  ? { entity, field: field.key, label: field.label }
+                  : undefined,
+                className: widthClassName(field.display.width),
+                numeric: field.kind === "number" ? true : undefined,
+                mobile: toMobileColumnMeta(field.display.mobile),
+                cellData: textCellData<TRecord>("text", labelOf),
+              }),
+              cell: ({ row }) => labelOf(row.original) ?? <NoneValue />,
+            },
+          ),
         );
         continue;
       }

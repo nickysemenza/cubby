@@ -30,6 +30,7 @@ interface RecipeRow {
   totals: null;
   updatedAt: Date;
   meta: { times: { totalMinutes: number } } | null;
+  totalMinutesLabel: string | null;
   source: RecipeSource | null;
   meals: number;
   notes: string | null;
@@ -41,6 +42,7 @@ const RECIPE_ROW: RecipeRow = {
   totals: null,
   updatedAt: new Date(),
   meta: { times: { totalMinutes: 35 } },
+  totalMinutesLabel: "35 min",
   source: { type: "website", url: "https://www.example.com/recipe" },
   meals: 2,
   notes: "Fixture notes",
@@ -205,7 +207,7 @@ describe("recipe list display columns", () => {
     });
   });
 
-  it("renders totalMinutes through the declared total-time renderer", () => {
+  it("renders totalMinutes as the server-composed label", () => {
     render(<>{renderRecipeCell("totalMinutes", RECIPE_ROW)}</>);
     expect(screen.getByText("35 min")).toBeVisible();
   });

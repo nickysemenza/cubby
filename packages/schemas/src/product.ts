@@ -1,3 +1,4 @@
+import { listLabel } from "./entity-definitions/label-field";
 import { tradeSchema } from "./task-fields";
 import { productCategoryFeature } from "./product-category-fields";
 import { productCategoryShortcode } from "./identifier-fields";
@@ -787,6 +788,10 @@ export const productListItemOut = z.object({
   expenseTotal: money,
   purchaseDate: plainDate.nullable(),
   ...productQuantityFields,
+  // Server-composed text for the Expected, Variance and Unit price columns.
+  ledgerExpectedQuantityLabel: listLabel,
+  quantityVarianceLabel: listLabel,
+  unitPriceLabel: listLabel,
 });
 export type ProductListItem = z.infer<typeof productListItemOut>;
 

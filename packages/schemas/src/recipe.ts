@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { listLabel } from "./entity-definitions/label-field";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { numericRangeFields, timestampedFields } from "./base-entity";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
@@ -191,6 +192,10 @@ export const recipeListItemOut = z.object({
   ...recipeTopLevelFields,
   dataQuality: generatedRecipeFieldSchemas.read.dataQuality,
   totals: recipeTotals.nullish(),
+  // Server-composed text for the computed Cost, Calories and Time columns.
+  costTotalLabel: listLabel,
+  caloriesTotalLabel: listLabel,
+  totalMinutesLabel: listLabel,
   cost: generatedRecipeFieldSchemas.read.cost,
   calories: generatedRecipeFieldSchemas.read.calories,
   protein: generatedRecipeFieldSchemas.read.protein,

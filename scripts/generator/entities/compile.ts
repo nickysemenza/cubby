@@ -511,6 +511,7 @@ const compileFieldModel = (
         standard: field.display.standard,
         width: field.display.width ?? null,
         readPath: field.display.readPath ?? null,
+        labelPath: field.display.labelPath ?? null,
         format: field.display.format ?? null,
         renderer: field.display.renderer ?? null,
         mobile: field.display.mobile ?? null,
@@ -552,6 +553,17 @@ const compileFieldModel = (
       if (!field.display.list && !field.display.detail)
         throw new EntityDeclarationError(
           `${context}.${field.key}.display.readPath requires display.list or display.detail.`,
+        );
+    }
+    const labelPath = field.display.labelPath;
+    if (labelPath !== null) {
+      if (!DISPLAY_READ_PATH.test(labelPath))
+        throw new EntityDeclarationError(
+          `${context}.${field.key}.display.labelPath "${labelPath}" must be dotted keys with optional [n] or [] segments.`,
+        );
+      if (!field.display.list)
+        throw new EntityDeclarationError(
+          `${context}.${field.key}.display.labelPath requires display.list.`,
         );
     }
     const standard = field.display.standard;

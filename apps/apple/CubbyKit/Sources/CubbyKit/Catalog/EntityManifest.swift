@@ -79,21 +79,15 @@ public enum ListRendererID: String, CaseIterable, Codable, Sendable {
     case dataQuality = "data-quality"
     case estimateCost = "estimate-cost"
     case estimateKcal = "estimate-kcal"
-    case expectedQuantity = "expected-quantity"
-    case expenseCount = "expense-count"
     case financialSettlement = "financial-settlement"
-    case mealCost = "meal-cost"
     case orderLink = "order-link"
     case possibleVendor = "possible-vendor"
     case productLink = "product-link"
-    case quantityVariance = "quantity-variance"
     case recipeLinks = "recipe-links"
     case recipeSource = "recipe-source"
     case reconciliationStatus = "reconciliation-status"
     case spendingCategorySummary = "spending-category-summary"
     case tagLinks = "tag-links"
-    case totalTime = "total-time"
-    case unitPrice = "unit-price"
     case uploadedImage = "uploaded-image"
     case usdaFoodLink = "usda-food-link"
     case valuationSummary = "valuation-summary"
@@ -319,6 +313,10 @@ public struct FieldDescriptor: Codable, Sendable {
     /// Where a field with no flat read key reads from on a row: dotted keys with optional `[n]` / `[]`
     /// segments (`quantityLedger.locationCount`, `sourceRefs[].source`).
     public let readPath: String?
+    /// Where a list row carries this field's human-readable text (`readPath`'s grammar): a
+    /// server-composed figure or a reference's display name. Clients print it instead of
+    /// re-deriving the figure.
+    public let labelPath: String?
     public let listRenderer: ListRendererID?
     public let detailRenderer: DetailRendererID?
     /// Mobile card placement of the list column, when declared.

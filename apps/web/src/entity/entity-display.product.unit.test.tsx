@@ -37,6 +37,7 @@ interface ProductRow {
   expenseTotal: number;
   servingAsLocations: number;
   componentCount: number;
+  ledgerExpectedQuantityLabel: string;
   quantityLedger: {
     expectedQuantity: number;
     acquiredUnits: number;
@@ -66,6 +67,7 @@ const PRODUCT_ROW: ProductRow = {
   expenseTotal: 42,
   servingAsLocations: 1,
   componentCount: 0,
+  ledgerExpectedQuantityLabel: "3",
   quantityLedger: {
     expectedQuantity: 3,
     acquiredUnits: 3,
@@ -287,7 +289,7 @@ describe("product list display columns", () => {
     expect(screen.getByText("Tools")).toBeVisible();
   });
 
-  it("renders ledgerExpectedQuantity through the declared expected-quantity renderer", () => {
+  it("renders ledgerExpectedQuantity as the server-composed label", () => {
     render(<>{renderProductCell("ledgerExpectedQuantity", PRODUCT_ROW)}</>);
     expect(screen.getByText("3")).toBeVisible();
   });

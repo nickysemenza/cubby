@@ -105,38 +105,25 @@ export const nativeCoverage = {
       "spending-category-summary",
       "data-quality",
     ]),
-    ...unsupported(
-      [
-        "expected-quantity",
-        "quantity-variance",
-        "estimate-cost",
-        "estimate-kcal",
-        "total-time",
-        "meal-cost",
-        "unit-price",
-        "valuation-summary",
-        "financial-settlement",
-        "reconciliation-status",
-        "expense-count",
-      ],
-      "This computed figure is available on web.",
-    ),
-    ...unsupported(
-      [
-        "tag-links",
-        "recipe-links",
-        "product-link",
-        "usda-food-link",
-        "vendor-cell",
-        "order-link",
-        "possible-vendor",
-      ],
-      "This linked cell is available on web; the field reads as a reference natively.",
-    ),
-    ...unsupported(
-      ["uploaded-image"],
-      "The thumbnail is drawn from the row image natively.",
-    ),
+    // Drawn from the field's declared `display.labelPath`: the server-composed figure (a rule
+    // computed once, not per client) or the display name of the record a cell links to. The rich
+    // web cell (tooltip, pill, link, workbench) stays web-only; the fact it carries does not.
+    ...generic([
+      "estimate-cost",
+      "estimate-kcal",
+      "financial-settlement",
+      "reconciliation-status",
+      "valuation-summary",
+      "tag-links",
+      "recipe-links",
+      "product-link",
+      "usda-food-link",
+      "vendor-cell",
+      "order-link",
+      "possible-vendor",
+    ]),
+    // The Image row IS the picture: native draws it as the row thumbnail.
+    ...ownedElsewhere(["uploaded-image"]),
   },
   detail: {
     ...generic([
@@ -305,7 +292,7 @@ export const nativeCoverage = {
  */
 export const NATIVE_UNSUPPORTED_CEILING = {
   control: 7,
-  list: 19,
+  list: 0,
   detail: 15,
   heroAction: 7,
   detailSlot: 38,

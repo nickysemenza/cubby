@@ -217,6 +217,7 @@ export type EntityField = Readonly<{
     listOrder: number | null;
     width: "xs" | "sm" | "md" | "lg" | null;
     readPath: string | null;
+    labelPath: string | null;
     format: DisplayFormat | null;
     renderer: Readonly<{
       list: string | null;

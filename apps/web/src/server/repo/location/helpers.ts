@@ -29,6 +29,7 @@ import {
   type RowWithOptionalAliasesAndTags,
 } from "~/server/repo/database-helpers";
 import { requireLoadedProductPricing } from "~/server/repo/inventory/mappers";
+import { valuationLabel } from "~/server/repo/list-display-labels";
 import { parseLocationType } from "~/server/repo/location/parse-type";
 import {
   mapDbProductToInventoryEmbed,
@@ -93,6 +94,7 @@ export const dbLocationToListAPI = <Q extends DataQuality | undefined>(
   dataQuality: Q;
 } => ({
   ...dbLocationToAPI(locationData, valuations, dataQuality),
+  valuationLabel: valuationLabel(valuations?.get(locationData.id)),
   parent:
     locationData.parent && isNotDeleted(locationData.parent)
       ? dbLocationToListRef(locationData.parent)

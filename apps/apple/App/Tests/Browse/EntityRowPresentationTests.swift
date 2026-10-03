@@ -46,6 +46,31 @@ struct EntityRowPresentationTests {
         #expect(!presentation.accessibilityText.contains("PRD-1001"))
     }
 
+    @Test func serverComposedLabelsPrintInsteadOfARederivedFigure() throws {
+        let purchase = EntityRow(
+            id: "PUR-1001", title: "Order", subtitle: nil, imageURL: nil,
+            raw: [
+                "id": "PUR-1001", "expenseCount": 4, "expenseCountLabel": "4 · 2 unpriced",
+                "reconciliation": "mismatch", "reconciliationLabel": "Needs review -$5.00",
+            ])
+        let presentation = EntityRowPresentation.resolve(
+            descriptor: EntityCatalog[.purchase], row: purchase,
+            columns: ["expenseCount", "reconciliation"])
+        #expect(presentation.facts.contains { $0.value == "4 · 2 unpriced" })
+        #expect(presentation.facts.contains { $0.value == "Needs review -$5.00" })
+
+        // A reference cell names the records it links to, one per element.
+        let meal = EntityRow(
+            id: "MEL-1001", title: "Supper", subtitle: nil, imageURL: nil,
+            raw: [
+                "id": "MEL-1001",
+                "recipes": [["recipe": ["name": "Soup"]], ["recipe": ["name": "Bread"]]],
+            ])
+        let mealFacts = EntityRowPresentation.resolve(
+            descriptor: EntityCatalog[.meal], row: meal, columns: ["recipes"])
+        #expect(mealFacts.facts.contains { $0.value == "Soup, Bread" })
+    }
+
     @Test func relationColumnsResolveRenamedReferencesAndZeroCurrency() throws {
         let descriptor = EntityCatalog[.purchase]
         let row = EntityRow(

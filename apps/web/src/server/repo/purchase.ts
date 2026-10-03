@@ -108,6 +108,11 @@ import {
 import { displayableImageSql } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list";
 import {
+  expenseCountLabel,
+  reconciliationLabel,
+  settlementLabel,
+} from "~/server/repo/list-display-labels";
+import {
   listGroupFields,
   hydrateListRead,
   loadListGroup,
@@ -762,6 +767,19 @@ export const purchaseListRead = async (
             const financial =
               derived?.financials.get(row.id) ??
               emptyPurchaseFinancialAggregate();
+            const reconciliation = reconcilePurchase({
+              statedTotal: row.statedTotal,
+              expenseTotal: Number(row.vendorExpenseTotal),
+              expenseCount: Number(row.vendorExpenseCount),
+              unpricedExpenseCount: Number(row.vendorUnpricedExpenseCount),
+              postedRefundTotal: financial.postedRefundTotal,
+            });
+            const financialReconciliation = calculateFinancialReconciliation({
+              settleableExpenseTotal: row.settleableExpenseTotal!,
+              settleableUnpricedExpenseCount:
+                row.settleableUnpricedExpenseCount!,
+              ...financial,
+            });
             return {
               ...row,
               id: parseShortcodeFor("purchase", row.shortcode),
@@ -809,19 +827,20 @@ export const purchaseListRead = async (
                 documentCoverage: row.coverage!.document,
                 itemizationCoverage: row.coverage!.itemization,
                 productsCoverage: row.coverage!.products,
-                reconciliation: reconcilePurchase({
+                reconciliation,
+                financialReconciliation,
+                expenseCountLabel: expenseCountLabel(
+                  Number(row.expenseCount),
+                  Number(row.unpricedExpenseCount),
+                ),
+                reconciliationLabel: reconciliationLabel({
                   statedTotal: row.statedTotal,
-                  expenseTotal: Number(row.vendorExpenseTotal),
-                  expenseCount: Number(row.vendorExpenseCount),
-                  unpricedExpenseCount: Number(row.vendorUnpricedExpenseCount),
-                  postedRefundTotal: financial.postedRefundTotal,
+                  expenseTotal: Number(row.expenseTotal),
+                  reconciliation,
                 }),
-                financialReconciliation: calculateFinancialReconciliation({
-                  settleableExpenseTotal: row.settleableExpenseTotal!,
-                  settleableUnpricedExpenseCount:
-                    row.settleableUnpricedExpenseCount!,
-                  ...financial,
-                }),
+                financialReconciliationLabel: settlementLabel(
+                  financialReconciliation,
+                ),
               })),
             };
           },

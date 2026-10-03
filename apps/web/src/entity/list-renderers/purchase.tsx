@@ -5,7 +5,6 @@ import { VendorCell } from "~/entity/components/vendor-cell";
 import { createTextColumn } from "~/ui/data-table/columnHelpers";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import { Row } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 import type { ListRenderer } from "../list-renderer-types";
@@ -65,34 +64,6 @@ const orderLink: ListRenderer<"purchase"> = (helper) =>
     );
   });
 
-const expenseCount: ListRenderer<"purchase"> = (helper) =>
-  createCubbyColumnCollection((add) => {
-    add(
-      helper.accessor((row) => row.expenseCount, {
-        id: "expenseCount",
-        header: "Expenses",
-        meta: {
-          numeric: true,
-          className: "w-32",
-          mobile: { slot: "meta", priority: 50 },
-        },
-        cell: (info) => {
-          const row = info.row.original;
-          return (
-            <Row align="center" justify="end" gap="xs">
-              <span className="tabular-nums">{info.getValue()}</span>
-              {row.unpricedExpenseCount > 0 && (
-                <Badge variant="warning">
-                  {row.unpricedExpenseCount} unpriced
-                </Badge>
-              )}
-            </Row>
-          );
-        },
-      }),
-    );
-  });
-
 const financialSettlement: ListRenderer<"purchase"> = (helper) =>
   createCubbyColumnCollection((add) => {
     add(
@@ -126,7 +97,6 @@ const reconciliationStatus: ListRenderer<"purchase"> = (helper) =>
 export const purchaseListRenderers = {
   "vendor-cell": vendor,
   "order-link": orderLink,
-  "expense-count": expenseCount,
   "financial-settlement": financialSettlement,
   "reconciliation-status": reconciliationStatus,
 } as const;

@@ -364,6 +364,7 @@ describe("GenericEntityList", () => {
           reason: "no_data",
         })),
       }),
+      costTotalLabel: "$18.50",
       displayName: "Weeknight Supper",
       displayImages: [],
     },

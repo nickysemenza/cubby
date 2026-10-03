@@ -1,3 +1,4 @@
+import { listLabel } from "./entity-definitions/label-field";
 import { productCategorySummary } from "./product-category-fields";
 import { fdcId } from "@cubby/usda";
 import { gtin } from "./external-id";
@@ -309,6 +310,8 @@ const locationInventoryWithProductOut = z.object({
 const locationListItemFields = {
   ...locationOutFields,
   displayImages: displayImagesField,
+  // Server-composed text for the Valuation column.
+  valuationLabel: listLabel,
   children: z.array(locationListRefOut),
   parent: locationListRefOut.nullable(),
   inventoryEntries: z.array(locationInventoryWithProductOut),
