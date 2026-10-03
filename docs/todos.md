@@ -194,14 +194,6 @@ See also the image operational passes at the end of this file.
 
 ### Reconcile charges and refunds
 
-- 🟢 **Rank ambiguous settlement candidates for review.** Retained payment
-  lines and mail-proven order groups now settle uniquely evidenced, conserved
-  allocations automatically (`purchase-import/retained-settlement.ts`);
-  everything else stays reviewable. Add the bounded Jev tie-break that orders
-  ambiguous candidates in that review, never as write authority. Refund groups
-  stay reviewable because a credit's split is not stated by order totals.
-  Contract: [product identity and settlement](product-identity-journey.md).
-
 ### Review and apply corrections
 
 - 🟢 **Review validation corrections on native.** Web now shows field-level
