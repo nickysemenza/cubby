@@ -1245,6 +1245,10 @@ async function runNativeJourney(
       throw new Error("Tester Army iOS journey did not pass");
     return;
   }
+  // CLI replay owns a separate daemon. Release the prepare daemon so it
+  // cannot retain the runner lease; this hosted daemon belongs to this job.
+  if (process.env.GITHUB_ACTIONS === "true")
+    await run("pnpm", ["exec", "agent-device", "daemon", "stop"]);
   const stopRecording = video
     ? await recordSimulatorVideo(deviceID)
     : undefined;
