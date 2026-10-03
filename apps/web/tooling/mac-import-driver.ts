@@ -76,19 +76,38 @@ export class MacImportDriver {
     action: "press" | "scroll" | "fill",
     containerID: string,
     value: string,
-  ): void {
+  ): boolean {
     this.guardForeground();
-    execFileSync(
-      this.presentationHelper,
-      [
-        action,
-        String(this.pid),
-        path.join(homedir(), "Library/Caches/CubbyMacImportFixture/Cubby.app"),
-        containerID,
-        value,
-      ],
-      { timeout: 10000 },
-    );
+    try {
+      execFileSync(
+        this.presentationHelper,
+        [
+          action,
+          String(this.pid),
+          path.join(
+            homedir(),
+            "Library/Caches/CubbyMacImportFixture/Cubby.app",
+          ),
+          containerID,
+          value,
+        ],
+        { timeout: 10000 },
+      );
+      return true;
+    } catch (error) {
+      if (
+        action === "press" &&
+        z.object({ status: z.literal(2) }).safeParse(error).success
+      ) {
+        this.record(
+          ["AX-press-unsupported", containerID, value],
+          0,
+          "Owned coordinate input required",
+        );
+        return false;
+      }
+      throw error;
+    }
   }
 
   async prepareBackend(): Promise<void> {
@@ -479,9 +498,11 @@ export class MacImportDriver {
       JSON.stringify({ x, y, text: hit.text, ownedPID: this.pid }),
     );
     const buttonScope = containerID ?? this.buttonContainer(node);
-    if (buttonScope && role(node) === "button" && node.identifier) {
-      this.presentationAction("press", buttonScope, node.identifier);
-    } else {
+    const pressed =
+      buttonScope && role(node) === "button" && node.identifier
+        ? this.presentationAction("press", buttonScope, node.identifier)
+        : false;
+    if (!pressed) {
       this.invoke(
         [
           "press",

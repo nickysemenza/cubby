@@ -106,7 +106,11 @@ case "press":
   guard buttons.count == 1 else {
     fatalError("Expected one enabled scoped AX button; found \(buttons.count)")
   }
-  status = AXUIElementPerformAction(buttons[0], kAXPressAction as CFString)
+  var actionNames: CFArray?
+  _ = AXUIElementCopyActionNames(buttons[0], &actionNames)
+  let actions = actionNames as? [String] ?? []
+  let action = actions.contains(kAXPressAction) ? kAXPressAction : kAXShowMenuAction
+  status = AXUIElementPerformAction(buttons[0], action as CFString)
 case "fill":
   guard attribute(containers[0], kAXRoleAttribute) as? String == kAXTextFieldRole,
     attribute(containers[0], kAXEnabledAttribute) as? Bool != false
@@ -126,6 +130,10 @@ case "scroll":
     NSNumber(value: min(1, max(0, current.doubleValue + amount)))
   )
 default: fatalError("Unsupported presentation AX action")
+}
+if arguments[1] == "press", status == .attributeUnsupported || status == .actionUnsupported {
+  print("Owned AX button does not support press or menu input")
+  exit(2)
 }
 guard status == .success else { fatalError("Presentation AX action failed: \(status.rawValue)") }
 print("\(arguments[1]) succeeded in owned container \(arguments[4])")
