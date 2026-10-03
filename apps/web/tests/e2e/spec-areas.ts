@@ -485,6 +485,13 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/server/repo/financial-transaction.ts`,
     `${WEB}/src/server/repo/purchase.ts`,
   ],
+  "receive-after-photo-inventory.spec.ts": [
+    `${WEB}/src/app/expenses/**`,
+    `${WEB}/src/app/purchases/**`,
+    `${WEB}/src/server/services/receiving-context.service.ts`,
+    `${WEB}/src/server/services/product-match.service.ts`,
+    `${WEB}/src/server/repo/inventory/**`,
+  ],
   "relationship-discovery.spec.ts": [
     `${WEB}/tests/e2e/relationship-discovery-contract.ts`,
     `${WEB}/src/routes/_authenticated/purchases.$shortcode.tsx`,

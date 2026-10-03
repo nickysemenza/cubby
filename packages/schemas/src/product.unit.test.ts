@@ -44,6 +44,7 @@ describe("productMcpOut", () => {
       usdaUnavailable: null,
       labelNutrition: null,
       stockTracked: null,
+      kind: null,
       externalIds: [],
       usdaFdcId: null,
       ingredientId: null,

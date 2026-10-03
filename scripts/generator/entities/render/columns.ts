@@ -63,6 +63,7 @@ const enumColumnExpression = (
   const expressions = {
     "expense.economicRole": `text(${column},{enum:["vendor", "reimbursement"]})`,
     "product.acquisitionOrigin": `text(${column},{enum:["unknown", "purchased", "gift", "previously_owned"]})`,
+    "product.kind": `text(${column},{enum:productKindValues})`,
     "spendingCategory.evidenceExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
     "vendor.evidenceExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
     "purchase.evidenceExpectation": `text(${column},{enum:["unknown", "required", "not_expected"]})`,
@@ -213,6 +214,7 @@ export const storageColumnImports =
   'import { mealKindValues, mealTypeValues } from "@cubby/schemas/meal-classification";\n' +
   'import type { IngredientApplicabilityKey } from "@cubby/schemas/codec";\n' +
   'import { productCategoryFeatureValues } from "@cubby/schemas/product-category-fields";\n' +
+  'import { productKindValues } from "@cubby/schemas/product-fields";\n' +
   'import { costTypeValues, projectKindValues, projectStatusValues, taskStatusValues, tradeValues } from "@cubby/schemas/project";\n' +
   'import { expenseLineBasisValues, expenseLineKindValues } from "@cubby/schemas/expense-line-kind";\n' +
   'import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";\n' +

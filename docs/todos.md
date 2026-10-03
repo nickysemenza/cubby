@@ -56,13 +56,6 @@ history is the archive. Permanent product constraints live in the
   analysis measurably slows while the sweep runs: add a `PhotoVisionGate`
   actor both acquire, with the sheet yielding the sweep.
 
-- 🟢 **Receiving an already-photographed purchase.** Keep import stock-neutral.
-  Surface existing photo inventory and pending Product matches before offering
-  receive; resolve identity first, then explicitly confirm whether additional
-  units arrived and their quantity. Never treat a merge or later purchase
-  evidence as another receipt of already-counted stock. Contract:
-  [product identity](product-identity-journey.md).
-
 - ⏳ **Product match queue recall and cost.** Each unfocused queue read now
   logs `queue read coverage`: vector lookups, unseeded photo Products, and
   photo Products with no candidate at all, split by whether they were seeded.
@@ -246,15 +239,6 @@ See also the image operational passes at the end of this file.
 ---
 
 ## Inventory, products & locations
-
-- 🧱 **Consumable vs durable as a Product attribute.** Add optional
-  `Product.kind: consumable | durable`, independent of the choice to count
-  stock (`stockTracked`). Use kind for useful worklist filters and contextual
-  import project suggestions: routine supplies suggest Household, project
-  materials use order/project evidence, and explicit choices win. Leave kind
-  unset when uncertain, with no completeness penalty or classification wizard;
-  do not rewrite existing Expenses. Plan schema and generated-client
-  compatibility before adding the field.
 
 ---
 

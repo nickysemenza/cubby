@@ -7,6 +7,11 @@
  * a blind second create.
  * The operator chooses move, add, or create here; the shared receiving command
  * rechecks the choice against current stock and resolves delivery atomically.
+ *
+ * Import stays stock-neutral: when the Product already has stock, or a stocked
+ * Product (e.g. a photo import) may be the same item, the dialog shows that
+ * first and defaults to "Nothing new arrived". Units are added only after an
+ * explicit "Additional units arrived" and a typed quantity.
  */
 
 import type {
@@ -16,14 +21,17 @@ import type {
 import {
   positiveAmount,
   type InventoryReceiveExpenseInput,
+  type InventoryReceivingContextOut,
 } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { type FC } from "react";
+import { Link } from "@tanstack/react-router";
+import { useState, type FC } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { entityDetailFor } from "~/entity/entity-detail";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
 import {
   AmountFieldGroup,
@@ -35,14 +43,20 @@ import { getOptionalLocationId, optionalLocationField } from "~/ui/form-fields";
 import { ComboboxFieldWithSearch } from "~/ui/form-utils/combobox-field-with-search";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
+import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
 
+// A null quantity is "not entered yet": an already-counted Product starts
+// blank so units can never be added without typing a number.
 const formSchema = z.object({
   location: optionalLocationField,
-  addQuantity: z.number().positive(),
-  createAmount: positiveAmount,
+  addQuantity: z.number().positive().nullable(),
+  createAmount: z.object({
+    value: z.number().nullable(),
+    unit: z.string(),
+  }),
 });
 
 type ReceiveValues = z.infer<typeof formSchema>;
@@ -55,6 +69,16 @@ interface ReceiveExpenseDialogProps {
   expenseId: ExpenseShortcode;
 }
 
+type ProductDetail = DetailRecordOf<"product">;
+
+interface ReceiveBodyProps {
+  productId: ProductShortcode;
+  expenseId: ExpenseShortcode;
+  product: ProductDetail;
+  context: InventoryReceivingContextOut;
+  onDone: () => void;
+}
+
 export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   open,
   onOpenChange,
@@ -62,29 +86,77 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   expenseName,
   expenseId,
 }) => {
-  const { data: product, isLoading } = useQuery({
+  const { data: product } = useQuery({
     ...entityDetailFor("product").queryOptions(productId),
     enabled: open,
   });
+  const { data: context } = useQuery({
+    ...inventoryOperations.receivingContext.queryOptions({ productId }),
+    enabled: open,
+    // Stock is the thing being decided; never decide on a cached count.
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+  return (
+    <WorkflowDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Receive into Inventory"
+      description={`Put what "${expenseName}" bought onto a shelf.`}
+    >
+      {product && context ? (
+        <ReceiveBody
+          productId={productId}
+          expenseId={expenseId}
+          product={product}
+          context={context}
+          onDone={() => onOpenChange(false)}
+        />
+      ) : (
+        <Description>Loading product…</Description>
+      )}
+    </WorkflowDialog>
+  );
+};
+
+const ReceiveBody: FC<ReceiveBodyProps> = ({
+  productId,
+  expenseId,
+  product,
+  context,
+  onDone,
+}) => {
+  const stockedMatches = context.matches.filter(
+    (match) => match.candidate.inventoryCount > 0,
+  );
+  const ownUnits = context.stock.reduce(
+    (sum, entry) => sum + entry.amount.value,
+    0,
+  );
+  // Already counted: the shelf holds this Product, or a stocked Product that
+  // may be the same item. Importing the purchase never added to either.
+  const alreadyCounted = stockedMatches.length > 0 || context.stock.length > 0;
+  const [unitsConfirmed, setUnitsConfirmed] = useState(!alreadyCounted);
 
   const form = useForm<ReceiveValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       location: null,
-      addQuantity: 1,
-      createAmount: { value: 1, unit: DEFAULT_AMOUNT_UNIT },
+      addQuantity: alreadyCounted ? null : 1,
+      createAmount: {
+        value: alreadyCounted ? null : 1,
+        unit: DEFAULT_AMOUNT_UNIT,
+      },
     },
   });
   const locationId = getOptionalLocationId(form.watch("location"));
+  const addQuantity = form.watch("addQuantity");
 
-  const close = (nextOpen: boolean) => {
-    if (!nextOpen) form.reset();
-    onOpenChange(nextOpen);
-  };
   const receive = useActionMutation({
     mutationFn: inventoryOperations.receiveExpense.mutationOptions,
     success: "Received into Inventory",
-    onSuccess: () => close(false),
+    onSuccess: onDone,
   });
   const receiveAction = (action: InventoryReceiveExpenseInput["action"]) => {
     if (!locationId) return;
@@ -96,19 +168,71 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
     });
   };
 
-  const entries = product?.inventoryEntry ?? [];
+  const entries = product.inventoryEntry ?? [];
   // `expectedQuantity: 1` marks a one-of-a-kind item. Such a product doesn't
   // get a second entry when it turns up somewhere else — it moves.
-  const isUnique = product?.expectedQuantity === 1;
+  const isUnique = product.expectedQuantity === 1;
   const soleEntry = entries.length === 1 ? entries[0] : undefined;
   const entryHere = locationId
     ? entries.find((e) => e.location.id === locationId)
     : undefined;
 
+  const countedNotice = alreadyCounted ? (
+    <Stack gap="sm">
+      {stockedMatches.map((match) => (
+        <Alert key={match.candidate.id}>
+          <AlertTitle>
+            This may already be counted as {match.candidate.name}
+          </AlertTitle>
+          <AlertDescription>
+            {match.candidate.inventoryCount} on hand
+            {match.evidence ? ` · ${match.evidence}` : ""}.{" "}
+            {match.warnings.map((warning) => `${warning} `)}
+            <Link
+              to="/recommendations/workbench"
+              search={{
+                kind: "product-match",
+                source: productId,
+                candidate: match.candidate.id,
+              }}
+              className="font-medium text-primary hover:underline"
+            >
+              Review this match
+            </Link>{" "}
+            before receiving.
+          </AlertDescription>
+        </Alert>
+      ))}
+      {context.stock.length > 0 ? (
+        <Description>
+          {product.name} already has {ownUnits} on hand (
+          {context.stock
+            .map(
+              (entry) =>
+                `${entry.amount.value} ${entry.amount.unit} at ${entry.locationName}`,
+            )
+            .join(", ")}
+          ). Importing this purchase did not change it.
+        </Description>
+      ) : null}
+      {!unitsConfirmed ? (
+        <Row gap="sm" wrap>
+          <Button onClick={onDone}>Nothing new arrived</Button>
+          <Button variant="outline" onClick={() => setUnitsConfirmed(true)}>
+            Additional units arrived
+          </Button>
+        </Row>
+      ) : (
+        <Description>
+          Enter how many additional units arrived. Nothing is added until you
+          do.
+        </Description>
+      )}
+    </Stack>
+  ) : null;
+
   const body = () => {
-    if (isLoading || !product) {
-      return <Description>Loading product…</Description>;
-    }
+    if (!unitsConfirmed) return null;
 
     // A unique item already on a shelf: offer the move, never a second entry.
     if (isUnique && soleEntry) {
@@ -171,16 +295,19 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
                 min="0"
                 className="w-24"
                 aria-label="Quantity to add"
-                value={form.watch("addQuantity")}
+                value={addQuantity ?? ""}
                 onChange={(e) =>
-                  form.setValue("addQuantity", Number(e.target.value))
+                  form.setValue(
+                    "addQuantity",
+                    e.target.value === "" ? null : Number(e.target.value),
+                  )
                 }
               />
               <Button
-                disabled={receive.isPending || !(form.watch("addQuantity") > 0)}
+                disabled={receive.isPending || !((addQuantity ?? 0) > 0)}
                 onClick={() => {
                   const add = form.getValues("addQuantity");
-                  if (!(add > 0)) return;
+                  if (!add || !(add > 0)) return;
                   receiveAction({
                     kind: "add",
                     entryId: entryHere.id,
@@ -227,23 +354,19 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   };
 
   return (
-    <WorkflowDialog
-      open={open}
-      onOpenChange={close}
-      title="Receive into Inventory"
-      description={`Put what "${expenseName}" bought onto a shelf.`}
-    >
-      <FormProvider {...form}>
-        <FieldSuggestionProvider
-          entity="inventory"
-          mode="create"
-          staticBasis={{ productId }}
-          fieldKeys={["locationId"]}
-          paths={{ locationId: "location" }}
-        >
+    <FormProvider {...form}>
+      <FieldSuggestionProvider
+        entity="inventory"
+        mode="create"
+        staticBasis={{ productId }}
+        fieldKeys={["locationId"]}
+        paths={{ locationId: "location" }}
+      >
+        <Stack gap="md">
+          {countedNotice}
           {body()}
-        </FieldSuggestionProvider>
-      </FormProvider>
-    </WorkflowDialog>
+        </Stack>
+      </FieldSuggestionProvider>
+    </FormProvider>
   );
 };

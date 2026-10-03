@@ -1,6 +1,6 @@
 {
-  "id": "513037ed-c5a7-45f4-96a6-a403797796bd",
-  "prevId": "05a26579-74cb-443f-9e74-b095d9e0cbd4",
+  "id": "6de60570-d462-409e-a9ac-2fc6c0b8eb48",
+  "prevId": "513037ed-c5a7-45f4-96a6-a403797796bd",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5443,7 +5443,7 @@
       "checkConstraints": {
         "Expense_date_cost_check": {
           "name": "Expense_date_cost_check",
-          "value": "\"Expense\".\"date\" IS NOT NULL OR (\"Expense\".\"cost\" IS NOT NULL AND \"Expense\".\"cost\" = 0)"
+          "value": "\"Expense\".\"date\" IS NOT NULL OR \"Expense\".\"cost\" IS NULL OR \"Expense\".\"cost\" = 0"
         },
         "Expense_live_charge_assignment_check": {
           "name": "Expense_live_charge_assignment_check",

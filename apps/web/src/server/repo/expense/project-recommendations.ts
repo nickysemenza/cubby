@@ -26,6 +26,7 @@ export async function expenseProjectRecommendationContext(
   const source = await getDb(db).query.expense.findFirst({
     where: and(eq(expense.shortcode, id), notDeleted(expense)),
     extras: expenseInheritanceReadExtras(),
+    with: { product: { columns: { kind: true } } },
   });
   if (
     !source ||
@@ -79,6 +80,7 @@ export async function expenseProjectRecommendationContext(
       ...source,
       projectId: source.effectiveProjectId,
       trade: source.effectiveTrade,
+      productKind: source.product?.kind ?? null,
     },
     projects,
     history: history.map((row) => ({
