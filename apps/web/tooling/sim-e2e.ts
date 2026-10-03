@@ -1865,14 +1865,14 @@ async function main(): Promise<void> {
       const output = path.join(artifacts, "native-driver-diagnostics.json");
       writeFileSync(output, `${JSON.stringify(diagnostics, null, 2)}\n`);
       scenarioEvidence.push(output);
-      const textDiagnostics = path.join(
-        artifacts,
-        "native-text-entry-diagnostics.json",
-      );
-      if (existsSync(textDiagnostics)) scenarioEvidence.push(textDiagnostics);
     } catch {
       console.warn(`[${lane}] Native driver diagnostics unavailable`);
     }
+    const textDiagnostics = path.join(
+      artifacts,
+      "native-text-entry-diagnostics.json",
+    );
+    if (existsSync(textDiagnostics)) scenarioEvidence.push(textDiagnostics);
   }
   failure = finishE2ERun(failure);
   if (failure !== undefined) throw failure;
