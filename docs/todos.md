@@ -63,12 +63,12 @@ history is the archive. Permanent product constraints live in the
   evidence as another receipt of already-counted stock. Contract:
   [product identity](product-identity-journey.md).
 
-- 🤔 **Product match queue recall and cost.** A full queue read makes up to 60
-  vector lookups (top 20 neighbours each), and a photo↔purchase pair is missed
-  when the purchase Product is outside that neighbourhood and shares no name
-  token. Measure misses on real wardrobe imports before widening, caching, or
-  moving detection to write time
-  (`apps/web/src/server/services/product-match.service.ts`).
+- ⏳ **Product match queue recall and cost.** Each unfocused queue read now
+  logs `queue read coverage`: vector lookups, unseeded photo Products, and
+  photo Products with no candidate at all, split by whether they were seeded.
+  Promote widening, caching, or write-time detection only when those logs from
+  a real wardrobe import show unseeded photos without candidates that a person
+  later matched (`apps/web/src/server/services/product-match.service.ts`).
 
 - 🤔 **Reproduce macOS photo-match export inside the sandbox.** Capture the
   error chain and sandbox denial for Downloads, Desktop, and an iCloud
@@ -161,14 +161,6 @@ See also the image operational passes at the end of this file.
 
 ### Reconcile charges and refunds
 
-- 🟢 **Rank ambiguous settlement candidates for review.** Retained payment
-  lines and mail-proven order groups now settle uniquely evidenced, conserved
-  allocations automatically (`purchase-import/retained-settlement.ts`);
-  everything else stays reviewable. Add the bounded Jev tie-break that orders
-  ambiguous candidates in that review, never as write authority. Refund groups
-  stay reviewable because a credit's split is not stated by order totals.
-  Contract: [product identity and settlement](product-identity-journey.md).
-
 ### Review and apply corrections
 
 - 🟢 **Review validation corrections on native.** Web now shows field-level
@@ -177,15 +169,6 @@ See also the image operational passes at the end of this file.
   Expose the same operation and v2 diff in the Apple run review. A Purchase has
   no currency column, so a non-USD order remains write-blocked rather than a
   correction.
-
-- 🟢 **Generalize evidence-backed Product enrichment beyond Amazon.** Extend
-  verified adapters for retailer SKU, catalog/item number, and GTIN; use agent
-  research when adapters cannot establish facts. Primary manufacturer/retailer
-  evidence must prove the exact variant; search results and free-text hints
-  are leads, not write authority. Batches retain expected current/replacement
-  values and existing approvals; uncertain identity remains reviewable and
-  merges explicit. Reuse [Product enrichment](../.claude/skills/product-enrichment/SKILL.md),
-  without a new enrichment queue or evidence table.
 
 - 🧱 **Cross-vendor manufacturer identifiers.** Add manufacturer-scoped
   part/style identity distinct from retailer SKU, with contract/generation
@@ -288,13 +271,11 @@ See also the image operational passes at the end of this file.
   addresses negative expected quantities from exits whose earlier acquisition
   is missing; filling known acquisition quantities remains an operational pass.
 
-- 🟢 **Product external-ID collision review.** Purchase import now keeps the
-  reviewed Product and proposes the colliding pair in the Product match queue.
-  Finish the enrichment path the same way: a proven identifier owned by another
-  Product is skipped and proposed, never reassigned or fatal to the commit. The
-  live unique index makes `duplicate_external_id` and the `collision` result of
-  `product.externalIdCollisions` unreachable; retire them rather than keep a
-  second path. Add no separate persistent queue.
+- 🟢 **Retire unreachable external-ID collision paths.** Import and
+  enrichment now propose colliding pairs in the Product match queue. The live
+  unique index makes `duplicate_external_id` and the `collision` result of
+  `product.externalIdCollisions` unreachable; remove them rather than keep a
+  second path.
 
 ---
 

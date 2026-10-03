@@ -9,6 +9,8 @@ import {
   purchaseProductsOut,
   purchaseSettlementCandidatesInput,
   purchaseSettlementCandidatesOut,
+  purchaseSettlementSuggestInput,
+  purchaseSettlementSuggestOut,
   reclassifyPurchaseDocumentInput,
   splitExpenseInput,
   splitExpenseOut,
@@ -47,6 +49,16 @@ export const purchaseContract = defineContract("purchase", {
     input: purchaseSettlementCandidatesInput,
     output: purchaseSettlementCandidatesOut,
     cache: { tags: [["purchase"], ["financialTransaction"]] },
+  }),
+  /**
+   * On-demand Jev tie-break over candidates tied at the top deterministic
+   * rank. A mutation because it is person-triggered and bills model usage,
+   * not because it writes: it never allocates and invalidates nothing. Off
+   * MCP on purpose, so agents keep the deterministic candidates.
+   */
+  suggestSettlementMatch: mutation({
+    input: purchaseSettlementSuggestInput,
+    output: purchaseSettlementSuggestOut,
   }),
   orderMail: query({
     native: "Show linked order email events on native Purchase detail",
