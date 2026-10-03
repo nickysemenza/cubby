@@ -10,12 +10,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   expense,
+  financialTransaction,
   financialTransactionAllocation,
   orderMail,
   orderMailEvent,
   product,
   purchase,
   run as runTable,
+  runFinding,
   runProgress,
 } from "~/server/db/schema";
 import { getDb, withTransaction } from "~/server/repo/database-helpers";
@@ -151,7 +153,10 @@ describe("purchase coordinator decision eval", () => {
             displayLabel: DECISION_MERCHANT,
             statedTotal: decision.priorOrder.total,
           });
-        const charges = new Map<string, string>();
+        const charges = new Map<
+          typeof financialTransaction.$inferSelect.id,
+          string
+        >();
         for (const charge of decision.charges ?? []) {
           const row = await insertWithShortcode(
             ctx.db,
@@ -292,6 +297,18 @@ describe("purchase coordinator decision eval", () => {
                 inArray(financialTransactionAllocation.purchaseId, purchaseIds),
               )
           : [];
+        // Not scored: why a run stopped, so a miss can be diagnosed.
+        const findings = await getDb(ctx.db)
+          .select({ kind: runFinding.kind, summary: runFinding.summary })
+          .from(runFinding)
+          .where(eq(runFinding.runId, run.id));
+        // Charges share the member and merchant across runs; retire this
+        // run's so a leftover never becomes a later run's competing charge.
+        if (charges.size)
+          await getDb(ctx.db)
+            .update(financialTransaction)
+            .set({ deletedAt: new Date() })
+            .where(inArray(financialTransaction.id, [...charges.keys()]));
         const observed: ObservedDecision = {
           status,
           lines: expenses.map((row) => {
@@ -326,6 +343,7 @@ describe("purchase coordinator decision eval", () => {
           usage,
           costUsd: evalCostUsd(choice.model, usage),
           observed,
+          findings,
           ...scoreDecision(decision.expected, observed),
         };
       };

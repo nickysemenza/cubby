@@ -55,6 +55,8 @@ export type DecisionCase = {
   catalog: DecisionCatalogProduct[];
   /** Saved card charges the settlement verification can see. */
   charges?: Array<{ key: string; amount: number; date: string }>;
+  /** Payment lines the confirmation itself prints; settlement evidence. */
+  payments?: Array<{ amount: number; date: string }>;
   /** Another already-imported order from the same vendor. */
   priorOrder?: { orderId: string; total: number; date: string };
   expected: ExpectedDecision;
@@ -279,6 +281,9 @@ export const purchaseDecisionCases: DecisionCase[] = [
     printsTotal: true,
     lines: [kneeler, tax(1.44)],
     catalog: [],
+    // The printed payment line is the evidence; an amount match alone would
+    // only be a review candidate.
+    payments: [{ amount: 19.44, date: "2026-09-22" }],
     charges: [
       { key: "card-a", amount: 19.44, date: "2026-09-22" },
       { key: "card-b", amount: 12, date: "2026-09-22" },
@@ -387,6 +392,9 @@ export function decisionMailBody(decision: DecisionCase) {
         `${entry.title}${entry.sku ? ` (SKU ${entry.sku})` : ""} ${money(entry.amount)}`,
     ),
     decision.printsTotal ? `Order total ${money(total)} USD` : null,
+    ...(decision.payments ?? []).map(
+      (payment) => `Charged ${money(payment.amount)} on ${payment.date}`,
+    ),
   ]
     .filter((part): part is string => part !== null)
     .join("\n");
@@ -418,7 +426,12 @@ export function decisionExtraction(decision: DecisionCase) {
             sku: entry.sku ?? null,
             seller: null,
           })),
-          payments: [],
+          payments: (decision.payments ?? []).map((payment) => ({
+            amount: payment.amount,
+            chargedAt: `${payment.date}T12:00:00.000Z`,
+            cardLastFour: null,
+            description: null,
+          })),
           allShipmentsDelivered: null,
         };
   return {

@@ -142,11 +142,12 @@ See also the image operational passes at the end of this file.
 
 ### Review and apply corrections
 
-- 🤔 **Run the purchase decision evaluation.** A 12-case synthetic corpus and
-  scorer (correct, unsafe, reviewable miss; latency, tokens, cost) exist behind
-  `pnpm --dir apps/web eval:purchase-decisions` (opt-in, billed). Run it on
-  candidate coordinator models before changing matching or purchase-run model
-  routing; purchase runs stay on Sol until it does. Scripted Flue scenarios
+- ⏳ **Re-run the purchase decision evaluation before rerouting.** Run
+  `pnpm --dir apps/web eval:purchase-decisions` (opt-in, billed) before
+  changing matching or purchase-run model routing. Baseline, 2026-10-03:
+  GPT-6 Sol high 12/12 correct, 0 unsafe, about $0.58 per run; GPT-6 Luna
+  high 8/12, 1 unsafe (duplicate Product) and three runs that misread the
+  extractor result, so purchase runs stay on Sol. Scripted Flue scenarios
   prove orchestration, not model judgment.
 
 ---
