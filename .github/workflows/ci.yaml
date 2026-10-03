@@ -543,12 +543,6 @@ jobs:
           "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/cubby-sim-pg" -l "$RUNNER_TEMP/cubby-sim-pg.log" -o '-h 127.0.0.1 -p 55432' start
           "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -c "ALTER USER postgres WITH PASSWORD 'password'"
           "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -Atc "SELECT name FROM pg_available_extensions WHERE name = 'vector'" | grep -qx vector
-      # Boot competes with Homebrew extraction as well as cache restores.
-      # Cold app builds retain the harness's post-compilation boot.
-      - name: Start warm simulator boot
-        if: steps.derived-data.outputs.cache-hit == 'true'
-        continue-on-error: true
-        run: node scripts/prewarm-ios-simulator.ts
       - name: Run native read and write against a disposable database
         env:
           CUBBY_SIM_DB_EXTERNAL: "1"
@@ -680,10 +674,6 @@ jobs:
           "$pg_bin/pg_ctl" -D "$RUNNER_TEMP/cubby-sim-pg" -l "$RUNNER_TEMP/cubby-sim-pg.log" -o '-h 127.0.0.1 -p 55432' start
           "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -c "ALTER USER postgres WITH PASSWORD 'password'"
           "$pg_bin/psql" -h 127.0.0.1 -p 55432 -U postgres -d postgres -Atc "SELECT name FROM pg_available_extensions WHERE name = 'vector'" | grep -qx vector
-      - name: Start warm simulator boot
-        if: steps.derived-data.outputs.cache-hit == 'true'
-        continue-on-error: true
-        run: node scripts/prewarm-ios-simulator.ts
       - run: pnpm test:e2e:agent:ios
       - name: Save Apple test runner cache
         if: always()
