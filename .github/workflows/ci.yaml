@@ -521,7 +521,6 @@ jobs:
         with:
           wasm: restore
           pnpm-store-cache: "false"
-          ios-simulator-prewarm: "true"
       - uses: ./.github/actions/reuse-worker-build
       - uses: ./.github/actions/setup-apple-ffi
         with:
@@ -652,7 +651,6 @@ jobs:
         with:
           wasm: restore
           pnpm-store-cache: "false"
-          ios-simulator-prewarm: "true"
       - run: pnpm test:e2e:agent:preflight
       - uses: ./.github/actions/reuse-worker-build
       - uses: ./.github/actions/setup-apple-ffi
