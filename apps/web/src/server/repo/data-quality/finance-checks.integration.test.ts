@@ -172,6 +172,84 @@ describe("data quality: finance and project entities", () => {
     );
   });
 
+  it("vendor: surfaces a source classification that contradicts the evidence policy, in one check", async () => {
+    const make = async (
+      name: string,
+      values: {
+        orderEvidence?: "online_account" | "receipt_only" | "not_expected";
+        evidenceExpectation?: "required" | "not_expected" | "unknown";
+      },
+    ) => createRepoEntity(ctx, "vendor", { name, ...values });
+    const noSource = await make("DQ conflict required, no source", {
+      evidenceExpectation: "required",
+    });
+    const noPolicy = await make("DQ conflict not expected, no policy", {
+      orderEvidence: "not_expected",
+    });
+    const consistent = [
+      await make("DQ conflict consistent a", {
+        orderEvidence: "online_account",
+        evidenceExpectation: "required",
+      }),
+      await make("DQ conflict consistent b", {
+        orderEvidence: "not_expected",
+        evidenceExpectation: "not_expected",
+      }),
+      await make("DQ conflict consistent c", {
+        orderEvidence: "online_account",
+        evidenceExpectation: "unknown",
+      }),
+    ];
+    const sourceOff = await make("DQ conflict source off", {
+      orderEvidence: "not_expected",
+      evidenceExpectation: "required",
+    });
+    const policyOffOnline = await make("DQ conflict policy off online", {
+      orderEvidence: "online_account",
+      evidenceExpectation: "not_expected",
+    });
+    const policyOffReceipt = await make("DQ conflict policy off receipt", {
+      orderEvidence: "receipt_only",
+      evidenceExpectation: "not_expected",
+    });
+
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "vendor",
+      [
+        noSource,
+        noPolicy,
+        ...consistent,
+        sourceOff,
+        policyOffOnline,
+        policyOffReceipt,
+      ].map((v) => v.entityId),
+    );
+    const conflict = (v: typeof noSource) =>
+      hydrated
+        .get(v.entityId)
+        ?.gaps.map((g) => g.check)
+        .includes("vendor_order_evidence_conflict");
+    for (const id of [noSource, noPolicy, ...consistent])
+      expect(conflict(id)).toBe(false);
+    for (const id of [sourceOff, policyOffOnline, policyOffReceipt])
+      expect(conflict(id)).toBe(true);
+
+    // Resolving either side clears it; no accepted-exception state exists.
+    await updateVendor(
+      ctx.db,
+      sourceOff.output.id,
+      { orderEvidence: "online_account" },
+      ctx.actor,
+    );
+    const resolved = (
+      await loadDataQualities(ctx.db, "vendor", [sourceOff.entityId])
+    ).get(sourceOff.entityId);
+    expect(resolved?.gaps.map((g) => g.check)).not.toContain(
+      "vendor_order_evidence_conflict",
+    );
+  });
+
   it("financialAccount: ledger party link and confirmation", async () => {
     const member = await createLedgerParty(
       ctx.db,

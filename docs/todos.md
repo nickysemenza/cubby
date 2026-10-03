@@ -147,28 +147,19 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
-- 🟢 **Manual purchase lifecycle.** Use the existing run machinery to expand
-  selected order, mail, or charge candidates into retained evidence, receipts
-  with attachment ids and classifications, itemization, and settlement.
-  Record confirmed and terminal outcomes so interruption resumes without
-  duplicate writes; handle several orders in one run and leave ambiguous
-  decisions reviewable. Reuse the bounded prepare/commit and approval paths in
+- 🟢 **Manual purchase lifecycle.** Account-sync runs handle several listed
+  orders, defer one ambiguous order for review without blocking the rest, and
+  carry unfinished orders into a restart. Remaining: start a run from a
+  selected set of mail or charge candidates (today mail is one run per message
+  and hunts join the account run), with each candidate's terminal outcome
+  recorded. Reuse the bounded prepare/commit and approval paths in
   [purchase import](../.claude/skills/purchase-import/SKILL.md).
 
-- 🟢 **Resumable historical backfill.** Successful completed imports already
-  advance the account's newest-order cursor. Add explicit date-range backfill,
-  newest first, with progress persisted after confirmed outcomes and pacing
-  according to vendor constraints rather than a fixed orders/hour promise.
-  Preserve same-day order ids and never rewind the incremental cursor
-  (`purchase-import/run-service.ts`, `VendorAccount.cursor`).
-
-- 🟢 **Vendor evidence classification and policy.** Automatically classify
-  `orderEvidence` only from clear deterministic evidence; review uncertain
-  inference and preserve explicit choices. Resolved `evidenceExpectation`
-  governs whether evidence is wanted; source classification guides where to
-  look, never silently suppressing required discovery. Surface contradictory
-  choices in one review path, without another policy or confidence setting
-  (`repo/purchase-evidence-policy.ts`, `purchase-import/hunts.ts`).
+- 🟢 **Start a historical backfill from the Mac app.** The server accepts an
+  inclusive date range on `/api/import/agent/sync`, walks it newest first, and
+  never moves the incremental cursor; the Mac Settings sync section needs the
+  range control. Pace by the browser bridge's one-command handoff unless a
+  vendor proves a stricter limit.
 
 - 🟢 **Finish the input-first retailer and statement journey.** Join saved
   synthetic order-history and Product HTML through browser capture,
@@ -260,12 +251,6 @@ See also the image operational passes at the end of this file.
   2. 🧱 A durable ingredient-level unit mapping store, which the harvested
      equivalences report (`lib/harvest-equivalences.ts`) then writes accepted
      suggestions into.
-
-- 🟢 **One external-id product lookup.** `repo/product/find-by-external-ids.ts`
-  batches `(source, externalId)` lookups for `entity_read.resolve`; purchase
-  import (`purchase-import/writer.ts` `productsByExternalIdentity`,
-  `import-orders.ts`) and `repo/product-match.ts` still query per line. Move
-  them onto the batched helper, keeping the writer's in-run cache.
 
 - 🧱 **Inferred-zero nutrients for label data.** Decided: yes. Label-sourced
   records (USDA `branded_food`, `labelNutrition`) print only FDA-mandatory
@@ -359,15 +344,13 @@ See also the image operational passes at the end of this file.
   addresses negative expected quantities from exits whose earlier acquisition
   is missing; filling known acquisition quantities remains an operational pass.
 
-- 🟢 **Location subtree filters.** Include descendants of a selected Location
-  in inventory/Product filtering through the generic filter path. Reuse a
-  scoped descendant-id helper rather than loading the whole-tree CTE.
-
-- 🟢 **Product external-ID collision review.** Make collisions encountered
-  during imports/enrichment actionable through existing
-  `product.externalIdCollisions` and collision review paths. Keep exact
-  variants and explicit merges; never silently reassign an identifier. Add no
-  separate persistent queue unless real unresolved volume demonstrates a need.
+- 🟢 **Product external-ID collision review.** Purchase import now keeps the
+  reviewed Product and proposes the colliding pair in the Product match queue.
+  Finish the enrichment path the same way: a proven identifier owned by another
+  Product is skipped and proposed, never reassigned or fatal to the commit. The
+  live unique index makes `duplicate_external_id` and the `collision` result of
+  `product.externalIdCollisions` unreachable; retire them rather than keep a
+  second path. Add no separate persistent queue.
 
 ---
 

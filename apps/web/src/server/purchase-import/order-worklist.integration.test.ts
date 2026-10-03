@@ -1,7 +1,4 @@
-import type {
-  BrowserBridgeRequest,
-  BrowserBridgeResult,
-} from "@cubby/schemas/purchase-import";
+import type { BrowserBridgeResult } from "@cubby/schemas/purchase-import";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -16,79 +13,18 @@ import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
+  fakeBroker,
+  historyPage,
+  HOST,
+  orderUrl,
+} from "./order-history.fixtures";
+import {
   claimNextImportWork,
   finishRun,
   importBrowserOrderEvidence,
   issueBrowserCommand,
   startOrResumeRun,
 } from "./run-service";
-
-const HOST = "shop.example.test";
-const orderUrl = (id: string) => `https://${HOST}/orders/details?orderID=${id}`;
-
-/** A fake bridge whose next result is the page the test hands it. */
-function fakeBroker() {
-  let issued: BrowserBridgeRequest | undefined;
-  let capture: BrowserBridgeResult["outcome"] | undefined;
-  const broker = {
-    enqueue: async (command: BrowserBridgeRequest) => {
-      issued = command;
-    },
-    result: async (): Promise<BrowserBridgeResult | null> =>
-      issued && capture
-        ? {
-            protocolVersion: 2,
-            commandID: issued.id,
-            operationID: issued.operationId,
-            runID: issued.runID,
-            completedAt: new Date().toISOString(),
-            outcome: capture,
-          }
-        : null,
-    cancel: async () => undefined,
-    connected: async () => true,
-    pendingCommands: async () => [],
-    notifyRunCompleted: async () => undefined,
-    requestAuthentication: async () => undefined,
-  };
-  return {
-    namespace: { getByName: () => broker },
-    respondWith(outcome: BrowserBridgeResult["outcome"]) {
-      capture = outcome;
-    },
-  };
-}
-
-const historyPage = (
-  orders: ReadonlyArray<{ id: string; date: string }>,
-  next: string | null,
-): BrowserBridgeResult["outcome"] => ({
-  status: "completed",
-  capture: {
-    sourceURL: `https://${HOST}/order-history`,
-    title: "Your Orders",
-    capturedAt: new Date().toISOString(),
-    captureVersion: 1,
-    variantMarkers: [],
-    readableText: orders
-      .map(
-        (order) =>
-          `Order placed ${order.date} Order # ${order.id} Total $12.00`,
-      )
-      .join("\n"),
-    links: [
-      ...orders.map((order) => ({
-        id: `link-${order.id}`,
-        url: orderUrl(order.id),
-        label: "View order details",
-      })),
-      ...(next ? [{ id: "next", url: next, label: "Next →" }] : []),
-    ],
-    images: [],
-    paymentEvidence: [],
-    evidence: [],
-  },
-});
 
 describe("account-sync order worklist", () => {
   const ctx = withTestDb();

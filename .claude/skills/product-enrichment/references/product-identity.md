@@ -25,22 +25,29 @@ A Product's identity can be established by a photo import, a purchase import,
 or manual entry, in any order; whichever side arrives second must recognize
 the first rather than fork a second record.
 
-**Exact identifier match** — the purchase line carries a SKU, style number,
-UPC, or model read from a label, box, or vendor line that matches an existing
-photo-created Product exactly: resolve the line straight to that Product
+**Exact-variant identifier match** — the purchase line carries an identifier
+that names exactly one variant (a GTIN/UPC, an ASIN, a retailer SKU for one
+size and color, or an exact manufacturer part number) and it matches an
+existing photo-created Product: resolve the line straight to that Product
 (`productResolutions` `kind: "existing"`). The commit only adds the vendor's
 identifiers; enrich it in place afterwards — rename to the vendor identity
 with the old descriptive name moved to `aliases`, and attach the vendor's
 catalog image alongside the existing own-item photo. No human review needed; the
 identifier is the proof.
 
+A style, family, or model number shared by several sizes or colors is not
+identity. It ranks candidates, and size, color, or model evidence must
+corroborate the exact variant; otherwise treat the pair as a descriptive-only
+match below. Never store a shared style number as `retailer_sku` or any other
+external id: it would claim one variant and collide with its siblings. Keep it
+in `model` or `notes`.
+
 Purchase prep only reports `exactIdentifierMatch` for identifiers stored as
 external ids, never for text in `notes`. When a photo shows a legible barcode,
 record it with `product_enrichment.patch_external_ids` (`source: "gtin"`,
-`kind: "gtin_14"`); prep matches a numeric order-line SKU against it. A style
-number printed on a brand's own tag may also be stored as `retailer_sku`
-under that brand's vendor source slug when the brand sells direct. Otherwise
-it stays in `notes`, and the purchase agent compares it by hand.
+`kind: "gtin_14"`); prep matches a numeric order-line SKU against it. A
+direct-selling brand's per-variant SKU printed on its own tag may be stored as
+`retailer_sku` under that brand's vendor source slug.
 
 **Descriptive-only match** — the photo Product has no identifier (a cut tag,
 an unreadable label): purchase-import does not claim it directly. Create the
@@ -74,8 +81,11 @@ sides. Agents call `product_enrichment.propose_match` themselves when they hold 
 the detector lacks — a vendor product page confirmed to match the photo, a
 label transcription, an exact identifier the detector hasn't indexed.
 
-**Merge.** When a human confirms a proposed pair, or an agent finds a
-same-item pair a matching pass missed, resolve with `entity.merge product`:
+**Merge.** A merge is always an explicit human decision. An agent that finds
+a same-item pair a matching pass missed records it with
+`product_enrichment.propose_match`; it never merges on its own evidence. Once
+a human confirms the pair, resolve it with `entity.merge product`, which pauses
+for exact typed approval in an agent run:
 the vendor/purchase Product is always `keepId` — it carries the stronger
 identity evidence (a paid, itemized order) plus whatever the photo
 contributed. The photo Product's descriptive name folds into `aliases`, and
@@ -84,10 +94,11 @@ keeper's empty scalar fields, so after merging check the kept name and
 manufacturer: rename to the `Brand Model — Color, Size` convention when the
 vendor title is worse.
 
-Never receive a purchase line whose item is already inventoried from photos.
+Never receive a purchase line whose item is already inventoried from photos;
+a merge or later purchase evidence is never another receipt of counted stock.
 Merging two stocked Products sums their quantities, so one shirt would become
-two. If it was received, delete that duplicate inventory entry before
-merging.
+two. If the same item was received twice, ask the human to remove the
+duplicate inventory entry before approving the merge.
 
 Cover order for a household belonging: the owner's own item cutout first, the
 verified catalog image second (only once one is verified — never speculative),

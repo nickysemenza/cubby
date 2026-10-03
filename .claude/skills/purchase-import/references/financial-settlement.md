@@ -316,7 +316,8 @@ transaction for it.
   `apps/web/src/server/repo/statement-row-identity.ts` — import it, never
   reimplement — and ask the DB which ids exist; a column-wise CSV diff does not
   work across export vintages. `StatementImport.fingerprint` is the sha256 of
-  the file. Exclude `$0.00` placeholder rows (they re-present as new forever).
+  the file. Exclude `$0.00` placeholder rows (they re-present as new forever);
+  the import counts them as `zeroValueRows` instead of saving them.
   Verify afterwards: any stored row whose hash is absent from the source file is
   fabricated.
 - **The descriptor firm-up mints a second identity.** A pending row re-observed
@@ -412,36 +413,44 @@ money, but most nonzero gaps are benign. Check these causes:
 
 ## Multi-charge attribution
 
+Rule for every vendor: only evidence that ties a charge to an order — a vendor
+payment ledger naming the order, payment lines retained on the order page, or a
+receipt carrying the card and amount — settles automatically, and only when
+the whole payment set is unique. A subset that sums to `statedTotal`, a
+same-week cluster, the nearest date, or a model ranking is a candidate for
+review, never a settlement by itself.
+
 - **Amazon: the charge→order ledger is the only arbiter.** A subset of charges
   that sums exactly to `statedTotal`, uniquely in its window, is still not
   evidence — grocery orders bill in many small legs and coincidental sums are
-  possible even when the arithmetic closes. Scrape
+  possible even when the arithmetic closes. In an interactive session, scrape
   `/cpe/yourpayments/transactions` (20 rows per POST page; render results into
   the DOM and read with `get_page_text`, since `javascript_tool` truncates
   returns), join free transactions to charges on (amount, date ±6 d) to get the
-  **order id**, then order id → Purchase. Query _all_ purchases, not just
+  **order id**, then order id → Purchase. A Flue run uses the payment evidence
+  retained with its captures instead. Query _all_ purchases, not just
   zero-allocation ones — most wins are extra shipment legs on partially-settled
   orders, and refund-only purchases complete to net zero when the charge lands.
   Re-run the audit (group `orderId → [amounts]`, diff against Cubby) after any
   matching pass; it is cheap. The scraper's dedupe key collapses identical
   same-day charges on one order, so "Amazon < Cubby" on a same-amount pair may
   be dedupe loss.
-- **Home Depot multi-charge matches are trustworthy**: legs cluster within a
-  week, so a same-week set summing to `statedTotal` is good evidence. HD has no
-  charge→order ledger; use `expenses vs net settlement`, not either against
-  `statedTotal` (returns net both sides down together).
+- **Home Depot legs cluster within a week**, so a same-week set summing to
+  `statedTotal` is a strong candidate to propose, but it still needs review
+  because HD has no charge→order ledger. Compare `expenses vs net settlement`,
+  not either against `statedTotal` (returns net both sides down together).
 - A charge that **predates its order** falsifies the match by itself; a 1–3 day
   lead is posting noise, a week is a wrong purchase date. A gift-card line means
   the card charge is _not_ the stated total. Marketplace vs first-party
   descriptors (`AMAZON MKTPL` vs `Amazon.com`) break same-day ties; `Sold by:` on
   the invoice explains multi-seller multi-charge orders. When identical charges
-  stay indistinguishable, pick, and say the pick is arbitrary in the note. Never
-  attach a charge that exactly equals an already fully-posted total — the twin
-  belongs to an order Cubby never booked. Prefer the candidate purchase that
-  still carries a shortfall, then nearest date, one charge per purchase; tips
-  skip the shortfall test.
+  stay indistinguishable, leave them unresolved for review rather than picking
+  one. Never attach a charge that exactly equals an already fully-posted total —
+  the twin belongs to an order Cubby never booked. When proposing, rank the
+  candidate purchase that still carries a shortfall first, then nearest date,
+  one charge per purchase; tips skip the shortfall test.
 - Recurring same-price purchases are the whole source of ambiguity; nearest
-  date resolves them, with the arbitrariness written into the note.
+  date only orders the proposal, and the reviewer chooses.
 - Link in batches of 25, not 50 — 50 exceeds the MCP response timeout, and the
   writes still land on a timeout, so re-query before resending. Read existing
   `notes` and append; never write allocations via direct SQL (the write path

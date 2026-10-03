@@ -60,6 +60,11 @@ export const stopForReviewInput = purchaseAgentOperationRef.extend({
   detail: z.string().optional(),
 });
 
+export const deferOrderForReviewInput = purchaseAgentOperationRef.extend({
+  orderId: z.string(),
+  detail: z.string(),
+});
+
 export const markRunFailedInput = purchaseAgentOperationRef.extend({
   failureCode: z.enum(["flue_failed", "flue_aborted"]),
   detail: z.string().optional(),
