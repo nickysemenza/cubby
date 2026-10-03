@@ -4,9 +4,13 @@ import { appendFileSync, readFileSync } from "node:fs";
 import { arch, homedir } from "node:os";
 import path from "node:path";
 import { selectIOSSimulator } from "./apple-simulator-selection.ts";
+import {
+  assertPristineSimulatorApps,
+  pristineRunnerEnvironment,
+} from "./pristine-simulator-policy.ts";
 
-// Cache only a stock hosted device, before any test app, runner, or credentials
-// reach it. Never save its data again after the full journey mutates the device.
+// Cache only Apple apps and the public SDK runner, without credentials or
+// Cubby installed. Never save again after the full journey mutates the device.
 if (process.env.GITHUB_ACTIONS !== "true" || process.platform !== "darwin")
   throw new Error(
     "Pristine simulator caching requires a disposable hosted Mac",
@@ -48,6 +52,11 @@ if (mode === "key") {
     },
     device: device.udid,
     policy: readFileSync(new URL(import.meta.url)),
+    appPolicy: readFileSync(
+      new URL("./pristine-simulator-policy.ts", import.meta.url),
+    ),
+    sdk: readFileSync("node_modules/agent-device/package.json"),
+    sdkPatch: readFileSync("patches/agent-device@0.21.20.patch"),
   };
   const key = createHash("sha256")
     .update(JSON.stringify(identity))
@@ -56,29 +65,45 @@ if (mode === "key") {
     throw new Error("GitHub step output is unavailable");
   appendFileSync(
     process.env.GITHUB_OUTPUT,
-    `device-id=${device.udid}\ndata-path=${path.join(homedir(), "Library/Developer/CoreSimulator/Devices", device.udid, "data")}\ncache-key=pristine-ios-v1-${key}\n`,
+    `device-id=${device.udid}\ndata-path=${path.join(homedir(), "Library/Developer/CoreSimulator/Devices", device.udid, "data")}\ncache-key=pristine-ios-v2-${key}\n`,
   );
 } else if (mode === "seed") {
   if (device.udid !== process.argv[3])
     throw new Error("Stock device selection changed");
   if (device.state !== "Booted") capture(["boot", device.udid]);
+  const runner = (args: string[]) =>
+    execFileSync("pnpm", ["exec", "agent-device", ...args], {
+      env: pristineRunnerEnvironment(process.env),
+      encoding: "utf8",
+      timeout: 300_000,
+      maxBuffer: 8 * 1024 * 1024,
+    });
+  const installedApps = () =>
+    Object.keys(
+      JSON.parse(
+        execFileSync("plutil", ["-convert", "json", "-o", "-", "--", "-"], {
+          input: capture(["listapps", device.udid]),
+          encoding: "utf8",
+        }),
+      ),
+    );
   try {
     capture(["bootstatus", device.udid, "-b"]);
-    const installed = JSON.parse(
-      execFileSync("plutil", ["-convert", "json", "-o", "-", "--", "-"], {
-        input: capture(["listapps", device.udid]),
-        encoding: "utf8",
-      }),
-    );
-    if (Object.keys(installed).some((id) => !id.startsWith("com.apple.")))
-      throw new Error(
-        "Refusing to cache a simulator with non-stock applications",
-      );
+    assertPristineSimulatorApps(installedApps(), false);
+    const common = ["--platform", "ios", "--udid", device.udid];
+    runner(["prepare", "ios-runner", ...common, "--timeout", "240000"]);
+    runner(["open", "com.apple.Preferences", ...common]);
+    runner(["snapshot", ...common]);
+    assertPristineSimulatorApps(installedApps(), true);
   } finally {
-    capture(["shutdown", device.udid]);
+    try {
+      runner(["daemon", "stop"]);
+    } finally {
+      capture(["shutdown", device.udid]);
+    }
   }
   console.log(
-    "Initialized and shut down the stock simulator before test installation",
+    "Initialized and shut down the public runner template before Cubby installation",
   );
 } else
   throw new Error("Usage: pristine-simulator-cache.ts key|seed <device-id>");

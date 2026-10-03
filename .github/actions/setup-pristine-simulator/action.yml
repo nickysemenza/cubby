@@ -1,5 +1,5 @@
-name: Initialize stock simulator data
-description: Reuse first-boot data for an exact hosted image/runtime/device before installing test apps.
+name: Initialize public runner simulator data
+description: Reuse first-boot and public XCTest runner data before installing Cubby.
 runs:
   using: composite
   steps:
@@ -22,8 +22,8 @@ runs:
       env:
         STOCK_DEVICE_ID: ${{ steps.stock.outputs.device-id }}
       run: node scripts/pristine-simulator-cache.ts seed "$STOCK_DEVICE_ID"
-    # Save immediately after shutdown, never in a post-test step: Cubby and
-    # XCTest have not been installed and no app session can enter the cache.
+    # Save immediately after shutdown, never in a post-test step. Only Apple
+    # apps and the public runner were installed, under a credential-free env.
     - name: Save stock first-boot data
       if: steps.data.outputs.cache-hit != 'true'
       continue-on-error: true
