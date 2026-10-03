@@ -20,6 +20,8 @@ import {
   runPurpose,
   validatePurchaseImportInput,
   validatePurchaseImportOut,
+  validationDiff,
+  validationExpectedPlan,
   preparePurchaseImportInput,
   preparePurchaseImportOut,
   importOperationStatusInput,
@@ -97,6 +99,11 @@ import {
   structuredPageProvesExactVariant,
   type ProvableIdentifier,
 } from "./structured-identifier-proof";
+import { loadLiveValidationState } from "./validation-corrections";
+import {
+  compareValidationPlan,
+  PURCHASE_CURRENCY,
+} from "./validation-corrections-compare";
 import { buildPurchaseImportPlan, importVendorOrder } from "./writer";
 
 const operationArgs = (input: {
@@ -944,213 +951,181 @@ export async function validatePurchaseImport(
   if (scope.public.status !== "running")
     throw new Error(`Import run is fenced in status ${scope.public.status}`);
   const argsFingerprint = await sha256Hex(JSON.stringify(input));
-  return withTransactionDatabase(
-    db,
-    // eslint-disable-next-line complexity -- Validation compares the complete immutable plan inside one read-only transaction.
-    async (transactionDb) => {
-      const database = getDb(transactionDb);
-      const [lockedRun] = await database
-        .select({ status: runTable.status })
-        .from(runTable)
-        .where(eq(runTable.id, scope.public.runId))
-        .limit(1)
-        .for("update");
-      if (lockedRun?.status !== "running")
-        throw new Error(
-          `Import run is fenced in status ${lockedRun?.status ?? "missing"}`,
-        );
-      const [existing] = await database
+  return withTransactionDatabase(db, async (transactionDb) => {
+    const database = getDb(transactionDb);
+    const [lockedRun] = await database
+      .select({ status: runTable.status })
+      .from(runTable)
+      .where(eq(runTable.id, scope.public.runId))
+      .limit(1)
+      .for("update");
+    if (lockedRun?.status !== "running")
+      throw new Error(
+        `Import run is fenced in status ${lockedRun?.status ?? "missing"}`,
+      );
+    const [existing] = await database
+      .select({
+        inputFingerprint: runOperation.inputFingerprint,
+        result: runOperation.result,
+      })
+      .from(runOperation)
+      .where(
+        and(
+          eq(runOperation.runId, scope.public.runId),
+          eq(runOperation.operationId, input._runExecution.operationId),
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      if (existing.inputFingerprint !== argsFingerprint)
+        throw new Error("Operation id was replayed with different input");
+      return validatePurchaseImportOut.parse(existing.result);
+    }
+    const prepared = await loadPreparation(
+      transactionDb,
+      scope.public.runId,
+      input.prepareOperationId,
+    );
+    const resolutionMap = new Map(
+      input.resolutions.map((resolution) => [
+        `${resolution.stableOrderId}:${resolution.stableLineId}`,
+        resolution.resolution,
+      ]),
+    );
+    if (resolutionMap.size !== input.resolutions.length)
+      throw new Error("Product resolutions contain duplicate line ids");
+    const results = [];
+    const canonical = (value: unknown[]) =>
+      [...value].sort((left, right) =>
+        JSON.stringify(left).localeCompare(JSON.stringify(right)),
+      );
+    for (const { order, lines } of prepared) {
+      const extraction = importExtractionOutcome.parse(order.extraction);
+      const plan = buildPurchaseImportPlan(extraction);
+      const [target] = await database
         .select({
-          inputFingerprint: runOperation.inputFingerprint,
-          result: runOperation.result,
+          id: runTarget.id,
+          entityId: runTarget.entityId,
+          entityKind: runTarget.entityKind,
+          evidenceFingerprint: runTarget.evidenceFingerprint,
         })
-        .from(runOperation)
+        .from(runTarget)
         .where(
           and(
-            eq(runOperation.runId, scope.public.runId),
-            eq(runOperation.operationId, input._runExecution.operationId),
+            eq(runTarget.runId, scope.public.runId),
+            eq(runTarget.sourceExternalKey, order.sourceExternalKey),
           ),
         )
         .limit(1);
-      if (existing) {
-        if (existing.inputFingerprint !== argsFingerprint)
-          throw new Error("Operation id was replayed with different input");
-        return validatePurchaseImportOut.parse(existing.result);
-      }
-      const prepared = await loadPreparation(
+      if (target?.entityKind !== "purchase")
+        throw new Error("Prepared validation order has no Purchase target");
+      const targetPurchaseId = parseEntityId("purchase", target.entityId);
+      const live = await loadLiveValidationState(
         transactionDb,
-        scope.public.runId,
-        input.prepareOperationId,
+        targetPurchaseId,
+        { lock: false, requireLive: false },
       );
-      const resolutionMap = new Map(
-        input.resolutions.map((resolution) => [
-          `${resolution.stableOrderId}:${resolution.stableLineId}`,
-          resolution.resolution,
-        ]),
-      );
-      if (resolutionMap.size !== input.resolutions.length)
-        throw new Error("Product resolutions contain duplicate line ids");
-      const results = [];
-      const canonical = (value: unknown[]) =>
-        [...value].sort((left, right) =>
-          JSON.stringify(left).localeCompare(JSON.stringify(right)),
-        );
-      for (const { order, lines } of prepared) {
-        const extraction = importExtractionOutcome.parse(order.extraction);
-        const plan = buildPurchaseImportPlan(extraction);
-        const [target] = await database
-          .select({
-            id: runTarget.id,
-            entityId: runTarget.entityId,
-            entityKind: runTarget.entityKind,
-            evidenceFingerprint: runTarget.evidenceFingerprint,
-          })
-          .from(runTarget)
-          .where(
-            and(
-              eq(runTarget.runId, scope.public.runId),
-              eq(runTarget.sourceExternalKey, order.sourceExternalKey),
-            ),
-          )
-          .limit(1);
-        if (target?.entityKind !== "purchase")
-          throw new Error("Prepared validation order has no Purchase target");
-        const targetPurchaseId = parseEntityId("purchase", target.entityId);
-        const [livePurchase] = await database
-          .select({
-            orderId: purchase.orderId,
-            statedTotal: purchase.statedTotal,
-          })
-          .from(purchase)
-          .where(eq(purchase.id, targetPurchaseId))
-          .limit(1);
-        const liveLines = await database
-          .select({
-            title: expense.name,
-            amount: expense.cost,
-            lineKind: expense.lineKind,
-            quantity: expense.productQuantity,
-            productId: product.shortcode,
-          })
-          .from(expense)
-          .leftJoin(
-            product,
-            and(eq(product.id, expense.productId), notDeleted(product)),
-          )
-          .where(
-            and(eq(expense.purchaseId, targetPurchaseId), notDeleted(expense)),
+      if (!live)
+        throw new Error("The validation target Purchase no longer exists");
+      const expected = canonical(
+        lines.map((line) => {
+          const parsed = extractedPurchaseLine.parse(line.line);
+          const resolution = resolutionMap.get(
+            `${order.stableOrderId}:${line.stableLineId}`,
           );
-        const expected = canonical(
-          lines.map((line) => {
-            const parsed = extractedPurchaseLine.parse(line.line);
-            const resolution = resolutionMap.get(
-              `${order.stableOrderId}:${line.stableLineId}`,
+          if (!resolution && parsed.lineKind === "principal")
+            throw new Error(
+              `Missing product resolution for ${order.stableOrderId}/${line.stableLineId}`,
             );
-            if (!resolution && parsed.lineKind === "principal")
-              throw new Error(
-                `Missing product resolution for ${order.stableOrderId}/${line.stableLineId}`,
-              );
-            return {
-              title: parsed.title,
-              amount: parsed.amount,
-              lineKind: parsed.lineKind,
-              quantity: parsed.quantity ?? null,
-              productId:
-                parsed.lineKind !== "principal"
-                  ? null
-                  : resolution?.kind === "existing"
-                    ? resolution.productId
-                    : resolution?.kind,
-            };
-          }),
-        );
-        const actual = canonical(
-          liveLines.map(({ title, amount, lineKind, quantity, productId }) => ({
-            title,
-            amount,
-            lineKind,
-            quantity,
-            productId: productId ?? null,
-          })),
-        );
-        const semanticEqual =
-          plan.writeBlockReason === null &&
-          JSON.stringify({
-            orderId: livePurchase?.orderId ?? null,
-            currency: "USD",
-            statedTotal: livePurchase?.statedTotal ?? null,
-            lines: actual,
-          }) ===
-            JSON.stringify({
-              orderId: plan.orderId,
-              currency: plan.currency,
-              statedTotal: plan.statedTotal,
-              lines: expected,
-            });
-        const rawEvidenceDrift =
-          semanticEqual &&
-          target.evidenceFingerprint !== null &&
-          target.evidenceFingerprint !== order.sourceChecksum;
-        const diff = semanticEqual
-          ? null
-          : {
-              expected: {
-                orderId: plan.orderId,
-                currency: plan.currency,
-                statedTotal: plan.statedTotal,
-                lines: expected,
-                writeBlockReason: plan.writeBlockReason,
-              },
-              actual: {
-                orderId: livePurchase?.orderId ?? null,
-                currency: "USD",
-                statedTotal: livePurchase?.statedTotal ?? null,
-                lines: actual,
-              },
-            };
-        const outcome = semanticEqual
-          ? rawEvidenceDrift
-            ? "raw_evidence_drift"
-            : "replayed"
-          : "semantic_drift";
-        await database
-          .update(runTarget)
-          .set({
-            state: semanticEqual ? "completed" : "unresolved",
-            outcome,
-            diff,
-            warning: rawEvidenceDrift
-              ? "The source evidence changed, but the resulting Purchase plan is semantically identical."
-              : null,
-            completedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(runTarget.id, target.id));
-        results.push({ stableOrderId: order.stableOrderId, outcome, diff });
-      }
-      const status = results.every(
-        (result) => result.outcome !== "semantic_drift",
-      )
-        ? "completed"
-        : "needs_review";
-      const result = validatePurchaseImportOut.parse({
-        runId: scope.public.shortcode,
-        operationId: input._runExecution.operationId,
-        status,
-        targets: results,
+          return {
+            title: parsed.title,
+            amount: parsed.amount,
+            lineKind: parsed.lineKind,
+            quantity: parsed.quantity ?? null,
+            productId:
+              parsed.lineKind !== "principal"
+                ? null
+                : resolution?.kind === "existing"
+                  ? resolution.productId
+                  : (resolution?.kind ?? null),
+          };
+        }),
+      );
+      const expectedPlan = validationExpectedPlan.parse({
+        orderId: plan.orderId,
+        currency: plan.currency,
+        statedTotal: plan.statedTotal,
+        lines: expected,
+        writeBlockReason: plan.writeBlockReason,
       });
-      await database.insert(runOperation).values({
-        runId: scope.public.runId,
-        operationId: input._runExecution.operationId,
-        kind: "validate_purchase_import",
-        inputFingerprint: argsFingerprint,
-        state: "completed",
-        result,
-        completedAt: new Date(),
-      });
-      return result;
-    },
-  );
+      const comparison = await compareValidationPlan(expectedPlan, live);
+      const semanticEqual = comparison.equal;
+      const evidenceChanged =
+        target.evidenceFingerprint !== null &&
+        target.evidenceFingerprint !== order.sourceChecksum;
+      const rawEvidenceDrift = semanticEqual && evidenceChanged;
+      const diff = semanticEqual
+        ? null
+        : validationDiff.parse({
+            version: 2,
+            expected: expectedPlan,
+            actual: {
+              orderId: live.orderId,
+              currency: PURCHASE_CURRENCY,
+              statedTotal: live.statedTotal,
+              lines: canonical(
+                live.lines.map(
+                  ({ code: _code, explicitProduct: _explicit, ...line }) =>
+                    line,
+                ),
+              ),
+            },
+            corrections: comparison.corrections,
+            notes: comparison.notes,
+            rawEvidenceDrift: evidenceChanged,
+          });
+      const outcome = semanticEqual
+        ? rawEvidenceDrift
+          ? "raw_evidence_drift"
+          : "replayed"
+        : "semantic_drift";
+      await database
+        .update(runTarget)
+        .set({
+          state: semanticEqual ? "completed" : "unresolved",
+          outcome,
+          diff,
+          warning: rawEvidenceDrift
+            ? "The source evidence changed, but the resulting Purchase plan is semantically identical."
+            : null,
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(runTarget.id, target.id));
+      results.push({ stableOrderId: order.stableOrderId, outcome, diff });
+    }
+    const status = results.every(
+      (result) => result.outcome !== "semantic_drift",
+    )
+      ? "completed"
+      : "needs_review";
+    const result = validatePurchaseImportOut.parse({
+      runId: scope.public.shortcode,
+      operationId: input._runExecution.operationId,
+      status,
+      targets: results,
+    });
+    await database.insert(runOperation).values({
+      runId: scope.public.runId,
+      operationId: input._runExecution.operationId,
+      kind: "validate_purchase_import",
+      inputFingerprint: argsFingerprint,
+      state: "completed",
+      result,
+      completedAt: new Date(),
+    });
+    return result;
+  });
 }
 
 /** What a targeted browser capture retains in `RunEvidence.sourceMetadata`. */

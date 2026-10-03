@@ -992,6 +992,130 @@ export const validatePurchaseImportOut = z.object({
   ),
 });
 
+/**
+ * One line of the evidence plan as validation compares it. `productId` is a
+ * Product shortcode, `new`/`unresolved` (a resolution with no Product yet), or
+ * null for a non-principal line.
+ */
+export const validationPlanLine = z.object({
+  title: z.string(),
+  amount: z.number(),
+  lineKind: expenseLineKindSchema,
+  quantity: z.number().nullable(),
+  productId: z.string().nullable(),
+});
+export type ValidationPlanLine = z.infer<typeof validationPlanLine>;
+
+export const validationExpectedPlan = z.object({
+  orderId: z.string().nullable(),
+  currency: z.string().nullable(),
+  statedTotal: z.number().nullable(),
+  lines: z.array(validationPlanLine),
+  writeBlockReason: z.string().nullable(),
+});
+export type ValidationExpectedPlan = z.infer<typeof validationExpectedPlan>;
+
+const sha256Fingerprint = z.string().regex(/^[a-f0-9]{64}$/);
+
+/** A selectable, field-level change from the live Purchase toward the plan. */
+export const validationCorrection = z.object({
+  /** Stable across recomputation while the compared live values are unchanged. */
+  id: z.string().min(1).max(200),
+  kind: z.enum([
+    "purchase_stated_total",
+    "expense_field",
+    "expense_add",
+    "expense_remove",
+  ]),
+  target: z.object({
+    kind: z.enum(["purchase", "expense"]),
+    code: z.union([purchaseShortcode, expenseShortcode]),
+  }),
+  field: z.enum([
+    "statedTotal",
+    "title",
+    "amount",
+    "quantity",
+    "lineKind",
+    "productId",
+    "line",
+  ]),
+  before: z.json(),
+  after: z.json(),
+  /** Hash of the live values this correction was computed from. */
+  fingerprint: sha256Fingerprint,
+});
+export type ValidationCorrection = z.infer<typeof validationCorrection>;
+
+/** A visible, unselectable difference validation will not change on its own. */
+export const validationNote = z.object({
+  id: z.string().min(1).max(200),
+  target: validationCorrection.shape.target,
+  field: z.string().min(1),
+  before: z.json(),
+  after: z.json(),
+  message: z.string().min(1),
+});
+export type ValidationNote = z.infer<typeof validationNote>;
+
+/** The versioned `RunTarget.diff` a purchase-validation target stores. */
+export const validationDiff = z.object({
+  version: z.literal(2),
+  expected: validationExpectedPlan,
+  actual: z.object({
+    orderId: z.string().nullable(),
+    currency: z.string(),
+    statedTotal: z.number().nullable(),
+    lines: z.array(validationPlanLine),
+  }),
+  corrections: z.array(validationCorrection),
+  notes: z.array(validationNote),
+  /** Evidence bytes changed since the target was frozen; kept for the outcome after a correction. */
+  rawEvidenceDrift: z.boolean(),
+});
+export type ValidationDiff = z.infer<typeof validationDiff>;
+
+/**
+ * A person applies a reviewed subset of a validation diff. Never an agent
+ * tool: it is absent from the MCP catalog and the Flue capability matrix.
+ */
+export const applyValidationCorrectionsInput = z.object({
+  runId: runShortcode,
+  purchaseId: purchaseShortcode,
+  operationId: importOperationId,
+  correctionIds: z.array(z.string().min(1).max(200)).min(1).max(500),
+});
+export type ApplyValidationCorrectionsInput = z.infer<
+  typeof applyValidationCorrectionsInput
+>;
+
+export const applyValidationCorrectionsOut = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("applied"),
+    runId: runShortcode,
+    purchaseId: purchaseShortcode,
+    operationId: importOperationId,
+    applied: z.array(z.string()),
+    outcome: z.enum(["replayed", "raw_evidence_drift", "semantic_drift"]),
+    remainingCorrections: z.number().int().nonnegative(),
+  }),
+  /** Nothing was written: raw diagnostics name each selection that no longer holds. */
+  z.object({
+    status: z.literal("stale"),
+    runId: runShortcode,
+    purchaseId: purchaseShortcode,
+    stale: z.array(
+      z.object({
+        correctionId: z.string().nullable(),
+        reason: z.string().min(1),
+      }),
+    ),
+  }),
+]);
+export type ApplyValidationCorrectionsOut = z.infer<
+  typeof applyValidationCorrectionsOut
+>;
+
 /** Bounded Product enrichment write. Price is deliberately absent. */
 export const commitProductEnrichmentInput = z.object({
   _runExecution: purchaseImportRunExecution,
