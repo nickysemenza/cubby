@@ -27,6 +27,7 @@ import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import { dispatchRunEvent } from "./dispatch";
 import { matchProcessedOrderMail } from "./gmail/match";
+import { settleRetainedPaymentEvidence } from "./retained-settlement";
 import { startOrResumeRun } from "./run-service";
 
 const normalizeMerchant = (value: string) =>
@@ -98,6 +99,9 @@ export async function listMerchantVendorRules(
  * chooses where discovery looks first; it never suppresses a required hunt.
  */
 export async function discoverImportHunts(db: Database): Promise<number> {
+  // Retained order evidence settles first: a charge that a Purchase's own
+  // payment lines uniquely explain needs no hunt.
+  await settleRetainedPaymentEvidence(db);
   const database = getDb(db);
   const expectation = routedChargeEvidenceExpectationSql(
     "FinancialTransaction",

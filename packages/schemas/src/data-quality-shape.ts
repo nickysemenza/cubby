@@ -24,6 +24,16 @@ export const dataExceptionReason = z.enum([
 ]);
 export type DataExceptionReason = z.infer<typeof dataExceptionReason>;
 
+/** The one label vocabulary for the "Accept as…" action on every client. */
+export const dataExceptionReasonLabel = {
+  not_issued: "Never issued",
+  unavailable: "Unavailable",
+  history_expired: "History expired",
+  not_applicable: "Not applicable",
+  insufficient_detail: "Insufficient detail",
+  expected_mismatch: "Expected mismatch",
+} as const satisfies Record<DataExceptionReason, string>;
+
 export const dataQualityGapKind = dataQualityCheckKind;
 export type DataQualityGapKind = z.infer<typeof dataQualityGapKind>;
 

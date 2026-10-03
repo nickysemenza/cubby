@@ -11,6 +11,7 @@ import {
   dataCheckWeight,
   dataCheckExemptible,
   dataException,
+  dataExceptionReasonLabel,
   dataQualityExceptionEntities,
   dataQualityFacets,
   relatedDataQualityEntities,
@@ -25,6 +26,7 @@ import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/repo/database-helpers";
 
+import { exceptionReasonsFor } from "./exception-reasons";
 import {
   checksOf,
   entryFor,
@@ -59,10 +61,27 @@ export const calculateDataQualityScore = (
   return Math.max(0, score);
 };
 
+const exceptionOf = (
+  recorded: readonly DataQualityException[],
+  check: string,
+) => {
+  const found = recorded.find((exception) => exception.check === check);
+  return found
+    ? {
+        exception: {
+          reason: found.reason,
+          note: found.note,
+          state: found.state,
+        },
+      }
+    : {};
+};
+
 export const buildQualityBreakdown = (
   expectedChecks: readonly DataCheck[],
   unresolvedChecks: readonly DataCheck[],
   activeExceptions: readonly DataCheck[],
+  recorded: readonly DataQualityException[] = [],
 ): z.infer<typeof qualityBreakdown> => {
   const expected = [...new Set(expectedChecks)];
   const gaps = new Set(unresolvedChecks);
@@ -92,6 +111,11 @@ export const buildQualityBreakdown = (
           ? "excepted"
           : "satisfied",
       description: dataCheckMessage[check],
+      exceptionReasons: exceptionReasonsFor(check).map((reason) => ({
+        reason,
+        label: dataExceptionReasonLabel[reason],
+      })),
+      ...exceptionOf(recorded, check),
     })),
   });
 };
@@ -127,6 +151,7 @@ export const loadQualityBreakdown = async (
     evaluation.exceptions
       .filter((exception) => exception.state === "active")
       .map((exception) => dataCheck.parse(exception.check)),
+    evaluation.exceptions,
   );
 };
 

@@ -194,15 +194,13 @@ See also the image operational passes at the end of this file.
 
 ### Reconcile charges and refunds
 
-- 🟢 **Complete charge-to-order discovery and grouped settlement.** Consult
-  retained shipment/payment evidence before mailbox matching, then use a
-  bounded Jev tie-break to rank ambiguous candidates. Automatically allocate
-  only a uniquely evidenced full payment set, including groups: account/vendor
-  scope, charge/refund direction, conserved amounts, and no competing
-  allocations must agree. Amount/date coincidence or AI ranking alone stays
-  reviewable. Apply confirmed groups atomically and leave incomplete evidence
-  unresolved; settlement never changes stock. Contract:
-  [product identity and settlement](product-identity-journey.md).
+- 🟢 **Rank ambiguous settlement candidates for review.** Retained payment
+  lines and mail-proven order groups now settle uniquely evidenced, conserved
+  allocations automatically (`purchase-import/retained-settlement.ts`);
+  everything else stays reviewable. Add the bounded Jev tie-break that orders
+  ambiguous candidates in that review, never as write authority. Refund groups
+  stay reviewable because a credit's split is not stated by order totals.
+  Contract: [product identity and settlement](product-identity-journey.md).
 
 ### Review and apply corrections
 
@@ -514,14 +512,6 @@ See also the image operational passes at the end of this file.
   MCP Apps, and Cloudflare-safe validation. Keep legacy protocol support until
   Flue supports modern version negotiation; its current MCP client defaults
   to legacy requests without exposing a negotiation option.
-
-- 🟢 **Record evidence-bound exceptions from web and native.** Duplicate
-  per-record predicates now use their declared bindings, and every exemptible
-  check has reasons. Recording or clearing an exception still needs MCP: add
-  one generic accept/clear action with the check's reason list to the field
-  explanation on web and native, reusing `dataQuality.setException`. Keep
-  operational Problems and aggregate rules explicit; no universal ignore
-  control. Contract: [data quality](entities.md#data-quality).
 
 - 🟢 **Declare non-entity child tables in the manifest (`children:`)** so
   their DDL is generated like entity tables.

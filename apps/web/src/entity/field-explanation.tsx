@@ -33,6 +33,7 @@ import {
   PopoverTrigger,
 } from "~/ui/primitives/popover";
 
+import { ExceptionControls } from "./field-explanation-exception";
 import {
   FieldResolutionEntityActions,
   FieldResolutionStatus,
@@ -281,8 +282,10 @@ function UnassessedQualityExplanation({
 
 function QualityCalculation({
   breakdown,
+  entityId,
 }: {
   breakdown: NonNullable<FieldExplanationOutput["qualityBreakdown"]>;
+  entityId: string;
 }) {
   return (
     <div className="grid gap-3">
@@ -312,6 +315,7 @@ function QualityCalculation({
               </span>
             </div>
             {check.state === "gap" ? <p>{check.description}</p> : null}
+            <ExceptionControls entityId={entityId} check={check} />
             <p className="text-xs text-muted-foreground">
               {humanizeKey(check.facet)} ·{" "}
               <span className="font-mono break-all">{check.check}</span>
@@ -505,7 +509,10 @@ function FieldExplanationContents({
               </div>
             </dl>
             {result.data.qualityBreakdown ? (
-              <QualityCalculation breakdown={result.data.qualityBreakdown} />
+              <QualityCalculation
+                breakdown={result.data.qualityBreakdown}
+                entityId={id}
+              />
             ) : null}
             {!explanationScalar.safeParse(result.data.value).success &&
             result.data.value !== null &&
