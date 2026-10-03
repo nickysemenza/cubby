@@ -20,6 +20,9 @@ public final class GenericEntityEditModel {
     public private(set) var original: JSONValue?
     /// Per-field messages from `validationIssues[].path[0]`, or a cleared non-nullable key.
     public private(set) var fieldErrors: [String: String] = [:]
+    /// Messages for a position inside a structured field's value: `validationIssues[].path` past
+    /// the key, for the issues the structured editor has a place to draw (`StructuredValue.draws`).
+    public private(set) var nestedErrors: [String: [[String]: String]] = [:]
     /// A rejection that names no field, or a transport failure.
     public private(set) var bannerError: String?
     public private(set) var isSaving = false
@@ -227,7 +230,7 @@ public final class GenericEntityEditModel {
 
     /// The update patch for the current draft; locked keys and unchanged values are left out.
     public func patch() throws -> EntityPatch {
-        let editable = draft.filter { !readOnly($0.key) }
+        let editable = wireDraft().filter { !readOnly($0.key) }
         var patch = try EntityPatch.diff(original: original, draft: editable, nullableKeys: nullableKeys)
         if imageField("pendingImageIds"), !pendingUploads.isEmpty {
             patch.values["pendingImageIds"] = Self.codes(pendingUploads)
@@ -244,11 +247,28 @@ public final class GenericEntityEditModel {
 
     /// The create body: every non-null draft value, plus the pending uploads.
     public func createBody() -> [String: JSONValue] {
-        var body = draft.filter { $0.value != .null }
+        var body = wireDraft().filter { $0.value != .null }
         if imageField("pendingImageIds"), !pendingUploads.isEmpty {
             body["pendingImageIds"] = Self.codes(pendingUploads)
         }
         return body
+    }
+
+    /// The draft as sent: a structured field's value is shaped by its `ValueSchema` (unfilled
+    /// optional text left out), every other field as drafted.
+    private func wireDraft() -> [String: JSONValue] {
+        draft.reduce(into: [:]) { wire, entry in
+            if let schema = descriptor.field(entry.key)?.valueSchema {
+                wire[entry.key] = StructuredValue.wireValue(entry.value, schema: schema)
+            } else {
+                wire[entry.key] = entry.value
+            }
+        }
+    }
+
+    /// The server's message for a position inside a structured field's value, or nil.
+    public func nestedError(_ key: String, path: [String]) -> String? {
+        nestedErrors[key]?[path]
     }
 
     public var missingRequiredKeys: [String] {
@@ -276,6 +296,7 @@ public final class GenericEntityEditModel {
         guard !isSaving else { return false }
         isSaving = true
         fieldErrors = [:]
+        nestedErrors = [:]
         bannerError = nil
         defer { isSaving = false }
         do {
@@ -303,12 +324,24 @@ public final class GenericEntityEditModel {
             !issues.isEmpty
         {
             var named: [String: String] = [:]
+            var nested: [String: [[String]: String]] = [:]
             for issue in issues {
                 guard let key = issue.path.first else { continue }
+                // A structured field's issue lands where the editor draws that position; one it
+                // cannot place (a whole-value rule, a hidden key) stays on the field.
+                let inner = Array(issue.path.dropFirst())
+                if let schema = descriptor.field(key)?.valueSchema,
+                    StructuredValue.draws(path: inner, in: draft[key], schema: schema)
+                {
+                    nested[key, default: [:]][inner] =
+                        nested[key]?[inner].map { "\($0); \(issue.message)" } ?? issue.message
+                    continue
+                }
                 named[key] = named[key].map { "\($0); \(issue.message)" } ?? issue.message
             }
             fieldErrors = named
-            if named.isEmpty { bannerError = error.userMessage }
+            nestedErrors = nested
+            if named.isEmpty && nested.isEmpty { bannerError = error.userMessage }
             return
         }
         bannerError = error.userMessage
@@ -321,6 +354,11 @@ public final class GenericEntityEditModel {
         for field in visibleFields {
             if let resolution = FieldResolutionPresentation(raw: original, field: field) {
                 stored[field.key] = resolution.storedValue
+            }
+            // A read payload carries keys the input schema rejects; the diff base is the schema
+            // the editor would send back, so an untouched structured field stays out of the patch.
+            if let schema = field.valueSchema, let value = stored[field.key] {
+                stored[field.key] = StructuredValue.project(value, to: schema)
             }
         }
         let original = JSONValue.object(stored)
@@ -367,6 +405,9 @@ public final class GenericEntityEditModel {
                 !suppressDefaultKeys.contains(field.key)
             {
                 seeded[field.key] = .string(PlainDate(.now).rawValue)
+            } else if let schema = field.valueSchema, field.requiredOnCreate {
+                // A required structured value starts as an empty one the person fills in.
+                seeded[field.key] = StructuredValue.blank(schema, populated: true)
             } else {
                 seeded[field.key] = .null
             }

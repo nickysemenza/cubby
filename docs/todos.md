@@ -270,11 +270,17 @@ See also the image operational passes at the end of this file.
   lifecycle only on demonstrated friction. Owners: `apps/apple/App/Shared`,
   generated `EntityCatalog`.
 
-- ⏳ **Native specialized-renderer editors.** Promote per field as a native
-  workflow needs it: product `unitMappings`/`labelNutrition` (read-only today),
-  financialAccount `sourceAliases`, financialTransaction `sourceRefs`, and
-  every `structured-field`. They show "Additional fields are available on
-  web". On web, `cardNumbers` has no editor (MCP-only history).
+- ⏳ **Native structured-value editor follow-ups.** All seven specialized
+  renderers edit natively: `StructuredValueControl` draws the `valueSchema`
+  that `pnpm generate` derives from each field's Zod input schema, and
+  `product-tags` reuses the token list (Collections show as raw `collection:*`
+  tags, not the web's split). Open: validate the editor on a device against a
+  real household (recipe `sections` and `cardNumbers` are drawn generically
+  and untested by hand; web has no editor for either, `cardNumbers` being
+  MCP-only history, so decide whether to keep them off native), title array rows
+  from their content instead of "<Field> N", and retire the web
+  `ProductUnitMappingsField`/`ProductExternalIdsField`/`SourceAliasesField`/
+  `SourceRefsField` once a generic web renderer reads the same `valueSchema`.
 
 - ⏳ **Retire native-owned web fieldwork and PWA installation.** After native
   parity ships and passes real-device validation, remove web barcode/QR

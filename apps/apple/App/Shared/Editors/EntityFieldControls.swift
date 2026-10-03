@@ -139,10 +139,12 @@ struct EntityFieldControl: View {
     // MARK: - Specialized
 
     /// The native control a specialized renderer draws. nil means none: a renderer only web
-    /// draws (`.structuredField`, the image block's `.imageOrder`, any id a future field declares)
-    /// draws nothing, and `NativePresentationCoverage.control` reports it unsupported. This is
-    /// exactly the set `packages/schemas/src/native-coverage.ts` marks `implemented` or `generic`;
-    /// `NativeCoverageViewPathTests` fails when they differ.
+    /// draws (the image block's `.imageOrder`, any id a future field declares) draws nothing, and
+    /// `NativePresentationCoverage.control` reports it unsupported. A field with a declared
+    /// `valueSchema` (the structured renderers, `generic` in `native-coverage.ts`) is drawn by
+    /// `StructuredValueControl` whatever its renderer. Every other renderer is exactly the set
+    /// `native-coverage.ts` marks `implemented` or `generic`; `NativeCoverageViewPathTests` fails
+    /// when they differ.
     enum Drawing {
         case entityReference, entityMultiReference, amount, tokens, text, money, ledgerAttributions
     }
@@ -152,7 +154,7 @@ struct EntityFieldControl: View {
         case .entitySelect: .entityReference
         case .entityMultiSelect: .entityMultiReference
         case .amount: .amount
-        case .tagList: .tokens
+        case .tagList, .productTags: .tokens
         case .vendorName, .url: .text
         case .money: .money
         case .ledgerAttributions: .ledgerAttributions
@@ -162,7 +164,9 @@ struct EntityFieldControl: View {
 
     @ViewBuilder
     private var specialized: some View {
-        if let renderer = field.controlRenderer, let drawing = Self.drawing(for: renderer) {
+        if let schema = field.valueSchema {
+            StructuredValueControl(field: field, schema: schema, model: model, pickedTitles: $pickedTitles)
+        } else if let renderer = field.controlRenderer, let drawing = Self.drawing(for: renderer) {
             switch drawing {
             case .entityReference:
                 if let reference = field.reference {

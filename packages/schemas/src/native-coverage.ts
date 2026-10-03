@@ -61,44 +61,41 @@ const unsupported = <const Id extends string>(
   ids: readonly Id[],
   reason: string,
 ) => mapRecord(ids, () => ({ status: "unsupported", reason }) as const);
-const unsupportedEach = <const Id extends string>(
-  ids: readonly Id[],
-  reasonFor: (id: Id) => string,
-) =>
-  mapRecord(
-    ids,
-    (id) => ({ status: "unsupported", reason: reasonFor(id) }) as const,
-  );
+
+/**
+ * Control renderers whose value is an object or array the generic structured-value editor draws
+ * from the field's `valueSchema` (derived from its Zod input schema by `pnpm generate`), so none
+ * has a per-renderer view path. Classified `generic` below; the generator refuses a field here
+ * whose input schema it cannot describe.
+ */
+export const STRUCTURED_VALUE_RENDERERS = [
+  "external-ids",
+  "label-nutrition",
+  "source-aliases",
+  "source-refs",
+  "structured-field",
+  "unit-mappings",
+] as const satisfies readonly ControlRendererId[];
 
 export const nativeCoverage = {
-  /** Specialized control renderers; `generic` ones draw as their `controlKind` primitive. */
+  /**
+   * Specialized control renderers; `generic` ones draw as their `controlKind` primitive or, for
+   * `STRUCTURED_VALUE_RENDERERS`, from the field's declared `valueSchema`.
+   */
   control: {
     ...implemented([
       "amount",
       "entity-multi-select",
       "ledger-attributions",
+      "product-tags",
       "tag-list",
       "vendor-name",
     ]),
     // `upc-lookup`/`usda-food` are plain text/number fields once their AI action strips away.
     ...generic(["entity-select", "money", "url", "upc-lookup", "usda-food"]),
+    ...generic(STRUCTURED_VALUE_RENDERERS),
     // The editor's image block owns image ordering; it is never a field control.
     ...ownedElsewhere(["image-order"]),
-    ...unsupported(
-      ["structured-field"],
-      "Structured fields are available on web.",
-    ),
-    ...unsupportedEach(
-      [
-        "external-ids",
-        "label-nutrition",
-        "product-tags",
-        "source-aliases",
-        "source-refs",
-        "unit-mappings",
-      ],
-      (id) => `No native control for ${id}; edit it on web.`,
-    ),
   },
   list: {
     ...implemented([
@@ -504,7 +501,7 @@ export const nativeHeroActionPlans = {
  * justification in review.
  */
 export const NATIVE_UNSUPPORTED_CEILING = {
-  control: 7,
+  control: 0,
   list: 0,
   detail: 15,
   heroAction: 0,

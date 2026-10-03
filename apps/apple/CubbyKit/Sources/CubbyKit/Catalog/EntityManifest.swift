@@ -295,6 +295,9 @@ public struct FieldDescriptor: Codable, Sendable {
     public let initialValue: JSONValue?
     /// `true`/`false` override the create schema's required-ness for the editor; nil derives it.
     public let controlRequired: Bool?
+    /// The input schema's description, for the fields a structured renderer draws; the generic
+    /// structured-value editor reads it instead of a per-renderer view.
+    public let valueSchema: ValueSchema?
     /// Membership in the create / update payloads (the editor's visible field rosters).
     public let inCreate: Bool
     /// The create payload rejects this key absent: the editor must fill it before saving.

@@ -124,7 +124,9 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   `pnpm generate` checks the plan against the contract (operation flagged `native:`, body keys
   declared); an `implemented` slot or control needs its view path (`DetailSlotRegistry`,
   `ListSlotRegistry`, `EntityFieldControl.drawing(for:)`), which `NativeCoverageViewPathTests`
-  checks in both directions.
+  checks in both directions. The structured renderers (`STRUCTURED_VALUE_RENDERERS`) are `generic`:
+  `FieldDescriptor.valueSchema`, derived from the field's Zod input schema, is drawn by the one
+  `StructuredValueControl`, so a new structured field is a declaration, not a view.
 - `CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json` and
   `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift` — from
   `scripts/generator/entities/render/swift-catalog.ts`. Regenerate with `pnpm generate`
