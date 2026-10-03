@@ -18,8 +18,12 @@ afterEach(() => {
   harness.dispose();
 });
 
-function renderExpense(intent: "date" | "cost", date: string | null) {
-  const record = mock(expenseOut, { overrides: { cost: 0, date } });
+function renderExpense(
+  intent: "date" | "cost",
+  date: string | null,
+  cost: number | null = 0,
+) {
+  const record = mock(expenseOut, { overrides: { cost, date } });
   const transport = vi.fn(async () =>
     entityBrowserMutationResultSchema.parse({
       action: "update",
@@ -57,13 +61,28 @@ it("uses the existing cost when clearing a date in the date-only editor", async 
   );
 });
 
+it("lets an unknown cost keep an unknown date in the date-only editor", async () => {
+  const transport = renderExpense("date", "2026-01-02", null);
+  fireEvent.click(await screen.findByRole("button", { name: "Date unknown" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  await waitFor(() =>
+    expect(transport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: expect.objectContaining({ data: { date: null } }),
+      }),
+    ),
+  );
+});
+
 it("retains a cost draft and explains the missing date before submitting", async () => {
   const transport = renderExpense("cost", null);
   const cost = await screen.findByLabelText("Cost", { exact: true });
   fireEvent.change(cost, { target: { value: "12" } });
   fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
   expect(
-    await screen.findByText(/A date is required unless the cost is \$0/),
+    await screen.findByText(
+      /A date is required when the cost is known and not \$0/,
+    ),
   ).toBeInTheDocument();
   expect(cost).toHaveValue(12);
   expect(transport).not.toHaveBeenCalled();

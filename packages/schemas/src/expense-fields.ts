@@ -11,11 +11,18 @@ export const COST_TYPE_LABELS = {
 } as const satisfies Record<CostType, string>;
 
 export const EXPENSE_DATE_REQUIRED_MESSAGE =
-  "A date is required unless the cost is $0. Set the cost to $0 or enter a date.";
+  "A date is required when the cost is known and not $0. Clear the cost (unknown), set it to $0, or enter a date.";
 
-const zeroCost = z.literal(0);
+/**
+ * The one date/cost rule, shared by the schema refine, the repo guard, the
+ * editor, and mirrored by the `Expense_date_cost_check` DB CHECK. An absent date
+ * is legal only where no dated spend is claimed: a free ($0) row or a row whose
+ * cost is unknown (null — e.g. a historical acquisition). Any other known cost
+ * needs the date it was spent.
+ */
+const unknownOrZeroCost = z.union([z.null(), z.undefined(), z.literal(0)]);
 export const canClearExpenseDate = (cost: unknown): boolean =>
-  zeroCost.safeParse(cost).success;
+  unknownOrZeroCost.safeParse(cost).success;
 
 export const hasValidExpenseDate = (expense: {
   cost: number | null;
@@ -28,7 +35,7 @@ export const hasValidExpenseDate = (expense: {
  * $0 line carries its direction in the sign — keep it explicit.
  */
 export const PRODUCT_QUANTITY_DESCRIPTION =
-  'Product units covered by this expense; fractional values are allowed (half a coil thrown away is -0.5). Null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon "Account adjustment", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt.';
+  'Product units covered by this expense; fractional values are allowed (half a coil thrown away is -0.5). Null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon "Account adjustment", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt. A positive quantity with cost null and no date records a historical acquisition whose price and date are unknown; it counts toward expected quantity but is never a price sample and never creates stock.';
 
 /**
  * Product units — signed, fractional, and zero only where the cost is negative.

@@ -240,17 +240,6 @@ See also the image operational passes at the end of this file.
 
 ## Inventory, products & locations
 
-- 🧱 **Record historical acquisitions with unknown cost and date.** Record a
-  known acquired quantity through the existing Expense path with `cost: null`
-  and an absent date when unknown; never invent quantity, price, or date, and
-  never receive stock as a side effect. The current date contract allows an
-  absent date only for zero cost: plan its cross-client compatibility change
-  and distinguish undated history in date-based reports
-  (`packages/schemas/src/expense-fields.ts`,
-  `repo/product/quantity-ledger.ts`). This
-  addresses negative expected quantities from exits whose earlier acquisition
-  is missing; filling known acquisition quantities remains an operational pass.
-
 ---
 
 ## Tasks, projects & garden

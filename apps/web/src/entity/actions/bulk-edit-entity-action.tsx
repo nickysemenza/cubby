@@ -4,6 +4,7 @@ import {
   entityInspectorMetadata,
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
+import { canClearExpenseDate } from "@cubby/schemas/expense-fields";
 import type { MutationSideEffects } from "@cubby/schemas/mutation-side-effects";
 import type { UseMutationOptions } from "@tanstack/react-query";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
@@ -404,7 +405,12 @@ export function BulkEditDialogBody({
       modes[key] === "set" ||
       Boolean(dirtyFields[key]),
   );
-  const clearCost = items.every((item) => item.cost === 0) ? 0 : null;
+  // The shared date rule per selected row. When any row still needs a date
+  // (a known non-zero cost), stand in a non-zero cost so clearing stays off;
+  // null would now mean "unknown cost", which may clear it.
+  const clearCost = items.every((item) => canClearExpenseDate(item.cost))
+    ? 0
+    : 1;
   const onModeChange = (field: BulkEditFieldModel, mode: BulkFieldMode) => {
     form.clearErrors(field.key);
     const companions = new Set([
