@@ -642,13 +642,13 @@ export class MacImportDriver {
     return this.action(["snapshot", "-i"]);
   }
   async click(selector: string, containerID?: string): Promise<string> {
-    if (selector.startsWith("id=settings."))
+    const settings = selector.startsWith("id=settings.");
+    const scope =
+      containerID ??
+      (settings ? "com_apple_SwiftUI_Settings_window" : undefined);
+    if (settings)
       await this.scrollTo(selector, "com_apple_SwiftUI_Settings_window");
-    return this.action([
-      "click",
-      selector,
-      ...(containerID ? [containerID] : []),
-    ]);
+    return this.action(["click", selector, ...(scope ? [scope] : [])]);
   }
   async wait(selector: string): Promise<string> {
     const started = Date.now();
