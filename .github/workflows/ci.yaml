@@ -522,6 +522,7 @@ jobs:
           wasm: restore
           pnpm-store-cache: "false"
           ios-simulator-prewarm: "true"
+      - uses: ./.github/actions/reuse-worker-build
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: sim
@@ -614,6 +615,7 @@ jobs:
         with:
           wasm: restore
       - run: pnpm test:e2e:agent:preflight
+      - uses: ./.github/actions/reuse-worker-build
       - uses: ./.github/actions/start-test-services
       - run: pnpm --filter @cubby/web run test:e2e:install-browser chromium --with-deps
       - run: pnpm test:e2e:agent:web
@@ -651,6 +653,7 @@ jobs:
           pnpm-store-cache: "false"
           ios-simulator-prewarm: "true"
       - run: pnpm test:e2e:agent:preflight
+      - uses: ./.github/actions/reuse-worker-build
       - uses: ./.github/actions/setup-apple-ffi
         with:
           targets: sim

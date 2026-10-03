@@ -62,6 +62,12 @@ uses fresh fixture state. Install the Chromium browser with
 `pnpm --dir apps/web exec playwright install chromium` if needed.
 The iOS prerequisites are the same as `pnpm test:e2e:sim`.
 
+Manual GitHub web and native lanes reuse the regular CI Worker artifact when
+a successful push run published one for the exact tested commit. The existing
+source and output fingerprint checks still run; missing, expired or invalid
+artifacts fall back to a normal build. Pull-request merge artifacts are excluded
+because they were built from a different commit.
+
 The shared Node setup restores the portable WASM package from the exact Rust
 source key used by Linux jobs, avoiding a second macOS compilation.
 The two optional macOS lanes disable pnpm store caching: measured installs took
