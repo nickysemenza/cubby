@@ -1687,18 +1687,29 @@ async function main(): Promise<void> {
         });
       };
       const launch = async () => {
-        await run("xcrun", [
-          "simctl",
-          "launch",
-          "--terminate-running-process",
-          device.udid,
-          "com.nickysemenza.cubby",
-          "--cubby-e2e-server",
-          nativeOrigin,
-        ]);
+        const launchStarted = performance.now();
+        try {
+          await run("xcrun", [
+            "simctl",
+            "launch",
+            "--terminate-running-process",
+            device.udid,
+            "com.nickysemenza.cubby",
+            "--cubby-e2e-server",
+            nativeOrigin,
+          ]);
+        } finally {
+          phases.push({
+            name: "native-launch",
+            durationMs: Math.round(performance.now() - launchStarted),
+          });
+        }
       };
       try {
         await install();
+        // First app launch can settle while XCTest starts. Input fixtures must
+        // instead reach the installed app's container before its first launch.
+        if (!inputJourney) await launch();
         const driverStarted = performance.now();
         try {
           await run("pnpm", [
@@ -1761,7 +1772,7 @@ async function main(): Promise<void> {
             throw error;
           }
         }
-        await launch();
+        if (inputJourney) await launch();
         if (journey && journeyPool) {
           try {
             scenarioEvidence.push(await journey.execute());
