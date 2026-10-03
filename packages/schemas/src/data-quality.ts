@@ -37,6 +37,7 @@ export {
 } from "./data-quality-facets";
 export {
   dataExceptionReason,
+  dataExceptionReasonLabel,
   dataQuality,
   dataQualityException,
   dataQualityFacet,

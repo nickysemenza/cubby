@@ -284,6 +284,47 @@ test("quality explanations reconcile exceptions, defects, and related gaps", asy
   );
 });
 
+test("a person accepts a data gap as an exception from the explanation and clears it", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const name = `Synthetic exception ${Date.now()}`;
+  const product = await seedProductPrerequisite(page, {
+    name,
+    manufacturer: "(unspecified)",
+  });
+  const location = await seedLocationPrerequisite(page, `${name} shelf`);
+  await createEntityFixture(page, "inventory", {
+    productId: product.id,
+    locationId: location.id,
+    amount: { value: 1, unit: "each" },
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/products?name=${encodeURIComponent(name)}&view=table`,
+  );
+  const row = page.getByRole("row").filter({ hasText: name }).first();
+  await row
+    .getByRole("button", { name: /How (data )?quality is determined/ })
+    .click();
+  const popover = page.locator('[data-slot="popover-content"]');
+  const check = popover
+    .getByRole("listitem")
+    .filter({ hasText: "product_manufacturer" });
+  await expect(check).toContainText("Missing data");
+  await check.getByRole("button", { name: "Accept as…" }).click();
+  await check.getByLabel("Reason").selectOption({ label: "Not applicable" });
+  await check.getByLabel("Note").fill("Synthetic unbranded product.");
+  await check.getByRole("button", { name: "Accept exception" }).click();
+  await expect(check).toContainText("Accepted exception");
+  await expect(
+    check.getByRole("button", { name: "Clear exception" }),
+  ).toBeVisible();
+  await check.getByRole("button", { name: "Clear exception" }).click();
+  await expect(check).toContainText("Missing data");
+  await expect(check.getByRole("button", { name: "Accept as…" })).toBeVisible();
+});
+
 test("explanations load lazily, recover from errors, and expand bounded evidence on phones", async ({
   page,
 }, testInfo) => {
