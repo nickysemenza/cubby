@@ -396,6 +396,7 @@ export const runContract = defineContract("run", {
     cache: { tags: [["run"]] },
   }),
   work: query({
+    native: "Review a purchase-validation run's targets and corrections",
     input: z.object({ runId: runShortcode }),
     output: runDetail,
     cache: { tags: [["run"]] },
