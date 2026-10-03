@@ -1,6 +1,8 @@
-context platform=ios timeout=240000
+context platform=ios timeout=600000
 
 open com.nickysemenza.cubby
+# Verify the previous phase in the shared prepared runner session.
+wait text "Transactions recorded" 240000
 back
 back
 wait text "All photos" 30000
@@ -8,11 +10,12 @@ click "label=\"All photos\""
 wait "id=photo.source.systemPicker" 30000
 click "id=photo.source.systemPicker"
 wait "label=Photos" 30000
-# The disposable simulator contains exactly one synthetic photo. This fixed
-# OS-picker tile is outside Cubby's accessibility identifier ownership.
-press 80 210
-wait "label=Add" 30000
-click "label=Add"
+# The just-added synthetic image is the first tile, ahead of the OS sample
+# photos. The first-use privacy banner shifts this fixed simulator grid down.
+wait "id=PXGGridLayout-Info" 30000
+press 66 412
+wait "role=Button label=Done" 30000
+click "role=Button label=Done"
 wait "id=photos.review.continue" 30000
 click "id=photos.review.continue"
 wait "label=\"Add to import run…\"" 30000

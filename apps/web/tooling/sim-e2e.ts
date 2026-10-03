@@ -32,6 +32,7 @@ import { z } from "zod";
 
 import { writeE2ERunBundle } from "./e2e-run-bundle";
 import { collectNativeDriverDiagnostics } from "./native-driver-diagnostics";
+import { scrubErrorMessage } from "../src/lib/error-diagnostics";
 import { assertSimulatorAdminUrl } from "./sim-db-guard";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
 
@@ -1133,6 +1134,84 @@ function nativeBuildMetadata() {
   };
 }
 
+function retainRunDiagnostics(failure: Error | undefined): string[] {
+  const evidenceFiles: string[] = [];
+  if (failure) {
+    const driverRoot = path.resolve(
+      process.env.AGENT_DEVICE_STATE_DIR ??
+        path.join(homedir(), ".agent-device"),
+    );
+    const log = path.join(artifacts, "runner.log");
+    const diagnosticPaths = existsSync(log)
+      ? [...readFileSync(log, "utf8").matchAll(/Diagnostics Log: ([^\r\n]+)/gu)]
+      : [];
+    for (const [index, match] of diagnosticPaths.entries()) {
+      const diagnosticPath = match[1];
+      if (!diagnosticPath) continue;
+      const source = path.resolve(diagnosticPath.trim());
+      const relative = path.relative(driverRoot, source);
+      if (
+        relative.startsWith("..") ||
+        path.isAbsolute(relative) ||
+        !existsSync(source) ||
+        statSync(source).size > 2 * 1024 * 1024
+      )
+        continue;
+      const diagnostic = path.join(artifacts, `driver-diagnostic-${index}.log`);
+      writeFileSync(
+        diagnostic,
+        readFileSync(source, "utf8")
+          .split("\n")
+          .map(scrubErrorMessage)
+          .join("\n"),
+      );
+      evidenceFiles.push(diagnostic);
+    }
+  }
+  const sourceStatus = path.join(artifacts, "source-status.txt");
+  writeFileSync(
+    sourceStatus,
+    execFileSync("git", ["status", "--porcelain"], { cwd: repoRoot }),
+  );
+  evidenceFiles.push(sourceStatus);
+  const wasmDiff = path.join(artifacts, "wasm-package-diff.patch");
+  writeFileSync(
+    wasmDiff,
+    execFileSync("git", ["diff", "--", "packages/wasm/package.json"], {
+      cwd: repoRoot,
+    }),
+  );
+  evidenceFiles.push(wasmDiff);
+  for (const name of [
+    "failure.txt",
+    "failure.png",
+    "failure-ui-tree.ndjson",
+    "diagnostic-error.txt",
+    "fixture-app-settings.json",
+    "input-statement.xml",
+    "input-photo.xml",
+    "input-statement.json",
+    "input-statement-open.json",
+    "input-statement-files.json",
+    "input-photo.json",
+    "input-photo-approval.json",
+    "input-driver-close.json",
+  ]) {
+    const evidence = path.join(artifacts, name);
+    if (!existsSync(evidence)) continue;
+    if (name !== "failure.png")
+      writeFileSync(
+        evidence,
+        readFileSync(evidence, "utf8")
+          .split("\n")
+          .map(scrubErrorMessage)
+          .join("\n"),
+      );
+    evidenceFiles.push(evidence);
+  }
+  return evidenceFiles;
+}
+
 function finishE2ERun(failure: Error | undefined): Error | undefined {
   if (watch) return failure;
   try {
@@ -1140,6 +1219,7 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
     const status = failure === undefined ? "passed" : "failed";
     const durationMs = Math.round(performance.now() - runStartedAt);
     const resultsPath = path.join(artifacts, "run-results.json");
+    scenarioEvidence.push(...retainRunDiagnostics(failure));
     if (testerArmy) {
       const summary = path.join(
         testerArmyRawOutput(artifacts),
@@ -1337,9 +1417,40 @@ async function main(): Promise<void> {
   let restoreEnvironment = () => {};
   let productId = "";
   let disposableSimulatorID: string | undefined;
+  let inputDriverSessionArgs: string[] | undefined;
   let failure: Error | undefined;
+  const closeInputDriver = async (): Promise<Error[]> => {
+    if (!inputDriverSessionArgs) return [];
+    const report = path.join(artifacts, "input-driver-close.json");
+    try {
+      await run(
+        "pnpm",
+        ["exec", "agent-device", "close", ...inputDriverSessionArgs, "--json"],
+        repoRoot,
+        report,
+        true,
+      );
+      return [];
+    } catch (error) {
+      // A failed one-shot replay can already have closed its owned session.
+      let alreadyClosed = false;
+      try {
+        alreadyClosed = z
+          .object({
+            success: z.literal(false),
+            error: z.object({ code: z.literal("SESSION_NOT_FOUND") }),
+          })
+          .safeParse(JSON.parse(readFileSync(report, "utf8"))).success;
+      } catch {
+        // Missing or malformed output preserves the original cleanup failure.
+      }
+      return alreadyClosed
+        ? []
+        : [error instanceof Error ? error : new Error(String(error))];
+    }
+  };
   const cleanup = async (): Promise<Error[]> => {
-    const errors: Error[] = [];
+    const errors = await closeInputDriver();
     try {
       await suggestionPeer?.close();
     } catch (error) {
@@ -1712,13 +1823,22 @@ async function main(): Promise<void> {
       try {
         await install();
         const driverStarted = performance.now();
+        if (inputJourney)
+          inputDriverSessionArgs = [
+            ...common,
+            "--session",
+            session,
+            "--state-dir",
+            path.join(artifacts, "agent-device-state"),
+          ];
         try {
           await run("pnpm", [
             "exec",
             "agent-device",
             "prepare",
             "ios-runner",
-            ...common,
+            "--debug",
+            ...(inputDriverSessionArgs ?? common),
             "--timeout",
             "240000",
           ]);
@@ -1748,7 +1868,8 @@ async function main(): Promise<void> {
               repoRoot,
               artifacts,
               deviceID: device.udid,
-              common,
+              session,
+              common: inputDriverSessionArgs ?? common,
               run: (command, args, stdoutFile) =>
                 run(command, args, repoRoot, stdoutFile),
             });
@@ -1810,27 +1931,22 @@ async function main(): Promise<void> {
         // Snapshot would retry the failed XCTest startup and hide its original cost.
         if (!driverPrepared) throw error;
         const diagnosticSession = `cubby-sim-diagnostic-${simName}`;
+        const diagnosticArgs = inputDriverSessionArgs ?? [
+          ...common,
+          "--session",
+          diagnosticSession,
+        ];
         try {
           await run("pnpm", [
             "exec",
             "agent-device",
             "open",
             "com.nickysemenza.cubby",
-            ...common,
-            "--session",
-            diagnosticSession,
+            ...diagnosticArgs,
           ]);
           await run(
             "pnpm",
-            [
-              "exec",
-              "agent-device",
-              "snapshot",
-              "--raw",
-              ...common,
-              "--session",
-              diagnosticSession,
-            ],
+            ["exec", "agent-device", "snapshot", "--raw", ...diagnosticArgs],
             repoRoot,
             path.join(artifacts, "failure-ui-tree.ndjson"),
           );
@@ -1844,9 +1960,7 @@ async function main(): Promise<void> {
             "exec",
             "agent-device",
             "close",
-            ...common,
-            "--session",
-            diagnosticSession,
+            ...diagnosticArgs,
           ]).catch(console.error);
         }
         throw error;

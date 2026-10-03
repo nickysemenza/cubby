@@ -2054,6 +2054,8 @@ export async function importBrowserOrderEvidence(
           canonicalUrl: capture.canonicalUrl ?? null,
           requestedAmazonAsin: capture.requestedAmazonAsin ?? null,
           servedAmazonAsin: capture.servedAmazonAsin ?? null,
+          sourceURL: capture.sourceURL,
+          structuredProducts: capture.structuredProducts ?? null,
           variantMarkers: capture.variantMarkers,
           images: capture.images.map((image) => ({
             url: image.url,

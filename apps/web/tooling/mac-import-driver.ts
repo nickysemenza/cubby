@@ -9,6 +9,7 @@ import { z } from "zod";
 
 const nodeSchema = z.object({
   index: z.number(),
+  parentIndex: z.number().nullish(),
   type: z.string().nullish(),
   role: z.string().nullish(),
   subrole: z.string().nullish(),
@@ -72,22 +73,41 @@ export class MacImportDriver {
   }
 
   private presentationAction(
-    action: "press" | "scroll",
+    action: "press" | "scroll" | "fill",
     containerID: string,
     value: string,
-  ): void {
+  ): boolean {
     this.guardForeground();
-    execFileSync(
-      this.presentationHelper,
-      [
-        action,
-        String(this.pid),
-        path.join(homedir(), "Library/Caches/CubbyMacImportFixture/Cubby.app"),
-        containerID,
-        value,
-      ],
-      { timeout: 10000 },
-    );
+    try {
+      execFileSync(
+        this.presentationHelper,
+        [
+          action,
+          String(this.pid),
+          path.join(
+            homedir(),
+            "Library/Caches/CubbyMacImportFixture/Cubby.app",
+          ),
+          containerID,
+          value,
+        ],
+        { timeout: 10000 },
+      );
+      return true;
+    } catch (error) {
+      if (
+        action === "press" &&
+        z.object({ status: z.literal(2) }).safeParse(error).success
+      ) {
+        this.record(
+          ["AX-press-unsupported", containerID, value],
+          0,
+          "Owned coordinate input required",
+        );
+        return false;
+      }
+      throw error;
+    }
   }
 
   async prepareBackend(): Promise<void> {
@@ -197,10 +217,47 @@ export class MacImportDriver {
     return schema.parse(envelope.data);
   }
 
+  // Re-activating an already-owned foreground app can disrupt its menu or key window.
   private guardForeground(attempt = 0): void {
     if (this.aborted) throw new Error("Mac driver interrupted");
     if (!this.bundleID) throw new Error("No owned Mac fixture session");
     if (!this.pid) throw new Error("No verified fixture PID");
+    let activationOutput: string;
+    try {
+      activationOutput = execFileSync(
+        "osascript",
+        [
+          "-l",
+          "JavaScript",
+          "-e",
+          'ObjC.import("AppKit"); function run(argv) { const expectedPID=Number(argv[0]); const app=$.NSRunningApplication.runningApplicationWithProcessIdentifier(expectedPID); if (!app || app.isTerminated || ObjC.unwrap(app.bundleIdentifier)!==argv[1]) throw Error("Owned fixture PID/bundle is not running"); const alreadyFront=$.NSWorkspace.sharedWorkspace.frontmostApplication; const accepted=Number(alreadyFront.processIdentifier)===expectedPID || app.activateWithOptions(3); const deadline=Date.now()+3000; let front; do { front=$.NSWorkspace.sharedWorkspace.frontmostApplication; if (Number(front.processIdentifier)===expectedPID && ObjC.unwrap(front.bundleIdentifier)===argv[1]) break; $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.05)); } while(Date.now()<deadline); return JSON.stringify({accepted:Boolean(accepted),bundleId:ObjC.unwrap(front.bundleIdentifier)||"",pid:Number(front.processIdentifier),appName:ObjC.unwrap(front.localizedName)||""}); }',
+          String(this.pid),
+          this.bundleID,
+        ],
+        { encoding: "utf8", timeout: 10000 },
+      );
+    } catch (error) {
+      const lookup = z
+        .object({ status: z.literal(1), stderr: z.string() })
+        .safeParse(error);
+      // Failure evidence can observe the same PID after a transient AppKit lookup miss.
+      if (
+        attempt < 2 &&
+        lookup.success &&
+        lookup.data.stderr.includes(
+          "Owned fixture PID/bundle is not running (-2700)",
+        )
+      ) {
+        this.record(
+          ["foreground-lookup-retry", String(attempt + 1)],
+          1,
+          lookup.data.stderr,
+        );
+        execFileSync("osascript", ["-e", "delay 0.1"], { timeout: 1000 });
+        return this.guardForeground(attempt + 1);
+      }
+      throw error;
+    }
     const activation = z
       .object({
         accepted: z.boolean(),
@@ -208,22 +265,7 @@ export class MacImportDriver {
         pid: z.number(),
         appName: z.string(),
       })
-      .parse(
-        JSON.parse(
-          execFileSync(
-            "osascript",
-            [
-              "-l",
-              "JavaScript",
-              "-e",
-              'ObjC.import("AppKit"); function run(argv) { const expectedPID=Number(argv[0]); const app=$.NSRunningApplication.runningApplicationWithProcessIdentifier(expectedPID); if (!app || app.isTerminated || ObjC.unwrap(app.bundleIdentifier)!==argv[1]) throw Error("Owned fixture PID/bundle is not running"); const accepted=app.activateWithOptions(3); const deadline=Date.now()+3000; let front; do { front=$.NSWorkspace.sharedWorkspace.frontmostApplication; if (Number(front.processIdentifier)===expectedPID && ObjC.unwrap(front.bundleIdentifier)===argv[1]) break; $.NSRunLoop.currentRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.05)); } while(Date.now()<deadline); return JSON.stringify({accepted:Boolean(accepted),bundleId:ObjC.unwrap(front.bundleIdentifier)||"",pid:Number(front.processIdentifier),appName:ObjC.unwrap(front.localizedName)||""}); }',
-              String(this.pid),
-              this.bundleID,
-            ],
-            { encoding: "utf8", timeout: 10000 },
-          ),
-        ),
-      );
+      .parse(JSON.parse(activationOutput));
     this.record(
       ["foreground-activation"],
       activation.accepted &&
@@ -382,6 +424,20 @@ export class MacImportDriver {
     );
   }
 
+  private buttonContainer(node: Node): string | undefined {
+    let current: Node | undefined = node;
+    for (let depth = 0; current && depth < 32; depth++) {
+      if (["window", "popover"].includes(role(current)) && current.identifier)
+        return current.identifier;
+      const parentIndex: Node["parentIndex"] = current.parentIndex;
+      current =
+        parentIndex == null
+          ? undefined
+          : this.nodes.find((entry) => entry.index === parentIndex);
+    }
+    return undefined;
+  }
+
   private press(selector: string, containerID?: string): string {
     const surface = /role=Menu/.test(selector) ? "menubar" : "frontmost-app";
     if (!selector.startsWith("@")) {
@@ -438,7 +494,22 @@ export class MacImportDriver {
         hit = readHit();
         break;
       } catch (error) {
-        if (Date.now() >= deadline) throw error;
+        if (Date.now() >= deadline) {
+          this.record(
+            ["owned-point-failure", selector],
+            1,
+            JSON.stringify({
+              x,
+              y,
+              target: node.rect,
+              windows: this.nodes
+                .filter((entry) => role(entry) === "window")
+                .map((entry) => ({ id: entry.identifier, rect: entry.rect })),
+              ownedPID: this.pid,
+            }),
+          );
+          throw error;
+        }
         this.guardForeground();
       }
     }
@@ -447,9 +518,12 @@ export class MacImportDriver {
       0,
       JSON.stringify({ x, y, text: hit.text, ownedPID: this.pid }),
     );
-    if (containerID && role(node) === "button" && node.identifier) {
-      this.presentationAction("press", containerID, node.identifier);
-    } else {
+    const buttonScope = containerID ?? this.buttonContainer(node);
+    const pressed =
+      buttonScope && role(node) === "button" && node.identifier
+        ? this.presentationAction("press", buttonScope, node.identifier)
+        : false;
+    if (!pressed) {
       this.invoke(
         [
           "press",
@@ -551,17 +625,7 @@ export class MacImportDriver {
         case "fill":
           this.press(args[1]!);
           if (args[1] === "id=PathTextField") {
-            this.guardForeground();
-            execFileSync(
-              "osascript",
-              [
-                "-e",
-                'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set pathSheet to sheet 1 of sheet 1 of window 1 of ownedProcess\n if value of attribute "AXIdentifier" of pathSheet is not "GoToWindow" then error "Expected the owned Go To sheet"\n set pathField to text field 1 of pathSheet\n if value of attribute "AXIdentifier" of pathField is not "PathTextField" then error "Expected the owned path field"\n set value of pathField to item 2 of argv\n end tell\nend run',
-                String(this.pid),
-                args[2]!,
-              ],
-              { timeout: 10000 },
-            );
+            this.presentationAction("fill", "PathTextField", args[2]!);
             output = this.observe();
           } else output = this.keyboard(args[2]!, true);
           break;
@@ -586,7 +650,7 @@ export class MacImportDriver {
   ): void {
     const file = path.join(
       this.artifacts,
-      `${String(++this.sequence).padStart(3, "0")}-${args[0]}.txt`,
+      `${createHash("sha256").update(this.session).digest("hex").slice(0, 8)}-${String(++this.sequence).padStart(3, "0")}-${args[0]}.txt`,
     );
     writeFileSync(file, output);
     this.evidence.push(file);
@@ -626,11 +690,13 @@ export class MacImportDriver {
     return this.action(["snapshot", "-i"]);
   }
   async click(selector: string, containerID?: string): Promise<string> {
-    return this.action([
-      "click",
-      selector,
-      ...(containerID ? [containerID] : []),
-    ]);
+    const settings = selector.startsWith("id=settings.");
+    const scope =
+      containerID ??
+      (settings ? "com_apple_SwiftUI_Settings_window" : undefined);
+    if (settings)
+      await this.scrollTo(selector, "com_apple_SwiftUI_Settings_window");
+    return this.action(["click", selector, ...(scope ? [scope] : [])]);
   }
   async wait(selector: string): Promise<string> {
     const started = Date.now();
@@ -745,23 +811,58 @@ export class MacImportDriver {
     );
   }
   async clickSidebar(label: "Browse" | "Photos"): Promise<void> {
-    this.nativeMenu("View", label);
+    // CubbyCommands binds Photos/Browse to the fourth/fifth AppSection tabs.
+    this.nativeShortcut(label === "Photos" ? 21 : 23, label);
     await this.wait(`label="${label}" role=window`);
+    // View commands can change the main destination while Settings remains key.
+    // Raise the owned main window before invoking a file importer or sheet.
+    await pollUntil(
+      () => {
+        this.guardForeground();
+        try {
+          execFileSync(
+            "osascript",
+            [
+              "-e",
+              'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set mainWindow to first window of ownedProcess whose value of attribute "AXIdentifier" is "main"\n perform action "AXRaise" of mainWindow\n end tell\nend run',
+              String(this.pid),
+            ],
+            { encoding: "utf8", timeout: 10000 },
+          );
+          return true;
+        } catch (error) {
+          const lookup = z
+            .object({ status: z.literal(1), stderr: z.string() })
+            .safeParse(error);
+          // System Events can lag the owned window's accessibility snapshot.
+          if (
+            lookup.success &&
+            lookup.data.stderr.includes("AXIdentifier") &&
+            lookup.data.stderr.includes("Invalid index. (-1719)")
+          )
+            return undefined;
+          throw error;
+        }
+      },
+      { label: "raise owned main window", timeoutMs: 10000, intervalMs: 100 },
+    );
+    this.record(["raise-main-window", label], 0, this.observe());
   }
-  private nativeMenu(menu: string, item: string): void {
+  private nativeShortcut(keyCode: number, label: string): void {
     this.guardForeground();
     execFileSync(
       "osascript",
       [
+        "-l",
+        "JavaScript",
         "-e",
-        'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set ownedMenu to menu bar item (item 2 of argv) of menu bar 1 of ownedProcess\n click ownedMenu\n click menu item (item 3 of argv) of menu 1 of ownedMenu\n end tell\nend run',
+        'ObjC.import("CoreGraphics"); function run(argv) { const pid=Number(argv[0]); const key=Number(argv[1]); for (const down of [true,false]) { const event=$.CGEventCreateKeyboardEvent(null,key,down); $.CGEventSetFlags(event,1<<20); $.CGEventPostToPid(pid,event); } }',
         String(this.pid),
-        menu,
-        item,
+        String(keyCode),
       ],
       { timeout: 10000 },
     );
-    this.record(["native-menu", menu, item], 0, this.observe());
+    this.record(["owned-shortcut", label], 0, this.observe());
   }
   async openStatementImport(): Promise<void> {
     await this.click("id=browse.importStatement");
@@ -777,18 +878,10 @@ export class MacImportDriver {
     await this.click('label="Open" role=Button');
   }
   async openSettings(): Promise<void> {
-    this.nativeMenu("Cubby", "Settings…");
+    // SwiftUI Settings can expose AXWindow without supporting AXRaise.
+    // The registered command also brings an existing Settings window forward.
+    this.nativeShortcut(43, "Settings");
     await this.wait('label="Settings" role=window');
-    this.guardForeground();
-    execFileSync(
-      "osascript",
-      [
-        "-e",
-        'on run argv\n tell application "System Events"\n set ownedProcess to first application process whose unix id is (item 1 of argv as integer)\n set value of scroll bar 1 of scroll area 1 of group 1 of window "Settings" of ownedProcess to 1\n end tell\nend run',
-        String(this.pid),
-      ],
-      { timeout: 10000 },
-    );
     await this.wait("id=settings.purchaseImport.syncNow");
   }
   async importStatement(file: string): Promise<void> {

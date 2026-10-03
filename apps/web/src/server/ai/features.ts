@@ -189,6 +189,18 @@ export const FIELD_SUGGESTION_FEATURE = defineFeature({
   promptVersion: "2026-09-18.1",
 }) satisfies AiDecisionFeature;
 
+/**
+ * Orders statement transactions that the deterministic settlement ranking
+ * ties for a Purchase. Person-triggered and advisory: it orders a review and
+ * never writes an allocation.
+ */
+export const SETTLEMENT_CANDIDATE_RANK_FEATURE = defineFeature({
+  feature: "settlement-candidate-rank",
+  tier: "decision",
+  cache: true,
+  promptVersion: "2026-10-02.1",
+}) satisfies AiDecisionFeature;
+
 export const PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE = defineFeature({
   feature: "product-line-identity",
   tier: "decision",
@@ -380,6 +392,7 @@ export const AI_FEATURES = [
   USDA_FOOD_SUGGEST_FEATURE,
   INGREDIENT_MERGE_FEATURE,
   FIELD_SUGGESTION_FEATURE,
+  SETTLEMENT_CANDIDATE_RANK_FEATURE,
   PURCHASE_IMPORT_PRODUCT_IDENTITY_FEATURE,
   PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE,
   PURCHASE_IMPORT_KIT_DETECTION_FEATURE,
