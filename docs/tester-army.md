@@ -82,8 +82,10 @@ An unchanged toolchain, generated inputs, Swift and resource files, FFI bytes,
 dependency pins, and complete app-bundle checksum allow compilation to be skipped.
 Otherwise they run the normal incremental build and certify its result. The
 required Apple gate always compiles and supplies the same certificate. The optional
-GitHub native lanes start simulator boot during dependency setup, overlapping
-startup with installation and cache restores. The harness still waits for boot
+GitHub native lanes start simulator boot after dependency installation, overlapping
+startup with Apple tool setup and cache restores. Booting during extraction and
+generation increased observed dependency setup from 42 seconds to 84–386 seconds;
+these runs were not a controlled comparison. The harness still waits for boot
 readiness before installing the app. Local runs start boot after compilation.
 App replacement
 uses `simctl` directly, before preparing the driver, so installation does not

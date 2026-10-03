@@ -17,7 +17,7 @@ inputs:
     required: false
     default: ""
   ios-simulator-prewarm:
-    description: Start the native test simulator while dependencies install
+    description: Start the native test simulator before Apple tool and cache setup
     required: false
     default: "false"
 
@@ -36,12 +36,6 @@ runs:
         node-version: "24"
         cache: ${{ inputs.pnpm-store-cache == 'true' && 'pnpm' || '' }}
         package-manager-cache: false
-
-    - name: Start simulator boot during dependency setup
-      if: inputs.ios-simulator-prewarm == 'true'
-      shell: bash
-      run: |
-        nohup node scripts/prewarm-ios-simulator.ts >"$RUNNER_TEMP/cubby-sim-prewarm.log" 2>&1 < /dev/null &
 
     # WASM is restored independently so consumers can start in parallel. See
     # docs/ci.md for the measured producer-job and cache tradeoffs.
@@ -77,6 +71,7 @@ runs:
     - name: Build recipebridge WASM
       if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
       shell: bash
+
       # pnpm 12 otherwise installs dependencies before running this script,
       # breaking the WASM-before-install ordering above.
       run: wasm-pack build --scope cubby --out-dir ../packages/wasm recipebridge
@@ -127,3 +122,11 @@ runs:
           pnpm install --frozen-lockfile --prefer-offline
         fi
       shell: bash
+
+    # Boot competes with dependency extraction and generated-code hashing on
+    # the three-core native runners. Overlap Apple tool/cache setup afterward.
+    - name: Start simulator boot after dependency installation
+      if: inputs.ios-simulator-prewarm == 'true'
+      shell: bash
+      run: |
+        nohup node scripts/prewarm-ios-simulator.ts >"$RUNNER_TEMP/cubby-sim-prewarm.log" 2>&1 < /dev/null &
