@@ -58,6 +58,7 @@ const IMPORT_RUN_AGENT_TOOLS = [
   "mark_history_expired",
   "finish_import_run",
   "stop_import_run_for_review",
+  "defer_order_for_review",
 ] as const;
 export type ImportRunAgentToolName = (typeof IMPORT_RUN_AGENT_TOOLS)[number];
 
