@@ -56,7 +56,7 @@ public struct HeroOperationPlan: Decodable, Sendable, Hashable {
     public let confirmation: HeroActionConfirmation
     public let preview: Preview?
     public let fields: [HeroActionField]
-    /// The request body with `$row.id` and `$<field key>` slots.
+    /// The request body with `$row.id` and `$field.<key>` slots.
     public let body: JSONValue
 }
 

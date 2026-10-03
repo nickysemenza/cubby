@@ -22,9 +22,9 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
  */
 import { tradeSchema } from "@cubby/schemas/task-fields";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { type FC, useId, useMemo } from "react";
+import { type FC, useEffect, useId, useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -89,12 +89,13 @@ interface ProductDiscardDialogProps {
 }
 
 /**
- * The server decides which shelf the discard touches, whether a shelf choice is
- * still owed, and the warning (that this removes the shelf row rather than
- * reducing it, removes more than it holds, or leaves a row claiming stock that
- * was just written off). Warnings, not blocks: see `describeDiscard`.
- * `needsEntryChoice` defaults to true until the first answer so submit never
- * races ahead of the verdict.
+ * The server's advisory answer for the current inputs: the warning (this
+ * removes the shelf row rather than reducing it, removes more than it holds, or
+ * leaves a row claiming stock that was just written off) and the default
+ * quantity. Warnings, not blocks: see `describeDiscard`. Whether a shelf choice
+ * is owed is computed locally from the shelves and enforced by the server, so a
+ * slow or failed preview never blocks the discard, and a previous answer is
+ * never shown as the current one.
  */
 function useDiscardPreview(input: {
   open: boolean;
@@ -114,12 +115,11 @@ function useDiscardPreview(input: {
         : null,
     }),
     enabled: input.open,
-    placeholderData: keepPreviousData,
   });
   return {
     selectedEntry: preview?.selectedShelf ?? null,
-    needsEntryChoice: preview?.needsShelfChoice ?? true,
     warning: preview?.warning ?? null,
+    defaultQuantity: preview?.defaultQuantity ?? null,
   };
 }
 
@@ -135,19 +135,12 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   const entries = product.inventoryEntry;
   const soleEntry = entries.length === 1 ? entries[0] : undefined;
 
-  const defaultEntry =
-    entries.find((entry) => entry.id === defaultInventoryEntryId) ?? soleEntry;
-
   const form = useForm<DiscardValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      // "Threw away the rest" is the common case on a part-used shelf, so a 0.5
-      // entry prefills 0.5 — but a shelf of 12 still prefills 1 rather than
-      // proposing to bin the lot.
-      quantity: Math.min(
-        defaultQuantity ?? 1,
-        defaultEntry?.amount.value ?? Number.POSITIVE_INFINITY,
-      ),
+      // The server's preview supplies the default when the caller has none
+      // (see the effect below); a caller that knows better seeds it here.
+      quantity: defaultQuantity ?? 1,
       date: format(new Date(), "yyyy-MM-dd"),
       reason: "",
       adjustInventory: entries.length > 0,
@@ -186,13 +179,34 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   const adjustInventory = form.watch("adjustInventory");
   const inventoryEntryId = form.watch("inventoryEntryId");
   const quantity = form.watch("quantity");
-  const { selectedEntry, needsEntryChoice, warning } = useDiscardPreview({
+  const {
+    selectedEntry,
+    warning,
+    defaultQuantity: serverDefaultQuantity,
+  } = useDiscardPreview({
     open,
     productId: product.id,
     quantity,
     adjustInventory,
     inventoryEntryId,
   });
+
+  // Only blocks when a choice is genuinely owed: several shelves, and the
+  // operator has asked for one of them to be decremented. The server enforces
+  // the same rule, so this is a convenience rather than the authority.
+  const needsEntryChoice =
+    adjustInventory && entries.length > 1 && inventoryEntryId === "";
+
+  const quantityDirty = form.formState.dirtyFields.quantity === true;
+  useEffect(() => {
+    if (
+      defaultQuantity === undefined &&
+      serverDefaultQuantity !== null &&
+      !quantityDirty
+    ) {
+      form.setValue("quantity", serverDefaultQuantity);
+    }
+  }, [defaultQuantity, serverDefaultQuantity, quantityDirty, form]);
 
   const submit = form.handleSubmit((values) => {
     discard.mutate({

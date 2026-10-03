@@ -57,7 +57,15 @@ export const describeDiscard = (
     return null;
   })();
 
+  // "Threw away the rest" is the common case on a part-used shelf, so a 0.5
+  // entry prefills 0.5 — but a shelf of 12 still prefills 1, not the lot.
+  const defaultQuantity = Math.min(
+    1,
+    selectedShelf?.amount.value ?? Number.POSITIVE_INFINITY,
+  );
+
   return {
+    defaultQuantity,
     ledgerOnly: shelves.length === 0,
     selectedShelf,
     needsShelfChoice,

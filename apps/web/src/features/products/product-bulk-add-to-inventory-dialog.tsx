@@ -91,79 +91,6 @@ interface ProductBulkAddToInventoryDialogProps {
   products: readonly BulkAddProduct[];
   /** Called after a successful add — the caller clears its row selection. */
   onComplete?: () => void;
-  /**
-   * For a single staged product, what the ledger and its kit parts already
-   * account for. Omitted by callers that don't know, which skips the warning.
-   */
-  accounting?: KitAccounting;
-}
-
-interface KitAccounting {
-  /** Units the ledger says were acquired and not disposed of. */
-  expectedQuantity: number;
-  /** Units already on shelves under THIS product's own name. */
-  ownOnHandUnits: number | null;
-  /** Live `productComponent` links — zero means this is not a kit. */
-  componentCount: number;
-}
-
-/**
- * Whether stocking one more unit here would account for more kits than were
- * bought.
- *
- * Deliberately NOT "the parent is stocked XOR the parts are". A partially
- * opened multi-pack is a legitimate mix — two 4-packs, one opened into four
- * loose singles and one still sealed, is `1 parent + 4 components` and values
- * correctly. What is never legitimate is accounting for more units than the
- * ledger says were acquired, which is the real double-count.
- *
- * Complete kits, not loose parts: a kit whose parts are half-present accounts
- * for zero whole kits, so this stays quiet rather than warning on a shortfall
- * that the variance cue already reports.
- */
-export const kitsAccountedByParts = (
-  components: readonly { quantity: number; onHandUnits: number | null }[],
-): number | null => {
-  if (components.length === 0) return null;
-  let complete = Number.POSITIVE_INFINITY;
-  for (const component of components) {
-    // A mixed-unit part cannot be counted, so the kit's accounting is
-    // unanswerable rather than zero — silence beats a wrong number.
-    if (component.onHandUnits === null) return null;
-    complete = Math.min(
-      complete,
-      Math.floor(component.onHandUnits / component.quantity),
-    );
-  }
-  return complete;
-};
-
-function useKitOverAccounting(
-  open: boolean,
-  productId: ProductShortcode | undefined,
-  accounting: KitAccounting | undefined,
-) {
-  // Same query the Kit Components section makes, so this costs nothing extra.
-  const { data: components } = useQuery({
-    ...productOperations.components.queryOptions({
-      // A parseable placeholder keeps the disabled query's input valid.
-      parentProductId: productId ?? productShortcode.parse("PRD-2222"),
-    }),
-    enabled:
-      open && productId !== undefined && (accounting?.componentCount ?? 0) > 0,
-  });
-  return useMemo(() => {
-    if (!accounting || !components) return null;
-    const byParts = kitsAccountedByParts(components);
-    if (byParts === null) return null;
-    const accounted = byParts + (accounting.ownOnHandUnits ?? 0);
-    // Only a ledger that says something can be exceeded. Expected 0 means no
-    // receipt was ever entered, not that nothing is owned, so stay quiet.
-    if (accounting.expectedQuantity <= 0) return null;
-    return accounted >= accounting.expectedQuantity
-      ? { accounted, expected: accounting.expectedQuantity }
-      : null;
-  }, [accounting, components]);
 }
 
 const rowsFor = (products: readonly BulkAddProduct[]) =>
@@ -180,9 +107,8 @@ const rowsFor = (products: readonly BulkAddProduct[]) =>
 
 export const ProductBulkAddToInventoryDialog: FC<
   ProductBulkAddToInventoryDialogProps
-> = ({ open, onOpenChange, products, onComplete, accounting }) => {
+> = ({ open, onOpenChange, products, onComplete }) => {
   const sole = products.length === 1 ? products[0] : undefined;
-  const overAccounted = useKitOverAccounting(open, sole?.id, accounting);
   const form = useForm<BulkAddValues>({
     resolver: zodResolver(formSchema),
     defaultValues: { location: null, items: rowsFor(products) },
@@ -208,6 +134,32 @@ export const ProductBulkAddToInventoryDialog: FC<
 
   const location = form.watch("location");
   const locationId = location ? getLocationId(location) : null;
+
+  // The server owns the proposed amount and the warnings (parts already
+  // account for every unit bought; stock already at this location), so web and
+  // native show one verdict. Multi-product selections have no single basis.
+  const { data: preview } = useQuery({
+    ...productOperations.addToInventoryPreview.queryOptions({
+      // A parseable placeholder keeps the disabled query's input valid.
+      productId: sole?.id ?? productShortcode.parse("PRD-2222"),
+      locationId,
+    }),
+    enabled: open && sole !== undefined,
+  });
+  const overAccounted = preview?.kitWarning ?? null;
+  const amountDirty =
+    form.formState.dirtyFields.items?.[0]?.amount !== undefined;
+  const serverDefaultAmount = preview?.defaultAmount;
+  useEffect(() => {
+    if (
+      sole &&
+      sole.defaultAmount === undefined &&
+      serverDefaultAmount &&
+      !amountDirty
+    ) {
+      form.setValue("items.0.amount", serverDefaultAmount);
+    }
+  }, [sole, serverDefaultAmount, amountDirty, form]);
 
   // What is already on that shelf, so a row that will merge can say so. One
   // query for the whole location — the selection is small, and this endpoint
@@ -328,7 +280,9 @@ export const ProductBulkAddToInventoryDialog: FC<
         ) : (
           <Stack gap="sm" className="min-w-0">
             {fields.map((field, index) => {
-              const onHand = onHandByProductId.get(field.productId);
+              const onHand = sole
+                ? (preview?.existingAtLocation ?? undefined)
+                : onHandByProductId.get(field.productId);
               return (
                 <Row
                   key={field.id}

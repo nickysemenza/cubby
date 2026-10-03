@@ -35,7 +35,7 @@ struct HeroActionSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(model.plan.label, role: isDestructive ? .destructive : nil) {
-                        if isDestructive { confirming = true } else { Task { await run(confirmed: false) } }
+                        if isDestructive { confirming = true } else { run(confirmed: false) }
                     }
                     .disabled(!model.canSubmit)
                     .accessibilityIdentifier("heroAction.submit")
@@ -44,7 +44,7 @@ struct HeroActionSheet: View {
             .confirmationDialog(
                 "\(model.plan.label) \(model.row.title)?", isPresented: $confirming, titleVisibility: .visible
             ) {
-                Button(model.plan.label, role: .destructive) { Task { await run(confirmed: true) } }
+                Button(model.plan.label, role: .destructive) { run(confirmed: true) }
             } message: {
                 Text(model.plan.kind == .delete ? "This cannot be undone." : "This records the change now.")
             }
@@ -120,6 +120,9 @@ struct HeroActionSheet: View {
                 LabeledContent(field.label, value: pickedLocationTitle ?? "Choose a location")
             }
         case .amount:
+            if let existing = model.existingStock {
+                Text(existing).font(.caption).foregroundStyle(.secondary)
+            }
             HStack {
                 TextField(field.label, value: amountValueBinding(field.key), format: .number)
                     #if os(iOS)
@@ -168,10 +171,11 @@ struct HeroActionSheet: View {
         }
     }
 
-    private func run(confirmed: Bool) async {
-        guard let outcome = await model.submit(confirmed: confirmed) else { return }
-        dismiss()
-        onFinished(outcome)
+    private func run(confirmed: Bool) {
+        model.submit(confirmed: confirmed) { outcome in
+            dismiss()
+            onFinished(outcome)
+        }
     }
 
     // MARK: - Bindings over the model's JSON values

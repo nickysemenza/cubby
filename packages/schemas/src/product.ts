@@ -541,6 +541,11 @@ export const productDiscardPreviewOut = z.object({
       location: z.object({ id: locationShortcode, name: z.string() }),
     })
     .nullable(),
+  /**
+   * Units to prefill: one, capped by the selected shelf so a part-used shelf
+   * never proposes binning more than it holds.
+   */
+  defaultQuantity: z.number().positive(),
   /** Several shelves, shelf adjustment requested, none named — the server never guesses. */
   needsShelfChoice: z.boolean(),
   warning: z
@@ -551,6 +556,32 @@ export const productDiscardPreviewOut = z.object({
     .nullable(),
 });
 export type ProductDiscardPreviewOut = z.infer<typeof productDiscardPreviewOut>;
+
+/**
+ * What "add to inventory" proposes and warns about for one product (optionally
+ * at a location), so every client shows the server's verdict. Advisory only.
+ */
+export const productAddToInventoryPreviewInput = z.object({
+  productId: productShortcode,
+  locationId: locationShortcode.nullable().default(null),
+});
+export type ProductAddToInventoryPreviewInput = z.infer<
+  typeof productAddToInventoryPreviewInput
+>;
+
+export const productAddToInventoryPreviewOut = z.object({
+  /** The quantity the ledger says is outstanding, else one unit. */
+  defaultAmount: amount,
+  /** Parts on shelves already account for every unit bought. */
+  kitWarning: z
+    .object({ accounted: z.number(), expected: z.number() })
+    .nullable(),
+  /** Stock already at the location; the add sums into that row. */
+  existingAtLocation: amount.nullable(),
+});
+export type ProductAddToInventoryPreviewOut = z.infer<
+  typeof productAddToInventoryPreviewOut
+>;
 
 export type ProductPricingOut = z.infer<typeof productPricingOut>;
 

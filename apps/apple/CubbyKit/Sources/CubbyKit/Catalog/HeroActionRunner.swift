@@ -22,6 +22,7 @@ public enum HeroActionOutcome: Sendable, Equatable {
 /// The server's answer to "what will this do?" for a verb that has one.
 public enum HeroActionPreview: Sendable {
     case discard(ProductDiscardPreviewOut)
+    case addToInventory(ProductAddToInventoryPreviewOut)
     case deleteImpact(EntityConnectionsOut)
 }
 
@@ -60,7 +61,9 @@ public struct HeroActionRunner: Sendable {
 
     /// Operation ids with a typed handler in `perform`, and previews in `preview`.
     public static let handledOperations: Set<String> = ["product.discard", "inventory.bulkAdd"]
-    public static let handledPreviews: Set<String> = ["product.discardPreview"]
+    public static let handledPreviews: Set<String> = [
+        "product.discardPreview", "product.addToInventoryPreview",
+    ]
 
     // MARK: - Form
 
@@ -78,15 +81,16 @@ public struct HeroActionRunner: Sendable {
         return values
     }
 
-    /// The values to send: a field gated by an off `showWhen` toggle and a blank optional field
-    /// are null; a blank required field is refused so no request goes out half-filled.
-    public static func resolvedValues(
+    /// The values as the server should see them: a field gated by an off `showWhen` toggle is
+    /// null, a blank string is null, a missing toggle is off. Previews and the write both send
+    /// these, so a preview describes exactly what submit would do.
+    public static func normalizedValues(
         _ fields: [HeroActionField], values: [String: JSONValue]
-    ) throws -> [String: JSONValue] {
-        var resolved: [String: JSONValue] = [:]
+    ) -> [String: JSONValue] {
+        var normalized: [String: JSONValue] = [:]
         for field in fields {
             if let gate = field.showWhen, values[gate]?.boolValue != true {
-                resolved[field.key] = .null
+                normalized[field.key] = .null
                 continue
             }
             var value = values[field.key] ?? .null
@@ -95,17 +99,28 @@ public struct HeroActionRunner: Sendable {
                 value = trimmed.isEmpty ? .null : .string(trimmed)
             }
             if value == .null, field.kind == .toggle { value = .bool(false) }
-            if value == .null, !field.optional { throw HeroActionError.missing(field.key) }
-            resolved[field.key] = value
+            normalized[field.key] = value
         }
-        return resolved
+        return normalized
     }
 
-    /// Replaces `$row.id` and `$<field key>` slots in a plan template; everything else is literal.
+    /// `normalizedValues`, refusing a blank required field so no request goes out half-filled.
+    public static func resolvedValues(
+        _ fields: [HeroActionField], values: [String: JSONValue]
+    ) throws -> [String: JSONValue] {
+        let normalized = normalizedValues(fields, values: values)
+        for field in fields where !field.optional && normalized[field.key] == .null {
+            throw HeroActionError.missing(field.key)
+        }
+        return normalized
+    }
+
+    /// Replaces `$row.id` and `$field.<key>` slots in a plan template; every other string is literal.
     public static func fill(_ template: JSONValue, rowID: String, values: [String: JSONValue]) -> JSONValue {
         switch template {
-        case .string(let text) where text == "$row.id": return .string(rowID)
-        case .string(let text) where text.hasPrefix("$"): return values[String(text.dropFirst())] ?? .null
+        case .string("$row.id"): return .string(rowID)
+        case .string(let text) where text.hasPrefix("$field."):
+            return values[String(text.dropFirst("$field.".count))] ?? .null
         case .array(let items): return .array(items.map { fill($0, rowID: rowID, values: values) })
         case .object(let fields): return .object(fields.mapValues { fill($0, rowID: rowID, values: values) })
         default: return template
@@ -139,6 +154,10 @@ public struct HeroActionRunner: Sendable {
                             productId: rowID, quantity: body["quantity"]?.doubleValue,
                             adjustInventory: body["adjustInventory"]?.boolValue,
                             inventoryEntryId: body["inventoryEntryId"]?.stringValue)))
+            case "product.addToInventoryPreview":
+                return .addToInventory(
+                    try await client.addToInventoryPreview(
+                        .init(productId: rowID, locationId: body["locationId"]?.stringValue)))
             default: throw HeroActionError.unsupported(preview.operation)
             }
         case .create, .setField, .toggleField:
@@ -183,7 +202,8 @@ public struct HeroActionRunner: Sendable {
             var prefill: [String: JSONValue] = [:]
             for (key, value) in seed {
                 let filled = Self.fill(value, rowID: row.id, values: values)
-                if filled != .null { prefill[key] = filled }
+                // An explicit null stays: it overrides a default the editor would otherwise seed.
+                prefill[key] = filled
             }
             return .editor(entity: target, prefill: prefill)
         case .setField(let field):

@@ -136,6 +136,12 @@ export const productContract = defineContract("product", {
     ...productWorkflowSchemas.discard,
     invalidates: ["expense"],
   }),
+  /** The proposed amount and warnings for stocking one product, before the write. */
+  addToInventoryPreview: query({
+    native: "Add to inventory preview for the hero action",
+    ...productWorkflowSchemas.addToInventoryPreview,
+    cache: { tags: [["product"], ["inventory"]] },
+  }),
   /** Which shelf a discard touches and what it will warn about, before it commits. */
   discardPreview: query({
     native: "Discard preview for the hero action confirmation",

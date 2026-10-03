@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { entityKeys } from "../../../packages/schemas/src/generated/entity-summary.gen.ts";
+import {
+  entityKeys,
+  entitySummary,
+} from "../../../packages/schemas/src/generated/entity-summary.gen.ts";
 import { generatedEntityFieldModels } from "../../../packages/schemas/src/generated/entity-field-model.gen.ts";
 import {
   type HeroActionBodyValue,
@@ -210,10 +213,24 @@ const checkOperationPlan = (
   for (const key of templateKeys(plan.body))
     if (properties !== null && !properties.has(key))
       problems.push(`${verb}: ${plan.operation} declares no body field ${key}`);
-  const slots = new Set(plan.fields.map((field) => field.key));
-  for (const slot of JSON.stringify(plan.body).match(/\$[A-Za-z.]+/gu) ?? [])
-    if (slot !== "$row.id" && !slots.has(slot.slice(1)))
-      problems.push(`${verb}: body slot ${slot} has no field`);
+  const fields = new Set(plan.fields.map((field) => field.key));
+  const templates = [plan.body, plan.preview?.body ?? null];
+  for (const template of templates)
+    for (const slot of JSON.stringify(template).match(
+      /\$(?:row|field)\.[A-Za-z]+/gu,
+    ) ?? []) {
+      const [prefix, name] = slot.slice(1).split(".");
+      if (prefix === "row" ? name !== "id" : !fields.has(name ?? ""))
+        problems.push(`${verb}: body slot ${slot} has no field`);
+    }
+  const toggles = new Set(
+    plan.fields.filter((field) => field.kind === "toggle").map((f) => f.key),
+  );
+  for (const field of plan.fields)
+    if (field.showWhen !== undefined && !toggles.has(field.showWhen))
+      problems.push(
+        `${verb}: ${field.key} is shown when ${field.showWhen}, which is not a toggle field`,
+      );
   return problems;
 };
 
@@ -249,7 +266,17 @@ const checkHeroActionPlans = (context: PlanContext) => {
     if (plan.kind === "operation")
       return checkOperationPlan(context, verb, plan);
     if (plan.kind !== "delete") return checkFieldPlan(verb, plan);
-    return ["entity.connections", "resources.task.delete"]
+    // Every entity whose hero declares delete needs its own generated route.
+    return [
+      "entity.connections",
+      ...entityKeys
+        .filter((key) =>
+          entitySummary[key].detail.hero.actions.some(
+            (action) => action === "delete",
+          ),
+        )
+        .map((key) => `resources.${key}.delete`),
+    ]
       .filter((id) => !context.generatedOperationIds.has(id))
       .map((id) => `${verb}: ${id} is not on the generated client`);
   });

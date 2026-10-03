@@ -37,6 +37,7 @@ import {
   listKitMembership,
   listProductComponents,
 } from "~/server/repo/product-components";
+import { previewProductAddToInventory } from "~/server/repo/product/add-to-inventory-preview";
 import {
   getCategoryDistribution,
   getProductExternalIdSourceOptions,
@@ -105,6 +106,7 @@ import {
 export type ProductWorkflowContext = ReturnType<typeof requireActor>;
 
 const productShortcodes = bindShortcodeResolver("product");
+const locationShortcodes = bindShortcodeResolver("location");
 const projectShortcodes = bindShortcodeResolver("project");
 const inventoryShortcodes = bindShortcodeResolver("inventory");
 
@@ -279,6 +281,7 @@ export const discardProductWorkflow = bindWorkflow(
           date: input.date,
           reason: input.reason,
           inventoryEntryId: resolved.inventoryEntryId,
+          adjustInventory: input.adjustInventory,
         },
         context.actorContext,
       ),
@@ -566,6 +569,14 @@ export const productHandlers = implementOperationDomain(productContract, {
     ),
   setProjectUses,
   discard: discardProductWorkflow,
+  addToInventoryPreview: async (context, input) =>
+    previewProductAddToInventory(
+      context.db,
+      await productShortcodes.one(context.db, input.productId),
+      input.locationId
+        ? await locationShortcodes.one(context.db, input.locationId)
+        : null,
+    ),
   discardPreview: async (context, input) =>
     previewProductDiscard(
       context.db,

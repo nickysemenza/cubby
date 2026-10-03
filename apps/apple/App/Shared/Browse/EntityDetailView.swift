@@ -24,6 +24,10 @@ struct EntityDetailView: View {
     @State private var heroAction: HeroActionModel?
     @State private var heroEditor: HeroEditorRequest?
     @State private var heroNotice: String?
+    @State private var heroBusy = false
+    /// Set when a delete finished: the record is gone, so leave its screen once the sheet that
+    /// ran the delete has actually dismissed (dismissing both at once only closes the sheet).
+    @State private var leaveAfterHeroSheet = false
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
@@ -82,7 +86,15 @@ struct EntityDetailView: View {
                 }
                 .environment(appModel)
             }
-            .sheet(item: $heroAction) { action in
+            .sheet(
+                item: $heroAction,
+                onDismiss: {
+                    if leaveAfterHeroSheet {
+                        leaveAfterHeroSheet = false
+                        dismiss()
+                    }
+                }
+            ) { action in
                 HeroActionSheet(model: action) { outcome in finishHeroAction(action.plan, outcome) }
                     .environment(appModel)
             }
@@ -285,8 +297,12 @@ struct EntityDetailView: View {
         let runner = HeroActionRunner(client: appModel.client)
         switch plan.kind {
         case .toggleField, .create:
-            // No input and nothing destructive: one explicit tap runs it.
+            // No input and nothing destructive: one explicit tap runs it. The flag flips before
+            // the task is scheduled so a second tap cannot start a second write.
+            guard !heroBusy else { return }
+            heroBusy = true
             Task {
+                defer { heroBusy = false }
                 do {
                     finishHeroAction(
                         plan, try await runner.perform(plan, on: key, row: row, values: [:], confirmed: false)
@@ -306,7 +322,11 @@ struct EntityDetailView: View {
         case .completed(let message, let changed):
             appModel.recordEntityMutation(keys: changed)
             if case .delete = plan.kind {
-                dismiss()
+                leaveAfterHeroSheet = true
+                if heroAction == nil {
+                    leaveAfterHeroSheet = false
+                    dismiss()
+                }
             } else {
                 heroNotice = message
                 Task { await refresh() }

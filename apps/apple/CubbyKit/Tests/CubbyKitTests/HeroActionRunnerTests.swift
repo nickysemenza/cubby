@@ -25,11 +25,13 @@ struct HeroActionRunnerTests {
         let method: String?
         let path: String
         let body: [String: JSONValue]
+        let query: String
     }
 
     private final class Recorder: Sendable {
         let seen = Mutex<[Seen]>([])
         var requests: [Seen] { seen.withLock { $0 } }
+        var queries: [String] { requests.map(\.query) }
     }
 
     private func makeRunner() throws -> HeroActionRunner {
@@ -49,7 +51,10 @@ struct HeroActionRunnerTests {
                 let data = (try? Self.requestBody(request)) ?? Data()
                 let fields = (try? JSONDecoder().decode([String: JSONValue].self, from: data)) ?? [:]
                 recorder.seen.withLock {
-                    $0.append(Seen(method: request.httpMethod, path: request.url?.path ?? "", body: fields))
+                    $0.append(
+                        Seen(
+                            method: request.httpMethod, path: request.url?.path ?? "", body: fields,
+                            query: request.url?.query ?? ""))
                 }
                 return respond(request)
             }
@@ -227,20 +232,87 @@ struct HeroActionRunnerTests {
     }
 
     nonisolated private static let twoShelves = Data(
-        #"{"productName":"Sample","shelves":[{"id":"INV-4K7M","amount":{"value":3,"unit":"each"},"location":{"id":"LOC-4K7M","name":"Workshop"}},{"id":"INV-5K7M","amount":{"value":12,"unit":"each"},"location":{"id":"LOC-5K7M","name":"Garage"}}],"ledgerOnly":false,"selectedShelf":null,"needsShelfChoice":true,"warning":null}"#
+        #"{"productName":"Sample","shelves":[{"id":"INV-4K7M","amount":{"value":3,"unit":"each"},"location":{"id":"LOC-4K7M","name":"Workshop"}},{"id":"INV-5K7M","amount":{"value":12,"unit":"each"},"location":{"id":"LOC-5K7M","name":"Garage"}}],"ledgerOnly":false,"selectedShelf":null,"defaultQuantity":1,"needsShelfChoice":true,"warning":null}"#
             .utf8)
 
-    @MainActor @Test func discardCannotSubmitUntilTheServerAnswersAndAShelfIsChosen() async throws {
-        _ = capture { _ in (200, Self.twoShelves) }
-        let runner = try makeRunner()
+    nonisolated private static let oneShelf = Data(
+        #"{"productName":"Sample","shelves":[{"id":"INV-4K7M","amount":{"value":0.5,"unit":"each"},"location":{"id":"LOC-4K7M","name":"Workshop"}}],"ledgerOnly":false,"selectedShelf":{"id":"INV-4K7M","amount":{"value":0.5,"unit":"each"},"location":{"id":"LOC-4K7M","name":"Workshop"}},"defaultQuantity":0.5,"needsShelfChoice":false,"warning":null}"#
+            .utf8)
+
+    @MainActor private func discardModel(_ preview: Data) throws -> (HeroActionModel, Recorder) {
+        let recorder = capture { request in
+            request.url?.path.hasSuffix("discardPreview") == true ? (200, preview) : (200, Self.discarded)
+        }
         let plan = try #require(HeroActionRunner.plan(for: .discard, on: .product))
-        let model = HeroActionModel(plan: plan, entity: .product, row: Self.row("PRD-4K7M"), runner: runner)
+        let model = HeroActionModel(
+            plan: plan, entity: .product, row: Self.row("PRD-4K7M"), runner: try makeRunner())
+        return (model, recorder)
+    }
+
+    @MainActor @Test func discardCannotSubmitUntilTheServerAnswersAndAShelfIsChosen() async throws {
+        let (model, _) = try discardModel(Self.twoShelves)
         // Before the first preview the verdict is unknown: never submit ahead of it.
         #expect(!model.canSubmit)
         await model.refreshPreview()
         #expect(model.shelfOptions.map(\.value) == ["INV-4K7M", "INV-5K7M"])
         // Several shelves, none chosen: the server owes the operator a choice, not a guess.
         #expect(!model.canSubmit)
+    }
+
+    @MainActor @Test func theServerSeedsTheSoleShelfAndTheDefaultQuantity() async throws {
+        let (model, _) = try discardModel(Self.oneShelf)
+        await model.refreshPreview()
+        // Native never decides these: it renders the preview's selected shelf and default.
+        #expect(model.values["inventoryEntryId"] == "INV-4K7M")
+        #expect(model.values["quantity"] == 0.5)
+        // The preview answered the form as it stood before seeding, so it must refresh first.
+        #expect(!model.canSubmit)
+        await model.refreshPreview()
+        #expect(model.canSubmit)
+    }
+
+    @MainActor @Test func aStalePreviewNeverEnablesSubmit() async throws {
+        let (model, _) = try discardModel(Self.oneShelf)
+        await model.refreshPreview()
+        await model.refreshPreview()
+        #expect(model.canSubmit)
+        model.values["quantity"] = 7
+        #expect(!model.canSubmit)
+        #expect(model.advisory == nil)
+    }
+
+    @MainActor @Test func aFailedPreviewClearsTheOldAnswer() async throws {
+        let (model, _) = try discardModel(Self.oneShelf)
+        await model.refreshPreview()
+        await model.refreshPreview()
+        #expect(model.canSubmit)
+        _ = capture { _ in (500, Data()) }
+        model.values["quantity"] = 2
+        await model.refreshPreview()
+        #expect(model.preview == nil)
+        #expect(!model.canSubmit)
+    }
+
+    @MainActor @Test func previewsSendNormalizedValues() async throws {
+        let (model, recorder) = try discardModel(Self.twoShelves)
+        model.values["inventoryEntryId"] = ""
+        await model.refreshPreview()
+        let query = try #require(recorder.queries.first)
+        // A blank shelf is null (omitted), never an empty string the server would reject.
+        #expect(!query.contains("inventoryEntryId"))
+    }
+
+    @MainActor @Test func submitStartsOnlyOnceForRepeatedTaps() async throws {
+        let (model, recorder) = try discardModel(Self.oneShelf)
+        await model.refreshPreview()
+        await model.refreshPreview()
+        let finished = Mutex(0)
+        model.submit(confirmed: true) { _ in finished.withLock { $0 += 1 } }
+        model.submit(confirmed: true) { _ in finished.withLock { $0 += 1 } }
+        #expect(model.isRunning)
+        while model.isRunning { await Task.yield() }
+        #expect(recorder.requests.filter { $0.path.hasSuffix("/discard") }.count == 1)
+        #expect(finished.withLock { $0 } == 1)
     }
 
     @Test func markPurchasedFlipsTheAcquiredFlagFromItsState() async throws {
@@ -272,7 +344,7 @@ struct HeroActionRunnerTests {
         #expect(entity == .expense)
         #expect(prefill["productId"] == "PRD-4K7M")
         #expect(prefill["costType"] == "tools")
-        // A null seed means "leave unset", not a literal null in the draft.
-        #expect(prefill["projectId"] == nil)
+        // An explicit null overrides any default the editor would otherwise seed.
+        #expect(prefill["projectId"] == .null)
     }
 }

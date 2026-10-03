@@ -113,6 +113,66 @@ describe("discardProductUnits", () => {
     expect(after?.deletedAt).toBeNull();
   });
 
+  // The server owns the shelf default: a client that asks to adjust without
+  // naming an entry (native hero action) must still decrement a sole shelf.
+  it("takes the units off the sole shelf when adjusting without naming it", async () => {
+    const { prod, entry } = await seedStockedProduct(3);
+
+    const result = await discardProductUnits(
+      ctx.db,
+      {
+        productId: prod.entityId,
+        quantity: 2,
+        date: "2026-06-03",
+        trade: "other",
+        reason: null,
+        inventoryEntryId: null,
+        adjustInventory: true,
+      },
+      ctx.actor,
+    );
+
+    expect(result.inventory).toMatchObject({ remainingValue: 1 });
+    const after = await getDb(ctx.db).query.inventoryEntry.findFirst({
+      where: eq(inventoryEntry.id, entry.entityId),
+    });
+    expect(after?.amountValue).toBe(1);
+  });
+
+  it("refuses to guess among several shelves", async () => {
+    const { prod } = await seedStockedProduct(3);
+    const other = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Second bin" }),
+      ctx.actor,
+    );
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: prod.entityId,
+        locationId: other.entityId,
+        amount: { value: 4, unit: "each" },
+      },
+      ctx.actor,
+    );
+
+    await expect(
+      discardProductUnits(
+        ctx.db,
+        {
+          productId: prod.entityId,
+          quantity: 1,
+          date: null,
+          trade: "other",
+          reason: null,
+          inventoryEntryId: null,
+          adjustInventory: true,
+        },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({ code: "CONSTRAINT_VIOLATION" });
+  });
+
   // Over-discard is deliberately allowed rather than refused the way
   // bulkMoveInventoryEntries refuses an over-move — the shelf is a
   // stale-tolerant ballpark and the operator at the bin outranks it. See the

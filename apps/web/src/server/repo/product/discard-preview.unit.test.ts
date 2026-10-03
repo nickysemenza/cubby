@@ -37,6 +37,13 @@ describe("describeDiscard", () => {
     });
   });
 
+  it("defaults to one unit, capped by the selected shelf", () => {
+    expect(describeDiscard([box], input()).defaultQuantity).toBe(1);
+    const half = shelf("INV-CCCC", "LOC-CCCC", "Drawer", 0.5);
+    expect(describeDiscard([half], input()).defaultQuantity).toBe(0.5);
+    expect(describeDiscard([tray, box], input()).defaultQuantity).toBe(1);
+  });
+
   it("selects the sole shelf without asking", () => {
     expect(describeDiscard([tray], input())).toMatchObject({
       selectedShelf: tray,

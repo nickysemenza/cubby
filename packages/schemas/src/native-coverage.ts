@@ -300,7 +300,10 @@ export const nativeCoverage = {
   listSlot: Record<ListSlotKey, NativeCoverageEntry>;
 };
 
-/** A literal body value, or a `$` slot the runner fills: `$row.id` or `$<field key>`. */
+/**
+ * A literal body value. Only a string starting `$row.` (the row's `id`) or `$field.` (a form
+ * field's key) is a slot the runner fills; any other string, `$` or not, is literal.
+ */
 export type HeroActionBodyValue =
   | string
   | number
@@ -418,9 +421,9 @@ export const nativeHeroActionPlans = {
       operation: "product.discardPreview",
       body: {
         productId: "$row.id",
-        quantity: "$quantity",
-        adjustInventory: "$adjustInventory",
-        inventoryEntryId: "$inventoryEntryId",
+        quantity: "$field.quantity",
+        adjustInventory: "$field.adjustInventory",
+        inventoryEntryId: "$field.inventoryEntryId",
       },
     },
     fields: [
@@ -452,12 +455,12 @@ export const nativeHeroActionPlans = {
     ],
     body: {
       productId: "$row.id",
-      quantity: "$quantity",
-      trade: "$trade",
-      date: "$date",
-      reason: "$reason",
-      adjustInventory: "$adjustInventory",
-      inventoryEntryId: "$inventoryEntryId",
+      quantity: "$field.quantity",
+      trade: "$field.trade",
+      date: "$field.date",
+      reason: "$field.reason",
+      adjustInventory: "$field.adjustInventory",
+      inventoryEntryId: "$field.inventoryEntryId",
     },
   },
   addToInventory: {
@@ -468,13 +471,17 @@ export const nativeHeroActionPlans = {
     entities: ["product"],
     // An explicit, named stocking action; inventory never changes as a side effect.
     confirmation: "none",
+    preview: {
+      operation: "product.addToInventoryPreview",
+      body: { productId: "$row.id", locationId: "$field.location" },
+    },
     fields: [
       { key: "location", label: "Location", kind: "location" },
       { key: "amount", label: "Amount", kind: "amount", default: "one" },
     ],
     body: {
-      locationId: "$location",
-      items: [{ productId: "$row.id", amount: "$amount" }],
+      locationId: "$field.location",
+      items: [{ productId: "$row.id", amount: "$field.amount" }],
     },
   },
   recordSale: {

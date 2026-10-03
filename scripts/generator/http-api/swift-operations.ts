@@ -813,6 +813,10 @@ const CLIENT_PASSTHROUGH_METHODS = {
   "inventory.bulkAdd": { method: "bulkAddInventory", doc: null },
   "product.discard": { method: "discardProduct", doc: null },
   "product.discardPreview": { method: "discardPreview", doc: null },
+  "product.addToInventoryPreview": {
+    method: "addToInventoryPreview",
+    doc: null,
+  },
   "dataQuality.setException": { method: "setDataException", doc: null },
   "dataQuality.clearException": { method: "clearDataException", doc: null },
   "image.detail": { method: "imageDetail", doc: null },
