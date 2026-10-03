@@ -313,7 +313,7 @@ export type HeroActionBodyValue =
   | { readonly [key: string]: HeroActionBodyValue };
 
 /** One input the runner asks for. Everything else in the request body is the plan's literal. */
-export type HeroActionField = {
+type HeroActionField = {
   readonly key: string;
   readonly label: string;
   readonly kind:

@@ -170,7 +170,7 @@ describe("discardProductUnits", () => {
         },
         ctx.actor,
       ),
-    ).rejects.toMatchObject({ code: "CONSTRAINT_VIOLATION" });
+    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
   });
 
   // Over-discard is deliberately allowed rather than refused the way
