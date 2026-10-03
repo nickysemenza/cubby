@@ -126,7 +126,12 @@ export function descriptionRequest(imageUrl: string) {
  */
 export async function describeOriginalImage(
   db: Database,
-  input: { imageId: ImageId; attemptId: string; runId: RunId },
+  input: {
+    imageId: ImageId;
+    attemptId: string;
+    runId: RunId;
+    normalizedInput?: { bytes: Uint8Array; key: string };
+  },
 ): Promise<{
   result: ImageDescriptionResult;
   cached: boolean;
@@ -159,10 +164,17 @@ export async function describeOriginalImage(
     cached: false,
   });
   let analysisUrl = imageAnalysisRenditionUrl(getR2PublicUrl(source.key));
-  const key = `cubby/analysis-inputs/${input.attemptId}.jpg`;
-  if (!(await reserveImageAnalysisInput(db, input.attemptId, key)))
+  // Companions receive a rewritable staging PUT, never this server-owned snapshot key.
+  const key =
+    input.normalizedInput?.key ??
+    `cubby/analysis-inputs/${input.attemptId}-${crypto.randomUUID()}.jpg`;
+  if (
+    !input.normalizedInput &&
+    !(await reserveImageAnalysisInput(db, input.attemptId, key))
+  )
     throw new Error("Image analysis attempt is no longer current");
-  const bytes = await fetchAnalysisRendition(analysisUrl);
+  const bytes =
+    input.normalizedInput?.bytes ?? (await fetchAnalysisRendition(analysisUrl));
   const inspected = await inspectImageFile(bytes, "image/jpeg");
   if (inspected.detectedContentType !== "image/jpeg")
     throw new Error("Analysis rendition must be JPEG");

@@ -37,6 +37,7 @@ extension ImageProcessingClientMessage {
                     actualImageDescription: .init(
                         available: imageDescriptionAvailable,
                         revision: imageDescriptionAvailable ? 1 : nil),
+                    jpegNormalization: .init(available: true, revision: ._1),
                     foreground: foreground),
                 // The device owns this switch; the server mirrors it onto the
                 // `Device` row and refuses to dispatch when it is off.

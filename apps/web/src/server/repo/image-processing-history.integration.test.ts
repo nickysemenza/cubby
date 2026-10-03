@@ -1,7 +1,7 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   aiAnalysis,
@@ -12,7 +12,11 @@ import {
   imageProcessingOrphan,
   imageProcessingSubmissionJob,
 } from "~/server/db/schema";
-import { scheduleImageProcessingJobs } from "~/server/services/image-processing.service";
+import {
+  scheduleImageProcessingJobs,
+  completeCompanionImageProcessingResult,
+} from "~/server/services/image-processing.service";
+import * as storage from "~/server/utils/s3";
 
 import {
   reserveImageAnalysisInput,
@@ -26,6 +30,7 @@ import {
   claimImageProcessingJob,
   completeImageProcessingJob,
   findImageProcessingDispatchRepairs,
+  getLeasedImageProcessingJobContext,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   markImageProcessingWaitingForDevice,
@@ -369,6 +374,167 @@ describe("image execution history conservation", () => {
       .from(imageProcessingOrphan)
       .where(eq(imageProcessingOrphan.key, key));
     expect(orphans).toHaveLength(1);
+  });
+  // A companion can return after its signed PUT or lease expires, or after the source changes.
+  // Neither a new reservation nor retaining uploaded input may revive that stale attempt.
+  it.each(["expired", "replaced", "deleted"])(
+    "fences analysis input after the source is %s",
+    async (change) => {
+      const { source, jobId } = await setup();
+      const lease = await claim(jobId);
+      expect(await assignCloud(jobId, lease.attemptId)).toBe(true);
+      const key = `tests/input-${lease.attemptId}.jpg`;
+      expect(
+        await reserveImageAnalysisInput(ctx.db, lease.attemptId, key),
+      ).toBe(true);
+      if (change === "expired") {
+        await getDb(ctx.db)
+          .update(imageProcessingJob)
+          .set({ leaseExpiresAt: new Date(0) })
+          .where(eq(imageProcessingJob.id, jobId));
+      } else if (change === "replaced") {
+        await getDb(ctx.db)
+          .update(image)
+          .set({ sha256: "b".repeat(64) })
+          .where(eq(image.id, source.id));
+      } else {
+        await deleteImages(ctx.db, [parseEntityId("image", source.id)]);
+      }
+      expect(
+        await getLeasedImageProcessingJobContext(ctx.db, {
+          jobId,
+          attemptId: lease.attemptId,
+        }),
+      ).toBeNull();
+      expect(await retainImageAnalysisInput(ctx.db, lease.attemptId, key)).toBe(
+        false,
+      );
+      expect(
+        await reserveImageAnalysisInput(ctx.db, lease.attemptId, `${key}.late`),
+      ).toBe(false);
+    },
+  );
+  it("consumes a staging input once when normalization results arrive concurrently", async () => {
+    const { jobId } = await setup();
+    const lease = await claim(jobId);
+    await assignCloud(jobId, lease.attemptId);
+    const stage = `tests/stage-${lease.attemptId}.jpg`;
+    expect(
+      await reserveImageAnalysisInput(ctx.db, lease.attemptId, stage),
+    ).toBe(true);
+    const snapshots = [
+      `tests/snapshot-a-${lease.attemptId}.jpg`,
+      `tests/snapshot-b-${lease.attemptId}.jpg`,
+    ];
+    const reservations = await Promise.all(
+      snapshots.map((key) =>
+        reserveImageAnalysisInput(ctx.db, lease.attemptId, key, stage),
+      ),
+    );
+    expect(reservations.filter(Boolean)).toHaveLength(1);
+    const winner = snapshots[reservations.indexOf(true)]!;
+    expect(
+      await retainImageAnalysisInput(ctx.db, lease.attemptId, winner),
+    ).toBe(true);
+    const [saved] = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.id, jobId));
+    expect(saved?.state).toBe("leased");
+  });
+  it("allows only the normalization owner to read storage and fail its attempt", async () => {
+    const { source, jobId } = await setup();
+    await getDb(ctx.db)
+      .update(image)
+      .set({ contentType: "image/avif" })
+      .where(eq(image.id, source.id));
+    const lease = await claim(jobId);
+    await assignCloud(jobId, lease.attemptId);
+    const key = `cubby/analysis-staging/${lease.attemptId}.jpg`;
+    await reserveImageAnalysisInput(ctx.db, lease.attemptId, key);
+    const result = {
+      jobId,
+      attemptId: lease.attemptId,
+      completedAt: new Date().toISOString(),
+      outcome: {
+        kind: "describe_image" as const,
+        status: "normalized" as const,
+        key,
+        contentType: "image/jpeg" as const,
+        sha256: "b".repeat(64),
+        width: 2,
+        height: 3,
+      },
+    };
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const read = vi
+      .spyOn(storage, "getS3Object")
+      .mockImplementation(async () => {
+        await gate;
+        return new Response("synthetic storage failure", { status: 503 });
+      });
+    try {
+      const completions = [
+        completeCompanionImageProcessingResult(ctx.db, result),
+        completeCompanionImageProcessingResult(ctx.db, result),
+      ];
+      await vi.waitFor(() => expect(read).toHaveBeenCalled());
+      release();
+      await Promise.all(completions);
+      expect(read).toHaveBeenCalledTimes(1);
+      const [saved] = await getDb(ctx.db)
+        .select()
+        .from(imageProcessingJob)
+        .where(eq(imageProcessingJob.id, jobId));
+      expect(saved?.state).toBe("pending");
+    } finally {
+      release();
+      read.mockRestore();
+    }
+  });
+  it("rejects a normalization result for an unreserved output key without adopting it", async () => {
+    const { source, jobId } = await setup();
+    await getDb(ctx.db)
+      .update(image)
+      .set({ contentType: "image/avif" })
+      .where(eq(image.id, source.id));
+    const lease = await claim(jobId);
+    await assignCloud(jobId, lease.attemptId);
+    await reserveImageAnalysisInput(
+      ctx.db,
+      lease.attemptId,
+      `cubby/analysis-staging/${lease.attemptId}.jpg`,
+    );
+    expect(
+      await completeCompanionImageProcessingResult(ctx.db, {
+        jobId,
+        attemptId: lease.attemptId,
+        completedAt: new Date().toISOString(),
+        outcome: {
+          kind: "describe_image",
+          status: "normalized",
+          key: "unreserved.jpg",
+          contentType: "image/jpeg",
+          sha256: "b".repeat(64),
+          width: 2,
+          height: 3,
+        },
+      }),
+    ).toEqual({ adopted: false });
+    const [saved] = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.id, jobId));
+    expect(saved?.state).toBe("leased");
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(aiAnalysis)
+        .where(eq(aiAnalysis.entityId, source.id)),
+    ).toEqual([]);
   });
   it("does not retry terminal skips or failures for an obsolete source", async () => {
     const { source, jobId } = await setup();

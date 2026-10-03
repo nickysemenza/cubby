@@ -1,25 +1,37 @@
 import { parseShortcodeFor, type RunId } from "@cubby/schemas/identifiers";
 import {
   pullCompanionImageProcessingInput,
+  imageProcessingTerminalResult,
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-processing";
 import type {
   ImageProcessingJobKind,
-  ImageProcessingResult,
+  ImageProcessingTerminalResult as ImageProcessingResult,
+  ImageProcessingResult as CompanionImageProcessingResult,
 } from "@cubby/schemas/image-processing";
+import {
+  readResponseWithLimit,
+  MAX_EXTERNAL_IMAGE_BYTES,
+} from "@cubby/shared/external-fetch";
 import { z } from "zod";
 
 import { publishBackgroundTasks } from "~/server/background-tasks/publish";
 import type { Database } from "~/server/db";
-import { prepareCompanionImageCommand } from "~/server/image-processing/dispatch";
+import { completeCloudImageDescription } from "~/server/image-processing/cloud-description";
+import {
+  prepareCompanionImageCommand,
+  reserveCompanionAnalysisOutput,
+} from "~/server/image-processing/dispatch";
 import { safeImageProcessingError } from "~/server/image-processing/safe-error";
+import { reserveImageAnalysisInput } from "~/server/repo/activity-input";
 import { upsertDeviceFromHello } from "~/server/repo/device-participation";
 import {
   claimImageProcessingJob,
   reclaimExpiredImageProcessingLeases,
   markImageProcessingWaitingForDevice,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
 } from "~/server/repo/image-processing";
 import { retryFailedImageProcessingJobs } from "~/server/repo/image-processing";
@@ -156,9 +168,14 @@ async function verifyTransparentOutput(
  */
 export async function completeCompanionImageProcessingResult(
   db: Database,
-  result: ImageProcessingResult,
+  result: CompanionImageProcessingResult,
 ): Promise<{ adopted: boolean }> {
-  const prepared = await prepareCompanionCompletion(db, result);
+  if (result.outcome.status === "normalized")
+    return completeNormalizedImageInput(db, result, result.outcome);
+  const prepared = await prepareCompanionCompletion(
+    db,
+    imageProcessingTerminalResult.parse(result),
+  );
   if (!prepared) {
     await recordImageProcessingEvent(db, {
       jobId: result.jobId,
@@ -176,6 +193,99 @@ export async function completeCompanionImageProcessingResult(
   if (completion.adopted && prepared.searchImageId)
     await refreshDirectImageOwnerSearchDocuments(db, prepared.searchImageId);
   return { adopted: completion.adopted };
+}
+
+async function readVerifiedAnalysisJPEG(
+  key: string,
+  outcome: Extract<
+    CompanionImageProcessingResult["outcome"],
+    { status: "normalized" }
+  >,
+) {
+  const response = await getS3Object(key);
+  if (!response.ok)
+    throw new Error(
+      `Analysis staging output is unavailable: HTTP ${response.status}: ${(await response.text()).slice(0, 500)}`,
+    );
+  const storedType = response.headers
+    .get("content-type")
+    ?.split(";", 1)[0]
+    ?.trim()
+    .toLowerCase();
+  const bytes = await readResponseWithLimit(response, MAX_EXTERNAL_IMAGE_BYTES);
+  const inspected = await inspectImageFile(bytes, "image/jpeg");
+  if (
+    storedType !== "image/jpeg" ||
+    inspected.detectedContentType !== "image/jpeg" ||
+    inspected.sha256 !== outcome.sha256 ||
+    inspected.width !== outcome.width ||
+    inspected.height !== outcome.height ||
+    outcome.width > 2048 ||
+    outcome.height > 2048
+  )
+    throw new Error(
+      "Analysis JPEG does not match the leased normalization command",
+    );
+  return bytes;
+}
+
+async function completeNormalizedImageInput(
+  db: Database,
+  result: CompanionImageProcessingResult,
+  outcome: Extract<
+    CompanionImageProcessingResult["outcome"],
+    { status: "normalized" }
+  >,
+): Promise<{ adopted: boolean }> {
+  const context = await getLeasedImageProcessingJobContext(db, result);
+  const stageKey = `cubby/analysis-staging/${result.attemptId}.jpg`;
+  if (
+    !context ||
+    context.kind !== "describe_image" ||
+    context.processorRevision !== IMAGE_DESCRIPTION_PROCESSOR_REVISION ||
+    context.contentType !== "image/avif" ||
+    context.inputKey !== stageKey ||
+    outcome.key !== stageKey
+  )
+    return { adopted: false };
+  const snapshotKey = `cubby/analysis-inputs/${result.attemptId}-${crypto.randomUUID()}.jpg`;
+  if (
+    !(await reserveImageAnalysisInput(
+      db,
+      result.attemptId,
+      snapshotKey,
+      stageKey,
+    ))
+  )
+    return { adopted: false };
+  try {
+    const bytes = await readVerifiedAnalysisJPEG(stageKey, outcome);
+    // Recheck after storage IO; the cloud helper snapshots these bytes under a server-only key.
+    const current = await getLeasedImageProcessingJobContext(db, result);
+    if (!current || current.inputKey !== snapshotKey) return { adopted: false };
+    return {
+      adopted: await completeCloudImageDescription(db, {
+        jobId: result.jobId,
+        attemptId: result.attemptId,
+        imageId: context.imageId,
+        runId: context.runId,
+        normalizedInput: { bytes, key: snapshotKey },
+      }),
+    };
+  } catch (error) {
+    const completion = await completeImageProcessingJob(db, {
+      result: {
+        ...result,
+        outcome: {
+          kind: "describe_image",
+          status: "failed",
+          retryable: context.attempts < 3,
+          reason: safeImageProcessingError(error),
+        },
+      },
+    });
+    return { adopted: completion.adopted };
+  }
 }
 
 type VerifiedDerivative = {
@@ -313,6 +423,33 @@ export async function retryImageProcessingFailures(
 }
 
 /** Pulling grants one bounded assignment; the socket's foreground gate stays truthful. */
+function companionClaimCapabilities(
+  hello: z.infer<typeof pullCompanionImageProcessingInput>["hello"],
+) {
+  const revisions: number[] = [];
+  const kinds: ImageProcessingJobKind[] = [];
+  if (
+    hello.capabilities.visionSubjectLift.available &&
+    hello.capabilities.visionSubjectLift.revision === 1
+  ) {
+    kinds.push("subject_lift");
+    revisions.push(IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION);
+  }
+  if (
+    hello.capabilities.actualImageDescription.available &&
+    hello.capabilities.actualImageDescription.revision === 1
+  ) {
+    kinds.push("describe_image");
+    revisions.push(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+  }
+  const allowAvifNormalization =
+    hello.capabilities.jpegNormalization?.available === true &&
+    hello.capabilities.jpegNormalization.revision === 1;
+  if (allowAvifNormalization && !kinds.includes("describe_image"))
+    kinds.push("describe_image");
+  return { revisions, kinds, allowAvifNormalization };
+}
+
 export async function pullCompanionImageProcessing(
   db: Database,
   input: z.infer<typeof pullCompanionImageProcessingInput>,
@@ -334,28 +471,15 @@ export async function pullCompanionImageProcessing(
     (await readImageProcessingSettings(db)).paused
   )
     return empty;
-  const revisions: number[] = [];
-  const kinds: ImageProcessingJobKind[] = [];
-  if (
-    hello.capabilities.visionSubjectLift.available &&
-    hello.capabilities.visionSubjectLift.revision === 1
-  ) {
-    kinds.push("subject_lift");
-    revisions.push(IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION);
-  }
-  if (
-    hello.capabilities.actualImageDescription.available &&
-    hello.capabilities.actualImageDescription.revision === 1
-  ) {
-    kinds.push("describe_image");
-    revisions.push(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
-  }
+  const { revisions, kinds, allowAvifNormalization } =
+    companionClaimCapabilities(hello);
   if (!kinds.length) return empty;
   await reclaimExpiredImageProcessingLeases(db);
   for (let skipped = 0; skipped < 8; skipped++) {
     const claimed = await claimImageProcessingJob(db, {
       kinds,
       processorRevisions: revisions,
+      allowAvifNormalization,
       leaseMs: input.leaseSeconds * 1000,
     });
     if (!claimed) return empty;
@@ -382,6 +506,7 @@ export async function pullCompanionImageProcessing(
         });
         return empty;
       }
+      if (!(await reserveCompanionAnalysisOutput(db, command))) return empty;
       return { command, remotePaused: false };
     } catch (error) {
       await markImageProcessingWaitingForDevice(db, {
@@ -396,7 +521,7 @@ export async function pullCompanionImageProcessing(
 
 export async function completeAssignedCompanionImageProcessing(
   db: Database,
-  input: { deviceId: string; result: ImageProcessingResult },
+  input: { deviceId: string; result: CompanionImageProcessingResult },
   userId: string,
 ) {
   if (

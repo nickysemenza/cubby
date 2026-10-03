@@ -91,6 +91,13 @@ export const imageProcessingCapabilities = z.object({
     available: z.boolean(),
     revision: z.int().positive().optional(),
   }),
+  /** Checksum-verified JPEG preparation, independent of a native language model. */
+  jpegNormalization: z
+    .object({
+      available: z.boolean(),
+      revision: z.literal(1),
+    })
+    .optional(),
   /** iOS must accurately report foreground-only availability. */
   foreground: z.boolean(),
 });
@@ -153,6 +160,14 @@ export const imageProcessingCommand = z.discriminatedUnion("kind", [
     kind: z.literal("describe_image"),
     promptRevision: z.literal(IMAGE_DESCRIPTION_PROMPT_REVISION),
     resultSchemaRevision: z.literal(IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION),
+    /** A companion prepares input; the server still runs the cloud description. */
+    analysisOutput: z
+      .object({
+        key: z.string().min(1).max(1_000),
+        uploadUrl: z.url(),
+        contentType: z.literal("image/jpeg"),
+      })
+      .optional(),
   }),
 ]);
 export type ImageProcessingCommand = z.infer<typeof imageProcessingCommand>;
@@ -191,6 +206,17 @@ export const imageProcessingFailedOutcome = z.object({
   reason: z.string().trim().min(1).max(1_000),
 });
 
+/** Transport-only intermediate result; never a persisted job state. */
+export const imageProcessingNormalizedOutcome = z.object({
+  kind: z.literal("describe_image"),
+  status: z.literal("normalized"),
+  key: z.string().min(1).max(1_000),
+  sha256,
+  contentType: z.literal("image/jpeg"),
+  width: positiveInt.max(2048),
+  height: positiveInt.max(2048),
+});
+
 export const imageProcessingDiagnostics = z.object({
   osVersion: z.string().max(100).optional(),
   appVersion: z.string().max(100).optional(),
@@ -211,9 +237,21 @@ export const imageProcessingResult = z.object({
     imageProcessingCompletedOutcome,
     imageProcessingSkippedOutcome,
     imageProcessingFailedOutcome,
+    imageProcessingNormalizedOutcome,
   ]),
 });
 export type ImageProcessingResult = z.infer<typeof imageProcessingResult>;
+
+export const imageProcessingTerminalResult = imageProcessingResult.extend({
+  outcome: z.union([
+    imageProcessingCompletedOutcome,
+    imageProcessingSkippedOutcome,
+    imageProcessingFailedOutcome,
+  ]),
+});
+export type ImageProcessingTerminalResult = z.infer<
+  typeof imageProcessingTerminalResult
+>;
 
 export const imageProcessingClientMessage = z.discriminatedUnion("type", [
   imageProcessingHello,
