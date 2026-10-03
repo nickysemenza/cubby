@@ -532,6 +532,12 @@ jobs:
         id: test-runner
         with:
           toolchain-hash: ${{ steps.derived-data.outputs.toolchain-hash }}
+      # Overlap readiness with database/Worker startup only after heavy cache
+      # restores. A cold app build keeps the harness's post-compilation boot.
+      - name: Start warm simulator boot
+        if: steps.derived-data.outputs.cache-hit == 'true'
+        continue-on-error: true
+        run: node scripts/prewarm-ios-simulator.ts
       - name: Start native PostgreSQL 17 with pgvector
         shell: bash
         run: |
@@ -663,6 +669,10 @@ jobs:
         id: test-runner
         with:
           toolchain-hash: ${{ steps.derived-data.outputs.toolchain-hash }}
+      - name: Start warm simulator boot
+        if: steps.derived-data.outputs.cache-hit == 'true'
+        continue-on-error: true
+        run: node scripts/prewarm-ios-simulator.ts
       - name: Start native PostgreSQL 17 with pgvector
         shell: bash
         run: |

@@ -16,10 +16,6 @@ inputs:
     description: "Optional space-separated pnpm workspace filters for a narrower install"
     required: false
     default: ""
-  ios-simulator-prewarm:
-    description: Start the native test simulator before Apple tool and cache setup
-    required: false
-    default: "false"
 
 runs:
   using: "composite"
@@ -122,11 +118,3 @@ runs:
           pnpm install --frozen-lockfile --prefer-offline
         fi
       shell: bash
-
-    # Boot competes with dependency extraction and generated-code hashing on
-    # the three-core native runners. Overlap Apple tool/cache setup afterward.
-    - name: Start simulator boot after dependency installation
-      if: inputs.ios-simulator-prewarm == 'true'
-      shell: bash
-      run: |
-        nohup node scripts/prewarm-ios-simulator.ts >"$RUNNER_TEMP/cubby-sim-prewarm.log" 2>&1 < /dev/null &
