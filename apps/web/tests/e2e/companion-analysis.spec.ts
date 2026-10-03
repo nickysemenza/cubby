@@ -6,6 +6,7 @@ import {
   completeCompanionImageProcessingOutput,
   completeCompanionImageProcessingInput,
   imageProcessingHello,
+  imageProcessingNormalizedOutcome,
   pullCompanionImageProcessingOutput,
   pullCompanionImageProcessingInput,
 } from "@cubby/schemas/image-processing";
@@ -39,6 +40,12 @@ const hash = (bytes: Buffer) =>
 type CompanionRequest =
   | z.input<typeof pullCompanionImageProcessingInput>
   | z.input<typeof completeCompanionImageProcessingInput>;
+type NormalizedResult = Omit<
+  z.input<typeof completeCompanionImageProcessingInput>["result"],
+  "outcome"
+> & {
+  outcome: z.input<typeof imageProcessingNormalizedOutcome>;
+};
 
 // Real HTTP admission, signed storage and cloud completion; only the external model
 // response is seeded through its exact byte-fingerprint cache. Native ImageIO has
@@ -47,10 +54,9 @@ type CompanionRequest =
 test("companion normalization preserves originals and rejects stale or corrupt results", async ({
   request,
   page,
-  baseURL,
   e2eRuntime,
 }) => {
-  if (!baseURL) throw new Error("Worker URL missing");
+  const workerOrigin = e2eRuntime.baseURL;
   const { db, actor } = await createEvidenceHarnessContext(page);
   const runId = await ensureRun(db, actor, { purpose: "background" });
   const database = getDb(db);
@@ -72,7 +78,7 @@ test("companion normalization preserves originals and rejects stale or corrupt r
   });
   async function post(path: string, input: CompanionRequest) {
     const response = await request.post(`/api/v1/imageProcessing/${path}`, {
-      headers: { Origin: baseURL },
+      headers: { Origin: workerOrigin },
       data: input,
     });
     expect(response.ok(), await response.text()).toBe(true);
@@ -168,9 +174,7 @@ test("companion normalization preserves originals and rejects stale or corrupt r
       })
     ).ok(),
   ).toBe(true);
-  const result: z.input<
-    typeof completeCompanionImageProcessingInput
-  >["result"] = {
+  const result: NormalizedResult = {
     jobId: command.jobId,
     attemptId: command.attemptId,
     completedAt: new Date().toISOString(),
