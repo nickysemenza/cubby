@@ -8,7 +8,7 @@ import Testing
 struct EntityFieldValueTests {
     /// A `yyyy-MM-dd` column keeps its calendar day regardless of the device zone.
     @Test func dateOnlyValueKeepsItsCalendarDay() {
-        let rendered = EntityFieldValue.formattedDate("2039-05-10", locale: Locale(identifier: "en_US"))
+        let rendered = EntityFieldValue.formattedDate("2039-05-10")
         #expect(rendered == "May 10, 2039")
     }
 

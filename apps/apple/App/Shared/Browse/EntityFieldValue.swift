@@ -21,15 +21,13 @@ nonisolated enum EntityFieldValue {
     static func text(_ value: JSONValue?, field: FieldDescriptor) -> String? {
         guard let value, value != .null else { return nil }
         switch field.format {
-        case "currency": return money(value)
-        case "signedCurrency":
-            guard let amount = number(value) else { return nil }
-            return (amount > 0 ? "+" : "") + amount.formatted(.usd)
-        case "plainDate", "timestamp": return date(value)
+        case "currency", "signedCurrency": return money(value)
+        case "plainDate": return value.stringValue.map(DisplayFormat.plainDate)
+        case "timestamp": return date(value)
         case "amount": return amount(value)
         case "external-link":
             if let string = value.stringValue { return string.isEmpty ? nil : string }
-            if let number = number(value) { return format(number) }
+            if let number = number(value) { return DisplayFormat.number(number) }
             return nil
         default: break
         }
@@ -37,9 +35,10 @@ nonisolated enum EntityFieldValue {
         case .null: return nil
         case .string(let string):
             if string.isEmpty { return nil }
-            if field.kind == .date || field.kind == .timestamp { return date(value) ?? string }
+            if field.kind == .date { return DisplayFormat.plainDate(string) }
+            if field.kind == .timestamp { return date(value) ?? string }
             return field.kind == .enum ? enumLabel(string, field: field) : string
-        case .number(let number): return format(number)
+        case .number(let number): return DisplayFormat.number(number)
         case .bool(let flag): return flag ? "Yes" : "No"
         case .array(let items):
             if items.isEmpty { return nil }
@@ -93,26 +92,29 @@ nonisolated enum EntityFieldValue {
         return nil
     }
 
-    static func format(_ value: Double) -> String {
+    static func money(_ value: JSONValue?) -> String? {
+        guard let amount = number(value) else { return nil }
+        return DisplayFormat.currency(amount)
+    }
+
+    /// `{ value, unit }` is Cubby's amount shape; a bare number means units. The web renders this
+    /// with the recipebridge unit formatter (`wasm.format_amount`), which native does not call
+    /// yet, so a quantity keeps its grouped, two-decimal form.
+    static func amount(_ value: JSONValue?) -> String? {
+        guard let value else { return nil }
+        if let amount = number(value["value"]) {
+            let unit = value["unit"]?.stringValue
+            return unit.map { "\(quantity(amount)) \($0)" } ?? quantity(amount)
+        }
+        if let amount = number(value) { return quantity(amount) }
+        return nil
+    }
+
+    /// Whole numbers print bare; fractions round to two places.
+    static func quantity(_ value: Double) -> String {
         value == value.rounded() && abs(value) < 1e15
             ? Int(value).formatted()
             : value.formatted(.number.precision(.fractionLength(0...2)))
-    }
-
-    static func money(_ value: JSONValue?) -> String? {
-        guard let amount = number(value) else { return nil }
-        return amount.formatted(.usd)
-    }
-
-    /// `{ value, unit }` is Cubby's amount shape; a bare number means units.
-    static func amount(_ value: JSONValue?) -> String? {
-        guard let value else { return nil }
-        if let quantity = number(value["value"]) {
-            let unit = value["unit"]?.stringValue
-            return unit.map { "\(format(quantity)) \($0)" } ?? format(quantity)
-        }
-        if let quantity = number(value) { return format(quantity) }
-        return nil
     }
 
     static func date(_ value: JSONValue?) -> String? {
@@ -120,9 +122,10 @@ nonisolated enum EntityFieldValue {
         return formattedDate(string)
     }
 
-    /// ISO-8601 with or without fractional seconds, plus bare `yyyy-MM-dd` for date-only columns,
-    /// which keeps its calendar day regardless of the device zone.
-    static func formattedDate(_ string: String, locale: Locale = .current) -> String? {
+    /// ISO-8601 with or without fractional seconds, in the device's zone and locale (the web shows
+    /// a compact relative time instead), plus bare `yyyy-MM-dd` for date-only columns, which
+    /// keeps its calendar day regardless of the device zone.
+    static func formattedDate(_ string: String) -> String? {
         let withFraction = ISO8601DateFormatter()
         withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = withFraction.date(from: string) {
@@ -133,24 +136,7 @@ nonisolated enum EntityFieldValue {
         if let date = plain.date(from: string) {
             return date.formatted(date: .abbreviated, time: .shortened)
         }
-        if string.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil {
-            let utc = TimeZone(secondsFromGMT: 0)!
-            let input = DateFormatter()
-            input.calendar = Calendar(identifier: .gregorian)
-            input.locale = Locale(identifier: "en_US_POSIX")
-            input.timeZone = utc
-            input.dateFormat = "yyyy-MM-dd"
-            input.isLenient = false
-            guard let date = input.date(from: string) else { return nil }
-
-            let output = DateFormatter()
-            output.calendar = Calendar(identifier: .gregorian)
-            output.locale = locale
-            output.timeZone = utc
-            output.dateStyle = .medium
-            output.timeStyle = .none
-            return output.string(from: date)
-        }
-        return nil
+        let day = DisplayFormat.plainDate(string)
+        return day == string ? nil : day
     }
 }

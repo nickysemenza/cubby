@@ -7,15 +7,13 @@ import Foundation
 public enum ImageTransform {
     /// Three variants per image, ever. Every caller asks for 2x its rendered point width (retina
     /// is the primary client) and snaps UP to a rung, so a 16pt identity mark, a 40pt card, and a
-    /// 64pt table cell of the same photo share one URL. Mirrors `IMAGE_WIDTHS` in image-url.ts —
-    /// keep both lists identical or the two clients stop sharing cache entries.
-    public static let widths: [Int] = [128, 640, 2048]
+    /// 64pt table cell of the same photo share one URL. Generated from `IMAGE_WIDTHS`
+    /// (`packages/shared/src/client-constants.ts`): both clients must list the same rungs or they
+    /// stop sharing cache entries.
+    public static let widths: [Int] = SharedConstants.imageWidths
 
-    /// The R2 bucket's public host. Mirrors `R2_PUBLIC_URL` in `apps/web/wrangler.jsonc`
-    /// (`"https://media.nickysemenza.com"`). Hard-coded rather than read from a manifest at
-    /// runtime — the same posture as `AppModel.productionBaseURL` hard-coding the API host: this
-    /// is deployment config baked in at build time, not something negotiated per-request.
-    private static let bucketHost = "media.nickysemenza.com"
+    /// The R2 bucket's public host, generated from `R2_PUBLIC_URL` in `apps/web/wrangler.jsonc`.
+    private static let bucketHost = URL(string: SharedConstants.mediaOrigin)?.host?.lowercased() ?? ""
 
     /// Transform width for a rendered width in points: 2x for retina, snapped up to the next
     /// rung, falling back to the largest rung. `displayScale` is deliberately ignored — the goal

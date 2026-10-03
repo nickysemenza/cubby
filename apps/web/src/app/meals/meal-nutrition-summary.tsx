@@ -5,11 +5,7 @@ import type {
   MealNutritionPerson,
 } from "@cubby/schemas/meal";
 import { MEAL_TYPE_LABELS } from "@cubby/schemas/meal-classification";
-import {
-  hasKnownEstimate,
-  type MeasureEstimate,
-  type NutritionTotals,
-} from "@cubby/schemas/nutrition";
+import type { NutritionTotals } from "@cubby/schemas/nutrition";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import { TrashIcon } from "@phosphor-icons/react/dist/csr/Trash";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -20,8 +16,12 @@ import { toast } from "sonner";
 import { entityDetailLink } from "~/entity/entities";
 import { meal } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
-import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
-import { roundTo } from "~/lib/utils";
+import {
+  compactEstimateText,
+  compactNumberText,
+  estimateStatusText,
+  formatEstimate,
+} from "~/lib/nutrition-format";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -36,19 +36,7 @@ const MACROS = [
   { key: "carbs", label: "Carbs", unit: "g" },
   { key: "fat", label: "Fat", unit: "g" },
 ] as const;
-const number = (value: number) => roundTo(value, 1).toLocaleString();
-function compactEstimate(estimate: MeasureEstimate, key: string) {
-  if (!hasKnownEstimate(estimate)) return "—";
-  const format =
-    key === "kcal"
-      ? (value: number) => Math.round(value).toLocaleString()
-      : number;
-  const value =
-    estimate.upper != null && estimate.upper !== estimate.lower
-      ? `${format(estimate.lower)}–${format(estimate.upper)}`
-      : format(estimate.lower);
-  return `${value}${estimate.status === "partial" ? "+" : ""}`;
-}
+const number = (value: number) => compactNumberText(value, "macro");
 
 function Macros({
   totals,
@@ -67,7 +55,10 @@ function Macros({
             title={formatEstimate(totals.nutrition[key], number)}
             aria-label={`${label}: ${formatEstimate(totals.nutrition[key], number)} ${unit}. ${estimateStatusText(totals.nutrition[key]) ?? ""}`}
           >
-            {compactEstimate(totals.nutrition[key], key)}
+            {compactEstimateText(
+              totals.nutrition[key],
+              key === "kcal" ? "kcal" : "macro",
+            )}
             <span className="ml-1 text-xs font-normal text-muted-foreground">
               {unit}
             </span>
