@@ -5,6 +5,9 @@ inputs:
     required: true
     description: Xcode version hash from the Apple build cache setup
 outputs:
+  cache-paths:
+    value: ${{ steps.paths.outputs.paths }}
+    description: Certified runner products and metadata shared by restore and save
   cache-key:
     value: ${{ steps.runner.outputs.cache-primary-key }}
     description: Primary test runner cache key
@@ -17,18 +20,20 @@ outputs:
 runs:
   using: composite
   steps:
-    # The SDK revalidates its runner source, Xcode/SDK and build settings on use.
-    # Leases live beside derived data; per-session launch files live within it.
-    # Restore only compiled products and metadata, never live process state.
+    # The SDK certifies products and metadata. Xcode build databases and
+    # workspace state are host-specific and must not cross runners.
+    - id: paths
+      shell: bash
+      run: |
+        cat >> "$GITHUB_OUTPUT" <<'EOF'
+        paths<<RUNNER_CACHE_PATHS
+        ~/.agent-device/apple-runner/derived/**/Build/Products
+        ~/.agent-device/apple-runner/derived/**/.agent-device-runner-cache.json
+        !~/.agent-device/apple-runner/derived/**/AgentDeviceRunner.env.session-*
+        RUNNER_CACHE_PATHS
+        EOF
     - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       id: runner
       with:
-        path: |
-          ~/.agent-device/apple-runner/derived
-          !~/.agent-device/apple-runner/derived/**/Logs
-          !~/.agent-device/apple-runner/derived/**/TestResults
-          !~/.agent-device/apple-runner/derived/**/*.log
-          !~/.agent-device/apple-runner/derived/**/AgentDeviceRunner.env.session-*
-          !~/.agent-device/apple-runner/derived/**/lock
-          !~/.agent-device/apple-runner/derived/**/*.lock
-        key: agent-device-apple-runner-v3-${{ runner.os }}-${{ inputs.toolchain-hash }}-${{ hashFiles('node_modules/agent-device/package.json', 'patches/agent-device@0.21.20.patch') }}
+        path: ${{ steps.paths.outputs.paths }}
+        key: agent-device-apple-runner-v4-${{ runner.os }}-${{ runner.arch }}-${{ inputs.toolchain-hash }}-${{ hashFiles('.github/actions/setup-apple-test-runner-cache/action.yml', 'node_modules/agent-device/package.json', 'patches/agent-device@0.21.20.patch') }}
