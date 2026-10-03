@@ -564,6 +564,12 @@ ${renderFilterSwitch(parameters, entity)}
             _ = try await client.${swiftMethod(entity, "update")}(path: .init(id: id), body: .json(try body.decoded())).ok`,
     )
     .join("\n");
+  const deleteCases = withGenerated("delete")
+    .map(
+      ([entity]) => `        case .${swiftCase(entity)}:
+            _ = try await client.${swiftMethod(entity, "delete")}(path: .init(id: id)).ok`,
+    )
+    .join("\n");
   const attachCases = withGenerated("update")
     .filter(([entity]) => bodyHas(entity, "pendingImageIds"))
     .map(
@@ -606,7 +612,7 @@ public enum NativeReadKind: Sendable, Hashable {
 
 extension EntityKey {
     /// The resource actions the HTTP document exposes for this entity, whether or not the
-    /// generated client carries them (\`delete\` is exposed but not generated).
+    /// generated client carries them.
     public var httpActions: Set<EntityAction> {
         switch self {
 ${actionCases}${fallback((key) => resourceEntities.has(key), "[]")}
@@ -691,6 +697,12 @@ ${switchBody(createCases, "create")}
     /// \`resources.<key>.update\` with \`body\` decoded into the typed update payload.
     func update(_ body: JSONValue, id: String, client: Client) async throws {
 ${switchBody(updateCases, "update")}
+    }
+
+    /// \`resources.<key>.delete\`. Destructive: only the hero-action runner calls it, behind an
+    /// explicit confirmation.
+    func delete(id: String, client: Client) async throws {
+${switchBody(deleteCases, "delete")}
     }
 
     /// \`resources.<key>.update\` with only \`pendingImageIds\` set, for the entities whose update
@@ -796,6 +808,15 @@ const CLIENT_PASSTHROUGH_METHODS = {
     doc: null,
   },
   "inventory.receiveExpense": { method: "receiveExpense", doc: null },
+  // The hero-action runner's operations (`nativeHeroActionPlans`); it decodes its form values
+  // into these typed inputs, so a contract change is a compile error here, not a silent 400.
+  "inventory.bulkAdd": { method: "bulkAddInventory", doc: null },
+  "product.discard": { method: "discardProduct", doc: null },
+  "product.discardPreview": { method: "discardPreview", doc: null },
+  "product.addToInventoryPreview": {
+    method: "addToInventoryPreview",
+    doc: null,
+  },
   "dataQuality.setException": { method: "setDataException", doc: null },
   "dataQuality.clearException": { method: "clearDataException", doc: null },
   "image.detail": { method: "imageDetail", doc: null },

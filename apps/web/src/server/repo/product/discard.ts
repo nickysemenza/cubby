@@ -34,6 +34,10 @@ import type {
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type {
+  ProductDiscardPreviewInput,
+  ProductDiscardPreviewOut,
+} from "@cubby/schemas/product";
 import { tradeSchema, type Trade } from "@cubby/schemas/task-fields";
 import { and, eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -45,9 +49,12 @@ import { logAuditEntry } from "~/server/repo/audit-log";
 import { touchDataQualityTargets } from "~/server/repo/data-quality/touch";
 import {
   amountFromColumns,
+  getDb,
   notDeleted,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { describeDiscard } from "~/server/repo/product/discard-preview";
+import { loadProductInventoryEntries } from "~/server/repo/product/lookup";
 import {
   pricingProductIds,
   syncChangedEffectivePrices,
@@ -62,8 +69,14 @@ export type DiscardProductInput = {
   quantity: number;
   date: string | null;
   reason: string | null;
-  /** Null leaves inventory alone — the operator cleared the checkbox. */
+  /** Null with `adjustInventory` unset leaves inventory alone. */
   inventoryEntryId: InventoryId | null;
+  /**
+   * The operator asked to take the units off a shelf. The server owns the
+   * default: a sole live entry is chosen here, several with none named are
+   * refused (never guessed), none records a ledger-only exit.
+   */
+  adjustInventory?: boolean;
 };
 
 /** One ledger line and what it did to the shelf, before per-request work. */
@@ -227,6 +240,34 @@ const writeDiscardLine = async (
   };
 };
 
+/**
+ * Which shelf entry a single-product discard draws from. Clients that do not
+ * name one (native) must still decrement a product that sits on exactly one
+ * shelf; a product on several shelves needs an explicit choice.
+ */
+const resolveDiscardShelf = async (
+  tx: DrizzleTransaction,
+  input: DiscardProductInput,
+): Promise<InventoryId | null> => {
+  if (input.inventoryEntryId !== null || !input.adjustInventory) {
+    return input.inventoryEntryId;
+  }
+  const live = await tx.query.inventoryEntry.findMany({
+    where: and(
+      eq(inventoryEntry.productId, input.productId),
+      notDeleted(inventoryEntry),
+    ),
+    columns: { id: true },
+  });
+  if (live.length > 1) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "This product is on several shelves; name which inventory entry to take the units from.",
+    );
+  }
+  return live[0]?.id ?? null;
+};
+
 export const discardProductUnits = async (
   db: Database,
   input: DiscardProductInput,
@@ -238,7 +279,12 @@ export const discardProductUnits = async (
       pricingProductIds([input.productId]),
     );
 
-    const line = await writeDiscardLine(tx, input, actor);
+    const inventoryEntryId = await resolveDiscardShelf(tx, input);
+    const line = await writeDiscardLine(
+      tx,
+      { ...input, inventoryEntryId },
+      actor,
+    );
 
     await touchDataQualityTargets(tx, { productIds: [input.productId] });
 
@@ -381,3 +427,37 @@ export const discardFromInventoryEntries = async (
 
     return { items, priceAffectedProductIds };
   });
+
+/**
+ * The advisory preview behind the discard confirmation (web dialog and native
+ * hero action). Read-only: `discardProductUnits` re-checks everything.
+ */
+export const previewProductDiscard = async (
+  db: Database,
+  productId: ProductId,
+  input: Pick<
+    ProductDiscardPreviewInput,
+    "quantity" | "adjustInventory" | "inventoryEntryId" | "requestedQuantity"
+  >,
+): Promise<ProductDiscardPreviewOut> => {
+  const prod = await getDb(db).query.product.findFirst({
+    where: and(eq(product.id, productId), notDeleted(product)),
+    columns: { name: true },
+  });
+  if (!prod) {
+    throw createAppError("PRODUCT_NOT_FOUND", "Product not found.");
+  }
+  const entries = (await loadProductInventoryEntries(db, [productId])).get(
+    productId,
+  );
+  const shelves = (entries ?? []).map((entry) => ({
+    id: entry.id,
+    amount: entry.amount,
+    location: { id: entry.location.id, name: entry.location.name },
+  }));
+  return {
+    productName: prod.name,
+    shelves,
+    ...describeDiscard(shelves, input),
+  };
+};

@@ -1,13 +1,11 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
-import { z } from "zod";
 
 import { entityDetailFor } from "~/entity/entity-detail";
 
 import type { BulkAddProduct } from "../../features/products/product-bulk-add-to-inventory-dialog";
 import { ProductBulkAddToInventoryDialog } from "../../features/products/product-bulk-add-to-inventory-dialog";
-import { defaultStockAmount } from "../../features/products/product-hero-presence";
 import { VerbMenuItem } from "./action-verb-ui";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
@@ -31,34 +29,12 @@ function hasStringManufacturer(
   return "manufacturer" in row && typeof row.manufacturer === "string";
 }
 
-/**
- * The ledger's outstanding quantity, when the row already carries it (product
- * list rows do; purchase lines and shortcode-only callers do not and keep the
- * dialog's one-unit fallback rather than costing a read per row).
- */
-const ledgerFields = z.object({
-  quantityLedger: z.object({ expectedQuantity: z.number() }),
-  onHandUnits: z.number().nullish(),
-});
-
-function ledgerDefaultAmount(
-  row: EntityActionRow,
-): BulkAddProduct["defaultAmount"] {
-  const parsed = ledgerFields.safeParse(row);
-  if (!parsed.success) return undefined;
-  return defaultStockAmount({
-    expectedQuantity: parsed.data.quantityLedger.expectedQuantity,
-    onHandUnits: parsed.data.onHandUnits ?? null,
-  });
-}
-
 const asBulkAddProduct = (row: EntityActionRow): BulkAddProduct => {
   const manufacturer = hasStringManufacturer(row) ? row.manufacturer : null;
   return {
     id: parseShortcodeFor("product", row.id),
     name: row.name || row.id,
     manufacturer,
-    defaultAmount: ledgerDefaultAmount(row),
   };
 };
 
@@ -136,15 +112,6 @@ function StagedAddToInventoryDialog({
     };
   }, [soleProduct, detail]);
 
-  const accounting = useMemo(() => {
-    if (!detail || detail.id !== soleProduct?.id) return undefined;
-    return {
-      expectedQuantity: detail.quantityLedger.expectedQuantity,
-      ownOnHandUnits: detail.onHandUnits,
-      componentCount: detail.componentCount,
-    };
-  }, [detail, soleProduct]);
-
   return (
     <ProductBulkAddToInventoryDialog
       open
@@ -152,7 +119,6 @@ function StagedAddToInventoryDialog({
         if (!open) onClose();
       }}
       products={soleWithDetail ? [soleWithDetail] : staged}
-      accounting={accounting}
     />
   );
 }

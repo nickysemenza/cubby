@@ -1,4 +1,14 @@
-import { entityKeys } from "../../../packages/schemas/src/generated/entity-summary.gen.ts";
+import { z } from "zod";
+import {
+  entityKeys,
+  entitySummary,
+} from "../../../packages/schemas/src/generated/entity-summary.gen.ts";
+import { generatedEntityFieldModels } from "../../../packages/schemas/src/generated/entity-field-model.gen.ts";
+import {
+  type HeroActionBodyValue,
+  type NativeHeroActionPlan,
+  nativeHeroActionPlans,
+} from "../../../packages/schemas/src/native-coverage.ts";
 import { generatedHeader, yamlGeneratedHeader } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import type { HttpResources } from "../entities/render/index.ts";
@@ -12,6 +22,7 @@ import {
 } from "./swift-operations.ts";
 import {
   collectSwiftRoutes,
+  operationBodyRef,
   requestBodyRef,
   type SwiftRoute,
   swiftList,
@@ -70,15 +81,15 @@ ${swiftRoutes
 `,
 });
 
-// The native client carries every resources.<entity>.{list,get,create,update,
+// The native client carries every resources.<entity>.{list,get,create,update,delete,
 // timeline} operation the HTTP document exposes: the generic list, detail and
 // editor screens run over every resource entity, so the op set is the
-// document's, not an opt-in list (delete stays off the generated client —
-// the app deletes through the kernel command). RPC ids are opt-in through
+// document's, not an opt-in list (the hero-action runner needs delete, and
+// confirms it behind the connection-impact preview). RPC ids are opt-in through
 // `native:` on the contract member; the generator config is written from
 // the document and those flags so they cannot drift.
 const isAutomaticResourceOperation = (id: string) =>
-  /^resources\.[^.]+\.(?:list|get|create|update|timeline)$/u.test(id);
+  /^resources\.[^.]+\.(?:list|get|create|update|delete|timeline)$/u.test(id);
 /**
  * The operation ids the swift-openapi-generator client carries: every
  * automatic one plus the flagged ones (sorted, deduplicated by the caller).
@@ -135,7 +146,7 @@ const renderGeneratorConfig = (
   return {
     relativePath:
       "apps/apple/CubbyKit/Sources/CubbyAPI/openapi-generator-config.yaml",
-    source: `${yamlGeneratedHeader}# Every resources.*.{list,get,create,update,timeline} operation in the HTTP
+    source: `${yamlGeneratedHeader}# Every resources.*.{list,get,create,update,delete,timeline} operation in the HTTP
 # document, plus the RPC ids flagged \`native:\` in apps/web/src/contracts.
 generate:
   - types
@@ -161,6 +172,120 @@ ${generatedOperations.map((id) => `    - ${id}`).join("\n")}
 // a second hand-kept list. RPC ids attach to an entity by
 // their first segment (`product.lookupUpc` → product); a workflow domain that
 // is not an entity key (`garden.*`, `upc.lookup`) belongs to no entity here.
+/** The top-level keys of a hero-action body template. */
+const templateKeys = (body: HeroActionBodyValue): string[] =>
+  Object.keys(z.record(z.string(), z.unknown()).catch({}).parse(body));
+
+type PlanContext = {
+  document: OpenApiDocument;
+  components: Record<string, JsonSchema>;
+  swiftRoutes: readonly SwiftRoute[];
+  generatedOperationIds: ReadonlySet<string>;
+};
+
+const bodyProperties = (
+  context: PlanContext,
+  id: string,
+): ReadonlySet<string> | null => {
+  const entry = context.swiftRoutes.find((route) => route.id === id);
+  const ref =
+    entry === undefined
+      ? undefined
+      : operationBodyRef(context.document, entry.route, entry.method);
+  const body = ref === undefined ? undefined : context.components[ref];
+  return body !== undefined && isObjectSchema(body)
+    ? new Set(Object.keys(body.properties ?? {}))
+    : null;
+};
+
+const checkOperationPlan = (
+  context: PlanContext,
+  verb: string,
+  plan: Extract<NativeHeroActionPlan, { kind: "operation" }>,
+): string[] => {
+  const problems: string[] = [];
+  for (const id of [plan.operation, plan.preview?.operation ?? null])
+    if (id !== null && !context.generatedOperationIds.has(id))
+      problems.push(
+        `${verb}: ${id} is not on the generated client (flag its contract member \`native:\`)`,
+      );
+  const properties = bodyProperties(context, plan.operation);
+  for (const key of templateKeys(plan.body))
+    if (properties !== null && !properties.has(key))
+      problems.push(`${verb}: ${plan.operation} declares no body field ${key}`);
+  const fields = new Set(plan.fields.map((field) => field.key));
+  const templates = [plan.body, plan.preview?.body ?? null];
+  for (const template of templates)
+    for (const slot of JSON.stringify(template).match(
+      /\$(?:row|field)\.[A-Za-z]+/gu,
+    ) ?? []) {
+      const [prefix, name] = slot.slice(1).split(".");
+      if (prefix === "row" ? name !== "id" : !fields.has(name ?? ""))
+        problems.push(`${verb}: body slot ${slot} has no field`);
+    }
+  const toggles = new Set(
+    plan.fields.filter((field) => field.kind === "toggle").map((f) => f.key),
+  );
+  for (const field of plan.fields)
+    if (field.showWhen !== undefined && !toggles.has(field.showWhen))
+      problems.push(
+        `${verb}: ${field.key} is shown when ${field.showWhen}, which is not a toggle field`,
+      );
+  return problems;
+};
+
+const checkFieldPlan = (
+  verb: string,
+  plan: Extract<
+    NativeHeroActionPlan,
+    { kind: "create" | "setField" | "toggleField" }
+  >,
+): string[] => {
+  const targets = plan.kind === "create" ? [plan.entity] : plan.entities;
+  const names = plan.kind === "create" ? Object.keys(plan.seed) : [plan.field];
+  return targets.flatMap((entity) => {
+    const writable: readonly string[] = [
+      ...generatedEntityFieldModels[entity].create,
+      ...generatedEntityFieldModels[entity].update,
+    ];
+    return names
+      .filter((name) => !writable.includes(name))
+      .map((name) => `${verb}: ${entity} has no writable field ${name}`);
+  });
+};
+
+/**
+ * A hero-action plan names operations the generated client must carry and body keys the
+ * operation's request schema declares, so a renamed contract field or a dropped `native:` flag
+ * fails `pnpm generate` instead of surfacing as a decode error on a device.
+ */
+const checkHeroActionPlans = (context: PlanContext) => {
+  const plans: Readonly<Record<string, NativeHeroActionPlan>> =
+    nativeHeroActionPlans;
+  const problems = Object.entries(plans).flatMap(([verb, plan]) => {
+    if (plan.kind === "operation")
+      return checkOperationPlan(context, verb, plan);
+    if (plan.kind !== "delete") return checkFieldPlan(verb, plan);
+    // Every entity whose hero declares delete needs its own generated route.
+    return [
+      "entity.connections",
+      ...entityKeys
+        .filter((key) =>
+          entitySummary[key].detail.hero.actions.some(
+            (action) => action === "delete",
+          ),
+        )
+        .map((key) => `resources.${key}.delete`),
+    ]
+      .filter((id) => !context.generatedOperationIds.has(id))
+      .map((id) => `${verb}: ${id} is not on the generated client`);
+  });
+  if (problems.length > 0)
+    throw new Error(
+      `nativeHeroActionPlans is invalid:\n${problems.join("\n")}`,
+    );
+};
+
 const renderNativeCoverage = (
   document: OpenApiDocument,
   components: Record<string, JsonSchema>,
@@ -170,6 +295,12 @@ const renderNativeCoverage = (
   generatedOperationIds: ReadonlySet<string>,
   nativeOperations: readonly string[],
 ): EntityArtifacts => {
+  checkHeroActionPlans({
+    document,
+    components,
+    swiftRoutes,
+    generatedOperationIds,
+  });
   const bodyHas = (entity: string, property: string) =>
     updateBodyHas(document, components, swiftRoutes, entity, property);
   const nativeCoverage = Object.fromEntries(

@@ -216,6 +216,12 @@ public actor CubbyClient {
         }
     }
 
+    /// `resources.<entity>.delete`. Destructive: only `HeroActionRunner` calls it, and only after
+    /// the person confirmed behind the connection-impact preview.
+    public func delete(_ descriptor: EntityDescriptor, id: String) async throws {
+        try await perform { try await descriptor.delete(id: id, client: api) }
+    }
+
     /// One row by id, or `nil` when the server does not have it.
     public func row(_ descriptor: EntityDescriptor, id: String) async throws -> EntityRow? {
         do {

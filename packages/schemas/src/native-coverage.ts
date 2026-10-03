@@ -1,6 +1,7 @@
 // Not "@cubby/shared": its index reaches generated files, and this module is imported by the
 // generator before they exist.
 import { mapRecord } from "../../shared/src/record";
+import { TRADE_LABELS, tradeValues } from "./task-fields";
 import type { Entity } from "./entity-core";
 import type {
   ControlRendererId,
@@ -169,21 +170,23 @@ export const nativeCoverage = {
       "This structured detail is available on web.",
     ),
   },
-  /** `edit` stays in the screen toolbar; the other declared verbs have no native handler yet. */
+  /**
+   * `implemented` verbs each have a plan in `nativeHeroActionPlans` that the one generic runner
+   * (`HeroActionRunner`) executes; `edit` stays in the screen toolbar.
+   */
   heroAction: {
-    ...ownedElsewhere(["edit"]),
-    ...unsupported(
-      [
-        "addToInventory",
-        "bulkEdit",
-        "delete",
-        "discard",
-        "markPurchased",
-        "recordSale",
-        "setStatus",
-      ],
-      "This action is available on web.",
-    ),
+    ...implemented([
+      "addToInventory",
+      "delete",
+      "discard",
+      "markPurchased",
+      "recordSale",
+      "setStatus",
+    ]),
+    // `edit` is the toolbar's editor. `bulkEdit` is a list/multi-select verb: on a task's detail
+    // hero it is the same field editor over one row, which the toolbar `edit` already is, and a
+    // selection-wide edit has no row to anchor to on a detail screen.
+    ...ownedElsewhere(["edit", "bulkEdit"]),
   },
   /**
    * `implemented` slots are exactly the keys of `DetailSlotRegistry` in
@@ -285,6 +288,216 @@ export const nativeCoverage = {
 };
 
 /**
+ * A literal body value. Only a string starting `$row.` (the row's `id`) or `$field.` (a form
+ * field's key) is a slot the runner fills; any other string, `$` or not, is literal.
+ */
+export type HeroActionBodyValue =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly HeroActionBodyValue[]
+  | { readonly [key: string]: HeroActionBodyValue };
+
+/** One input the runner asks for. Everything else in the request body is the plan's literal. */
+type HeroActionField = {
+  readonly key: string;
+  readonly label: string;
+  readonly kind:
+    | "number"
+    | "text"
+    | "date"
+    | "toggle"
+    | "choice"
+    | "location"
+    | "amount"
+    /** Options come from the plan's preview (`shelves`), never a guess. */
+    | "shelf";
+  /** `today` seeds a date field; `one` seeds an amount with a single `each`. */
+  readonly default?: string | number | boolean | "today" | "one";
+  readonly options?: readonly {
+    readonly value: string;
+    readonly label: string;
+  }[];
+  /** An empty value is sent as null (otherwise the runner refuses to submit). */
+  readonly optional?: boolean;
+  /** Shown, and sent, only while this toggle field is on; otherwise null. */
+  readonly showWhen?: string;
+};
+
+/**
+ * What the one generic native hero-action runner (`HeroActionRunner`) does for a verb. The verb
+ * is the manifest's hero action id; the plan names the operation (an HTTP operation id, so the
+ * client is generated and `pnpm generate` fails when it is not flagged `native:`), the confirmation
+ * the runner requires, and the input form. Nothing here is per entity: `entities` only gates which
+ * declarations may offer the verb.
+ */
+export type NativeHeroActionPlan = {
+  /** The menu title, sentence case (the web registry's label without its trailing `...`). */
+  readonly label: string;
+  /** An SF Symbol name. */
+  readonly symbol: string;
+} & (
+  | {
+      /** `resources.<entity>.delete`, behind the connection-impact preview. */
+      readonly kind: "delete";
+      readonly confirmation: "destructive";
+      readonly preview: "entity.connections";
+    }
+  | {
+      readonly kind: "operation";
+      readonly operation: string;
+      readonly entities: readonly Entity[];
+      readonly confirmation: "none" | "destructive";
+      /** A query that answers "what will this do?" with the current field values. */
+      readonly preview?: {
+        readonly operation: string;
+        readonly body: HeroActionBodyValue;
+      };
+      readonly fields: readonly HeroActionField[];
+      readonly body: HeroActionBodyValue;
+    }
+  | {
+      /** Opens the generic create editor with the entity's fields pre-seeded. */
+      readonly kind: "create";
+      readonly entity: Entity;
+      readonly entities: readonly Entity[];
+      readonly seed: { readonly [field: string]: HeroActionBodyValue };
+    }
+  | {
+      /** Picks a value for one declared enum field, then updates the row. */
+      readonly kind: "setField";
+      readonly entities: readonly Entity[];
+      readonly field: string;
+    }
+  | {
+      /** Flips a boolean update field whose current state is read from `stateField`. */
+      readonly kind: "toggleField";
+      readonly entities: readonly Entity[];
+      readonly field: string;
+      readonly stateField: string;
+    }
+);
+
+const tradeOptions = tradeValues.map((value) => ({
+  value,
+  label: TRADE_LABELS[value],
+}));
+
+/**
+ * Reviewed plans for the `implemented` hero actions; the keys are exactly those verbs
+ * (asserted by the unit test). Emitted into `native-coverage.json`.
+ */
+export const nativeHeroActionPlans = {
+  delete: {
+    label: "Delete",
+    symbol: "trash",
+    kind: "delete",
+    confirmation: "destructive",
+    preview: "entity.connections",
+  },
+  discard: {
+    label: "Discard",
+    symbol: "minus.square",
+    kind: "operation",
+    operation: "product.discard",
+    entities: ["product"],
+    // Writes a ledger exit and, when asked, empties a shelf entry: never one tap.
+    confirmation: "destructive",
+    preview: {
+      operation: "product.discardPreview",
+      body: {
+        productId: "$row.id",
+        quantity: "$field.quantity",
+        adjustInventory: "$field.adjustInventory",
+        inventoryEntryId: "$field.inventoryEntryId",
+      },
+    },
+    fields: [
+      { key: "quantity", label: "Units discarded", kind: "number", default: 1 },
+      {
+        key: "trade",
+        label: "Trade",
+        kind: "choice",
+        default: "other",
+        options: tradeOptions,
+      },
+      // Required on the wire (nullable, no default): the generated client omits a nil optional
+      // instead of sending null, so the form always sends a date.
+      { key: "date", label: "Date", kind: "date", default: "today" },
+      { key: "reason", label: "Reason", kind: "text", optional: true },
+      {
+        key: "adjustInventory",
+        label: "Also take these units off the shelf",
+        kind: "toggle",
+        default: true,
+      },
+      {
+        key: "inventoryEntryId",
+        label: "Take from",
+        kind: "shelf",
+        optional: true,
+        showWhen: "adjustInventory",
+      },
+    ],
+    body: {
+      productId: "$row.id",
+      quantity: "$field.quantity",
+      trade: "$field.trade",
+      date: "$field.date",
+      reason: "$field.reason",
+      adjustInventory: "$field.adjustInventory",
+      inventoryEntryId: "$field.inventoryEntryId",
+    },
+  },
+  addToInventory: {
+    label: "Add to inventory",
+    symbol: "shippingbox",
+    kind: "operation",
+    operation: "inventory.bulkAdd",
+    entities: ["product"],
+    // An explicit, named stocking action; inventory never changes as a side effect.
+    confirmation: "none",
+    preview: {
+      operation: "product.addToInventoryPreview",
+      body: { productId: "$row.id", locationId: "$field.location" },
+    },
+    fields: [
+      { key: "location", label: "Location", kind: "location" },
+      { key: "amount", label: "Amount", kind: "amount", default: "one" },
+    ],
+    body: {
+      locationId: "$field.location",
+      items: [{ productId: "$row.id", amount: "$field.amount" }],
+    },
+  },
+  recordSale: {
+    label: "Record sale",
+    symbol: "dollarsign.circle",
+    kind: "create",
+    entity: "expense",
+    entities: ["product"],
+    // A disposition expense: attributed to no project, filed under tools (the web seed).
+    seed: { productId: "$row.id", projectId: null, costType: "tools" },
+  },
+  setStatus: {
+    label: "Set status",
+    symbol: "checklist",
+    kind: "setField",
+    entities: ["project"],
+    field: "status",
+  },
+  markPurchased: {
+    label: "Mark purchased",
+    symbol: "checkmark.circle",
+    kind: "toggleField",
+    entities: ["wish"],
+    field: "acquired",
+    stateField: "acquiredAt",
+  },
+} as const satisfies Partial<Record<HeroActionId, NativeHeroActionPlan>>;
+
+/**
  * Reviewed count of `unsupported` ids per kind. It only shrinks: implement an
  * id natively, flip its status above, and lower the number. Raising it means a
  * new web-only declaration shipped without a native path and needs a
@@ -294,7 +507,7 @@ export const NATIVE_UNSUPPORTED_CEILING = {
   control: 7,
   list: 0,
   detail: 15,
-  heroAction: 7,
+  heroAction: 0,
   detailSlot: 38,
   listSlot: 0,
 } as const satisfies Record<NativeCoverageKind, number>;

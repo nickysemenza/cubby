@@ -11,6 +11,7 @@ struct EntityDetailView: View {
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.developerOverlays) private var developerOverlays
+    @Environment(\.dismiss) private var dismiss
     @State private var model: GenericEntityDetailModel?
     @State private var relationshipsModel: EntityRelationshipsModel?
     @State private var relationSections: [RelationSectionModel] = []
@@ -20,9 +21,13 @@ struct EntityDetailView: View {
     @State private var creatingRelation: RelationSectionModel?
     @State private var physicalConnections: EntityConnectionsOut?
     @State private var physicalError: String?
-    @State private var deleteImpact: EntityConnectionsOut?
-    @State private var deleteImpactError: String?
-    @State private var showingDeleteImpact = false
+    @State private var heroAction: HeroActionModel?
+    @State private var heroEditor: HeroEditorRequest?
+    @State private var heroNotice: String?
+    @State private var heroBusy = false
+    /// Set when a delete finished: the record is gone, so leave its screen once the sheet that
+    /// ran the delete has actually dismissed (dismissing both at once only closes the sheet).
+    @State private var leaveAfterHeroSheet = false
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
@@ -81,11 +86,25 @@ struct EntityDetailView: View {
                 }
                 .environment(appModel)
             }
-            .sheet(isPresented: $showingDeleteImpact) {
-                DeleteImpactPreview(
-                    impact: deleteImpact, error: deleteImpactError,
-                    retry: { Task { await loadDeleteImpact() } })
+            .sheet(
+                item: $heroAction,
+                onDismiss: {
+                    if leaveAfterHeroSheet {
+                        leaveAfterHeroSheet = false
+                        dismiss()
+                    }
+                }
+            ) { action in
+                HeroActionSheet(model: action) { outcome in finishHeroAction(action.plan, outcome) }
+                    .environment(appModel)
             }
+            .sheet(item: $heroEditor) { request in
+                EntityEditorSheet(key: request.entity, mode: .create(prefill: request.prefill)) { _ in
+                    Task { await refresh() }
+                }
+                .environment(appModel)
+            }
+            .alert(heroNotice ?? "", isPresented: heroNoticeBinding) { Button("OK") {} }
             .sheet(item: $creatingRelation) { section in
                 EntityEditorSheet(
                     key: section.target.key, mode: .create(prefill: section.createPrefill)
@@ -128,12 +147,7 @@ struct EntityDetailView: View {
                     } label: {
                         Label("Copy shortcode", systemImage: "number")
                     }
-                    if key.nativeActions.contains(.delete) {
-                        Button("Preview delete impact", systemImage: "trash") {
-                            showingDeleteImpact = true
-                            Task { await loadDeleteImpact() }
-                        }
-                    }
+                    heroActionButtons
                 } label: {
                     Label("More", systemImage: "ellipsis.circle")
                 }
@@ -254,14 +268,71 @@ struct EntityDetailView: View {
         }
     }
 
-    private func loadDeleteImpact() async {
+    /// The manifest's hero actions this entity declares and native implements, from the one
+    /// generic runner (`edit` stays the toolbar's Edit; `bulkEdit` is a list verb).
+    @ViewBuilder private var heroActionButtons: some View {
+        let plans = descriptor.presentation.heroActions.compactMap { verb in
+            HeroActionRunner.plan(for: verb, on: key).map { (verb, $0) }
+        }
+        if !plans.isEmpty {
+            Divider()
+            ForEach(plans, id: \.0) { verb, plan in
+                Button(
+                    plan.label, systemImage: plan.symbol,
+                    role: plan.confirmation == .destructive ? .destructive : nil
+                ) {
+                    startHeroAction(plan)
+                }
+                .accessibilityIdentifier("detail.\(key.rawValue).hero.\(verb.rawValue)")
+            }
+        }
+    }
+
+    private var heroNoticeBinding: Binding<Bool> {
+        Binding(get: { heroNotice != nil }, set: { if !$0 { heroNotice = nil } })
+    }
+
+    private func startHeroAction(_ plan: HeroActionPlan) {
         guard let row = model?.row else { return }
-        deleteImpact = nil
-        deleteImpactError = nil
-        do {
-            deleteImpact = try await appModel.client.physicalConnections(id: row.id, previewDelete: true)
-        } catch {
-            deleteImpactError = String(describing: error)
+        let runner = HeroActionRunner(client: appModel.client)
+        switch plan.kind {
+        case .toggleField, .create:
+            // No input and nothing destructive: one explicit tap runs it. The flag flips before
+            // the task is scheduled so a second tap cannot start a second write.
+            guard !heroBusy else { return }
+            heroBusy = true
+            Task {
+                defer { heroBusy = false }
+                do {
+                    finishHeroAction(
+                        plan, try await runner.perform(plan, on: key, row: row, values: [:], confirmed: false)
+                    )
+                } catch {
+                    Diagnostics.report(error, context: "detail.heroAction")
+                    appModel.handle(error)
+                }
+            }
+        case .delete, .operation, .setField:
+            heroAction = HeroActionModel(plan: plan, entity: key, row: row, runner: runner)
+        }
+    }
+
+    private func finishHeroAction(_ plan: HeroActionPlan, _ outcome: HeroActionOutcome) {
+        switch outcome {
+        case .completed(let message, let changed):
+            appModel.recordEntityMutation(keys: changed)
+            if case .delete = plan.kind {
+                leaveAfterHeroSheet = true
+                if heroAction == nil {
+                    leaveAfterHeroSheet = false
+                    dismiss()
+                }
+            } else {
+                heroNotice = message
+                Task { await refresh() }
+            }
+        case .editor(let entity, let prefill):
+            heroEditor = HeroEditorRequest(entity: entity, prefill: prefill)
         }
     }
 
@@ -625,58 +696,6 @@ struct EntityDetailContent: View {
 
 /// Developer overlays layer 4/7: shortcode plus fetched-at/age. No `uuid` field — the generic
 /// entity API never exposes the underlying uuid, only the public shortcode (`row.id`).
-private struct DeleteImpactPreview: View {
-    let impact: EntityConnectionsOut?
-    let error: String?
-    let retry: () -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    private var incoming: [EntityConnectionGroup] {
-        impact?.groups.filter { $0.direction == .incoming } ?? []
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Text("This preview is advisory. Delete checks the connections again when it runs.")
-                        .foregroundStyle(.secondary)
-                    if incoming.contains(where: { $0.disposition?.effect == .block }) {
-                        Label("Delete is blocked by connected records", systemImage: "hand.raised")
-                            .foregroundStyle(.red)
-                    }
-                }
-                if let error {
-                    Section {
-                        Text(error); Button("Retry", action: retry)
-                    }
-                } else if impact == nil {
-                    Section { ProgressView("Checking connections") }
-                } else if incoming.isEmpty {
-                    Section { Text("No incoming connections").foregroundStyle(.secondary) }
-                } else {
-                    ForEach(incoming, id: \.edgeKey) { group in
-                        Section("\(group.label) · \(group.count)") {
-                            Text(group.disposition?.description ?? "No disposition declared")
-                            ForEach(group.items, id: \.id) { item in
-                                if let key = EntityKey(rawValue: item.kind.rawValue) {
-                                    NavigationLink(value: Route.entityDetail(key, id: item.id)) {
-                                        Text(item.name ?? item.id)
-                                    }
-                                } else {
-                                    Text(item.name ?? item.id)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Delete impact")
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-        }
-    }
-}
-
 private struct EntityDetailDiagnostics: Encodable {
     let shortcode: String
     let fetchedAt: Date?
@@ -694,6 +713,13 @@ private struct EntityDetailDiagnostics: Encodable {
         formatter.maximumUnitCount = 1
         return formatter
     }()
+}
+
+/// A create editor the hero action opens, seeded from its plan.
+private struct HeroEditorRequest: Identifiable {
+    let id = UUID()
+    let entity: EntityKey
+    let prefill: [String: JSONValue]
 }
 
 #Preview {

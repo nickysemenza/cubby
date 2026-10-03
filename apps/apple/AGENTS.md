@@ -67,10 +67,11 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   document by `scripts/generator/http-api/native.ts` into `Generated/OperationRoutes.swift`
   (`pnpm generate`). Look routes up
   by operation id; entity reads go through `CubbyClient.list`/`row`, never a path. Every
-  `resources.<entity>.{list,get,create,update,timeline}` operation the OpenAPI document exposes is
-  generated (not every entity has every verb: `image` has only `update`/`delete`; `cookbook` and
-  `usda-food` have no resource verbs, per `Generated/EntityOperations.swift`'s `httpActions`;
-  `delete` stays off the client). The RPC operation ids CubbyKit calls are flagged
+  `resources.<entity>.{list,get,create,update,delete,timeline}` operation the OpenAPI document
+  exposes is generated (not every entity has every verb: `image` has only `update`/`delete`;
+  `cookbook` and `usda-food` have no resource verbs, per `Generated/EntityOperations.swift`'s
+  `httpActions`). `delete` is destructive: only `HeroActionRunner` calls it, after an explicit
+  confirmation behind the connection-impact preview. The RPC operation ids CubbyKit calls are flagged
   `native: "<why>"` on their contract member (`apps/web/src/contracts/*.contract.ts`) — flagging
   an automatic resource id is rejected.
   `Sources/CubbyAPI/openapi-generator-config.yaml` and `Generated/EntityOperations.swift` are
@@ -116,7 +117,12 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   hero-action ids native draws, from `packages/schemas/src/native-coverage.ts` (the single
   declaration; `NativePresentationCoverage` only reads it). A new web-only id must be classified
   there (`unsupported` + reason, raising `NATIVE_UNSUPPORTED_CEILING` with a justification in
-  review); an `implemented` slot or control needs its view path (`DetailSlotRegistry`,
+  review); an `implemented` hero action needs a plan in `nativeHeroActionPlans` (the same file,
+  emitted as `heroActionPlan`): the verb names a generated operation, its input fields, and its
+  confirmation, and `HeroActionRunner` (CubbyKit) is the one generic path that runs it, so a new
+  verb is a plan plus (for a new RPC) a typed case in the runner, never per-entity Swift.
+  `pnpm generate` checks the plan against the contract (operation flagged `native:`, body keys
+  declared); an `implemented` slot or control needs its view path (`DetailSlotRegistry`,
   `ListSlotRegistry`, `EntityFieldControl.drawing(for:)`), which `NativeCoverageViewPathTests`
   checks in both directions.
 - `CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json` and

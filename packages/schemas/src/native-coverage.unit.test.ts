@@ -9,6 +9,7 @@ import {
   NATIVE_COVERAGE_KINDS,
   NATIVE_UNSUPPORTED_CEILING,
   nativeCoverage,
+  nativeHeroActionPlans,
   type NativeCoverageEntry,
   type NativeCoverageKind,
 } from "./native-coverage";
@@ -91,4 +92,21 @@ describe("native presentation coverage", () => {
       expect(verdict).toBe("within ceiling");
     },
   );
+
+  it("gives exactly the implemented hero actions a runner plan", () => {
+    const implemented = entries("heroAction")
+      .filter(([, entry]) => entry.status === "implemented")
+      .map(([id]) => id);
+    expect(used(Object.keys(nativeHeroActionPlans))).toEqual(used(implemented));
+  });
+
+  it("requires explicit confirmation for the destructive verbs", () => {
+    // Deleting a record and discarding stock must never run on one tap.
+    expect(nativeHeroActionPlans.delete.confirmation).toBe("destructive");
+    expect(nativeHeroActionPlans.discard.confirmation).toBe("destructive");
+  });
+
+  it("classifies the multi-select verb as owned elsewhere, not faked", () => {
+    expect(nativeCoverage.heroAction.bulkEdit.status).toBe("ownedElsewhere");
+  });
 });
