@@ -29,6 +29,8 @@ import { fdcId } from "@cubby/usda";
 import { FILTER_ANY, FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
 import { productCategorySummary } from "../product-category-fields";
+import { productKindSchema } from "../product-fields";
+import { selectControlOptions } from "./select-control-options";
 export default defineEntity({
   key: "product",
   names: { singular: "Product", plural: "Products" },
@@ -562,6 +564,7 @@ export default defineEntity({
             "expectedQuantity",
             "price",
             "stockTracked",
+            "kind",
             "acquisitionOrigin",
           ],
         },
@@ -1077,6 +1080,21 @@ export default defineEntity({
           read: z.boolean().nullable(),
           create: z.boolean().nullable().optional(),
           update: z.boolean().nullable().optional(),
+        },
+      },
+      {
+        // Optional and independent of `stockTracked`: unset means undecided,
+        // with no completeness check. It only informs project suggestions and
+        // worklist filters; it never rewrites existing Expenses.
+        key: "kind",
+        kind: "enum",
+        nullable: true,
+        control: { kind: "select", options: selectControlOptions.productKind },
+        display: { list: true, detail: true, listHidden: true },
+        validation: {
+          read: productKindSchema.nullable(),
+          create: productKindSchema.nullable().optional(),
+          update: productKindSchema.nullable().optional(),
         },
       },
       {
@@ -1661,6 +1679,7 @@ export default defineEntity({
       { key: "price", specialized: "real" },
       "usdaUnavailable",
       "stockTracked",
+      { key: "kind", specialized: "enum:productKind" },
       { key: "labelNutrition", specialized: "json:labelNutrition" },
     ],
     create: [
@@ -1684,6 +1703,7 @@ export default defineEntity({
       "externalIds",
       "usdaUnavailable",
       "stockTracked",
+      "kind",
       "pendingImageIds",
       "pendingImagePurposes",
     ],
@@ -1708,6 +1728,7 @@ export default defineEntity({
       "externalIds",
       "usdaUnavailable",
       "stockTracked",
+      "kind",
       "pendingImageIds",
       "pendingImagePurposes",
       "removeImageIds",
@@ -1796,6 +1817,7 @@ export default defineEntity({
           "expectedQuantity",
           "price",
           "stockTracked",
+          "kind",
           "unitMappings",
           "labelNutrition",
           "externalIds",
@@ -1822,6 +1844,7 @@ export default defineEntity({
           "expectedQuantity",
           "price",
           "stockTracked",
+          "kind",
           "unitMappings",
           "labelNutrition",
           "externalIds",
@@ -1875,6 +1898,7 @@ export default defineEntity({
       "fieldResolutions",
       "usdaUnavailable",
       "stockTracked",
+      "kind",
       "labelNutrition",
       "createdAt",
       "updatedAt",
@@ -1930,6 +1954,9 @@ export default defineEntity({
         where: "{deletedAt} IS NULL",
       },
     ],
+    // Values come from the `kind` select options. Widening the value array
+    // widens this CHECK: ship the migration before the code that writes it.
+    checks: [{ column: "kind", nullClause: true }],
     relations: {
       category: "categoryId",
       ingredient: { field: "ingredientId", relationName: "ProductIngredient" },
@@ -2354,6 +2381,25 @@ export default defineEntity({
         options: [
           { value: "none", label: "Undecided" },
           { value: "has", label: "Reviewed" },
+        ],
+      },
+      {
+        columnId: "kind",
+        urlKey: "kinds",
+        kind: "multiselect",
+        placeholder: "Filter by kind...",
+        deriveSchema: true,
+        stored: true,
+        schemaRef: {
+          module: "@cubby/schemas/product-fields",
+          export: "productKindSchema",
+        },
+        // Worklist only: `none` finds Products with no kind yet. It is not a
+        // data-quality check.
+        nullable: { field: "kindPresenceFilter", label: "kind" },
+        options: [
+          { value: "consumable", label: "Consumable" },
+          { value: "durable", label: "Durable" },
         ],
       },
       {

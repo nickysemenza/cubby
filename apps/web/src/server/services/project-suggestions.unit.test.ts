@@ -210,4 +210,77 @@ describe("rankProjectSuggestions", () => {
       ),
     ).toEqual([]);
   });
+
+  describe("Product kind", () => {
+    // Household is undated like the real fallback Project, so the date window
+    // alone would never offer it.
+    const household: SuggestableProject = {
+      id: "PRJ-HSHD",
+      name: "Household",
+      effectiveStart: null,
+      effectiveEnd: null,
+    };
+    const withHousehold = [...projects, household];
+
+    it("raises Household first for a consumable with no project choice", () => {
+      const suggestions = rankProjectSuggestions(
+        { date: "2024-06-15", trade: "drywall", productKind: "consumable" },
+        withHousehold,
+        affinity,
+        TODAY,
+      );
+      expect(suggestions[0]?.id).toBe("PRJ-HSHD");
+      expect(suggestions).toHaveLength(3);
+    });
+
+    it("offers Household for a consumable even when the expense has no date", () => {
+      expect(
+        rankProjectSuggestions(
+          { date: null, trade: "drywall", productKind: "consumable" },
+          withHousehold,
+          [],
+          TODAY,
+        ).map((item) => item.id),
+      ).toEqual(["PRJ-HSHD"]);
+    });
+
+    it("leaves an existing project choice untouched", () => {
+      const suggestions = rankProjectSuggestions(
+        {
+          date: "2024-06-15",
+          trade: "drywall",
+          projectId: "kitchen-drywall",
+          productKind: "consumable",
+        },
+        withHousehold,
+        affinity,
+        TODAY,
+      );
+      expect(suggestions.map((item) => item.id)).not.toContain("PRJ-HSHD");
+    });
+
+    it.each([["durable"], [null], [undefined]] as const)(
+      "relies on date and trade evidence for kind %s",
+      (productKind) => {
+        const suggestions = rankProjectSuggestions(
+          { date: "2024-06-15", trade: "drywall", productKind },
+          withHousehold,
+          affinity,
+          TODAY,
+        );
+        expect(suggestions.map((item) => item.id)).not.toContain("PRJ-HSHD");
+        expect(suggestions[0]?.id).toBe("kitchen-drywall");
+      },
+    );
+
+    it("does not invent Household when that project does not exist", () => {
+      const suggestions = rankProjectSuggestions(
+        { date: "2024-06-15", trade: "drywall", productKind: "consumable" },
+        projects,
+        affinity,
+        TODAY,
+      );
+      expect(suggestions[0]?.id).toBe("kitchen-drywall");
+    });
+  });
 });

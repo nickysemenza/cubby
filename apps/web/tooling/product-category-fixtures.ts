@@ -119,6 +119,7 @@ const productRowDefaults = {
   usdaUnavailable: null,
   acquisitionOrigin: "unknown" as const,
   stockTracked: null,
+  kind: null,
   labelNutrition: null,
 };
 

@@ -55,6 +55,10 @@ other side (a photo Product for a purchase-created one, or vice versa) per
 contract; propose it with `product_enrichment.propose_match` rather than enriching two
 records that should converge into one.
 
+Set `kind` (`consumable` or `durable`) only when the published product or the
+order context makes it clear; never guess, and leave it unset when uncertain. It
+only informs project suggestions and is independent of `stockTracked`.
+
 Use `product_enrichment.patch_external_ids` for exact slot changes and preserve unrelated
 IDs; use a full `entity.update product` external-ID set only when deliberately
 replacing it. Check `imports_read.external_id_collisions` before each new ID.
