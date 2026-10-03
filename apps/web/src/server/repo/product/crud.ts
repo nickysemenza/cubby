@@ -1259,7 +1259,14 @@ export const productList = async (
   );
 
   const result = {
-    data: productsWithUnitPrices,
+    data: productsWithUnitPrices.map((product) => ({
+      ...product,
+      ledgerExpectedQuantityLabel: expectedQuantityLabel(
+        product.quantityLedger,
+      ),
+      quantityVarianceLabel: quantityVarianceLabel(product.quantityVariance),
+      unitPriceLabel: unitPriceLabel(product.unitPrice),
+    })),
     count: totalCount,
     sums,
     groups: undefined,

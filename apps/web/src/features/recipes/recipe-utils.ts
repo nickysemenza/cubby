@@ -210,9 +210,6 @@ export const entityRefForRow = (
 // keep working; the implementation lives in the wasm-free module.
 export { formatYield };
 
-// Re-exported: the implementation is wasm-free so the server can label list rows.
-export { formatRecipeTime };
-
 /** The recipe's times as ordered display rows, skipping the ones the source
  * never printed. Total leads: it is the axis the list sorts on. */
 export const recipeTimeEntries = (
