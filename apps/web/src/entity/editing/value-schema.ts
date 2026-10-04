@@ -1,7 +1,43 @@
 import { z } from "zod";
 
+type DraftJson =
+  | string
+  | number
+  | boolean
+  | null
+  | DraftJson[]
+  | { [key: string]: DraftJson };
+
+/**
+ * JSON whose nested objects may hold `undefined` keys, which are dropped. A registered but
+ * untouched optional input leaves `key: undefined` inside a draft object; JSON has no such key, so
+ * it must read as absent rather than make the whole draft invalid.
+ */
+const draftJsonSchema: z.ZodType<DraftJson, unknown> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(draftJsonSchema),
+    z
+      .record(z.string(), z.union([draftJsonSchema, z.undefined()]))
+      .transform((record) =>
+        Object.fromEntries(
+          Object.entries(record).filter(
+            (entry): entry is [string, DraftJson] => entry[1] !== undefined,
+          ),
+        ),
+      ),
+  ]),
+);
+
 /** Browser-local draft values may retain Dates until their intent serializes them. */
-const entityEditValueSchema = z.union([z.json(), z.date(), z.undefined()]);
+const entityEditValueSchema = z.union([
+  draftJsonSchema,
+  z.date(),
+  z.undefined(),
+]);
 export const entityEditValueBagSchema = z.record(
   z.string(),
   entityEditValueSchema,

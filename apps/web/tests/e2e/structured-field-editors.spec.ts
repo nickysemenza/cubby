@@ -64,3 +64,44 @@ test("a new account must choose its identity kind instead of getting a default",
   await expect(row).toBeVisible();
   await expect(row).toContainText("Credit card");
 });
+
+// Tester Army (web) found the Edit dialog refusing a source-claim description edit with
+// "Invalid input at sourceClaims" before any request left the browser.
+test("an expense's source claim description is edited without losing the claim", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  const expense = await createEntityFixture(page, "expense", {
+    name: `Example claim expense ${Date.now()}`,
+    cost: 10,
+    trade: "other",
+    sourceClaims: [
+      {
+        source: "example-provider",
+        providerId: "example-row-1",
+        normalizedEvidence: {
+          amount: 10,
+          occurredOn: "2026-08-20",
+          description: "Example claim evidence",
+          context: null,
+          disambiguator: null,
+        },
+        reconciliation: { decision: "amounts_match" },
+      },
+    ],
+  });
+  await gotoAuthenticatedPage(page, `/expenses/${expense.id}`);
+  const dialog = page.getByRole("dialog", { name: "Edit Expense" });
+  const edit = page.getByRole("button", { name: "Edit Expense", exact: true });
+  await edit.click();
+  await dialog
+    .getByRole("textbox", { name: "Description" })
+    .fill("Example claim evidence revised");
+  await dialog.getByRole("button", { name: "Save changes" }).click();
+  await expect(dialog).toBeHidden();
+
+  await edit.click();
+  await expect(
+    dialog.getByRole("textbox", { name: "Description" }),
+  ).toHaveValue("Example claim evidence revised");
+});

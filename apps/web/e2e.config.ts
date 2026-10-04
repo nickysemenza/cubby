@@ -13,14 +13,14 @@ import { readBrowserCookies } from "./tooling/tester-army/scenario";
 process.env.E2E_TELEMETRY_DISABLED = "1";
 const target = z.enum(["web", "ios"]).parse(process.env.TESTER_ARMY_TARGET);
 const journey = z
-  .enum(["product", "import"])
-  .default("product")
+  .enum(["catalog", "import"])
+  .default("catalog")
   .parse(process.env.TESTER_ARMY_JOURNEY);
 if (journey === "import" && target !== "web")
   throw new Error("The live import journey runs on web only");
 const JOURNEY_CONTEXT = {
-  product:
-    "Cubby household inventory. Use the synthetic product only. On web, the global search palette can find products by name. On iOS, Find searches the catalog. Save closes the editor.",
+  catalog:
+    "Cubby household inventory. Use only the synthetic records named in each goal. On web, the global search palette can find products by name. On iOS, Find searches the catalog. Save closes the editor. Names and amounts in quotes are exact.",
   import:
     "Cubby household inventory. A vendor page lists saved order confirmation emails; each importable order has an Import order button, which starts an agent run and then shows a View import link to that run's page. Use the synthetic vendor only.",
 };
@@ -29,7 +29,10 @@ const cookies = target === "web" ? readBrowserCookies() : [];
 
 export default {
   projectId: "cubby-tester-army-trial",
-  tests: `tests/tester-army/${target}-${journey}.e2e.ts`,
+  tests:
+    journey === "import"
+      ? `tests/tester-army/${target}-import.e2e.ts`
+      : `tests/tester-army/${target}-journeys.e2e.ts`,
   targets: [
     target === "web"
       ? {
@@ -73,8 +76,8 @@ export default {
     default: {
       model: testerArmyModel(),
       providerOptions: testerArmyProviderOptions,
-      maxSteps: 20,
-      maxModelCalls: 20,
+      maxSteps: journey === "import" ? 20 : 40,
+      maxModelCalls: journey === "import" ? 20 : 40,
       context: JOURNEY_CONTEXT[journey],
     },
   },

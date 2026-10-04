@@ -43,7 +43,7 @@ export const testerArmyReporter: Reporter = {
         0,
       ),
       cases: results.map((result) => ({
-        name: "synthetic product rename and reopen",
+        name: result.titlePath.join(" > "),
         status: result.status,
         durationMs: result.attempts.reduce(
           (sum, attempt) => sum + attempt.durationMs,
@@ -72,10 +72,10 @@ export function readTesterArmySummary(output: string) {
   );
   if (
     summary.status === "passed" &&
-    (summary.cases.length !== 1 ||
+    (summary.cases.length === 0 ||
       summary.cases.some((item) => item.status !== "passed"))
   )
-    throw new Error("Tester Army passed without exactly one passing journey");
+    throw new Error("Tester Army passed without every journey passing");
   return summary;
 }
 
