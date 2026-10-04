@@ -556,10 +556,10 @@ describe("prepared orders", () => {
     return form;
   };
 
-  it("composes nothing when no order was prepared, or for a photo batch", () => {
+  it("says so when no order was prepared, and composes nothing for a photo batch", () => {
     expect(
       importReportBlocks("run.import-prepared-orders", reviewing([])),
-    ).toEqual([]);
+    ).toEqual([{ kind: "note", text: "No orders were prepared." }]);
     expect(
       importReportBlocks(
         "run.import-prepared-orders",

@@ -413,6 +413,67 @@ describe("EntityReportSlot records", () => {
       ).toBeEnabled();
     });
 
+    it("says why instead of doing nothing when the answers cannot become a body", async () => {
+      answer = () => prepared(null);
+      render(
+        <EntityReportSlot slot="run.import-prepared-orders" id={RUN_ID} />,
+        { wrapper: harness.wrapper },
+      );
+      await screen.findByRole("button", { name: "Approve and import" });
+      fireEvent.change(screen.getByLabelText("Trade for imported expenses"), {
+        target: { value: "other" },
+      });
+      fireEvent.change(screen.getByLabelText("Product decision for Item l1"), {
+        target: { value: "unresolved" },
+      });
+      fireEvent.change(
+        screen.getByLabelText("Reason for leaving Item l1 unresolved"),
+        { target: { value: "x".repeat(1_001) } },
+      );
+      expect(
+        screen.getByRole("button", { name: "Approve and import" }),
+      ).toBeDisabled();
+      // SAFETY: the decision is a native select.
+      expect(screen.getByText(/An answer cannot be sent/)).toBeInTheDocument();
+    });
+
+    it("keeps answers when a second batch appears and retitles the first", async () => {
+      let batches = 1;
+      answer = () => {
+        const first = prepared(null);
+        const [block] = first.blocks;
+        if (batches === 1 || block?.kind !== "records") return first;
+        return {
+          ...first,
+          blocks: [
+            { ...block, title: "Prepared batch 1" },
+            {
+              ...block,
+              title: "Prepared batch 2",
+              rows: [row("line:o9:l9", "Item second")],
+              form: block.form && {
+                ...block.form,
+                command: { ...block.form.command, id: "commit:prepare-2" },
+              },
+            },
+          ],
+        };
+      };
+      render(
+        <EntityReportSlot slot="run.import-prepared-orders" id={RUN_ID} />,
+        { wrapper: harness.wrapper },
+      );
+      await screen.findByRole("button", { name: "Approve and import" });
+      fireEvent.change(screen.getByLabelText("Product decision for Item l1"), {
+        target: { value: "new" },
+      });
+      batches = 2;
+      await screen.findByText("Item second", {}, { timeout: 8_000 });
+      expect(screen.getByLabelText("Product decision for Item l1")).toHaveValue(
+        "new",
+      );
+    }, 15_000);
+
     it("shows the server's reason instead of controls when approval is unavailable", async () => {
       answer = () => prepared("Prepared import approved and committed.");
       render(

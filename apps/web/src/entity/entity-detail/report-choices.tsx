@@ -3,6 +3,7 @@ import type { ReportChoice, ReportForm } from "@cubby/schemas/entity-report";
 import {
   type ChoiceAnswer,
   type ChoiceAnswers,
+  commitPreparedInput,
   remainingChoices,
   remainingSentence,
 } from "@cubby/schemas/report-choice";
@@ -218,6 +219,14 @@ export function ChoiceFormFooter({
     return <StatusText>{form.disabledReason}</StatusText>;
   const remaining = remainingChoices(rowChoices, state.answers);
   const unanswered = remaining + remainingChoices(form.choices, state.answers);
+  // The same parse the click uses: a complete-looking answer that cannot become a body (an
+  // over-long reason) must say so rather than do nothing.
+  const buildable =
+    commitPreparedInput(
+      form.command.request,
+      state.answers,
+      state.operationId,
+    ) !== null;
   return (
     <Stack gap="sm">
       {form.choices.map((choice) => (
@@ -235,9 +244,15 @@ export function ChoiceFormFooter({
           : form.completeText}{" "}
         {form.note}
       </StatusText>
+      {unanswered === 0 && !buildable ? (
+        <StatusText tone="destructive">
+          An answer cannot be sent: a reason is at most 1,000 characters and a
+          Product must be chosen from the picker.
+        </StatusText>
+      ) : null}
       <Button
         type="button"
-        disabled={pending || unanswered > 0}
+        disabled={pending || unanswered > 0 || !buildable}
         onClick={onRun}
       >
         {pending ? "Importing…" : form.command.label}

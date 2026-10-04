@@ -639,6 +639,7 @@ function importPreparedOrders(run: RunDetail): ReportBlock[] {
       ...(batches.get(order.prepareOperationId) ?? []),
       order,
     ]);
+  if (batches.size === 0) return [note("No orders were prepared.")];
   return [...batches].map(([id, orders], index) =>
     preparedBatch(
       run,

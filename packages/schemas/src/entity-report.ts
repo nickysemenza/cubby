@@ -194,8 +194,8 @@ const reportNote = z.object({
 
 /**
  * What a row command runs. Each member names one existing operation and carries its exact body,
- * so a client never assembles a request from a label; `confirm` is shown before it is sent and
- * null means one tap acts.
+ * so a client never assembles a request from a label; `confirm` is shown before it is sent by
+ * native; web acts on the tap as it always has. Null means one tap acts on both.
  */
 export const reportCommandRequest = z.discriminatedUnion("kind", [
   z.object({
