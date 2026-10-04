@@ -11,6 +11,8 @@ public final class HeroActionModel: Identifiable {
     public let plan: HeroActionPlan
     public let entity: EntityKey
     public let row: EntityRow
+    /// The tapped collection row a row-scoped action acts on (`$item.id`); nil for a hero verb.
+    public let itemID: String?
     private let runner: HeroActionRunner
 
     public private(set) var values: [String: JSONValue]
@@ -25,12 +27,13 @@ public final class HeroActionModel: Identifiable {
     private var edited: Set<String> = []
 
     public init(
-        plan: HeroActionPlan, entity: EntityKey, row: EntityRow, runner: HeroActionRunner,
-        now: Date = Date()
+        plan: HeroActionPlan, entity: EntityKey, row: EntityRow, itemID: String? = nil,
+        runner: HeroActionRunner, now: Date = Date()
     ) {
         self.plan = plan
         self.entity = entity
         self.row = row
+        self.itemID = itemID
         self.runner = runner
         var seed = HeroActionRunner.defaults(for: plan.fields, now: now)
         // A field picker starts on the row's current value.
@@ -72,9 +75,26 @@ public final class HeroActionModel: Identifiable {
         }
     }
 
+    /// Choices for an `evidence` field: the sources the server says can be replayed.
+    public var evidenceOptions: [LabeledOption] {
+        guard case .launch(let launch)? = preview else { return [] }
+        return launch.sources.filter(\.usable).map { source in
+            LabeledOption(
+                value: source.id,
+                label: source.detail.isEmpty ? source.label : "\(source.label) — \(source.detail)")
+        }
+    }
+
     /// The server's advisory line (a warning or a blocked delete), if any, for the current form.
     public var advisory: (message: String, isDestructive: Bool)? {
         switch currentPreview {
+        case .launch(let launch)?:
+            // The server's own words, as a neutral note: with no replayable evidence the run can
+            // still search for it itself, so only `canValidate` blocks.
+            if !launch.canValidate {
+                return (launch.reason ?? "Validation is not available for this purchase.", false)
+            }
+            return launch.reason.map { ($0, false) }
         case .discard(let preview)?:
             return preview.warning.map { ($0.message, $0.tone == .destructive) }
         case .addToInventory(let preview)?:
@@ -110,6 +130,7 @@ public final class HeroActionModel: Identifiable {
         if operation.preview != nil {
             guard let current = currentPreview else { return false }
             if case .discard(let discard) = current, discard.needsShelfChoice { return false }
+            if case .launch(let launch) = current, !launch.canValidate { return false }
         }
         return (try? HeroActionRunner.resolvedValues(operation.fields, values: values)) != nil
     }
@@ -117,7 +138,8 @@ public final class HeroActionModel: Identifiable {
     public func refreshPreview() async {
         let requested = normalizedValues
         do {
-            let answer = try await runner.preview(plan, on: entity, rowID: row.id, values: requested)
+            let answer = try await runner.preview(
+                plan, on: entity, rowID: row.id, itemID: itemID, values: requested)
             preview = answer
             previewValues = requested
             previewError = nil
@@ -126,7 +148,7 @@ public final class HeroActionModel: Identifiable {
             // Never leave a previous answer standing for a form it was not computed for.
             preview = nil
             previewValues = nil
-            previewError = String(describing: error)
+            previewError = error.userMessage
         }
     }
 
@@ -146,6 +168,11 @@ public final class HeroActionModel: Identifiable {
                     "value": .number(add.defaultAmount.value), "unit": .string(add.defaultAmount.unit),
                 ]
             }
+        case .launch(let launch):
+            let usable = launch.sources.filter(\.usable)
+            if let source = usable.first(where: \.isDefault) ?? usable.first, untouched("sourceId") {
+                values["sourceId"] = .string(source.id)
+            }
         case .deleteImpact:
             break
         }
@@ -164,10 +191,10 @@ public final class HeroActionModel: Identifiable {
             defer { isRunning = false }
             do {
                 let outcome = try await runner.perform(
-                    plan, on: entity, row: row, values: values, confirmed: confirmed)
+                    plan, on: entity, row: row, itemID: itemID, values: values, confirmed: confirmed)
                 onFinished(outcome)
             } catch {
-                errorMessage = String(describing: error)
+                errorMessage = error.userMessage
             }
         }
     }

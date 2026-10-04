@@ -1,0 +1,275 @@
+import type { Amount } from "@cubby/schemas/codec";
+import type { CollectionActionId } from "@cubby/schemas/entity-definitions/collection-actions";
+import {
+  labelNutritionSource,
+  type ReportBlock,
+  reportSlotActions,
+} from "@cubby/schemas/entity-report";
+import {
+  type ImageId,
+  type LedgerPartyId,
+  parseEntityId,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
+import { runPurpose } from "@cubby/schemas/run-fields";
+import { and, asc, eq } from "drizzle-orm";
+
+import { computeParseDrift } from "~/lib/parse-drift";
+import type { Database } from "~/server/db";
+import {
+  cookbook,
+  entityAttachment,
+  image,
+  location,
+  product,
+  recipe,
+} from "~/server/db/schema";
+import { listRuns } from "~/server/purchase-import/run-target";
+import {
+  aiDescriptionItems,
+  cookbookItems,
+  imageAssociationItems,
+  labelImageItems,
+  recipeUsageItems,
+  runHistoryItems,
+  type UsageForItems,
+} from "~/server/repo/collection-items";
+import { getDb, mapImages, notDeleted } from "~/server/repo/database-helpers";
+import { getImageById } from "~/server/repo/image";
+import { getImageProcessingReadProjection } from "~/server/repo/image-processing";
+import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient/search";
+import { locationAiDescriptionSql } from "~/server/repo/location/ai-description";
+import {
+  resolveLiveShortcode,
+  resolveOrThrow,
+} from "~/server/repo/shortcode-resolver";
+
+/** Who is asking, for the reads that are scoped to a member's own ledger party. */
+export type ReportViewer = () => Promise<{ id: LedgerPartyId } | null>;
+
+/** The `records` block the slots below share. */
+const records = (
+  rows: Extract<ReportBlock, { kind: "records" }>["rows"],
+  empty: string,
+  actions: readonly CollectionActionId[] = [],
+  thumbnail: Extract<ReportBlock, { kind: "records" }>["thumbnail"] = "small",
+): ReportBlock[] => [
+  { kind: "records", rows, empty, actions: [...actions], thumbnail },
+];
+
+/**
+ * Loaded on demand: the WASM formatter (the one web and native share) is only needed once a
+ * report has recipe lines to word.
+ */
+const amountFormatter = async () => {
+  const { wasm } = await import("~/lib/wasm");
+  return (amount: Amount) => {
+    const request: Parameters<typeof wasm.format_amount_labeled>[0] = {
+      value: amount.value,
+      unit: amount.unit,
+    };
+    if (amount.upperValue != null) request.upper_value = amount.upperValue;
+    return wasm.format_amount_labeled(request);
+  };
+};
+
+const liveProductId = (db: Database, code: string) =>
+  resolveOrThrow(db, "product", code);
+
+/**
+ * A label's detected nutrition is worth reviewing when its preferred analysis read some, and the
+ * product has not already saved that very reading (same rule web used to hide its button).
+ */
+const reviewableLabels = async (
+  db: Database,
+  labels: readonly { imageId: ImageId; code: string }[],
+  saved: { source?: string | null } | null,
+) => {
+  const reviewable = new Set<string>();
+  await Promise.all(
+    labels.map(async (label) => {
+      const status = await getImageProcessingReadProjection(db, label.imageId);
+      const analysis = status.analyses.find((entry) => entry.preferred);
+      if (!analysis?.result.nutritionFacts) return;
+      if (
+        saved?.source !==
+        labelNutritionSource(label.code, String(analysis.createdAt))
+      )
+        reviewable.add(label.code);
+    }),
+  );
+  return reviewable;
+};
+
+export const productLabelsReport = async (db: Database, code: string) => {
+  const productId = await liveProductId(db, code);
+  const [saved] = await getDb(db)
+    .select({ labelNutrition: product.labelNutrition })
+    .from(product)
+    .where(and(eq(product.id, productId), notDeleted(product)));
+  const rows = await getDb(db)
+    .select({ image })
+    .from(entityAttachment)
+    .innerJoin(image, eq(entityAttachment.imageId, image.id))
+    .where(
+      and(
+        eq(entityAttachment.entityId, productId),
+        notDeleted(entityAttachment),
+        eq(entityAttachment.purpose, "label"),
+        notDeleted(image),
+      ),
+    )
+    .orderBy(asc(entityAttachment.sortOrder), asc(entityAttachment.createdAt));
+  const labels = mapImages(rows.map((entry) => entry.image));
+  const reviewable = await reviewableLabels(
+    db,
+    rows.map((entry, index) => ({
+      imageId: parseEntityId("image", entry.image.id),
+      code: labels[index]?.id ?? "",
+    })),
+    saved?.labelNutrition ?? null,
+  );
+  return records(
+    labelImageItems(labels, reviewable),
+    "No labels on file.",
+    [],
+    "large",
+  );
+};
+
+export const productCookbooksReport = async (db: Database, code: string) => {
+  const productId = await liveProductId(db, code);
+  const row = await getDb(db).query.product.findFirst({
+    where: and(eq(product.id, productId), notDeleted(product)),
+    columns: { id: true },
+    with: {
+      cookbooks: {
+        where: notDeleted(cookbook),
+        orderBy: asc(cookbook.name),
+        with: {
+          recipes: { where: notDeleted(recipe), columns: { deletedAt: true } },
+        },
+      },
+    },
+  });
+  return records(
+    cookbookItems(
+      (row?.cookbooks ?? []).map((entry) => ({
+        id: parseShortcodeFor("cookbook", entry.shortcode),
+        name: entry.name,
+        recipeCount: entry.recipes.length,
+      })),
+    ),
+    "Not a cookbook copy.",
+  );
+};
+
+/** Lines a fresh parse would change, named by axis; parsed once for the whole report. */
+const driftBadges = async (
+  usages: readonly UsageForItems[],
+  knownNames: readonly string[],
+) => {
+  const { wasm } = await import("~/lib/wasm");
+  const fresh = wasm.parse_ingredient_lines(
+    usages.map((usage) => usage.rawLine ?? ""),
+  );
+  const byUsage = new Map<UsageForItems, string[]>();
+  usages.forEach((usage, index) => {
+    const parsed = fresh[index];
+    if (!usage.rawLine || !parsed) return;
+    const drift = computeParseDrift(
+      { knownNames, amounts: usage.amounts, modifier: usage.modifier ?? null },
+      parsed,
+    );
+    const axes = [
+      drift.amounts !== null ? "amount" : null,
+      drift.modifier !== null ? "modifier" : null,
+      drift.name !== null ? "name" : null,
+    ].filter((axis) => axis !== null);
+    if (axes.length > 0)
+      byUsage.set(usage, [`Re-parse changes ${axes.join(", ")}`]);
+  });
+  return (usage: UsageForItems) => byUsage.get(usage) ?? [];
+};
+
+export const productRecipeAppearancesReport = async (
+  db: Database,
+  code: string,
+) => {
+  const productId = await liveProductId(db, code);
+  const row = await getDb(db).query.product.findFirst({
+    where: and(eq(product.id, productId), notDeleted(product)),
+    columns: { id: true },
+    with: {
+      ingredient: {
+        columns: { id: true, name: true, aliases: true, deletedAt: true },
+      },
+    },
+  });
+  const ingredient =
+    row?.ingredient?.deletedAt === null ? row.ingredient : null;
+  const usages = ingredient
+    ? (await getRecipeUsagesForIngredient(db, ingredient.id)).recipeUsages
+    : [];
+  if (!ingredient || usages.length === 0)
+    return records([], "Not used in any recipes yet.");
+  return records(
+    recipeUsageItems(
+      usages,
+      await amountFormatter(),
+      await driftBadges(usages, [ingredient.name, ...ingredient.aliases]),
+    ),
+    "Not used in any recipes yet.",
+  );
+};
+
+export const imageAssociationsReport = async (db: Database, code: string) =>
+  records(
+    imageAssociationItems(
+      (await getImageById(db, await resolveOrThrow(db, "image", code)))
+        .associations,
+    ),
+    "This image is not attached to a record.",
+    reportSlotActions["image.associations"],
+  );
+
+export const locationAiDescriptionReport = async (
+  db: Database,
+  code: string,
+) => {
+  const id = await resolveOrThrow(db, "location", code);
+  const [row] = await getDb(db)
+    .select({ aiDescription: locationAiDescriptionSql(location.id) })
+    .from(location)
+    .where(and(eq(location.id, id), notDeleted(location)));
+  return records(
+    aiDescriptionItems(row?.aiDescription),
+    "No photos analyzed yet.",
+    reportSlotActions["location.ai-description"],
+  );
+};
+
+export const purchaseRunsReport = async (
+  db: Database,
+  code: string,
+  viewer: ReportViewer,
+) => {
+  const party = await viewer();
+  if (!party)
+    throw new Error("This login is not linked to a member ledger party yet.");
+  const purchaseId = await resolveLiveShortcode(db, code, "purchase");
+  if (purchaseId === null) throw new Error("Purchase was not found");
+  const runs = await listRuns(db, party.id, purchaseId);
+  return records(
+    runHistoryItems(
+      runs.map((run) => ({
+        ...run,
+        purpose: runPurpose.parse(run.purpose),
+        startedAt: run.startedAt.toISOString(),
+        endedAt: run.endedAt?.toISOString() ?? null,
+      })),
+    ),
+    "No import run has been recorded for this purchase.",
+    reportSlotActions["purchase.runs"],
+  );
+};

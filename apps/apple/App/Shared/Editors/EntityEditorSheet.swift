@@ -17,6 +17,9 @@ struct EntityEditorSheet: View {
     var original: JSONValue? = nil
     /// A detail action stages a reset for review; Save remains the only write.
     var resolutionResetField: String? = nil
+    /// Values a detail action derived (a detected nutrition panel) staged for review as the
+    /// person's own edits; Save remains the only write.
+    var stagedValues: [String: JSONValue] = [:]
     /// A create the hero action opened with its own title and guidance (record sale).
     var context: HeroEditorContext? = nil
     let onSaved: (String) -> Void
@@ -239,6 +242,7 @@ struct EntityEditorSheet: View {
         guard !Task.isCancelled, initializedIdentity == identity, model === created else { return }
         initialDraft = created.draft
         if let resolutionResetField { created.stageResolutionReset(resolutionResetField) }
+        created.stage(stagedValues)
         seedPickedTitles(created)
         suggestions = suggestionReview(for: created)
     }

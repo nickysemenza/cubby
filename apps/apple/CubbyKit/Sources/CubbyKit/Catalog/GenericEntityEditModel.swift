@@ -205,13 +205,21 @@ public final class GenericEntityEditModel {
     }
 
     private func stageResolutionPayload(_ payload: [String: JSONValue]) -> Bool {
-        guard !isSaving, !isLoading, !payload.isEmpty,
-            payload.keys.allSatisfy({ key in
+        stage(payload)
+    }
+
+    /// Stages values a detail action derived (a detected nutrition panel, a resolution reset) as
+    /// the person's own edits, for review; Save owns persistence. Refuses a key the editor cannot
+    /// write, so a stale plan never stages a value the server would reject.
+    @discardableResult
+    public func stage(_ values: [String: JSONValue]) -> Bool {
+        guard !isSaving, !isLoading, !values.isEmpty,
+            values.keys.allSatisfy({ key in
                 guard let field = descriptor.field(key) else { return false }
                 return (isCreate ? field.inCreate : field.inUpdate) && !readOnly(key)
             })
         else { return false }
-        for (key, value) in payload {
+        for (key, value) in values {
             draft[key] = value
             markEdited(key)
         }

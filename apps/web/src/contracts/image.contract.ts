@@ -68,6 +68,7 @@ export const imageContract = defineContract("image", {
     invalidates: ["image"],
   }),
   attachExisting: mutation({
+    native: "Attach an existing image to a record from its Used by section",
     input: imageAttachExistingInput,
     output: imageAttachExistingOutput,
     invalidates: ["image"],

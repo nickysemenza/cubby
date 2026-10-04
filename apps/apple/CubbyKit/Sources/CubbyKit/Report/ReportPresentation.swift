@@ -112,7 +112,54 @@ public struct ReportPresentation: Hashable, Sendable {
         }
     }
 
+    /// A record-bearing row: the server's words, a thumbnail, short badges, an instant the
+    /// client prints in its own locale, and the record the row opens.
+    public struct RecordRow: Hashable, Sendable, Identifiable {
+        public let id: Int
+        public let entity: EntityKey?
+        public let recordID: String?
+        public let title: String
+        public let subtitle: String?
+        public let trailing: String?
+        public let imageURL: URL?
+        public let badges: [String]
+        public let at: Date?
+        /// The list of other records this row summarises, opened from the trailing figure.
+        public let listLink: ListLink?
+        /// Verbs offered on this row only; the server decides when one applies.
+        public let actions: [CollectionActionID]
+    }
+
+    public struct ListLink: Hashable, Sendable {
+        public let entity: EntityKey
+        public let filters: [String: String]
+
+        /// The list's filter state: each declared URL key mapped to its wire parameter.
+        public var filterState: EntityFilterState {
+            var state = EntityFilterState()
+            for (urlKey, value) in filters {
+                guard
+                    let name = EntityCatalog[entity].filters.first(where: { $0.urlKey == urlKey })?.wire.names
+                        .first
+                else { continue }
+                state.set(.single(value), for: name)
+            }
+            return state
+        }
+    }
+
+    /// Rows that are records of their own, with the verbs the slot offers (`CollectionActionID`).
+    public struct Records: Hashable, Sendable {
+        public let title: String?
+        public let rows: [RecordRow]
+        public let empty: String
+        public let actions: [CollectionActionID]
+        /// Large for evidence photos that must stay legible (a package label).
+        public let largeThumbnails: Bool
+    }
+
     public enum Block: Hashable, Sendable {
+        case records(Records)
         case stats(title: String?, figures: [Figure])
         case chart(Chart)
         case table(Table)
@@ -177,6 +224,29 @@ public struct ReportPresentation: Hashable, Sendable {
                     }))
         case .note(let note):
             return .note(note.text)
+        case .records(let records):
+            return .records(
+                Records(
+                    title: records.title,
+                    rows: records.rows.enumerated().map { index, row in
+                        RecordRow(
+                            id: index, entity: row.entity.flatMap(EntityKey.init(rawValue:)),
+                            recordID: row.id, title: row.title, subtitle: row.subtitle,
+                            trailing: row.trailing, imageURL: row.imageUrl.flatMap(URL.init(string:)),
+                            badges: row.badges ?? [], at: row.at.flatMap(instant),
+                            listLink: row.listLink.flatMap { link in
+                                EntityKey(rawValue: link.entity).map {
+                                    ListLink(entity: $0, filters: link.filters.additionalProperties)
+                                }
+                            },
+                            actions: (row.actions ?? []).compactMap {
+                                CollectionActionID(rawValue: $0.rawValue)
+                            })
+                    },
+                    empty: records.empty,
+                    actions: (records.actions ?? []).compactMap { CollectionActionID(rawValue: $0.rawValue) },
+                    largeThumbnails: records.thumbnail == .large)
+            )
         }
     }
 
@@ -184,6 +254,15 @@ public struct ReportPresentation: Hashable, Sendable {
     private static func text(_ value: Double?, money: Bool) -> String {
         guard let value else { return "—" }
         return money ? value.usd : String(Int(value.rounded()))
+    }
+
+    /// An ISO-8601 instant with or without fractional seconds.
+    private static func instant(_ text: String) -> Date? {
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return withFraction.date(from: text) ?? plain.date(from: text)
     }
 
     /// A household calendar day (`yyyy-MM-dd`) as the start of that day in UTC.

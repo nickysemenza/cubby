@@ -108,6 +108,8 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/app/products/**`,
     `${WEB}/src/features/nutrition/**`,
     `${WEB}/src/lib/label-nutrition.ts`,
+    `${WEB}/src/server/repo/entity-report/**`,
+    `${WEB}/src/server/repo/collection-items.ts`,
     `${WEB}/src/server/image-processing/**`,
     `${WEB}/src/server/repo/image-processing*.ts`,
     `${WEB}/src/server/services/image-description.service.ts`,

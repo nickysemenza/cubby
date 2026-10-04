@@ -14,6 +14,8 @@ public struct HeroActionField: Decodable, Sendable, Hashable, Identifiable {
         case number, text, date, toggle, choice, location, amount
         /// Options come from the plan's preview (`shelves`), never a guess.
         case shelf
+        /// Options are the plan preview's replayable evidence sources, never a guess.
+        case evidence
     }
 
     public let key: String
@@ -56,8 +58,36 @@ public struct HeroOperationPlan: Decodable, Sendable, Hashable {
     public let confirmation: HeroActionConfirmation
     public let preview: Preview?
     public let fields: [HeroActionField]
-    /// The request body with `$row.id` and `$field.<key>` slots.
+    /// The request body with `$row.id`, `$item.id` and `$field.<key>` slots.
     public let body: JSONValue
+    /// The record must carry a value here before the action is offered.
+    public let requires: Requirement?
+    /// What the screen does with the result instead of a plain "done" notice.
+    public let continueWith: Continuation?
+
+    public struct Requirement: Decodable, Sendable, Hashable {
+        /// `readPath` grammar, read against the record.
+        public let path: String
+        /// Shown in the action's place while the record lacks the value.
+        public let reason: String
+    }
+
+    public enum Continuation: Decodable, Sendable, Hashable {
+        /// Opens the record's editor with a value the operation derives staged for `field`.
+        case editRecord(field: String)
+
+        private enum CodingKeys: String, CodingKey { case kind, field }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            switch try container.decode(String.self, forKey: .kind) {
+            case "editRecord": self = .editRecord(field: try container.decode(String.self, forKey: .field))
+            case let other:
+                throw DecodingError.dataCorruptedError(
+                    forKey: .kind, in: container, debugDescription: "Unknown continuation \(other)")
+            }
+        }
+    }
 }
 
 /// The title and guidance a create-editor hero action opens with when the capture is not a plain
@@ -95,6 +125,17 @@ public struct HeroActionPlan: Decodable, Sendable, Hashable {
     public var fields: [HeroActionField] {
         if case .operation(let plan) = kind { return plan.fields }
         return []
+    }
+
+    public var operation: HeroOperationPlan? {
+        if case .operation(let plan) = kind { return plan }
+        return nil
+    }
+
+    /// One explicit tap runs it: an operation with no form, no preview and nothing destructive.
+    public var runsOnTap: Bool {
+        guard let plan = operation else { return false }
+        return plan.fields.isEmpty && plan.preview == nil && plan.confirmation == .none
     }
 
     public var confirmation: HeroActionConfirmation {

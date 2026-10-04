@@ -43,6 +43,10 @@ public struct NativeCoverageManifest: Decodable, Sendable {
     public let listSlot: [String: NativeCoverageStatus]
     /// The runner plan for each `implemented` hero action, keyed by its manifest id.
     public let heroActionPlan: [String: HeroActionPlan]
+    /// The runner plan for each verb a `collection` section offers, keyed by `CollectionActionID`.
+    public let collectionActionPlan: [String: HeroActionPlan]
+    /// Whether each collection verb acts on the record (`section`) or on one row (`row`).
+    public let collectionActionScope: [String: CollectionActionScope]
 
     /// Decoded on first use; a missing or undecodable file is a build defect
     /// (`NativeCoverageTests` fails CI).

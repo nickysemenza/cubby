@@ -5,6 +5,7 @@ import {
   EXPENSE_DISPOSITION_COST_TYPE,
   EXPENSE_DISPOSITION_EDITOR,
 } from "./expense-fields";
+import type { CollectionActionId } from "./entity-definitions/collection-actions";
 import { TRADE_LABELS, tradeValues } from "./task-fields";
 import type { Entity } from "./entity-core";
 import type {
@@ -245,19 +246,22 @@ export const nativeCoverage = {
       // Read-only recipes with scale and cost; adding food, rescaling, removing and the portion
       // preparation workflow stay on web.
       "meal.composition",
+      // The same report view draws these as `records` blocks (rows with a thumbnail, badges and a
+      // record to open); their verbs are `nativeCollectionActionPlans`, run by the hero-action
+      // runner.
+      "product.labels",
+      "product.cookbooks",
+      "product.recipe-appearances",
+      "image.associations",
+      "purchase.runs",
+      "location.ai-description",
     ]),
     ...unsupported(
       [
         "expense.settlement",
-        "image.associations",
-        "location.ai-description",
-        "product.cookbooks",
-        "product.labels",
-        "product.recipe-appearances",
         "purchase.financial-settlement",
         "purchase.project-allocation",
         "purchase.reconciliation",
-        "purchase.runs",
         "run.ai-usage",
         "run.changes",
         "run.import-agent-live",
@@ -344,8 +348,9 @@ export const nativeCoverage = {
 };
 
 /**
- * A literal body value. Only a string starting `$row.` (the row's `id`) or `$field.` (a form
- * field's key) is a slot the runner fills; any other string, `$` or not, is literal.
+ * A literal body value. Only a string starting `$row.` (the record's `id`), `$item.` (the
+ * `id` of the collection row a row action was tapped on) or `$field.` (a form field's key) is a
+ * slot the runner fills; any other string, `$` or not, is literal.
  */
 export type HeroActionBodyValue =
   | string
@@ -368,7 +373,9 @@ type HeroActionField = {
     | "location"
     | "amount"
     /** Options come from the plan's preview (`shelves`), never a guess. */
-    | "shelf";
+    | "shelf"
+    /** Options are the plan preview's replayable evidence sources, never a guess. */
+    | "evidence";
   /** `today` seeds a date field; `one` seeds an amount with a single `each`. */
   readonly default?: string | number | boolean | "today" | "one";
   readonly options?: readonly {
@@ -412,6 +419,17 @@ export type NativeHeroActionPlan = {
       };
       readonly fields: readonly HeroActionField[];
       readonly body: HeroActionBodyValue;
+      /**
+       * The record must carry a value at this path (`readPath` grammar) before the action is
+       * offered; `reason` is shown in its place.
+       */
+      readonly requires?: { readonly path: string; readonly reason: string };
+      /** What the screen does with the result instead of a plain "done" notice. */
+      readonly continueWith?: {
+        /** Opens the record's editor seeded with a value the operation derives for `field`. */
+        readonly kind: "editRecord";
+        readonly field: string;
+      };
     }
   | {
       /** Opens the generic create editor with the entity's fields pre-seeded. */
@@ -565,6 +583,99 @@ export const nativeHeroActionPlans = {
 } as const satisfies Partial<Record<HeroActionId, NativeHeroActionPlan>>;
 
 /**
+ * Plans for the verbs a `collection` detail section offers (`COLLECTION_ACTION_SCOPES`), run by
+ * the same `HeroActionRunner` as the hero verbs. A `section` action acts on the record (`$row.id`);
+ * a `row` action also reads the tapped row's id (`$item.id`). The keys are exactly the action ids
+ * (asserted by the unit test); `pnpm generate` checks each plan against the contract.
+ */
+export const nativeCollectionActionPlans = {
+  analyzeLocation: {
+    label: "Analyze photos",
+    symbol: "eye",
+    kind: "operation",
+    operation: "ai.describeLocation",
+    entities: ["location"],
+    // Web runs it on one tap too: the description is a proposal row, not a destructive write.
+    confirmation: "none",
+    requires: {
+      path: "images",
+      reason: "Add a photo to this location to analyze it.",
+    },
+    fields: [],
+    body: { locationId: "$row.id" },
+  },
+  attachImage: {
+    label: "Attach to record",
+    symbol: "link.badge.plus",
+    kind: "operation",
+    operation: "image.attachExisting",
+    entities: ["image"],
+    confirmation: "none",
+    fields: [
+      { key: "targetId", label: "Record shortcode", kind: "text" },
+      // Sent only for a Product target; the server rejects a purpose on any other record.
+      {
+        key: "purpose",
+        label: "Product image use",
+        kind: "choice",
+        default: "item",
+        options: [
+          { value: "item", label: "Item photo" },
+          { value: "label", label: "Label or tag" },
+        ],
+      },
+    ],
+    body: {
+      imageId: "$row.id",
+      targetId: "$field.targetId",
+      purpose: "$field.purpose",
+    },
+  },
+  reviewLabelNutrition: {
+    label: "Review detected nutrition",
+    symbol: "text.magnifyingglass",
+    kind: "operation",
+    operation: "imageProcessing.status",
+    entities: ["product"],
+    // The product editor that opens is the confirmation: nothing saves until it does.
+    confirmation: "none",
+    fields: [],
+    body: { id: "$item.id" },
+    continueWith: { kind: "editRecord", field: "labelNutrition" },
+  },
+  validatePurchase: {
+    label: "Validate ingestion",
+    symbol: "checkmark.circle",
+    kind: "operation",
+    operation: "run.startTargeted",
+    entities: ["purchase"],
+    confirmation: "none",
+    preview: {
+      operation: "run.targetedLaunch",
+      body: { purpose: "purchase_validation", targetId: "$row.id" },
+    },
+    fields: [
+      // The server allows no chosen source (it then searches for evidence itself), so the
+      // field is optional exactly as on web.
+      {
+        key: "sourceId",
+        label: "Evidence to replay",
+        kind: "evidence",
+        optional: true,
+      },
+    ],
+    body: {
+      purpose: "purchase_validation",
+      purchaseId: "$row.id",
+      sourceId: "$field.sourceId",
+    },
+  },
+} as const satisfies Record<
+  CollectionActionId,
+  Extract<NativeHeroActionPlan, { kind: "operation" }>
+>;
+
+/**
  * Reviewed count of `unsupported` ids per kind. It only shrinks: implement an
  * id natively, flip its status above, and lower the number. Raising it means a
  * new web-only declaration shipped without a native path and needs a
@@ -575,7 +686,7 @@ export const NATIVE_UNSUPPORTED_CEILING = {
   list: 0,
   detail: 0,
   heroAction: 0,
-  detailSlot: 27,
+  detailSlot: 21,
   listSlot: 0,
   structuredField: 8,
 } as const satisfies Record<NativeCoverageKind, number>;

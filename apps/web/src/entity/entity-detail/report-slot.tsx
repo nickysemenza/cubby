@@ -1,3 +1,4 @@
+import { slotActionsOf } from "@cubby/schemas/entity-report";
 import type {
   EntityReportInput,
   ReportBlock,
@@ -11,6 +12,8 @@ import { Row, Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Skeleton } from "~/ui/primitives/skeleton";
+
+import { RecordsBlockView, ReportVerb } from "./records-block";
 
 const TONE_TEXT = {
   positive: "text-positive",
@@ -147,7 +150,13 @@ const blockKey = (block: ReportBlock) =>
  * with a richer web-only surface (the schedule grid) reads the same blocks
  * itself instead.
  */
-function ReportBlocks({ blocks }: { blocks: readonly ReportBlock[] }) {
+function ReportBlocks({
+  blocks,
+  record,
+}: {
+  blocks: readonly ReportBlock[];
+  record?: object;
+}) {
   return (
     <Stack gap="xs">
       {blocks.map((block) => {
@@ -177,6 +186,8 @@ function ReportBlocks({ blocks }: { blocks: readonly ReportBlock[] }) {
                 {block.text}
               </Description>
             );
+          case "records":
+            return <RecordsBlockView key={key} block={block} record={record} />;
           case "schedule":
             return null;
         }
@@ -185,17 +196,35 @@ function ReportBlocks({ blocks }: { blocks: readonly ReportBlock[] }) {
   );
 }
 
-/** A detail slot that is nothing but the server's report blocks. */
-export function EntityReportSlot(input: EntityReportInput) {
+/**
+ * A detail slot that is nothing but the server's report blocks. A `records` block's verbs act on
+ * `record` (the loaded detail record) and `rowBadges` adds web-only per-row badges.
+ */
+export function EntityReportSlot({
+  record,
+  ...input
+}: EntityReportInput & { record?: object }) {
   const query = useQuery(entityReport.get.queryOptions(input));
-  if (query.isPending) return <Skeleton className="h-16" />;
-  if (query.isError)
-    return (
-      <ErrorDisplay
-        error={query.error}
-        title="this section"
-        onRetry={() => void query.refetch()}
-      />
-    );
-  return <ReportBlocks blocks={query.data.blocks} />;
+  // The slot's own verbs (attach, analyze, validate) stay available while the rows load or fail.
+  const verbs = record === undefined ? [] : slotActionsOf(input.slot);
+  return (
+    <Stack gap="sm" className="items-start">
+      {record !== undefined
+        ? verbs.map((action) => (
+            <ReportVerb key={action} action={action} record={record} />
+          ))
+        : null}
+      {query.isPending ? (
+        <Skeleton className="h-16 w-full" />
+      ) : query.isError ? (
+        <ErrorDisplay
+          error={query.error}
+          title="this section"
+          onRetry={() => void query.refetch()}
+        />
+      ) : (
+        <ReportBlocks blocks={query.data.blocks} record={record} />
+      )}
+    </Stack>
+  );
 }

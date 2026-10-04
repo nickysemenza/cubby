@@ -10,12 +10,18 @@ import {
   EXPENSE_DISPOSITION_EDITOR,
 } from "./expense-fields";
 import {
+  COLLECTION_ACTION_SCOPES,
+  COLLECTION_ACTIONS,
+} from "./entity-definitions/collection-actions";
+import {
   NATIVE_COVERAGE_KINDS,
   NATIVE_UNSUPPORTED_CEILING,
+  nativeCollectionActionPlans,
   nativeCoverage,
   nativeHeroActionPlans,
   type NativeCoverageEntry,
   type NativeCoverageKind,
+  type NativeHeroActionPlan,
 } from "./native-coverage";
 
 const used = (ids: readonly string[]) => [...new Set(ids)].sort();
@@ -131,5 +137,49 @@ describe("native presentation coverage", () => {
     expect(plan.editor).toEqual(EXPENSE_DISPOSITION_EDITOR);
     expect(plan.seed.costType).toBe(EXPENSE_DISPOSITION_COST_TYPE);
     expect(plan.seed.projectId).toBeNull();
+  });
+});
+
+describe("native collection verbs", () => {
+  it("gives every verb a runner plan, and only the verbs", () => {
+    expect(used(Object.keys(nativeCollectionActionPlans))).toEqual(
+      used([...COLLECTION_ACTIONS]),
+    );
+  });
+
+  it("names the entities each verb may be offered on", () => {
+    const plans: Record<string, NativeHeroActionPlan> =
+      nativeCollectionActionPlans;
+    const entitiesOf = Object.fromEntries(
+      COLLECTION_ACTIONS.map((action) => {
+        const plan = plans[action];
+        return [action, plan?.kind === "operation" ? plan.entities : []];
+      }),
+    );
+    expect(entitiesOf).toEqual({
+      analyzeLocation: ["location"],
+      attachImage: ["image"],
+      reviewLabelNutrition: ["product"],
+      validatePurchase: ["purchase"],
+    });
+  });
+
+  it("reads a row's id only for a row-scoped verb", () => {
+    for (const action of COLLECTION_ACTIONS) {
+      const usesItem = JSON.stringify(
+        nativeCollectionActionPlans[action].body,
+      ).includes("$item.");
+      expect({ action, usesItem }).toEqual({
+        action,
+        usesItem: COLLECTION_ACTION_SCOPES[action] === "row",
+      });
+    }
+  });
+
+  it("starts from a form or an explicit tap, never a silent write", () => {
+    // Analysis, attaching and launching are named verbs the person chose; none removes a
+    // record, so none asks for the destructive confirmation.
+    for (const plan of Object.values(nativeCollectionActionPlans))
+      expect(plan.confirmation).toBe("none");
   });
 });

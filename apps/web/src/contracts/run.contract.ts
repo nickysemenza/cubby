@@ -468,6 +468,7 @@ export const runContract = defineContract("run", {
     cache: { tags: [["run"]] },
   }),
   targetedLaunch: query({
+    native: "Replayable evidence for a targeted purchase-validation launch",
     input: z.object({
       purpose: targetedImportPurpose,
       targetId: z.string().min(1),

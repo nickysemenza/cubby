@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+import {
+  COLLECTION_ACTIONS,
+  type CollectionActionId,
+} from "./entity-definitions/collection-actions";
+
 /**
  * The generic read a detail slot draws on every client. The server composes
  * each figure, series and schedule row once (money only from
@@ -15,8 +20,37 @@ export const reportSlots = [
   "project.schedule",
   "location.contents-valuation",
   "meal.composition",
+  "product.labels",
+  "product.cookbooks",
+  "product.recipe-appearances",
+  "image.associations",
+  "purchase.runs",
+  "location.ai-description",
 ] as const;
 export const reportSlot = z.enum(reportSlots);
+
+/**
+ * The verbs on the record each `records` slot belongs to. The server puts them on the block, and
+ * web shows them from this table so they stay available while the report loads or fails.
+ */
+export const reportSlotActions = {
+  "image.associations": ["attachImage"],
+  "location.ai-description": ["analyzeLocation"],
+  "purchase.runs": ["validatePurchase"],
+} as const satisfies Partial<
+  Record<(typeof reportSlots)[number], readonly CollectionActionId[]>
+>;
+
+/** The verbs a slot offers on its record (none for most slots). */
+export const slotActionsOf = (slot: string): readonly CollectionActionId[] =>
+  Object.entries(reportSlotActions).find(([key]) => key === slot)?.[1] ?? [];
+
+/**
+ * The evidence a saved label reading cites, shared so the server's "is there anything new to
+ * review" and the review itself agree.
+ */
+export const labelNutritionSource = (imageId: string, analysisAt: string) =>
+  `Package label ${imageId} · analysis ${analysisAt}`;
 export type ReportSlot = z.infer<typeof reportSlot>;
 
 export const entityReportInput = z.object({
@@ -118,12 +152,57 @@ const reportNote = z.object({
   text: z.string(),
 });
 
+const reportRecordRow = z.object({
+  /** The record the row opens (any entity key), or null for a row that only reads. */
+  entity: z.string().nullable(),
+  id: z.string().nullable(),
+  title: z.string(),
+  /** Display text composed by the server; lines are joined with "\n". */
+  subtitle: z.string().nullable(),
+  trailing: z.string().nullable(),
+  /** A thumbnail the row leads with. */
+  imageUrl: z.string().optional(),
+  /** Short chips worded by the server (a status, a failure code). */
+  badges: z.array(z.string()).optional(),
+  /** An ISO instant each client prints in its own locale and zone. */
+  at: z.string().optional(),
+  /** The list of other records this row summarises, opened as the trailing link. */
+  listLink: z
+    .object({
+      entity: z.string(),
+      /** Filter values keyed by the list's URL key. */
+      filters: z.record(z.string(), z.string()),
+    })
+    .optional(),
+  /** Row verbs offered on this row only (the server decides when one applies). */
+  actions: z.array(z.enum(COLLECTION_ACTIONS)).optional(),
+});
+export type ReportRecordRow = z.infer<typeof reportRecordRow>;
+
+/**
+ * Rows that are records of their own (cookbooks a product is a copy of, the photos of a label, the
+ * import runs of a purchase) with the verbs the slot offers. `actions` name
+ * `COLLECTION_ACTION_SCOPES` verbs: web fills each in `collection-actions.tsx`, native runs the
+ * plan in `nativeCollectionActionPlans`.
+ */
+const reportRecords = z.object({
+  kind: z.literal("records"),
+  title: z.string().optional(),
+  rows: z.array(reportRecordRow),
+  empty: z.string(),
+  /** Verbs on the record the slot belongs to (`reportSlotActions`). */
+  actions: z.array(z.enum(COLLECTION_ACTIONS)).optional(),
+  /** `large` for evidence photos that must stay legible (a package label). */
+  thumbnail: z.enum(["small", "large"]).optional(),
+});
+
 export const reportBlock = z.discriminatedUnion("kind", [
   reportStats,
   reportChart,
   reportTable,
   reportSchedule,
   reportNote,
+  reportRecords,
 ]);
 export type ReportBlock = z.infer<typeof reportBlock>;
 

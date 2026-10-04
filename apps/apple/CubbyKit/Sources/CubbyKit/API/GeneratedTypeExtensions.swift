@@ -276,8 +276,6 @@ extension ImageWithEntity {
 
 extension ImageAssociation: Identifiable {
     public var id: String { "\(entityKind.rawValue):\(entityId):\(role.rawValue)" }
-    /// The catalog key, when the association's entity is one the catalog knows.
-    public var key: EntityKey? { EntityKey(rawValue: entityKind.rawValue) }
 }
 
 extension PhotoLocalAnalysis {

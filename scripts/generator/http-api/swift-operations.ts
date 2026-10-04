@@ -749,6 +749,12 @@ const CLIENT_PASSTHROUGH_METHODS = {
   "product.purchases": { method: "productPurchases", doc: null },
   "recipe.getIngredientUsage": { method: "ingredientUsage", doc: null },
   "run.history": { method: "runHistory", doc: null },
+  // The collection-section actions' operations (`nativeCollectionActionPlans`), decoded from the
+  // runner's form values into these typed inputs.
+  "ai.describeLocation": { method: "describeLocation", doc: null },
+  "image.attachExisting": { method: "attachExistingImage", doc: null },
+  "run.startTargeted": { method: "startTargetedRun", doc: null },
+  "run.targetedLaunch": { method: "targetedRunLaunch", doc: null },
   "run.work": { method: "runWork", doc: null },
   "purchaseImport.applyValidationCorrections": {
     method: "applyValidationCorrections",
