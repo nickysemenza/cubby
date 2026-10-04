@@ -567,22 +567,21 @@ function gmailCountsBlock(
   gmail: GmailProgress,
   status: RunLiveProgress["status"],
 ): ReportBlock {
-  return counts([
-    [
-      gmail.pagesScanned === 1 ? "Page scanned" : "Pages scanned",
-      gmail.pagesScanned,
-    ],
-    [
-      status === "completed" ? "Messages checked" : "Messages found",
-      gmail.searched,
-    ],
-    ["Already saved", gmail.skipped],
-    [
-      gmail.reviewable === 1
-        ? "Order email to review"
-        : "Order emails to review",
-      gmail.reviewable,
-    ],
+  const sentence = (id: string, text: string) => row(id, { title: text });
+  return records([
+    sentence(
+      "pages",
+      `${gmail.pagesScanned} ${gmail.pagesScanned === 1 ? "page" : "pages"} scanned`,
+    ),
+    sentence(
+      "messages",
+      `${gmail.searched} messages ${status === "completed" ? "checked" : "found"}`,
+    ),
+    sentence("skipped", `${gmail.skipped} already saved`),
+    sentence(
+      "reviewable",
+      `${gmail.reviewable} order ${gmail.reviewable === 1 ? "email" : "emails"} to review`,
+    ),
   ]);
 }
 

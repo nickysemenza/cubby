@@ -2,7 +2,6 @@ import type {
   ReportCommand,
   ReportCommandRequest,
 } from "@cubby/schemas/entity-report";
-import { useState } from "react";
 import { match } from "ts-pattern";
 
 import { runHref } from "~/app/purchases/purchase-import-links";
@@ -11,16 +10,6 @@ import {
   run,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/ui/primitives/alert-dialog";
 import { Button } from "~/ui/primitives/button";
 
 /** Runs a row command through the operation it names; the server composed the exact body. */
@@ -75,7 +64,11 @@ export function useReportCommands() {
 
 export type ReportCommands = ReturnType<typeof useReportCommands>;
 
-/** A command with a declared confirmation asks first; the rest act on the tap. */
+/**
+ * A row command. Web acts on the tap, as these controls always have (the Run page's Approve,
+ * Reject and Apply fix buttons never asked first); the `confirm` copy is for native, which asks
+ * before anything that writes.
+ */
 export function CommandButton({
   command,
   commands,
@@ -83,43 +76,15 @@ export function CommandButton({
   command: ReportCommand;
   commands: ReportCommands;
 }) {
-  const [asking, setAsking] = useState(false);
   return (
-    <>
-      <Button
-        type="button"
-        size="sm"
-        variant={command.prominent ? "default" : "outline"}
-        disabled={commands.pending}
-        onClick={() =>
-          command.confirm === null
-            ? commands.run(command.request)
-            : setAsking(true)
-        }
-      >
-        {command.label}
-      </Button>
-      {command.confirm === null ? null : (
-        <AlertDialog open={asking} onOpenChange={setAsking}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{command.label}</AlertDialogTitle>
-              <AlertDialogDescription>{command.confirm}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
-                  setAsking(false);
-                  commands.run(command.request);
-                }}
-              >
-                {command.label}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
-    </>
+    <Button
+      type="button"
+      size="sm"
+      variant={command.prominent ? "default" : "outline"}
+      disabled={commands.pending}
+      onClick={() => commands.run(command.request)}
+    >
+      {command.label}
+    </Button>
   );
 }

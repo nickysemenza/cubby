@@ -3,13 +3,7 @@ import type {
   ReportCommand,
 } from "@cubby/schemas/entity-report";
 import { runShortcode } from "@cubby/schemas/identifiers";
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
@@ -88,7 +82,7 @@ describe("EntityReportSlot records", () => {
     ).toHaveAttribute("href", "/images/IMG-4S9Q");
   });
 
-  it("asks before approving and sends the server's exact request only once confirmed", async () => {
+  it("sends the server's exact request when a command is tapped", async () => {
     answer = () => ({
       live: true,
       status: "running",
@@ -122,23 +116,6 @@ describe("EntityReportSlot records", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Approve import proposal" }),
     );
-    // The tap alone must not decide the approval.
-    expect(calls.map((call) => call.operation)).not.toContain("run.control");
-    const dialog = await screen.findByRole("alertdialog");
-    expect(
-      within(dialog).getByText("Approve product_overwrite?"),
-    ).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    expect(calls.map((call) => call.operation)).not.toContain("run.control");
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Approve import proposal" }),
-    );
-    fireEvent.click(
-      within(await screen.findByRole("alertdialog")).getByRole("button", {
-        name: "Approve import proposal",
-      }),
-    );
     await waitFor(() =>
       expect(calls).toContainEqual({
         operation: "run.control",
@@ -150,9 +127,6 @@ describe("EntityReportSlot records", () => {
         },
       }),
     );
-    expect(
-      calls.filter((call) => call.operation === "run.control"),
-    ).toHaveLength(1);
   });
 
   it("reads every run slot on the page from one batched request", async () => {

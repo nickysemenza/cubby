@@ -298,7 +298,7 @@ export function RecordsBlockView({
   // SAFETY: the verb registry is keyed by this entity, so it takes this entity's record.
   const erasedRecord = record as never;
   return (
-    <Stack gap="sm" className="w-full">
+    <Stack as="section" aria-label={block.title} gap="sm" className="w-full">
       {block.title && block.rows.length > 0 ? (
         <Eyebrow>{block.title}</Eyebrow>
       ) : null}

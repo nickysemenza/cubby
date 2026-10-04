@@ -230,8 +230,8 @@ classified under `sectionAction` in `native-coverage.ts`.
 
 **Report commands and batching.** A `records` row may carry `statuses` (toned chips), `lines`,
 a collapsible `detail` and `commands`: each command names an existing operation and its exact
-body (`run-control`, `resolve-finding`, `retry-gmail-search`) plus the `confirm` copy both clients
-show before sending it (approve, reject and apply confirm; dismiss and retry act on the tap).
+body (`run-control`, `resolve-finding`, `retry-gmail-search`) plus `confirm` copy: native asks before sending
+(approve, reject and apply carry one; dismiss and retry act on the tap), web acts on the tap as it always has.
 A report may say the record is `live` (clients poll; there is no realtime transport), carry its
 `status` (a client showing another refreshes its record) and a `nextCursor` for paging. A page that
 shows several slots of one record (a Run) polls one `entityReport.getMany`, so the server loads the
