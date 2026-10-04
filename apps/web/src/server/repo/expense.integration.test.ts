@@ -786,6 +786,7 @@ describe("expense repository — expenseAnalytics", () => {
       count: 6,
       actualCount: 5,
       plannedCount: 1, // p2
+      unpricedCount: 0,
     });
     expect(result.adjustments).toEqual({
       actual: 23,

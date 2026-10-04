@@ -1,4 +1,5 @@
-import type { HouseholdContributionLedgerOut } from "@cubby/schemas/household-contribution";
+import { type HouseholdContributionLedgerOut } from "@cubby/schemas/household-contribution";
+import { contributionGapLabels } from "@cubby/schemas/household-contribution-labels";
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
@@ -10,7 +11,6 @@ import { useId, useMemo, useState } from "react";
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import {
   ContributionGapTargets,
-  contributionGapLabels,
   MoneyCell,
 } from "~/features/finance/household-contribution-format";
 import { householdContribution } from "~/integrations/tanstack-query/generated/catalog.gen";

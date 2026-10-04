@@ -22,6 +22,7 @@ export {
 } from "./entity-integrity.contract";
 export { entityListContract } from "./entity-list.contract";
 export { entityMediaContract } from "./entity-media.contract";
+export { entityReportContract } from "./entity-report.contract";
 export { entityMutationContract } from "./entity-mutation.contract";
 export { entityTimelineContract } from "./entity-timeline.contract";
 export { expenseContract } from "./expense.contract";

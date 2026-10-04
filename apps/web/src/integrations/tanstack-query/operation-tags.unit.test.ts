@@ -2,6 +2,8 @@ import { allEntities } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
 import { z, type JSONType } from "zod";
 
+import { entityReportContract } from "~/contracts/entity-report.contract";
+
 import {
   EMPTY_INVALIDATION_TAG_SET,
   entityRipple,
@@ -142,6 +144,33 @@ describe("operation cache tags", () => {
       ["calendar", "feed"],
       ["calendar", "credential"],
     ]);
+  });
+
+  it("refreshes slot reports when any record they are computed from changes", () => {
+    // Purchase default-project and allocation edits, product price edits, and
+    // ledger party edits all move report figures without touching a project.
+    // SAFETY: the contract declares its tags as plain string tuples.
+    const reportTags = (entityReportContract.ops.get.cache?.tags ??
+      []) as readonly (readonly string[])[];
+    for (const entity of [
+      "project",
+      "task",
+      "expense",
+      "purchase",
+      "product",
+      "ledgerParty",
+      "location",
+      "inventory",
+      "meal",
+      "recipe",
+    ]) {
+      const invalidated = entityRipple(entity).some((tag) =>
+        reportTags.some((candidate) => isPrefixOf(tag, candidate)),
+      );
+      expect(invalidated, `${entity} must invalidate entityReport.get`).toBe(
+        true,
+      );
+    }
   });
 
   it("loads the whole catalog", () => {

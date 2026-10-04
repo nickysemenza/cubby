@@ -1,20 +1,16 @@
-import type {
-  ProjectListItemOut,
-  ProjectOut,
-  TaskOut,
-} from "@cubby/schemas/project";
+import type { ProjectListItemOut, ProjectOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
+import type { ProjectScheduleRow } from "~/lib/project-schedule";
+
 import {
-  buildDetailScheduleRows,
   buildPortfolioScheduleRows,
-  projectScheduleWindow,
+  visibleScheduleRows,
 } from "./project-schedule-model";
 
 const projectId = (seed: string) => testShortcode("project", seed);
-const taskId = (seed: string) => testShortcode("task", seed);
 
 function project(
   seed: string,
@@ -33,26 +29,6 @@ function project(
       startSource: start ? "explicit" : "none",
       endSource: end ? "explicit" : "none",
     },
-    blockedByIds: [],
-    blockingIds: [],
-  });
-}
-
-function task(
-  seed: string,
-  owner: string | null,
-  parent?: string,
-  due?: string,
-  dueEnd?: string,
-): TaskOut {
-  return fromPartial<TaskOut>({
-    id: taskId(seed),
-    name: seed,
-    projectId: owner ? projectId(owner) : null,
-    parentTaskId: parent ? taskId(parent) : null,
-    status: "not_started",
-    dueDate: due ?? null,
-    dueEndDate: dueEnd ?? null,
     blockedByIds: [],
     blockingIds: [],
   });
@@ -84,60 +60,20 @@ describe("project schedule rows", () => {
     ).toEqual([parent.id]);
   });
 
-  it("includes every nested task, including undated inherited subtasks", () => {
-    const root = project("root");
-    const phase = project("phase", "root", "2026-07-02", "2026-07-08");
-    const work = task("work", "phase", undefined, "2026-07-04");
-    const subtask = task("subtask", null, "work");
-    const rows = buildDetailScheduleRows(
-      root,
-      [phase],
-      [work, subtask],
-      new Set(),
-    );
-    expect(rows.map((row) => [row.name, row.depth])).toEqual([
-      ["root", 0],
-      ["phase", 1],
-      ["work", 2],
-      ["subtask", 3],
-    ]);
-    expect(rows.at(-1)?.noDateLabel).toBe("No due date");
+  it("hides a collapsed subtree of the server's rows and nothing else", () => {
+    const row = (id: string, depth: number, expandable: boolean) =>
+      fromPartial<ProjectScheduleRow>({ id, name: id, depth, expandable });
+    const rows = [
+      row("root", 0, true),
+      row("phase", 1, true),
+      row("work", 2, false),
+      row("sibling", 1, false),
+    ];
     expect(
-      projectScheduleWindow(rows, new Date("2026-01-01T00:00:00Z")),
-    ).toEqual({
-      startDate: "2026-06-18",
-      endDate: "2026-08-22",
-    });
+      visibleScheduleRows(rows, new Set(["phase"])).map((entry) => entry.id),
+    ).toEqual(["root", "phase", "sibling"]);
     expect(
-      buildDetailScheduleRows(
-        root,
-        [phase],
-        [work, subtask],
-        new Set([phase.id]),
-      ).map((row) => row.name),
-    ).toEqual(["root", "phase"]);
-  });
-
-  it("keeps an end-only task on the timeline as a due-end milestone", () => {
-    const root = project("root");
-    const endOnly = task(
-      "end-only",
-      "root",
-      undefined,
-      undefined,
-      "2026-09-12",
-    );
-    const row = buildDetailScheduleRows(root, [], [endOnly], new Set())[1];
-    expect(row?.noDateLabel).toBeUndefined();
-    expect(row?.segments).toEqual([
-      {
-        id: `${endOnly.id}:due`,
-        label: "end-only due end",
-        startDate: "2026-09-12",
-        variant: "milestone",
-        color: "var(--domain-plan)",
-      },
-    ]);
-    expect(row?.meta).toContain("Due end only");
+      visibleScheduleRows(rows, new Set()).map((entry) => entry.id),
+    ).toEqual(["root", "phase", "work", "sibling"]);
   });
 });

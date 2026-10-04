@@ -17,6 +17,12 @@ existing block. Extend the generic path when it almost fits. See
   `apps/web/src/entity/editing/`.
 - Saved views: `presentation.list.views` on the declaration.
 - Detail pages: generic detail with declared slots (`app/*/slots.tsx`).
+- Slot reports: a slot that is figures, series, a table or dated rows reads
+  `entityReport.get` (`server/repo/entity-report/`; block kinds `stats`,
+  `chart`, `table`, `schedule`, `note` in `packages/schemas/src/entity-report.ts`).
+  Web draws them with `ReportBlocks` (`entity/entity-detail/report-slot.tsx`),
+  native with `ReportDetailSlot`/`ReportPresentation`; add a slot id and a
+  builder, never client-side derivation.
 - Swift: generated OpenAPI client, `entity-manifest.json`, and the generic list
   and detail views; no hand-written mapping layer.
 

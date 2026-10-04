@@ -235,21 +235,25 @@ export const nativeCoverage = {
       "ingredient.recipe-usages",
       "cookbook.toc",
       "cookbook.import-progress",
+      // One generic report view draws these from the server-composed
+      // `entityReport.get` blocks (stats, chart, table, schedule, note).
+      "project.budget",
+      "project.contribution",
+      "project.analytics",
+      "project.schedule",
+      "location.contents-valuation",
+      // Read-only recipes with scale and cost; adding food, rescaling, removing and the portion
+      // preparation workflow stay on web.
+      "meal.composition",
     ]),
     ...unsupported(
       [
         "expense.settlement",
         "image.associations",
         "location.ai-description",
-        "location.contents-valuation",
-        "meal.composition",
         "product.cookbooks",
         "product.labels",
         "product.recipe-appearances",
-        "project.analytics",
-        "project.budget",
-        "project.contribution",
-        "project.schedule",
         "purchase.financial-settlement",
         "purchase.project-allocation",
         "purchase.reconciliation",
@@ -571,7 +575,7 @@ export const NATIVE_UNSUPPORTED_CEILING = {
   list: 0,
   detail: 0,
   heroAction: 0,
-  detailSlot: 33,
+  detailSlot: 27,
   listSlot: 0,
   structuredField: 8,
 } as const satisfies Record<NativeCoverageKind, number>;

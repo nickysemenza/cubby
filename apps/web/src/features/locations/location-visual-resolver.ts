@@ -1,10 +1,5 @@
 import { type ImageOut, isDisplayableImageFile } from "@cubby/schemas/image";
-import {
-  type InfLocation,
-  type LocationType,
-  locationCoverImage,
-} from "@cubby/schemas/location";
-import pluralize from "pluralize";
+import { type InfLocation, locationCoverImage } from "@cubby/schemas/location";
 
 const MAX_CHILD_PREVIEWS = 4;
 
@@ -74,21 +69,4 @@ export function resolveLocationVisual(
       (location.children?.length ?? 0) - childVisuals.length,
     ),
   };
-}
-
-/** A homogeneous direct-child set earns a useful physical label. */
-export function locationChildGroupLabel(
-  children: ReadonlyArray<Pick<InfLocation, "type">>,
-): string {
-  if (children.length === 0) return "Locations";
-  const types = new Set(
-    children
-      .map((child) => child.type)
-      .filter((type): type is LocationType => type != null),
-  );
-  if (types.size !== 1 || children.some((child) => child.type == null)) {
-    return "Compartments";
-  }
-  const [type] = types;
-  return pluralize(type ?? "compartment", children.length);
 }

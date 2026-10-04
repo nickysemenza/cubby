@@ -1,7 +1,6 @@
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import type { EntityRef } from "@cubby/schemas/entity";
 import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
-import type { ProjectOut, TaskOut } from "@cubby/schemas/project";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
@@ -11,7 +10,7 @@ import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entityDetailParams, entities } from "~/entity/entities";
-import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
+import { compileEntityListInput } from "~/entity/entity-list";
 import type { ListSlotProps } from "~/entity/entity-list/list-slot-types";
 import {
   entityDisplayImageKey,
@@ -24,7 +23,7 @@ import {
   type ScheduleRow,
 } from "~/features/schedule/schedule-grid";
 import {
-  task,
+  entityReport,
   project,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -33,17 +32,14 @@ import { useLoadAllPages } from "~/ui/hooks/useAllEntityRecords";
 import { Button } from "~/ui/primitives/button";
 
 import {
-  projectScheduleSubtreeQueryParams,
-  projectSubtreeTasksFilters,
-} from "./project-query-params";
-import {
-  buildDetailScheduleRows,
   buildPortfolioScheduleRows,
   type ProjectScheduleEntry,
   projectScheduleWindow,
+  scheduleGridRows,
+  visibleScheduleRows,
 } from "./project-schedule-model";
 
-const EMPTY_TASKS: TaskOut[] = [];
+const NO_SEEDED_IMAGES: EntityDisplayImageMap = {};
 
 function seedProjectImages(
   projects: readonly { id: string; displayImages: DisplayImageSummary[] }[],
@@ -224,7 +220,7 @@ function ProjectScheduleSurface({
         />
       )}
       <ScheduleGrid
-        rows={rows}
+        rows={scheduleGridRows(rows)}
         window={window}
         ariaLabel={ariaLabel}
         renderLabel={renderLabel}
@@ -324,37 +320,25 @@ export function ProjectScheduleListSlot({ search }: ListSlotProps) {
 
 export function ProjectScheduleDetail({
   projectId,
-  record,
+  name,
 }: {
   projectId: string;
-  record: ProjectOut;
+  name: string;
 }) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const projectsQuery = useInfiniteQuery(
-    entityListFor("project").infiniteQueryOptions(
-      projectScheduleSubtreeQueryParams(projectId),
-    ),
+  const query = useQuery(
+    entityReport.get.queryOptions({
+      slot: "project.schedule",
+      id: projectId,
+    }),
   );
-  useLoadAllPages(projectsQuery);
-  const tasksQuery = useQuery(
-    task.chartData.queryOptions(projectSubtreeTasksFilters(projectId)),
-  );
-  const descendants = useMemo(
-    () => flattenUniquePageItems(projectsQuery.data?.pages),
-    [projectsQuery.data],
-  );
-  const tasks = tasksQuery.data ?? EMPTY_TASKS;
-  const allRows = useMemo(
-    () => buildDetailScheduleRows(record, descendants, tasks, new Set()),
-    [record, descendants, tasks],
-  );
+  const allRows = useMemo<ProjectScheduleEntry[]>(() => {
+    const block = query.data?.blocks.find((entry) => entry.kind === "schedule");
+    return block?.kind === "schedule" ? block.rows : [];
+  }, [query.data]);
   const rows = useMemo(
-    () => buildDetailScheduleRows(record, descendants, tasks, collapsed),
-    [record, descendants, tasks, collapsed],
-  );
-  const seededImages = useMemo(
-    () => seedProjectImages(descendants),
-    [descendants],
+    () => visibleScheduleRows(allRows, collapsed),
+    [allRows, collapsed],
   );
   const toggle = useCallback((id: string) => {
     setCollapsed((current) => {
@@ -365,23 +349,17 @@ export function ProjectScheduleDetail({
     });
   }, []);
 
-  if (projectsQuery.isError || tasksQuery.isError) {
+  if (query.isError) {
     return (
       <ScheduleError
-        error={projectsQuery.error ?? tasksQuery.error}
+        error={query.error}
         retry={() => {
-          void projectsQuery.refetch();
-          void tasksQuery.refetch();
+          void query.refetch();
         }}
       />
     );
   }
-  if (
-    projectsQuery.isPending ||
-    projectsQuery.hasNextPage ||
-    projectsQuery.isFetchingNextPage ||
-    tasksQuery.isPending
-  ) {
+  if (query.isPending) {
     return (
       <output className="block p-4 text-sm text-muted-foreground">
         Loading the full project schedule…
@@ -393,8 +371,8 @@ export function ProjectScheduleDetail({
       allRows={allRows}
       rows={rows}
       onToggle={toggle}
-      ariaLabel={`${record.name} schedule`}
-      seededImages={seededImages}
+      ariaLabel={`${name} schedule`}
+      seededImages={NO_SEEDED_IMAGES}
     />
   );
 }

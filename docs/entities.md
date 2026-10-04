@@ -213,6 +213,15 @@ signal, e.g. a Location only reads as a growing area once it has Plantings.
 `collapseWhenEmpty: true` instead keeps the header, `0` count and create
 button and folds only the body away.
 
+**Report slots.** A `slot` section whose content is figures, a chart series, a
+table or dated schedule rows has no per-platform code: the server composes it
+once (`entityReport.get`, builders in `server/repo/entity-report/`, block kinds
+in `packages/schemas/src/entity-report.ts`) and web (`ReportBlocks`) and native
+(`ReportDetailSlot`, Swift Charts) only draw it. Add the slot id to
+`reportSlots`, a builder to `BUILDERS`, and register the slot on both clients;
+money in a report is `SUM(Expense.cost)` or the persisted valuation, never
+recomputed on a client.
+
 **Native coverage.** Which of these presentation ids the Apple app does not draw
 is declared once, in `packages/schemas/src/native-coverage.ts`: every control,
 list, and detail renderer id, hero action, and (entity-qualified) detail and

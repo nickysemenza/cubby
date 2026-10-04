@@ -220,7 +220,7 @@ export const projectRollup = z.object({
   ),
   // The `spent` figure above blends three economically distinct quantities;
   // these split it so callers can show a true money-out "Actual" that matches
-  // the detail hero / BudgetStrip decomposition instead of the net blend.
+  // the detail hero / budget decomposition instead of the net blend.
   actualSpent: money.describe(
     "SUM(cost) where cost > 0 and not future — money already spent",
   ),
@@ -636,6 +636,8 @@ export const expenseAnalyticsSummary = z.object({
   ...expenseAggregateFields,
   actualCount: z.number().int(),
   plannedCount: z.number().int(),
+  /** Rows with an unknown cost: counted, never summed as $0. */
+  unpricedCount: z.number().int(),
 });
 export type ExpenseAnalyticsSummary = z.infer<typeof expenseAnalyticsSummary>;
 
@@ -1708,7 +1710,7 @@ export const projectDashboardSummaryOut = z.object({
     committedSpend: money,
     /**
      * Sum of each scoped project's own SUBTREE `costEstimate` (portfolio
-     * equivalent of `BudgetStrip`'s "Estimate" figure) — over ONLY the
+     * equivalent of the project budget's "Estimate" figure) — over ONLY the
      * projects that have one. `costEstimate` is nullable end-to-end (an
      * unestimated subtree is UNKNOWN, not zero — see `helpers.ts`'s
      * `EMPTY_PROJECT_SUBTREE_ROLLUP` doc comment), so summing a missing

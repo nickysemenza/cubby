@@ -1,0 +1,131 @@
+import { z } from "zod";
+
+/**
+ * The generic read a detail slot draws on every client. The server composes
+ * each figure, series and schedule row once (money only from
+ * SUM(Expense.cost) or the persisted valuation); web and native render the
+ * block kinds below and derive nothing. A block kind earns its place by
+ * repeating across slots: `stats` (labelled figures), `chart` (labelled
+ * values, bar/stack/line), `table`, `schedule` (dated spans) and `note`.
+ */
+export const reportSlots = [
+  "project.budget",
+  "project.contribution",
+  "project.analytics",
+  "project.schedule",
+  "location.contents-valuation",
+  "meal.composition",
+] as const;
+export const reportSlot = z.enum(reportSlots);
+export type ReportSlot = z.infer<typeof reportSlot>;
+
+export const entityReportInput = z.object({
+  slot: reportSlot,
+  /** The record's public shortcode; its prefix must match the slot's entity. */
+  id: z.string().min(1),
+});
+export type EntityReportInput = z.infer<typeof entityReportInput>;
+
+const reportTone = z.enum(["positive", "warning", "destructive", "muted"]);
+const reportFormat = z.enum(["money", "count"]);
+
+/** A record a row or bar links to. */
+const reportRef = z.object({
+  entity: z.enum(["project", "recipe"]),
+  id: z.string(),
+});
+
+const reportStats = z.object({
+  kind: z.literal("stats"),
+  title: z.string().optional(),
+  figures: z.array(
+    z.object({
+      label: z.string(),
+      /** Null renders as an em dash (no estimate to measure against). */
+      value: z.number().nullable(),
+      format: reportFormat,
+      tone: reportTone.optional(),
+    }),
+  ),
+});
+
+const reportChart = z.object({
+  kind: z.literal("chart"),
+  title: z.string().optional(),
+  /** `stack` draws the series as one segmented bar against `marker`. */
+  mark: z.enum(["bar", "stack", "line"]),
+  format: reportFormat,
+  series: z.array(
+    z.object({
+      label: z.string(),
+      value: z.number(),
+      tone: reportTone.optional(),
+      ref: reportRef.optional(),
+    }),
+  ),
+  /** The reference value a `stack` is measured against (the estimate). */
+  marker: z.number().optional(),
+  caption: z.string().optional(),
+});
+
+const reportTable = z.object({
+  kind: z.literal("table"),
+  title: z.string().optional(),
+  columns: z.array(z.string()),
+  /** Cells are display text composed by the server, one per column. */
+  rows: z.array(
+    z.object({
+      id: z.string(),
+      cells: z.array(z.string()),
+      ref: reportRef.optional(),
+    }),
+  ),
+  empty: z.string().optional(),
+  truncated: z.boolean().optional(),
+});
+
+const reportSegment = z.object({
+  id: z.string(),
+  label: z.string(),
+  startDate: z.string(),
+  endDate: z.string().optional(),
+  variant: z.enum(["range", "milestone"]),
+});
+
+const reportScheduleRow = z.object({
+  id: z.string(),
+  entity: z.enum(["project", "task"]),
+  name: z.string(),
+  /** Nesting depth in the tree; rows arrive in display (pre-)order. */
+  depth: z.number().int().nonnegative(),
+  expandable: z.boolean(),
+  meta: z.string(),
+  metaShort: z.string(),
+  segments: z.array(reportSegment),
+  noDateLabel: z.string().optional(),
+  blockedByIds: z.array(z.string()),
+  blockingIds: z.array(z.string()),
+});
+export type ReportScheduleRow = z.infer<typeof reportScheduleRow>;
+
+const reportSchedule = z.object({
+  kind: z.literal("schedule"),
+  rows: z.array(reportScheduleRow),
+});
+
+const reportNote = z.object({
+  kind: z.literal("note"),
+  text: z.string(),
+});
+
+export const reportBlock = z.discriminatedUnion("kind", [
+  reportStats,
+  reportChart,
+  reportTable,
+  reportSchedule,
+  reportNote,
+]);
+export type ReportBlock = z.infer<typeof reportBlock>;
+
+export const entityReportOut = z.object({ blocks: z.array(reportBlock) });
+export type EntityReportOut = z.infer<typeof entityReportOut>;
