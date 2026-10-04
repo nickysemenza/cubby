@@ -11,7 +11,7 @@ import {
 
 import { purchaseContract } from "~/contracts/purchase.contract";
 import { suggestSettlementMatch } from "~/server/ai/settlement-candidate-rank";
-import { executeEntityAs } from "~/server/entity-kernel";
+import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { implementOperationDomain } from "~/server/operation-domain.server";
@@ -22,10 +22,22 @@ import {
   reclassifyPurchaseDocument,
   splitExpense,
 } from "~/server/repo/purchase";
+import {
+  checkLinkExpensesFor,
+  checkSplitFor,
+  explicitlyAttachedProductIds,
+  listLinkExpenseCandidates,
+  loadSplitOriginal,
+} from "~/server/repo/purchase-finance-actions";
+import {
+  composeLinkProductCandidates,
+  LINK_PRODUCT_LIMIT,
+} from "~/server/repo/purchase-link-draft";
 import { listPurchaseProducts } from "~/server/repo/purchase-products";
 import { checkSettlementAllocationDraft } from "~/server/repo/purchase-settlement-allocation";
 import { listPurchaseSettlementCandidates } from "~/server/repo/purchase-settlement-candidates";
 import { composeSettlementReview } from "~/server/repo/purchase-settlement-review";
+import { startSplitDraft } from "~/server/repo/purchase-split-draft";
 import {
   resolveAllPresent,
   resolveOrThrow,
@@ -200,6 +212,50 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
   products: (context, input) => purchaseProductsWorkflow(context, input),
   link: (context, input) => linkExpensesToPurchaseWorkflow(context, input),
   split: (context, input) => splitExpenseWorkflow(context, input),
+  splitStart: async (context, input) =>
+    startSplitDraft(await loadSplitOriginal(context.db, input.expenseId)),
+  checkSplit: (context, input) => checkSplitFor(context.db, input),
+  linkExpenseCandidates: (context, input) =>
+    listLinkExpenseCandidates(context.db, input),
+  checkLinkExpenses: (context, input) =>
+    checkLinkExpensesFor(context.db, input),
+  linkProductCandidates: async (context, input) => {
+    const attached = await explicitlyAttachedProductIds(
+      context.db,
+      input.purchaseId,
+    );
+    // Loaded on demand: the product search pulls in the semantic fallback.
+    const { searchProducts } =
+      await import("~/server/operations/product.server");
+    const found = await searchProducts(context, {
+      filters: { nameFilter: input.search?.trim() || undefined },
+      pagination: {
+        pageIndex: 0,
+        // Room for what is hidden, so attached products never shorten the page.
+        pageSize: LINK_PRODUCT_LIMIT + attached.size,
+      },
+      sort: [{ orderBy: "name", direction: "asc" }],
+    });
+    return composeLinkProductCandidates(
+      found.items,
+      attached,
+      LINK_PRODUCT_LIMIT,
+    );
+  },
+  attachProducts: async (context, input) => {
+    // The kernel's own relation write, so the link is audited and settled exactly as the
+    // generic attach is.
+    const result = await executeEntity(context, {
+      action: "attach",
+      entity: "purchase",
+      relation: "products",
+      id: input.purchaseId,
+      items: input.productIds.map((id) => ({ id })),
+    });
+    if (!("relation" in result))
+      throw new Error("Entity kernel returned the wrong attach result");
+    return result.result;
+  },
   splitWithDelta: async (context, input) => {
     // Read before the split runs — the original row is soft-deleted by the
     // time `purchase.split` returns, so its cost has to be captured first.

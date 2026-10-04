@@ -263,9 +263,8 @@ See also the image operational passes at the end of this file.
   ceiling per kind. Every control, list cell, detail renderer and hero action
   is native. Remaining gaps: two Run detail slots (the live and stopped
   agent conversation, which stream over the coordinator's own protocol; see the next
-  item), three finance verbs (split an expense, attach expenses, attach products), eight read-only
-  structured fields, and the web-only parts inside drawn recipe/cookbook/
-  ingredient and meal-composition slots. Add editor focus order or
+  item) and the web-only parts inside drawn recipe/cookbook/ingredient and
+  meal-composition slots. Add editor focus order or
   comprehensive sheet lifecycle only on demonstrated friction. Owners:
   `apps/apple/App/Shared`, generated `EntityCatalog`.
 
@@ -282,20 +281,17 @@ See also the image operational passes at the end of this file.
   steer a running import from the phone instead of waiting for it to pause on
   web, then lower `NATIVE_UNSUPPORTED_CEILING.detailSlot` to zero.
 
-- ⏳ **Native structured-value editor follow-ups.** Native edits `unitMappings`,
-  `labelNutrition`, `externalIds`, `sourceAliases`, `sourceRefs`, recipe
-  `sections` (read-to-input via the `readFrom` declaration) and `productTags`
-  (Tags vs Collections via `@cubby/shared/collection-tag`). Still read-only
-  natively: the other `structured-field`s (recipe `meta`/`yield`, meal
-  `recipes`, account `identity`/`cardNumbers`, vendor `agentHints`,
-  `sourceClaims`); promote one only after a vector proves its round trip
-  (`sourceClaims` reads `sourceKey` where its input wants `providerId`, so it
-  needs a server-side read shape first). Also: validate on a device, show the
-  ingredient or recipe name (not its shortcode) on an existing section line,
-  title array rows from their content, the redundant-tag highlight web draws on
-  a Tags chip, and retire the web
+- ⏳ **Structured-value editor follow-ups.** Web and native edit every
+  `structured-field` (recipe `sections`/`meta`/`yield`, meal `recipes` on
+  create, account `identity`/`cardNumbers`, vendor `agentHints`, expense and
+  transfer `sourceClaims`) with one generic editor over the generated
+  `valueSchema`, each with a vector from a real server read. Left: validate on
+  a device, show the ingredient or recipe name (not its shortcode) on an
+  existing section line, title array rows from their content, the
+  redundant-tag highlight web draws on a Tags chip, and retire the web
   `ProductUnitMappingsField`/`ProductExternalIdsField`/`SourceAliasesField`/
-  `SourceRefsField` once a generic web renderer reads the same `valueSchema`.
+  `SourceRefsField` and the recipe form's meta/yield inputs in favour of the
+  generic `StructuredValueField` (it already reads the same `valueSchema`).
 
 - ⏳ **Retire native-owned web fieldwork and PWA installation.** After native
   parity ships and passes real-device validation, remove web barcode/QR

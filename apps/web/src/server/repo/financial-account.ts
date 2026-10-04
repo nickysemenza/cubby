@@ -499,8 +499,19 @@ export async function updateFinancialAccount(
       data.providerVendorId === undefined
         ? undefined
         : await resolveProviderVendorForAccount(tx, data.providerVendorId);
+    // The identity kind is the discriminator statement routing depends on, so it is chosen
+    // at creation; the other identity fields and the card numbers stay editable.
+    const beforeIdentity = financialAccountIdentity.parse(before.identity);
+    if (
+      data.identity !== undefined &&
+      data.identity.kind !== beforeIdentity.kind
+    )
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `An account's identity kind is fixed at creation (this account is ${beforeIdentity.kind}); create a new account for a ${data.identity.kind}.`,
+      );
     assertProviderMatchesKind(
-      data.identity ?? financialAccountIdentity.parse(before.identity),
+      data.identity ?? beforeIdentity,
       providerVendorId === undefined
         ? before.providerVendorId
         : providerVendorId,

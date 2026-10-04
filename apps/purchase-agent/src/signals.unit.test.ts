@@ -4,7 +4,7 @@ import { parseSignal, renderSignal } from "./signals";
 
 describe("agent signals", () => {
   // The workerd scripted model and its await markers match these exact bytes;
-  // they are the format the coordinator was trained against under Flue.
+  // the coordinator's workflow prompts are written against them too.
   it("renders the finish nudge in the established wire format", () => {
     expect(
       renderSignal({ type: "run_not_finished", body: "Keep going." }),

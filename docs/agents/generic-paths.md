@@ -29,7 +29,10 @@ existing block. Extend the generic path when it almost fits. See
   `nativeCollectionActionPlans` through `HeroActionRunner`. Rows are worded in
   `server/repo/collection-items.ts`. The same block carries the finance slots: rows may be
   checkable (`key`, `disabledReason`), with a `footer` and finance `verbs`
-  (`SECTION_ACTION_IDS`, each with the server's `disabledReason`).
+  (`SECTION_ACTION_IDS`, each with the server's `disabledReason`). A verb that edits
+  a draft (split, attach expenses, attach products) asks the server before it writes:
+  `purchase.checkSplit` / `purchase.checkLinkExpenses` return the body to send or the
+  reason not to (`server/repo/purchase-split-draft.ts`, `purchase-link-draft.ts`).
 - Swift: generated OpenAPI client, `entity-manifest.json`, and the generic list
   and detail views; no hand-written mapping layer.
 

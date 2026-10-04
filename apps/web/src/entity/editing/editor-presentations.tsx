@@ -1,6 +1,5 @@
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { EXPENSE_DISPOSITION_EDITOR } from "@cubby/schemas/expense-fields";
-import { financialAccountIdentity } from "@cubby/schemas/financial-account";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -15,10 +14,6 @@ import {
 import { type FieldValues, type UseFormReturn } from "react-hook-form";
 import { z } from "zod";
 
-import {
-  SelectField as FinanceSelectField,
-  TextField,
-} from "~/app/finance/financial-form-fields";
 import {
   FinancialTransactionFormFields,
   type FinancialTransactionFormValues,
@@ -43,6 +38,7 @@ import type { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 import {
   EntityIntentFields,
   EntityPrimitiveFields,
+  type PrimitiveFieldModel,
   renderIntentField,
   requiredFieldModel,
 } from "./entity-primitive-fields";
@@ -258,101 +254,53 @@ function ProductFields({ record }: EntityEditorFieldsProps) {
   );
 }
 
-const financialAccountSourceAliasesField = requiredFieldModel(
-  "financialAccount",
-  "sourceAliases",
-);
-const financialAccountProviderVendorField = requiredFieldModel(
-  "financialAccount",
-  "providerVendorId",
-);
+const financialAccountFieldModels = {
+  identity: requiredFieldModel("financialAccount", "identity"),
+  cardNumbers: requiredFieldModel("financialAccount", "cardNumbers"),
+  providerVendorId: requiredFieldModel("financialAccount", "providerVendorId"),
+  sourceAliases: requiredFieldModel("financialAccount", "sourceAliases"),
+};
 
+/**
+ * The account's identity (an explicit kind, no default) and dated card numbers are the generic
+ * structured-value editor over their declared schemas; only the provider vendor, which a gift card
+ * alone carries, and the evidence aliases keep their own fields.
+ */
 function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
-  const kind = form.watch("kind");
-  const creating = !record;
+  const mode = record ? "edit" : "create";
   const idPrefix = useId();
-  const storedValue = creating
-    ? kind === "stored_value"
-    : financialAccountIdentity.safeParse(record.identity).data?.kind ===
-      "stored_value";
+  const kind = z
+    .string()
+    .nullish()
+    .catch(null)
+    .parse(form.watch("identity.kind"));
+  const render = (field: PrimitiveFieldModel) =>
+    renderIntentField({
+      entity: "financialAccount",
+      field,
+      form,
+      idPrefix,
+      mode,
+      record,
+      scopedValueRecord: {},
+    });
   return (
     <>
       <EntityPrimitiveFields
         entity="financialAccount"
-        mode={creating ? "create" : "edit"}
+        mode={mode}
         section="main"
         options={{
           name: { focusOnMount: true },
           notes: { placeholder: "Optional evidence" },
         }}
       />
-      {creating ? (
-        <>
-          <FinanceSelectField
-            form={form}
-            name="kind"
-            label="Identity kind"
-            values={[
-              "credit_card",
-              "bank_account",
-              "stored_value",
-              "cash",
-              "other",
-            ]}
-          />
-          {kind === "credit_card" ? (
-            <>
-              <TextField form={form} name="issuer" label="Issuer" />
-              <FinanceSelectField
-                form={form}
-                name="network"
-                label="Network"
-                values={["visa", "mastercard", "amex", "discover", "other"]}
-              />
-            </>
-          ) : null}
-          {kind === "bank_account" ? (
-            <>
-              <TextField form={form} name="institution" label="Institution" />
-              <FinanceSelectField
-                form={form}
-                name="accountType"
-                label="Account type"
-                values={["checking", "savings", "money_market", "other"]}
-              />
-            </>
-          ) : null}
-          {kind === "stored_value" ? (
-            <TextField form={form} name="provider" label="Provider name" />
-          ) : null}
-          {kind === "other" ? (
-            <TextField form={form} name="institution" label="Institution" />
-          ) : null}
-          {kind !== "cash" ? (
-            <TextField form={form} name="last4" label="Last four" />
-          ) : null}
-        </>
-      ) : null}
-      {storedValue
-        ? renderIntentField({
-            entity: "financialAccount",
-            field: financialAccountProviderVendorField,
-            form,
-            idPrefix,
-            mode: creating ? "create" : "edit",
-            record,
-            scopedValueRecord: {},
-          })
+      {render(financialAccountFieldModels.identity)}
+      {render(financialAccountFieldModels.cardNumbers)}
+      {kind === "stored_value"
+        ? render(financialAccountFieldModels.providerVendorId)
         : null}
-      {renderIntentField({
-        entity: "financialAccount",
-        field: financialAccountSourceAliasesField,
-        form,
-        idPrefix,
-        mode: creating ? "create" : "edit",
-        record,
-        scopedValueRecord: {},
-      })}
+      {render(financialAccountFieldModels.sourceAliases)}
     </>
   );
 }

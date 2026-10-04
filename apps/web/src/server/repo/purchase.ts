@@ -30,6 +30,7 @@ import {
   purchaseOut,
   RECONCILIATION_TOLERANCE,
   reconcilePurchase,
+  splitExpenseDelta,
 } from "@cubby/schemas/purchase";
 import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
@@ -1391,13 +1392,14 @@ export const splitExpense = async (
         );
       }
 
+      // The cents comparison the split form's check (`checkSplitDraft`) makes, from the one
+      // shared computation, so a split the form accepts is never refused here.
       if (
         original.cost !== null &&
-        (parts.some((part) => part.cost === null) ||
-          parts.reduce(
-            (sum, part) => sum + Math.round((part.cost ?? 0) * 100),
-            0,
-          ) !== Math.round(original.cost * 100))
+        splitExpenseDelta(
+          original.cost,
+          parts.map((part) => part.cost),
+        ).delta !== 0
       ) {
         throw createAppError(
           "CONSTRAINT_VIOLATION",

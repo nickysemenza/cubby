@@ -490,7 +490,16 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["date", "name", "mealType", "mealKind", "pendingImageIds"],
+        // `recipes` is create-only (an existing meal's recipes change through the composition
+        // workflow), so it joins the create-only `capture` intent, not `full`.
+        capture: [
+          "date",
+          "name",
+          "mealType",
+          "mealKind",
+          "recipes",
+          "pendingImageIds",
+        ],
         full: [
           "date",
           "name",

@@ -435,6 +435,151 @@ export const splitExpenseDelta = (
   return { originalCost, partsSum, delta: deltaCents / 100 };
 };
 
+/**
+ * The words a split and its checks share, so web, native and the write path never describe the
+ * same refusal differently.
+ */
+export const SPLIT_NEEDS_PURCHASE_REASON =
+  "Record this expense's vendor first — a split files its parts under the same purchase.";
+
+/**
+ * One part as typed: every field a person edits stays text or a plain choice, so a half-typed
+ * amount is representable. `projectId` is blank for none; `keepProduct` hands the original's
+ * product link to this part (at most one part).
+ */
+export const splitPartDraft = z.object({
+  name: z.string(),
+  cost: z.string(),
+  costType: costTypeSchema,
+  trade: tradeSchema.nullable(),
+  projectId: z.string(),
+  keepProduct: z.boolean(),
+  productQuantity: z.string(),
+});
+export type SplitPartDraft = z.infer<typeof splitPartDraft>;
+
+export const purchaseSplitStartInput = z.object({
+  expenseId: expenseShortcode,
+});
+export const purchaseSplitStartOut = z.object({
+  title: z.string(),
+  /** What a split does, worded once: the parts replace the expense. */
+  description: z.string(),
+  /** The sentence an explicit confirmation shows before the write. */
+  confirm: z.string(),
+  originalCost: z.number().nullable(),
+  /** The linked product a part can inherit; null when the expense has none. */
+  productName: z.string().nullable(),
+  /** The note under the parts when a product can be handed to one part. */
+  productNote: z.string().nullable(),
+  maxParts: z.number().int(),
+  /** The rows to start from: the whole cost on the first part, the second empty. */
+  parts: z.array(splitPartDraft),
+});
+
+export const splitAttributionPolicy = z.enum(["inherit", "clear"]);
+
+export const purchaseSplitCheckInput = z.object({
+  expenseId: expenseShortcode,
+  attributionPolicy: splitAttributionPolicy.optional(),
+  parts: z.array(splitPartDraft).max(MAX_SPLIT_EXPENSE_PARTS),
+});
+export const purchaseSplitCheckOut = z.object({
+  /** The exact body to send to `purchase.split`; null while the parts cannot be saved. */
+  split: splitExpenseInput.nullable(),
+  /** Dollars the parts add up to, in whole cents. */
+  partsTotal: z.number(),
+  originalCost: z.number().nullable(),
+  /** `partsTotal` minus `originalCost`; null when the original has no cost. */
+  delta: z.number().nullable(),
+  /** Why the parts cannot be saved yet; null when they can. */
+  reason: z.string().nullable(),
+  /** The line under the totals, already worded. */
+  note: z.string(),
+  /** True when the original carries household attribution and a policy has not been chosen. */
+  needsAttributionPolicy: z.boolean(),
+});
+
+export const linkExpenseScope = z.enum([
+  "vendorOrUnattached",
+  "unattached",
+  "any",
+]);
+export type LinkExpenseScope = z.infer<typeof linkExpenseScope>;
+
+export const purchaseLinkExpensesCandidatesInput = z.object({
+  purchaseId: purchaseShortcode,
+  scope: linkExpenseScope.default("vendorOrUnattached"),
+  search: z.string().optional(),
+});
+export const purchaseLinkExpenseCandidate = z.object({
+  id: expenseShortcode,
+  name: z.string(),
+  date: z.string().nullable(),
+  cost: z.number().nullable(),
+  trade: tradeSchema.nullable(),
+  projectId: projectShortcode.nullable(),
+  projectName: z.string().nullable(),
+  /** Where it is filed now: "unattached", or the vendor of its current purchase. */
+  current: z.string(),
+  /** True when attaching moves it off another purchase. */
+  filed: z.boolean(),
+  /** The line under the name, already worded. */
+  summary: z.string(),
+});
+export const purchaseLinkExpensesCandidatesOut = z.object({
+  scopes: z.array(z.object({ value: linkExpenseScope, label: z.string() })),
+  candidates: z.array(purchaseLinkExpenseCandidate),
+  /** Why the list is empty; null when it is not. */
+  message: z.string().nullable(),
+  /** The standing caution under the list. */
+  caution: z.string(),
+});
+
+export const purchaseLinkExpensesCheckInput = z.object({
+  purchaseId: purchaseShortcode,
+  expenseIds: z.array(expenseShortcode).max(500),
+});
+export const purchaseLinkExpensesCheckOut = z.object({
+  /** The ids to send to `purchase.link`; null while nothing valid is selected. */
+  expenseIds: z.array(expenseShortcode).nullable(),
+  selectedCount: z.number().int(),
+  /** Dollars the selected expenses add up to; those without a cost add nothing. */
+  selectedTotal: z.number(),
+  /** The purchase's expense total once they are attached; null when nothing is selected. */
+  resultingTotal: z.number().nullable(),
+  /** How many selected expenses would move off another purchase. */
+  movedCount: z.number().int(),
+  reason: z.string().nullable(),
+  /** The line under the selection, already worded. */
+  note: z.string().nullable(),
+  /** Set when attaching moves expenses off another purchase: the sentence to confirm. */
+  confirm: z.string().nullable(),
+});
+
+export const purchaseLinkProductsCandidatesInput = z.object({
+  purchaseId: purchaseShortcode,
+  search: z.string().optional(),
+});
+/** A product offered for attaching: what the picker shows, no more. */
+export const purchaseLinkProductCandidate = z.object({
+  id: productShortcode,
+  name: z.string(),
+  manufacturer: z.string(),
+  price: z.number().nullable(),
+  coverImageUrl: z.string().nullable(),
+});
+export const purchaseLinkProductsCandidatesOut = z.object({
+  candidates: z.array(purchaseLinkProductCandidate),
+  message: z.string().nullable(),
+  /** What attaching does and does not record. */
+  note: z.string(),
+});
+export const purchaseAttachProductsInput = z.object({
+  purchaseId: purchaseShortcode,
+  productIds: z.array(productShortcode).min(1).max(200),
+});
+
 /** Agent-safe Purchase deletion: only already-empty vendor events qualify. */
 export const deleteEmptyPurchasesInput = z.strictObject({
   ids: z

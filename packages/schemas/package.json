@@ -34,6 +34,8 @@
     "./entity-timeline": "./src/entity-timeline.ts",
     "./entity-sort": "./src/generated/entity-sort.gen.ts",
     "./entity-edit-intents": "./src/generated/entity-edit-intents.gen.ts",
+    "./structured-value-schema": "./src/structured-value-schema.ts",
+    "./structured-value-schemas": "./src/generated/structured-value-schemas.gen.ts",
     "./entity-field-schema-maps": "./src/generated/entity-field-schema-maps.gen.ts",
     "./entity-integrity": "./src/entity-integrity.ts",
     "./entity-links": "./src/entity-links.ts",

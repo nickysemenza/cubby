@@ -30,7 +30,6 @@ import {
   implemented,
   ownedElsewhere,
   type PresentationCoverage,
-  unsupported,
 } from "~/entity/presentation-coverage";
 import { basisValueOf } from "~/features/ai/field-suggestion";
 import { FormFieldResolution } from "~/features/ai/form-field-resolution";
@@ -77,6 +76,8 @@ import {
   presentEntitySelectOptions,
   type EntitySelectOption,
 } from "./select-options";
+import { structuredSchemaFor } from "./structured-schema";
+import { StructuredValueField } from "./structured-value-field";
 import type { EntityEditRecord } from "./types";
 import {
   entityEditValueBagSchema,
@@ -575,6 +576,28 @@ function EntityMultiSelectField({
   );
 }
 
+function StructuredFieldRenderer({
+  entity,
+  field,
+  form,
+  mode,
+}: SpecializedIntentRendererProps) {
+  const schema = structuredSchemaFor(entity, field.key);
+  if (schema === undefined)
+    throw new Error(
+      `${entity}.${field.key} is a structured-field with no valueSchema; classify it in nativeCoverage.structuredField`,
+    );
+  return (
+    <StructuredValueField
+      form={form}
+      name={field.key}
+      label={field.label}
+      schema={schema}
+      creating={mode === "create"}
+    />
+  );
+}
+
 /**
  * Renderers for `control.kind: "specialized"` fields that are not a
  * singular reference (those are handled generically below). Keyed by
@@ -603,9 +626,8 @@ export const controlRendererCoverage = {
   // `imageOrder` through `onExistingImagesReorder`); the field itself has no
   // control of its own to draw.
   "image-order": ownedElsewhere,
-  "structured-field": unsupported(
-    "Structured fields require their workflow-specific editor.",
-  ),
+  // Drawn from the field's generated `StructuredValueSchema`, the same description native draws.
+  "structured-field": implemented(StructuredFieldRenderer),
   "unit-mappings": implemented(ProductUnitMappingsField),
   "label-nutrition": implemented(ProductLabelNutritionField),
   "external-ids": implemented(ProductExternalIdsField),

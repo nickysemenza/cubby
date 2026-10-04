@@ -22,6 +22,7 @@ import { renderEntityTablesArtifact } from "./tables.ts";
 import { browserRoutes, lowerCamelCase } from "./routes.ts";
 import { kernelEntitiesFor } from "./shared.ts";
 import { hasGenericListOperation } from "../list-capabilities.ts";
+import { renderStructuredValueSchemas } from "./structured-value-schemas.ts";
 import { renderSwiftEntityCatalog } from "./swift-catalog.ts";
 import { renderSwiftSharedConstants } from "./swift-shared-constants.ts";
 import { renderDataQualityArtifacts } from "./data-quality.ts";
@@ -1481,6 +1482,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         `export const HTTP_RESOURCES = {\n${httpResources}\n} as const satisfies Record<string, { basePath: string; verbs: readonly ("list" | "timeline" | "get" | "create" | "update" | "delete")[] }>;\n`,
     },
     ...renderSwiftEntityCatalog(entities),
+    ...renderStructuredValueSchemas(entities),
     ...renderSwiftSharedConstants(),
     {
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",

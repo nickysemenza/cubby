@@ -24,8 +24,3 @@ export const generic = {
 export const ownedElsewhere = {
   kind: "ownedElsewhere",
 } as const satisfies PresentationCoverage<never>;
-
-export const unsupported = (reason: string): PresentationCoverage<never> => ({
-  kind: "unsupported",
-  reason,
-});

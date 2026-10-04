@@ -59,6 +59,9 @@ private struct StructuredSchemaView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            if let notice = schema.notice {
+                Text(notice).font(.caption).foregroundStyle(.secondary)
+            }
             if schema.nullable && addedAsWhole {
                 nullableComposite
             } else {
@@ -120,7 +123,8 @@ private struct StructuredSchemaView: View {
         case .object(let fields): fieldRows(fields)
         case .array(let item): arrayRows(item)
         case .map(let keys, let item): mapRows(keys, item)
-        case .variant(let discriminator, let cases): variantRows(discriminator, cases)
+        case .variant(let discriminator, let cases):
+            variantRows(discriminator, cases, locked: schema.createOnly == true && !context.model.isCreate)
         }
     }
 
@@ -314,7 +318,8 @@ private struct StructuredSchemaView: View {
         }
     }
 
-    private func variantRows(_ discriminator: String, _ cases: [ValueSchema.Case]) -> some View {
+    private func variantRows(_ discriminator: String, _ cases: [ValueSchema.Case], locked: Bool) -> some View
+    {
         let tag = value[discriminator]?.stringValue
         let selected = cases.first { $0.value == tag }
         let pickerTitle = title.isEmpty ? discriminator.capitalized : "\(title) \(discriminator)"
@@ -333,6 +338,7 @@ private struct StructuredSchemaView: View {
                 if selected == nil { Text("Choose").tag("") }
                 ForEach(cases, id: \.value) { Text($0.label).tag($0.value) }
             }
+            .disabled(locked)
             .accessibilityIdentifier(context.identifier(path + [discriminator]))
             if let selected { fieldRows(selected.fields) }
         }

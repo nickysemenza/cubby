@@ -1340,7 +1340,7 @@ describe("financial repositories — critical invariants", () => {
         { identity: { kind: "cash" } },
         ctx.actor,
       ),
-    ).rejects.toThrow(/stored-value account/);
+    ).rejects.toThrow(/fixed at creation/);
 
     for (const [owner, expected] of [
       [memberA, [a.id]],

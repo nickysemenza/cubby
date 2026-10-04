@@ -131,6 +131,10 @@ const buildOpenApiDocument = async (): Promise<{
     ({ zodSchema, jsonSchema }) => {
       delete jsonSchema.mock;
       delete jsonSchema.mockValue;
+      // Structured-editor annotations (`value-schema.ts`) are not OpenAPI keywords.
+      delete jsonSchema.opaque;
+      delete jsonSchema.createOnly;
+      delete jsonSchema.notice;
       if (io === "output" && jsonSchema.additionalProperties === false)
         delete jsonSchema.additionalProperties;
       // Zod emits `oneOf` for a discriminated union but no discriminator; the

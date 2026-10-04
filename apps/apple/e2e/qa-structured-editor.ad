@@ -1,0 +1,15 @@
+context platform=ios timeout=240000
+
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 240000
+open "cubby://entity/${PRODUCT_ID}"
+wait "role=Button label=Edit" 90000
+click "role=Button label=Edit"
+wait text "Edit Product" 90000
+scroll down 0.8
+scroll down 0.8
+wait text "Unit mappings" 90000
+wait "role=TextField value=120" 90000
+fill "role=TextField value=120" "125"
+click "role=Button label=Save"
+wait "role=Button label=Edit" 90000

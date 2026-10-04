@@ -128,13 +128,19 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   `ReportDetailSlot`; its `records` block (finance slots) shows the server's checkable rows and
   verbs, every figure, candidate and disabled reason being the server's. A verb is a
   `sectionAction` id: `implemented` ones are cases of `ReportRecordsView.handledVerbs`, run through
-  `SectionActionRunner` or `StatementMatchSession` (the same operations web calls, behind the
-  server's `disabledReason` and, for a write, a fresh server check of exactly what is sent);
-  `unsupported` ones show their reason. The structured renderers (`STRUCTURED_VALUE_RENDERERS`) are `generic`:
+  `SectionActionRunner`, `StatementMatchSession`, `ExpenseSplitSession`,
+  `PurchaseExpenseLinkSession` or `PurchaseProductLinkSession` (the same operations web calls,
+  behind the server's `disabledReason` and, for a write, a fresh server check of exactly what is
+  sent; a split needs an explicit confirmation, and attaching expenses that would move off another
+  purchase does too); `unsupported` ones show their reason. The structured renderers (`STRUCTURED_VALUE_RENDERERS`) are `generic`:
   `FieldDescriptor.valueSchema`, derived from the field's Zod input schema, is drawn by the one
   `StructuredValueControl`, so a new structured field is a declaration, not a view (a read payload
   that nests an input's id declares `readFrom` on the Zod field; `project` applies the emitted
-  `readPath`). The `product-tags` control splits Tags from Collections with `CollectionTag`, which
+  `readPath`; a key marked `opaque` is carried untouched, never drawn). Every `structured-field`
+  (`nativeCoverage.structuredField`) is drawn the same way, each with a generated read-to-input
+  vector; web draws the same description with `StructuredValueField`. A variant starts with no case
+  chosen (an account's identity kind is an explicit pick), and a source claim goes back under the
+  `sourceKey` its read carried, which the server holds it to. The `product-tags` control splits Tags from Collections with `CollectionTag`, which
   reads the prefix and slug pattern from generated `SharedConstants` and is pinned to web's rule by
   `golden-vectors/collection-tag.json`. A structured
   detail field needs no view either: it declares where the record carries its server-composed text

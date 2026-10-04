@@ -39,6 +39,35 @@ public struct SectionActionRunner: Sendable {
         if let reason = action.disabledReason { throw SectionActionError.unavailable(reason) }
     }
 
+    /// `splitExpense`: opens the split for `expenseID`. Throws, sending nothing, unless the report
+    /// offers the verb available (the server leaves it unavailable, with its reason, for an
+    /// expense with no purchase). The session asks the server for everything else.
+    @MainActor
+    public func splitSession(
+        expenseID: String, records: ReportPresentation.Records
+    ) throws -> ExpenseSplitSession {
+        try Self.canOpen(.splitExpense, in: records)
+        return ExpenseSplitSession(expenseID: expenseID, client: client)
+    }
+
+    /// `linkExpenses`: opens attaching existing expenses to `purchaseID`.
+    @MainActor
+    public func expenseLinkSession(
+        purchaseID: String, records: ReportPresentation.Records
+    ) throws -> PurchaseExpenseLinkSession {
+        try Self.canOpen(.linkExpenses, in: records)
+        return PurchaseExpenseLinkSession(purchaseID: purchaseID, client: client)
+    }
+
+    /// `linkProducts`: opens attaching products to `purchaseID`.
+    @MainActor
+    public func productLinkSession(
+        purchaseID: String, records: ReportPresentation.Records
+    ) throws -> PurchaseProductLinkSession {
+        try Self.canOpen(.linkProducts, in: records)
+        return PurchaseProductLinkSession(purchaseID: purchaseID, client: client)
+    }
+
     /// `searchCharges`: one browser run for exactly the checked statement charges. Returns the
     /// new run's id. Nothing is sent unless the verb is offered, something is checked, and every
     /// checked row is one the server still allows.

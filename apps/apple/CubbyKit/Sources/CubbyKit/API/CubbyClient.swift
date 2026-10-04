@@ -877,7 +877,9 @@ public actor CubbyClient {
     }
 
     public func requestCatchUp() async throws {
-        _ = try await perform { try await api.maintenance_requestCatchUp().ok.body.json }
+        // The server's `z.undefined()` mutation input still rejects a missing body (400
+        // "expected object"); the spec marks the body optional, so send an empty object.
+        _ = try await perform { try await api.maintenance_requestCatchUp(body: .json(.init())).ok.body.json }
     }
 
     /// The meals planned for one household calendar day.

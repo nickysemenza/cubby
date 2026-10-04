@@ -11,14 +11,22 @@ public struct ValueSchema: Codable, Sendable, Hashable {
     /// The server accepts `null` here; the editor offers a way to clear it.
     public let nullable: Bool
     public let node: Node
+    /// Chosen when the record is created and fixed afterwards (an account's identity kind): the
+    /// editor locks it on update and the server refuses a change.
+    public let createOnly: Bool?
+    /// A caution the editor shows with the value (changing card numbers changes statement matching).
+    public let notice: String?
 
-    public init(nullable: Bool = false, node: Node) {
+    public init(nullable: Bool = false, node: Node, createOnly: Bool? = nil, notice: String? = nil) {
         self.nullable = nullable
         self.node = node
+        self.createOnly = createOnly
+        self.notice = notice
     }
 
     public indirect enum Node: Codable, Sendable, Hashable {
-        /// `format` is `uri`, `date` (`yyyy-MM-dd`), `uuid` (opaque: preserved, never edited) or `email`.
+        /// `format` is `uri`, `date` (`yyyy-MM-dd`), `email`, or `uuid`/`opaque` (an id or identity key:
+        /// preserved so an untouched row keeps its identity, never shown or edited).
         case text(format: String?)
         case number(integer: Bool)
         case boolean

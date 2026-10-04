@@ -90,15 +90,24 @@ struct RecordRowView: View {
             .font(.caption)
         }
         if let model, !row.commands.isEmpty {
-            HStack {
-                ForEach(row.commands) { command in
-                    Button(command.label) { start(command, model: model) }
-                        .buttonStyle(.borderless)
-                        .fontWeight(command.prominent ? .semibold : .regular)
-                        .disabled(model.busyActionID != nil)
-                        .accessibilityIdentifier("report.command.\(command.id)")
-                }
+            // Server-worded commands ("Approve import proposal") can be wider than half a phone
+            // row: stack them rather than wrapping a label mid-word.
+            ViewThatFits(in: .horizontal) {
+                HStack { commandButtons(model: model) }
+                VStack(alignment: .leading) { commandButtons(model: model) }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func commandButtons(model: ReportSlotModel) -> some View {
+        ForEach(row.commands) { command in
+            Button(command.label) { start(command, model: model) }
+                .buttonStyle(.borderless)
+                .fontWeight(command.prominent ? .semibold : .regular)
+                .lineLimit(1)
+                .disabled(model.busyActionID != nil)
+                .accessibilityIdentifier("report.command.\(command.id)")
         }
     }
 
@@ -145,6 +154,9 @@ struct RecordsBlockView: View {
     @State private var selection: Set<String> = []
     @State private var statementMatch: StatementMatchSession?
     @State private var receiving: ReceivingModel?
+    @State private var splitting: ExpenseSplitSession?
+    @State private var linkingExpenses: PurchaseExpenseLinkSession?
+    @State private var linkingProducts: PurchaseProductLinkSession?
     @State private var isSearching = false
     @State private var startedRun: String?
     @State private var verbError: String?
@@ -153,7 +165,9 @@ struct RecordsBlockView: View {
 
     /// Exactly the finance verbs `native-coverage.ts` marks `implemented`
     /// (`NativeCoverageViewPathTests` asserts it); `verbButton` runs each.
-    static let handledVerbs: Set<SectionActionID> = [.searchCharges, .matchStatement, .receiveExpense]
+    static let handledVerbs: Set<SectionActionID> = [
+        .searchCharges, .matchStatement, .receiveExpense, .splitExpense, .linkExpenses, .linkProducts,
+    ]
 
     private var offersSelection: Bool {
         records.verbs.contains { Self.handledVerbs.contains($0.verb) && $0.actsOnSelection }
@@ -238,6 +252,21 @@ struct RecordsBlockView: View {
         }
         .sheet(item: $receiving) { model in
             ReceiveExpenseSheet(model: model)
+        }
+        .sheet(item: $splitting) { session in
+            SplitExpenseSheet(session: session) { splitSaved() }
+                .environment(appModel)
+                .nativeSheet(.editor)
+        }
+        .sheet(item: $linkingExpenses) { session in
+            LinkExpensesSheet(session: session) { attachSaved() }
+                .environment(appModel)
+                .nativeSheet(.editor)
+        }
+        .sheet(item: $linkingProducts) { session in
+            LinkProductsSheet(session: session) { attachSaved() }
+                .environment(appModel)
+                .nativeSheet(.editor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .sheet(item: $action) { model in
@@ -331,9 +360,74 @@ struct RecordsBlockView: View {
             }
             .disabled(verb.disabledReason != nil || productID == nil)
             .accessibilityIdentifier("receive.open.\(host?.row.id ?? "")")
-        case .splitExpense, .linkExpenses, .linkProducts:
-            EmptyView()
+        case .splitExpense:
+            Button(verb.label) {
+                open {
+                    try $0.splitSession(expenseID: $1, records: records)
+                } assign: {
+                    splitting = $0
+                }
+            }
+            .disabled(verb.disabledReason != nil || host == nil)
+            .accessibilityIdentifier("section.splitExpense")
+        case .linkExpenses:
+            Button(verb.label) {
+                open {
+                    try $0.expenseLinkSession(purchaseID: $1, records: records)
+                } assign: {
+                    linkingExpenses = $0
+                }
+            }
+            .disabled(verb.disabledReason != nil || host == nil)
+            .accessibilityIdentifier("section.linkExpenses")
+        case .linkProducts:
+            Button(verb.label) {
+                open {
+                    try $0.productLinkSession(purchaseID: $1, records: records)
+                } assign: {
+                    linkingProducts = $0
+                }
+            }
+            .disabled(verb.disabledReason != nil || host == nil)
+            .accessibilityIdentifier("section.linkProducts")
         }
+    }
+
+    /// Opens a verb's session on the record this report belongs to. The runner throws, sending
+    /// nothing, unless the server offers the verb available.
+    private func open<Session>(
+        _ make: (SectionActionRunner, String) throws -> Session, assign: (Session) -> Void
+    ) {
+        guard let host else { return }
+        verbError = nil
+        do {
+            assign(try make(SectionActionRunner(client: appModel.client), host.row.id))
+        } catch let error as SectionActionError {
+            verbError =
+                switch error {
+                case .unavailable(let reason), .refusedSelection(let reason), .unsupported(let reason):
+                    reason
+                case .nothingSelected: "Check at least one row first."
+                }
+        } catch {
+            verbError = error.userMessage
+        }
+    }
+
+    /// The parts replaced the expense, so leave its screen for the purchase they were filed under.
+    private func splitSaved() {
+        appModel.recordEntityMutation(keys: [.expense, .purchase, .product])
+        if let purchaseID = host?.row.raw["purchaseId"]?.stringValue {
+            appModel.navigator.replaceCurrentRecord(
+                with: RecordSelection(key: .purchase, id: purchaseID))
+        } else {
+            host?.onChanged()
+        }
+    }
+
+    private func attachSaved() {
+        appModel.recordEntityMutation(keys: [.purchase, .expense, .product])
+        host?.onChanged()
     }
 
     private func searchCharges() async {
