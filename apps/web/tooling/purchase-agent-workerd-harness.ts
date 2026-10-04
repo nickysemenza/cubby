@@ -106,18 +106,43 @@ const DETERMINISTIC_MODEL: WorkerdModelWorker = {
   main: "tests/e2e/harness-services/purchase-agent-test-model.ts",
 };
 
+const DETERMINISTIC_GATEWAY: WorkerdModelWorker = {
+  main: "tests/e2e/harness-services/purchase-import-test-gateway.ts",
+};
+
 /**
  * The coupled web + purchase-agent workerd harness. Its model worker is
- * `cubby-test-model`: the deterministic fake by default, or a Gateway proxy
- * for a live model eval.
+ * `cubby-test-model` (the agent's provider) and its gateway worker is
+ * `cubby-test-gateway` (the web Worker's structured features): deterministic
+ * fakes by default, or Gateway proxies for live evals and journeys.
  */
 export function createWorkerdHarness(
   databaseUrl: string,
   modelWorker: WorkerdModelWorker = DETERMINISTIC_MODEL,
+  gatewayWorker: WorkerdModelWorker = DETERMINISTIC_GATEWAY,
 ) {
   return createTestHarness({
     root: webRoot,
     workers: [
+      // The web Worker is primary: `listen()` serves the app a browser drives.
+      {
+        config: workerdWebConfig(databaseUrl),
+        vars: {
+          ALLOW_SIGNUP: "true",
+          INSECURE_AUTH_COOKIES: "true",
+          E2E_AUTH_TEST_MODE: "true",
+          DATABASE_URL: databaseUrl,
+          R2_ENDPOINT: "http://127.0.0.1:9",
+          R2_PUBLIC_URL: "http://127.0.0.1:9",
+          R2_BUCKET_NAME: "e2e-bucket",
+          R2_KEY_PREFIX: "e2e",
+          R2_ACCESS_KEY_ID: "dummy",
+          R2_SECRET_ACCESS_KEY: "dummy",
+          USDA_API_URL: "http://127.0.0.1:9/",
+          UPC_UPSTREAM_DISABLED: "true",
+        },
+        secrets: { BETTER_AUTH_SECRET: "workerd-test-secret" },
+      },
       {
         config: {
           name: "cubby-queue-producer",
@@ -143,24 +168,6 @@ export function createWorkerdHarness(
         },
       },
       {
-        config: workerdWebConfig(databaseUrl),
-        vars: {
-          ALLOW_SIGNUP: "true",
-          INSECURE_AUTH_COOKIES: "true",
-          E2E_AUTH_TEST_MODE: "true",
-          DATABASE_URL: databaseUrl,
-          R2_ENDPOINT: "http://127.0.0.1:9",
-          R2_PUBLIC_URL: "http://127.0.0.1:9",
-          R2_BUCKET_NAME: "e2e-bucket",
-          R2_KEY_PREFIX: "e2e",
-          R2_ACCESS_KEY_ID: "dummy",
-          R2_SECRET_ACCESS_KEY: "dummy",
-          USDA_API_URL: "http://127.0.0.1:9/",
-          UPC_UPSTREAM_DISABLED: "true",
-        },
-        secrets: { BETTER_AUTH_SECRET: "workerd-test-secret" },
-      },
-      {
         config: workerdAgentConfig(),
         // "test" disables Sentry in both the agent Durable Object wrapper and
         // the queue consumer, so the harness never reports to sentry.io.
@@ -178,9 +185,11 @@ export function createWorkerdHarness(
       {
         config: {
           name: "cubby-test-gateway",
-          main: "tests/e2e/harness-services/purchase-import-test-gateway.ts",
+          main: gatewayWorker.main,
           compatibility_date: "2026-09-19",
         },
+        vars: gatewayWorker.vars,
+        secrets: gatewayWorker.secrets,
       },
       {
         config: {

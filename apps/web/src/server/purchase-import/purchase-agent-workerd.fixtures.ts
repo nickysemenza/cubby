@@ -159,7 +159,7 @@ export async function startScenarioHarness(
     }
   };
   try {
-    const { url } = await harness.listen();
+    await harness.listen();
     const model = harness.getWorker("cubby-test-model");
     const gateway = harness.getWorker("cubby-test-gateway");
     type JsonPost = {
@@ -182,7 +182,9 @@ export async function startScenarioHarness(
     };
     const toModel: Sender = (path, init) => model.fetch(path, init);
     const toGateway: Sender = (path, init) => gateway.fetch(path, init);
-    const toQueue: Sender = (path, init) => fetch(new URL(path, url), init);
+    const queue = harness.getWorker("cubby-queue-producer");
+    const toQueue: Sender = (path, init) =>
+      queue.fetch(new URL(path, "https://queue.test"), init);
     const toAgent: Sender = (path, init) =>
       harness.getWorker("purchase-agent").fetch(path, {
         ...init,
@@ -223,6 +225,38 @@ export async function startScenarioHarness(
           `https://purchase-agent.internal/internal/agents/purchase-import-run/${encodeURIComponent(agentId)}`,
           { kind: "user", body },
         ),
+      /**
+       * The run page's two reads of the agent conversation: the snapshot and
+       * the first SSE frame of the live stream, each as the agent answered.
+       */
+      conversation: async (agentId: string) => {
+        const base = `https://purchase-agent.internal/internal/agents/purchase-import-run/${encodeURIComponent(agentId)}`;
+        const headers = { "x-cubby-agent-service": "purchase-import-proxy-v1" };
+        const agent = harness.getWorker("purchase-agent");
+        const snapshot = await agent.fetch(base, { headers });
+        const stream = await agent.fetch(`${base}/stream`, { headers });
+        // A whole-snapshot frame can span several chunks; read to its end.
+        const decoder = new TextDecoder();
+        let firstFrame = "";
+        const reader = stream.body?.getReader();
+        if (reader) {
+          for (;;) {
+            const chunk = await reader.read();
+            if (chunk.done) break;
+            firstFrame += decoder.decode(chunk.value, { stream: true });
+            if (firstFrame.includes("\n\n")) break;
+          }
+          await reader.cancel();
+        }
+        return {
+          snapshot: { status: snapshot.status, body: await snapshot.text() },
+          stream: {
+            status: stream.status,
+            contentType: stream.headers.get("content-type"),
+            firstFrame: firstFrame.split("\n\n")[0] ?? "",
+          },
+        };
+      },
       violations: async () =>
         readJson(z.array(z.string()), () =>
           model.fetch("https://model.test/violations"),

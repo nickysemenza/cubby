@@ -449,43 +449,56 @@ export class PurchaseImportRunAgent extends Agent<Env> {
    */
   private async stream(request: Request): Promise<Response> {
     const encoder = new TextEncoder();
-    const send = async (writer: WritableStreamDefaultWriter<Uint8Array>) =>
-      writer.write(
-        encoder.encode(
-          `data: ${JSON.stringify(await this.conversation())}\n\n`,
-        ),
+    const frame = async () =>
+      encoder.encode(`data: ${JSON.stringify(await this.conversation())}\n\n`);
+    // Enqueue never waits for a reader: a writer awaited before the Response
+    // is returned deadlocks, because nothing can read until it is returned.
+    const first = await frame();
+    if (!this.identity())
+      return eventStream(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(first);
+            controller.close();
+          },
+        }),
       );
-    const { readable, writable } = new TransformStream<
-      Uint8Array,
-      Uint8Array
-    >();
-    const writer = writable.getWriter();
-    await send(writer);
-    if (!this.identity()) {
-      await writer.close();
-      return eventStream(readable);
-    }
     const root = await (await this.harness.pi()).root(context);
     const view = await root.viewState(context);
     let timer: ReturnType<typeof setTimeout> | undefined;
     let closed = false;
+    let unsubscribe = () => {};
     const close = () => {
       if (closed) return;
       closed = true;
       if (timer) clearTimeout(timer);
       unsubscribe();
       view.dispose();
-      void writer.close().catch(() => undefined);
     };
-    const unsubscribe = view.subscribe(() => {
-      if (timer || closed) return;
-      timer = setTimeout(() => {
-        timer = undefined;
-        send(writer).catch(close);
-      }, 250);
-    });
     request.signal.addEventListener("abort", close);
-    return eventStream(readable);
+    return eventStream(
+      new ReadableStream({
+        start: (controller) => {
+          controller.enqueue(first);
+          unsubscribe = view.subscribe(() => {
+            if (timer || closed) return;
+            timer = setTimeout(() => {
+              timer = undefined;
+              frame()
+                .then((next) => {
+                  if (!closed) controller.enqueue(next);
+                })
+                .catch((error) => {
+                  this.report(error);
+                  close();
+                  controller.close();
+                });
+            }, 250);
+          });
+        },
+        cancel: close,
+      }),
+    );
   }
 }
 

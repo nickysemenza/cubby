@@ -39,7 +39,7 @@ export interface E2EWorkerRuntime {
   close(): Promise<void>;
 }
 
-async function authenticate(baseURL: string): Promise<E2EStorageState> {
+export async function authenticate(baseURL: string): Promise<E2EStorageState> {
   const email = process.env.E2E_TEST_USER_EMAIL;
   const password = process.env.E2E_TEST_USER_PASSWORD;
   if (!email || !password) {
