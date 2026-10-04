@@ -1,4 +1,4 @@
-import type { ExpectedMatch } from "./flue-model-eval.fixtures";
+import type { ExpectedMatch } from "./agent-model-eval.fixtures";
 
 /** One proposed group, by fixture photo key; `product` is the fixture key of an existing match. */
 export type ScoredProposal = { photos: string[]; product: string | null };

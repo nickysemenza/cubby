@@ -36,9 +36,12 @@ import {
   evalUsageReport,
   evalWebRoot,
   liveEvalModelWorker,
-} from "./flue-eval-live-support";
-import { type EvalCase, flueModelEvalCases } from "./flue-model-eval.fixtures";
-import { scoreProposals } from "./flue-model-eval.score";
+} from "./agent-eval-live-support";
+import {
+  type EvalCase,
+  agentModelEvalCases,
+} from "./agent-model-eval.fixtures";
+import { scoreProposals } from "./agent-model-eval.score";
 import {
   startPhotoInventoryCoordinator,
   startPhotoInventoryRun,
@@ -46,18 +49,18 @@ import {
 
 /**
  * Live photo-coordinator model comparison. Opt-in and billed: it runs the real
- * Flue agent in workerd against an isolated database, with its model calls
+ * import-run agent in workerd against an isolated database, with its model calls
  * forwarded to Cubby's AI Gateway as each candidate. Run with
- * `pnpm --dir apps/web eval:flue-models`.
+ * `pnpm --dir apps/web eval:agent-models`.
  */
 const candidates = evalCandidates(
   "gpt-6-luna:medium,gpt-6-luna:high,gpt-6-sol:medium,gpt-6-sol:high",
 );
-const caseFilter = process.env.FLUE_EVAL_CASES?.split(",");
-const cases = flueModelEvalCases.filter(
+const caseFilter = process.env.AGENT_EVAL_CASES?.split(",");
+const cases = agentModelEvalCases.filter(
   (evalCase) => !caseFilter || caseFilter.includes(evalCase.name),
 );
-const repeats = Number(process.env.FLUE_EVAL_REPEATS ?? "1");
+const repeats = Number(process.env.AGENT_EVAL_REPEATS ?? "1");
 const RUN_TIMEOUT_MS = 8 * 60_000;
 
 async function poll(done: () => Promise<boolean>) {
@@ -82,7 +85,7 @@ describe("photo coordinator model eval", () => {
       });
       await ensurePurchaseAgentOAuthClient(ctx.db);
       const now = new Date();
-      const sessionId = `flue-eval-${crypto.randomUUID()}`;
+      const sessionId = `agent-eval-${crypto.randomUUID()}`;
       await getDb(ctx.db)
         .insert(session)
         .values({
@@ -277,7 +280,7 @@ describe("photo coordinator model eval", () => {
 
       const outDir = path.join(
         evalWebRoot,
-        "../../artifacts/flue-model-eval",
+        "../../artifacts/agent-model-eval",
         new Date().toISOString().replace(/[:.]/gu, "-"),
       );
       mkdirSync(outDir, { recursive: true });
@@ -331,7 +334,7 @@ describe("photo coordinator model eval", () => {
         ),
       ].join("\n");
       writeFileSync(path.join(outDir, "report.md"), `${table}\n`);
-      console.log(`[flue-eval] report: ${outDir}\n${table}`);
+      console.log(`[agent-eval] report: ${outDir}\n${table}`);
       await harness.close();
       expect(results).toHaveLength(candidates.length * cases.length * repeats);
     },

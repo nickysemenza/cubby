@@ -12,7 +12,7 @@ const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
 
 // Every audit row and run copies these fields from the request actor. A
 // verified-credential field silently dropped here (as the MCP client id once
-// was) makes Claude, ChatGPT and Flue writes indistinguishable.
+// was) makes Claude, ChatGPT and the purchase agent's writes indistinguishable.
 describe("createRequestContext caller attribution", () => {
   it.each<[string, RequestActor, object]>([
     [

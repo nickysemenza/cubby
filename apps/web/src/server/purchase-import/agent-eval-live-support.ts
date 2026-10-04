@@ -7,8 +7,8 @@ import { z } from "zod";
 import { CF_ACCOUNT_ID, CF_AIG_GATEWAY_ID } from "~/server/cf-env";
 
 /**
- * Shared plumbing for the opt-in, billed Flue coordinator evals: the
- * candidate list, the `tooling/flue-eval-model.ts` proxy that forwards the
+ * Shared plumbing for the opt-in, billed import-run agent evals: the
+ * candidate list, the `tooling/agent-eval-model.ts` proxy that forwards the
  * agent's model calls to Cubby's AI Gateway as each candidate, and its usage
  * and cost accounting.
  */
@@ -24,7 +24,7 @@ const candidate = z.object({
 export type EvalCandidate = z.infer<typeof candidate>;
 
 export function evalCandidates(fallback: string): EvalCandidate[] {
-  return (process.env.FLUE_EVAL_CANDIDATES ?? fallback)
+  return (process.env.AGENT_EVAL_CANDIDATES ?? fallback)
     .split(",")
     .map((entry) => {
       const [model, effort] = entry.split(":");
@@ -75,7 +75,7 @@ function gatewayApiKey() {
 
 /** The harness model worker that bills each candidate through the Gateway. */
 export const liveEvalModelWorker = () => ({
-  main: "tooling/flue-eval-model.ts",
+  main: "tooling/agent-eval-model.ts",
   vars: {
     GATEWAY_OPENAI_URL: `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_AIG_GATEWAY_ID}/openai`,
   },

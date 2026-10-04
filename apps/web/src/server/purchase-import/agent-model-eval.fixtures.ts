@@ -96,7 +96,7 @@ function largeBatch(name: string, colorways: number): EvalCase {
   return { name, photos, catalog: [], expected };
 }
 
-export const flueModelEvalCases: EvalCase[] = [
+export const agentModelEvalCases: EvalCase[] = [
   {
     name: "item-with-care-label",
     photos: [

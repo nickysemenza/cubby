@@ -3,7 +3,7 @@ import type { DeviceId, RunId, UserId } from "./identifiers";
 
 /**
  * How a write entered the app. Who and what did it are separate columns:
- * `oauthClientId` names the MCP client (Claude, ChatGPT, Codex, Flue),
+ * `oauthClientId` names the MCP client (Claude, ChatGPT, Codex, the import-run agent),
  * `deviceId` names the Apple install (`X-Cubby-Device`), and `runId` names the
  * Run that grouped the work. `system` is only for work with no user present
  * (crons, retries); anything a member starts is attributed to that member.

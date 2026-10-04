@@ -1,29 +1,31 @@
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
-import { z } from "zod";
 
-import { cubbyMcpConnection } from "./cubby-mcp";
+import { cubbyMcpFetch, mountedMcpTools } from "./cubby-mcp";
 import type { PurchaseImportService } from "./service";
 
 const runId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 
-describe("cubbyMcpConnection", () => {
+describe("Cubby MCP for an import run", () => {
   it("mounts only the photo workflow tools for photo inventory runs", () => {
-    const connection = cubbyMcpConnection(
-      runId,
-      () => {
-        throw new Error("The connection should not fetch during setup");
-      },
-      "photo_inventory",
-    );
+    const catalog = [
+      "imports_read",
+      "entity_read",
+      "entity",
+      "search",
+      "photo_run",
+      "product_enrichment",
+    ].map((name) => ({ name, inputSchema: { type: "object" } }));
 
-    expect(connection.tools).toEqual([
+    expect(
+      mountedMcpTools("photo_inventory", catalog).map((tool) => tool.name),
+    ).toEqual([
       "imports_read",
       "entity_read",
       "search",
       "photo_run",
       "product_enrichment",
     ]);
-    expect(connection.tools).not.toContain("entity");
   });
 
   it("resolves run-bound auth per request and proxies through the service binding", async () => {
@@ -32,54 +34,24 @@ describe("cubbyMcpConnection", () => {
       expect(request.headers.get("authorization")).toBe("Bearer run-token");
       return new Response("ok");
     });
-    const unavailable = vi.fn(async (): Promise<never> => {
-      throw new Error("Unexpected agent service call");
-    });
-    const service: PurchaseImportService = {
-      loadRunScope: unavailable,
-      canDispatchCoordinator: unavailable,
-      acknowledgeCoordinator: unavailable,
-      acquireMcpAccess: vi.fn(async () => ({
-        token: "run-token",
-        expiresAt: "2026-09-20T20:00:00.000Z",
-        mcpUrl: "https://mcp.internal.test/api/mcp",
-      })),
+    const acquireMcpAccess = vi.fn(async () => ({
+      token: "run-token",
+      expiresAt: "2026-09-20T20:00:00.000Z",
+      mcpUrl: "https://mcp.internal.test/api/mcp",
+    }));
+    // The MCP transport reaches only these two service methods.
+    const service = fromPartial<PurchaseImportService>({
+      acquireMcpAccess,
       mcpFetch,
-      claimNextWork: unavailable,
-      extractReceiptEvidence: unavailable,
-      extractRunEvidence: unavailable,
-      issueBrowserCommand: unavailable,
-      readBrowserCommandResult: unavailable,
-      importOrderEvidence: unavailable,
-      saveNavigationHints: unavailable,
-      markHistoryExpired: unavailable,
-      finishRun: unavailable,
-      stopForReview: unavailable,
-      deferOrderForReview: unavailable,
-      settleChargeHunt: unavailable,
-      recordAgentUsage: unavailable,
-      updateAgentProgress: unavailable,
-      markRunFailed: unavailable,
-      auditBatch: unavailable,
-      reconcileSettledRun: unavailable,
-    };
-    const connection = cubbyMcpConnection(runId, () => service);
-    if (!connection.fetch) {
-      throw new Error("Expected dynamic MCP auth and fetch");
-    }
-    const authenticate = z
-      .function({ input: [], output: z.promise(z.string()) })
-      .parse(connection.auth);
+    });
 
-    await expect(authenticate()).resolves.toBe("run-token");
-    const response = await connection.fetch(
+    const response = await cubbyMcpFetch(runId, () => service)(
       "https://cubby-mcp.invalid/mcp?session=7",
-      { headers: { authorization: "Bearer run-token" } },
+      { method: "POST", body: "{}" },
     );
 
     expect(await response.text()).toBe("ok");
-    expect(service.acquireMcpAccess).toHaveBeenCalledWith({ runId });
-    expect(service.acquireMcpAccess).toHaveBeenCalledOnce();
+    expect(acquireMcpAccess).toHaveBeenCalledWith({ runId });
     expect(mcpFetch).toHaveBeenCalledOnce();
   });
 });

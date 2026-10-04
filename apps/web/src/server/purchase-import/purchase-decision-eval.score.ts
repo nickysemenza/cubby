@@ -162,7 +162,7 @@ export function scoreDecision(
     : { verdict: "correct", reasons: [] };
 }
 
-/** The flue-eval-model proxy's usage totals for one run. */
+/** The agent-eval-model proxy's usage totals for one run. */
 export type DecisionUsage = {
   requests: number;
   failedRequests: number;

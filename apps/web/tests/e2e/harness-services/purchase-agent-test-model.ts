@@ -14,7 +14,7 @@ type ResponsesFunctionCall = {
 
 let script: ScriptStep[] | undefined;
 let violations: string[] = [];
-/** Each emitted step, in order: what the real Flue agent was told to do. */
+/** Each emitted step, in order: what the real import-run agent was told to do. */
 let emitted: string[] = [];
 /** A waiting model is asked again on every nudge; record the wait once. */
 const record = (entry: string) => {
@@ -64,7 +64,7 @@ type InputItem = {
   output?: unknown;
 };
 
-/** Every JSON reading of a tool output: Flue text, MCP content, structured content. */
+/** Every JSON reading of a tool output: agent text, MCP content, structured content. */
 function outputCandidates(value: unknown, depth = 0): unknown[] {
   if (depth > 4) return [];
   if (typeof value === "string") {
@@ -142,9 +142,9 @@ const isFinishNudge = (item: unknown) =>
 /**
  * Regression: the agent once nudged after a terminating tool (a pending
  * browser command) and re-nudged each cycle from a stale guard, so under CI
- * load it hit Flue's 32-cycle runaway ceiling before browser evidence joined.
+ * load it hit the agent's 32-cycle runaway ceiling before browser evidence joined.
  * Either misbehavior is recorded deterministically, without needing the race;
- * the harness reads them from `/violations`. Flue retries a model error
+ * the harness reads them from `/violations`. The agent retries a model error
  * response, so refusing the request would hide the misbehavior instead.
  */
 function finishNudgeViolation(
@@ -172,7 +172,7 @@ const issued = (body: string, callId: string) =>
   body.includes(`"call_id":"${callId}"`);
 
 /**
- * Deterministic coordinator for real Flue runs: it plays one scenario script,
+ * Deterministic coordinator for real agent runs: it plays one scenario script,
  * choosing the first step whose effect is not yet in the conversation. Tool
  * arguments may read prior tool outputs, so ids the server mints (browser
  * command ids, purchase codes) flow through the conversation the way a real

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { scoreProposals } from "./flue-model-eval.score";
+import { scoreProposals } from "./agent-model-eval.score";
 
 const expected = [
   { photos: ["a", "b"], match: { kind: "create" as const } },

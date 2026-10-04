@@ -1,7 +1,7 @@
 /**
  * The scenario script the workerd harness's deterministic model plays
  * (`tests/e2e/harness-services/purchase-agent-test-model.ts`). Only the model
- * is scripted: Flue, its tools, the MCP server, queue events, and the web
+ * is scripted: the agent, its tools, the MCP server, queue events, and the web
  * Worker's writers are production code.
  */
 export type ScriptValue =

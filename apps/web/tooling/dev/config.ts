@@ -1,10 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import type { D1Database, R2Bucket } from "@cloudflare/workers-types";
-import type { Plugin } from "vite";
-import type { WorkerConfig } from "@cloudflare/vite-plugin";
 import { getPlatformProxy, type Unstable_RawConfig } from "wrangler";
 import { parse } from "jsonc-parser";
 import { z } from "zod";
@@ -103,29 +100,6 @@ export async function writeLocalDevConfig(
   return destination;
 }
 
-type ConfigCustomizer = (config: WorkerConfig) => void;
-const purchaseCustomizers = new Map<string, ConfigCustomizer>();
-
-/** Must precede cloudflare() so Flue can register its real local agent DO. */
-export async function createLocalDevPeerPlugins(
-  profile: DevProfile,
-): Promise<Plugin[]> {
-  if (profile.profile === "offline") return [];
-  const purchaseRoot = path.join(profile.repoRoot, "apps/purchase-agent");
-  const { flue, flueWorkerConfig } = await import(
-    pathToFileURL(path.join(purchaseRoot, "tooling/local-dev-flue.ts")).href
-  );
-  const plugins: Plugin[] = flue({
-    target: "cloudflare",
-    app: path.join(purchaseRoot, "src/app.ts"),
-    cloudflare: path.join(purchaseRoot, "src/cloudflare.ts"),
-    agents: path.join(purchaseRoot, "src/purchase-import-run.ts"),
-    providers: [],
-  });
-  purchaseCustomizers.set(profile.id, flueWorkerConfig());
-  return plugins;
-}
-
 export async function createLocalDevPeers(profile: DevProfile) {
   const configRoot = path.join(profile.stateDir, "peers");
   await mkdir(configRoot, { recursive: true });
@@ -148,7 +122,10 @@ export async function createLocalDevPeers(profile: DevProfile) {
     queues: { consumers: [{ queue: queueName, max_retries: 3 }] },
   };
   if (profile.profile === "integrations") {
-    delete purchaseConfig.main;
+    purchaseConfig.main = path.join(
+      profile.repoRoot,
+      "apps/purchase-agent/src/index.ts",
+    );
     purchaseConfig.ai = { binding: "AI", remote: true };
     purchaseConfig.services = [
       {
@@ -157,8 +134,20 @@ export async function createLocalDevPeers(profile: DevProfile) {
         entrypoint: "PurchaseImportService",
       },
     ];
+    purchaseConfig.durable_objects = {
+      bindings: [
+        { name: "PURCHASE_IMPORT_RUN", class_name: "PurchaseImportRunAgent" },
+      ],
+    };
+    // Same tags as apps/purchase-agent/wrangler.jsonc, so persisted local
+    // state migrates the way production does.
     purchaseConfig.migrations = [
       { tag: "v1", new_sqlite_classes: ["FluePurchaseImportRunAgent"] },
+      {
+        tag: "v2",
+        deleted_classes: ["FluePurchaseImportRunAgent"],
+        new_sqlite_classes: ["PurchaseImportRunAgent"],
+      },
     ];
   }
   const configs = [
@@ -178,26 +167,13 @@ export async function createLocalDevPeers(profile: DevProfile) {
     },
     purchaseConfig,
   ];
-  const auxiliaryWorkers: Array<{
-    configPath: string;
-    config?: ConfigCustomizer;
-    devOnly: true;
-  }> = [];
-  for (const [index, config] of configs.entries()) {
+  const auxiliaryWorkers: Array<{ configPath: string; devOnly: true }> = [];
+  for (const config of configs) {
     const configPath = path.join(configRoot, `${config.name}.json`);
     await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, {
       mode: 0o600,
     });
-    const customizer =
-      index === 1 && profile.profile === "integrations"
-        ? purchaseCustomizers.get(profile.id)
-        : undefined;
-    const auxiliary: (typeof auxiliaryWorkers)[number] = {
-      configPath,
-      devOnly: true,
-    };
-    if (customizer) auxiliary.config = customizer;
-    auxiliaryWorkers.push(auxiliary);
+    auxiliaryWorkers.push({ configPath, devOnly: true });
   }
   return { auxiliaryWorkers, services, queueName };
 }

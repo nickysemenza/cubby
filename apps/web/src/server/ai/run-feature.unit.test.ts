@@ -1,7 +1,19 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
+import {
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxToolCall,
+  type AssistantMessage,
+  type Context,
+  type JsonObject,
+  type ModelsApiStreamOptions,
+  type UserMessage,
+} from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
 
 import { AI_CACHE_TTL_SECONDS } from "~/server/clients/ai-adapters";
+import type { GatewayCallOptions } from "~/server/clients/ai-gateway";
 import { Database } from "~/server/db";
 
 import {
@@ -11,6 +23,7 @@ import {
   RECIPE_FLOW_PRIMARY_FEATURE,
 } from "./features";
 import {
+  RESPOND_TOOL_NAME,
   type AiChatRequest,
   type AiRunContext,
   modelOptionsFor,
@@ -29,57 +42,74 @@ const request: AiChatRequest = {
   messages: [{ role: "user", content: "subject" }],
 };
 
-/** The fields the runner puts on every `chat()` call, typed so the
- * assertions below read them instead of casting a dictionary. */
-interface CapturedChatCall {
-  adapter: { structuredOutputStream?: unknown };
-  modelOptions: unknown;
-  outputSchema: unknown;
-  systemPrompts: string[];
-  messages: unknown[];
-  middleware: unknown[];
+/** A valid instance of each real feature's schema, so `placeStructuredCall`'s
+ * unconditional `spec.schema.parse()` never rejects a fixture — only the
+ * fields a given test actually varies carry meaning. */
+const PRODUCT_IDENTIFICATION_FIXTURE = {
+  name: "n",
+  manufacturer: "m",
+  model: null,
+  confidence: "high",
+  reasoning: "r",
+};
+const LOCATION_DESCRIPTION_FIXTURE = { description: "d", confidence: "high" };
+const RECIPE_FLOW_FIXTURE = {
+  schemaVersion: 1,
+  setup: [],
+  sources: [],
+  operations: [],
+  outputOperationIds: [],
+};
+
+/** A forced `respond` tool call carrying `args`, built the same way pi-ai's
+ * own test provider expects (see "Faux Provider for Tests") rather than a
+ * hand-rolled `AssistantMessage` literal. */
+function respondWith(args: JsonObject): AssistantMessage {
+  return fauxAssistantMessage(fauxToolCall(RESPOND_TOOL_NAME, args), {
+    stopReason: "toolUse",
+  });
 }
 
-interface FakeChat {
-  calls: CapturedChatCall[];
-  ports: StructuredRunPorts;
+interface CapturedCall {
+  model: string;
+  call: GatewayCallOptions;
+  context: Context;
+  options: unknown;
 }
 
 /**
- * Capture what the runner hands `chat()` without reaching a provider.
- * `responses` is consumed one per call, in order, so repair tests can hand
- * back a rejected answer on the first call and a corrected one on the
- * second; the last entry repeats for any further call. Callers that never
- * inspect the resolved value pass a single placeholder object.
+ * Fakes `callTarget` on pi-ai's own faux provider (`@earendil-works/pi-ai`'s
+ * `fauxProvider()`): a real `Model`, routed through a real `Models`
+ * collection, answering with scripted `AssistantMessage`s consumed in queue
+ * order — a repair test hands back a rejected answer on the first call and
+ * a corrected one on the second. `complete` still captures each call's
+ * context/options so the tier-mapping assertions below can inspect them.
  */
-function fakeChat<T extends object>(responses: readonly T[]): FakeChat {
-  const calls: CapturedChatCall[] = [];
-  const capture = async (args: CapturedChatCall): Promise<string> => {
-    calls.push(args);
-    // SAFETY: `responses` is a non-empty array by construction (every call
-    // site below passes at least one fixture), and the index is clamped to
-    // its last entry, so this index is always in bounds.
-    const response =
-      responses[Math.min(calls.length - 1, responses.length - 1)]!;
-    const widened: unknown = response;
-    // SAFETY: `response` (now `widened`) is one of the caller's own
-    // fixtures, never actually treated as a string — `capture` is declared
-    // to return `Promise<string>` only so it structurally overlaps `chat`'s
-    // real conditional return enough for the single cast a few lines below;
-    // `runStructuredFeature` re-casts the resolved value to its own `T` and
-    // never parses it.
-    return widened as string;
+function fakePorts(responses: readonly AssistantMessage[]) {
+  const calls: CapturedCall[] = [];
+  const faux = fauxProvider();
+  const models = createModels();
+  models.setProvider(faux.provider);
+  faux.setResponses([...responses]);
+  const ports: StructuredRunPorts = {
+    callTarget: (model, call) => ({
+      model: faux.getModel(),
+      complete: async (context, options) => {
+        calls.push({ model, call, context, options });
+        // SAFETY: the faux provider accepts any API's stream options as an
+        // untyped bag (`StreamOptions & Record<string, unknown>`); `options`
+        // already came from `chatCompletionOptionsFor`, shaped for the real
+        // model's API, which is all the production call site relies on.
+        return models.complete(
+          faux.getModel(),
+          context,
+          options as ModelsApiStreamOptions<string>,
+        );
+      },
+    }),
   };
-  // SAFETY: the port is typed as `chat`'s full generic signature; `capture`
-  // reads only the fields every branch of the runner passes, and resolves to
-  // whatever `responses` was given, unwrapped through the cast above.
-  const chat = capture as StructuredRunPorts["chat"];
-  return { calls, ports: { chat } };
+  return { calls, ports };
 }
-
-/** Placeholder resolved value for a `fakeChat` call whose assertions never
- * inspect what `chat()` returned. */
-const UNUSED_RESPONSE = { unused: true } as const;
 
 describe("planStructuredRun", () => {
   it("caches a structured feature for the gateway's full TTL", () => {
@@ -91,9 +121,6 @@ describe("planStructuredRun", () => {
 
     expect(plan.call.cacheTtlSeconds).toBe(AI_CACHE_TTL_SECONDS);
     expect(plan.call.skipCache).toBeUndefined();
-    // Non-streaming is what puts `stream: false` on the wire, which the
-    // gateway's exact-body cache key depends on.
-    expect(plan.streaming).toBe(false);
   });
 
   it("turns a caller's force into a skip rather than a shorter TTL", () => {
@@ -108,7 +135,7 @@ describe("planStructuredRun", () => {
     expect(plan.call.cacheTtlSeconds).toBeUndefined();
   });
 
-  it("skips the cache for an uncacheable feature, and streams it", () => {
+  it("skips the cache for an uncacheable feature", () => {
     const plan = planStructuredRun(PURCHASE_IMPORT_REPAIR_FEATURE, {
       db,
       runId,
@@ -117,7 +144,6 @@ describe("planStructuredRun", () => {
 
     expect(plan.call.skipCache).toBe(true);
     expect(plan.call.cacheTtlSeconds).toBeUndefined();
-    expect(plan.streaming).toBe(true);
   });
 
   it("labels the gateway call with the spec's feature and the caller's entity", () => {
@@ -135,48 +161,6 @@ describe("planStructuredRun", () => {
       entityId: "loc-1",
     });
   });
-
-  it("prices the usage row on the registry's provider for the tier's model", () => {
-    // A wrong provider here prices the row as null and drops it out of the
-    // cost ledger, so it is read from the registry, never hardcoded.
-    expect(
-      planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
-        db,
-        runId,
-        operation: "suggestCategory",
-      }).usage,
-    ).toMatchObject({
-      provider: "openai",
-      model: "gpt-6-luna",
-      feature: "product-identification",
-      cacheStatus: "none",
-    });
-
-    expect(
-      planStructuredRun(RECIPE_FLOW_PRIMARY_FEATURE, {
-        db,
-        runId,
-        operation: "recipeFlow",
-      }).usage,
-    ).toMatchObject({ provider: "openai", model: "gpt-6-sol" });
-
-    expect(
-      planStructuredRun(LOCATION_DESCRIPTION_FEATURE, {
-        db,
-        runId,
-        operation: "locationDescription",
-      }).usage,
-    ).toMatchObject({ provider: "google", model: "gemini-2.5-flash" });
-  });
-
-  it("records no usage when the caller has no database", () => {
-    expect(
-      planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
-        runId,
-        operation: "eval",
-      }).usage,
-    ).toBeUndefined();
-  });
 });
 
 it("keeps the model, gateway route, operation, and provider cause on a failed call", async () => {
@@ -184,11 +168,14 @@ it("keeps the model, gateway route, operation, and provider cause on a failed ca
     status: 429,
     code: 2018,
   });
-  const ports = {
-    // SAFETY: the fake always rejects before any conditional chat result is used.
-    chat: (async () => {
-      throw providerError;
-    }) as StructuredRunPorts["chat"],
+  const faux = fauxProvider();
+  const ports: StructuredRunPorts = {
+    callTarget: () => ({
+      model: faux.getModel(),
+      complete: async () => {
+        throw providerError;
+      },
+    }),
   };
   await expect(
     runStructuredFeature(
@@ -204,123 +191,9 @@ it("keeps the model, gateway route, operation, and provider cause on a failed ca
 });
 
 describe("runStructuredFeature", () => {
-  it("maps the fast tier to OpenAI Responses options and the spec's schema", async () => {
-    const { calls, ports } = fakeChat([UNUSED_RESPONSE]);
-
-    await runStructuredFeature(
-      PRODUCT_IDENTIFICATION_FEATURE,
-      request,
-      { db, runId, operation: "suggestCategory" },
-      ports,
-    );
-
-    const call = calls[0]!;
-    expect(call.modelOptions).toEqual({
-      max_output_tokens: 500,
-      reasoning: { effort: "low" },
-    });
-    expect(call.outputSchema).toBe(PRODUCT_IDENTIFICATION_FEATURE.schema);
-    expect(call.systemPrompts).toEqual(["frame"]);
-  });
-
-  it("maps the vision batch tier to compat options", async () => {
-    const { calls, ports } = fakeChat([UNUSED_RESPONSE]);
-
-    await runStructuredFeature(
-      LOCATION_DESCRIPTION_FEATURE,
-      request,
-      { db, runId, operation: "locationDescription" },
-      ports,
-    );
-
-    // No `reasoning_effort`: Gemini's own thinking stays on for batch work.
-    expect(calls[0]!.modelOptions).toEqual({ max_tokens: 1500 });
-  });
-
-  it("maps the reasoning tier to OpenAI Responses options", async () => {
-    const { calls, ports } = fakeChat([UNUSED_RESPONSE]);
-
-    await runStructuredFeature(
-      RECIPE_FLOW_PRIMARY_FEATURE,
-      request,
-      { db, runId, operation: "recipeFlow" },
-      ports,
-    );
-
-    expect(calls[0]!.modelOptions).toEqual({
-      max_output_tokens: 16000,
-      reasoning: { effort: "low" },
-    });
-  });
-
-  it("forces the non-streaming structured path for a cacheable feature", async () => {
-    const { calls, ports } = fakeChat([UNUSED_RESPONSE]);
-
-    await runStructuredFeature(
-      PRODUCT_IDENTIFICATION_FEATURE,
-      request,
-      { db, runId, operation: "suggestCategory" },
-      ports,
-    );
-
-    // `surfaceStructuredOutputRunErrors(..., { streaming: false })` clears
-    // `structuredOutputStream`, which is what makes the engine put
-    // `stream: false` on the wire for the gateway's cache key.
-    expect(calls[0]!.adapter.structuredOutputStream).toBeUndefined();
-  });
-
-  it("attaches a usage middleware only when the caller has a database", async () => {
-    const withDb = fakeChat([UNUSED_RESPONSE]);
-    await runStructuredFeature(
-      PRODUCT_IDENTIFICATION_FEATURE,
-      request,
-      { db, runId, operation: "suggestCategory" },
-      withDb.ports,
-    );
-    expect(withDb.calls[0]!.middleware).toHaveLength(1);
-
-    const withoutDb = fakeChat([UNUSED_RESPONSE]);
-    await runStructuredFeature(
-      PRODUCT_IDENTIFICATION_FEATURE,
-      request,
-      { operation: "eval", runId },
-      withoutDb.ports,
-    );
-    expect(withoutDb.calls[0]!.middleware).toHaveLength(0);
-  });
-});
-
-describe("runStructuredFeature repair", () => {
-  // `validate` closures below track their own call count instead of
-  // inspecting the fake's resolved value: the fake returns plain test
-  // fixtures, not real `ProductIdentification` output, and the point of these
-  // tests is the runner's repair *policy* (how many calls, what the second
-  // one carries), not the shape of any one tier's schema.
-  const okContext = (): AiRunContext<unknown> => ({
-    db,
-    runId,
-    operation: "suggestCategory",
-    validate: () => ({ ok: true }),
-  });
-
-  it("returns the first answer and places one call when validate passes", async () => {
-    const { calls, ports } = fakeChat([{ pass: 1 }]);
-
-    const result = await runStructuredFeature(
-      PRODUCT_IDENTIFICATION_FEATURE,
-      request,
-      okContext(),
-      ports,
-    );
-
-    expect(result).toEqual({ pass: 1 });
-    expect(calls).toHaveLength(1);
-  });
-
-  it("leaves plain calls unaffected when the caller passes no validate", async () => {
-    const { calls, ports } = fakeChat([
-      { never: "repaired" },
-      { unused: true },
+  it("maps the fast tier to OpenAI Responses options and forces the respond tool", async () => {
+    const { calls, ports } = fakePorts([
+      respondWith(PRODUCT_IDENTIFICATION_FIXTURE),
     ]);
 
     const result = await runStructuredFeature(
@@ -330,12 +203,123 @@ describe("runStructuredFeature repair", () => {
       ports,
     );
 
-    expect(result).toEqual({ never: "repaired" });
+    expect(result).toEqual(PRODUCT_IDENTIFICATION_FIXTURE);
+    const call = calls[0]!;
+    expect(call.options).toEqual({
+      maxTokens: 500,
+      reasoningEffort: "low",
+      toolChoice: { type: "function", name: RESPOND_TOOL_NAME },
+    });
+    expect(call.context.systemPrompt).toBe("frame");
+    expect(call.context.tools).toHaveLength(1);
+    expect(call.context.tools?.[0]?.name).toBe(RESPOND_TOOL_NAME);
+  });
+
+  // Regression: pi-ai `structuredClone`s strict tool parameters before every
+  // request; a TypeBox-wrapped schema carried a validator function and failed
+  // every structured call in workerd while this fake path still passed.
+  it("hands pi-ai respond-tool parameters it can clone", async () => {
+    const { calls, ports } = fakePorts([
+      respondWith(PRODUCT_IDENTIFICATION_FIXTURE),
+    ]);
+
+    await runStructuredFeature(
+      PRODUCT_IDENTIFICATION_FEATURE,
+      request,
+      { runId, operation: "suggestCategory" },
+      ports,
+    );
+
+    const parameters = calls[0]?.context.tools?.[0]?.parameters;
+    expect(() => structuredClone(parameters)).not.toThrow();
+  });
+
+  it("maps the vision batch tier to compat options with no forced reasoning effort", async () => {
+    const { calls, ports } = fakePorts([
+      respondWith(LOCATION_DESCRIPTION_FIXTURE),
+    ]);
+
+    await runStructuredFeature(
+      LOCATION_DESCRIPTION_FEATURE,
+      request,
+      { db, runId, operation: "locationDescription" },
+      ports,
+    );
+
+    // No `reasoningEffort`: Gemini's own thinking stays on for batch work.
+    expect(calls[0]!.options).toEqual({
+      maxTokens: 1500,
+      toolChoice: { type: "function", function: { name: RESPOND_TOOL_NAME } },
+    });
+  });
+
+  it("maps the reasoning tier to OpenAI Responses options", async () => {
+    const { calls, ports } = fakePorts([respondWith(RECIPE_FLOW_FIXTURE)]);
+
+    await runStructuredFeature(
+      RECIPE_FLOW_PRIMARY_FEATURE,
+      request,
+      { db, runId, operation: "recipeFlow" },
+      ports,
+    );
+
+    expect(calls[0]!.options).toEqual({
+      maxTokens: 16000,
+      reasoningEffort: "low",
+      toolChoice: { type: "function", name: RESPOND_TOOL_NAME },
+    });
+  });
+});
+
+describe("runStructuredFeature repair", () => {
+  const okContext = (): AiRunContext<unknown> => ({
+    db,
+    runId,
+    operation: "suggestCategory",
+    validate: () => ({ ok: true }),
+  });
+
+  it("returns the first answer and places one call when validate passes", async () => {
+    const { calls, ports } = fakePorts([
+      respondWith(PRODUCT_IDENTIFICATION_FIXTURE),
+    ]);
+
+    const result = await runStructuredFeature(
+      PRODUCT_IDENTIFICATION_FEATURE,
+      request,
+      okContext(),
+      ports,
+    );
+
+    expect(result).toEqual(PRODUCT_IDENTIFICATION_FIXTURE);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("leaves plain calls unaffected when the caller passes no validate", async () => {
+    const { calls, ports } = fakePorts([
+      respondWith({
+        ...PRODUCT_IDENTIFICATION_FIXTURE,
+        reasoning: "never repaired",
+      }),
+      respondWith({ ...PRODUCT_IDENTIFICATION_FIXTURE, reasoning: "unused" }),
+    ]);
+
+    const result = await runStructuredFeature(
+      PRODUCT_IDENTIFICATION_FEATURE,
+      request,
+      { db, runId, operation: "suggestCategory" },
+      ports,
+    );
+
+    expect(result.reasoning).toBe("never repaired");
     expect(calls).toHaveLength(1);
   });
 
   it("repairs once when validate rejects the first answer, then returns the second", async () => {
-    const { calls, ports } = fakeChat([{ bad: true }, { good: true }]);
+    const { calls, ports } = fakePorts([
+      respondWith({ ...PRODUCT_IDENTIFICATION_FIXTURE, reasoning: "bad" }),
+      respondWith({ ...PRODUCT_IDENTIFICATION_FIXTURE, reasoning: "good" }),
+    ]);
     let validateCalls = 0;
     const ctx: AiRunContext<unknown> = {
       db,
@@ -359,34 +343,26 @@ describe("runStructuredFeature repair", () => {
       ports,
     );
 
-    expect(result).toEqual({ good: true });
+    expect(result).toMatchObject({ reasoning: "good" });
     expect(calls).toHaveLength(2);
 
     // The first call is the caller's own request, untouched.
-    expect(calls[0]!.messages).toEqual(request.messages);
+    expect(calls[0]!.context.messages).toHaveLength(request.messages.length);
 
     // The second call appends one turn naming the issue and the rejected
     // answer, on top of the original messages — it does not replace them.
-    const repairMessages = calls[1]!.messages;
+    const repairMessages = calls[1]!.context.messages;
     expect(repairMessages).toHaveLength(request.messages.length + 1);
-    expect(repairMessages.slice(0, -1)).toEqual(request.messages);
-    const repairTurn: unknown = repairMessages.at(-1);
-    expect(repairTurn).toEqual(
-      expect.objectContaining({
-        role: "user",
-        content: expect.stringContaining(
-          "operation op-x references unknown operation setup-y",
-        ),
-      }),
+    const repairTurn = repairMessages.at(-1);
+    if (!repairTurn || repairTurn.role !== "user") {
+      throw new Error("The repair turn must be a user message.");
+    }
+    const repairText = userMessageText(repairTurn);
+    expect(repairText).toContain(
+      "operation op-x references unknown operation setup-y",
     );
-    expect(repairTurn).toEqual(
-      expect.objectContaining({ content: expect.stringContaining("bad") }),
-    );
-    expect(repairTurn).toEqual(
-      expect.objectContaining({
-        content: expect.stringMatching(/corrected, complete answer/i),
-      }),
-    );
+    expect(repairText).toContain("bad");
+    expect(repairText).toMatch(/corrected, complete answer/i);
   });
 
   it("plans the repair call to skip the gateway's response cache", () => {
@@ -412,7 +388,13 @@ describe("runStructuredFeature repair", () => {
   });
 
   it("throws with the issues when validate rejects the repair too", async () => {
-    const { calls, ports } = fakeChat([{ bad: 1 }, { stillBad: 2 }]);
+    const { calls, ports } = fakePorts([
+      respondWith({ ...PRODUCT_IDENTIFICATION_FIXTURE, reasoning: "bad-1" }),
+      respondWith({
+        ...PRODUCT_IDENTIFICATION_FIXTURE,
+        reasoning: "still-bad",
+      }),
+    ]);
     const ctx: AiRunContext<unknown> = {
       db,
       runId,
@@ -427,26 +409,44 @@ describe("runStructuredFeature repair", () => {
   });
 });
 
+/** `content is string` is the one shape `isInsideTypeGuard` recognizes as a
+ * type guard, so the `typeof` narrowing this needs lives in its own
+ * predicate function rather than inline. */
+function isStringContent(content: UserMessage["content"]): content is string {
+  return typeof content === "string";
+}
+
+function userMessageText(message: UserMessage): string {
+  return isStringContent(message.content) ? message.content : "";
+}
+
 describe("modelOptionsFor", () => {
   it("routes each model to its provider's option shape", () => {
     expect(modelOptionsFor("gpt-6-luna", { maxTokens: 100 })).toEqual({
-      max_output_tokens: 100,
-      reasoning: { effort: "low" },
+      maxTokens: 100,
+      reasoningEffort: "low",
+      toolChoice: { type: "function", name: RESPOND_TOOL_NAME },
     });
     expect(modelOptionsFor("claude-sonnet-5", { maxTokens: 100 })).toEqual({
-      max_tokens: 100,
-      thinking: { type: "adaptive" },
-      output_config: { effort: "low" },
+      maxTokens: 100,
+      thinkingEnabled: true,
+      effort: "low",
+      toolChoice: { type: "tool", name: RESPOND_TOOL_NAME },
     });
     expect(modelOptionsFor("gemini-2.5-flash", { maxTokens: 100 })).toEqual({
-      max_tokens: 100,
-      reasoning_effort: "low",
+      maxTokens: 100,
+      reasoningEffort: "low",
+      toolChoice: { type: "function", function: { name: RESPOND_TOOL_NAME } },
     });
   });
 
   it("honours an explicit effort", () => {
     expect(
       modelOptionsFor("gpt-6-luna", { maxTokens: 100, effort: "high" }),
-    ).toEqual({ max_output_tokens: 100, reasoning: { effort: "high" } });
+    ).toEqual({
+      maxTokens: 100,
+      reasoningEffort: "high",
+      toolChoice: { type: "function", name: RESPOND_TOOL_NAME },
+    });
   });
 });

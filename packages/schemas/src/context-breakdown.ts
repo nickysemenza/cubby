@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Per-model-call context breakdown the purchase agent attaches to each Flue
+ * Per-model-call context breakdown the purchase agent attaches to each
  * response's metadata as `contextBreakdown` (writer:
  * apps/purchase-agent/src/context-breakdown.ts; reader:
  * apps/web/src/lib/agent-context-breakdown.ts). Section values are tokens

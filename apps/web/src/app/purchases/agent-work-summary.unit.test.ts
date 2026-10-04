@@ -1,5 +1,5 @@
+import type { AgentConversationMessage } from "@cubby/schemas/agent-conversation";
 import type { PhotoRunImage } from "@cubby/schemas/photo-import-run";
-import type { FlueConversationMessage } from "@flue/sdk";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
@@ -38,10 +38,10 @@ describe("agent work summary", () => {
     ]);
     const observed = summarizeAgentWork(
       [
-        fromPartial<FlueConversationMessage>({
+        fromPartial<AgentConversationMessage>({
           parts: [
             {
-              type: "dynamic-tool",
+              type: "tool",
               toolName: "mcp__cubby__propose_photo_groups",
               state: "output-available",
               durationMs: 400,
@@ -80,11 +80,11 @@ describe("agent work summary", () => {
 
   it("groups recorded work and reports only measured durations", () => {
     const messages = [
-      fromPartial<FlueConversationMessage>({
+      fromPartial<AgentConversationMessage>({
         id: "agent-1",
         parts: [
           {
-            type: "dynamic-tool",
+            type: "tool",
             toolName: "mcp__cubby__get_entities",
             toolCallId: "check-1",
             state: "output-available",
@@ -95,7 +95,7 @@ describe("agent work summary", () => {
           // Current tools name their action in the input; the retired
           // per-action names above still read the same way.
           {
-            type: "dynamic-tool",
+            type: "tool",
             toolName: "mcp__cubby__entity_read",
             toolCallId: "check-2",
             state: "output-available",
@@ -104,7 +104,7 @@ describe("agent work summary", () => {
             durationMs: 760,
           },
           {
-            type: "dynamic-tool",
+            type: "tool",
             toolName: "mcp__cubby__photo_run",
             toolCallId: "proposal-1",
             state: "output-available",

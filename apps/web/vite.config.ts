@@ -17,10 +17,7 @@ import { mcpAppAsset } from "./tooling/mcp-app-asset.ts";
 import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
 import { resolveDevProfile } from "../../scripts/lib/dev-profile.ts";
 import { writeLocalDevConfig } from "./tooling/dev/config.ts";
-import {
-  createLocalDevPeers,
-  createLocalDevPeerPlugins,
-} from "./tooling/dev/config.ts";
+import { createLocalDevPeers } from "./tooling/dev/config.ts";
 import { readR2PublicUrlFromWrangler } from "./tooling/wrangler-public-config.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -266,7 +263,6 @@ export default defineConfig(async ({ command }) => {
   const deployPlugin: PluginOption[] = [];
   const { cloudflare } = await import("@cloudflare/vite-plugin");
   if (profile) {
-    deployPlugin.push(...(await createLocalDevPeerPlugins(profile)));
     const peers = await createLocalDevPeers(profile);
     deployPlugin.push(
       cloudflare({

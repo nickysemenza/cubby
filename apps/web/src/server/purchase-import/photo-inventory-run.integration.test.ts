@@ -201,7 +201,7 @@ describe("photo import finalize", () => {
       feature: "purchase_import_agent",
       provider: "fixture",
       model: "fixture-model",
-      operation: "flue.photo_inventory",
+      operation: "agent.photo_inventory",
       durationMs: 3_200,
     });
     expect((await loadRunDetail(ctx.db, original.publicId)).agentModelMs).toBe(

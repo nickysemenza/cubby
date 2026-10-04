@@ -11,33 +11,48 @@ type Fixture = { extractions: Extraction[]; audit: unknown };
 
 let fixture: Fixture = { extractions: [], audit: { findings: [] } };
 let calls: Array<{ feature: string; matched: string | null }> = [];
+let callSequence = 0;
 
-function respond(output: unknown, stream: boolean) {
-  const text = JSON.stringify(output);
+/**
+ * `runStructuredFeature` forces exactly one call to a `respond` tool and
+ * reads the answer from its arguments, not from response text. pi-ai's
+ * `Models.complete()` always streams on the wire (`models.js`'s `complete()`
+ * awaits `stream().result()`), so this answers with the OpenAI Responses SSE
+ * event sequence for a completed function-call turn: a `function_call`
+ * output item followed by its arguments in one `.done` event, mirroring how
+ * `openai-responses-shared.js` builds the `toolCall` content block.
+ */
+function respondWithToolCall(output: unknown) {
+  callSequence += 1;
+  const callId = `call_${callSequence}`;
+  const itemId = `fc_${callSequence}`;
   const usage = { input_tokens: 1, output_tokens: 1, total_tokens: 2 };
-  if (!stream)
-    return Response.json({
-      id: "gateway-response",
-      object: "response",
-      status: "completed",
-      model: "workerd-gateway",
-      output: [
-        {
-          type: "message",
-          id: "gateway-message",
-          role: "assistant",
-          status: "completed",
-          content: [{ type: "output_text", text, annotations: [] }],
-        },
-      ],
-      usage,
-    });
+  const item = {
+    type: "function_call",
+    id: itemId,
+    call_id: callId,
+    name: "respond",
+    arguments: JSON.stringify(output),
+    status: "completed",
+  };
+  // pi-ai only finishes a tool call on its `output_item.done`; without it the
+  // stream ends with an "unfinished tool call" error.
   const events = [
     { type: "response.created", response: { id: "gateway-response" } },
-    { type: "response.output_text.delta", delta: text },
+    {
+      type: "response.output_item.added",
+      output_index: 0,
+      item: { ...item, arguments: "", status: "in_progress" },
+    },
+    { type: "response.output_item.done", output_index: 0, item },
     {
       type: "response.completed",
-      response: { id: "gateway-response", status: "completed", usage },
+      response: {
+        id: "gateway-response",
+        status: "completed",
+        output: [item],
+        usage,
+      },
     },
   ];
   return new Response(
@@ -123,10 +138,9 @@ export default {
       });
     }
     const raw = await request.text();
-    const body = JSON.parse(raw) as { stream?: boolean };
     if (feature === "purchase-import-audit") {
       calls.push({ feature, matched: "audit" });
-      return respond(fixture.audit, body.stream === true);
+      return respondWithToolCall(fixture.audit);
     }
     if (
       feature === "purchase-import-extraction" ||
@@ -136,7 +150,7 @@ export default {
         raw.includes(match),
       );
       calls.push({ feature, matched: extraction?.match ?? null });
-      if (extraction) return respond(extraction.output, body.stream === true);
+      if (extraction) return respondWithToolCall(extraction.output);
     } else calls.push({ feature, matched: null });
     return new Response(`Unscripted gateway feature ${feature}`, {
       status: 501,

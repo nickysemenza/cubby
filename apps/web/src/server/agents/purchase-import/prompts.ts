@@ -1,5 +1,6 @@
 import type { BrowserCapture } from "@cubby/schemas/purchase-import";
-import type { ModelMessage } from "@tanstack/ai";
+
+import type { AiMessage } from "~/server/ai/run-feature";
 
 import { purchaseImportPromptText } from "./prompt-text.gen";
 
@@ -12,7 +13,7 @@ export const purchaseExtractionPrompt = (capture: BrowserCapture) => ({
     {
       role: "user",
       content: JSON.stringify(capture),
-    } satisfies ModelMessage,
+    } satisfies AiMessage,
   ],
 });
 
@@ -50,6 +51,6 @@ export const purchaseAuditPrompt = (
     {
       role: "user",
       content: JSON.stringify(renderedBatch),
-    } satisfies ModelMessage,
+    } satisfies AiMessage,
   ],
 });

@@ -72,7 +72,7 @@ export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
   return cfEnv?.TELEMETRY_QUEUE as TelemetryQueueProducer | undefined;
 };
 
-/** Queue producer for the private per-run Flue purchase-import Worker. */
+/** Queue producer for the private per-run purchase-import agent Worker. */
 export const getPurchaseAgentQueue = ():
   | PurchaseAgentQueueProducer
   | undefined => {

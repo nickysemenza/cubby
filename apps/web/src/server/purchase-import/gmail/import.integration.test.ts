@@ -88,7 +88,7 @@ describe("saved confirmation imports", () => {
     return { mail, event };
   };
 
-  it("starts and replays one browser-independent Flue run with frozen mail evidence", async () => {
+  it("starts and replays one browser-independent agent run with frozen mail evidence", async () => {
     const { mail, event } = await seed();
     const input = { eventId: event.id, evidenceChecksum: mail.rawChecksum };
     const sent: PurchaseAgentEvent[] = [];
@@ -627,7 +627,7 @@ describe("saved confirmation imports", () => {
         kind: "none",
       });
       // finish_import_run would run the LLM auditor over the committed
-      // Purchase (an external seam); the Flue scenario covers that finish.
+      // Purchase (an external seam); the agent scenario covers that finish.
       await getDb(ctx.db)
         .update(runTable)
         .set({ status: "needs_review", endedAt: new Date() })

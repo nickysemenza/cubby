@@ -1,15 +1,16 @@
-import { flueImportRunPurpose } from "@cubby/schemas/import-run-agent";
+import {
+  agentConversationSchema,
+  agentPromptSchema,
+  type AgentConversationMessage,
+  type AgentConversationPart,
+  type AgentConversationSettlement,
+} from "@cubby/schemas/agent-conversation";
+import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import {
   initiateRunEvidenceUploadInput,
   validationDiff,
 } from "@cubby/schemas/purchase-import";
 import type { RunOut } from "@cubby/schemas/run";
-import {
-  createFlueClient,
-  type AgentConversationObservationSnapshot,
-  type FlueConversationMessage,
-  type FlueConversationPart,
-} from "@flue/sdk";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { CircleIcon } from "@phosphor-icons/react/dist/csr/Circle";
@@ -19,7 +20,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type ReactNode,
   useEffect,
-  useMemo,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -30,6 +30,7 @@ import {
   agentUrl,
   runHasAgent,
   useAgentObservation,
+  type AgentConversationObservationSnapshot,
 } from "~/app/runs/agent-observation";
 import { usePhotoRunReview } from "~/app/runs/photo-group-review";
 import { PhotoImportRunView } from "~/app/runs/photo-run-detail";
@@ -92,10 +93,7 @@ const statusBadgeVariant = (status: string): BadgeVariant => {
 };
 
 const EMPTY_AGENT_SNAPSHOT: AgentConversationObservationSnapshot = {
-  conversation: undefined,
-  offset: undefined,
-  phase: "loading",
-  error: undefined,
+  phase: "connecting",
 };
 
 type RunControlInput = Parameters<typeof runOperations.control.call>[0];
@@ -155,7 +153,7 @@ function runActions(run: RunDetail): RunAction[] {
     );
   if (
     TERMINAL_RUN_STATUSES.has(run.status) &&
-    flueImportRunPurpose.safeParse(run.purpose).success
+    agentImportRunPurpose.safeParse(run.purpose).success
   ) {
     if (
       run.purpose !== "photo_inventory" &&
@@ -383,7 +381,7 @@ function AgentWorkOverview({
   additionalWork = [],
 }: {
   run: RunDetail;
-  messages: readonly FlueConversationMessage[];
+  messages: readonly AgentConversationMessage[];
   proposedGroups?: number;
   settledGroups?: number;
   additionalWork?: AgentWorkItem[];
@@ -659,7 +657,7 @@ function PhotoAgentWorkOverview({
   messages,
 }: {
   run: RunDetail;
-  messages: readonly FlueConversationMessage[];
+  messages: readonly AgentConversationMessage[];
 }) {
   const review = usePhotoRunReview(run.publicId, run.status, runHasAgent(run));
   const descriptionWork = summarizePhotoDescriptions(
@@ -690,7 +688,7 @@ function AgentOverview({
   messages,
 }: {
   run: RunDetail;
-  messages: readonly FlueConversationMessage[];
+  messages: readonly AgentConversationMessage[];
 }) {
   return run.purpose === "photo_inventory" ? (
     <PhotoAgentWorkOverview run={run} messages={messages} />
@@ -703,15 +701,15 @@ function AgentTranscriptDisclosure({
   messages,
   settlements,
 }: {
-  messages: FlueConversationMessage[];
-  settlements: Array<{ submissionId: string; outcome: string }>;
+  messages: AgentConversationMessage[];
+  settlements: AgentConversationSettlement[];
 }) {
   return (
     <details className="border-t border-border pt-2">
       <summary className="cursor-pointer text-sm font-medium">
         Agent messages and tool calls · {messages.length} messages
       </summary>
-      <FlueTranscript messages={messages} settlements={settlements} />
+      <AgentTranscript messages={messages} settlements={settlements} />
     </details>
   );
 }
@@ -728,15 +726,21 @@ function useAbsentAgentRefresh(
   }, [phase, dispatchEventId, observation]);
 }
 
+/** A one-off `GET …/agent`: the whole conversation snapshot for a stopped run. */
+async function fetchAgentHistory(publicId: string) {
+  const response = await fetch(agentUrl(publicId), {
+    credentials: "same-origin",
+  });
+  if (!response.ok)
+    throw new Error(`Agent history responded ${response.status}`);
+  return agentConversationSchema.parse(await response.json());
+}
+
 function TerminalAgentSurface({ run }: { run: RunDetail }) {
-  const client = useMemo(
-    () => createFlueClient({ url: agentUrl(run.publicId) }),
-    [run.publicId],
-  );
-  // The Flue conversation route, not a Cubby operation.
+  // The Cubby agent conversation route, not a Cubby operation.
   const history = useQuery({
-    queryKey: ["flue-agent-history", run.publicId],
-    queryFn: () => client.history(),
+    queryKey: ["agent-history", run.publicId],
+    queryFn: () => fetchAgentHistory(run.publicId),
   });
   return (
     <Section description="This terminal run is view-only. The complete materialized conversation remains available as durable evidence.">
@@ -766,10 +770,6 @@ function ActiveAgentSurface({ run }: { run: RunDetail }) {
     Boolean(run.latestProgress?.awaitingApproval);
   const [prompt, setPrompt] = useState("");
   const queryClient = useQueryClient();
-  const client = useMemo(
-    () => createFlueClient({ url: agentUrl(run.publicId) }),
-    [run.publicId],
-  );
   // Shared with the photo review, which refreshes from the same stream.
   const observation = useAgentObservation(run.publicId);
   const agent = useSyncExternalStore(
@@ -779,18 +779,33 @@ function ActiveAgentSurface({ run }: { run: RunDetail }) {
   );
   useAbsentAgentRefresh(agent.phase, run.dispatch?.eventId, observation);
   const promptMutation = useMutation({
-    mutationFn: async (value: string) =>
-      await client.send({
-        message: { kind: "user", body: value },
-        idempotencyKey: crypto.randomUUID(),
-      }),
+    mutationFn: async (value: string) => {
+      const response = await fetch(agentUrl(run.publicId), {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(
+          agentPromptSchema.parse({ kind: "user", body: value }),
+        ),
+      });
+      if (!response.ok)
+        throw new Error(`Agent prompt responded ${response.status}`);
+      return response.json();
+    },
     onSuccess: () => {
       setPrompt("");
       observation.refresh();
     },
   });
   const abortMutation = useMutation({
-    mutationFn: async () => await client.abort(),
+    mutationFn: async () => {
+      const response = await fetch(`${agentUrl(run.publicId)}/abort`, {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      if (!response.ok)
+        throw new Error(`Agent abort responded ${response.status}`);
+    },
     onSuccess: () => {
       observation.refresh();
       void invalidateOperationTags(queryClient, ripple.runOnly);
@@ -877,12 +892,12 @@ function ActiveAgentSurface({ run }: { run: RunDetail }) {
   );
 }
 
-function FlueTranscript({
+function AgentTranscript({
   messages,
   settlements,
 }: {
-  messages: FlueConversationMessage[];
-  settlements: Array<{ submissionId: string; outcome: string }>;
+  messages: AgentConversationMessage[];
+  settlements: AgentConversationSettlement[];
 }) {
   if (messages.length === 0 && settlements.length === 0)
     return <StatusText>No agent messages have been recorded yet.</StatusText>;
@@ -892,21 +907,21 @@ function FlueTranscript({
       aria-label="Agent conversation transcript"
     >
       {messages.map((message) => (
-        <FlueMessage key={message.id} message={message} />
+        <AgentMessage key={message.id} message={message} />
       ))}
       {settlements.map((settlement) => (
         <p
-          key={settlement.submissionId}
+          key={settlement.operationId}
           className="border-t border-border py-2 font-mono text-xs text-muted-foreground"
         >
-          {settlement.submissionId} · {settlement.outcome}
+          {settlement.operationId} · {settlement.outcome}
         </p>
       ))}
     </div>
   );
 }
 
-function FlueMessage({ message }: { message: FlueConversationMessage }) {
+function AgentMessage({ message }: { message: AgentConversationMessage }) {
   return (
     <article className="grid gap-1 border-b border-border py-2 last:border-0">
       <div className="flex flex-wrap items-center gap-2">
@@ -914,15 +929,10 @@ function FlueMessage({ message }: { message: FlueConversationMessage }) {
           {message.purpose}
         </Badge>
         <span className="text-xs text-muted-foreground">{message.display}</span>
-        {message.settlement ? (
-          <Badge variant={statusBadgeVariant(message.settlement.outcome)}>
-            {message.settlement.outcome}
-          </Badge>
-        ) : null}
       </div>
       {message.signal ? (
         <p className="font-mono text-xs text-muted-foreground">
-          {message.signal.tagName ?? "signal"}
+          {message.signal.type}
           {message.signal.attributes
             ? ` · ${Object.entries(message.signal.attributes)
                 .map(([key, value]) => `${key}=${value}`)
@@ -932,7 +942,7 @@ function FlueMessage({ message }: { message: FlueConversationMessage }) {
       ) : null}
       <div className="grid gap-2">
         {message.parts.map((part) => (
-          <FluePart
+          <AgentPart
             key={`${message.id}:${part.type}:${JSON.stringify(part)}`}
             part={part}
           />
@@ -942,7 +952,7 @@ function FlueMessage({ message }: { message: FlueConversationMessage }) {
   );
 }
 
-function FluePart({ part }: { part: FlueConversationPart }) {
+function AgentPart({ part }: { part: AgentConversationPart }) {
   if (part.type === "text" || part.type === "reasoning") {
     return (
       <p
@@ -957,39 +967,28 @@ function FluePart({ part }: { part: FlueConversationPart }) {
     );
   }
   if (part.type === "file") {
-    return part.url ? (
-      <a className="text-sm text-primary hover:underline" href={part.url}>
-        {part.filename ?? "Agent attachment"}
-      </a>
-    ) : (
+    return (
       <span className="text-sm text-muted-foreground">
-        {part.filename ?? "Agent attachment"}
+        {part.filename ?? "Agent attachment"} · {part.mediaType}
       </span>
     );
   }
-  if (part.type === "dynamic-tool") {
-    return (
-      <details className="border border-border bg-muted/30 p-2 text-xs">
-        <summary className="cursor-pointer font-mono">
-          {part.toolName} · {part.state}
-          {part.durationMs !== undefined ? ` · ${part.durationMs}ms` : ""}
-        </summary>
-        <div className="grid gap-2 pt-2">
-          <ToolValue label="Arguments" value={part.input} />
-          {part.state === "output-available" ? (
-            <ToolValue label="Result" value={part.output} />
-          ) : null}
-          {part.state === "output-error" ? (
-            <p className="text-destructive">{part.errorText}</p>
-          ) : null}
-        </div>
-      </details>
-    );
-  }
   return (
-    <pre className="overflow-auto bg-muted p-2 font-mono text-xs">
-      {JSON.stringify(part.data, null, 2)}
-    </pre>
+    <details className="border border-border bg-muted/30 p-2 text-xs">
+      <summary className="cursor-pointer font-mono">
+        {part.toolName} · {part.state}
+        {part.durationMs !== undefined ? ` · ${part.durationMs}ms` : ""}
+      </summary>
+      <div className="grid gap-2 pt-2">
+        <ToolValue label="Arguments" value={part.input} />
+        {part.state === "output-available" ? (
+          <ToolValue label="Result" value={part.output} />
+        ) : null}
+        {part.state === "output-error" ? (
+          <p className="text-destructive">{part.errorText}</p>
+        ) : null}
+      </div>
+    </details>
   );
 }
 

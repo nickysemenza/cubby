@@ -1,14 +1,13 @@
-import type {
-  AgentConversationObservation,
-  AgentConversationObservationSnapshot,
-} from "@flue/sdk";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createObservationRegistry,
+  openAgentObservation,
   photoReviewPollInterval,
   watchAgentChanges,
+  type AgentConversationObservation,
+  type AgentConversationObservationSnapshot,
 } from "./agent-observation";
 
 const created: Array<ReturnType<typeof fakeObservation>> = [];
@@ -21,12 +20,7 @@ const registry = createObservationRegistry(() => {
 const retainAgentObservation = registry.retain;
 
 function fakeObservation() {
-  let snapshot: AgentConversationObservationSnapshot = {
-    conversation: undefined,
-    offset: undefined,
-    phase: "loading",
-    error: undefined,
-  };
+  let snapshot: AgentConversationObservationSnapshot = { phase: "connecting" };
   const listeners = new Set<() => void>();
   const close = vi.fn();
   const observation: AgentConversationObservation = {
@@ -51,6 +45,7 @@ function fakeObservation() {
 
 const conversation = (messageCount: number, partsPerMessage = 1) =>
   fromPartial<AgentConversationObservationSnapshot["conversation"]>({
+    status: "running",
     messages: Array.from({ length: messageCount }, () => ({
       parts: Array.from({ length: partsPerMessage }),
     })),
@@ -202,5 +197,73 @@ describe("photoReviewPollInterval", () => {
         data: idle,
       }),
     ).toBe(false);
+  });
+});
+
+/**
+ * `openAgentObservation` against a fake `fetch`: regression coverage for the
+ * SSE line parser (a `data:` line split across chunk boundaries) and for a
+ * malformed snapshot not clobbering the last good one.
+ */
+describe("openAgentObservation", () => {
+  const snapshotLine = (status: "absent" | "idle" | "running") =>
+    `data: ${JSON.stringify({ status, messages: [], settlements: [] })}\n\n`;
+
+  function streamResponse(chunks: string[]) {
+    const encoder = new TextEncoder();
+    let index = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (index >= chunks.length) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(encoder.encode(chunks[index]));
+        index += 1;
+      },
+    });
+    return new Response(body, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reassembles a snapshot line split across chunk boundaries", async () => {
+    const full = snapshotLine("running");
+    const splitAt = Math.floor(full.length / 2);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        streamResponse([full.slice(0, splitAt), full.slice(splitAt)]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const observation = openAgentObservation("/api/agent");
+    await vi.waitFor(() =>
+      expect(observation.getSnapshot().conversation?.status).toBe("running"),
+    );
+    expect(observation.getSnapshot().phase).toBe("live");
+    observation.close();
+  });
+
+  it("keeps the last good conversation when a later line fails validation", async () => {
+    const goodLine = snapshotLine("running");
+    const malformedLine = "data: {not json\n\n";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(streamResponse([goodLine, malformedLine]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const observation = openAgentObservation("/api/agent");
+    await vi.waitFor(() =>
+      expect(observation.getSnapshot().conversation?.status).toBe("running"),
+    );
+    // The malformed line that followed must not have cleared the snapshot.
+    expect(observation.getSnapshot().conversation?.status).toBe("running");
+    observation.close();
   });
 });

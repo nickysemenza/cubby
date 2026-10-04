@@ -1,4 +1,4 @@
-import type { FlueConversationMessage } from "@flue/sdk";
+import type { AgentConversationMessage } from "@cubby/schemas/agent-conversation";
 import { useId, useMemo } from "react";
 
 import {
@@ -35,7 +35,7 @@ const SEGMENT_COLORS = [
 export function AgentContextPerCall({
   messages,
 }: {
-  messages: readonly FlueConversationMessage[];
+  messages: readonly AgentConversationMessage[];
 }) {
   const headingId = useId();
   const summary = useMemo(

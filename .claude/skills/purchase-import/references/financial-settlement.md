@@ -430,7 +430,7 @@ review, never a settlement by itself.
   `/cpe/yourpayments/transactions` (20 rows per POST page; render results into
   the DOM and read with `get_page_text`, since `javascript_tool` truncates
   returns), join free transactions to charges on (amount, date ±6 d) to get the
-  **order id**, then order id → Purchase. A Flue run uses the payment evidence
+  **order id**, then order id → Purchase. An agent run uses the payment evidence
   retained with its captures instead. Query _all_ purchases, not just
   zero-allocation ones — most wins are extra shipment legs on partially-settled
   orders, and refund-only purchases complete to net zero when the charge lands.

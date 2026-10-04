@@ -315,7 +315,7 @@ async function seedLocalProblemWork(
       });
       const terminal = await markRunFailed(db, {
         runId: run.id,
-        failureCode: "flue_failed",
+        failureCode: "agent_failed",
         detail: reason,
       });
       if (!terminal.failed)
@@ -354,7 +354,7 @@ async function assertLocalProblemWork(pool: Pool): Promise<void> {
   );
   assert.ok(failed);
   assert.equal(failed.status, "failed");
-  assert.equal(failed.failureCode, "flue_failed");
+  assert.equal(failed.failureCode, "agent_failed");
   assert.ok(failed.endedAt, "Failed Run must have terminal timing");
   assert.ok(pending);
   assert.equal(pending.status, "running");

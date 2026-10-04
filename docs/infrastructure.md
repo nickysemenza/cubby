@@ -16,7 +16,7 @@ dependency.
 | Concern                       | Provider                           | Production resource                                                                   |
 | ----------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------- |
 | Web application and APIs      | Cloudflare Workers                 | Worker `cubby`, custom domain `cubby.nickysemenza.com`                                |
-| Purchase-import orchestration | Cloudflare Workers + Flue          | Private Worker `purchase-agent`, queue `cubby-purchase-agent`, SQLite Durable Objects |
+| Purchase-import orchestration | Agents SDK + pi-durable            | Private Worker `purchase-agent`, queue `cubby-purchase-agent`, SQLite Durable Objects |
 | PostgreSQL                    | Neon through Cloudflare Hyperdrive | One Neon origin, two Hyperdrive configurations                                        |
 | Images and documents          | Cloudflare R2                      | Bucket `foo`, public origin `https://media.nickysemenza.com`                          |
 | Product lookup                | Main Worker + PostgreSQL           | `UpcLookupCache` table, upcitemdb fallback (no key)                                   |
@@ -84,29 +84,32 @@ are created or updated by `wrangler deploy` from the checked-in configuration.
 
 ### Private purchase-agent Worker
 
-`apps/purchase-agent` is the private Flue runtime for purchase imports. It has
+`apps/purchase-agent` is the private coordinator runtime for import runs: an
+Agents SDK `Agent` hosting a pi-durable conversation through `PiHarness`. It has
 no route, preview URL, database credential, document binding, or browser
 authority. Its checked-in Wrangler configuration declares:
 
 - queue consumer `cubby-purchase-agent`;
-- SQLite Durable Object class `FlueImportRunAgent`, one instance named
-  `import-run:<Run.id>` per run;
+- SQLite Durable Object class `PurchaseImportRunAgent` (binding
+  `PURCHASE_IMPORT_RUN`), one instance named `import-run:<Run.id>` or
+  `photo-inventory:<Run.id>` per run; pi keeps the transcript, inbox, and
+  tasks in the object's SQLite and Lifecycle jobs wake it after eviction;
 - direct named service binding `CUBBY_PURCHASE_SERVICE` to the web Worker's
   `PurchaseImportService` entrypoint, including run-bound MCP token issuance
   and private MCP request forwarding;
 - Workers AI binding `AI`, with every orchestration call routed through AI
-  Gateway `cubby` by the Flue provider adapter;
+  Gateway `cubby` by the shared pi-ai providers (`@cubby/shared/pi-gateway`);
 - var `SENTRY_ENVIRONMENT` (`test` disables Sentry entirely, which is what the
   workerd harness sets).
 
-Native Workers Traces carry the platform spans plus Flue's `invoke_agent` /
-`chat` / `execute_tool` spans and the consumer's `job.purchase_agent_event` span
-(`run.id`, `event.type`, `dispatch.outcome`) in Cloudflare. `app.ts` installs
-that instrumentation explicitly with `content: false`, because Flue's default
-install would attach prompts, tool arguments, and results as span attributes.
-Sentry remains wired by `src/sentry.ts` for Flue `log.*` calls, terminal failures
-as issues, and coordinator recovery as breadcrumbs. It does not receive traces.
-Model and tool content is never recorded in either destination.
+Native Workers Traces carry the platform spans and the consumer's
+`job.purchase_agent_event` span (`run.id`, `event.type`, `dispatch.outcome`) in
+Cloudflare. Sentry (`src/sentry.ts`) receives the agent's operational errors as
+issues; it does not receive traces. Model and tool content is never recorded in
+either destination. Each model response's usage reaches `AiUsage` through
+`recordAgentUsage`, and a Lifecycle job per submission reports its settlement
+(`reconcileSettledRun`, or `markRunFailed` with `agent_failed` /
+`agent_aborted`).
 
 The web Worker has the reverse `PURCHASE_AGENT` service binding solely to proxy
 authenticated conversation history, live updates, prompts, and aborts. This is
@@ -116,7 +119,7 @@ browser users reach the agent only through an authenticated web route.
 
 Account syncs and explicit Purchase validation/Product enrichment runs share
 the same queue. Each admitted run records a stable start-event id and the
-consumer fences duplicates and late deliveries before Flue admission. A
+consumer fences duplicates and late deliveries before agent admission. A
 VendorAccount never has more than one active run: targeted launches reject a
 busy account and link to its `PIR-*` page instead of creating an application
 waiting queue. Run-scoped evidence is stored beneath the import-run R2 prefix
@@ -127,7 +130,7 @@ code + PKCE, `offline_access`, no client secret, and the callback
 `https://cubby.nickysemenza.com/api/import/agent/oauth/callback`. The web Worker
 provisions the client idempotently when authorization begins. Better Auth's
 existing `oauth_refresh_token` row is the revocable grant; its value is never
-copied to Flue. The web Worker mints five-minute, run-bound delegation tokens
+copied to the agent. The web Worker mints five-minute, run-bound delegation tokens
 for MCP calls and rechecks the live grant and LedgerParty ownership on every
 request.
 
@@ -161,7 +164,7 @@ WHERE c.client_id = 'cubby-purchase-agent'
 GROUP BY c.client_id, c.public, c.require_pkce;
 ```
 
-Two local suites exercise the real Flue agent in the coupled workerd harness.
+Two local suites exercise the real agent in the coupled workerd harness.
 `apps/web/src/server/purchase-import/purchase-agent-scenarios.integration.test.ts`
 (PostgreSQL tier) scripts only the coordinator model and the web Worker's
 extractor/audit model, and asserts the database graph, run status, findings,
@@ -173,7 +176,7 @@ unsafe, or reviewable miss, with latency and token cost:
 
 ```bash
 pnpm --dir apps/web eval:purchase-decisions
-# FLUE_EVAL_CANDIDATES=gpt-6-sol:high PURCHASE_EVAL_CASES=identity-exact-variant-sku
+# AGENT_EVAL_CANDIDATES=gpt-6-sol:high PURCHASE_EVAL_CASES=identity-exact-variant-sku
 ```
 
 Neither uses an authenticated household session or production data.
@@ -449,7 +452,7 @@ For a new account or disaster recovery:
 5. Recreate Google Auth Platform configuration and rotate the Google client
    secret rather than copying it through documentation.
 6. Deploy `cubby`, then the private `purchase-agent`; verify their exact source
-   revision, queue/service binding, Flue storage, Gateway usage, and run
+   revision, queue/service binding, agent storage, Gateway usage, and run
    authenticated database, media, AI, Gmail, and auxiliary-service smoke tests.
 7. Reconnect native clients and regrant local macOS permissions.
 

@@ -28,7 +28,7 @@ export function parsePurchaseAgentEvent(input: unknown): PurchaseAgentEvent {
   });
 }
 
-/** Queue redelivery converges on exactly one Flue submission. */
+/** Queue redelivery converges on exactly one agent submission. */
 export function purchaseAgentEventIdempotencyKey(
   event: PurchaseAgentEvent,
 ): string {

@@ -1,217 +1,119 @@
 import {
-  createProvider,
-  type Provider,
-  type ProviderStreams,
-} from "@earendil-works/pi-ai";
-import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
-import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
-import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
-import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
-import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
-import {
   endpointFor,
-  gatewayBaseURL,
   gatewayQuery,
   requestUrl,
   strippedHeaders,
 } from "@cubby/shared/ai-gateway-request";
+import { cubbyPiProviders, type GatewayRoute } from "@cubby/shared/pi-gateway";
+import type { Provider } from "@earendil-works/pi-ai";
+import { z } from "zod";
 
 import { type ContextRecorder, withContextCapture } from "./context-breakdown";
 
 const CUBBY_GATEWAY_ID = process.env.AI_GATEWAY_ID || "cubby";
-const OPENAI_MODELS = ["gpt-6-sol", "gpt-6-luna"] as const;
-const ANTHROPIC_MODELS = ["claude-haiku-4-5", "claude-sonnet-5"] as const;
 
-type GatewayProvider = "openai" | "anthropic";
 type Gateway = Pick<AiGateway, "run">;
 type GatewayHost = { gateway(id: string): Gateway };
 export type PurchaseAgentTestModelBinding = Pick<Fetcher, "fetch">;
+type JsonBody = Awaited<ReturnType<typeof gatewayQuery>>;
 
-/** Provider SDK fetch shim for Cubby's binding-authenticated Universal Gateway. */
+/**
+ * pi ends a run on a terminating tool only when every call of that round
+ * terminates. A pending browser command batched with a progress report would
+ * therefore keep the coordinator running while the browser works, so the
+ * coordinator never gets parallel calls: one round, one call.
+ */
+/** A Messages `tool_choice` object; its other fields pass through. */
+const anthropicToolChoice = z.looseObject({ type: z.string() });
+
+export function withSequentialToolCalls(
+  route: GatewayRoute,
+  body: JsonBody,
+): JsonBody {
+  if (!Array.isArray(body.tools) || body.tools.length === 0) return body;
+  if (route === "anthropic") {
+    const choice = anthropicToolChoice.safeParse(body.tool_choice).data ?? {
+      type: "auto",
+    };
+    return {
+      ...body,
+      tool_choice: { ...choice, disable_parallel_tool_use: true },
+    };
+  }
+  return { ...body, parallel_tool_calls: false };
+}
+
+/** Provider fetch through Cubby's binding-authenticated Universal Gateway. */
 export function createCubbyGatewayFetch(
-  provider: GatewayProvider,
+  route: GatewayRoute,
   gatewayForRequest: () => Gateway,
-  agentScope?: () => string,
+  runId: () => string | undefined,
 ): typeof fetch {
   return async (input, init) => {
     const headers = strippedHeaders(init);
-    const runId = importRunIdFromAgentIdentity(agentScope?.());
-    const metadata = {
+    const base = {
       feature: "purchase_import_agent",
       jobKind: "purchase_import_run",
     };
-    if (runId) Object.assign(metadata, { runId });
+    const run = runId();
+    const metadata = run ? { ...base, runId: run } : base;
     return gatewayForRequest().run(
       {
-        provider,
-        endpoint: endpointFor(provider, requestUrl(input)),
+        provider: route,
+        endpoint: endpointFor(route, requestUrl(input)),
         headers: Object.fromEntries(headers.entries()),
-        query: await gatewayQuery(init?.body),
+        query: withSequentialToolCalls(route, await gatewayQuery(init?.body)),
       },
       {
-        gateway: {
-          id: CUBBY_GATEWAY_ID,
-          metadata,
-        },
+        gateway: { id: CUBBY_GATEWAY_ID, metadata },
         signal: init?.signal ?? undefined,
       },
     );
   };
 }
 
-function streamsThroughGateway(
-  streams: ProviderStreams,
-  gatewayFetch: typeof fetch,
-): ProviderStreams {
-  return {
-    stream: (model, context, options) =>
-      streams.stream(model, context, { ...options, fetch: gatewayFetch }),
-    streamSimple: (model, context, options) =>
-      streams.streamSimple(model, context, {
-        ...options,
-        fetch: gatewayFetch,
+/**
+ * The workerd harness's deterministic model peer. This binding is
+ * deliberately absent from the deployed Worker; a test service binding cannot
+ * clone the provider's AbortSignal, so the request is rebuilt without it.
+ */
+function testModelFetch(
+  route: GatewayRoute,
+  testModel: PurchaseAgentTestModelBinding,
+): typeof fetch {
+  return async (input, init) => {
+    const body = withSequentialToolCalls(route, await gatewayQuery(init?.body));
+    return testModel.fetch(
+      new Request(requestUrl(input), {
+        method: init?.method ?? "POST",
+        headers: init?.headers,
+        body: JSON.stringify(body),
       }),
+    );
   };
 }
 
-function bindingAuth(provider: string) {
-  return {
-    apiKey: {
-      name: `Cubby ${provider} Gateway binding`,
-      resolve: async () => ({
-        auth: { apiKey: "binding-authenticated" },
-        source: "Cloudflare AI Gateway binding",
-      }),
-    },
-  };
-}
-
-// Pi's catalog has not caught up to GPT-6. Responses uses these ids
-// verbatim; each inherits its template's context and output limits. Costs are
-// USD per 1M tokens from OpenAI's pricing page (no long-context tiers).
-const SYNTHESIZED_MODELS = {
-  "gpt-6-sol": {
-    template: "gpt-5.5-pro",
-    name: "GPT-6 Sol",
-    cost: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
-  },
-  "gpt-6-luna": {
-    template: "gpt-5.6-luna",
-    name: "GPT-6 Luna",
-    cost: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
-  },
-} satisfies Record<
-  (typeof OPENAI_MODELS)[number],
-  {
-    template: string;
-    name: string;
-    cost: {
-      input: number;
-      output: number;
-      cacheRead: number;
-      cacheWrite: number;
-    };
-  }
->;
-
-const synthesizedModel = (id: string) =>
-  Object.entries(SYNTHESIZED_MODELS).find(([known]) => known === id)?.[1];
-
-function selectedModels<const TIds extends readonly string[]>(
-  provider: Provider,
-  ids: TIds,
-  baseUrl: string,
-) {
-  return ids.map((id) => {
-    const declared = provider
-      .getModels()
-      .find((candidate) => candidate.id === id);
-    const synthesized = synthesizedModel(id);
-    const model =
-      declared ??
-      (synthesized
-        ? (() => {
-            const template = provider
-              .getModels()
-              .find((candidate) => candidate.id === synthesized.template);
-            if (!template) {
-              throw new Error(`Pi does not declare ${synthesized.template}`);
-            }
-            return {
-              ...template,
-              id,
-              name: synthesized.name,
-              cost: synthesized.cost,
-            };
-          })()
-        : undefined);
-    if (!model) throw new Error(`Pi does not declare ${id}`);
-    return { ...model, baseUrl };
-  });
-}
-
-/** All coordinator and optional escalation models, forced through Gateway. */
-export function cubbyAiGatewayProviders(
-  aiForRequest: () => GatewayHost,
-  testModel?: PurchaseAgentTestModelBinding,
-  contextCapture?: { recorder: ContextRecorder; scope: () => string },
-): Provider[] {
-  const gateway = () => aiForRequest().gateway(CUBBY_GATEWAY_ID);
-  // This binding is intentionally absent from the deployed worker. Workerd
-  // harnesses can supply a deterministic Responses peer here, while every
-  // normal request still goes through the binding-authenticated Gateway.
-  const testFetch: typeof fetch | undefined = testModel
-    ? (input, init) => {
-        // Flue passes an AbortSignal to provider fetch. Unlike the production
-        // Gateway binding, a test service binding cannot clone it.
-        const source = input instanceof Request ? input : undefined;
-        return testModel.fetch(
-          new Request(requestUrl(input), {
-            method: init?.method ?? source?.method,
-            headers: init?.headers ?? source?.headers,
-            body:
-              init?.body ??
-              (source?.method === "GET" || source?.method === "HEAD"
-                ? undefined
-                : source?.body),
-          }),
-        );
-      }
-    : undefined;
-  // Every model call, test peer included, is measured for the run page's
-  // per-call context breakdown (sizes only; see context-breakdown.ts).
-  const captured = (fetchFn: typeof fetch) =>
-    contextCapture ? withContextCapture(fetchFn, contextCapture) : fetchFn;
-  const openaiFetch = captured(
-    testFetch ??
-      createCubbyGatewayFetch("openai", gateway, contextCapture?.scope),
+/**
+ * Every coordinator model call rides the Gateway, or the test peer when the
+ * harness supplies one, and is measured for the run page's per-call context
+ * breakdown (sizes only; see context-breakdown.ts).
+ */
+export function cubbyAgentProviders(input: {
+  ai: () => GatewayHost;
+  runId: () => string | undefined;
+  recorder: ContextRecorder;
+  testModel?: PurchaseAgentTestModelBinding;
+}): Provider[] {
+  const gateway = () => input.ai().gateway(CUBBY_GATEWAY_ID);
+  return cubbyPiProviders((route) =>
+    withContextCapture(
+      input.testModel
+        ? testModelFetch(route, input.testModel)
+        : createCubbyGatewayFetch(route, gateway, input.runId),
+      { recorder: input.recorder, scope: () => CONTEXT_SCOPE },
+    ),
   );
-  const anthropicFetch = captured(
-    testFetch ??
-      createCubbyGatewayFetch("anthropic", gateway, contextCapture?.scope),
-  );
-  return [
-    createProvider({
-      id: "openai",
-      name: "OpenAI through Cubby AI Gateway",
-      auth: bindingAuth("OpenAI"),
-      models: selectedModels(
-        openaiProvider(),
-        OPENAI_MODELS,
-        gatewayBaseURL("openai"),
-      ),
-      api: streamsThroughGateway(openAIResponsesApi(), openaiFetch),
-    }),
-    createProvider({
-      id: "anthropic",
-      name: "Anthropic through Cubby AI Gateway",
-      auth: bindingAuth("Anthropic"),
-      models: selectedModels(
-        anthropicProvider(),
-        ANTHROPIC_MODELS,
-        gatewayBaseURL("anthropic"),
-      ),
-      api: streamsThroughGateway(anthropicMessagesApi(), anthropicFetch),
-    }),
-  ];
 }
+
+/** One agent instance per Durable Object, so one recorder scope suffices. */
+export const CONTEXT_SCOPE = "run";

@@ -24,14 +24,10 @@ import type {
 } from "@cubby/schemas/purchase-agent-rpc";
 import { z } from "zod";
 
-export type { AgentUsageEvent };
-
 const purchaseImportServiceResult = z
   .record(z.string(), z.unknown())
   .nullable();
-export type PurchaseImportServiceResult = z.infer<
-  typeof purchaseImportServiceResult
->;
+type PurchaseImportServiceResult = z.infer<typeof purchaseImportServiceResult>;
 
 interface PurchaseImportMcpAccess {
   token: string;
@@ -98,7 +94,7 @@ const serviceBindingSchema = z.object({
   CUBBY_PURCHASE_SERVICE: z.custom<PurchaseImportService>(),
 });
 
-// `env` is validated here, so it stays `unknown`: typing it as Flue's
+// `env` is validated here, so it stays `unknown`: typing it as the agent's
 // `CloudflareContext["env"]` drags the whole agent runtime (pi-ai, openai,
 // typebox) into the web typecheck through `mac-import-continuation-peer.ts`.
 export function purchaseImportService(env: unknown): PurchaseImportService {

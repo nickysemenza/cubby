@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./activity": "./src/activity.ts",
+    "./agent-conversation": "./src/agent-conversation.ts",
     "./availability": "./src/availability.ts",
     "./batch": "./src/batch.ts",
     "./codec": "./src/codec.ts",

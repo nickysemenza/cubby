@@ -532,7 +532,7 @@ const narrowedSchemas = new Map<string, ReturnType<typeof toolSchema>>();
 /**
  * The description and input schema of `tool` limited to `allowed` actions
  * (`${tool}.${action}`), or null when none is allowed. The purchase agent's
- * catalog is narrowed this way: Flue mounts whole tools and resends every
+ * catalog is narrowed this way: the agent mounts whole tools and resends every
  * mounted schema on each model call, so an agent sees only its actions.
  */
 export function narrowedToolSchema(

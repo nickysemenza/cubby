@@ -2,7 +2,7 @@ import { tradeSchema } from "./task-fields";
 import { z } from "zod";
 import { productCategoryShortcode } from "./identifier-fields";
 import { externalIdKind, externalIdSource } from "./external-id";
-import { flueImportRunPurpose } from "./import-run-agent";
+import { agentImportRunPurpose } from "./import-run-agent";
 
 import { money } from "./money";
 import { runPurpose, runStatus, runTrigger } from "./run-fields";
@@ -176,7 +176,7 @@ const stableImportItemId = z
  * retrying it verbatim returns the original ledger result.
  */
 export const purchaseImportRunExecution = z.object({
-  // The private run id: it is what the delegation token and Flue instance
+  // The private run id: it is what the delegation token and agent instance
   // carry, so the public code can change without touching agent state.
   runId: z.uuid(),
   operationId: importOperationId,
@@ -744,7 +744,7 @@ export const importCoordinatorModel = z.literal("gpt-6-sol");
 const agentEventBase = z.object({
   version: z.literal(1),
   runId: z.uuid(),
-  purpose: flueImportRunPurpose.optional(),
+  purpose: agentImportRunPurpose.optional(),
   coordinatorModel: importCoordinatorModel.optional(),
   eventId: z.string().trim().min(1).max(256),
 });
@@ -1079,7 +1079,7 @@ export type ValidationDiff = z.infer<typeof validationDiff>;
 
 /**
  * A person applies a reviewed subset of a validation diff. Never an agent
- * tool: it is absent from the MCP catalog and the Flue capability matrix.
+ * tool: it is absent from the MCP catalog and the agent's capability matrix.
  */
 export const applyValidationCorrectionsInput = z.object({
   runId: runShortcode,

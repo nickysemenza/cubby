@@ -786,7 +786,7 @@ try {
       assert.ok(failed);
       assert.ok(pending);
       assert.equal(failed.status, "failed");
-      assert.equal(failed.failureCode, "flue_failed");
+      assert.equal(failed.failureCode, "agent_failed");
       assert.ok(failed.endedAt);
       assert.equal(failed.attempts, 1);
       assert.match(failed.lastError, /Synthetic provider failure/u);

@@ -4,7 +4,7 @@ export const INTERNAL_AGENT_HEADER_VALUE = "purchase-import-proxy-v1";
 
 export type InternalAgentRoute = { status: 403 | 404 } | { request: Request };
 
-/** Authorization and prefix removal before the request reaches Flue's router. */
+/** Authorization and prefix removal before the request reaches the agent's router. */
 export function internalAgentRoute(request: Request): InternalAgentRoute {
   const url = new URL(request.url);
   if (

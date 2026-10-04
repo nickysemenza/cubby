@@ -24,7 +24,7 @@ type AiProvider = z.infer<typeof aiProvider>;
  * `/compat/chat/completions` (the only path to Google AI Studio).
  */
 const chatRoute = z.enum(["anthropic", "openai-responses", "compat"]);
-type ChatRoute = z.infer<typeof chatRoute>;
+export type ChatRoute = z.infer<typeof chatRoute>;
 
 interface ChatAiModelConfig {
   role: "chat";
@@ -180,13 +180,6 @@ const AI_MODEL_REGISTRY = {
     provider: "typesafe",
   },
 } as const satisfies Record<SupportedAiModel, AiModelConfig>;
-
-export type SupportedAiModelRef = {
-  [Model in SupportedAiModel]: {
-    provider: (typeof AI_MODEL_REGISTRY)[Model]["provider"];
-    model: Model;
-  };
-}[SupportedAiModel];
 
 /**
  * The cookbook catalog prices its extraction models. The same pinned Rust

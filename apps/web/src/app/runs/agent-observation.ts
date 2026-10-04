@@ -1,18 +1,196 @@
 import {
-  createFlueClient,
-  type AgentConversationObservation,
-  type AgentConversationObservationPhase,
-  type AgentConversationObservationSnapshot,
-} from "@flue/sdk";
+  agentConversationSchema,
+  type AgentConversation,
+} from "@cubby/schemas/agent-conversation";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
+import { EventSourceParserStream } from "eventsource-parser/stream";
 import { useEffect, useSyncExternalStore } from "react";
 
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import type { UnparsedError } from "~/lib/error-utils";
 
-/** The Flue conversation route for a run's agent, not a Cubby operation. */
+/** The Cubby agent conversation route for a run's agent (`GET`/`POST`/`stream`/`abort`). */
 export const agentUrl = (publicId: string) =>
   `/api/import/runs/${encodeURIComponent(publicId)}/agent`;
+
+/** The client's connection phase, distinct from the conversation's own `status`. */
+export type AgentConversationObservationPhase =
+  | "connecting"
+  | "live"
+  | "absent"
+  | "closed"
+  | "error";
+
+export interface AgentConversationObservationSnapshot {
+  phase: AgentConversationObservationPhase;
+  conversation?: AgentConversation;
+  error?: Error;
+}
+
+export interface AgentConversationObservation {
+  subscribe: (listener: () => void) => () => void;
+  getSnapshot: () => AgentConversationObservationSnapshot;
+  /** A one-off GET, for a run with no agent yet (the stream has nothing to push). */
+  refresh: () => void;
+  close: () => void;
+}
+
+const INITIAL_SNAPSHOT: AgentConversationObservationSnapshot = {
+  phase: "connecting",
+};
+
+/** Every event's `data` is a full snapshot; a malformed one is dropped, not applied. */
+function parseSnapshotData(data: string): AgentConversation | undefined {
+  if (!data || data === "[DONE]") return undefined;
+  try {
+    const parsed = agentConversationSchema.safeParse(JSON.parse(data));
+    return parsed.success ? parsed.data : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Decodes and parses SSE framing (tolerating a `data:` line split across
+ * chunk boundaries — `EventSourceParserStream` buffers a partial line itself).
+ */
+async function readEvents(
+  body: ReadableStream<BufferSource>,
+  onData: (data: string) => void,
+) {
+  const reader = body
+    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(new EventSourceParserStream())
+    .getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      onData(value.data);
+    }
+  } finally {
+    // SILENT: canceling an already-closed or already-errored reader just
+    // rejects; the stream is ending either way, so there is nothing left to
+    // surface it to.
+    await reader.cancel().catch(() => {});
+  }
+}
+
+const phaseForStatus = (
+  status: AgentConversation["status"],
+): AgentConversationObservationPhase =>
+  status === "absent" ? "absent" : "live";
+
+/**
+ * Opens the run's agent conversation: an SSE connection to `${url}/stream`
+ * (reconnected with backoff while open) plus a `refresh` escape hatch for a
+ * plain `GET ${url}` snapshot. Every reader of a run shares one of these
+ * through the registry below.
+ */
+export function openAgentObservation(
+  url: string,
+): AgentConversationObservation {
+  const listeners = new Set<() => void>();
+  let snapshot = INITIAL_SNAPSHOT;
+  let closed = false;
+  let controller: AbortController | undefined;
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let attempt = 0;
+
+  const emit = () => {
+    for (const listener of listeners) listener();
+  };
+  const setSnapshot = (next: AgentConversationObservationSnapshot) => {
+    snapshot = next;
+    emit();
+  };
+
+  const scheduleReconnect = () => {
+    if (closed) return;
+    attempt += 1;
+    const delayMs = Math.min(30_000, 1_000 * 2 ** (attempt - 1));
+    reconnectTimer = setTimeout(connect, delayMs);
+  };
+
+  function connect() {
+    if (closed) return;
+    controller = new AbortController();
+    const { signal } = controller;
+    // Keep the last-good conversation visible across a reconnect; only the
+    // very first connect (no conversation yet) shows the connecting state.
+    if (!snapshot.conversation)
+      setSnapshot({ ...snapshot, phase: "connecting" });
+    fetch(`${url}/stream`, {
+      credentials: "same-origin",
+      headers: { accept: "text/event-stream" },
+      signal,
+    })
+      .then(async (response) => {
+        if (!response.ok || !response.body) {
+          throw new Error(`Agent stream responded ${response.status}`);
+        }
+        attempt = 0;
+        await readEvents(response.body, (data) => {
+          const conversation = parseSnapshotData(data);
+          if (conversation)
+            setSnapshot({
+              phase: phaseForStatus(conversation.status),
+              conversation,
+            });
+        });
+        if (closed || signal.aborted) return;
+        // The server closed the stream; reconnect rather than going stale.
+        scheduleReconnect();
+      })
+      .catch((error: UnparsedError) => {
+        if (closed || signal.aborted) return;
+        setSnapshot({
+          ...snapshot,
+          phase: "error",
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
+        scheduleReconnect();
+      });
+  }
+
+  connect();
+
+  return {
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    getSnapshot: () => snapshot,
+    refresh: () => {
+      fetch(url, { credentials: "same-origin" })
+        .then(async (response) => {
+          if (!response.ok) return;
+          const parsed = agentConversationSchema.safeParse(
+            await response.json().catch(() => null),
+          );
+          if (parsed.success)
+            setSnapshot({
+              phase: phaseForStatus(parsed.data.status),
+              conversation: parsed.data,
+            });
+        })
+        .catch(() => {
+          // SILENT: `refresh` is a best-effort escape hatch alongside the
+          // live SSE connection, which already owns error/reconnect
+          // handling; a failed one-off refresh leaves the current snapshot
+          // in place.
+        });
+    },
+    close: () => {
+      closed = true;
+      controller?.abort();
+      if (reconnectTimer !== undefined) clearTimeout(reconnectTimer);
+      setSnapshot({ ...snapshot, phase: "closed" });
+      listeners.clear();
+    },
+  };
+}
 
 interface Entry {
   observation: AgentConversationObservation;
@@ -61,7 +239,7 @@ export function createObservationRegistry(
 }
 
 const registry = createObservationRegistry((publicId) =>
-  createFlueClient({ url: agentUrl(publicId) }).observe({ live: "sse" }),
+  openAgentObservation(agentUrl(publicId)),
 );
 const { entryFor } = registry;
 const retainAgentObservation = registry.retain;

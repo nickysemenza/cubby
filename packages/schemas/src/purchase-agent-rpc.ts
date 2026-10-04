@@ -1,6 +1,6 @@
 /**
  * The input contract of the web Worker's private `PurchaseImportService` RPC
- * (`apps/web/src/cf-server.ts`), as called by the Flue Worker
+ * (`apps/web/src/cf-server.ts`), as called by the purchase-agent Worker
  * (`apps/purchase-agent`). Both sides take their types from these schemas
  * (`z.infer`), so a field added on one side cannot be forgotten on the other.
  * Every method resolves authority from the Run; none accepts a party, account,
@@ -82,7 +82,7 @@ export const settleChargeHuntInput = purchaseAgentOperationRef.extend({
 });
 
 export const markRunFailedInput = purchaseAgentOperationRef.extend({
-  failureCode: z.enum(["flue_failed", "flue_aborted"]),
+  failureCode: z.enum(["agent_failed", "agent_aborted"]),
   detail: z.string().optional(),
   dispatchEventId: z.string().optional(),
 });

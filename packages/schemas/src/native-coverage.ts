@@ -287,13 +287,13 @@ export const nativeCoverage = {
       "run.import-timeline",
       "run.live-progress",
     ]),
-    // The agent conversation is web-only on purpose: it streams from the Flue agent route (SSE
+    // The agent conversation is web-only on purpose: it streams from the import-run agent route (SSE
     // plus prompt and abort over its own protocol), not a Cubby operation, and CubbyKit has no
     // client, reconnect or transcript model for it. docs/todos.md ("Native agent conversation
     // streaming") records what promoting it takes.
     ...unsupported(
       ["run.import-agent-live", "run.import-agent-stopped"],
-      "The live agent conversation is web-only: it streams from the Flue agent route, which native has no client for. Prompt, stop and review the agent on web.",
+      "The live agent conversation is web-only: it streams from the import-run agent route, which native has no client for. Prompt, stop and review the agent on web.",
     ),
   },
   /**

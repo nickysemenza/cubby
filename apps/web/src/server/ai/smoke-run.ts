@@ -472,6 +472,14 @@ async function runCase(
           { db, runId, operation: "smoke.purchaseMail" },
           structuredPorts,
         ),
+        // A caller-supplied `structuredPorts` only ever comes from a test
+        // double (see `StructuredRunPorts`'s doc comment): with a real
+        // model call now recording its own usage row unconditionally
+        // (`runStructuredFeature`'s one-writer invariant), a faked
+        // transport is the only remaining signal that no model was really
+        // called — unlike the other cases above, this one has no
+        // result-shape heuristic to fall back on.
+        noModelCall: structuredPorts !== undefined,
       };
     }
     case "purchaseAudit": {

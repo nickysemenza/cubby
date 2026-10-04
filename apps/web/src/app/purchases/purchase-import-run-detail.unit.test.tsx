@@ -50,7 +50,7 @@ const run: RunDetail = {
   successorRunPublicId: null,
   coordinatorModel: "test-model",
   skillRevision: "purchase-import@test",
-  runtimeRevision: "flue@test",
+  runtimeRevision: "pi-durable@test",
   agentModelMs: 3_200,
   source: { kind: "vendor export", vendorName: "Fixture vendor" },
   actor: {
@@ -190,23 +190,20 @@ beforeEach(() => {
       };
     throw new Error(`Unexpected operation: ${operation}`);
   });
-  // The agent conversation stream stays a plain route.
+  // The agent conversation route (history, stream, prompt, abort) stays a
+  // plain fetch, not an operation dispatch.
   vi.stubGlobal(
     "fetch",
-    vi.fn().mockImplementation(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({
-            v: 1,
-            conversationId: "agent-1",
-            offset: "0",
-            messages: [],
-            settlements: [],
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
+    vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({ status: "idle", messages: [], settlements: [] }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
         ),
       ),
-    ),
   );
 });
 
