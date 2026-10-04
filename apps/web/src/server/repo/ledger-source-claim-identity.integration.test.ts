@@ -9,6 +9,10 @@ import { describe, expect, it } from "vitest";
 import { ledgerSourceClaim } from "~/server/db/schema";
 import { unwrapDb } from "~/server/repo/database-helpers";
 import { createExpense, updateExpense } from "~/server/repo/expense/crud";
+import {
+  createFinancialAccount,
+  updateFinancialAccount,
+} from "~/server/repo/financial-account";
 import { createLedgerParty } from "~/server/repo/ledger-party";
 import {
   createLedgerTransfer,
@@ -91,7 +95,7 @@ describe("source claim identity round trip", () => {
     expect(await rows()).toEqual(before);
   });
 
-  it("lets a keyed claim change its reconciliation but not its evidence", async () => {
+  it("lets a provider-keyed claim change its reconciliation and its evidence", async () => {
     const { id, read } = await expenseWithProviderClaim();
 
     const reviewed = await updateExpense(
@@ -119,26 +123,141 @@ describe("source claim identity round trip", () => {
       },
     ]);
 
+    // A provider-keyed claim keeps its key through an evidence edit, so the provider id
+    // that made it still resolves to this claim and a later import cannot duplicate it.
+    const edited = await updateExpense(
+      ctx.db,
+      id,
+      {
+        sourceClaims: [
+          ledgerSourceClaimInput.parse(
+            resend(read, {
+              normalizedEvidence: { ...evidence, description: "Edited" },
+              reconciliation: {
+                decision: "accept_target_amount",
+                note: "Reviewed against the synthetic receipt",
+              },
+            }),
+          ),
+        ],
+      },
+      ctx.actor,
+    );
+    expect(edited.output.sourceClaims).toMatchObject([
+      {
+        sourceKey: read.sourceKey,
+        normalizedEvidence: { description: "Edited" },
+      },
+    ]);
+    const reimported = await updateExpense(
+      ctx.db,
+      id,
+      {
+        sourceClaims: [
+          claimOf({
+            normalizedEvidence: { ...evidence, description: "Edited" },
+            reconciliation: {
+              decision: "accept_target_amount",
+              note: "Reviewed against the synthetic receipt",
+            },
+          }),
+        ],
+      },
+      ctx.actor,
+    );
+    expect(reimported.output.sourceClaims).toHaveLength(1);
+    expect(reimported.output.sourceClaims[0]?.sourceKey).toBe(read.sourceKey);
+  });
+
+  it("re-hashes an evidence-keyed claim in one step when its evidence is edited", async () => {
+    const created = await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Evidence-keyed placeholder",
+        cost: 10,
+        sourceClaims: [claimOf({ providerId: undefined })],
+      }),
+      ctx.actor,
+    );
+    const [read] = created.output.sourceClaims;
+    if (!read) throw new Error("expected a claim");
+
+    const edited = await updateExpense(
+      ctx.db,
+      created.output.id,
+      {
+        sourceClaims: [
+          ledgerSourceClaimInput.parse(
+            resend(read, {
+              normalizedEvidence: { ...evidence, description: "Edited" },
+            }),
+          ),
+        ],
+      },
+      ctx.actor,
+    );
+
+    expect(edited.output.sourceClaims).toHaveLength(1);
+    expect(edited.output.sourceClaims[0]?.sourceKey).not.toBe(read.sourceKey);
+    // The new key is exactly what a fresh claim with that evidence would get.
+    await expect(
+      createExpense(
+        ctx.db,
+        makeExpenseInput({
+          name: "Fresh placeholder",
+          cost: 10,
+          sourceClaims: [
+            claimOf({
+              providerId: undefined,
+              normalizedEvidence: { ...evidence, description: "Edited" },
+            }),
+          ],
+        }),
+        ctx.actor,
+      ),
+      // The edited claim already owns that identity, so a second owner is refused.
+    ).rejects.toMatchObject({ reason: "LEDGER_SOURCE_CLAIM_CONFLICT" });
+  });
+
+  it("refuses two claims that resolve to one identity", async () => {
+    const { id, read } = await expenseWithProviderClaim();
     await expect(
       updateExpense(
         ctx.db,
         id,
         {
-          sourceClaims: [
-            ledgerSourceClaimInput.parse(
-              resend(read, {
-                normalizedEvidence: { ...evidence, description: "Edited" },
-                reconciliation: {
-                  decision: "accept_target_amount",
-                  note: "Reviewed against the synthetic receipt",
-                },
-              }),
-            ),
-          ],
+          sourceClaims: [ledgerSourceClaimInput.parse(resend(read)), claimOf()],
         },
         ctx.actor,
       ),
-    ).rejects.toThrow(/identity/u);
+    ).rejects.toThrow(/repeat an identity/u);
+  });
+
+  it("keeps the stored sourceKeyVersion of a claim re-sent by its key", async () => {
+    const { id, read } = await expenseWithProviderClaim();
+    await unwrapDb(ctx.db)
+      .update(ledgerSourceClaim)
+      .set({ sourceKeyVersion: 2 })
+      .where(eq(ledgerSourceClaim.sourceKey, read.sourceKey));
+
+    const updated = await updateExpense(
+      ctx.db,
+      id,
+      {
+        sourceClaims: [
+          ledgerSourceClaimInput.parse(
+            resend(read, {
+              normalizedEvidence: { ...evidence, description: "Edited" },
+            }),
+          ),
+        ],
+      },
+      ctx.actor,
+    );
+    expect(updated.output.sourceClaims[0]).toMatchObject({
+      sourceKey: read.sourceKey,
+      sourceKeyVersion: 2,
+    });
   });
 
   it("rejects a key that no claim on this record holds", async () => {
@@ -224,5 +343,49 @@ describe("source claim identity round trip", () => {
     expect(
       updated.output?.sourceClaims.map((claim) => claim.sourceKey),
     ).toEqual([read.sourceKey]);
+  });
+
+  it("fixes an account's identity kind at creation but lets its other identity fields change", async () => {
+    const created = await createFinancialAccount(
+      ctx.db,
+      {
+        name: "Identity placeholder",
+        identity: {
+          kind: "credit_card",
+          issuer: "Synthetic Bank",
+          network: "visa",
+        },
+        cardNumbers: [],
+        provisional: false,
+        sourceAliases: [],
+        ledgerPartyId: null,
+        providerVendorId: null,
+        inventoryOwnerDefaultEnabled: false,
+        notes: null,
+      },
+      ctx.actor,
+    );
+    const id = created.output.id;
+    await expect(
+      updateFinancialAccount(
+        ctx.db,
+        id,
+        { identity: { kind: "cash" } },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/fixed at creation/u);
+    const renamed = await updateFinancialAccount(
+      ctx.db,
+      id,
+      {
+        identity: {
+          kind: "credit_card",
+          issuer: "Other Bank",
+          network: "visa",
+        },
+      },
+      ctx.actor,
+    );
+    expect(renamed.output.identity).toMatchObject({ issuer: "Other Bank" });
   });
 });

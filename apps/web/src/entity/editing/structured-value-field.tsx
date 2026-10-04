@@ -6,7 +6,7 @@ import type {
 } from "@cubby/schemas/structured-value-schema";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
-import { useId } from "react";
+import { createContext, useContext, useId } from "react";
 import {
   Controller,
   get,
@@ -62,25 +62,32 @@ const asPath = (path: string) => path as never;
 const singular = (label: string) =>
   label.length > 1 && label.endsWith("s") ? label.slice(0, -1) : label;
 
+/** Whether a record is being created; a `createOnly` value is locked once it exists. */
+const CreatingContext = createContext(true);
+
 export function StructuredValueField({
   form,
   name,
   label,
   schema,
+  creating = true,
 }: {
   form: Form;
   name: string;
   label: string;
   schema: StructuredValueSchema;
+  creating?: boolean;
 }) {
   return (
-    <NodeEditor
-      form={form}
-      path={name}
-      label={label}
-      schema={schema}
-      required
-    />
+    <CreatingContext.Provider value={creating}>
+      <NodeEditor
+        form={form}
+        path={name}
+        label={label}
+        schema={schema}
+        required
+      />
+    </CreatingContext.Provider>
   );
 }
 
@@ -95,10 +102,19 @@ const addedAsWhole = (node: StructuredNode) =>
 function NodeEditor(props: NodeProps) {
   const { schema } = props;
   if (!isDrawn(schema)) return null;
-  return schema.nullable && addedAsWhole(schema.node) ? (
-    <NullableWhole {...props} />
+  const body =
+    schema.nullable && addedAsWhole(schema.node) ? (
+      <NullableWhole {...props} />
+    ) : (
+      <NodeBody {...props} />
+    );
+  return schema.notice === undefined ? (
+    body
   ) : (
-    <NodeBody {...props} />
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">{schema.notice}</p>
+      {body}
+    </div>
   );
 }
 
@@ -475,6 +491,7 @@ function VariantEditor({
   form,
   path,
   label,
+  schema,
   discriminator,
   cases,
 }: NodeProps & {
@@ -486,6 +503,7 @@ function VariantEditor({
   }[];
 }) {
   const controlId = useId();
+  const creating = useContext(CreatingContext);
   const value = useWatch({ control: form.control, name: path });
   const tag = z.object({ [discriminator]: z.string() }).safeParse(value);
   const selected = tag.success
@@ -509,6 +527,7 @@ function VariantEditor({
         <StaticPicker
           inputId={controlId}
           items={cases}
+          disabled={schema.createOnly === true && !creating}
           value={selected?.value ?? null}
           label={title}
           placeholder={`Choose ${title.toLowerCase()}`}

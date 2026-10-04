@@ -240,6 +240,12 @@ struct StructuredValueTests {
         #expect(sent["reconciliation"]?["decision"] == "accept_target_amount")
     }
 
+    @Test func anAccountsIdentityKindIsCreateOnlyAndCardNumbersCarryANotice() throws {
+        #expect(try schema(.financialAccount, "identity").createOnly == true)
+        #expect(try schema(.financialAccount, "cardNumbers").notice?.contains("matched") == true)
+        #expect(try schema(.vendor, "agentHints").createOnly == nil)
+    }
+
     private func sourceClaimVector() throws -> Vector {
         struct File: Decodable { let vectors: [Vector] }
         let vectors = try GoldenVectors.decode(File.self, named: "structured-roundtrip").vectors

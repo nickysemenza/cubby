@@ -75,4 +75,11 @@ export type StructuredJson =
 export type StructuredValueSchema = {
   readonly nullable: boolean;
   readonly node: StructuredNode;
+  /**
+   * The value is chosen when a record is created and fixed afterwards (`.meta({ createOnly: true })`):
+   * a variant's case. Clients lock the picker on edit; the server enforces it.
+   */
+  readonly createOnly?: boolean;
+  /** A caution shown with the value (`.meta({ notice })`). */
+  readonly notice?: string;
 };

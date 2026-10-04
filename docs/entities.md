@@ -299,9 +299,12 @@ list or a `structuredField` entry, and a vector, never per-entity UI.
 A source claim is edited under the identity its read exposes: the read carries `sourceKey` (a hash
 of the provider id or the evidence, so the provider id is unrecoverable) and the input accepts it
 (`ledgerSourceClaimInput.sourceKey`, opaque, exclusive with `providerId`). The server
-(`assertHeldClaimIdentities`) refuses a key the record does not hold and any change to the evidence
-under a held key; changing evidence is remove-and-add (a new claim with no key), so an edit can never
-silently mint a second identity.
+(`resolveClaimKeys`) refuses a key the record does not hold and a request that resolves two claims
+to one identity. A held key survives an evidence edit when it is provider-keyed (re-hashing the
+stored evidence does not reproduce it, so the provider id still resolves to this claim); an
+evidence-keyed claim is re-hashed to its new key in the same replacement. A kept key keeps the
+stored `sourceKeyVersion`. `.meta({ createOnly: true })` on a value (an account's identity kind;
+the server refuses a change too) locks it on edit, and `.meta({ notice })` shows a caution with it.
 
 An `implemented` hero action also needs a plan in `nativeHeroActionPlans` (same
 file, emitted as `heroActionPlan`): the declared verb maps to one generated

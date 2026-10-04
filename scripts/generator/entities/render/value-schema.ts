@@ -30,6 +30,8 @@ type JsonSchema = {
   format?: string | undefined;
   readFrom?: string | undefined;
   opaque?: boolean | undefined;
+  createOnly?: boolean | undefined;
+  notice?: string | undefined;
   propertyNames?: { enum?: z.core.util.JSONType[] | undefined } | undefined;
   additionalProperties?: JsonSchema | undefined;
 };
@@ -48,6 +50,8 @@ const jsonSchema: z.ZodType<JsonSchema> = z.lazy(() =>
     format: z.string().optional(),
     readFrom: z.string().optional(),
     opaque: z.boolean().optional(),
+    createOnly: z.boolean().optional(),
+    notice: z.string().optional(),
     propertyNames: z.object({ enum: z.array(z.json()).optional() }).optional(),
     // `false` (a strict object) carries no schema to read.
     additionalProperties: z
@@ -218,7 +222,7 @@ const convertUnion = (branches: JsonSchema[], context: Context) => {
   return { nullable, node: variantNode(live, context) };
 };
 
-const convert = (
+const convertNode = (
   raw: JsonSchema | undefined,
   context: Context,
 ): ValueSchemaJSON => {
@@ -239,6 +243,20 @@ const convert = (
   if (raw.enum !== undefined)
     return { nullable, node: { enum: { options: options(raw.enum) } } };
   return { nullable, node: scalarNode(type, raw, context) };
+};
+
+/** `convertNode` plus the annotations a schema carries as `.meta(...)`. */
+const convert = (
+  raw: JsonSchema | undefined,
+  context: Context,
+): ValueSchemaJSON => {
+  const base = convertNode(raw, context);
+  const createOnly = raw?.createOnly === true;
+  const notice = raw?.notice;
+  if (createOnly && notice !== undefined)
+    return { ...base, createOnly, notice };
+  if (createOnly) return { ...base, createOnly };
+  return notice === undefined ? base : { ...base, notice };
 };
 
 /**

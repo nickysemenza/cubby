@@ -580,6 +580,7 @@ function StructuredFieldRenderer({
   entity,
   field,
   form,
+  mode,
 }: SpecializedIntentRendererProps) {
   const schema = structuredSchemaFor(entity, field.key);
   if (schema === undefined)
@@ -592,6 +593,7 @@ function StructuredFieldRenderer({
       name={field.key}
       label={field.label}
       schema={schema}
+      creating={mode === "create"}
     />
   );
 }

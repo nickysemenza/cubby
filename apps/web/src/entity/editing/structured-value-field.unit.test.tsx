@@ -19,12 +19,14 @@ function Harness({
   field,
   label,
   initial,
+  creating = true,
   onSubmit,
 }: {
   entity: string;
   field: string;
   label: string;
   initial: z.core.util.JSONType;
+  creating?: boolean;
   onSubmit: (value: z.core.util.JSONType) => void;
 }) {
   const schema = structuredSchemaFor(entity, field);
@@ -38,6 +40,7 @@ function Harness({
           name={field}
           label={label}
           schema={schema}
+          creating={creating}
         />
         <button type="submit">Save</button>
       </form>
@@ -140,5 +143,63 @@ describe("StructuredValueField", () => {
     expect(onSubmit.mock.calls[0]?.[0]).toMatchObject([
       { last4: "4242", kind: "primary" },
     ]);
+  });
+
+  it("sends an edited claim's evidence under the identity key it was read with", async () => {
+    const onSubmit = vi.fn();
+    render(
+      <Harness
+        entity="expense"
+        field="sourceClaims"
+        label="Source claims"
+        initial={inputOf("expense", "sourceClaims") ?? null}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Description" }), {
+      target: { value: "Corrected description" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject([
+      {
+        sourceKey: expect.stringMatching(/^v1:/u),
+        normalizedEvidence: { description: "Corrected description" },
+      },
+    ]);
+  });
+
+  it("locks an account's identity kind once it exists but keeps its other fields editable", () => {
+    render(
+      <Harness
+        entity="financialAccount"
+        field="identity"
+        label="Identity"
+        initial={inputOf("financialAccount", "identity") ?? null}
+        creating={false}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("combobox", { name: "Identity" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Issuer" })).toBeEnabled();
+  });
+
+  it("warns that changing card numbers changes statement matching", () => {
+    render(
+      <Harness
+        entity="financialAccount"
+        field="cardNumbers"
+        label="Card numbers"
+        initial={[]}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText(/statements are matched to this account/i),
+    ).toBeVisible();
   });
 });

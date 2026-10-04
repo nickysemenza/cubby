@@ -110,6 +110,21 @@ describe("valueSchemaOf", () => {
     expect(row.note).not.toHaveProperty("readPath");
   });
 
+  it("carries createOnly and notice annotations through unions and arrays", () => {
+    const choice = z
+      .discriminatedUnion("kind", [
+        z.object({ kind: z.literal("a") }),
+        z.object({ kind: z.literal("b") }),
+      ])
+      .meta({ createOnly: true });
+    expect(schemaOf(choice.optional())).toMatchObject({ createOnly: true });
+    const list = schemaOf(
+      z.array(z.string()).meta({ notice: "Careful." }).default([]),
+    );
+    expect(list.notice).toBe("Careful.");
+    expect(list).not.toHaveProperty("createOnly");
+  });
+
   it("marks an opaque key so no client draws it", () => {
     const row = fieldsOf(
       schemaOf(
