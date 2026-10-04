@@ -521,7 +521,7 @@ export function renderDetailFieldValue<TRecord extends object>(
   record: TRecord,
   field: DisplayField,
 ): ReactNode {
-  if (field.display.detailLabelPath !== null) {
+  if (field.display.detailLabelPath) {
     const label = readLabel(record, field.display.detailLabelPath);
     return label === null ? (
       <NoneValue />

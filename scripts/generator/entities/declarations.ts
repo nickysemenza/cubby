@@ -218,8 +218,8 @@ export type EntityField = Readonly<{
     width: "xs" | "sm" | "md" | "lg" | null;
     readPath: string | null;
     labelPath: string | null;
-    detailLabelPath: string | null;
-    itemsPath: string | null;
+    detailLabelPath?: string | null;
+    itemsPath?: string | null;
     format: DisplayFormat | null;
     renderer: Readonly<{
       list: string | null;

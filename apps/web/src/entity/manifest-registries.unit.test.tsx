@@ -197,7 +197,7 @@ describe("manifest registries", () => {
             field.kind === "json" &&
             field.reference === null &&
             field.display.format === null &&
-            field.display.detailLabelPath === null &&
+            !("detailLabelPath" in field.display) &&
             detailFieldRenderersFor(entity)?.[field.key] === undefined,
         )
         .map((field) => `${entity}.${field.key}`);
