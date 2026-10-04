@@ -41,13 +41,24 @@ const productionOperations: LinkedTransactionsOperations = {
   list: entityListFor("financialTransaction").listQueryPlan,
 };
 
+/**
+ * The amount the purchase's section read gives a linked transaction: the slice this purchase
+ * received, worded by the server ("$42.50 of $91.00" when the charge settled several orders).
+ */
+export type LinkedAmounts = ReadonlyMap<string, string>;
+
 // Scoped to one purchase, the slice is the honest figure — the full charge
 // settled several orders, and showing it here would overstate what this one
 // received. The whole amount stays visible beside it so the split is legible.
+// Where the server's section read supplies the slice (`amounts`), it is used as
+// given; the allocation lookup below is only the fallback for a table without one.
 function linkedTransactionAmount(
   transaction: FinancialTransactionOut,
   purchaseId: string | undefined,
+  amounts?: LinkedAmounts,
 ) {
+  const given = amounts?.get(transaction.id);
+  if (given) return given;
   const slice = purchaseId
     ? transaction.allocations.find(
         (allocation) => allocation.purchaseId === purchaseId,
@@ -76,9 +87,12 @@ export function LinkedTransactions({
   operations = productionOperations,
   onAddTransaction,
   onEditTransaction,
+  amounts,
 }: {
   accountId?: string;
   purchaseId?: string;
+  /** The server-read amount for each transaction on this purchase. */
+  amounts?: LinkedAmounts;
   operations?: LinkedTransactionsOperations;
   onAddTransaction?: () => void;
   onEditTransaction?: (transaction: FinancialTransactionOut) => void;
@@ -113,7 +127,11 @@ export function LinkedTransactions({
             override(
               helper.accessor("amount", {
                 cell: (info) =>
-                  linkedTransactionAmount(info.row.original, purchaseId),
+                  linkedTransactionAmount(
+                    info.row.original,
+                    purchaseId,
+                    amounts,
+                  ),
               }),
             ),
           ),
@@ -155,7 +173,7 @@ export function LinkedTransactions({
           );
         }
       }),
-    [accountId, helper, onEditTransaction, onSaveField, purchaseId],
+    [accountId, amounts, helper, onEditTransaction, onSaveField, purchaseId],
   );
   const list = useEntityList<
     FinancialTransactionOut,

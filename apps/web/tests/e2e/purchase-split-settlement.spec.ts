@@ -148,12 +148,12 @@ test("finds settlement beyond 200 newer nonmatches and allocates only after revi
   await dialog.getByRole("button", { name: "Save allocation" }).click();
   await expect(dialog).toHaveCount(0);
   await expect(
-    page.getByRole("row", { name: /\$42\.50of \$91\.00/ }),
+    page.getByRole("row", { name: /\$42\.50 of \$91\.00/ }),
   ).toBeVisible();
   await gotoAuthenticatedPage(
     page,
     `/purchases/${seed.second.shortcode}`,
-    page.getByRole("row", { name: /\$48\.50of \$91\.00/ }),
+    page.getByRole("row", { name: /\$48\.50 of \$91\.00/ }),
   );
   const reviewedAllocations = await getDb(db).execute(sql`
     SELECT "purchaseId", amount FROM "FinancialTransactionAllocation"

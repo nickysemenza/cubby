@@ -7,51 +7,49 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   SettlementCandidateList,
-  type SettlementCandidateRow,
+  type SettlementCandidate,
 } from "./settlement-candidate-list";
 
 const code = (suffix: string) =>
   financialTransactionShortcode.parse(`FTX-${suffix}`);
-const row = (
-  id: string,
-  merchant: string,
-  tier: { exactAmount: boolean; merchantMatches: boolean },
-): SettlementCandidateRow => ({
+const candidate = (id: string, merchant: string): SettlementCandidate => ({
   transaction: fromPartial<FinancialTransactionOut>({
     id,
     merchant,
     displayName: merchant,
     kind: "purchase",
     amount: 42.5,
-    postedDate: "2026-03-04",
-    transactionDate: "2026-03-03",
-    rawDescription: null,
   }),
   days: 2,
-  ...tier,
+  exactAmount: true,
+  merchantMatches: true,
+  title: merchant,
+  lines: ["Charge", "2026-03-04 · 2 days apart · vendor name matches"],
+  proposedAllocations: [],
 });
 
-const top = { exactAmount: true, merchantMatches: true };
-const tied = [
-  row(code("4K7M"), "Example Hardware North", top),
-  row(code("5N8P"), "Example Hardware South", top),
-];
-const lower = row(code("6Q9R"), "Example Garden", {
-  exactAmount: false,
-  merchantMatches: true,
-});
+const north = candidate(code("4K7M"), "Example Hardware North");
+const south = candidate(code("5N8P"), "Example Hardware South");
+const garden = candidate(code("6Q9R"), "Example Garden");
+const hint =
+  "2 charges rank equally. Jev can suggest which fits best; you still choose and allocate.";
 
 function renderList(
-  candidates: SettlementCandidateRow[],
-  suggestion: PurchaseSettlementSuggestOut | null = null,
-  onSuggest = vi.fn(),
+  candidates: SettlementCandidate[],
+  options: {
+    suggestHint?: string | null;
+    suggestion?: PurchaseSettlementSuggestOut | null;
+    onSuggest?: () => void;
+  } = {},
 ) {
+  const onSuggest = options.onSuggest ?? vi.fn();
   render(
     <SettlementCandidateList
       candidates={candidates}
+      suggestHint={options.suggestHint ?? null}
       selectedId={null}
       onSelect={vi.fn()}
-      suggestion={suggestion}
+      suggestion={options.suggestion ?? null}
       suggesting={false}
       onSuggest={onSuggest}
     />,
@@ -62,29 +60,41 @@ function renderList(
 const merchantOrder = () =>
   screen.getAllByRole("button", { pressed: false }).map((b) => b.textContent);
 
+// The list draws the server's tie, wording, order and badges; it holds no
+// ranking rule of its own.
 describe("SettlementCandidateList", () => {
-  it("offers Suggest a match only when two candidates tie at the top rank", () => {
-    const onSuggest = renderList([...tied, lower]);
+  it("offers Suggest a match exactly when the server reports a tie", () => {
+    const onSuggest = renderList([north, south, garden], { suggestHint: hint });
+    expect(screen.getByText(hint)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Suggest a match" }));
     expect(onSuggest).toHaveBeenCalledOnce();
   });
 
-  it("hides the action when the top rank has a single candidate", () => {
-    renderList([row(code("7S2T"), "Example Solo", top), lower]);
+  it("hides the action when the server reports no tie", () => {
+    renderList([north, garden]);
     expect(
       screen.queryByRole("button", { name: "Suggest a match" }),
     ).toBeNull();
   });
 
-  it("highlights the pick and orders tied candidates by probability", () => {
-    renderList([...tied, lower], {
-      status: "ranked",
-      advisory: true,
-      selectedTransactionId: code("5N8P"),
-      ranked: [
-        { transactionId: code("5N8P"), probability: 0.72 },
-        { transactionId: code("4K7M"), probability: 0.18 },
-      ],
+  it("shows the server's badges and display order, and says it is only a suggestion", () => {
+    renderList([north, south, garden], {
+      suggestHint: hint,
+      suggestion: {
+        status: "ranked",
+        advisory: true,
+        selectedTransactionId: code("5N8P"),
+        ranked: [
+          {
+            transactionId: code("5N8P"),
+            probability: 0.72,
+            badge: "Suggested · 72%",
+          },
+          { transactionId: code("4K7M"), probability: 0.18, badge: "18%" },
+        ],
+        displayOrder: [code("5N8P"), code("4K7M"), code("6Q9R")],
+        note: "Suggestion only. Jev ordered the 2 equally ranked charges; nothing is saved until you allocate.",
+      },
     });
     expect(screen.getByText("Suggested · 72%")).toBeInTheDocument();
     expect(screen.getByText(/Suggestion only/)).toBeInTheDocument();
@@ -95,7 +105,14 @@ describe("SettlementCandidateList", () => {
   });
 
   it("shows the raw diagnostic when the suggestion is unavailable", () => {
-    renderList(tied, { status: "unavailable", error: "gateway timeout" });
+    renderList([north, south], {
+      suggestHint: hint,
+      suggestion: {
+        status: "unavailable",
+        error: "gateway timeout",
+        note: "Suggestion unavailable: gateway timeout",
+      },
+    });
     expect(screen.getByText(/gateway timeout/)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Suggest a match" }),

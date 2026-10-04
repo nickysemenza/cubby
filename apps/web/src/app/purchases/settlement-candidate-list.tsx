@@ -1,7 +1,6 @@
-import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
-import {
-  type PurchaseSettlementSuggestOut,
-  tiedTopSettlementCandidates,
+import type {
+  purchaseSettlementCandidate,
+  PurchaseSettlementSuggestOut,
 } from "@cubby/schemas/purchase";
 import { useMemo } from "react";
 
@@ -10,74 +9,54 @@ import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 
-export interface SettlementCandidateRow {
-  transaction: FinancialTransactionOut;
-  days: number;
-  merchantMatches: boolean;
-  exactAmount: boolean;
-}
-
-const percent = (probability: number) => `${Math.round(probability * 100)}%`;
+export type SettlementCandidate = typeof purchaseSettlementCandidate._output;
 
 /**
- * Tied top-rank candidates first, in the model's probability order once a
- * suggestion exists; the rest keep the server's deterministic order.
- */
-function orderCandidates(
-  candidates: readonly SettlementCandidateRow[],
-  tied: readonly SettlementCandidateRow[],
-  probabilities: ReadonlyMap<string, number>,
-): SettlementCandidateRow[] {
-  if (probabilities.size === 0) return [...candidates];
-  const tiedSet = new Set(tied);
-  const ordered = [...tied].sort(
-    (a, b) =>
-      (probabilities.get(b.transaction.id) ?? 0) -
-      (probabilities.get(a.transaction.id) ?? 0),
-  );
-  return [...ordered, ...candidates.filter((c) => !tiedSet.has(c))];
-}
-
-/**
- * The reviewable candidate list. "Suggest a match" appears only while two or
- * more candidates tie at the deterministic top rank; the result highlights
- * and orders the tied candidates but selecting and allocating stay manual.
+ * The reviewable candidate list. Which candidates tie, what each says, the order a suggestion
+ * puts them in and every badge are the server's; this only draws them. "Suggest a match" is
+ * offered while the server reports a tie (`suggestHint`), and the result orders and badges the
+ * tied candidates, while selecting and allocating stay manual.
  */
 export function SettlementCandidateList({
   candidates,
+  suggestHint,
   selectedId,
   onSelect,
   suggestion,
   suggesting,
   onSuggest,
 }: {
-  candidates: readonly SettlementCandidateRow[];
+  candidates: readonly SettlementCandidate[];
+  suggestHint: string | null;
   selectedId: string | null;
-  onSelect: (candidate: SettlementCandidateRow) => void;
+  onSelect: (candidate: SettlementCandidate) => void;
   suggestion: PurchaseSettlementSuggestOut | null;
   suggesting: boolean;
   onSuggest: () => void;
 }) {
-  const tied = useMemo(
-    () => tiedTopSettlementCandidates(candidates),
-    [candidates],
-  );
   const ranked = suggestion?.status === "ranked" ? suggestion : null;
-  const probabilities = useMemo(
+  const badges = useMemo(
     () =>
-      new Map<string, number>(
-        ranked?.ranked.map((entry) => [entry.transactionId, entry.probability]),
+      new Map<string, string>(
+        ranked?.ranked.map((entry) => [entry.transactionId, entry.badge]),
       ),
     [ranked],
   );
-  const ordered = useMemo(
-    () => orderCandidates(candidates, tied, probabilities),
-    [candidates, tied, probabilities],
-  );
+  const ordered = useMemo(() => {
+    if (!ranked) return [...candidates];
+    const position = new Map(
+      ranked.displayOrder.map((id, index) => [id, index]),
+    );
+    return [...candidates].sort(
+      (a, b) =>
+        (position.get(a.transaction.id) ?? candidates.length) -
+        (position.get(b.transaction.id) ?? candidates.length),
+    );
+  }, [candidates, ranked]);
 
   return (
     <>
-      {tied.length >= 2 ? (
+      {suggestHint ? (
         <div className="space-y-1">
           <Button
             size="sm"
@@ -87,37 +66,14 @@ export function SettlementCandidateList({
           >
             {suggesting ? "Asking Jev…" : "Suggest a match"}
           </Button>
-          {ranked ? (
-            <Description size="xs">
-              Suggestion only. Jev ordered the {tied.length} equally ranked
-              charges; nothing is saved until you allocate.
-              {ranked.selectedTransactionId === null
-                ? " Jev found no clear match among them."
-                : ""}
-            </Description>
-          ) : suggestion?.status === "unavailable" ? (
-            <Description size="xs">
-              Suggestion unavailable: {suggestion.error}
-            </Description>
-          ) : suggestion?.status === "not_ambiguous" ? (
-            <Description size="xs">
-              These charges are no longer tied, so there is nothing to suggest.
-            </Description>
-          ) : (
-            <Description size="xs">
-              {tied.length} charges rank equally. Jev can suggest which fits
-              best; you still choose and allocate.
-            </Description>
-          )}
+          <Description size="xs">{suggestion?.note ?? suggestHint}</Description>
         </div>
       ) : null}
       <div className="max-h-80 space-y-2 overflow-y-auto">
         {ordered.map((candidate) => {
-          const { transaction, days, merchantMatches } = candidate;
-          const probability = probabilities.get(transaction.id);
-          const suggested =
-            ranked?.selectedTransactionId === transaction.id &&
-            probability !== undefined;
+          const { transaction } = candidate;
+          const badge = badges.get(transaction.id);
+          const suggested = ranked?.selectedTransactionId === transaction.id;
           return (
             <button
               key={transaction.id}
@@ -128,35 +84,23 @@ export function SettlementCandidateList({
               onClick={() => onSelect(candidate)}
             >
               <span className="min-w-0">
-                {suggested ? (
-                  <Badge className="mb-1">
-                    Suggested · {percent(probability)}
-                  </Badge>
-                ) : probability !== undefined ? (
-                  <Badge variant="secondary" className="mb-1">
-                    {percent(probability)}
+                {badge ? (
+                  <Badge
+                    variant={suggested ? "default" : "secondary"}
+                    className="mb-1"
+                  >
+                    {badge}
                   </Badge>
                 ) : null}
-                <strong className="block truncate">
-                  {transaction.merchant ?? transaction.displayName}
-                </strong>
-                <span className="block text-xs text-muted-foreground">
-                  {transaction.kind === "refund" ? "Refund" : "Charge"}
-                </span>
-                {transaction.rawDescription &&
-                transaction.rawDescription !== transaction.merchant ? (
-                  <span className="block text-xs text-muted-foreground">
-                    Statement: {transaction.rawDescription}
+                <strong className="block truncate">{candidate.title}</strong>
+                {candidate.lines.map((line) => (
+                  <span
+                    key={line}
+                    className="block text-xs text-muted-foreground"
+                  >
+                    {line}
                   </span>
-                ) : null}
-                <span className="text-muted-foreground">
-                  {transaction.postedDate ?? transaction.transactionDate} ·{" "}
-                  {Math.round(days)} {Math.round(days) === 1 ? "day" : "days"}{" "}
-                  apart
-                  {merchantMatches
-                    ? " · vendor name matches"
-                    : " · vendor differs"}
-                </span>
+                ))}
               </span>
               <span className="shrink-0 font-mono tabular-nums">
                 {formatCurrency(transaction.amount)}

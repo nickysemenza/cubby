@@ -27,7 +27,9 @@ existing block. Extend the generic path when it almost fits. See
   from `COLLECTION_ACTION_SCOPES`: web fills each verb in
   `entity-detail/collection-actions.tsx`, native runs its plan in
   `nativeCollectionActionPlans` through `HeroActionRunner`. Rows are worded in
-  `server/repo/collection-items.ts`.
+  `server/repo/collection-items.ts`. The same block carries the finance slots: rows may be
+  checkable (`key`, `disabledReason`), with a `footer` and finance `verbs`
+  (`SECTION_ACTION_IDS`, each with the server's `disabledReason`).
 - Swift: generated OpenAPI client, `entity-manifest.json`, and the generic list
   and detail views; no hand-written mapping layer.
 

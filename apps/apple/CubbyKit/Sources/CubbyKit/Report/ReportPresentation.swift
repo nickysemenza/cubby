@@ -128,6 +128,10 @@ public struct ReportPresentation: Hashable, Sendable {
         public let listLink: ListLink?
         /// Verbs offered on this row only; the server decides when one applies.
         public let actions: [CollectionActionID]
+        /// What a checked row names when it is not the opened record (a statement charge).
+        public let key: String?
+        /// Why the row cannot be checked; nil when it can.
+        public let disabledReason: String?
     }
 
     public struct ListLink: Hashable, Sendable {
@@ -156,6 +160,37 @@ public struct ReportPresentation: Hashable, Sendable {
         public let actions: [CollectionActionID]
         /// Large for evidence photos that must stay legible (a package label).
         public let largeThumbnails: Bool
+        /// One line under the rows, such as a total.
+        public let footer: String?
+        /// Finance verbs with the server's word on each (`SectionActionID`).
+        public let verbs: [Verb]
+
+        public struct Verb: Hashable, Sendable, Identifiable {
+            public var id: String { verb.rawValue }
+            public let verb: SectionActionID
+            public let label: String
+            /// `true` acts on the checked rows.
+            public let actsOnSelection: Bool
+            public let disabledReason: String?
+        }
+
+        public func verb(_ verb: SectionActionID) -> Verb? {
+            verbs.first { $0.verb == verb }
+        }
+
+        /// The checked keys the server still allows.
+        public func allowed(_ selection: Set<String>) -> Set<String> {
+            Set(rows.filter { $0.disabledReason == nil }.compactMap(\.key).filter(selection.contains))
+        }
+
+        /// `selection` with `key` flipped; a row the server refused is left alone.
+        public func toggled(_ selection: Set<String>, _ key: String) -> Set<String> {
+            guard let row = rows.first(where: { $0.key == key }), row.disabledReason == nil
+            else { return selection }
+            var next = selection
+            if next.contains(key) { next.remove(key) } else { next.insert(key) }
+            return next
+        }
     }
 
     public enum Block: Hashable, Sendable {
@@ -180,7 +215,9 @@ public struct ReportPresentation: Hashable, Sendable {
                 title: stats.title,
                 figures: stats.figures.map {
                     Figure(
-                        label: $0.label, text: text($0.value, money: $0.format == .money),
+                        label: $0.label,
+                        text: $0.format == .text
+                            ? ($0.text ?? "—") : text($0.value, money: $0.format == .money),
                         tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
                 })
         case .chart(let chart):
@@ -241,11 +278,19 @@ public struct ReportPresentation: Hashable, Sendable {
                             },
                             actions: (row.actions ?? []).compactMap {
                                 CollectionActionID(rawValue: $0.rawValue)
-                            })
+                            },
+                            key: row.key, disabledReason: row.disabledReason)
                     },
                     empty: records.empty,
                     actions: (records.actions ?? []).compactMap { CollectionActionID(rawValue: $0.rawValue) },
-                    largeThumbnails: records.thumbnail == .large)
+                    largeThumbnails: records.thumbnail == .large, footer: records.footer,
+                    verbs: (records.verbs ?? []).compactMap { verb in
+                        SectionActionID(rawValue: verb.id.rawValue).map {
+                            Records.Verb(
+                                verb: $0, label: verb.label, actsOnSelection: verb.scope == .selection,
+                                disabledReason: verb.disabledReason)
+                        }
+                    })
             )
         }
     }

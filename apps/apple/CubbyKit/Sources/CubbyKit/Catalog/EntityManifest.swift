@@ -207,6 +207,16 @@ extension CollectionActionID {
     }
 }
 
+/// Finance verbs a report's `records` block may offer; `packages/schemas/src/entity-section-actions.ts`.
+public enum SectionActionID: String, CaseIterable, Codable, Sendable {
+    case linkExpenses = "linkExpenses"
+    case linkProducts = "linkProducts"
+    case matchStatement = "matchStatement"
+    case receiveExpense = "receiveExpense"
+    case searchCharges = "searchCharges"
+    case splitExpense = "splitExpense"
+}
+
 public enum EntityListSlotID: String, CaseIterable, Codable, Sendable {
     case expenseAnalytics = "expense.analytics"
     case locationGallery = "location.gallery"

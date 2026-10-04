@@ -39,7 +39,12 @@ describe("entity report", () => {
     slot: Parameters<typeof buildEntityReport>[1]["slot"],
     id: string,
   ) => {
-    const out = await buildEntityReport(ctx.db, { slot, id }, async () => null);
+    const out = await buildEntityReport(
+      ctx.db,
+      { slot, id },
+      async () => null,
+      ctx.actor,
+    );
     // The wire contract must accept what the builder produces.
     return entityReportOut.parse(out).blocks;
   };
@@ -405,6 +410,7 @@ describe("entity report", () => {
           id: parseShortcodeFor("meal", meal.shortcode),
         },
         async () => null,
+        ctx.actor,
       ),
     ).rejects.toThrow(/project|prefix|shortcode/i);
   });

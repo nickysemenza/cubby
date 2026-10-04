@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import type {
   EntityReportInput,
   EntityReportOut,
@@ -5,6 +6,7 @@ import type {
 
 import type { Database } from "~/server/db";
 
+import { expenseSettlementReport } from "./expense-settlement";
 import { locationContentsValuationReport } from "./location";
 import { mealCompositionReport } from "./meal";
 import {
@@ -13,6 +15,9 @@ import {
   projectContributionReport,
   projectScheduleReport,
 } from "./project";
+import { purchaseFinancialSettlementReport } from "./purchase-financial-settlement";
+import { purchaseProjectAllocationReport } from "./purchase-project-allocation";
+import { purchaseReconciliationReport } from "./purchase-reconciliation";
 import {
   imageAssociationsReport,
   locationAiDescriptionReport,
@@ -22,6 +27,7 @@ import {
   purchaseRunsReport,
   type ReportViewer,
 } from "./records";
+import { vendorAccountChargeSearchReport } from "./vendor-account-charge-search";
 
 const BUILDERS = {
   "project.budget": projectBudgetReport,
@@ -36,12 +42,19 @@ const BUILDERS = {
   "image.associations": imageAssociationsReport,
   "purchase.runs": purchaseRunsReport,
   "location.ai-description": locationAiDescriptionReport,
+  "purchase.reconciliation": purchaseReconciliationReport,
+  "purchase.project-allocation": purchaseProjectAllocationReport,
+  "purchase.financial-settlement": purchaseFinancialSettlementReport,
+  "expense.settlement": expenseSettlementReport,
+  "vendorAccount.charge-search": (db, id, _viewer, actor) =>
+    vendorAccountChargeSearchReport(db, id, actor),
 } as const satisfies Record<
   EntityReportInput["slot"],
   (
     db: Database,
     code: string,
     viewer: ReportViewer,
+    actor: ActorContext,
   ) => Promise<EntityReportOut["blocks"]>
 >;
 
@@ -50,6 +63,7 @@ export async function buildEntityReport(
   db: Database,
   input: EntityReportInput,
   viewer: ReportViewer,
+  actor: ActorContext,
 ): Promise<EntityReportOut> {
-  return { blocks: await BUILDERS[input.slot](db, input.id, viewer) };
+  return { blocks: await BUILDERS[input.slot](db, input.id, viewer, actor) };
 }

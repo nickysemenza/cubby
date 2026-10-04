@@ -220,7 +220,13 @@ in `packages/schemas/src/entity-report.ts`) and web (`ReportBlocks`) and native
 (`ReportDetailSlot`, Swift Charts) only draw it. Add the slot id to
 `reportSlots`, a builder to `BUILDERS`, and register the slot on both clients;
 money in a report is `SUM(Expense.cost)` or the persisted valuation, never
-recomputed on a client.
+recomputed on a client. The finance slots (purchase reconciliation, project
+allocation and financial settlement, expense settlement, statement-charge
+search) also use the `records` block: rows a person can open or check, plus the
+verbs that act on them (`SECTION_ACTION_IDS`). Each row's and verb's
+`disabledReason`, every amount and the footer are the server's; a verb runs an
+existing operation on each client that implements it, and the rest are
+classified under `sectionAction` in `native-coverage.ts`.
 
 **Native coverage.** Which of these presentation ids the Apple app does not draw
 is declared once, in `packages/schemas/src/native-coverage.ts`: every control,

@@ -7,7 +7,6 @@ import type { FC } from "react";
 
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { formatCurrency } from "~/lib/utils";
-import { Description } from "~/ui/primitives/description";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
 /**
@@ -44,7 +43,7 @@ type ReconciliationPurchase = {
   >;
 };
 
-export const purchaseReconciliationStatus = (
+const purchaseReconciliationStatus = (
   purchase: ReconciliationPurchase,
 ): PurchaseReconciliation =>
   purchase.reconciliation ??
@@ -83,22 +82,3 @@ export const ReconciliationStatus: FC<{
     </EnumPill>
   );
 };
-
-/**
- * The sentence that keeps the cue from reading as a bug report. Rendered under
- * the numbers on the detail page; the list column shows the badge alone.
- */
-export const ReconciliationNote: FC<{
-  status: PurchaseReconciliation;
-}> = ({ status }) => (
-  <Description size="xs">
-    {status === "unknown" &&
-      "No stated total recorded yet — nothing to compare the expenses against. Add what the receipt or invoice says to turn this into a cue."}
-    {status === "match" &&
-      "The expenses add up to what the purchase stated. Stated totals are never summed into spend — spend is always the expenses."}
-    {status === "refund_adjusted" &&
-      "Posted refund evidence fully explains why the expenses are below the original stated total. The stated total remains the literal paperwork amount, and spend remains the expenses."}
-    {status === "mismatch" &&
-      "The expenses don't add up to what the purchase stated, and posted refund evidence doesn't fully explain the difference. Review the expenses, stated total, or settlement evidence."}
-  </Description>
-);

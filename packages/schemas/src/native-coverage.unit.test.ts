@@ -13,6 +13,7 @@ import {
   COLLECTION_ACTION_SCOPES,
   COLLECTION_ACTIONS,
 } from "./entity-definitions/collection-actions";
+import { SECTION_ACTION_IDS } from "./entity-section-actions";
 import {
   NATIVE_COVERAGE_KINDS,
   NATIVE_UNSUPPORTED_CEILING,
@@ -68,6 +69,7 @@ const vocabulary = {
       ),
     ),
   ),
+  sectionAction: [...SECTION_ACTION_IDS].sort(),
 } satisfies Record<NativeCoverageKind, readonly string[]>;
 
 const entries = (kind: NativeCoverageKind): [string, NativeCoverageEntry][] =>

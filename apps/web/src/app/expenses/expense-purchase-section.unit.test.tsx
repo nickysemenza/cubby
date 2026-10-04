@@ -92,6 +92,7 @@ describe("ExpensePurchaseSection", () => {
       <ExpensePurchaseSection
         expense={expense}
         operations={{ chargeContext: operation.queryOptions }}
+        soloNote="This is the only expense in the purchase."
       />,
       { wrapper: harness.wrapper },
     );

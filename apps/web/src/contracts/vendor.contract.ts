@@ -59,6 +59,7 @@ export const vendorContract = defineContract("vendor", {
     cache: { tags: [["vendor"], ["run"]] },
   }),
   startChargeRun: mutation({
+    native: "Start one browser run for the selected statement charges",
     input: chargeRunStartInput,
     output: chargeRunStartOut,
     invalidates: ["vendor", "runOnly"],

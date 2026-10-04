@@ -83,7 +83,10 @@ describe("suggestSettlementMatch", () => {
       openUsage,
       jev,
     });
-    expect(result).toEqual({ status: "not_ambiguous" });
+    expect(result).toEqual({
+      status: "not_ambiguous",
+      note: "These charges are no longer tied, so there is nothing to suggest.",
+    });
     expect(jev).not.toHaveBeenCalled();
     expect(openUsage).not.toHaveBeenCalled();
   });
@@ -118,9 +121,16 @@ describe("suggestSettlementMatch", () => {
       advisory: true,
       selectedTransactionId: code("5N8P"),
       ranked: [
-        { transactionId: code("5N8P"), probability: 0.7 },
-        { transactionId: code("4K7M"), probability: 0.2 },
+        {
+          transactionId: code("5N8P"),
+          probability: 0.7,
+          badge: "Suggested · 70%",
+        },
+        { transactionId: code("4K7M"), probability: 0.2, badge: "20%" },
       ],
+      // Tied candidates by probability, then the rest in the server's order.
+      displayOrder: [code("5N8P"), code("4K7M"), code("6Q9R")],
+      note: "Suggestion only. Jev ordered the 2 equally ranked charges; nothing is saved until you allocate.",
     });
   });
 
@@ -135,6 +145,7 @@ describe("suggestSettlementMatch", () => {
     expect(result).toMatchObject({
       status: "ranked",
       selectedTransactionId: null,
+      note: "Suggestion only. Jev ordered the 2 equally ranked charges; nothing is saved until you allocate. Jev found no clear match among them.",
     });
   });
 
@@ -152,6 +163,7 @@ describe("suggestSettlementMatch", () => {
     expect(result).toEqual({
       status: "unavailable",
       error: "Jev upstream returned 503: gateway timeout",
+      note: "Suggestion unavailable: Jev upstream returned 503: gateway timeout",
     });
   });
 });

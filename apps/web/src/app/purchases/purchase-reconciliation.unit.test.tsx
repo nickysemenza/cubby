@@ -4,8 +4,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   FinancialSettlementStatus,
-  initialSettlementAllocations,
-  parseSettlementAllocations,
   financialTransactionCaptureRequestForPurchase,
 } from "./financial-settlement";
 import { ReconciliationStatus } from "./purchase-reconciliation";
@@ -76,42 +74,5 @@ describe("purchase reconciliation statuses", () => {
         seed: { purchaseId: "PUR-2345" },
       }),
     );
-  });
-
-  it("requires a complete, signed split before saving settlement evidence", () => {
-    const transaction = fromPartial<
-      Parameters<typeof initialSettlementAllocations>[1]
-    >({ amount: 91, kind: "purchase" });
-    const purchase = fromPartial<
-      Parameters<typeof initialSettlementAllocations>[2]
-    >({ statedTotal: 42.5 });
-    const rows = initialSettlementAllocations(
-      "PUR-2345",
-      transaction,
-      purchase,
-    );
-    expect(rows).toEqual([
-      { purchaseId: "PUR-2345", amount: "42.50" },
-      { purchaseId: "", amount: "48.50" },
-    ]);
-    expect(parseSettlementAllocations(rows, 91)).toBeNull();
-    expect(
-      parseSettlementAllocations(
-        [
-          { ...rows[0]!, amount: "42.50" },
-          { purchaseId: "PUR-3456", amount: "48.50" },
-        ],
-        91,
-      ),
-    ).toEqual([
-      { purchaseId: "PUR-2345", amount: 42.5 },
-      { purchaseId: "PUR-3456", amount: 48.5 },
-    ]);
-    expect(
-      parseSettlementAllocations(
-        [{ purchaseId: "PUR-2345", amount: "15.00" }],
-        -15,
-      ),
-    ).toBeNull();
   });
 });

@@ -6,6 +6,7 @@ import {
   EXPENSE_DISPOSITION_EDITOR,
 } from "./expense-fields";
 import type { CollectionActionId } from "./entity-definitions/collection-actions";
+import type { SectionActionId } from "./entity-section-actions";
 import { TRADE_LABELS, tradeValues } from "./task-fields";
 import type { Entity } from "./entity-core";
 import type {
@@ -51,6 +52,7 @@ export const NATIVE_COVERAGE_KINDS = [
   "detailSlot",
   "listSlot",
   "structuredField",
+  "sectionAction",
 ] as const;
 export type NativeCoverageKind = (typeof NATIVE_COVERAGE_KINDS)[number];
 
@@ -255,13 +257,16 @@ export const nativeCoverage = {
       "image.associations",
       "purchase.runs",
       "location.ai-description",
+      // Finance slots: the same report view draws their `records` rows (checked rows, footer and
+      // verbs included); the verbs are classified under `sectionAction`.
+      "purchase.reconciliation",
+      "purchase.project-allocation",
+      "purchase.financial-settlement",
+      "expense.settlement",
+      "vendorAccount.charge-search",
     ]),
     ...unsupported(
       [
-        "expense.settlement",
-        "purchase.financial-settlement",
-        "purchase.project-allocation",
-        "purchase.reconciliation",
         "run.ai-usage",
         "run.changes",
         "run.import-agent-live",
@@ -278,9 +283,25 @@ export const nativeCoverage = {
         "run.import-targets",
         "run.import-timeline",
         "run.live-progress",
-        "vendorAccount.charge-search",
       ],
       "This detail is available on web.",
+    ),
+  },
+  /**
+   * Finance verbs a report's `records` block offers. `implemented` ones are exactly the cases
+   * `ReportRecordsView` runs (apps/apple `ReportRecordsView.swift`), each through the same
+   * operation web's handler calls; the report says per record whether the verb is available, so
+   * native never offers one the server would refuse.
+   */
+  sectionAction: {
+    ...implemented(["matchStatement", "searchCharges", "receiveExpense"]),
+    ...unsupported(
+      ["splitExpense"],
+      "Splitting an expense into parts is edited on web.",
+    ),
+    ...unsupported(
+      ["linkExpenses", "linkProducts"],
+      "Attaching expenses or products to a purchase is done on web.",
     ),
   },
   /**
@@ -345,6 +366,7 @@ export const nativeCoverage = {
   detailSlot: Record<DetailSlotKey, NativeCoverageEntry>;
   listSlot: Record<ListSlotKey, NativeCoverageEntry>;
   structuredField: Record<string, NativeCoverageEntry>;
+  sectionAction: Record<SectionActionId, NativeCoverageEntry>;
 };
 
 /**
@@ -686,7 +708,8 @@ export const NATIVE_UNSUPPORTED_CEILING = {
   list: 0,
   detail: 0,
   heroAction: 0,
-  detailSlot: 21,
+  detailSlot: 16,
   listSlot: 0,
   structuredField: 8,
+  sectionAction: 3,
 } as const satisfies Record<NativeCoverageKind, number>;

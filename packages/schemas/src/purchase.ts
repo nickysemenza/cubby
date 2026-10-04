@@ -48,8 +48,49 @@ export {
 
 export const splitExpenseOut = z.array(expenseOut);
 
+/** One allocation row as typed: the Purchase code (blank until chosen) and a dollar amount. */
+export const settlementAllocationDraft = z.object({
+  purchaseId: z.string(),
+  amount: z.string(),
+});
+export type SettlementAllocationDraft = z.infer<
+  typeof settlementAllocationDraft
+>;
+
+export const purchaseSettlementAllocationCheckInput = z.object({
+  transactionId: financialTransactionShortcode,
+  allocations: z.array(settlementAllocationDraft).max(50),
+});
+export const purchaseSettlementAllocationCheckOut = z.object({
+  /** The rows to save as `financialTransaction.update` allocations; null while they cannot be. */
+  allocations: z
+    .array(z.object({ purchaseId: purchaseShortcode, amount: z.number() }))
+    .nullable(),
+  /** Dollars the valid rows add up to. */
+  allocatedTotal: z.number(),
+  /** Dollars still to allocate; negative when over-allocated. */
+  remaining: z.number(),
+  /** Why the rows cannot be saved yet; null when they can. */
+  reason: z.string().nullable(),
+});
+
 export const purchaseSettlementCandidatesInput = z.object({
   purchaseId: purchaseShortcode,
+});
+
+export const purchaseSettlementCandidate = z.object({
+  transaction: financialTransactionOut,
+  days: z.number().int().min(0).max(45),
+  merchantMatches: z.boolean(),
+  exactAmount: z.boolean(),
+  title: z.string(),
+  /** The description under the title, already worded. */
+  lines: z.array(z.string()),
+  /**
+   * The rows to start allocating this entry from: this order up to its stated total, the
+   * remainder (blank Purchase) for another. A draft, not a settlement.
+   */
+  proposedAllocations: z.array(settlementAllocationDraft),
 });
 
 export const purchaseSettlementCandidatesOut = z.object({
@@ -58,16 +99,16 @@ export const purchaseSettlementCandidatesOut = z.object({
     .describe(
       "Suggestions only: reading candidates does not allocate settlement evidence or change the Expense ledger. Review and explicitly save allocations separately.",
     ),
-  candidates: z
-    .array(
-      z.object({
-        transaction: financialTransactionOut,
-        days: z.number().int().min(0).max(45),
-        merchantMatches: z.boolean(),
-        exactAmount: z.boolean(),
-      }),
-    )
-    .max(10),
+  /** Why there is nothing to review, or why the list is empty; null when there are candidates. */
+  message: z.string().nullable(),
+  candidates: z.array(purchaseSettlementCandidate).max(10),
+  /**
+   * The candidates tied at the top deterministic rank, or empty unless two or more are tied. Only
+   * then is "Suggest a match" offered.
+   */
+  tiedTransactionIds: z.array(financialTransactionShortcode),
+  /** What to say before a suggestion is asked for; null when none is offered. */
+  suggestHint: z.string().nullable(),
 });
 
 /** Deterministic rank tier: an exact stated-total charge outranks a vendor-name
@@ -102,10 +143,13 @@ export const purchaseSettlementSuggestInput = z.object({
 export const purchaseSettlementSuggestOut = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("not_ambiguous"),
+    // `note` throughout: what to tell the person, already worded.
+    note: z.string(),
   }),
   z.object({
     status: z.literal("unavailable"),
     error: z.string().describe("Raw diagnostic from the failed model call."),
+    note: z.string(),
   }),
   z.object({
     status: z.literal("ranked"),
@@ -122,11 +166,19 @@ export const purchaseSettlementSuggestOut = z.discriminatedUnion("status", [
         z.object({
           transactionId: financialTransactionShortcode,
           probability: z.number().min(0).max(1),
+          // The label to show on the candidate (`Suggested · 72%`).
+          badge: z.string(),
         }),
       )
       .max(10),
+    // Every candidate in the order to show: tied ones by probability, then the rest as listed.
+    displayOrder: z.array(financialTransactionShortcode),
+    note: z.string(),
   }),
 ]);
+export type PurchaseSettlementCandidatesOut = z.infer<
+  typeof purchaseSettlementCandidatesOut
+>;
 export type PurchaseSettlementSuggestOut = z.infer<
   typeof purchaseSettlementSuggestOut
 >;

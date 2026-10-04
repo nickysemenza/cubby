@@ -6,6 +6,11 @@ export const entityReportHandlers = implementOperationDomain(
   entityReportContract,
   {
     get: (context, input) =>
-      buildEntityReport(context.db, input, () => context.currentParty()),
+      buildEntityReport(
+        context.db,
+        input,
+        () => context.currentParty(),
+        context.actorContext,
+      ),
   },
 );

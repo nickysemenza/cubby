@@ -29,7 +29,12 @@ describe("records reports", () => {
     id: string,
   ): Promise<Records> => {
     const out = entityReportOut.parse(
-      await buildEntityReport(ctx.db, { slot, id }, async () => null),
+      await buildEntityReport(
+        ctx.db,
+        { slot, id },
+        async () => null,
+        ctx.actor,
+      ),
     );
     const block = out.blocks[0];
     if (block?.kind !== "records") throw new Error(`${slot} is not records`);
@@ -87,6 +92,7 @@ describe("records reports", () => {
         ctx.db,
         { slot: "purchase.runs", id: "PUR-4K7M" },
         async () => null,
+        ctx.actor,
       ),
     ).rejects.toThrow(/member ledger party/);
   });

@@ -746,6 +746,22 @@ extension JSONValue {
  */
 const CLIENT_PASSTHROUGH_METHODS = {
   "purchase.products": { method: "purchaseProducts", doc: null },
+  "purchase.settlementCandidates": {
+    method: "purchaseSettlementCandidates",
+    doc: "Unallocated statement entries near an order, already ranked and worded. Advisory: reading allocates nothing.",
+  },
+  "purchase.suggestSettlementMatch": {
+    method: "suggestPurchaseSettlementMatch",
+    doc: "An advisory ordering of equally ranked candidates. It never selects or allocates; the person still chooses and saves.",
+  },
+  "purchase.checkSettlementAllocation": {
+    method: "checkPurchaseSettlementAllocation",
+    doc: "Whether typed allocation rows can be saved against a statement entry, and why not. The only allocation rule clients consult.",
+  },
+  "vendor.startChargeRun": {
+    method: "startChargeRun",
+    doc: "One browser run for exactly the selected statement charges; the server refuses the whole selection if any charge is no longer searchable.",
+  },
   "product.purchases": { method: "productPurchases", doc: null },
   "recipe.getIngredientUsage": { method: "ingredientUsage", doc: null },
   "run.history": { method: "runHistory", doc: null },
