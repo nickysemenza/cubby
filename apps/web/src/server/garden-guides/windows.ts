@@ -257,11 +257,27 @@ const cropBasis = (source: string | undefined): string =>
   "crop estimate";
 
 /**
- * The expected first-harvest range: `transplantedOn` plus the transplant
- * range, else `sowedOn` plus the sow range. Cultivar packet days win over the
- * crop-level practice estimate for the same anchor. A bought seedling is just
- * a planting with `transplantedOn` and no `sowedOn`. `null` without a real
- * date or any matching days.
+ * Days a tray seedling has already grown when it goes out: the "transplants
+ * mature 14 days sooner" rule the kale and sorrel sources state. It turns a
+ * from-sowing range into a from-transplant one for crops that record only the
+ * former.
+ */
+const TRANSPLANT_NURSERY_DAYS = 14;
+
+const shiftRange = ([min, max]: DayRange, by: number): DayRange => [
+  Math.max(1, min + by),
+  Math.max(1, max + by),
+];
+
+/**
+ * The expected first-harvest range: the latest of `sowedOn` plus the sow
+ * range and `transplantedOn` plus the transplant range, so every known date
+ * counts and a later date never pulls the harvest earlier. Cultivar packet
+ * days win over the crop-level practice estimate for the same anchor. A crop
+ * with only sow days counts them from the transplant less
+ * `TRANSPLANT_NURSERY_DAYS`. A bought seedling is just a planting with
+ * `transplantedOn` and no `sowedOn`. `null` without a real date or any
+ * matching days.
  */
 export function expectedHarvestFor(args: {
   key: GardenGuideKey | null;
@@ -270,46 +286,58 @@ export function expectedHarvestFor(args: {
   transplantedOn: string | null;
 }): ExpectedHarvest | null {
   const maturity = args.key ? gardenPractice[args.key].maturity : null;
-  const anchors = [
-    {
-      date: args.transplantedOn,
-      packet: args.plant
-        ? packetRange(
-            args.plant.daysFromTransplantMin,
-            args.plant.daysFromTransplantMax,
-          )
-        : null,
-      crop: maturity?.fromTransplant ?? null,
-    },
-    {
-      date: args.sowedOn,
-      packet: args.plant
-        ? packetRange(args.plant.daysFromSowMin, args.plant.daysFromSowMax)
-        : null,
-      crop: maturity?.fromSow ?? null,
-    },
-    // A transplant with only sow-based days: late, which is the safe side.
-    {
-      date: args.transplantedOn,
-      packet: args.plant
-        ? packetRange(args.plant.daysFromSowMin, args.plant.daysFromSowMax)
-        : null,
-      crop: maturity?.fromSow ?? null,
-    },
-  ];
-  for (const anchor of anchors) {
-    if (anchor.date === null) continue;
-    const range = anchor.packet ?? anchor.crop;
-    if (range === null) continue;
-    const basis =
-      anchor.packet !== null ? "cultivar packet" : cropBasis(maturity?.source);
-    const start = addDays(anchor.date, range[0]);
-    const end = addDays(anchor.date, range[1]);
-    const span =
-      start === end
-        ? formatDay(start)
-        : `${formatDay(start)} – ${formatDay(end)}`;
-    return { start, end, basis, summary: `${span} (${basis})` };
-  }
-  return null;
+  const cropSource = cropBasis(maturity?.source);
+  const sowPacket = args.plant
+    ? packetRange(args.plant.daysFromSowMin, args.plant.daysFromSowMax)
+    : null;
+  const transplantPacket = args.plant
+    ? packetRange(
+        args.plant.daysFromTransplantMin,
+        args.plant.daysFromTransplantMax,
+      )
+    : null;
+  const sowRange: { range: DayRange; basis: string } | null = sowPacket
+    ? { range: sowPacket, basis: "cultivar packet" }
+    : maturity?.fromSow
+      ? { range: maturity.fromSow, basis: cropSource }
+      : null;
+  const transplantRange: { range: DayRange; basis: string } | null =
+    transplantPacket
+      ? { range: transplantPacket, basis: "cultivar packet" }
+      : maturity?.fromTransplant
+        ? { range: maturity.fromTransplant, basis: cropSource }
+        : sowRange
+          ? {
+              range: shiftRange(sowRange.range, -TRANSPLANT_NURSERY_DAYS),
+              basis: `${sowRange.basis}, less ${TRANSPLANT_NURSERY_DAYS} nursery days`,
+            }
+          : null;
+  const estimates = [
+    { date: args.sowedOn, days: sowRange },
+    { date: args.transplantedOn, days: transplantRange },
+  ].flatMap(({ date, days }) =>
+    date === null || days === null
+      ? []
+      : [
+          {
+            start: addDays(date, days.range[0]),
+            end: addDays(date, days.range[1]),
+            basis: days.basis,
+          },
+        ],
+  );
+  if (estimates.length === 0) return null;
+  const latest = estimates.reduce((a, b) => (b.start > a.start ? b : a));
+  const start = latest.start;
+  const end = estimates.reduce((a, b) => (b.end > a ? b.end : a), start);
+  const span =
+    start === end
+      ? formatDay(start)
+      : `${formatDay(start)} – ${formatDay(end)}`;
+  return {
+    start,
+    end,
+    basis: latest.basis,
+    summary: `${span} (${latest.basis})`,
+  };
 }

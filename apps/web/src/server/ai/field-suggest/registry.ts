@@ -59,6 +59,7 @@ import {
 } from "@cubby/shared/redundant-tokens";
 import { z } from "zod";
 
+import { householdLocalDate } from "~/lib/household-date";
 import {
   COST_TYPE_DESCRIPTIONS,
   COST_TYPE_RULES,
@@ -550,8 +551,11 @@ export const FIELD_SUGGEST_REGISTRY = {
         finished: "No longer growing or completed",
       })[v],
     rules:
-      "Infer the planting lifecycle status from its dates. A transplant date indicates growing; a finished date indicates finished; otherwise choose planned.",
-    subject: (basis) => renderSubject("planting", basis),
+      "Infer the planting lifecycle status from its dates, compared with Today. A finished date on or before Today indicates finished. A sow or transplant date on or before Today indicates growing. A sow or transplant date after Today is an estimate on a planned planting, so choose planned; with no dates choose planned.",
+    // Without today's date the model reads any filled-in transplant date as
+    // growing, including the estimated future dates planned plantings carry.
+    subject: (basis) =>
+      `Today: "${householdLocalDate()}"\n${renderSubject("planting", basis)}`,
   } satisfies EnumSuggestSpec<"planned" | "growing" | "finished">,
   "gardenEntry.kind": {
     kind: "enum",
