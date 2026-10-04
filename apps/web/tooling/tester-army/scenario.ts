@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { z } from "zod";
 import { pollUntil } from "@cubby/shared/retry";
 import { shortcodeSchema } from "@cubby/schemas/identifiers";
-import { IMPORT_AGENT_ORDER } from "../scenarios/import-agent";
+import { IMPORT_AGENT_ORDER } from "../scenarios/import-agent-order";
 import {
   SIM_PRODUCT_NAME,
   SIM_PRODUCT_UPDATED_NAME,

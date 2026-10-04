@@ -8,15 +8,8 @@ import { getDb } from "~/server/repo/database-helpers";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { buildScenarioDatabase } from "./context";
+import { IMPORT_AGENT_ORDER } from "./import-agent-order";
 import { seedSimulatorPhotoActor } from "./simulator";
-
-/** The synthetic order the live import journey must land as a Purchase. */
-export const IMPORT_AGENT_ORDER = {
-  vendor: "Synthetic Seed Supply",
-  orderId: "SYN-CONFIRM-LIVE-1",
-  item: "Herb packet",
-  totalCents: 500,
-} as const;
 
 /**
  * One saved, itemized order confirmation the member can import from the
