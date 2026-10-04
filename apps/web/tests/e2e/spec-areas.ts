@@ -326,7 +326,7 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     "packages/schemas/src/image.ts",
   ],
   "retired-fieldwork.spec.ts": [
-    `${WEB}/src/lib/retired-fieldwork*.ts`,
+    `${WEB}/src/lib/retired-fieldwork-storage.ts`,
     `${WEB}/src/ui/feedback/retired-fieldwork.tsx`,
     `${WEB}/public/sw.js`,
     `${WEB}/src/routes/__root.tsx`,

@@ -1,9 +1,6 @@
-import { useLocation } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 
 import { formatRelative } from "~/lib/date-format";
-import { retiredFieldworkNotice } from "~/lib/retired-fieldwork";
 import {
   exportRetiredFieldwork,
   findRetiredFieldwork,
@@ -55,38 +52,11 @@ function describePass(pass: RetiredPass) {
 }
 
 /**
- * Both retired-fieldwork affordances, mounted once for signed-in routes:
- * the "moved to the app" toast a redirect from an old route asks for, and the
- * one-time cleanup of recount/photo-pass state this browser still holds.
+ * One-time cleanup of recount/photo-pass state this browser still holds: the
+ * flows moved to the native app, so unfinished work is offered for download
+ * before the keys are removed.
  */
 export function RetiredFieldwork() {
-  return (
-    <>
-      <MovedToAppNotice />
-      <UnfinishedPassesDialog />
-    </>
-  );
-}
-
-function MovedToAppNotice() {
-  const href = useLocation({ select: (location) => location.href });
-
-  useEffect(() => {
-    const notice = retiredFieldworkNotice(window.location.hash.slice(1));
-    if (!notice) return;
-    toast.info(notice, { duration: 12_000 });
-    // Drop the fragment so a reload does not repeat the notice.
-    window.history.replaceState(
-      window.history.state,
-      "",
-      window.location.pathname + window.location.search,
-    );
-  }, [href]);
-
-  return null;
-}
-
-function UnfinishedPassesDialog() {
   const [passes, setPasses] = useState<RetiredPass[]>([]);
 
   useEffect(() => {

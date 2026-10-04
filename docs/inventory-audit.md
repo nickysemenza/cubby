@@ -90,24 +90,21 @@ client-only: it never stamps `verifiedAt` or `lastBulkInventory`.
 ## 5. Retired web surfaces
 
 The web app no longer scans, recounts, sweeps, or runs the location photo pass,
-and it is no longer installable as a PWA. Kept for old links:
+and it is no longer installable as a PWA. The old routes return the ordinary
+404:
 
-| Old URL                          | Lands on                                        |
-| -------------------------------- | ----------------------------------------------- |
-| `/scan`                          | Today                                           |
-| `/inventory/session?parent=LOC`  | that location's page                            |
-| `/inventory/session`             | the inventory list (also for `?worklist=`)      |
-| `/locations/photo-pass?parent=…` | that location's page                            |
-| `/locations/photo-pass`          | the location list                               |
-| `/LOC-…` printed QR labels       | unchanged: the shortcode route opens the record |
+| Old URL                                        | Now |
+| ---------------------------------------------- | --- |
+| `/scan`                                        | 404 |
+| `/inventory/session` (any `parent`/`worklist`) | 404 |
+| `/locations/photo-pass` (any `parent`)         | 404 |
 
-Each redirect carries a `#moved-to-app:<workflow>` fragment that
-`ui/feedback/retired-fieldwork.tsx` turns into a one-time notice. On first load
-the same component finds unfinished browser-local recount/photo-pass state
-(`cubby:audit-session:*`, `cubby:photo-pass:*`), offers a JSON download or an
-explicit discard, and removes the keys (`lib/retired-fieldwork-storage.ts`).
-`public/sw.js` is a self-unregistering stub for browsers that still hold the old
-app-shell worker; do not delete it.
+Printed QR label URLs (`/<shortcode>`) still open the record. On first load,
+`ui/feedback/retired-fieldwork.tsx` finds unfinished browser-local
+recount/photo-pass state (`cubby:audit-session:*`, `cubby:photo-pass:*`), offers
+a JSON download or an explicit discard, and removes the keys
+(`lib/retired-fieldwork-storage.ts`). `public/sw.js` is a self-unregistering
+stub for browsers that still hold the old app-shell worker; do not delete it.
 
 Still deliberately deferred: cross-device pass state, a true offline mutation
 queue, and inventory-entry-without-product photo identity (photo capture reuses

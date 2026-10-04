@@ -1,59 +1,24 @@
 import { readFileSync } from "node:fs";
 
-import { gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
+import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
-import { seedLocationPrerequisite } from "./fixtures-catalog";
 
 // Scanning, recount, sweep, and the location photo pass moved to the native
-// app. Their old URLs (bookmarks, notes, home-screen shortcuts) must land on a
-// surviving page with a notice, never a 404.
+// app; their web routes are gone and answer with the ordinary not-found page.
 
-test("old fieldwork URLs redirect to the location or list with a moved-to-app notice", async ({
-  page,
-}, testInfo) => {
-  const name = uniqueName(testInfo, "Synthetic retired fieldwork shelf");
-  const location = await seedLocationPrerequisite(page, name);
-  const heading = page.getByRole("heading", { level: 1, name });
-
-  await gotoAuthenticatedPage(
-    page,
-    `/inventory/session?parent=${location.id}`,
-    heading,
-  );
-  await expect(page).toHaveURL(new RegExp(`/locations/${location.id}$`));
-  await expect(page.getByText(/Recounts moved to the Cubby app/)).toBeVisible();
-
-  await gotoAuthenticatedPage(
-    page,
-    `/locations/photo-pass?parent=${location.id}`,
-    heading,
-  );
-  await expect(page).toHaveURL(new RegExp(`/locations/${location.id}$`));
-  await expect(
-    page.getByText(/location photo pass moved to the Cubby app/),
-  ).toBeVisible();
-
-  await gotoAuthenticatedPage(
-    page,
-    "/inventory/session?worklist=shelf-disagrees",
-  );
-  await expect(page).toHaveURL(/\/inventory$/);
-
-  await gotoAuthenticatedPage(page, "/locations/photo-pass");
-  await expect(page).toHaveURL(/\/locations$/);
-
-  await gotoAuthenticatedPage(page, "/scan");
-  await expect(page).toHaveURL(/^[^#?]*\/(#.*)?$/);
-  await expect(page.getByText(/Scanning moved to the Cubby app/)).toBeVisible();
-});
-
-test("the notice fragment is dropped so a reload does not repeat it", async ({
-  page,
-}) => {
-  await gotoAuthenticatedPage(page, "/scan");
-  await expect(page.getByText(/Scanning moved to the Cubby app/)).toBeVisible();
-  await expect.poll(() => new URL(page.url()).hash).toBe("");
-});
+for (const path of [
+  "/scan",
+  "/inventory/session",
+  "/inventory/session?parent=LOC-4K7M",
+  "/inventory/session?worklist=shelf-disagrees",
+  "/locations/photo-pass",
+  "/locations/photo-pass?parent=LOC-4K7M",
+]) {
+  test(`${path} is not found`, async ({ page }) => {
+    const response = await page.goto(path, { waitUntil: "domcontentloaded" });
+    expect(response?.status()).toBe(404);
+  });
+}
 
 const unfinishedPass = {
   version: 4,
