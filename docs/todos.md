@@ -260,21 +260,15 @@ See also the image operational passes at the end of this file.
 - ⏳ **Native workflow parity with web.** Promote when a recurring household
   task still needs the web. Coverage is declared once in
   `packages/schemas/src/native-coverage.ts` with a shrink-only unsupported
-  ceiling per kind; hero actions and list cells are covered. Remaining gaps
-  are bespoke detail slots (the Run import console is 16 of them; the recipe
-  walkthrough/costing/availability panels, cookbook reprocess and extraction
-  report, and ingredient usage re-parse, which stay on web inside the now-drawn
-  recipe/cookbook/ingredient slots), the three finance verbs web alone runs (split an expense, attach expenses,
-  attach products), and the controls below. Every detail renderer is drawn
-  (structured values arrive as server-composed `detailLabelPath` text or
-  `itemsPath` rows). Add editor focus order or comprehensive sheet
-  lifecycle only on demonstrated friction. Owners: `apps/apple/App/Shared`,
-  generated `EntityCatalog`.
-
-- ⏳ **Single-source amount formatting.** Field formats are pinned by
-  `packages/shared/golden-vectors/display-format.json`, but `{value, unit}`
-  amounts still format separately (web `wasm.format_amount`, native Swift).
-  Export the formatter through `cubby-ffi` when a native amount view drifts.
+  ceiling per kind. Every control, list cell, detail renderer and hero action
+  is native. Remaining gaps: three Run detail slots (the live agent
+  conversation, which streams over Flue's own protocol, and prepared-order
+  approve-and-import, which needs a per-line Product picker), three finance
+  verbs (split an expense, attach expenses, attach products), eight read-only
+  structured fields, and the web-only parts inside drawn recipe/cookbook/
+  ingredient and meal-composition slots. Add editor focus order or
+  comprehensive sheet lifecycle only on demonstrated friction. Owners:
+  `apps/apple/App/Shared`, generated `EntityCatalog`.
 
 - ⏳ **Native structured-value editor follow-ups.** Native edits `unitMappings`,
   `labelNutrition`, `externalIds`, `sourceAliases`, `sourceRefs`, recipe
