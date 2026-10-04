@@ -2,16 +2,18 @@ import {
   type ProductShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { ProductPickerItemOut } from "@cubby/schemas/product";
-import type { PurchaseOut } from "@cubby/schemas/purchase";
+import type {
+  PurchaseOut,
+  purchaseLinkProductCandidate,
+} from "@cubby/schemas/purchase";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useDebouncedValue } from "@tanstack/react-pacer";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
+import type { z } from "zod";
 
-import { entityRelationMutationOptions } from "~/entity/entity-mutation";
-import { product } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
 import {
@@ -42,7 +44,7 @@ const isRowSelectionUpdater = (
   typeof value === "function";
 
 const SEARCH_PAGE_SIZE = 50;
-type PickerRow = ProductPickerItemOut & {
+type PickerRow = z.output<typeof purchaseLinkProductCandidate> & {
   images: Array<{ id: string; url: string; filename: string }>;
 };
 
@@ -50,42 +52,40 @@ export function LinkProductsDialog({
   open,
   onOpenChange,
   purchase,
-  attachedIds,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   purchase: PurchaseOut;
-  attachedIds: Set<string>;
 }) {
   const [selected, setSelected] = useState<Set<ProductShortcode>>(new Set());
   const [searchInput, setSearchInput] = useState("");
   const [search] = useDebouncedValue(searchInput, { wait: 300 });
 
+  // The candidates — a product search minus what is already attached — are the server's
+  // (`purchase.linkProductCandidates`).
   const searchQuery = useQuery({
-    ...product.search.queryOptions({
-      filters: { nameFilter: search.trim() || undefined },
-      pagination: { pageIndex: 0, pageSize: SEARCH_PAGE_SIZE },
-      sort: [{ orderBy: "name", direction: "asc" }],
+    ...purchaseOperations.linkProductCandidates.queryOptions({
+      purchaseId: purchase.id,
+      search,
     }),
     enabled: open,
+    placeholderData: keepPreviousData,
   });
   const rows = useMemo<PickerRow[]>(
     () =>
-      (searchQuery.data?.items ?? [])
-        .filter((item) => !attachedIds.has(item.id))
-        .map((item) => ({
-          ...item,
-          images: item.coverImageUrl
-            ? [
-                {
-                  id: `cover:${item.id}`,
-                  url: item.coverImageUrl,
-                  filename: item.name,
-                },
-              ]
-            : [],
-        })),
-    [attachedIds, searchQuery.data?.items],
+      (searchQuery.data?.candidates ?? []).map((item) => ({
+        ...item,
+        images: item.coverImageUrl
+          ? [
+              {
+                id: `cover:${item.id}`,
+                url: item.coverImageUrl,
+                filename: item.name,
+              },
+            ]
+          : [],
+      })),
+    [searchQuery.data?.candidates],
   );
 
   const resetAndClose = (next: boolean) => {
@@ -96,7 +96,7 @@ export function LinkProductsDialog({
     onOpenChange(next);
   };
   const attach = useActionMutation({
-    mutationFn: entityRelationMutationOptions,
+    mutationFn: purchaseOperations.attachProducts.mutationOptions,
     success: (result) =>
       `Attached ${result.changed} product${result.changed === 1 ? "" : "s"}`,
     onSuccess: () => resetAndClose(false),
@@ -174,7 +174,9 @@ export function LinkProductsDialog({
       onOpenChange={resetAndClose}
       size="lg"
       title={`Attach products to ${purchaseLabel(purchase)}`}
-      description="Record which products this purchase bought. The link carries no money or quantity — spend stays on the purchase's Expenses."
+      description={
+        searchQuery.data?.note ?? "Record which products this purchase bought."
+      }
       summary={
         <Description size="xs" className="mr-auto">
           {selected.size} selected
@@ -188,11 +190,8 @@ export function LinkProductsDialog({
         disabled: selected.size === 0,
         onClick: () =>
           attach.mutate({
-            action: "attach",
-            entity: "purchase",
-            relation: "products",
-            id: purchase.id,
-            items: [...selected].map((id) => ({ id })),
+            purchaseId: purchase.id,
+            productIds: [...selected],
           }),
       }}
     >
@@ -216,7 +215,7 @@ export function LinkProductsDialog({
             <Empty variant="minimal" className="py-6">
               <EmptyTitle>No products found</EmptyTitle>
               <EmptyDescription>
-                Adjust the search, or every match is already attached.
+                {searchQuery.data?.message ?? "Nothing to attach."}
               </EmptyDescription>
             </Empty>
           }

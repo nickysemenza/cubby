@@ -1,10 +1,8 @@
-import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { MutationSideEffects } from "@cubby/schemas/mutation-side-effects";
 import type { UseMutationOptions } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
-import type { RelationCommand } from "~/integrations/tanstack-query/operation-overrides";
 import type {
   EntityBrowserMutationInput,
   EntityBrowserMutationResult,
@@ -31,24 +29,6 @@ const kernelMutationIdentity = ({
   mutationKey?: readonly unknown[];
   meta?: UseMutationOptions["meta"];
 }) => ({ mutationKey, meta });
-
-/**
- * Mutation options for one relation attach/detach, resolving to its counts.
- * The variables stay the full kernel command: invalidation reads them.
- */
-export const entityRelationMutationOptions = (): UseMutationOptions<
-  RelationMutationOut,
-  Error,
-  RelationCommand
-> => ({
-  ...kernelMutationIdentity(entityMutation.mutate.mutationOptions()),
-  mutationFn: async (command) => {
-    const result = await entityMutation.mutate.call(command);
-    if (!("relation" in result))
-      throw new Error("Entity mutation result did not match its command");
-    return result.result;
-  },
-});
 
 /** Mutation options for one entity merge, resolving to the kernel result. */
 export const entityMergeMutationOptions =

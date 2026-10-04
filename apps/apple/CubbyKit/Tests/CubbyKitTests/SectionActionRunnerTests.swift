@@ -180,23 +180,49 @@ struct SectionActionRunnerTests {
     @Test func classifiesEverySectionVerb() throws {
         let coverage = NativeCoverageManifest.shared.sectionAction
         #expect(Set(coverage.keys) == Set(SectionActionID.allCases.map(\.rawValue)))
-        #expect(SectionActionRunner.coverage(of: .searchCharges) == .implemented)
-        #expect(SectionActionRunner.coverage(of: .matchStatement) == .implemented)
-        #expect(SectionActionRunner.coverage(of: .receiveExpense) == .implemented)
-        // Splitting and attaching change what an order covers; web alone does them.
-        for verb in [SectionActionID.splitExpense, .linkExpenses, .linkProducts] {
-            #expect(SectionActionRunner.coverage(of: verb).isUnsupported)
+        for verb in SectionActionID.allCases {
+            #expect(SectionActionRunner.coverage(of: verb) == .implemented)
         }
     }
 
-    @Test func refusesAnUnsupportedVerbWithItsReason() throws {
-        let records = try records(
+    // MARK: - Split and attach
+
+    private func verbRecords(_ id: String, reason: String?) throws -> ReportPresentation.Records {
+        let reasonJSON = reason.map { "\"\($0)\"" } ?? "null"
+        return try records(
             """
-            {"blocks":[{"kind":"records","rows":[],"empty":"No purchase recorded.","actions":[],"verbs":[
-              {"id":"splitExpense","label":"Split","scope":"section","disabledReason":null}]}]}
+            {"blocks":[{"kind":"records","rows":[],"empty":"","actions":[],"verbs":[
+              {"id":"\(id)","label":"Verb","scope":"section","disabledReason":\(reasonJSON)}]}]}
             """)
-        #expect(throws: SectionActionError.unsupported("Splitting an expense into parts is edited on web.")) {
-            try SectionActionRunner.canOpen(.splitExpense, in: records)
+    }
+
+    @Test @MainActor func opensASplitOnlyWhenTheServerOffersIt() throws {
+        let recorder = respond { _ in (200, Data()) }
+        let runner = try SectionActionRunner(client: makeClient())
+        _ = try runner.splitSession(
+            expenseID: "EXP-4K7M", records: verbRecords("splitExpense", reason: nil))
+        #expect(throws: SectionActionError.unavailable("Record this expense's vendor first.")) {
+            _ = try runner.splitSession(
+                expenseID: "EXP-4K7M",
+                records: self.verbRecords("splitExpense", reason: "Record this expense's vendor first."))
+        }
+        #expect(recorder.requests.isEmpty)
+    }
+
+    @Test @MainActor func opensAttachingOnlyWhenTheServerOffersIt() throws {
+        let runner = try SectionActionRunner(client: makeClient())
+        _ = try runner.expenseLinkSession(
+            purchaseID: "PUR-4K7M", records: verbRecords("linkExpenses", reason: nil))
+        _ = try runner.productLinkSession(
+            purchaseID: "PUR-4K7M", records: verbRecords("linkProducts", reason: nil))
+        #expect(throws: SectionActionError.unavailable("Not now.")) {
+            _ = try runner.productLinkSession(
+                purchaseID: "PUR-4K7M", records: self.verbRecords("linkProducts", reason: "Not now."))
+        }
+        // A verb the report does not list is not offered at all.
+        #expect(throws: SectionActionError.unavailable("This action is not offered here.")) {
+            _ = try runner.expenseLinkSession(
+                purchaseID: "PUR-4K7M", records: self.verbRecords("linkProducts", reason: nil))
         }
     }
 }

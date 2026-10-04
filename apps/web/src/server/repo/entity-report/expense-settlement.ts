@@ -1,6 +1,7 @@
 import { expenseShortcode } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ExpenseOut } from "@cubby/schemas/project";
+import { SPLIT_NEEDS_PURCHASE_REASON } from "@cubby/schemas/purchase";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -32,9 +33,7 @@ export const composeExpenseSettlementSection = (
       id: "splitExpense" as const,
       label: "Split",
       scope: "section" as const,
-      disabledReason: expense.purchaseId
-        ? null
-        : "Record this expense's vendor first — a split files its parts under the same purchase.",
+      disabledReason: expense.purchaseId ? null : SPLIT_NEEDS_PURCHASE_REASON,
     },
     {
       id: "receiveExpense" as const,

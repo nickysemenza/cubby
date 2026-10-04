@@ -1,9 +1,17 @@
+import { relationMutationOut } from "@cubby/schemas/common";
 import {
   purchaseOrderMailInput,
   purchaseOrderMailOut,
 } from "@cubby/schemas/order-mail-review";
 import {
   linkExpensesToPurchaseInput,
+  purchaseAttachProductsInput,
+  purchaseLinkExpensesCandidatesInput,
+  purchaseLinkExpensesCandidatesOut,
+  purchaseLinkExpensesCheckInput,
+  purchaseLinkExpensesCheckOut,
+  purchaseLinkProductsCandidatesInput,
+  purchaseLinkProductsCandidatesOut,
   purchaseOut,
   purchaseProductsInput,
   purchaseProductsOut,
@@ -13,6 +21,10 @@ import {
   purchaseSettlementCandidatesOut,
   purchaseSettlementSuggestInput,
   purchaseSettlementSuggestOut,
+  purchaseSplitCheckInput,
+  purchaseSplitCheckOut,
+  purchaseSplitStartInput,
+  purchaseSplitStartOut,
   reclassifyPurchaseDocumentInput,
   splitExpenseInput,
   splitExpenseOut,
@@ -88,14 +100,63 @@ export const purchaseContract = defineContract("purchase", {
     output: purchaseProductsOut,
   }),
   link: mutation({
+    native: "Attach expenses to a Purchase",
     input: linkExpensesToPurchaseInput,
     output: purchaseOut,
     invalidates: ["purchase"],
   }),
   split: mutation({
+    native: "Split an Expense into parts filed under its Purchase",
     input: splitExpenseInput,
     output: splitExpenseOut,
     invalidates: ["expense"],
+  }),
+  /**
+   * The split form's starting point and its one rule: the parts to start from, and whether typed
+   * parts can be saved (whole cents that add up to the original, a name each, one product part,
+   * an attribution choice). Both clients consult it; `split` re-checks on write.
+   */
+  splitStart: query({
+    native:
+      "Start splitting an Expense: the starting parts and the confirmation",
+    input: purchaseSplitStartInput,
+    output: purchaseSplitStartOut,
+    cache: { tags: [["expense"]] },
+  }),
+  checkSplit: query({
+    native: "Validate typed split parts before saving",
+    transport: "post",
+    input: purchaseSplitCheckInput,
+    output: purchaseSplitCheckOut,
+    cache: { tags: [] },
+  }),
+  /** Expenses worth attaching to a Purchase for a scope and search, already worded. */
+  linkExpenseCandidates: query({
+    native: "List expenses that can be attached to a Purchase",
+    input: purchaseLinkExpensesCandidatesInput,
+    output: purchaseLinkExpensesCandidatesOut,
+    cache: { tags: [["expense"], ["purchase"]] },
+  }),
+  /** Whether a selection can be attached and what it does to the Purchase's expense total. */
+  checkLinkExpenses: query({
+    native: "Validate an expense selection before attaching it to a Purchase",
+    transport: "post",
+    input: purchaseLinkExpensesCheckInput,
+    output: purchaseLinkExpensesCheckOut,
+    cache: { tags: [] },
+  }),
+  /** Products worth attaching to a Purchase: a search minus what is already attached. */
+  linkProductCandidates: query({
+    native: "List products that can be attached to a Purchase",
+    input: purchaseLinkProductsCandidatesInput,
+    output: purchaseLinkProductsCandidatesOut,
+    cache: { tags: [["product"], ["purchase"]] },
+  }),
+  attachProducts: mutation({
+    native: "Attach products to a Purchase",
+    input: purchaseAttachProductsInput,
+    output: relationMutationOut,
+    invalidates: ["purchaseProduct"],
   }),
   // Agent-facing (MCP `expenses`, `purchase_import`): off the HTTP API.
   /** `split` plus the conservation check an agent confirms before moving on. */

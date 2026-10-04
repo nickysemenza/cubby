@@ -303,15 +303,14 @@ export const nativeCoverage = {
    * native never offers one the server would refuse.
    */
   sectionAction: {
-    ...implemented(["matchStatement", "searchCharges", "receiveExpense"]),
-    ...unsupported(
-      ["splitExpense"],
-      "Splitting an expense into parts is edited on web.",
-    ),
-    ...unsupported(
-      ["linkExpenses", "linkProducts"],
-      "Attaching expenses or products to a purchase is done on web.",
-    ),
+    ...implemented([
+      "matchStatement",
+      "searchCharges",
+      "receiveExpense",
+      "splitExpense",
+      "linkExpenses",
+      "linkProducts",
+    ]),
   },
   /**
    * `implemented` slots are exactly the keys of `ListSlotRegistry` in
@@ -720,5 +719,5 @@ export const NATIVE_UNSUPPORTED_CEILING = {
   detailSlot: 2,
   listSlot: 0,
   structuredField: 8,
-  sectionAction: 3,
+  sectionAction: 0,
 } as const satisfies Record<NativeCoverageKind, number>;

@@ -112,7 +112,7 @@ const inventoryShortcodes = bindShortcodeResolver("inventory");
 
 export { productSearchInput };
 
-async function searchProducts(
+export async function searchProducts(
   context: ProductWorkflowContext,
   input: z.output<typeof productSearchInput>,
 ) {
