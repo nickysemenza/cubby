@@ -137,6 +137,10 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/financial-transactions.index.tsx",
     "apps/web/src/routes/api/v1/$resource.ts",
   ],
+  "finance-section-actions.spec.ts": [
+    "apps/web/src/routes/_authenticated/expenses.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/purchases.$shortcode.tsx",
+  ],
   "financial-booking-review.spec.ts": [
     "apps/web/src/routes/_authenticated/financial-transactions.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/financial-transactions.index.tsx",

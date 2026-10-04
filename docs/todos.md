@@ -263,7 +263,7 @@ See also the image operational passes at the end of this file.
   ceiling per kind. Every control, list cell, detail renderer and hero action
   is native. Remaining gaps: two Run detail slots (the live and stopped
   agent conversation, which stream over Flue's own protocol; see the next
-  item), three finance verbs (split an expense, attach expenses, attach products), eight read-only
+  item), eight read-only
   structured fields, and the web-only parts inside drawn recipe/cookbook/
   ingredient and meal-composition slots. Add editor focus order or
   comprehensive sheet lifecycle only on demonstrated friction. Owners:

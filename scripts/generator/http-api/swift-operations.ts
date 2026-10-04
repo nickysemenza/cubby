@@ -758,6 +758,38 @@ const CLIENT_PASSTHROUGH_METHODS = {
     method: "checkPurchaseSettlementAllocation",
     doc: "Whether typed allocation rows can be saved against a statement entry, and why not. The only allocation rule clients consult.",
   },
+  "purchase.splitStart": {
+    method: "startExpenseSplit",
+    doc: "The starting parts of a split, its wording and the sentence to confirm before it replaces the expense.",
+  },
+  "purchase.checkSplit": {
+    method: "checkExpenseSplit",
+    doc: "Whether typed split parts can be saved, and the exact body to send when they can. The only split rule clients consult.",
+  },
+  "purchase.split": {
+    method: "splitExpense",
+    doc: "Replaces one expense with its parts. Send the body `checkExpenseSplit` returned, after the person confirmed.",
+  },
+  "purchase.link": {
+    method: "attachExpensesToPurchase",
+    doc: "Moves the selected expenses onto a Purchase. Send the ids `checkPurchaseExpenseLink` returned.",
+  },
+  "purchase.linkExpenseCandidates": {
+    method: "purchaseLinkExpenseCandidates",
+    doc: "Expenses that can be attached to a Purchase for a scope and search, already worded.",
+  },
+  "purchase.checkLinkExpenses": {
+    method: "checkPurchaseExpenseLink",
+    doc: "Whether an expense selection can be attached to a Purchase, what it does to the expense total, and what to confirm.",
+  },
+  "purchase.linkProductCandidates": {
+    method: "purchaseLinkProductCandidates",
+    doc: "Products that can be attached to a Purchase: a search minus what is already attached.",
+  },
+  "purchase.attachProducts": {
+    method: "attachProductsToPurchase",
+    doc: "Records which products a Purchase bought. The link carries no money or quantity.",
+  },
   "vendor.startChargeRun": {
     method: "startChargeRun",
     doc: "One browser run for exactly the selected statement charges; the server refuses the whole selection if any charge is no longer searchable.",

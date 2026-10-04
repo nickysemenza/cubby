@@ -482,6 +482,15 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/server/repo/financial-transaction.ts`,
     `${WEB}/src/server/repo/financial-reconciliation.ts`,
   ],
+  "finance-section-actions.spec.ts": [
+    `${WEB}/src/app/expenses/**`,
+    `${WEB}/src/app/purchases/**`,
+    `${WEB}/src/server/repo/purchase.ts`,
+    `${WEB}/src/server/repo/purchase-*.ts`,
+    `${WEB}/src/server/operations/purchase.server.ts`,
+    `${WEB}/src/contracts/purchase.contract.ts`,
+    "packages/schemas/src/purchase.ts",
+  ],
   "purchase-split-settlement.spec.ts": [
     `${WEB}/src/app/purchases/**`,
     `${WEB}/src/server/repo/financial-transaction.ts`,
