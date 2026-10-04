@@ -140,7 +140,10 @@ export async function assertDatabase(
             actual = await readBack(pool, check, ids);
             return actual === target ? true : undefined;
           },
-          { label: `${journey.id}: ${check.label}`, timeoutMs: 15_000 },
+          {
+            label: `${journey.id}: ${check.label}`,
+            timeoutMs: Number(process.env.TESTER_ARMY_DB_TIMEOUT_MS ?? 15_000),
+          },
         );
       } catch (cause) {
         throw new Error(

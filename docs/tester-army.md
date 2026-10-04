@@ -1,8 +1,36 @@
 # Tester Army trial
 
-The manual web and iOS lanes exercise the same synthetic product rename and
-reopen journey. Agent steps navigate and edit; exact UI and database assertions
-decide correctness. Existing deterministic suites remain the merge gate.
+The manual web and iOS lanes run one shared catalog of synthetic journeys.
+Agent steps navigate and edit; exact UI text and database read-backs decide
+correctness. Existing deterministic suites remain the merge gate.
+
+## Journeys
+
+Each journey is described once in `apps/web/tooling/tester-army/journeys.ts`:
+plain-language goals (an optional per-engine wording), exact on-screen text to
+expect, and SQL read-backs with their expected rows. `tests/tester-army/web-journeys.e2e.ts`
+and `ios-journeys.e2e.ts` are thin loops over that catalog, and
+`tooling/scenarios/tester-army-journeys.ts` seeds one synthetic household that
+gives every journey its own records, so destructive journeys never disturb each
+other. Both engines read the same seed through `TESTER_ARMY_IDS_FILE`.
+
+Select journeys with `-- --journey id,id` (omit it to run all). `-- --wrong`
+(alias `--wrong-name`) corrupts every final database expectation, so a run must
+fail at the read-back. Every passing read-back also asserts that the same query
+does not satisfy a corrupted expectation, and `pnpm test:e2e:agent:selfcheck`
+proves the comparison bites without any model call. Journeys are paced
+(`TESTER_ARMY_PACE_MS`, default 20 s) because the inference gateway rate-limits
+bursts of journeys.
+
+Catalog: product rename; receive a purchase into stock; the add-to-inventory,
+record-sale, set-status, mark-purchased and delete-with-impact-preview hero
+actions; label nutrition, external ids, financial-account source aliases,
+transaction source refs, source-claim description (identity preserved), recipe
+line and product tag/collection editing; purchase validation; expense split
+(cents conserved, unknown cost refused); attach expenses (move confirmation) and
+products; task board lanes and moving a card; and a Run console journey (live
+progress, resolving a finding). The Run console debug log is not cursor-paged in
+the app (it caps at 2,000 events), so paging is not asserted.
 
 ## Failure modes and acceptance
 
@@ -110,8 +138,8 @@ Dispatch **CI** manually with `tester_army` set to `web`, `ios`, `both`, or `imp
 `simulator_e2e` disabled. These optional jobs do not run on PRs and do not replace
 the required checks. Run each engine three times for the live acceptance sample.
 
-Append `-- --wrong-name` to either journey command to deliberately expect a
-different name; it must fail the exact assertion. For a local replay comparison,
+Append `-- --wrong` to either journey command to deliberately expect wrong
+database values; it must fail the exact assertion. For a local replay comparison,
 run the same command twice with `-- --replay`. This enables Tester Army's local
 read-write cache; normal runs disable it. Compare the resulting summaries for
 model calls, tokens, timings, replay hits and handoffs. Cache eligibility depends
@@ -160,6 +188,6 @@ startup phase names, cache outcomes, and numeric timings from this run. SDK
 traces remain local to the runner; their arguments, responses, identifiers,
 paths, and raw error text are excluded from the uploaded summary.
 
-This trial establishes only the synthetic rename journey on Chromium and an
+This trial establishes only the synthetic journeys above on Chromium and an
 iOS simulator. It does not establish broader agent reliability or physical
 device behavior.

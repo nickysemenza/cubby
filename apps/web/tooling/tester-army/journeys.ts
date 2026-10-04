@@ -403,9 +403,9 @@ export const journeys: Journey[] = [
     start: "expense",
     steps: [
       {
-        goal: 'Split this expense into two parts: "Synthetic part one" costing 6.00 and "Synthetic part two" costing 4.00, then confirm. If the app refuses because the parts do not add up, stop there.',
+        goal: 'Split this expense into two parts: "Synthetic part one" costing 6.00 and "Synthetic part two" costing 4.00, then confirm. If the app does not allow it because the parts do not add up to the original cost, stop there.',
         check: {
-          visible: () => ["conserve"],
+          visible: () => ["add up to the original cost exactly"],
           db: [purchaseParts(1, 1001)],
         },
       },

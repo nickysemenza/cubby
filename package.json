@@ -40,6 +40,7 @@
     "test:e2e:agent:web": "pnpm --dir apps/web exec tsx tooling/tester-army/web.ts",
     "test:e2e:agent:ios": "pnpm test:e2e:sim -- --tester-army",
     "test:e2e:agent:import": "pnpm --dir apps/web exec tsx tooling/tester-army/import.ts",
+    "test:e2e:agent:selfcheck": "NODE_ENV=test node scripts/test-services.ts -- pnpm --dir apps/web exec tsx tooling/tester-army/selfcheck.ts",
     "test:e2e:agent:preflight": "pnpm --dir apps/web exec tsx tooling/tester-army/preflight.ts",
     "test:all": "pnpm test && node scripts/test-services.ts -- sh -c 'pnpm test:postgres && pnpm test:e2e'",
     "apple": "node scripts/apple.ts",

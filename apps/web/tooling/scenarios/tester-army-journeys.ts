@@ -300,9 +300,21 @@ export async function seedJourneyWorld(
     vendorId: runVendor.id,
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
   });
+  // Its own vendor and account: the console Run keeps `runAccount` busy, and validation refuses a
+  // busy account (one account per vendor and member).
+  const validateVendor = await insertWithShortcode(db, "vendor", {
+    name: "Synthetic Validation Vendor",
+    website: "https://validate.example.test",
+    browserDomains: ["validate.example.test"],
+  });
+  const validateAccount = await insertWithShortcode(db, "vendorAccount", {
+    label: "Synthetic validation account",
+    vendorId: validateVendor.id,
+    ledgerPartyId: parseEntityId("ledgerParty", memberId),
+  });
   const validatePurchase = await createEntity(c, "purchase", {
-    vendorId: runVendor.shortcode,
-    vendorAccountId: runAccount.shortcode,
+    vendorId: validateVendor.shortcode,
+    vendorAccountId: validateAccount.shortcode,
     orderId: "SYN-VALIDATE-1",
     date: "2026-06-06",
   });
