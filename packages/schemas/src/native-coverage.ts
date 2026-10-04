@@ -28,7 +28,7 @@ import type {
  * Every record is keyed by the generated id union, so adding a renderer, slot,
  * or hero action to a declaration is a type error here until it is classified.
  * `unsupported` is a deliberate, disclosed gap (the native screen shows the
- * reason); `NATIVE_27_CEILING` only shrinks.
+ * reason); `NATIVE_UNSUPPORTED_CEILING` only shrinks.
  */
 export type NativeCoverageEntry =
   | { readonly status: "implemented" | "generic" | "ownedElsewhere" }
@@ -289,7 +289,7 @@ export const nativeCoverage = {
    * at all), so each field is classified here as `<entity>.<field>`: `implemented` ones are drawn
    * from a `valueSchema` (each needs a read-to-input vector in `structured-roundtrip.json`); the
    * rest are read-only natively. Every field with that renderer must appear (asserted by the
-   * unit test), and `NATIVE_27_CEILING.structuredField` only shrinks.
+   * unit test), and `NATIVE_UNSUPPORTED_CEILING.structuredField` only shrinks.
    */
   structuredField: {
     ...implemented(["recipe.sections"]),
@@ -570,7 +570,7 @@ export const nativeHeroActionPlans = {
  * new web-only declaration shipped without a native path and needs a
  * justification in review.
  */
-export const NATIVE_27_CEILING = {
+export const NATIVE_UNSUPPORTED_CEILING = {
   control: 0,
   list: 0,
   detail: 0,
