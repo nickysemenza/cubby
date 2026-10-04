@@ -48,7 +48,7 @@ export default defineEntity({
         },
       ],
       read: {
-        relations: ["candidates"],
+        relations: ["candidates", "candidateItems"],
         derived: ["candidateCount", "priceRange"],
         media: ["displayImages"],
         quality: ["dataQuality"],

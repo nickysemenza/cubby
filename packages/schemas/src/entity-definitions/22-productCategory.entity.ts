@@ -53,6 +53,7 @@ export default defineEntity({
           "parentId",
           "parentName",
           "path",
+          "pathLabel",
           "spendingCategoryName",
           "spendingCategoryEmoji",
         ],
