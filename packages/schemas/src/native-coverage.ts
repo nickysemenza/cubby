@@ -73,7 +73,7 @@ const unsupported = <const Id extends string>(
  * has a per-renderer view path. Classified `generic` below; the generator refuses a field here
  * whose input schema it cannot describe.
  */
-export const STRUCTURED_VALUE_RENDERERS = [
+const STRUCTURED_VALUE_RENDERERS = [
   "external-ids",
   "label-nutrition",
   "source-aliases",
