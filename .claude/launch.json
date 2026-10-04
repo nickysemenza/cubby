@@ -6,12 +6,6 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@cubby/web", "dev"],
       "port": 3000
-    },
-    {
-      "name": "web-production-data",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "web", "dev"],
-      "port": 3000
     }
   ]
 }
