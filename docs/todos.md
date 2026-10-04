@@ -323,6 +323,12 @@ See also the image operational passes at the end of this file.
   use or concurrent windows block a workflow; needs a write/retry/conflict
   model and window ownership rules.
 
+- ⏳ **Web-only parts inside the implemented native recipe/cookbook/ingredient
+  slots.** Recipe AI walkthrough, costing coverage, availability panel, flow
+  layout and total-weight scale anchor; cookbook extraction report, reprocess
+  and add-from-source; ingredient recipe-usage re-parse. Promote one when a
+  household task needs it on the phone.
+
 - ⏳ **Expose the rest of recipebridge via cubby-ffi.** Scaling (`scale_amount`,
   scale-factor anchors, scaled counts) ships with native cook mode. Conversion,
   needs, costing, and nutrition stay web-only until a native screen prices a
