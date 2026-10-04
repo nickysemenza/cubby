@@ -107,6 +107,8 @@ export function LinkExpensesDialog({
       search,
     }),
     enabled: open,
+    // Candidates are what attaching just changed: never trust a cached list across a reopen.
+    staleTime: 0,
     placeholderData: keepPreviousData,
   });
   const candidates = candidatesQuery.data?.candidates ?? NO_CANDIDATES;
