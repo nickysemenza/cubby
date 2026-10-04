@@ -37,6 +37,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { categoryPathLabel } from "~/server/repo/detail-display-labels";
 import { listScaffold } from "~/server/repo/list";
 import {
   hydrateListRead,
@@ -305,6 +306,7 @@ const hydrateRead = async (
             id: parseShortcodeFor("productCategory", part.id),
             name: part.name,
           })),
+          pathLabel: categoryPathLabel(path),
         });
       if (wantsListGroup(projection, "derived"))
         Object.assign(result, {

@@ -210,6 +210,9 @@ struct FieldsSectionView<Inline: View>: View {
             if field.detailRenderer == .recipeSource {
                 return RecipeSourcePresentation.parse(row.raw[field.key]) == nil ? nil : field
             }
+            if field.itemsPath != nil {
+                return field.detailItems(in: row.raw).isEmpty ? nil : field
+            }
             if EntityFieldValue.reference(in: row.raw, field: field) != nil {
                 return field
             }
@@ -225,6 +228,8 @@ struct FieldsSectionView<Inline: View>: View {
     private func fieldRow(_ field: FieldDescriptor) -> some View {
         if field.reference?.multiple == true {
             RecordReferenceList(field: field, row: row)
+        } else if field.itemsPath != nil {
+            DetailDisplayRows(label: field.label, rows: field.detailItems(in: row.raw))
         } else if field.detailRenderer == .spendingCategorySummary {
             if let value = row.raw[field.key],
                 let summary = try? JSONDecoder.cubby().decode(
@@ -1131,6 +1136,43 @@ struct RawRecordDisclosure: View {
             return "{}"
         }
         return string
+    }
+}
+
+/// A field's server-composed display rows (`display.itemsPath`): the title, second line, and
+/// trailing figure are the server's words; a row that names a record opens it.
+private struct DetailDisplayRows: View {
+    let label: String
+    let rows: [DetailDisplayRow]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+            Text(label).font(.fieldGuideLabel)
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, item in
+                if let entity = item.entity, let id = item.id {
+                    NavigationLink(value: Route.entityDetail(entity, id: id)) { content(item) }
+                } else {
+                    content(item)
+                }
+            }
+        }
+    }
+
+    private func content(_ item: DetailDisplayRow) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                if let subtitle = item.subtitle, !subtitle.isEmpty {
+                    Text(subtitle).font(.fieldGuideLabel).foregroundStyle(.secondary)
+                }
+            }
+            if let trailing = item.trailing, !trailing.isEmpty {
+                Spacer(minLength: FieldGuideTokens.Space.sm)
+                Text(trailing).font(.fieldGuideLabel).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

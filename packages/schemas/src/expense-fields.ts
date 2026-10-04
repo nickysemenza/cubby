@@ -10,6 +10,20 @@ export const COST_TYPE_LABELS = {
   services: "Services",
 } as const satisfies Record<CostType, string>;
 
+/**
+ * The disposition capture (a sale, return, or write-off of a Product recorded
+ * as an Expense): its editor copy and default cost type. Web's expense dialog
+ * reads them from its `disposition` context and native's Record sale hero
+ * action from `nativeHeroActionPlans`, so both clients open the same editor.
+ */
+export const EXPENSE_DISPOSITION_COST_TYPE =
+  "tools" as const satisfies CostType;
+export const EXPENSE_DISPOSITION_EDITOR = {
+  title: "Record Sale or Disposal",
+  description:
+    "Enter a negative cost for a sale or return, or 0 with a negative quantity if it broke or was given away.",
+} as const;
+
 export const EXPENSE_DATE_REQUIRED_MESSAGE =
   "A date is required when the cost is known and not $0. Clear the cost (unknown), set it to $0, or enter a date.";
 

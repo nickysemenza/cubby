@@ -126,7 +126,11 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   `ListSlotRegistry`, `EntityFieldControl.drawing(for:)`), which `NativeCoverageViewPathTests`
   checks in both directions. The structured renderers (`STRUCTURED_VALUE_RENDERERS`) are `generic`:
   `FieldDescriptor.valueSchema`, derived from the field's Zod input schema, is drawn by the one
-  `StructuredValueControl`, so a new structured field is a declaration, not a view.
+  `StructuredValueControl`, so a new structured field is a declaration, not a view. A structured
+  detail field needs no view either: it declares where the record carries its server-composed text
+  (`display.detailLabelPath`) or worded rows (`display.itemsPath`, drawn by `DetailDisplayRows`), or
+  a nested value (`readPath` with `format`/`valueOptions`), and the generic detail row prints that —
+  never re-word a structure in Swift.
 - `CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json` and
   `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift` — from
   `scripts/generator/entities/render/swift-catalog.ts`. Regenerate with `pnpm generate`

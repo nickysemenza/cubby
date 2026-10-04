@@ -263,10 +263,9 @@ See also the image operational passes at the end of this file.
   ceiling per kind; hero actions and list cells are covered. Remaining gaps
   are bespoke detail slots (the Run import console is 16 of them; project
   budget/schedule/analytics; recipe workflow; cookbook TOC; settlement and
-  reconciliation), structured detail renderers (recipe sections/totals/yield,
-  financial identity and source refs), and the controls below. Known native
-  divergences: task board lanes show project ids, not names; record-sale has
-  no disposition title. Add editor focus order or comprehensive sheet
+  reconciliation), and the controls below. Every detail renderer is drawn
+  (structured values arrive as server-composed `detailLabelPath` text or
+  `itemsPath` rows). Add editor focus order or comprehensive sheet
   lifecycle only on demonstrated friction. Owners: `apps/apple/App/Shared`,
   generated `EntityCatalog`.
 

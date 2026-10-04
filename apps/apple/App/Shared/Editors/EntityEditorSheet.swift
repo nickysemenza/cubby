@@ -17,6 +17,8 @@ struct EntityEditorSheet: View {
     var original: JSONValue? = nil
     /// A detail action stages a reset for review; Save remains the only write.
     var resolutionResetField: String? = nil
+    /// A create the hero action opened with its own title and guidance (record sale).
+    var context: HeroEditorContext? = nil
     let onSaved: (String) -> Void
 
     @Environment(AppModel.self) private var appModel
@@ -107,9 +109,10 @@ struct EntityEditorSheet: View {
     }
 
     private var title: String {
+        if let context { return context.title }
         switch mode {
-        case .create: "New \(descriptor.singular)"
-        case .update: "Edit \(descriptor.singular)"
+        case .create: return "New \(descriptor.singular)"
+        case .update: return "Edit \(descriptor.singular)"
         }
     }
 
@@ -124,6 +127,9 @@ struct EntityEditorSheet: View {
 
     private func form(_ model: GenericEntityEditModel) -> some View {
         Form {
+            if let context {
+                Section { Text(context.description).foregroundStyle(.secondary) }
+            }
             if !unsupportedFields.isEmpty {
                 Section {
                     Text(

@@ -516,7 +516,15 @@ heterogeneous trees (rows of another entity nested under a row), dialogs, and
 workflows remain handwritten. A self-referencing tree is declared:
 `presentation.list.tree.parentField` names a readable single reference to the
 entity itself, and the generic list nests rows under it, keeping a row whose
-parent is not loaded at the top level. A legacy field override and
+parent is not loaded at the top level. A structured
+value that every client would otherwise re-word declares where the record
+carries its text instead of a renderer: `display.labelPath` for a list cell,
+`display.detailLabelPath` for a detail row (a server-composed sentence, lines
+joined with `\n`, built in `server/repo/detail-display-labels.ts` and carried
+as a `labelField`), `display.itemsPath` for a list of worded rows that each
+open their record (`displayItemsField`), and `display.readPath` plus `format`
+or `valueOptions` for a nested value. Clients print what the record carries;
+none restates the structure. A legacy field override and
 a manifest renderer may not claim the same surface; the compiler or registry
 test fails instead of choosing one silently. `control.renderer` follows the
 same contract for form controls. `display.columnId` preserves an existing computed column identity when

@@ -47,6 +47,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { sourceRefsLabel } from "~/server/repo/detail-display-labels";
 import {
   assertSettlementRefsAvailable,
   replaceSettlementRefs,
@@ -247,6 +248,7 @@ const toOut = (
     coverage: row.coverage,
     sourceCategory: row.sourceCategory,
     sourceRefs,
+    sourceRefsLabel: sourceRefsLabel(sourceRefs),
     notes: row.notes,
     allocations,
     ledgerTransferId: row.ledgerTransferShortcode

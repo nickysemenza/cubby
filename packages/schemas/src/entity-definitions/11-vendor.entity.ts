@@ -2,6 +2,7 @@ import { vendorSpendingProfile } from "../spending-classification.js";
 import { productCategoryShortcode } from "../identifier-fields";
 import { spendingCategoryShortcode } from "../identifier-fields.js";
 import { defineEntity } from "./definition.js";
+import { labelField } from "./label-field.js";
 import { vendorShortcode } from "../identifier-fields.js";
 import { imageOut } from "./field-primitives.js";
 import { money } from "@cubby/schemas/money";
@@ -348,7 +349,7 @@ export default defineEntity({
           renderer: "structured-field",
           sectionOverride: "details",
         },
-        display: { detail: true, renderer: { detail: "vendor-agent-hints" } },
+        display: { detail: true, detailLabelPath: "agentHintsLabel" },
         validation: {
           read: vendorAgentHints,
           create: vendorAgentHints.default({
@@ -509,6 +510,8 @@ export default defineEntity({
         kind: "timestamp",
         nullable: true,
       },
+      // Server-composed text for the structured detail field above (`display.detailLabelPath`).
+      labelField("agentHintsLabel", "Vendor agent hints"),
     ],
     storage: [
       {
@@ -644,6 +647,7 @@ export default defineEntity({
       "orderEmailSenders",
       "browserDomains",
       "agentHints",
+      "agentHintsLabel",
       "returnWindowDays",
       "notes",
       "purchaseCount",

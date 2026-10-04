@@ -1,10 +1,36 @@
 import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
+import { recipeTotalsLabel } from "../detail-display-labels";
 import { createRecipeFixture, makeRecipeInput } from "../repo.fixtures";
 import { getRecipeByShortcode, recipeList, updateRecipe } from "./crud";
 
 const ctx = withTestDb();
+
+// The detail screen prints these (`display.detailLabelPath`); no client counts
+// the sections or words the totals itself.
+it("words a recipe's composition and totals for the detail read", async () => {
+  const created = await createRecipeFixture(
+    ctx.db,
+    makeRecipeInput({ name: "Synthetic composition label" }),
+    ctx.actor,
+  );
+  const read = await getRecipeByShortcode(ctx.db, created.id);
+  const sections = read?.sections ?? [];
+  const ingredients = sections.flatMap((section) => section.ingredients);
+  const steps = sections.flatMap((section) => section.instructions);
+  const plural = (count: number, noun: string) =>
+    `${count} ${noun}${count === 1 ? "" : "s"}`;
+  expect(read?.compositionLabel).toBe(
+    [
+      plural(sections.length, "section"),
+      plural(ingredients.length, "ingredient"),
+      plural(steps.length, "step"),
+    ].join(" · "),
+  );
+  // Whatever costing has produced, the label words that same total.
+  expect(read?.totalsLabel).toBe(recipeTotalsLabel(read?.totals));
+});
 
 // Stored servings must stay nullable: resolving a yield is a read, not an edit.
 it("reports live recipe serving fallback without materializing it during reads or reset", async () => {

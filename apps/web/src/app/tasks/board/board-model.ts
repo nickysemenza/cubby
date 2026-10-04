@@ -4,6 +4,10 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { TaskOut, Trade } from "@cubby/schemas/project";
 import { taskStatusValues, tradeValues } from "@cubby/schemas/project";
+import {
+  TASK_BOARD_INBOX_LABEL,
+  TASK_BOARD_UNTITLED_PROJECT_LABEL,
+} from "@cubby/shared/client-constants";
 import { match } from "ts-pattern";
 
 import type {
@@ -25,11 +29,6 @@ export type BoardLaneMode = "project" | "trade";
 
 /** Body cap for the Done column — bounds the DOM; header still shows true count. */
 export const DONE_COLUMN_CAP = 20;
-
-/** Label for the null-project (unassigned) column/lane. */
-export const INBOX_LABEL = "Inbox";
-
-const NAMELESS_PROJECT = "Untitled project";
 
 /**
  * Cell ordering: manual `sortOrder` ascending first (nulls last, so ranked
@@ -65,13 +64,16 @@ function projectAxis(
   const names = new Map<ProjectShortcode, string>();
   for (const t of activeTasks(tasks)) {
     if (t.projectId != null) {
-      names.set(t.projectId, t.projectName ?? NAMELESS_PROJECT);
+      names.set(
+        t.projectId,
+        t.projectName ?? TASK_BOARD_UNTITLED_PROJECT_LABEL,
+      );
     }
   }
   const present = [...names.entries()]
     .map(([projectId, projectName]) => ({ projectId, projectName }))
     .sort((a, b) => a.projectName.localeCompare(b.projectName));
-  return [{ projectId: null, projectName: INBOX_LABEL }, ...present];
+  return [{ projectId: null, projectName: TASK_BOARD_INBOX_LABEL }, ...present];
 }
 
 /** Trades with active tasks, in canonical `tradeValues` order. */

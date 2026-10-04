@@ -508,6 +508,10 @@ private struct ProvenanceRows: View {
                 ProvenanceBadge(text: Self.attributionLabel(detail.captureAttribution))
             }
         }
+        // The server words the evidence (`display.detailLabelPath`); nothing here re-joins it.
+        if let evidence = detail.provenanceEvidenceLabel {
+            LabeledContent("Evidence", value: evidence)
+        }
         if let location = detail.captureLocation {
             ProvenanceMapRow(location: location)
                 .listRowInsets(EdgeInsets())

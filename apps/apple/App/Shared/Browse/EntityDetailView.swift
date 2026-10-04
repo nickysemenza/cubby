@@ -99,7 +99,9 @@ struct EntityDetailView: View {
                     .environment(appModel)
             }
             .sheet(item: $heroEditor) { request in
-                EntityEditorSheet(key: request.entity, mode: .create(prefill: request.prefill)) { _ in
+                EntityEditorSheet(
+                    key: request.entity, mode: .create(prefill: request.prefill), context: request.context
+                ) { _ in
                     Task { await refresh() }
                 }
                 .environment(appModel)
@@ -331,8 +333,8 @@ struct EntityDetailView: View {
                 heroNotice = message
                 Task { await refresh() }
             }
-        case .editor(let entity, let prefill):
-            heroEditor = HeroEditorRequest(entity: entity, prefill: prefill)
+        case .editor(let entity, let prefill, let context):
+            heroEditor = HeroEditorRequest(entity: entity, prefill: prefill, context: context)
         }
     }
 
@@ -720,6 +722,7 @@ private struct HeroEditorRequest: Identifiable {
     let id = UUID()
     let entity: EntityKey
     let prefill: [String: JSONValue]
+    let context: HeroEditorContext?
 }
 
 #Preview {

@@ -128,9 +128,15 @@ export default defineEntity({
       {
         key: "meta",
         kind: "json",
+        labelOverride: "Source URL",
         nullable: true,
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { detail: true, renderer: { detail: "recipe-meta" } },
+        // The detail row is the source URL: read from the structured value, drawn as a link.
+        display: {
+          detail: true,
+          readPath: "meta.url",
+          format: "external-link",
+        },
         validation: {
           read: recipeTopLevelFields.meta,
           create: recipeMeta,
@@ -142,7 +148,7 @@ export default defineEntity({
         kind: "json",
         nullable: true,
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { detail: true, renderer: { detail: "recipe-yield" } },
+        display: { detail: true, format: "amount" },
         validation: {
           read: recipeTopLevelFields.yield,
           create: recipeYieldSchema.nullable().optional(),
@@ -295,8 +301,10 @@ export default defineEntity({
       {
         key: "sections",
         kind: "json",
+        labelOverride: "Composition",
         control: { kind: "specialized", renderer: "structured-field" },
-        display: { detail: true, renderer: { detail: "recipe-sections" } },
+        // The body renders in the workflow slot; this row is the composition summary.
+        display: { detail: true, detailLabelPath: "compositionLabel" },
         provenance: {
           kind: "relation",
           sources: [{ label: "Recipe sections" }],
@@ -413,7 +421,7 @@ export default defineEntity({
         key: "totals",
         kind: "json",
         nullable: true,
-        display: { detail: true, renderer: { detail: "recipe-totals" } },
+        display: { detail: true, detailLabelPath: "totalsLabel" },
         explanation: {
           ruleId: "recipe.totals",
           description:
@@ -644,6 +652,9 @@ export default defineEntity({
       labelField("costTotalLabel", "Recipe cost total"),
       labelField("caloriesTotalLabel", "Recipe calorie total"),
       labelField("totalMinutesLabel", "Recipe time metadata"),
+      // The same, for the structured detail fields (`display.detailLabelPath`).
+      labelField("compositionLabel", "Recipe sections"),
+      labelField("totalsLabel", "Computed recipe totals"),
     ],
     storage: [
       {
@@ -747,7 +758,9 @@ export default defineEntity({
       "tags",
       "notes",
       "sections",
+      "compositionLabel",
       "totals",
+      "totalsLabel",
       "cost",
       "calories",
       "protein",

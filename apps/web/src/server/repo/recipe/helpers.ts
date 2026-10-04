@@ -23,6 +23,10 @@ import {
   mapImages,
   mapRelation,
 } from "~/server/repo/database-helpers";
+import {
+  recipeCompositionLabel,
+  recipeTotalsLabel,
+} from "~/server/repo/detail-display-labels";
 
 import type {
   RecipeDeepDB,
@@ -266,11 +270,14 @@ export const dbRecipeToAPI = (
   dataQuality: DataQuality,
 ): RecipeOut => {
   const baseRecipe = dbRecipeToAPIShallow(recipeData);
+  const sections = mapRecipeSections(recipeData.sections);
   return {
     ...baseRecipe,
     dataQuality,
     images: mapRecipeImages(recipeData.images),
-    sections: mapRecipeSections(recipeData.sections),
+    sections,
+    compositionLabel: recipeCompositionLabel(sections),
+    totalsLabel: recipeTotalsLabel(baseRecipe.totals),
   };
 };
 

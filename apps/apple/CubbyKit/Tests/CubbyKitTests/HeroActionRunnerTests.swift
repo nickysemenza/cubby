@@ -345,7 +345,7 @@ struct HeroActionRunnerTests {
         let plan = try #require(HeroActionRunner.plan(for: .recordSale, on: .product))
         let outcome = try await runner.perform(
             plan, on: .product, row: Self.row("PRD-4K7M"), values: [:], confirmed: false)
-        guard case .editor(let entity, let prefill) = outcome else {
+        guard case .editor(let entity, let prefill, let context) = outcome else {
             Issue.record("expected editor")
             return
         }
@@ -354,5 +354,24 @@ struct HeroActionRunnerTests {
         #expect(prefill["costType"] == "tools")
         // An explicit null overrides any default the editor would otherwise seed.
         #expect(prefill["projectId"] == .null)
+        // The same disposition context web opens the expense editor with: its title and guidance
+        // come from the plan, not from a native special case.
+        #expect(context?.title == "Record Sale or Disposal")
+        #expect(context?.description.contains("negative cost") == true)
+    }
+
+    @Test func aCreatePlanWithoutEditorCopyOpensAPlainEditor() throws {
+        let plan = try JSONDecoder().decode(
+            HeroActionPlan.self,
+            from: Data(
+                """
+                {"kind":"create","label":"Add","symbol":"plus","entity":"task","entities":["product"],
+                 "seed":{"productId":"$row.id"}}
+                """.utf8))
+        guard case .create(_, _, let editor) = plan.kind else {
+            Issue.record("expected create")
+            return
+        }
+        #expect(editor == nil)
     }
 }

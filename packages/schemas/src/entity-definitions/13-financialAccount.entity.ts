@@ -1,4 +1,5 @@
 import { defineEntity } from "./definition.js";
+import { labelField } from "./label-field.js";
 import {
   financialAccountCardNumbers,
   financialAccountIdentity,
@@ -126,7 +127,7 @@ export default defineEntity({
           width: "xs",
           readPath: "sourceAliases",
           format: "arrayCount",
-          renderer: { detail: "financial-account-source-aliases" },
+          detailLabelPath: "sourceAliasesLabel",
         },
         validation: {
           read: financialAccountSourceAliases,
@@ -140,10 +141,7 @@ export default defineEntity({
         description:
           "Every last four this account has presented, dated: the primary card the statement labels it with (a reissue is an older primary with validTo), wallet device numbers, sibling cards, or gift-card instances.",
         control: { kind: "specialized", renderer: "structured-field" },
-        display: {
-          detail: true,
-          renderer: { detail: "financial-account-card-numbers" },
-        },
+        display: { detail: true, detailLabelPath: "cardNumbersLabel" },
         validation: {
           read: financialAccountCardNumbers,
           create: financialAccountCardNumbers.default([]),
@@ -285,6 +283,9 @@ export default defineEntity({
         kind: "timestamp",
         nullable: true,
       },
+      // Server-composed text for the structured detail fields above (`display.detailLabelPath`).
+      labelField("sourceAliasesLabel", "Source aliases"),
+      labelField("cardNumbersLabel", "Card numbers"),
     ],
     storage: [
       {
@@ -405,7 +406,9 @@ export default defineEntity({
       "identity",
       "provisional",
       "sourceAliases",
+      "sourceAliasesLabel",
       "cardNumbers",
+      "cardNumbersLabel",
       "providerVendorId",
       "ledgerPartyId",
       "inventoryOwnerDefaultEnabled",

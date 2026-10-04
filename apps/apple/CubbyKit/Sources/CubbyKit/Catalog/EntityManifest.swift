@@ -98,34 +98,24 @@ public enum DetailRendererID: String, CaseIterable, Codable, Sendable {
     case effectiveOwnership = "effectiveOwnership"
     case expenseProject = "expense-project"
     case expenseSpendingCategory = "expense-spending-category"
-    case financialAccountCardNumbers = "financial-account-card-numbers"
     case financialAccountIdentity = "financial-account-identity"
-    case financialAccountSourceAliases = "financial-account-source-aliases"
     case financialTransactionAllocations = "financial-transaction-allocations"
-    case financialTransactionSourceRefs = "financial-transaction-source-refs"
     case financialTransactionVendorInference = "financial-transaction-vendor-inference"
     case imageCaptureLocation = "image-capture-location"
-    case imageProvenanceEvidence = "image-provenance-evidence"
     case imageSightings = "image-sightings"
     case ledgerTransferClassification = "ledger-transfer-classification"
     case ownerLedgerPartyId = "ownerLedgerPartyId"
     case ownershipMode = "ownershipMode"
     case productCategory = "product-category"
-    case productCategoryPath = "product-category-path"
     case productExternalIds = "product-external-ids"
     case productFdcId = "product-fdc-id"
     case productId = "product-id"
     case productIngredient = "product-ingredient"
     case productPrimaryGtin = "product-primary-gtin"
     case productTags = "product-tags"
-    case recipeMeta = "recipe-meta"
-    case recipeSections = "recipe-sections"
     case recipeSource = "recipe-source"
-    case recipeTotals = "recipe-totals"
-    case recipeYield = "recipe-yield"
     case runFailureDetails = "run-failure-details"
     case spendingCategorySummary = "spending-category-summary"
-    case vendorAgentHints = "vendor-agent-hints"
     case wishCandidates = "wish-candidates"
 }
 
@@ -320,6 +310,11 @@ public struct FieldDescriptor: Codable, Sendable {
     /// server-composed figure or a reference's display name. Clients print it instead of
     /// re-deriving the figure.
     public let labelPath: String?
+    /// Where the detail record carries this field's text when its list cell stays a count or a
+    /// chip (`labelPath`'s detail twin; the text may span lines).
+    public let detailLabelPath: String?
+    /// Where the detail record carries the field's display items (`DetailDisplayRow`), shown as rows.
+    public let itemsPath: String?
     public let listRenderer: ListRendererID?
     public let detailRenderer: DetailRendererID?
     /// Mobile card placement of the list column, when declared.

@@ -11,6 +11,14 @@
 export const IMAGE_WIDTHS = [128, 640, 2048] as const;
 
 /**
+ * Task board swimlane titles that no record carries: the lane for tasks with no
+ * project, and the fallback for a project with no name. Web and native name
+ * their lanes with these, beside each task row's own `projectName`.
+ */
+export const TASK_BOARD_INBOX_LABEL = "Inbox";
+export const TASK_BOARD_UNTITLED_PROJECT_LABEL = "Untitled project";
+
+/**
  * Single-user household — hardcoded rather than configurable. Day boundaries
  * (`golden-vectors/household-day.json`) are computed in this zone on every
  * client, wherever the device is.

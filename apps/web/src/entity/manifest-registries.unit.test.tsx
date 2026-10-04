@@ -174,9 +174,10 @@ describe("manifest registries", () => {
 
   // A structured detail field with no domain renderer falls back to readable
   // JSON. That never crashes, but it is a page showing a raw payload — so a
-  // new json field has to be claimed here (by a renderer, a reference or a
-  // declared format) rather than land on the page unnoticed.
-  it("renders every structured detail field through a renderer, a reference or a declared format", () => {
+  // new json field has to be claimed here (by a renderer, a reference, a
+  // declared format, or a server-composed detail label) rather than land on
+  // the page unnoticed.
+  it("renders every structured detail field through a renderer, a reference, a declared format or a detail label", () => {
     const generic: readonly GenericDetailEntity[] = [
       ...detailEntities,
       "image",
@@ -196,6 +197,7 @@ describe("manifest registries", () => {
             field.kind === "json" &&
             field.reference === null &&
             field.display.format === null &&
+            !("detailLabelPath" in field.display) &&
             detailFieldRenderersFor(entity)?.[field.key] === undefined,
         )
         .map((field) => `${entity}.${field.key}`);

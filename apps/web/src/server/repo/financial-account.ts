@@ -7,8 +7,10 @@ import {
   type FinancialAccountFilters,
   type FinancialAccountOut,
   type FinancialAccountUpdateData,
+  financialAccountCardNumbers,
   financialAccountIdentity,
   financialAccountOut,
+  financialAccountSourceAliases,
 } from "@cubby/schemas/financial-account";
 import {
   type FinancialAccountId,
@@ -36,6 +38,10 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import {
+  cardNumbersLabel,
+  sourceAliasesLabel,
+} from "~/server/repo/detail-display-labels";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { lockLedgerPartiesForReference } from "~/server/repo/ledger-party-reference";
 import { listScaffold } from "~/server/repo/list";
@@ -127,14 +133,18 @@ const hydrate = async (
 const toOut = (
   row: FinancialAccountRow,
   dataQuality: DataQuality,
-): FinancialAccountOut =>
-  financialAccountOut.parse({
+): FinancialAccountOut => {
+  const sourceAliases = financialAccountSourceAliases.parse(row.sourceAliases);
+  const cardNumbers = financialAccountCardNumbers.parse(row.cardNumbers);
+  return financialAccountOut.parse({
     id: parseShortcodeFor("financialAccount", row.shortcode),
     name: row.name,
     identity: financialAccountIdentity.parse(row.identity),
     provisional: row.provisional,
-    sourceAliases: row.sourceAliases,
-    cardNumbers: row.cardNumbers,
+    sourceAliases,
+    sourceAliasesLabel: sourceAliasesLabel(sourceAliases),
+    cardNumbers,
+    cardNumbersLabel: cardNumbersLabel(cardNumbers),
     inventoryOwnerDefaultEnabled: row.inventoryOwnerDefaultEnabled,
     ledgerPartyId: row.ledgerPartyShortcode
       ? parseShortcodeFor("ledgerParty", row.ledgerPartyShortcode)
@@ -150,6 +160,7 @@ const toOut = (
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
+};
 
 const selectAccountsRead = (
   db: Database | DrizzleTransaction,

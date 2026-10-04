@@ -1,4 +1,5 @@
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { EXPENSE_DISPOSITION_EDITOR } from "@cubby/schemas/expense-fields";
 import { financialAccountIdentity } from "@cubby/schemas/financial-account";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
@@ -576,10 +577,12 @@ const presentations = {
   },
   "expense:create:capture": {
     title: ({ context }) =>
-      context.disposition === true ? "Record Sale or Disposal" : "New Expense",
+      context.disposition === true
+        ? EXPENSE_DISPOSITION_EDITOR.title
+        : "New Expense",
     description: ({ context }) =>
       context.disposition === true
-        ? "Enter a negative cost for a sale or return, or 0 with a negative quantity if it broke or was given away."
+        ? EXPENSE_DISPOSITION_EDITOR.description
         : "Log what you bought (or plan to) — the fastest way to keep a project's cost honest.",
     Fields: () => <EntityIntentFields entity="expense" intent="capture" />,
     successMessage: (result) => `Logged "${resultName(result, "expense")}"`,

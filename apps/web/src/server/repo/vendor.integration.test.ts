@@ -71,6 +71,31 @@ describe("vendor repository — findOrCreateVendor", () => {
 describe("vendor declared scalar updates", () => {
   const ctx = withTestDb();
 
+  // The detail screen prints this text (`display.detailLabelPath`) instead of
+  // each client wording the structured hints.
+  it("words the agent hints for the detail read", async () => {
+    const id = await findOrCreateVendor(ctx.db, "Hinted vendor");
+    const original = await getVendorByID(ctx.db, id);
+    expect(original.agentHintsLabel).toBeNull();
+
+    const changed = await updateVendor(
+      ctx.db,
+      original.id,
+      {
+        agentHints: {
+          ordersListUrl: "https://shop.example.test/orders",
+          pagination: null,
+          orderLinkPattern: null,
+          notes: ["Sign in first"],
+        },
+      },
+      ctx.actor,
+    );
+    expect(changed.output.agentHintsLabel).toBe(
+      "Orders: https://shop.example.test/orders\nSign in first",
+    );
+  });
+
   it("preserves omitted fields and audits only actual changes", async () => {
     const id = await findOrCreateVendor(ctx.db, "Scalar patch vendor");
     const original = await getVendorByID(ctx.db, id);

@@ -512,6 +512,9 @@ const compileFieldModel = (
         width: field.display.width ?? null,
         readPath: field.display.readPath ?? null,
         labelPath: field.display.labelPath ?? null,
+        // Left undefined (so not emitted) unless declared: the model ships in the budgeted Worker bundle.
+        detailLabelPath: field.display.detailLabelPath ?? undefined,
+        itemsPath: field.display.itemsPath ?? undefined,
         format: field.display.format ?? null,
         renderer: field.display.renderer ?? null,
         mobile: field.display.mobile ?? null,
@@ -561,9 +564,23 @@ const compileFieldModel = (
         throw new EntityDeclarationError(
           `${context}.${field.key}.display.labelPath "${labelPath}" must be dotted keys with optional [n] or [] segments.`,
         );
-      if (!field.display.list)
+      if (!field.display.list && !field.display.detail)
         throw new EntityDeclarationError(
-          `${context}.${field.key}.display.labelPath requires display.list.`,
+          `${context}.${field.key}.display.labelPath requires display.list or display.detail.`,
+        );
+    }
+    for (const [name, path] of [
+      ["detailLabelPath", field.display.detailLabelPath],
+      ["itemsPath", field.display.itemsPath],
+    ] as const) {
+      if (path === null || path === undefined) continue;
+      if (!DISPLAY_READ_PATH.test(path))
+        throw new EntityDeclarationError(
+          `${context}.${field.key}.display.${name} "${path}" must be dotted keys with optional [n] or [] segments.`,
+        );
+      if (!field.display.detail)
+        throw new EntityDeclarationError(
+          `${context}.${field.key}.display.${name} requires display.detail.`,
         );
     }
     const standard = field.display.standard;

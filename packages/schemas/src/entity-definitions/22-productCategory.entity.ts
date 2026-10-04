@@ -8,6 +8,7 @@ import { spendingCategoryShortcode } from "../identifier-fields.js";
 import { productCategoryShortcode } from "../identifier-fields.js";
 import { productCategoryFeature } from "../product-category-fields.js";
 import { defineEntity } from "./definition.js";
+import { labelField } from "./label-field.js";
 
 export default defineEntity({
   key: "productCategory",
@@ -52,6 +53,7 @@ export default defineEntity({
           "parentId",
           "parentName",
           "path",
+          "pathLabel",
           "spendingCategoryName",
           "spendingCategoryEmoji",
         ],
@@ -366,10 +368,7 @@ export default defineEntity({
       {
         key: "path",
         kind: "json",
-        display: {
-          detail: true,
-          renderer: { detail: "product-category-path" },
-        },
+        display: { detail: true, detailLabelPath: "pathLabel" },
         provenance: {
           kind: "derived",
           sources: [{ label: "Category ancestry" }],
@@ -445,6 +444,8 @@ export default defineEntity({
         kind: "timestamp",
         nullable: true,
       },
+      // Server-composed text for the structured detail field above (`display.detailLabelPath`).
+      labelField("pathLabel", "Category ancestry"),
     ],
     storage: [
       "emoji",
@@ -546,6 +547,7 @@ export default defineEntity({
       "feature",
       "parentName",
       "path",
+      "pathLabel",
       "productCount",
       "createdAt",
       "updatedAt",
