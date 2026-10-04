@@ -10,7 +10,10 @@ import type {
   IngredientEdge,
   IngredientNode,
 } from "@cubby/schemas/ingredient-cooccurrence";
-import type { IngredientUsage } from "@cubby/schemas/ingredient-usage";
+import {
+  type IngredientUsage,
+  recipeSharePercent,
+} from "@cubby/schemas/ingredient-usage";
 import type {
   RecipeDepEdge,
   RecipeDependencyGraph,
@@ -385,6 +388,7 @@ export const getIngredientUsage = async (
       ),
       name: names.get(ingredientId) ?? "Unknown",
       recipeCount: count,
+      sharePercent: recipeSharePercent(count, recipes.length),
     }))
     .sort((a, b) => b.recipeCount - a.recipeCount);
 

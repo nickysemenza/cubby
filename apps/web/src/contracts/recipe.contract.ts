@@ -167,6 +167,7 @@ export const recipeContract = defineContract("recipe", {
     cache: { tags: [["recipe", "dependencyGraph"]] },
   }),
   getIngredientUsage: query({
+    native: "Cookbook contents",
     input: recipeCookbookScopeInput,
     output: ingredientUsageSchema,
     cache: { tags: [["recipe", "ingredientUsage"]] },

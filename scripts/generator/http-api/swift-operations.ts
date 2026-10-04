@@ -747,6 +747,7 @@ extension JSONValue {
 const CLIENT_PASSTHROUGH_METHODS = {
   "purchase.products": { method: "purchaseProducts", doc: null },
   "product.purchases": { method: "productPurchases", doc: null },
+  "recipe.getIngredientUsage": { method: "ingredientUsage", doc: null },
   "run.history": { method: "runHistory", doc: null },
   "run.work": { method: "runWork", doc: null },
   "purchaseImport.applyValidationCorrections": {

@@ -1,5 +1,3 @@
-import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product";
-
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { FullNutrientBreakdown } from "~/features/nutrition/FullNutrientBreakdown";
 import { NutrientDensityStats } from "~/features/nutrition/NutrientDensityStats";
@@ -12,29 +10,15 @@ import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 
 /**
- * Nutrition and cost-per-nutrient must share one product's basis — pricing
- * one product's protein off a different product's nutrients would silently
- * misattribute cost. Pick the product carrying both (falling back to
- * nutrition alone when none has a price). A `labelNutrition` override is
- * preferred over USDA nutrition — the same precedence as `productWasmInputs`'
- * costing — before falling back to price.
+ * The ingredient's nutrition, shown from the one product the server chose
+ * (`nutritionProduct`, shared with native).
  */
-export function selectNutritionProduct(
-  products: ProductWithMappingsAndFoodOut[],
-): ProductWithMappingsAndFoodOut | undefined {
-  return (
-    products.find((p) => p.labelNutrition != null && p.price != null) ??
-    products.find((p) => p.labelNutrition != null) ??
-    products.find((p) => p.food?.nutritionInfo && p.price != null) ??
-    products.find((p) => p.food?.nutritionInfo)
-  );
-}
-
-/** The ingredient's nutrition, shown from the one product that supplies it. */
 export const IngredientNutritionProduct: DetailSlotComponent<"ingredient"> = ({
   record: ingredient,
 }) => {
-  const product = selectNutritionProduct(ingredient.product);
+  const product = ingredient.product.find(
+    (candidate) => candidate.id === ingredient.nutritionProduct?.productId,
+  );
   const nutrients = product?.labelNutrition
     ? labelNutrientsPer100(product.labelNutrition)
     : product?.food?.nutritionInfo?.nutrientsPer100;

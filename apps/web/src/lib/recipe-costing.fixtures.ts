@@ -141,6 +141,7 @@ export const ingredientWith = (
   dataQuality: testCompleteDataQuality(),
   ...dates,
   product,
+  nutritionProduct: null,
 });
 
 // An ingredient backed by one product carrying `mappings`. Pass `nutrientsPer100`
