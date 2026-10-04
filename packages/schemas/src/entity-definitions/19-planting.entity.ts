@@ -359,9 +359,9 @@ export default defineEntity({
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
-        // Expected first-harvest range: transplantedOn + the transplant range,
-        // else sowedOn + the sow range; Plant packet days win over crop-level
-        // `garden-practice.ts` estimates. Null without a real date or data.
+        // Expected first-harvest range: the later of sowedOn + the sow range and
+        // transplantedOn + the transplant range; Plant packet days win over
+        // crop-level `garden-practice.ts` estimates. Null without a real date or data.
         key: "expectedHarvestStart",
         kind: "date",
         nullable: true,
@@ -373,7 +373,7 @@ export default defineEntity({
         explanation: {
           ruleId: "planting.expected-harvest",
           description:
-            "The transplant or sow date plus the plant's days to maturity, from its packet when recorded, else the crop estimate.",
+            "The later of the sow and transplant dates each plus the plant's days to maturity, from its packet when recorded, else the crop estimate.",
           readPath: "expectedHarvestStart",
           sourceDependencies: [
             { path: "sowedOn", label: "Sowed" },
