@@ -45,7 +45,10 @@ async function runWithServices() {
       await import("../scenarios/tester-army-journeys");
     await seedSimulatorPhotoActor(pool, userId);
     const idsFile = path.join(output, "journey-ids.json");
-    writeFileSync(idsFile, JSON.stringify(await seedJourneyWorld(pool, userId)));
+    writeFileSync(
+      idsFile,
+      JSON.stringify(await seedJourneyWorld(pool, userId)),
+    );
     const state = path.join(output, "browser-state.json");
     writeFileSync(state, JSON.stringify(runtime.storageState), { mode: 0o600 });
     await runOrThrow("pnpm", ["exec", "e2e", "run", "--output", rawOutput], {
