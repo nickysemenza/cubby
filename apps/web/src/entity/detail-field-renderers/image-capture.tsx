@@ -41,22 +41,6 @@ function renderCoordinates(location: CaptureCoordinates | null) {
   );
 }
 
-/** Shared shape between `Image.provenanceEvidence` and nothing else yet, but
- * kept generic for a future basis-carrying field. */
-interface ProvenanceEvidence {
-  basis: string;
-  ruleId?: string;
-  detail?: string;
-}
-
-function renderProvenanceEvidence(evidence: ProvenanceEvidence | null) {
-  if (!evidence) return <NoneValue />;
-  const parts = [evidence.basis];
-  if (evidence.ruleId) parts.push(evidence.ruleId);
-  if (evidence.detail) parts.push(evidence.detail);
-  return <span className="text-xs">{parts.join(" · ")}</span>;
-}
-
 interface Camera {
   make?: string;
   model?: string;
@@ -119,9 +103,6 @@ function renderSightings(sightings: readonly ImageSightingOut[] | undefined) {
 export const imageDetailFields = {
   "image-capture-location": (image) => ({
     value: renderCoordinates(image.captureLocation),
-  }),
-  "image-provenance-evidence": (image) => ({
-    value: renderProvenanceEvidence(image.provenanceEvidence),
   }),
   "image-sightings": (image) => ({
     value: renderSightings(image.sightings),

@@ -379,6 +379,8 @@ const fieldDisplayJSON = (
   format: display.format ?? null,
   readPath: display.readPath ?? null,
   labelPath: display.labelPath ?? null,
+  detailLabelPath: display.detailLabelPath ?? null,
+  itemsPath: display.itemsPath ?? null,
   listRenderer: optionalMember(
     vocabulary,
     "ListRendererID",

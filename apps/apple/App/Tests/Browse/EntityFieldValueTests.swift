@@ -21,6 +21,35 @@ struct EntityFieldValueTests {
         #expect(EntityFieldValue.text(.null, field: field) == nil)
     }
 
+    /// A detail row reads where the declaration says: the nested kind through its `valueOptions`
+    /// labels, a server-composed sentence verbatim, and never a count of the structure behind it.
+    @Test func detailReadsDeclaredPathsLabelsAndSentences() throws {
+        let identity = try #require(EntityCatalog[.financialAccount].field("identity"))
+        let account: JSONValue = ["identity": ["kind": "credit_card", "issuer": .null, "network": "visa"]]
+        #expect(EntityFieldValue.text(in: account, field: identity, surface: "detail") == "Credit card")
+
+        let cards = try #require(EntityCatalog[.financialAccount].field("cardNumbers"))
+        let withLabel: JSONValue = [
+            "cardNumbers": [["last4": "1234"]], "cardNumbersLabel": "•••• 1234 · primary",
+        ]
+        #expect(
+            EntityFieldValue.text(in: withLabel, field: cards, surface: "detail") == "•••• 1234 · primary")
+        #expect(
+            EntityFieldValue.text(in: ["cardNumbers": [["last4": "1234"]]], field: cards, surface: "detail")
+                == nil)
+
+        let meta = try #require(EntityCatalog[.recipe].field("meta"))
+        #expect(
+            EntityFieldValue.text(
+                in: ["meta": ["url": "https://recipes.example.test/soup"]], field: meta, surface: "detail")
+                == "https://recipes.example.test/soup")
+        let yield = try #require(EntityCatalog[.recipe].field("yield"))
+        #expect(
+            EntityFieldValue.text(
+                in: ["yield": ["value": 4, "unit": "serving"]], field: yield, surface: "detail")
+                == "4 serving")
+    }
+
     /// A reference field resolves its target from the sibling `<stem>Name` projection, or from
     /// a nested `<stem>: {id, name}` object when the list row embeds one instead.
     @Test func referenceResolvesProjectedNameOrNestedObject() throws {

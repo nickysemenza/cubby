@@ -7,6 +7,7 @@ import {
 import { imageSightingOut } from "../image-sighting-fields.js";
 import { optionalImageRepresentations } from "../image-summary.js";
 import { defineEntity } from "./definition.js";
+import { labelField } from "./label-field.js";
 import { imageShortcode, ledgerPartyShortcode } from "../identifier-fields.js";
 import { z } from "zod";
 export const generatedImageStatusValues = [
@@ -456,10 +457,7 @@ export default defineEntity({
         key: "provenanceEvidence",
         kind: "json",
         nullable: true,
-        display: {
-          detail: true,
-          renderer: { detail: "image-provenance-evidence" },
-        },
+        display: { detail: true, detailLabelPath: "provenanceEvidenceLabel" },
         validation: {
           read: imageProvenanceEvidence.nullable(),
           create: null,
@@ -535,6 +533,8 @@ export default defineEntity({
         kind: "timestamp",
         nullable: true,
       },
+      // Server-composed text for the evidence above (`display.detailLabelPath`).
+      labelField("provenanceEvidenceLabel", "Image provenance evidence"),
     ],
     storage: [
       {
@@ -636,6 +636,7 @@ export default defineEntity({
       "capturedByName",
       "captureAttribution",
       "provenanceEvidence",
+      "provenanceEvidenceLabel",
       "sightings",
       "createdAt",
       "updatedAt",

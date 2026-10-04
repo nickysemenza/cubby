@@ -15,7 +15,15 @@ nonisolated enum EntityFieldValue {
     }
 
     static func text(in raw: JSONValue, field: FieldDescriptor, surface: String) -> String? {
-        text(FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface), field: field)
+        if surface == "detail" {
+            // A declared server-composed sentence is the whole answer: the structure behind it
+            // is never re-worded here, and with no sentence the row is empty.
+            if field.detailLabelPath != nil { return field.detailLabel(in: raw) }
+            // A nested value (`identity.kind`, `meta.url`) is read where the declaration says.
+            if field.readPath != nil { return text(field.detailValue(in: raw), field: field) }
+        }
+        return text(
+            FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface), field: field)
     }
 
     static func text(_ value: JSONValue?, field: FieldDescriptor) -> String? {
@@ -37,7 +45,9 @@ nonisolated enum EntityFieldValue {
             if string.isEmpty { return nil }
             if field.kind == .date { return DisplayFormat.plainDate(string) }
             if field.kind == .timestamp { return date(value) ?? string }
-            return field.kind == .enum ? enumLabel(string, field: field) : string
+            if field.kind == .enum { return enumLabel(string, field: field) }
+            // A non-enum field (a nested kind, a derived status) names its choices in `valueOptions`.
+            return field.optionLabel(for: value) ?? string
         case .number(let number): return DisplayFormat.number(number)
         case .bool(let flag): return flag ? "Yes" : "No"
         case .array(let items):

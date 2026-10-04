@@ -262,7 +262,7 @@ struct TaskBoardListView: View {
     let client: CubbyClient
     let filters: EntityFilterState
     @State private var selectedStatus = "not_started"
-    @State private var laneField = "projectId"
+    @State private var axis = TaskBoardLane.Axis.project
 
     private let statuses = ["not_started", "later", "in_progress", "blocked", "done"]
 
@@ -282,19 +282,16 @@ struct TaskBoardListView: View {
                         Text($0.replacingOccurrences(of: "_", with: " ").capitalized).tag($0)
                     }
                 }
-                Picker("Lane", selection: $laneField) {
-                    Text("Project").tag("projectId")
-                    Text("Trade").tag("trade")
+                Picker("Lane", selection: $axis) {
+                    Text("Project").tag(TaskBoardLane.Axis.project)
+                    Text("Trade").tag(TaskBoardLane.Axis.trade)
                 }
                 let visible = board.tasks.filter { $0["status"]?.stringValue == selectedStatus }
-                let lanes = visible.map { $0[laneField]?.stringValue ?? "Unassigned" }.uniqued()
-                ForEach(lanes, id: \.self) { lane in
-                    let laneTasks = visible.filter {
-                        ($0[laneField]?.stringValue ?? "Unassigned") == lane
-                    }
-                    Section(lane) {
-                        ForEach(Array(laneTasks.enumerated()), id: \.offset) { index, task in
-                            taskRow(task, index: index, lane: laneTasks, all: board.tasks, loader: loader)
+                ForEach(TaskBoardLanes.groups(of: visible, axis: axis), id: \.lane.id) { group in
+                    Section(group.lane.title) {
+                        ForEach(Array(group.tasks.enumerated()), id: \.offset) { index, task in
+                            taskRow(
+                                task, index: index, lane: group.tasks, all: board.tasks, loader: loader)
                         }
                     }
                 }
@@ -322,13 +319,17 @@ struct TaskBoardListView: View {
                 Menu("Move", systemImage: "arrow.up.arrow.down") {
                     ForEach(statuses, id: \.self) { status in
                         Button(status.replacingOccurrences(of: "_", with: " ").capitalized) {
-                            Task { await move(id, field: "status", value: status, loader: loader) }
+                            Task { await move(id, field: "status", value: .string(status), loader: loader) }
                         }
                     }
-                    ForEach(all.compactMap { $0[laneField]?.stringValue }.uniqued(), id: \.self) {
-                        destination in
-                        Button("Lane: \(destination)") {
-                            Task { await move(id, field: laneField, value: destination, loader: loader) }
+                    ForEach(TaskBoardLanes.destinations(of: all, axis: axis)) { destination in
+                        Button("Lane: \(destination.title)") {
+                            Task {
+                                await move(
+                                    id, field: axis.rawValue,
+                                    value: destination.value.map { .string($0) } ?? .null,
+                                    loader: loader)
+                            }
                         }
                     }
                     Button("Move earlier") {
@@ -345,11 +346,11 @@ struct TaskBoardListView: View {
     }
 
     private func move(
-        _ id: String, field: String, value: String, loader: SpecialistLoader<TaskBoardData>
+        _ id: String, field: String, value: JSONValue, loader: SpecialistLoader<TaskBoardData>
     ) async {
         await loader.perform {
             try await client.update(
-                EntityCatalog[.task], id: id, patch: EntityPatch(values: [field: .string(value)]))
+                EntityCatalog[.task], id: id, patch: EntityPatch(values: [field: value]))
         }
     }
 

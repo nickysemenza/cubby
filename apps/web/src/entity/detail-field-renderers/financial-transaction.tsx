@@ -5,7 +5,6 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entities, entityDetailParams } from "~/entity/entities";
 import { formatCurrency } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
-import { NoneValue } from "~/ui/primitives/none-value";
 
 import type { EntityDetailFieldRenderers } from "./index";
 import { renderSpendingCategorySummary } from "./spending-category-summary";
@@ -61,18 +60,6 @@ export const financialTransactionDetailFields = {
             </Row>
           ))}
         </Stack>
-      ),
-  }),
-  "financial-transaction-source-refs": (transaction) => ({
-    value:
-      transaction.sourceRefs.length > 0 ? (
-        <span className="font-mono text-xs">
-          {transaction.sourceRefs
-            .map((reference) => `${reference.source}: ${reference.externalId}`)
-            .join(", ")}
-        </span>
-      ) : (
-        <NoneValue />
       ),
   }),
 } satisfies EntityDetailFieldRenderers<"financialTransaction">;

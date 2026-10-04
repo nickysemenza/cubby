@@ -60,6 +60,14 @@ public struct HeroOperationPlan: Decodable, Sendable, Hashable {
     public let body: JSONValue
 }
 
+/// The title and guidance a create-editor hero action opens with when the capture is not a plain
+/// "New <entity>" (record sale opens the expense editor as "Record Sale or Disposal"). The copy
+/// is declared once, beside the web editor's `disposition` context that shows the same words.
+public struct HeroEditorContext: Decodable, Sendable, Hashable {
+    public let title: String
+    public let description: String
+}
+
 /// What the one generic runner does for a manifest hero action, decoded from
 /// `native-coverage.json`'s `heroActionPlan`. The verb is the manifest's; nothing is per entity
 /// except the `entities` gate.
@@ -69,7 +77,7 @@ public struct HeroActionPlan: Decodable, Sendable, Hashable {
         case delete
         case operation(HeroOperationPlan)
         /// Opens the generic create editor with `seed` (`$row.id` filled) pre-set.
-        case create(entity: EntityKey, seed: [String: JSONValue])
+        case create(entity: EntityKey, seed: [String: JSONValue], editor: HeroEditorContext?)
         /// Picks a value for one declared enum field, then updates the row.
         case setField(field: String)
         /// Flips a boolean update field whose current state is read from `stateField`.
@@ -98,7 +106,7 @@ public struct HeroActionPlan: Decodable, Sendable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case kind, label, symbol, entities, entity, seed, field, stateField
+        case kind, label, symbol, entities, entity, seed, editor, field, stateField
     }
 
     public init(from decoder: Decoder) throws {
@@ -114,7 +122,8 @@ public struct HeroActionPlan: Decodable, Sendable, Hashable {
         case "create":
             kind = .create(
                 entity: try container.decode(EntityKey.self, forKey: .entity),
-                seed: try container.decode([String: JSONValue].self, forKey: .seed))
+                seed: try container.decode([String: JSONValue].self, forKey: .seed),
+                editor: try container.decodeIfPresent(HeroEditorContext.self, forKey: .editor))
         case "setField":
             kind = .setField(field: try container.decode(String.self, forKey: .field))
         case "toggleField":

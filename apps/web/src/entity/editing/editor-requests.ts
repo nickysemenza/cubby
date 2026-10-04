@@ -1,4 +1,5 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { EXPENSE_DISPOSITION_COST_TYPE } from "@cubby/schemas/expense-fields";
 import type { FinancialAccountOut } from "@cubby/schemas/financial-account";
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
 import type {
@@ -101,7 +102,7 @@ export const expenseCaptureRequest = (input?: {
     seed.beneficiaries = input.beneficiaries;
   if (input?.disposition) {
     seed.projectId = null;
-    seed.costType = "tools";
+    seed.costType = EXPENSE_DISPOSITION_COST_TYPE;
   }
   return {
     entity: "expense",

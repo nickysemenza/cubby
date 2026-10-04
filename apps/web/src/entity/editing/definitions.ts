@@ -11,6 +11,7 @@ import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
 import {
   canClearExpenseDate,
   EXPENSE_DATE_REQUIRED_MESSAGE,
+  EXPENSE_DISPOSITION_COST_TYPE,
 } from "@cubby/schemas/expense-fields";
 import { displayGtin, externalIdInput } from "@cubby/schemas/external-id";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
@@ -1132,7 +1133,9 @@ export const editHooks: EditHooksMap = {
         defaults: (context) => ({
           lineKind: "auto",
           trade: null,
-          costType: context.disposition ? "tools" : "materials",
+          costType: context.disposition
+            ? EXPENSE_DISPOSITION_COST_TYPE
+            : "materials",
         }),
         buildData: (patch) => ({
           ...patch,

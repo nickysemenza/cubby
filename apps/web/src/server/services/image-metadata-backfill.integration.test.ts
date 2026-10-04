@@ -194,6 +194,8 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
     expect(row.captureLocation).toEqual({ lat: 40, lng: -74 });
     expect(row.capturedByPartyId).toBeNull();
     expect(row.provenanceEvidence).toEqual({ basis: "exif" });
+    // The server words the evidence (`display.detailLabelPath`) for every client.
+    expect(row.provenanceEvidenceLabel).toBe("exif");
 
     // Re-running against the now-fresh row is a no-op: the candidate WHERE
     // no longer matches it, so `getRow` returns nothing.

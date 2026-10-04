@@ -500,13 +500,35 @@ function referenceLink(entity: string, item: ReferenceItem): ReactNode {
   );
 }
 
-/** Reference fields link to the target's detail route; everything else
- * renders through its declared `display.format`. */
+/** What a `display.labelPath` / `detailLabelPath` read may carry: text, or a `[]` projection of text. */
+const labelValue = z.union([z.string().min(1), z.array(z.string()).min(1)]);
+
+/** The text the record carries at a declared label path, or `null` when it has none. */
+function readLabel<TRecord extends object>(
+  record: TRecord,
+  path: string,
+): string | null {
+  const parsed = labelValue.safeParse(readPathValue(record, path));
+  if (!parsed.success) return null;
+  return Array.isArray(parsed.data) ? parsed.data.join(", ") : parsed.data;
+}
+
+/** Reference fields link to the target's detail route; a field with a
+ * `detailLabelPath` prints the text the server composed for it; everything
+ * else renders through its declared `display.format`. */
 export function renderDetailFieldValue<TRecord extends object>(
   entity: Entity,
   record: TRecord,
   field: DisplayField,
 ): ReactNode {
+  if (field.display.detailLabelPath !== null) {
+    const label = readLabel(record, field.display.detailLabelPath);
+    return label === null ? (
+      <NoneValue />
+    ) : (
+      <span className="whitespace-pre-line">{label}</span>
+    );
+  }
   const reference = readReferenceField(record, field);
   if (reference !== null) {
     if (reference.items.length === 0) return <NoneValue />;
@@ -1227,9 +1249,6 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
  * `display.format` the cell renderer switches on — `external-link` copies
  * like the field's own kind (number or text), so it has no dedicated branch.
  */
-/** What a `display.labelPath` read may carry: text, or a `[]` projection of text. */
-const labelValue = z.union([z.string().min(1), z.array(z.string()).min(1)]);
-
 function cellDataForField<TRecord extends object>(
   entity: Entity,
   field: DisplayField,
@@ -1559,13 +1578,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
       // field's own value, when it has one, stays the sort value.
       const labelPath = field.display.labelPath;
       if (labelPath !== null) {
-        const labelOf = (record: TRecord) => {
-          const parsed = labelValue.safeParse(readPathValue(record, labelPath));
-          if (!parsed.success) return null;
-          return Array.isArray(parsed.data)
-            ? parsed.data.join(", ")
-            : parsed.data;
-        };
+        const labelOf = (record: TRecord) => readLabel(record, labelPath);
         add(
           helper.accessor(
             (record) =>

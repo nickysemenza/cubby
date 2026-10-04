@@ -1,6 +1,10 @@
 // Not "@cubby/shared": its index reaches generated files, and this module is imported by the
 // generator before they exist.
 import { mapRecord } from "../../shared/src/record";
+import {
+  EXPENSE_DISPOSITION_COST_TYPE,
+  EXPENSE_DISPOSITION_EDITOR,
+} from "./expense-fields";
 import { TRADE_LABELS, tradeValues } from "./task-fields";
 import type { Entity } from "./entity-core";
 import type {
@@ -130,6 +134,11 @@ export const nativeCoverage = {
     ...ownedElsewhere(["uploaded-image"]),
   },
   detail: {
+    // Drawn by the one generic detail row from what the declaration says to read: a reference,
+    // `valueOptions` labels (`financial-account-identity` via `readPath`, `ledger-transfer-
+    // classification`), the server-composed `detailLabelPath` text (`financial-transaction-
+    // vendor-inference`), or the `itemsPath` rows (`wish-candidates`). The richer web cell
+    // (filter link, pill, thumbnails) stays web-only; the fact it carries does not.
     ...generic([
       "expense-project",
       "ownerLedgerPartyId",
@@ -143,35 +152,24 @@ export const nativeCoverage = {
       "product-tags",
       "financial-transaction-allocations",
       "run-failure-details",
+      "financial-account-identity",
+      "financial-transaction-vendor-inference",
+      "ledger-transfer-classification",
+      "wish-candidates",
     ]),
     ...implemented([
       "recipe-source",
       "expense-spending-category",
       "spending-category-summary",
     ]),
-    // `image-capture-location` is `ImageEntityDetailView`'s own Provenance map row; Image never
-    // uses the generic detail view, so it is reachable only defensively.
-    ...ownedElsewhere(["effectiveOwnership", "image-capture-location"]),
-    ...unsupported(
-      [
-        "product-category-path",
-        "financial-account-identity",
-        "financial-account-source-aliases",
-        "financial-account-card-numbers",
-        "financial-transaction-source-refs",
-        "financial-transaction-vendor-inference",
-        "ledger-transfer-classification",
-        "recipe-meta",
-        "recipe-sections",
-        "recipe-totals",
-        "recipe-yield",
-        "vendor-agent-hints",
-        "wish-candidates",
-        "image-provenance-evidence",
-        "image-sightings",
-      ],
-      "This structured detail is available on web.",
-    ),
+    // `ImageEntityDetailView` draws Image's Provenance map row (`image-capture-location`) and
+    // "In libraries" rows (`image-sightings`) itself; Image never uses the generic detail view,
+    // so these are reachable only defensively.
+    ...ownedElsewhere([
+      "effectiveOwnership",
+      "image-capture-location",
+      "image-sightings",
+    ]),
   },
   /**
    * `implemented` verbs each have a plan in `nativeHeroActionPlans` that the one generic runner
@@ -366,6 +364,11 @@ export type NativeHeroActionPlan = {
       readonly entity: Entity;
       readonly entities: readonly Entity[];
       readonly seed: { readonly [field: string]: HeroActionBodyValue };
+      /** The editor's title and guidance when the capture is not a plain "New <entity>". */
+      readonly editor?: {
+        readonly title: string;
+        readonly description: string;
+      };
     }
   | {
       /** Picks a value for one declared enum field, then updates the row. */
@@ -480,8 +483,14 @@ export const nativeHeroActionPlans = {
     kind: "create",
     entity: "expense",
     entities: ["product"],
-    // A disposition expense: attributed to no project, filed under tools (the web seed).
-    seed: { productId: "$row.id", projectId: null, costType: "tools" },
+    // A disposition expense: attributed to no project, filed under tools, in the editor web
+    // titles "Record Sale or Disposal" (its `disposition` context).
+    seed: {
+      productId: "$row.id",
+      projectId: null,
+      costType: EXPENSE_DISPOSITION_COST_TYPE,
+    },
+    editor: EXPENSE_DISPOSITION_EDITOR,
   },
   setStatus: {
     label: "Set status",
@@ -509,7 +518,7 @@ export const nativeHeroActionPlans = {
 export const NATIVE_UNSUPPORTED_CEILING = {
   control: 2,
   list: 0,
-  detail: 15,
+  detail: 0,
   heroAction: 0,
   detailSlot: 38,
   listSlot: 0,

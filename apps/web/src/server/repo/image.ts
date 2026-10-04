@@ -114,6 +114,7 @@ import {
   uuidArrayParam,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { provenanceEvidenceLabel } from "~/server/repo/detail-display-labels";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/repo/entity-embedding-cleanup";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
@@ -1010,6 +1011,9 @@ const imageWithRelationsToAPI = (
     capturedByName: capturedByParty?.name ?? null,
     captureAttribution: imageData.captureAttribution,
     provenanceEvidence: imageData.provenanceEvidence,
+    provenanceEvidenceLabel: provenanceEvidenceLabel(
+      imageData.provenanceEvidence,
+    ),
     createdAt: imageData.createdAt,
     updatedAt: imageData.updatedAt,
     associations: associations.sort(

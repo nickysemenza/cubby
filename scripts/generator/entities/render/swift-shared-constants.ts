@@ -1,6 +1,8 @@
 import {
   HOUSEHOLD_TIMEZONE,
   IMAGE_WIDTHS,
+  TASK_BOARD_INBOX_LABEL,
+  TASK_BOARD_UNTITLED_PROJECT_LABEL,
 } from "../../../../packages/shared/src/client-constants.ts";
 import {
   WAYFINDING_DOMAINS,
@@ -40,6 +42,10 @@ export const renderSwiftSharedConstants = (): EntityArtifacts[] => {
         `    public static let mediaOrigin = ${swiftString(readR2PublicUrlFromWrangler())}\n` +
         "    /// The household's IANA time zone (`HOUSEHOLD_TIMEZONE`).\n" +
         `    public static let householdTimeZoneIdentifier = ${swiftString(HOUSEHOLD_TIMEZONE)}\n` +
+        "    /// The task board lane for tasks with no project (`TASK_BOARD_INBOX_LABEL`).\n" +
+        `    public static let taskBoardInboxLabel = ${swiftString(TASK_BOARD_INBOX_LABEL)}\n` +
+        "    /// A board lane's title for a project with no name (`TASK_BOARD_UNTITLED_PROJECT_LABEL`).\n" +
+        `    public static let taskBoardUntitledProjectLabel = ${swiftString(TASK_BOARD_UNTITLED_PROJECT_LABEL)}\n` +
         "}\n\n" +
         "extension WayfindingDomain {\n" +
         "    /// The line's name (`WAYFINDING_DOMAIN_PRESENTATION.label`).\n" +

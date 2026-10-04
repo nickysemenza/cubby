@@ -58,6 +58,14 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
   return cell({ row: { original: record } });
 }
 
+function fieldOf(entity: Entity, key: string) {
+  const field = entityFieldModels[entity].fields.find(
+    (candidate) => candidate.key === key,
+  );
+  if (!field) throw new Error(`${entity}.${key} is not declared`);
+  return field;
+}
+
 describe("declared entity displays", () => {
   it("links shortcodes in editable product notes beside a working edit control", async () => {
     const overrides = editableFieldOverrides(
@@ -95,6 +103,63 @@ describe("declared entity displays", () => {
     );
     expect(screen.getByText("$12.30")).toBeVisible();
   });
+  it("prints the server-composed text a structured detail field declares, line breaks kept", () => {
+    // Account cards are an array of objects; the server words them, so the
+    // detail row never restates the structure (`display.detailLabelPath`).
+    const field = fieldOf("financialAccount", "cardNumbers");
+    const { container } = render(
+      <>
+        {renderDetailFieldValue(
+          "financialAccount",
+          {
+            cardNumbers: [{ last4: "1234" }],
+            cardNumbersLabel: "•••• 1234 · primary\n•••• 9876 · wallet token",
+          },
+          field,
+        )}
+      </>,
+    );
+    expect(container.textContent).toBe(
+      "•••• 1234 · primary\n•••• 9876 · wallet token",
+    );
+    expect(container.firstElementChild).toHaveClass("whitespace-pre-line");
+  });
+
+  it("shows an empty structured detail field as none rather than raw JSON", () => {
+    const field = fieldOf("financialAccount", "sourceAliases");
+    render(
+      <>
+        {renderDetailFieldValue(
+          "financialAccount",
+          { sourceAliases: [], sourceAliasesLabel: null },
+          field,
+        )}
+      </>,
+    );
+    expect(screen.queryByText("[]")).toBeNull();
+  });
+
+  it("reads a recipe's source URL and yield through their declared paths and formats", () => {
+    render(
+      <>
+        {renderDetailFieldValue(
+          "recipe",
+          { meta: { url: "https://recipes.example.test/soup" } },
+          fieldOf("recipe", "meta"),
+        )}
+        {renderDetailFieldValue(
+          "recipe",
+          { yield: { value: 4, unit: "serving" } },
+          fieldOf("recipe", "yield"),
+        )}
+      </>,
+    );
+    expect(
+      screen.getByRole("link", { name: /recipes\.example\.test/ }),
+    ).toHaveAttribute("href", "https://recipes.example.test/soup");
+    expect(screen.getByText(/4/)).toBeVisible();
+  });
+
   it("has a picker path for every updateable singular reference shown in a manifest list", () => {
     // Current list-visible update references span these targets: the roster is
     // intentionally target-based because several entities reuse the same
@@ -755,14 +820,6 @@ describe("generic enum fields", () => {
     // A stored value the roster forgot prints itself, never "—".
     { entity: "task", key: "status", raw: "zzz", label: "zzz" },
   ];
-
-  function fieldOf(entity: Entity, key: string) {
-    const field = entityFieldModels[entity].fields.find(
-      (candidate) => candidate.key === key,
-    );
-    if (!field) throw new Error(`${entity}.${key} is not declared`);
-    return field;
-  }
 
   it.each(rows)(
     "$entity.$key renders $raw as the pill $label on list and detail",

@@ -11,6 +11,7 @@ import { sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/repo/database-helpers";
+import { possibleVendorLabel } from "~/server/repo/detail-display-labels";
 
 /** Lowercase, trim and collapse whitespace. Punctuation and words stay intact. */
 export const normalizeMerchant = (merchant: string): string =>
@@ -168,14 +169,18 @@ export async function enrichFinancialTransactionVendorRead<
     ),
   );
   const eligibleIds = new Set(eligible.map((transaction) => transaction.id));
-  return transactions.map((transaction) => ({
-    ...transaction,
-    vendorInference:
+  return transactions.map((transaction) => {
+    const vendorInference =
       eligibleIds.has(transaction.id) && transaction.merchant !== null
         ? (inferences.get(normalizeMerchant(transaction.merchant)) ??
           noInference())
-        : null,
-  }));
+        : null;
+    return {
+      ...transaction,
+      vendorInference,
+      possibleVendorLabel: possibleVendorLabel(vendorInference),
+    };
+  });
 }
 
 export async function enrichFinancialTransactionsWithVendorInference(

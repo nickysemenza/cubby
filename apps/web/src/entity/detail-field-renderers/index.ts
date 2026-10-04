@@ -18,11 +18,9 @@ import { imageDetailFields } from "./image-capture";
 import { inventoryDetailFields } from "./inventory";
 import { ledgerTransferDetailFields } from "./ledger-transfer";
 import { productDetailFields } from "./product";
-import { productCategoryDetailFields } from "./product-category";
 import { recipeDetailFields } from "./recipe";
 import { runDetailFields } from "./run";
 import { renderSpendingCategorySummary } from "./spending-category-summary";
-import { vendorDetailFields } from "./vendor";
 import { wishDetailFields } from "./wish";
 
 export type EntityDetailFieldRenderers<E extends GenericDetailEntity> =
@@ -73,20 +71,8 @@ export const detailRendererCoverage = {
     ),
     "product-tags": implemented(productDetailFields["product-tags"]),
   },
-  productCategory: {
-    "product-category-path": implemented(
-      productCategoryDetailFields["product-category-path"],
-    ),
-  },
   recipe: {
-    "recipe-meta": implemented(recipeDetailFields["recipe-meta"]),
-    "recipe-yield": implemented(recipeDetailFields["recipe-yield"]),
     "recipe-source": implemented(recipeDetailFields["recipe-source"]),
-    "recipe-sections": implemented(recipeDetailFields["recipe-sections"]),
-    "recipe-totals": implemented(recipeDetailFields["recipe-totals"]),
-  },
-  vendor: {
-    "vendor-agent-hints": implemented(vendorDetailFields["vendor-agent-hints"]),
   },
   run: {
     "run-failure-details": implemented(runDetailFields["run-failure-details"]),
@@ -94,12 +80,6 @@ export const detailRendererCoverage = {
   financialAccount: {
     "financial-account-identity": implemented(
       financialAccountDetailFields["financial-account-identity"],
-    ),
-    "financial-account-source-aliases": implemented(
-      financialAccountDetailFields["financial-account-source-aliases"],
-    ),
-    "financial-account-card-numbers": implemented(
-      financialAccountDetailFields["financial-account-card-numbers"],
     ),
   },
   purchase: {
@@ -119,9 +99,6 @@ export const detailRendererCoverage = {
     "financial-transaction-allocations": implemented(
       financialTransactionDetailFields["financial-transaction-allocations"],
     ),
-    "financial-transaction-source-refs": implemented(
-      financialTransactionDetailFields["financial-transaction-source-refs"],
-    ),
   },
   ledgerTransfer: {
     "ledger-transfer-classification": implemented(
@@ -134,9 +111,6 @@ export const detailRendererCoverage = {
   image: {
     "image-capture-location": implemented(
       imageDetailFields["image-capture-location"],
-    ),
-    "image-provenance-evidence": implemented(
-      imageDetailFields["image-provenance-evidence"],
     ),
     "image-sightings": implemented(imageDetailFields["image-sightings"]),
   },
@@ -158,12 +132,8 @@ const detailCoverageFor = (
       return detailRendererCoverage.expense;
     case "product":
       return detailRendererCoverage.product;
-    case "productCategory":
-      return detailRendererCoverage.productCategory;
     case "recipe":
       return detailRendererCoverage.recipe;
-    case "vendor":
-      return detailRendererCoverage.vendor;
     case "run":
       return detailRendererCoverage.run;
     case "financialAccount":

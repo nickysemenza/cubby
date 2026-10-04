@@ -34,6 +34,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { wishCandidateItems } from "~/server/repo/detail-display-labels";
 import {
   attachLinks,
   liveLinks,
@@ -158,6 +159,7 @@ const toWishOut = (
     notes: row.notes,
     acquiredAt: row.acquiredAt,
     candidates: publicCandidates,
+    candidateItems: wishCandidateItems(publicCandidates),
     candidateCount: publicCandidates.length,
     priceRange: wishPriceRange(publicCandidates),
     dataQuality,
@@ -212,6 +214,7 @@ const hydrateWishesRead = (
         id: parseShortcodeFor("wish", row.shortcode),
         ...listGroupFields(projection, ["relations", "derived"], () => ({
           candidates: alternatives,
+          candidateItems: wishCandidateItems(alternatives),
           candidateCount: alternatives.length,
           priceRange: wishPriceRange(alternatives),
         })),

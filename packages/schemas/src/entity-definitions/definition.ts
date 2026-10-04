@@ -405,6 +405,22 @@ const buildMetadataSchemas = () => {
        * rule. The field's own value stays the sort and filter value.
        */
       labelPath: nonEmptyString().nullable().optional().default(null),
+      /**
+       * Where the detail record carries this field's human-readable text, in
+       * `readPath`'s grammar: the detail-surface twin of `labelPath` for a
+       * structured value whose list cell stays a count or a chip (the text may
+       * span lines). Clients print it instead of re-deriving the sentence from
+       * the structure.
+       */
+      detailLabelPath: nonEmptyString().nullable().optional().default(null),
+      /**
+       * Where the detail record carries a list of display items
+       * (`displayItems`: a record each, or plain text) the field shows as rows,
+       * each linking to its record when it names one. The server composes the
+       * titles and figures, so a client draws a reference list without
+       * restating the structure.
+       */
+      itemsPath: nonEmptyString().nullable().optional().default(null),
       /** List cell formatter chosen by the shared column compiler. */
       format: z.enum(displayFormats).nullable().optional().default(null),
       /**
@@ -490,6 +506,8 @@ const buildMetadataSchemas = () => {
         width,
         readPath,
         labelPath,
+        detailLabelPath,
+        itemsPath,
         format,
         renderer,
         mobile,
@@ -507,6 +525,8 @@ const buildMetadataSchemas = () => {
         width,
         readPath,
         labelPath,
+        detailLabelPath,
+        itemsPath,
         format,
         renderer,
         mobile,

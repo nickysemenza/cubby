@@ -6,6 +6,10 @@ import {
 import { entityKeys, entitySummary } from "./generated/entity-summary.gen";
 import { isSlotListView } from "./entity-definitions/definition";
 import {
+  EXPENSE_DISPOSITION_COST_TYPE,
+  EXPENSE_DISPOSITION_EDITOR,
+} from "./expense-fields";
+import {
   NATIVE_COVERAGE_KINDS,
   NATIVE_UNSUPPORTED_CEILING,
   nativeCoverage,
@@ -108,5 +112,15 @@ describe("native presentation coverage", () => {
 
   it("classifies the multi-select verb as owned elsewhere, not faked", () => {
     expect(nativeCoverage.heroAction.bulkEdit.status).toBe("ownedElsewhere");
+  });
+
+  it("opens Record sale in the same disposition editor web shows", () => {
+    // Web's expense capture dialog titles and describes itself from the
+    // disposition context; the native editor takes the same copy and costType
+    // from this plan, so the two cannot drift.
+    const plan = nativeHeroActionPlans.recordSale;
+    expect(plan.editor).toEqual(EXPENSE_DISPOSITION_EDITOR);
+    expect(plan.seed.costType).toBe(EXPENSE_DISPOSITION_COST_TYPE);
+    expect(plan.seed.projectId).toBeNull();
   });
 });

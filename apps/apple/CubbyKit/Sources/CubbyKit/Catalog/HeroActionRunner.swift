@@ -16,7 +16,7 @@ public enum HeroActionOutcome: Sendable, Equatable {
     /// screens showing them refresh.
     case completed(String, changed: Set<EntityKey>)
     /// Open the generic editor (create mode) on `entity`, seeded with `prefill`.
-    case editor(entity: EntityKey, prefill: [String: JSONValue])
+    case editor(entity: EntityKey, prefill: [String: JSONValue], context: HeroEditorContext?)
 }
 
 /// The server's answer to "what will this do?" for a verb that has one.
@@ -54,7 +54,7 @@ public struct HeroActionRunner: Sendable {
         switch plan.kind {
         case .delete: return "resources.\(entity.rawValue).delete"
         case .operation(let operation): return operation.operation
-        case .create(let target, _): return "resources.\(target.rawValue).create"
+        case .create(let target, _, _): return "resources.\(target.rawValue).create"
         case .setField, .toggleField: return "resources.\(entity.rawValue).update"
         }
     }
@@ -198,14 +198,14 @@ public struct HeroActionRunner: Sendable {
                     changed: [entity, .inventory, .location])
             default: throw HeroActionError.unsupported(operation.operation)
             }
-        case .create(let target, let seed):
+        case .create(let target, let seed, let editor):
             var prefill: [String: JSONValue] = [:]
             for (key, value) in seed {
                 let filled = Self.fill(value, rowID: row.id, values: values)
                 // An explicit null stays: it overrides a default the editor would otherwise seed.
                 prefill[key] = filled
             }
-            return .editor(entity: target, prefill: prefill)
+            return .editor(entity: target, prefill: prefill, context: editor)
         case .setField(let field):
             guard let value = values[field], value != .null else { throw HeroActionError.missing(field) }
             try await client.update(descriptor, id: row.id, patch: EntityPatch(values: [field: value]))

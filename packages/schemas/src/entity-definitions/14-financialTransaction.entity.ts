@@ -4,6 +4,7 @@ import { financialTransactionCoverage } from "../purchase-evidence-policy";
 import { optionalFieldResolutionsSchema } from "../field-resolution";
 import { spendingCategoryShortcode } from "../identifier-fields";
 import { defineEntity } from "./definition.js";
+import { labelField } from "./label-field.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
   financialTransactionAllocations,
@@ -595,7 +596,7 @@ export default defineEntity({
         display: {
           list: true,
           detail: true,
-          renderer: { detail: "financial-transaction-source-refs" },
+          detailLabelPath: "sourceRefsLabel",
           listHidden: true,
           readPath: "sourceRefs[].source",
           format: "join",
@@ -738,6 +739,8 @@ export default defineEntity({
           list: true,
           detail: true,
           labelPath: "vendorInference.candidates[].vendorName",
+          // Only a suggested or ambiguous inference is worth showing on the detail screen.
+          detailLabelPath: "possibleVendorLabel",
           renderer: {
             list: "possible-vendor",
             detail: "financial-transaction-vendor-inference",
@@ -805,6 +808,9 @@ export default defineEntity({
         kind: "timestamp",
         nullable: true,
       },
+      // Server-composed text for the structured detail field above (`display.detailLabelPath`).
+      labelField("sourceRefsLabel", "Settlement references"),
+      labelField("possibleVendorLabel", "Merchant vendor inference"),
     ],
     storage: [
       "bookingDecisionFingerprint",
@@ -958,6 +964,8 @@ export default defineEntity({
       "rawDescription",
       "sourceCategory",
       "sourceRefs",
+      "sourceRefsLabel",
+      "possibleVendorLabel",
       "notes",
       "allocations",
       "ledgerTransferId",

@@ -66,6 +66,63 @@ const account = (name: string, aliases: FinancialAccountSourceAlias[] = []) =>
 describe("financial repositories — critical invariants", () => {
   const ctx = withTestDb();
 
+  // The detail screen prints these (`display.detailLabelPath`); no client
+  // re-words the structured aliases, card numbers, or settlement references.
+  it("words an account's aliases and cards and a transaction's references", async () => {
+    const created = (
+      await createFinancialAccount(
+        ctx.db,
+        buildEntity("financialAccount", {
+          name: "Labelled Visa",
+          identity: { kind: "credit_card", issuer: null, network: "visa" },
+          cardNumbers: [
+            {
+              last4: "4321",
+              kind: "primary",
+              validFrom: "2024-01-01",
+              validTo: null,
+              note: null,
+            },
+            {
+              last4: "8765",
+              kind: "wallet_token",
+              validFrom: null,
+              validTo: null,
+              note: "phone",
+            },
+          ],
+          sourceAliases: [
+            {
+              source: "label-test",
+              alias: "Everyday Visa",
+              externalAccountId: null,
+            },
+          ],
+        }),
+        ctx.actor,
+      )
+    ).output;
+    expect(created.sourceAliasesLabel).toBe("label-test: Everyday Visa");
+    expect(created.cardNumbersLabel).toBe(
+      "•••• 4321 · primary · 2024-01-01 → …\n•••• 8765 · wallet token · phone",
+    );
+
+    const transaction = (
+      await createFinancialTransaction(
+        ctx.db,
+        buildEntity("financialTransaction", {
+          accountId: created.id,
+          kind: "purchase",
+          status: "pending",
+          amount: 12,
+          sourceRefs: [{ source: "label-test", externalId: "txn-1" }],
+        }),
+        ctx.actor,
+      )
+    ).output;
+    expect(transaction.sourceRefsLabel).toBe("label-test: txn-1");
+  });
+
   it("serializes concurrent account alias claims", async () => {
     const results = await Promise.allSettled([
       createFinancialAccount(

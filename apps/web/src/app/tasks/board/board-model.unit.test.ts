@@ -1,5 +1,6 @@
 import type { TaskOut } from "@cubby/schemas/project";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
+import { TASK_BOARD_INBOX_LABEL } from "@cubby/shared/client-constants";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -10,7 +11,6 @@ import {
   computeMove,
   computeRank,
   DONE_COLUMN_CAP,
-  INBOX_LABEL,
 } from "./board-model";
 import type { TaskCardDragData } from "./board-types";
 
@@ -196,7 +196,7 @@ describe("buildColumns", () => {
     const cols = buildColumns(tasks, "project");
     expect(
       cols.map((c) => (c.kind === "project" ? c.projectName : "")),
-    ).toEqual([INBOX_LABEL, "Attic", "Bathroom"]);
+    ).toEqual([TASK_BOARD_INBOX_LABEL, "Attic", "Bathroom"]);
   });
 
   it("project mode omits projects whose only tasks are done", () => {
@@ -212,7 +212,7 @@ describe("buildColumns", () => {
     const cols = buildColumns(tasks, "project");
     expect(
       cols.map((c) => (c.kind === "project" ? c.projectName : "")),
-    ).toEqual([INBOX_LABEL, "Attic"]);
+    ).toEqual([TASK_BOARD_INBOX_LABEL, "Attic"]);
   });
 
   it("trade mode returns present trades in tradeValues order", () => {
@@ -236,7 +236,7 @@ describe("buildLanes", () => {
     );
     expect(
       lanes.map((l) => (l.kind === "project" ? l.projectName : "")),
-    ).toEqual([INBOX_LABEL, "Attic"]);
+    ).toEqual([TASK_BOARD_INBOX_LABEL, "Attic"]);
   });
 });
 
@@ -344,7 +344,7 @@ describe("cellTasks", () => {
     const inbox = cellTasks(
       tasks,
       { kind: "status", status: "not_started" },
-      { kind: "project", projectId: null, projectName: INBOX_LABEL },
+      { kind: "project", projectId: null, projectName: TASK_BOARD_INBOX_LABEL },
     );
     expect(inbox.cards.map((t) => t.id)).toEqual([taskId("b")]);
   });
@@ -396,7 +396,11 @@ describe("computeMove", () => {
     expect(
       computeMove(drag(t), {
         column: { kind: "status", status: "not_started" },
-        lane: { kind: "project", projectId: null, projectName: INBOX_LABEL },
+        lane: {
+          kind: "project",
+          projectId: null,
+          projectName: TASK_BOARD_INBOX_LABEL,
+        },
       }),
     ).toEqual({ projectId: null });
   });

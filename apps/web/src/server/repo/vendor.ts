@@ -54,6 +54,7 @@ import {
   rangeConditions,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { agentHintsLabel } from "~/server/repo/detail-display-labels";
 import { patchEntityRows } from "~/server/repo/entity-patch";
 import { reapUnreferencedImages } from "~/server/repo/image";
 import {
@@ -434,33 +435,34 @@ const vendorLogoToAPI = (logo: VendorRow["logo"]) =>
     captureAttribution: logo.captureAttribution ?? "none",
   };
 
-const dbVendorToAPI = (
-  row: VendorRow,
-  dataQuality: DataQuality,
-): VendorOut => ({
-  id: parseShortcodeFor("vendor", row.shortcode),
-  name: row.name,
-  defaultSpendingCategoryName: row.defaultSpendingCategoryName,
-  defaultSpendingCategoryEmoji: row.defaultSpendingCategoryEmoji,
-  website: row.website,
-  orderUrlTemplate: row.orderUrlTemplate,
-  spendingProfile: vendorSpendingProfile.parse(row.spendingProfile),
-  defaultSpendingCategoryId: row.defaultSpendingCategoryId,
-  evidenceExpectation: row.evidenceExpectation,
-  orderEvidence: vendorOrderEvidence.nullable().parse(row.orderEvidence),
-  orderEmailSenders: row.orderEmailSenders,
-  browserDomains: row.browserDomains,
-  returnWindowDays: row.returnWindowDays,
-  agentHints: vendorAgentHints.parse(row.agentHints),
-  notes: row.notes,
-  purchaseCount: Number(row.purchaseCount),
-  spend: Number(row.spend),
-  latestPurchaseDate: row.latestPurchaseDate,
-  logo: vendorLogoToAPI(row.logo),
-  dataQuality,
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-});
+const dbVendorToAPI = (row: VendorRow, dataQuality: DataQuality): VendorOut => {
+  const agentHints = vendorAgentHints.parse(row.agentHints);
+  return {
+    id: parseShortcodeFor("vendor", row.shortcode),
+    name: row.name,
+    defaultSpendingCategoryName: row.defaultSpendingCategoryName,
+    defaultSpendingCategoryEmoji: row.defaultSpendingCategoryEmoji,
+    website: row.website,
+    orderUrlTemplate: row.orderUrlTemplate,
+    spendingProfile: vendorSpendingProfile.parse(row.spendingProfile),
+    defaultSpendingCategoryId: row.defaultSpendingCategoryId,
+    evidenceExpectation: row.evidenceExpectation,
+    orderEvidence: vendorOrderEvidence.nullable().parse(row.orderEvidence),
+    orderEmailSenders: row.orderEmailSenders,
+    browserDomains: row.browserDomains,
+    returnWindowDays: row.returnWindowDays,
+    agentHints,
+    agentHintsLabel: agentHintsLabel(agentHints),
+    notes: row.notes,
+    purchaseCount: Number(row.purchaseCount),
+    spend: Number(row.spend),
+    latestPurchaseDate: row.latestPurchaseDate,
+    logo: vendorLogoToAPI(row.logo),
+    dataQuality,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+};
 
 const vendorScaffold = listScaffold("vendor", vendor);
 
@@ -548,17 +550,21 @@ export const vendorListRead = async (
       hydrate: (rows) =>
         hydrateListRead(db, "vendor", rows, projection, {
           load: async () => undefined,
-          mapRow: (row) => ({
-            ...row,
-            id: parseShortcodeFor("vendor", row.shortcode),
-            orderEvidence: vendorOrderEvidence
-              .nullable()
-              .parse(row.orderEvidence),
-            agentHints: vendorAgentHints.parse(row.agentHints),
-            ...listGroupFields(projection, "media", () => ({
-              logo: vendorLogoToAPI(row.logo ?? null),
-            })),
-          }),
+          mapRow: (row) => {
+            const agentHints = vendorAgentHints.parse(row.agentHints);
+            return {
+              ...row,
+              id: parseShortcodeFor("vendor", row.shortcode),
+              orderEvidence: vendorOrderEvidence
+                .nullable()
+                .parse(row.orderEvidence),
+              agentHints,
+              agentHintsLabel: agentHintsLabel(agentHints),
+              ...listGroupFields(projection, "media", () => ({
+                logo: vendorLogoToAPI(row.logo ?? null),
+              })),
+            };
+          },
         }),
     },
   );

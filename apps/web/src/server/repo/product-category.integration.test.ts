@@ -231,6 +231,43 @@ describe("product category hierarchy", () => {
     });
   });
 
+  // Clients print this text (`display.detailLabelPath`) instead of joining
+  // the path nodes themselves.
+  it("words the root-first path for the detail read", async () => {
+    const root = await createProductCategory(
+      ctx.db,
+      {
+        spendingCategoryId: null,
+        spendingCategoryMode: "inherit",
+        name: "Labelled root",
+        aliases: [],
+        description: null,
+        parentId: null,
+        sortOrder: 0,
+        feature: null,
+      },
+      ctx.actor,
+    );
+    const group = await createProductCategory(
+      ctx.db,
+      {
+        spendingCategoryId: null,
+        spendingCategoryMode: "inherit",
+        name: "Labelled group",
+        aliases: [],
+        description: null,
+        parentId: root.output.id,
+        sortOrder: 0,
+        feature: null,
+      },
+      ctx.actor,
+    );
+
+    const detail = await getProductCategoryByShortcode(ctx.db, group.output.id);
+
+    expect(detail?.pathLabel).toBe("Labelled root / Labelled group");
+  });
+
   it("returns a root-first path and rejects a cycle or fourth level", async () => {
     const root = await createProductCategory(
       ctx.db,

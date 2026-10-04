@@ -1,4 +1,5 @@
 import { defineEntity } from "./definition.js";
+import { displayItemsField } from "./label-field.js";
 import { productShortcode, wishShortcode } from "../identifier-fields.js";
 import {
   wishCandidateOut,
@@ -146,6 +147,7 @@ export default defineEntity({
         kind: "json",
         display: {
           detail: true,
+          itemsPath: "candidateItems",
           renderer: { detail: "wish-candidates" },
           // Roster for a candidate row's `inventoried` flag in the list.
           valueOptions: [
@@ -246,6 +248,8 @@ export default defineEntity({
         kind: "timestamp",
         nullable: true,
       },
+      // Server-composed rows for the candidates above (`display.itemsPath`).
+      displayItemsField("candidateItems", "Candidate products"),
     ],
     storage: [
       {
@@ -285,6 +289,7 @@ export default defineEntity({
       "notes",
       "acquiredAt",
       "candidates",
+      "candidateItems",
       "candidateCount",
       "priceRange",
       "createdAt",
