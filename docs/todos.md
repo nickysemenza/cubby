@@ -293,6 +293,13 @@ See also the image operational passes at the end of this file.
   `SourceRefsField` and the recipe form's meta/yield inputs in favour of the
   generic `StructuredValueField` (it already reads the same `valueSchema`).
 
+- ⏳ **Native recipe Share extension.** An iOS and macOS share-sheet extension
+  that sends a shared recipe URL to the existing server recipe import, reading
+  the session token from a Keychain access group shared with the app. Promote
+  when sharing recipes from the phone is wanted. Retiring the web manifest
+  dropped `share_target` from installed Chromium/Android PWAs only; iOS Safari
+  never supported Web Share Target, so nothing iOS-facing was lost.
+
 - ⏳ **Core native inventory experience.** Promote when everyday use exposes a
   specific bottleneck: location-first browsing, stock comparison,
   capture/recount, photo completion. Owners: `App/Shared/Browse`, `Capture`,
