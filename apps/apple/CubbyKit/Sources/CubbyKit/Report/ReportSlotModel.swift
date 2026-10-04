@@ -19,8 +19,8 @@ public protocol ReportServing: Sendable {
     /// The meal composition operations (`meal.addRecipe`, `updateRecipe`, `removeRecipe`,
     /// `savePreparation`); the server composed every id, the person supplied the rest.
     /// The cookbook commands, run to their end; each answers with the sentence to show.
-    func reprocessCookbook(_ input: CookbookIdInput) async throws -> String
-    func importCookbookRecipes(_ input: ImportCookbookStreamInput) async throws -> String
+    func reprocessCookbook(_ input: CookbookReprocessChunkInput) async throws -> CookbookChunkResult
+    func importCookbookRecipes(_ input: CookbookImportChunkInput) async throws -> CookbookChunkResult
     func addMealRecipe(_ input: MealAddRecipeInput) async throws
     func updateMealRecipe(_ input: MealUpdateRecipeInput) async throws
     func removeMealRecipe(_ input: MealRecipeIdInput) async throws
@@ -37,10 +37,14 @@ extension ReportServing {
     public func generateFlow(_ input: RecipeFlowGenerateInput) async throws {
         throw ReportActionError.unavailable("Not supported by this service.")
     }
-    public func reprocessCookbook(_ input: CookbookIdInput) async throws -> String {
+    public func reprocessCookbook(_ input: CookbookReprocessChunkInput) async throws
+        -> CookbookChunkResult
+    {
         throw ReportActionError.unavailable("Not supported by this service.")
     }
-    public func importCookbookRecipes(_ input: ImportCookbookStreamInput) async throws -> String {
+    public func importCookbookRecipes(_ input: CookbookImportChunkInput) async throws
+        -> CookbookChunkResult
+    {
         throw ReportActionError.unavailable("Not supported by this service.")
     }
     public func addMealRecipe(_ input: MealAddRecipeInput) async throws {
@@ -88,17 +92,24 @@ extension CubbyClient: ReportServing {
         let _: RecipeFlowArtifact = try await generateRecipeFlow(input)
     }
 
-    public func reprocessCookbook(_ input: CookbookIdInput) async throws -> String {
+    public func reprocessCookbook(_ input: CookbookReprocessChunkInput) async throws
+        -> CookbookChunkResult
+    {
         let out: RecipeReprocessCookbookOnceOutput = try await reprocessCookbook(input)
-        return "Reprocessed \(out.reprocessed) recipes"
+        return CookbookChunkResult(done: out.reprocessed, failureText: nil, next: out.nextOffset)
     }
 
-    public func importCookbookRecipes(_ input: ImportCookbookStreamInput) async throws -> String {
+    public func importCookbookRecipes(_ input: CookbookImportChunkInput) async throws
+        -> CookbookChunkResult
+    {
         let out: RecipeImportCookbookRecipesOnceOutput = try await importCookbookRecipes(input)
-        return out.failed > 0
-            ? "Added \(out.succeeded); \(out.failed) failed: "
-                + out.failures.map { "\($0.sourceRecipeId): \($0.error)" }.joined(separator: "; ")
-            : "Added \(out.succeeded) recipes"
+        return CookbookChunkResult(
+            done: out.imported,
+            failureText: out.failed > 0
+                ? "\(out.failed) failed: "
+                    + out.failures.map { "\($0.sourceRecipeId): \($0.error)" }.joined(separator: "; ")
+                : nil,
+            next: nil)
     }
 
     public func addMealRecipe(_ input: MealAddRecipeInput) async throws {
@@ -119,6 +130,20 @@ extension CubbyClient: ReportServing {
 
     public func commitPrepared(_ input: RunCommitPreparedInput) async throws {
         let _: CommitPurchaseImportOut = try await commitPreparedImport(input)
+    }
+}
+
+/// One bounded call of a cookbook command: how many recipes it finished, the raw reason any
+/// failed, and where a reprocess continues (nil when it was the last window).
+public struct CookbookChunkResult: Sendable, Equatable {
+    public let done: Int
+    public let failureText: String?
+    public let next: Int?
+
+    public init(done: Int, failureText: String?, next: Int?) {
+        self.done = done
+        self.failureText = failureText
+        self.next = next
     }
 }
 
@@ -156,6 +181,8 @@ public final class ReportSlotModel {
     public private(set) var busyActionID: String?
     public private(set) var actionError: String?
     public private(set) var actionNotice: String?
+    /// How far a command that runs in several calls has got ("Added 40 recipes…").
+    public private(set) var actionProgress: String?
     public private(set) var openedRunID: String?
 
     public let slot: ReportSlot
@@ -300,7 +327,10 @@ public final class ReportSlotModel {
         actionNotice = nil
         defer { busyActionID = nil }
         do {
-            let outcome = try await Self.perform(action.request, form: form, service: service)
+            defer { actionProgress = nil }
+            let outcome = try await Self.perform(
+                action.request, form: form, service: service
+            ) { [weak self] in self?.actionProgress = $0 }
             switch outcome {
             case .openedRun(let runID): openedRunID = runID
             case .done(let message): actionNotice = message
@@ -352,7 +382,8 @@ public final class ReportSlotModel {
     }
 
     static func perform(
-        _ request: ReportCommandRequest, form: ReportCommandForm?, service: any ReportServing
+        _ request: ReportCommandRequest, form: ReportCommandForm?, service: any ReportServing,
+        progress: @MainActor (String) -> Void = { _ in }
     ) async throws -> ReportActionOutcome {
         switch request {
         case .runControl(let control):
@@ -375,7 +406,10 @@ public final class ReportSlotModel {
             guard let recipeID = form?.text("recipeId") ?? add.recipeId,
                 let scale = form?.number("scale") ?? add.scale
             else { throw ReportActionError.incompleteAnswers }
-            try await service.addMealRecipe(.init(mealId: add.mealId, recipeId: recipeID, scale: scale))
+            let convert = form?.text("convertToCooked").map { $0 == "true" } ?? add.convertToCooked
+            try await service.addMealRecipe(
+                .init(
+                    mealId: add.mealId, recipeId: recipeID, scale: scale, convertToCooked: convert))
             return .done("Added to the meal")
         case .mealScaleRecipe(let change):
             guard let scale = form?.number("scale") ?? change.scale
@@ -422,11 +456,36 @@ public final class ReportSlotModel {
                     actualYieldGrams: made.field == .actual ? whole : nil, changes: []))
             return .done("Yield saved")
         case .reprocessCookbook(let book):
-            return .done(try await service.reprocessCookbook(.init(cookbookId: book.cookbookId)))
+            // One bounded window per call; the first error ends the loop, and what landed is
+            // already finalized by the server.
+            var offset = 0
+            var total = 0
+            while true {
+                let result = try await service.reprocessCookbook(
+                    .init(cookbookId: book.cookbookId, offset: offset))
+                total += result.done
+                progress("Reprocessed \(total) recipes…")
+                guard let next = result.next else { break }
+                offset = next
+            }
+            return .done("Reprocessed \(total) recipes")
         case .importCookbookRecipes(let book):
-            return .done(
-                try await service.importCookbookRecipes(
-                    .init(cookbookId: book.cookbookId, recipeIds: book.recipeIds)))
+            var added = 0
+            var start = 0
+            let size = max(1, book.chunkSize)
+            while start < book.recipeIds.count {
+                let chunk = Array(book.recipeIds[start..<min(start + size, book.recipeIds.count)])
+                let result = try await service.importCookbookRecipes(
+                    .init(cookbookId: book.cookbookId, recipeIds: chunk))
+                added += result.done
+                if let failure = result.failureText {
+                    throw ReportActionError.unavailable(
+                        "Added \(added) of \(book.recipeIds.count); \(failure)")
+                }
+                start += size
+                progress("Added \(added) of \(book.recipeIds.count)…")
+            }
+            return .done("Added \(added) recipes")
         case .generateRecipeFlow(let flow):
             try await service.generateFlow(.init(id: flow.recipeId, force: flow.force))
             return .done("Walkthrough generated")

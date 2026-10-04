@@ -6,10 +6,13 @@ import type {
 import { mealShortcode } from "@cubby/schemas/identifiers";
 import type { MealRecipePreparationOut } from "@cubby/schemas/meal";
 import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
+import { and, asc, inArray } from "drizzle-orm";
 
 import { formatEstimate } from "~/lib/nutrition-format";
 import { formatCurrency } from "~/lib/utils";
 import type { Database } from "~/server/db";
+import { ledgerParty } from "~/server/db/schema";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { getMealByID } from "~/server/repo/meal/crud";
 import { getMealPreparations } from "~/server/repo/meal/portions";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
@@ -115,32 +118,45 @@ export async function mealCompositionReport(
         : meal.mealKind === "leftovers"
           ? "No new recipes. Add leftovers from another meal."
           : `${MEAL_KIND_LABELS[meal.mealKind]} — no recipe required.`,
-    commands:
-      meal.mealKind === "cooked" || meal.mealKind === "leftovers"
-        ? [
-            {
-              id: "add-recipe",
-              label: "Add recipe",
-              prominent: true,
-              confirm: null,
-              inputs: [
+    commands: [
+      {
+        id: "add-recipe",
+        label: "Add recipe",
+        prominent: true,
+        confirm: null,
+        inputs: [
+          {
+            kind: "record",
+            key: "recipeId",
+            label: "Recipe",
+            entity: "recipe",
+          },
+          scaleInput(1),
+          // A recipe on a meal that is not cooked yet converts it, so the person reviews that.
+          ...(meal.mealKind === "cooked"
+            ? []
+            : [
                 {
-                  kind: "record",
-                  key: "recipeId",
-                  label: "Recipe",
-                  entity: "recipe",
+                  kind: "choice" as const,
+                  key: "convertToCooked",
+                  label: "This meal is not cooked yet",
+                  options: [
+                    { value: "true", label: "Switch this meal to cooked" },
+                    { value: "false", label: "Keep it as it is" },
+                  ],
+                  initial: "true",
                 },
-                { ...scaleInput(1) },
-              ],
-              request: {
-                kind: "meal-add-recipe",
-                mealId,
-                recipeId: null,
-                scale: null,
-              },
-            },
-          ]
-        : [],
+              ]),
+        ],
+        request: {
+          kind: "meal-add-recipe",
+          mealId,
+          recipeId: null,
+          scale: null,
+          convertToCooked: meal.mealKind === "cooked" ? false : null,
+        },
+      },
+    ],
   };
 
   const { preparations } = await getMealPreparations(
@@ -148,9 +164,34 @@ export async function mealCompositionReport(
     { mealId },
     services.recipeCosting,
   );
+  // Members and guests can eat; Add portion offers only those without a portion on this meal yet,
+  // so it can never replace one silently (changing a portion is Mark eaten/planned or Remove).
+  const parties = await getDb(db)
+    .select({ code: ledgerParty.shortcode, name: ledgerParty.name })
+    .from(ledgerParty)
+    .where(
+      and(
+        inArray(ledgerParty.kind, ["member", "guest"]),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .orderBy(asc(ledgerParty.name));
   return [
     recipes,
-    ...preparations.flatMap((entry) => portionBlocks(entry, mealId)),
+    ...preparations.flatMap((entry) => {
+      const taken = new Set<string>(
+        entry.portions
+          .filter((portion) => portion.targetMeal.id === mealId)
+          .map((portion) => portion.eater.id),
+      );
+      return portionBlocks(
+        entry,
+        mealId,
+        parties
+          .filter((party) => !taken.has(party.code))
+          .map((party) => ({ value: party.code, label: party.name })),
+      );
+    }),
   ];
 }
 
@@ -158,6 +199,7 @@ export async function mealCompositionReport(
 function portionBlocks(
   preparation: MealRecipePreparationOut,
   mealId: ReturnType<typeof mealShortcode.parse>,
+  freeEaters: readonly { value: string; label: string }[],
 ): ReportBlock[] {
   const { mealRecipeId } = preparation;
   const summary = preparation.sourceSummary;
@@ -217,7 +259,7 @@ function portionBlocks(
     }),
     empty: "No portions yet.",
     commands: [
-      ...(preparation.preparedHere
+      ...(preparation.preparedHere && freeEaters.length > 0
         ? [
             {
               id: `portion-add:${mealRecipeId}`,
@@ -226,10 +268,11 @@ function portionBlocks(
               confirm: null,
               inputs: [
                 {
-                  kind: "record",
+                  kind: "choice",
                   key: "ledgerPartyId",
                   label: "Eater",
-                  entity: "ledgerParty",
+                  options: [...freeEaters],
+                  initial: null,
                 },
                 {
                   kind: "number",

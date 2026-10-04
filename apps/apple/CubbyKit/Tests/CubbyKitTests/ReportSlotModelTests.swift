@@ -14,14 +14,16 @@ private final class FakeReports: ReportServing {
         var retries = 0
         var reparses: [RecipeReparseLineInput] = []
         var flows: [RecipeFlowGenerateInput] = []
-        var reprocessed: [CookbookIdInput] = []
-        var imported: [ImportCookbookStreamInput] = []
+        var reprocessed: [CookbookReprocessChunkInput] = []
+        var imported: [CookbookImportChunkInput] = []
         var added: [MealAddRecipeInput] = []
         var scaled: [MealUpdateRecipeInput] = []
         var removed: [MealRecipeIdInput] = []
         var prepared: [SaveMealRecipePreparationInput] = []
     }
     let calls = Mutex(Calls())
+    /// The import call (1-based) that reports a failure; 0 means none do.
+    let importFailsOnCall = Mutex(0)
     let pages: Mutex<[EntityReportOut]>
 
     /// How long a read takes, so a test can act while one is in flight.
@@ -69,13 +71,19 @@ private final class FakeReports: ReportServing {
     func generateFlow(_ input: RecipeFlowGenerateInput) async throws {
         calls.withLock { $0.flows.append(input) }
     }
-    func reprocessCookbook(_ input: CookbookIdInput) async throws -> String {
+    func reprocessCookbook(_ input: CookbookReprocessChunkInput) async throws -> CookbookChunkResult {
         calls.withLock { $0.reprocessed.append(input) }
-        return "Reprocessed 3 recipes"
+        // Two windows of two, then a short last one.
+        return input.offset < 4
+            ? CookbookChunkResult(done: 2, failureText: nil, next: input.offset + 2)
+            : CookbookChunkResult(done: 1, failureText: nil, next: nil)
     }
-    func importCookbookRecipes(_ input: ImportCookbookStreamInput) async throws -> String {
+    func importCookbookRecipes(_ input: CookbookImportChunkInput) async throws -> CookbookChunkResult {
         calls.withLock { $0.imported.append(input) }
-        return "Added 2 recipes"
+        let failing = calls.withLock { $0.imported.count } == importFailsOnCall.withLock { $0 }
+        return CookbookChunkResult(
+            done: failing ? 0 : input.recipeIds.count,
+            failureText: failing ? "1 failed: 001.0003: boom" : nil, next: nil)
     }
     func addMealRecipe(_ input: MealAddRecipeInput) async throws {
         calls.withLock { $0.added.append(input) }
@@ -152,8 +160,11 @@ private let removeCommand = #"""
 private let addRecipeCommand = #"""
     {"id": "add-recipe", "label": "Add recipe", "prominent": true, "confirm": null,
      "inputs": [{"kind": "record", "key": "recipeId", "label": "Recipe", "entity": "recipe"},
-                {"kind": "number", "key": "scale", "label": "Recipe scale", "initial": 1, "min": 0.01}],
-     "request": {"kind": "meal-add-recipe", "mealId": "MEL-4K7M", "recipeId": null, "scale": null}}
+                {"kind": "number", "key": "scale", "label": "Recipe scale", "initial": 1, "min": 0.01},
+                {"kind": "choice", "key": "convertToCooked", "label": "Not cooked yet", "initial": "true",
+                 "options": [{"value": "true", "label": "Switch"}, {"value": "false", "label": "Keep"}]}],
+     "request": {"kind": "meal-add-recipe", "mealId": "MEL-4K7M", "recipeId": null, "scale": null,
+                 "convertToCooked": null}}
     """#
 
 private let addPortionCommand = #"""
@@ -288,22 +299,38 @@ struct ReportSlotModelTests {
         #expect(form.missing == ["Recipe scale"])
     }
 
-    @Test("Reprocessing rewrites recipes, so it asks first; adding source recipes names exactly the ids")
-    func cookbookCommands() async throws {
+    @Test("Reprocessing asks first, then walks the server's windows until the last")
+    func reprocessWalksWindows() async throws {
         let reprocess: ReportCommand = try decode(
-            #"{"id":"reprocess","label":"Reprocess","prominent":false,"confirm":"Re-derive 3 recipes (no AI)?","request":{"kind":"reprocess-cookbook","cookbookId":"CKB-4K7M"}}"#
-        )
-        let add: ReportCommand = try decode(
-            #"{"id":"import:x","label":"Add","prominent":false,"confirm":null,"request":{"kind":"import-cookbook-recipes","cookbookId":"CKB-4K7M","recipeIds":["001.0002","001.0003"]}}"#
+            #"{"id":"reprocess","label":"Reprocess","prominent":false,"confirm":"Re-derive 5 recipes (no AI)?","request":{"kind":"reprocess-cookbook","cookbookId":"CKB-4K7M"}}"#
         )
         let service = FakeReports([try report(live: false, status: "completed")])
         let model = model(service)
         #expect(await model.run(reprocess, confirmed: false) == nil)
         #expect(service.calls.withLock { $0.reprocessed.isEmpty })
-        #expect(await model.run(reprocess, confirmed: true) == .done("Reprocessed 3 recipes"))
-        #expect(service.calls.withLock { $0.reprocessed.first?.cookbookId } == "CKB-4K7M")
-        #expect(await model.run(add, confirmed: false) == .done("Added 2 recipes"))
-        #expect(service.calls.withLock { $0.imported.first?.recipeIds } == ["001.0002", "001.0003"])
+        #expect(await model.run(reprocess, confirmed: true) == .done("Reprocessed 5 recipes"))
+        #expect(service.calls.withLock { $0.reprocessed.map(\.offset) } == [0, 2, 4])
+    }
+
+    @Test("Adding source recipes goes a server-sized chunk at a time and stops at the first failure")
+    func importIsChunkedAndStopsOnError() async throws {
+        let add: ReportCommand = try decode(
+            #"{"id":"import:all","label":"Add all 5","prominent":true,"confirm":"Import all 5 (no AI)?","request":{"kind":"import-cookbook-recipes","cookbookId":"CKB-4K7M","recipeIds":["a","b","c","d","e"],"chunkSize":2}}"#
+        )
+        let service = FakeReports([try report(live: false, status: "completed")])
+        let model = model(service)
+        #expect(await model.run(add, confirmed: false) == nil)
+        #expect(service.calls.withLock { $0.imported.isEmpty })
+        #expect(await model.run(add, confirmed: true) == .done("Added 5 recipes"))
+        #expect(service.calls.withLock { $0.imported.map(\.recipeIds) } == [["a", "b"], ["c", "d"], ["e"]])
+
+        // The second chunk fails: nothing after it is sent, and the raw reason is shown.
+        let failing = FakeReports([try report(live: false, status: "completed")])
+        failing.importFailsOnCall.withLock { $0 = 2 }
+        let failingModel = self.model(failing)
+        #expect(await failingModel.run(add, confirmed: true) == nil)
+        #expect(failing.calls.withLock { $0.imported.count } == 2)
+        #expect(failingModel.actionError?.contains("001.0003: boom") == true)
     }
 
     @Test("Removing a recipe from a meal waits for the confirmation")
@@ -336,6 +363,8 @@ struct ReportSlotModelTests {
         #expect(sent.mealId == "MEL-4K7M")
         #expect(sent.recipeId == "RCP-4K7M")
         #expect(sent.scale == 1.5)
+        // The seeded answer is the reviewed one; changing it changes what is sent.
+        #expect(sent.convertToCooked == true)
     }
 
     @Test("A portion is one set change; marking eaten resends the server's amount")

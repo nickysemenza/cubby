@@ -239,11 +239,15 @@ export const reportCommandRequest = z.discriminatedUnion("kind", [
     kind: z.literal("reprocess-cookbook"),
     cookbookId: cookbookShortcode,
   }),
-  /** Import these source recipes (the tree's item ids) from the book's stored extraction. */
+  /**
+   * Import these source recipes (the tree's item ids) from the book's stored extraction. The
+   * client sends at most `chunkSize` per call (the server's cap) and stops at the first error.
+   */
   z.object({
     kind: z.literal("import-cookbook-recipes"),
     cookbookId: cookbookShortcode,
     recipeIds: z.array(z.string().min(1)).min(1),
+    chunkSize: z.number().int().positive(),
   }),
   /** Ask the AI to arrange a recipe's steps into a walkthrough (`force` replaces a current one). */
   z.object({
@@ -257,6 +261,8 @@ export const reportCommandRequest = z.discriminatedUnion("kind", [
     mealId: mealShortcode,
     recipeId: recipeShortcode.nullable(),
     scale: mealScale.nullable(),
+    /** The person's reviewed answer for a meal that is not cooked yet; false for a cooked one. */
+    convertToCooked: z.boolean().nullable(),
   }),
   /** Change how much of a meal's recipe is served (`scale`, entered by the person). */
   z.object({

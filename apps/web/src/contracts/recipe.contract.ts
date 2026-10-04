@@ -18,6 +18,8 @@ import {
   deleteCookbookOut,
   gatewayForwardInput,
   gatewayForwardOut,
+  cookbookImportChunkInput,
+  cookbookReprocessChunkInput,
   importCookbookStreamInput,
   importNotionSyncInput,
   importRecipeSchema,
@@ -147,16 +149,18 @@ const recipeLinePatchOut = z.object({
 
 const cookbookReprocessOnceOut = z.object({
   reprocessed: z.number().int().nonnegative(),
-  /** Source recipes the book does not hold yet. */
-  importableExtras: z.number().int().nonnegative(),
+  /** Where the next call starts; null when this window was the last. */
+  nextOffset: z.number().int().nonnegative().nullable(),
 });
 const cookbookImportOnceOut = z.object({
-  succeeded: z.number().int().nonnegative(),
+  imported: z.number().int().nonnegative(),
   failed: z.number().int().nonnegative(),
   /** The raw reason each failed source recipe gave. */
   failures: z.array(
     z.object({ sourceRecipeId: z.string(), error: z.string() }),
   ),
+  /** Source recipes the book still does not hold. */
+  remaining: z.number().int().nonnegative(),
 });
 
 const recipeLineReparseInput = z.object({
@@ -286,19 +290,19 @@ export const recipeContract = defineContract("recipe", {
     invalidates: ["recipe"],
   }),
   /**
-   * `reprocessCookbook` run to its end for a client with no stream: the same workflow, answered
-   * once with its summary.
+   * `reprocessCookbook` for a client with no stream, one bounded window per call (the server
+   * caps it): the same workflow, finalized per window, answered with where to continue.
    */
   reprocessCookbookOnce: mutation({
     native: "Reprocess a cookbook from its report command",
-    input: cookbookIdInput,
+    input: cookbookReprocessChunkInput,
     output: cookbookReprocessOnceOut,
     invalidates: ["recipe", "cookbook"],
   }),
-  /** `importCookbookStream` run to its end, answered once with its summary. */
+  /** `importCookbookStream` for one capped chunk of source recipes, answered with its counts. */
   importCookbookRecipesOnce: mutation({
     native: "Add source recipes to a cookbook from its report command",
-    input: importCookbookStreamInput,
+    input: cookbookImportChunkInput,
     output: cookbookImportOnceOut,
     invalidates: ["recipe", "cookbook"],
   }),

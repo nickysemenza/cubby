@@ -114,11 +114,13 @@ describe("meal.composition", () => {
           { kind: "record", key: "recipeId", entity: "recipe" },
           { kind: "number", key: "scale", initial: 1, min: 0.01 },
         ],
+        // A cooked meal needs no conversion, so nothing is asked.
         request: {
           kind: "meal-add-recipe",
           mealId: meal.output.id,
           recipeId: null,
           scale: null,
+          convertToCooked: false,
         },
       },
     ]);
@@ -163,15 +165,80 @@ describe("meal.composition", () => {
       },
     ]);
     expect(portions.commands?.map((command) => command.label)).toEqual([
-      "Add portion",
       "Set actual yield",
     ]);
-    // The add form asks for the eater, the amount and its unit; nothing is guessed.
-    expect(portions.commands?.[0]?.inputs?.map((input) => input.key)).toEqual([
+  });
+
+  it("offers Add portion only to eaters without a portion, so it never replaces one silently", async () => {
+    const { meal } = await seed();
+    // The seeded eater already has a portion, so with nobody else there is no one to add.
+    const alone = await blocks(meal.output.id);
+    const aloneBlock = alone.find(
+      (block) =>
+        block.kind === "records" && block.title?.startsWith("Portions"),
+    );
+    if (aloneBlock?.kind !== "records") throw new Error("no portions block");
+    expect(aloneBlock.commands?.map((command) => command.label)).toEqual([
+      "Set actual yield",
+    ]);
+
+    const other = await createLedgerParty(
+      ctx.db,
+      { name: "Second eater", kind: "guest", notes: null },
+      ctx.actor,
+    );
+    const out = await blocks(meal.output.id);
+    const portions = out.find(
+      (block) =>
+        block.kind === "records" && block.title?.startsWith("Portions"),
+    );
+    if (portions?.kind !== "records") throw new Error("no portions block");
+    const add = portions.commands?.find(
+      (command) => command.label === "Add portion",
+    );
+    expect(add?.inputs?.map((input) => input.key)).toEqual([
       "ledgerPartyId",
       "value",
       "unit",
     ]);
+    // The eater is picked from the server's list of who has no portion, not searched freely.
+    expect(add?.inputs?.[0]).toMatchObject({
+      kind: "choice",
+      options: [{ value: other.output!.id, label: "Second eater" }],
+    });
+  });
+
+  it("asks whether to switch a not-cooked meal to cooked when a recipe is added", async () => {
+    const leftovers = await createMealWithEntityId(
+      ctx.db,
+      buildEntity("meal", {
+        date: "2026-09-23",
+        name: "Leftover night",
+        mealKind: "leftovers",
+      }),
+      ctx.actor,
+    );
+    const out = await blocks(leftovers.output.id);
+    const recipes = out.find((block) => block.kind === "records");
+    if (recipes?.kind !== "records") throw new Error("expected records");
+    const add = recipes.commands?.[0];
+    expect(add).toMatchObject({
+      label: "Add recipe",
+      request: { kind: "meal-add-recipe", convertToCooked: null },
+    });
+    expect(add?.inputs?.map((input) => input.key)).toEqual([
+      "recipeId",
+      "scale",
+      "convertToCooked",
+    ]);
+    expect(add?.inputs?.[2]).toMatchObject({
+      kind: "choice",
+      initial: "true",
+      options: [
+        { value: "true", label: "Switch this meal to cooked" },
+        { value: "false", label: "Keep it as it is" },
+      ],
+    });
   });
 
   it("says a meal that needs no recipe has nothing to compose", async () => {

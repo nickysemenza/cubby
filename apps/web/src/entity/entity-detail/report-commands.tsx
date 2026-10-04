@@ -7,6 +7,7 @@ import {
   type ChoiceAnswers,
   commitPreparedInput,
 } from "@cubby/schemas/report-choice";
+import { toast } from "sonner";
 import { match } from "ts-pattern";
 
 import { runHref } from "~/app/purchases/purchase-import-links";
@@ -43,15 +44,10 @@ export function useReportCommands() {
   const reprocess = useActionMutation({
     mutationFn: recipe.reprocessCookbookOnce.mutationOptions,
     error: "Could not reprocess the cookbook",
-    success: (result) => `Reprocessed ${result.reprocessed} recipes`,
   });
   const importRecipes = useActionMutation({
     mutationFn: recipe.importCookbookRecipesOnce.mutationOptions,
     error: "Could not add the recipes",
-    success: (result) =>
-      result.failed > 0
-        ? `Added ${result.succeeded}; ${result.failed} failed`
-        : `Added ${result.succeeded} recipes`,
   });
   const mealRecipe = useActionMutation({
     mutationFn: meal.updateRecipe.mutationOptions,
@@ -133,15 +129,48 @@ export function useReportCommands() {
         .with({ kind: "retry-gmail-search" }, (r) =>
           retry.mutate({ shortcode: r.runId }),
         )
-        .with({ kind: "reprocess-cookbook" }, (r) =>
-          reprocess.mutate({ cookbookId: r.cookbookId }),
-        )
-        .with({ kind: "import-cookbook-recipes" }, (r) =>
-          importRecipes.mutate({
-            cookbookId: r.cookbookId,
-            recipeIds: r.recipeIds,
-          }),
-        )
+        // Bounded calls, one window at a time; the first error stops the loop (the hook has
+        // already shown it).
+        .with({ kind: "reprocess-cookbook" }, async (r) => {
+          let offset: number | null = 0;
+          let total = 0;
+          try {
+            while (offset !== null) {
+              const done = await reprocess.mutateAsync({
+                cookbookId: r.cookbookId,
+                offset,
+              });
+              total += done.reprocessed;
+              offset = done.nextOffset;
+            }
+          } catch {
+            // SILENT: useActionMutation already showed the error; the loop just stops.
+            return;
+          }
+          toast.success(`Reprocessed ${total} recipes`);
+        })
+        .with({ kind: "import-cookbook-recipes" }, async (r) => {
+          let imported = 0;
+          try {
+            for (let i = 0; i < r.recipeIds.length; i += r.chunkSize) {
+              const done = await importRecipes.mutateAsync({
+                cookbookId: r.cookbookId,
+                recipeIds: r.recipeIds.slice(i, i + r.chunkSize),
+              });
+              imported += done.imported;
+              if (done.failed > 0) {
+                toast.error(
+                  `Added ${imported}; ${done.failed} failed: ${done.failures.map((failure) => `${failure.sourceRecipeId}: ${failure.error}`).join("; ")}`,
+                );
+                return;
+              }
+            }
+          } catch {
+            // SILENT: useActionMutation already showed the error; the loop just stops.
+            return;
+          }
+          toast.success(`Added ${imported} recipes`);
+        })
         // The meal commands ask the person for a scale, recipe, eater or amount first; web has
         // its own dialogs for those and never renders these reports, so a request that still
         // lacks its input is not sent.

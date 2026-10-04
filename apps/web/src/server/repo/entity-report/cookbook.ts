@@ -132,18 +132,14 @@ export async function cookbookImportProgressReport(
 ): Promise<ReportBlock[]> {
   const id = await resolveOrThrow(db, "cookbook", code);
   const cookbookId = cookbookShortcode.parse(code);
-  const [
-    { getCookbookSource },
-    { getCookbookRecipeTitles },
-    { flattenCookbookRecipes },
-  ] = await Promise.all([
-    import("~/server/repo/cookbook"),
-    import("~/server/repo/recipe/crud"),
-    import("@cubby/schemas/cookbook"),
-  ]);
-  let source;
+  const [{ getCookbookSourceCoverage }, { COOKBOOK_COMMAND_CHUNK }] =
+    await Promise.all([
+      import("~/server/repo/cookbook"),
+      import("@cubby/schemas/import-recipe"),
+    ]);
+  let coverage;
   try {
-    source = await getCookbookSource(db, id);
+    coverage = await getCookbookSourceCoverage(db, id);
   } catch {
     // A flat pre-tree array has no readable source; the extraction report says so too.
     return [
@@ -155,26 +151,25 @@ export async function cookbookImportProgressReport(
       },
     ];
   }
-  const imported = new Set(
-    (await getCookbookRecipeTitles(db, id)).map((title) =>
-      title.trim().toLowerCase(),
-    ),
-  );
-  const all = flattenCookbookRecipes(source.cookbook);
-  const missing = all.filter(
-    (entry) => !imported.has(entry.recipe.name.trim().toLowerCase()),
-  );
+  const { total, missing } = coverage;
+  const all = { length: total };
   const importedCount = all.length - missing.length;
   const importCommand = (
     recipeIds: string[],
     label: string,
     prominent: boolean,
+    confirm: string | null = null,
   ): ReportCommand => ({
     id: `import:${recipeIds.length === 1 ? recipeIds[0] : "all"}`,
     label,
     prominent,
-    confirm: null,
-    request: { kind: "import-cookbook-recipes", cookbookId, recipeIds },
+    confirm,
+    request: {
+      kind: "import-cookbook-recipes",
+      cookbookId,
+      recipeIds,
+      chunkSize: COOKBOOK_COMMAND_CHUNK,
+    },
   });
   const listing: Extract<ReportBlock, { kind: "records" }> = {
     kind: "records",
@@ -196,6 +191,7 @@ export async function cookbookImportProgressReport(
               missing.map((entry) => entry.recipe.id),
               `Add all ${missing.length}`,
               true,
+              `Import all ${missing.length} source recipes (no AI)? It runs ${COOKBOOK_COMMAND_CHUNK} at a time and stops at the first error.`,
             ),
           ]
         : []),

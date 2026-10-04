@@ -351,6 +351,23 @@ export const importCookbookStreamInput = z.object({
   recipeIds: z.array(z.string().min(1)).min(1),
 });
 
+/**
+ * A client with no stream imports and reprocesses a book in bounded calls: more recipes in one
+ * request could outlive the Worker and leave the ones that landed without fresh totals. The server
+ * enforces the cap; a client reads it from the command it was given.
+ */
+export const COOKBOOK_COMMAND_CHUNK = 20;
+
+export const cookbookImportChunkInput = importCookbookStreamInput.extend({
+  recipeIds: z.array(z.string().min(1)).min(1).max(COOKBOOK_COMMAND_CHUNK),
+});
+
+export const cookbookReprocessChunkInput = z.object({
+  cookbookId: cookbookShortcode,
+  /** Where the previous call stopped (`nextOffset`); 0 starts over. */
+  offset: z.number().int().nonnegative(),
+});
+
 export const cookbookImportEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("progress"),

@@ -85,6 +85,9 @@ private struct ReportSlotContent: View {
                     Text(error).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
                         .textSelection(.enabled)
                 }
+                if let progress = model.actionProgress {
+                    Text(progress).font(.caption).foregroundStyle(.secondary)
+                }
                 if let notice = model.actionNotice {
                     Text(notice).font(.caption).foregroundStyle(FieldGuideTokens.positive)
                 }
