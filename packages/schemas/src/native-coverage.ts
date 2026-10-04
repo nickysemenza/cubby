@@ -318,34 +318,28 @@ export const nativeCoverage = {
    * covered by the generic list's own affordances and never selectable as a slot.
    */
   /**
-   * `structured-field` is a shared renderer id for fields web edits in a workflow editor (or not
-   * at all), so each field is classified here as `<entity>.<field>`: `implemented` ones are drawn
-   * from a `valueSchema` (each needs a read-to-input vector in `structured-roundtrip.json`); the
-   * rest are read-only natively. Every field with that renderer must appear (asserted by the
-   * unit test), and `NATIVE_UNSUPPORTED_CEILING.structuredField` only shrinks.
+   * `structured-field` is a shared renderer id, so each field is classified here as
+   * `<entity>.<field>`: `implemented` ones are drawn from a `valueSchema` by the generic
+   * structured-value editor on both clients (each needs a read-to-input vector in
+   * `structured-roundtrip.json`); an `unsupported` one stays read-only on both, with its reason.
+   * Every field with that renderer must appear (asserted by the unit test), and
+   * `NATIVE_UNSUPPORTED_CEILING.structuredField` only shrinks.
    */
   structuredField: {
-    ...implemented(["recipe.sections"]),
-    ...unsupported(
-      ["expense.sourceClaims", "ledgerTransfer.sourceClaims"],
-      "Machine-written provenance: the read carries sourceKey where the input wants providerId, so it cannot round-trip.",
-    ),
-    ...unsupported(
-      ["recipe.meta", "recipe.yield"],
-      "No client edits this through the generic editor yet; it needs a read-to-input vector first.",
-    ),
-    ...unsupported(
-      ["meal.recipes"],
-      "Served recipes are edited through the meal composition workflow; the read nests a recipe where the input wants recipeId.",
-    ),
-    ...unsupported(
-      ["financialAccount.identity", "financialAccount.cardNumbers"],
-      "Account identity and card numbers are edited on web only; no native vector yet.",
-    ),
-    ...unsupported(
-      ["vendor.agentHints"],
-      "Agent hints are edited on web only; no native vector yet.",
-    ),
+    // Every field is drawn by the one generic editor on both clients, each with a read-to-input
+    // vector from a real server read. `meal.recipes` has only a create input (an existing meal's
+    // recipes change through the meal composition workflow), so it draws on create alone.
+    ...implemented([
+      "expense.sourceClaims",
+      "financialAccount.cardNumbers",
+      "financialAccount.identity",
+      "ledgerTransfer.sourceClaims",
+      "meal.recipes",
+      "recipe.meta",
+      "recipe.sections",
+      "recipe.yield",
+      "vendor.agentHints",
+    ]),
   },
   listSlot: {
     ...implemented([
@@ -718,6 +712,6 @@ export const NATIVE_UNSUPPORTED_CEILING = {
   heroAction: 0,
   detailSlot: 2,
   listSlot: 0,
-  structuredField: 8,
   sectionAction: 0,
+  structuredField: 0,
 } as const satisfies Record<NativeCoverageKind, number>;

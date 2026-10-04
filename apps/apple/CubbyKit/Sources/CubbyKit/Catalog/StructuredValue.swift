@@ -62,7 +62,8 @@ public enum StructuredValue {
 
     /// What a new row or newly added object starts as. Only required keys are present; text is
     /// empty and a number unset, so an unfilled row is rejected by the server rather than guessed.
-    /// A nullable schema starts `null` unless `populated`.
+    /// A nullable schema starts `null` unless `populated`, and a variant starts `null` (no case
+    /// chosen): the person picks one, never a default the editor guessed.
     public static func blank(_ schema: ValueSchema, populated: Bool = false) -> JSONValue {
         if schema.nullable && !populated { return .null }
         switch schema.node {
@@ -76,9 +77,7 @@ public enum StructuredValue {
         case .object(let fields): return .object(blankFields(fields))
         case .array: return .array([])
         case .map: return .object([:])
-        case .variant(let discriminator, let cases):
-            guard let first = cases.first else { return .null }
-            return blankCase(discriminator, first)
+        case .variant: return .null
         }
     }
 
@@ -235,7 +234,7 @@ extension ValueSchema {
     public var isEdited: Bool {
         switch node {
         case .constant: false
-        case .text(let format): format != "uuid"
+        case .text(let format): format != "uuid" && format != "opaque"
         default: true
         }
     }

@@ -18,7 +18,8 @@ public struct ValueSchema: Codable, Sendable, Hashable {
     }
 
     public indirect enum Node: Codable, Sendable, Hashable {
-        /// `format` is `uri`, `date` (`yyyy-MM-dd`), `uuid` (opaque: preserved, never edited) or `email`.
+        /// `format` is `uri`, `date` (`yyyy-MM-dd`), `email`, or `uuid`/`opaque` (an id or identity key:
+        /// preserved so an untouched row keeps its identity, never shown or edited).
         case text(format: String?)
         case number(integer: Bool)
         case boolean

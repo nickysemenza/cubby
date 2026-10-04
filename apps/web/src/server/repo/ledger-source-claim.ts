@@ -20,6 +20,9 @@ const toHex = (bytes: ArrayBuffer) =>
     .join("");
 
 async function ledgerSourceKey(claim: LedgerSourceClaimInput) {
+  // A claim a client read back keeps the identity it was read with;
+  // `assertHeldClaimIdentities` has already proven this record holds it.
+  if (claim.sourceKey !== undefined) return claim.sourceKey;
   // Provider identities are stable, but still external identifiers: hash the
   // source namespace and provider id rather than storing either in sourceKey.
   if (claim.providerId) {
@@ -115,13 +118,10 @@ export async function assertExplicitSourceClaimsForAmountChange(
   if (sourceClaims !== undefined || sameAmount(previousAmount, nextAmount))
     return;
 
-  const ownerWhere = isExpenseOwner(owner)
-    ? eq(ledgerSourceClaim.expenseId, owner.expenseId)
-    : eq(ledgerSourceClaim.ledgerTransferId, owner.ledgerTransferId);
   const [claim] = await tx
     .select({ id: ledgerSourceClaim.id })
     .from(ledgerSourceClaim)
-    .where(and(ownerWhere, notDeleted(ledgerSourceClaim)))
+    .where(and(ownerClaims(owner), notDeleted(ledgerSourceClaim)))
     .limit(1);
   if (!claim) return;
 
@@ -132,12 +132,61 @@ export async function assertExplicitSourceClaimsForAmountChange(
   );
 }
 
+const ownerClaims = (owner: ClaimOwnerReference) =>
+  isExpenseOwner(owner)
+    ? eq(ledgerSourceClaim.expenseId, owner.expenseId)
+    : eq(ledgerSourceClaim.ledgerTransferId, owner.ledgerTransferId);
+
+/**
+ * A claim sent with a `sourceKey` is an edit of a claim this record already
+ * holds, and keeps its identity. The key is a hash, so the server cannot tell a
+ * provider-keyed claim from an evidence-keyed one: it refuses any change to the
+ * evidence under a held key (for an evidence-keyed claim that would silently
+ * orphan the key) and a key the record does not hold (it could otherwise adopt
+ * another record's, or a retired, identity). Changing evidence is
+ * remove-and-add: send the new claim without a `sourceKey`.
+ */
+async function assertHeldClaimIdentities(
+  tx: DrizzleTransaction,
+  owner: ClaimOwnerReference,
+  claims: readonly LedgerSourceClaimInput[],
+): Promise<void> {
+  const keyed = claims.filter((claim) => claim.sourceKey !== undefined);
+  if (keyed.length === 0) return;
+  const held = await tx
+    .select({
+      source: ledgerSourceClaim.source,
+      sourceKey: ledgerSourceClaim.sourceKey,
+      normalizedEvidence: ledgerSourceClaim.normalizedEvidence,
+    })
+    .from(ledgerSourceClaim)
+    .where(and(ownerClaims(owner), notDeleted(ledgerSourceClaim)));
+  for (const claim of keyed) {
+    const row = held.find(
+      (candidate) =>
+        candidate.source === claim.source &&
+        candidate.sourceKey === claim.sourceKey,
+    );
+    if (!row)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Source claim identity ${claim.source}/${claim.sourceKey} is not held by this record. Send a new claim without sourceKey instead.`,
+      );
+    if (!isEqual(row.normalizedEvidence, claim.normalizedEvidence))
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Changing the evidence of source claim ${claim.source}/${claim.sourceKey} would change its identity. Remove the claim and add a new one without sourceKey.`,
+      );
+  }
+}
+
 export async function replaceLedgerSourceClaims(
   tx: DrizzleTransaction,
   owner: ClaimOwner,
   claims: readonly LedgerSourceClaimInput[],
 ): Promise<void> {
   const { targetAmount } = owner;
+  await assertHeldClaimIdentities(tx, owner, claims);
   const keys = await Promise.all(claims.map(ledgerSourceKey));
   assertClaimAmounts(targetAmount, claims);
   const valuesFor = (claim: LedgerSourceClaimInput, key: string) => ({
@@ -245,9 +294,7 @@ export async function replaceLedgerSourceClaims(
       [blocker],
     );
   }
-  const currentOwner = isExpenseOwner(owner)
-    ? eq(ledgerSourceClaim.expenseId, owner.expenseId)
-    : eq(ledgerSourceClaim.ledgerTransferId, owner.ledgerTransferId);
+  const currentOwner = ownerClaims(owner);
   const currentRows = await tx
     .select({
       id: ledgerSourceClaim.id,

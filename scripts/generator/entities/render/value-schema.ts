@@ -1,44 +1,16 @@
 import { z } from "zod";
 
-/**
- * The structured-value description the native editor draws, derived from a field's Zod input
- * schema so no client hand-writes a per-field form. It is emitted into the Swift manifest as
- * `FieldDescriptor.valueSchema` and encoded as Swift's synthesized `Codable` encodes `ValueSchema`
- * (`Catalog/ValueSchema.swift`): a case with a labelled payload is `{"case": {"label": value}}`,
- * a payload-less one `{"boolean": {}}`. Validation rules are not described here — the server
- * stays the only validator and its issues are mapped back onto this tree.
- */
-type OptionJSON = { value: string; label: string };
-type FieldJSON = {
-  key: string;
-  label: string;
-  required: boolean;
-  schema: ValueSchemaJSON;
-  /**
-   * Where the read payload carries this key when it is not at the same key (a dotted path, from
-   * the input schema's `readFrom` metadata): the client's read-to-input projection fills the key
-   * from there.
-   */
-  readPath?: string;
-};
-type NodeJSON =
-  | { text: { format: "uri" | "date" | "uuid" | "email" | null } }
-  | { number: { integer: boolean } }
-  | { boolean: Record<string, never> }
-  | { enum: { options: OptionJSON[] } }
-  | { reference: { entity: string } }
-  | { amount: { upper: boolean } }
-  | { constant: { value: z.core.util.JSONType } }
-  | { object: { fields: FieldJSON[] } }
-  | { array: { item: ValueSchemaJSON } }
-  | { map: { keys: OptionJSON[]; value: ValueSchemaJSON } }
-  | {
-      variant: {
-        discriminator: string;
-        cases: { value: string; label: string; fields: FieldJSON[] }[];
-      };
-    };
-export type ValueSchemaJSON = { nullable: boolean; node: NodeJSON };
+import type {
+  StructuredField,
+  StructuredNode,
+  StructuredOption,
+  StructuredValueSchema,
+} from "../../../../packages/schemas/src/structured-value-schema.ts";
+
+export type ValueSchemaJSON = StructuredValueSchema;
+type NodeJSON = StructuredNode;
+type FieldJSON = StructuredField;
+type OptionJSON = StructuredOption;
 
 /** Resolves an entity from a shortcode prefix such as `ING-`; null when no entity owns it. */
 export type EntityForPrefix = (prefix: string) => string | null;
@@ -57,6 +29,7 @@ type JsonSchema = {
   pattern?: string | undefined;
   format?: string | undefined;
   readFrom?: string | undefined;
+  opaque?: boolean | undefined;
   propertyNames?: { enum?: z.core.util.JSONType[] | undefined } | undefined;
   additionalProperties?: JsonSchema | undefined;
 };
@@ -74,6 +47,7 @@ const jsonSchema: z.ZodType<JsonSchema> = z.lazy(() =>
     pattern: z.string().optional(),
     format: z.string().optional(),
     readFrom: z.string().optional(),
+    opaque: z.boolean().optional(),
     propertyNames: z.object({ enum: z.array(z.json()).optional() }).optional(),
     // `false` (a strict object) carries no schema to read.
     additionalProperties: z
@@ -103,9 +77,14 @@ const CALENDAR_DAY = String.raw`^\d{4}-\d{2}-\d{2}$`;
 const SHORTCODE_PREFIX = /^\^([A-Z]+-)\[/u;
 const TEXT_FORMATS = z.enum(["uri", "uuid", "email"]);
 
-const textNode = (schema: JsonSchema, entityForPrefix: EntityForPrefix) => {
+const textNode = (
+  schema: JsonSchema,
+  entityForPrefix: EntityForPrefix,
+): NodeJSON => {
+  // Carried untouched and never shown (`.meta({ opaque: true })`): a claim's identity key.
+  if (schema.opaque === true) return { text: { format: "opaque" } };
   const pattern = schema.pattern ?? "";
-  if (pattern === CALENDAR_DAY) return { text: { format: "date" } } as const;
+  if (pattern === CALENDAR_DAY) return { text: { format: "date" } };
   const entity = entityForPrefix(SHORTCODE_PREFIX.exec(pattern)?.[1] ?? "");
   if (entity !== null) return { reference: { entity } };
   const format = TEXT_FORMATS.safeParse(schema.format);
@@ -123,7 +102,7 @@ const fieldsOf = (
   return Object.entries(schema.properties ?? {})
     .filter(([key]) => key !== skip)
     .map(([key, property]) => {
-      const field: FieldJSON = {
+      const field = {
         key,
         label: humanize(key),
         required: required.has(key),
@@ -132,8 +111,9 @@ const fieldsOf = (
           where: `${context.where}.${key}`,
         }),
       };
-      if (property.readFrom !== undefined) field.readPath = property.readFrom;
-      return field;
+      return property.readFrom === undefined
+        ? field
+        : { ...field, readPath: property.readFrom };
     });
 };
 

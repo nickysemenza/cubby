@@ -110,6 +110,19 @@ describe("valueSchemaOf", () => {
     expect(row.note).not.toHaveProperty("readPath");
   });
 
+  it("marks an opaque key so no client draws it", () => {
+    const row = fieldsOf(
+      schemaOf(
+        z.object({
+          sourceKey: z.string().optional().meta({ opaque: true }),
+          note: z.string(),
+        }),
+      ),
+    );
+    expect(row.sourceKey?.schema.node).toEqual({ text: { format: "opaque" } });
+    expect(row.note?.schema.node).toEqual({ text: { format: null } });
+  });
+
   it("describes a discriminated union as a variant whose cases carry their own fields", () => {
     const schema = schemaOf(
       z.discriminatedUnion("kind", [
@@ -202,14 +215,22 @@ describe("declared structured editors", () => {
         structured.push(`${entity.key}.${field.key}`);
       }
     }
-    // Only fields with a read-to-input vector; the rest stay read-only natively.
+    // Only fields with a read-to-input vector; both clients draw exactly these.
     expect(structured.sort()).toEqual([
+      "expense.sourceClaims",
+      "financialAccount.cardNumbers",
+      "financialAccount.identity",
       "financialAccount.sourceAliases",
       "financialTransaction.sourceRefs",
+      "ledgerTransfer.sourceClaims",
+      "meal.recipes",
       "product.externalIds",
       "product.labelNutrition",
       "product.unitMappings",
+      "recipe.meta",
       "recipe.sections",
+      "recipe.yield",
+      "vendor.agentHints",
     ]);
   });
 
@@ -246,8 +267,9 @@ describe("declared structured editors", () => {
           (candidate) =>
             candidate.entity === entity.key && candidate.field === field.key,
         );
-        const update = field.validation.update;
-        expect(update?.safeParse(vector?.input).success).toBe(true);
+        // A create-only field (a meal's `recipes`) is edited on create alone.
+        const input = field.validation.update ?? field.validation.create;
+        expect(input?.safeParse(vector?.input).success).toBe(true);
       }
     }
   });

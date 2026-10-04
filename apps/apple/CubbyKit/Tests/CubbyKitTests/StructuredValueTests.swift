@@ -69,7 +69,7 @@ struct StructuredValueTests {
                 }
             }
         }
-        #expect(drawn == 6)
+        #expect(drawn == 14)
     }
 
     @Test func aRecipeSectionLineReadsItsTargetsIdFromTheNestedRecord() throws {
@@ -104,8 +104,8 @@ struct StructuredValueTests {
         #expect(value.node == .number(integer: false))
     }
 
-    /// No declared field uses a variant today (the fields that did are read-only natively), so the
-    /// editor's variant handling is exercised on a synthetic schema.
+    /// A synthetic variant schema, so the editor's variant handling is exercised without depending
+    /// on a declared field's exact cases.
     private static let accountKind = ValueSchema(
         node: .variant(
             discriminator: "kind",
@@ -208,6 +208,44 @@ struct StructuredValueTests {
         }
     }
 
+    /// A new account has no default identity kind: the form stays unsaveable until one is chosen.
+    @Test func aNewAccountMustChooseItsIdentityKind() throws {
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.financialAccount], mode: .create(prefill: [:]),
+            client: try makeClient())
+        #expect(model.missingRequiredKeys.contains("identity"))
+        let identity = try schema(.financialAccount, "identity")
+        guard case .variant(let discriminator, let cases) = identity.node,
+            let cash = cases.first(where: { $0.value == "cash" })
+        else { throw Failure("identity is not a variant with a cash case") }
+        model.draft["identity"] = StructuredValue.blankCase(discriminator, cash)
+        #expect(!model.missingRequiredKeys.contains("identity"))
+    }
+
+    /// An edited claim goes back under the identity it was read with (`sourceKey`), never a
+    /// provider id the read cannot supply, so the server keeps the claim instead of rehashing it.
+    @Test func anEditedSourceClaimKeepsItsIdentityKey() throws {
+        let vector = try sourceClaimVector()
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-2222"),
+            client: try makeClient(), original: .object(["sourceClaims": vector.read]))
+        #expect(try model.patch().isEmpty)
+        let reviewed = StructuredValue.setting(
+            ["decision": "accept_target_amount", "note": "Reviewed"], at: ["0", "reconciliation"],
+            in: model.draft["sourceClaims"] ?? .null)
+        model.draft["sourceClaims"] = reviewed
+        let sent = try #require(model.patch().values["sourceClaims"]?.arrayValue?.first)
+        #expect(sent["sourceKey"] == vector.input.arrayValue?.first?["sourceKey"])
+        #expect(sent["providerId"] == nil)
+        #expect(sent["reconciliation"]?["decision"] == "accept_target_amount")
+    }
+
+    private func sourceClaimVector() throws -> Vector {
+        struct File: Decodable { let vectors: [Vector] }
+        let vectors = try GoldenVectors.decode(File.self, named: "structured-roundtrip").vectors
+        return try #require(vectors.first { $0.entity == .expense && $0.field == "sourceClaims" })
+    }
+
     @Test func storedEmptyTextOrNullsDoNotMakeAnUntouchedRowLookEdited() throws {
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[.product], mode: .update(id: "PRD-2345"), client: try makeClient(),
@@ -277,9 +315,8 @@ struct StructuredValueTests {
 
     @Test func blankValuesCarryOnlyRequiredKeysAndAVariantsTag() throws {
         let identity = Self.accountKind
-        #expect(
-            StructuredValue.blank(identity)
-                == ["kind": "cash"])
+        // No case is chosen for the person: a default variant would be a silent identity.
+        #expect(StructuredValue.blank(identity) == .null)
         guard case .variant(let discriminator, let cases) = identity.node,
             let cash = cases.first(where: { $0.value == "cash" })
         else { throw Failure("no cash case") }
