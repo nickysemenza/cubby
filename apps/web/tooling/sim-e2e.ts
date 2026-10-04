@@ -67,7 +67,14 @@ const emojiReview = flags.includes("--emoji-review");
 const testerArmy = flags.includes("--tester-army");
 const testerArmyReplay = flags.includes("--replay");
 const wrongName = flags.includes("--wrong-name");
+const qa = flags.includes("--qa");
+const qaHold = flags.includes("--hold");
 if (
+  (qa &&
+    flags.some(
+      (flag) => flag !== "--qa" && flag !== "--hold" && flag !== "--video",
+    )) ||
+  (qaHold && !qa) ||
   (emojiReview &&
     flags.some((flag) => flag !== "--emoji-review" && flag !== "--video")) ||
   (inputJourney &&
@@ -114,33 +121,37 @@ if (
         "--tester-army",
         "--replay",
         "--wrong-name",
+        "--qa",
+        "--hold",
       ].includes(argument),
   )
 )
   throw new Error(
-    "Usage: sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --tester-army [--replay] [--wrong-name] | --video | --layout [--video] | --product-clarity [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
+    "Usage: sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --tester-army [--replay] [--wrong-name] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
   );
-const lane = emojiReview
-  ? "sim-emoji-review-e2e"
-  : inputJourney
-    ? "sim-input-journey-e2e"
-    : testerArmy
-      ? "sim-tester-army-e2e"
-      : productClarity
-        ? "sim-product-clarity-e2e"
-        : statementCsv
-          ? "headless-statement-csv-e2e"
-          : layout
-            ? "sim-layout-e2e"
-            : purchase
-              ? "headless-wardrobe-e2e"
-              : photo
-                ? "headless-photo-e2e"
-                : headless
-                  ? "headless-e2e"
-                  : watch
-                    ? "sim-dev"
-                    : "sim-e2e";
+const lane = qa
+  ? "sim-qa-e2e"
+  : emojiReview
+    ? "sim-emoji-review-e2e"
+    : inputJourney
+      ? "sim-input-journey-e2e"
+      : testerArmy
+        ? "sim-tester-army-e2e"
+        : productClarity
+          ? "sim-product-clarity-e2e"
+          : statementCsv
+            ? "headless-statement-csv-e2e"
+            : layout
+              ? "sim-layout-e2e"
+              : purchase
+                ? "headless-wardrobe-e2e"
+                : photo
+                  ? "headless-photo-e2e"
+                  : headless
+                    ? "headless-e2e"
+                    : watch
+                      ? "sim-dev"
+                      : "sim-e2e";
 // Database bootstrap validates the caller's environment before simulation-only overrides.
 const bootstrapEnvironment = { ...process.env };
 for (const [key, value] of Object.entries({
@@ -1263,6 +1274,8 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
   }
 }
 
+let qaIds: Record<string, string> = {};
+
 async function seedNativeScenario(userId: string): Promise<{
   productId: string;
   layoutRunID?: string;
@@ -1278,6 +1291,11 @@ async function seedNativeScenario(userId: string): Promise<{
       seedSimulatorProductClarity,
     } = await import("./scenarios/simulator");
     await seedSimulatorPhotoActor(seedPool, userId);
+    if (qa) {
+      const { seedNativeQa } = await import("./scenarios/native-qa");
+      qaIds = await seedNativeQa(seedPool, userId);
+      return { productId: qaIds.PRODUCT_ID ?? "" };
+    }
     if (productClarity)
       return await seedSimulatorProductClarity(seedPool, userId);
     if (emojiReview)
@@ -1294,6 +1312,113 @@ async function seedNativeScenario(userId: string): Promise<{
   } finally {
     await seedPool.end();
   }
+}
+
+/** Reads the database back after the QA journeys: each native write must have landed exactly once. */
+async function assertQaOutcomes(): Promise<void> {
+  const checkPool = new Pool({ connectionString: databaseURL });
+  const rows = async <T extends object>(text: string, values: unknown[] = []) =>
+    (await checkPool.query<T>(text, values)).rows;
+  try {
+    const stock = await rows<{ code: string; amount: number }>(
+      `SELECT e.shortcode AS code, e."amountValue" AS amount
+       FROM "InventoryEntry" e WHERE e.shortcode = ANY($1)`,
+      [[qaIds.INVENTORY_ID, qaIds.SHELF_INVENTORY_ID]],
+    );
+    const amountOf = (code: string | undefined) =>
+      stock.find((row) => row.code === code)?.amount;
+    if (
+      amountOf(qaIds.INVENTORY_ID) !== 6 ||
+      amountOf(qaIds.SHELF_INVENTORY_ID) !== 2
+    )
+      throw new Error(
+        `Discard with a shelf choice must take one unit from the chosen shelf only: ${JSON.stringify(stock)}`,
+      );
+    const discards = await rows(
+      `SELECT 1 FROM "Expense" WHERE name = 'Discarded — Synthetic Flour Bag' AND "productQuantity" = -1`,
+    );
+    if (discards.length !== 1)
+      throw new Error(`Expected one discard line, found ${discards.length}`);
+    const allocations = await rows<{ amount: number }>(
+      `SELECT a.amount FROM "FinancialTransactionAllocation" a
+       JOIN "FinancialTransaction" t ON t.id = a."transactionId"
+       WHERE t.shortcode = $1 AND a."deletedAt" IS NULL ORDER BY a.amount`,
+      [qaIds.SPLIT_CHARGE_ID],
+    );
+    if (allocations.map((row) => row.amount).join() !== "42.5,48.5")
+      throw new Error(
+        `Statement match must allocate 42.5 and 48.5: ${JSON.stringify(allocations)}`,
+      );
+    const mappings = await rows<{ bValue: number }>(
+      `SELECT "bValue" FROM "ProductUnitMapping" WHERE "aUnit" = 'cup' AND "deletedAt" IS NULL`,
+    );
+    if (mappings.length !== 1 || mappings[0]?.bValue !== 125)
+      throw new Error(
+        `Unit mapping edit must update the one cup row in place: ${JSON.stringify(mappings)}`,
+      );
+    const approvals = await rows<{ state: string }>(
+      `SELECT a.state FROM "RunApproval" a JOIN "Run" r ON r.id = a."runId" WHERE r.shortcode = $1`,
+      [qaIds.APPROVAL_RUN_ID],
+    );
+    if (approvals.map((row) => row.state).join() !== "granted")
+      throw new Error(
+        `Run approval must be granted: ${JSON.stringify(approvals)}`,
+      );
+    console.log(`[${lane}] Native QA writes verified in ${simName}`);
+  } finally {
+    await checkPool.end();
+  }
+}
+
+/** Replays every `apps/apple/e2e/qa-*.ad` journey against the seeded QA world. */
+async function runQaJourneys(common: string[]): Promise<void> {
+  writeFileSync(
+    path.join(artifacts, "qa-ids.json"),
+    `${JSON.stringify({ database: simName, ids: qaIds }, null, 2)}\n`,
+  );
+  if (qaHold) {
+    const stop = path.join(artifacts, "qa.stop");
+    console.log(
+      `[${lane}] HOLD ${databaseURL} ids=${path.join(artifacts, "qa-ids.json")}; touch ${stop} to finish`,
+    );
+    const stopped = () => existsSync(stop) || interrupted !== undefined;
+    while (!stopped())
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    return;
+  }
+  const journeys = readdirSync(path.join(appleRoot, "e2e"))
+    .filter((file) => /^qa-.*\.(ad|yaml)$/u.test(file))
+    .sort();
+  const stopRecording = video
+    ? await recordSimulatorVideo(common[3] ?? "")
+    : undefined;
+  try {
+    for (const journey of journeys)
+      await run(
+        "pnpm",
+        [
+          "exec",
+          "agent-device",
+          "test",
+          `apps/apple/e2e/${journey}`,
+          ...common,
+          "--artifacts-dir",
+          artifacts,
+          "--reporter",
+          "default",
+          "--reporter",
+          `junit:${path.join(artifacts, `junit-${journey}.xml`)}`,
+          ...Object.entries(qaIds).flatMap(([key, value]) => [
+            "-e",
+            `${key}=${value}`,
+          ]),
+        ],
+        repoRoot,
+      );
+  } finally {
+    await stopRecording?.();
+  }
+  await assertQaOutcomes();
 }
 
 async function runNativeJourney(
@@ -1919,6 +2044,8 @@ async function main(): Promise<void> {
             install,
             launch,
           });
+        } else if (qa) {
+          await runQaJourneys(common);
         } else {
           await runNativeJourney(
             device.udid,

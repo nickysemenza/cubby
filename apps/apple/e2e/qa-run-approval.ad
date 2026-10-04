@@ -1,0 +1,15 @@
+context platform=ios timeout=240000
+
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 240000
+open "cubby://entity/${APPROVAL_RUN_ID}"
+wait "label=\"Run console\"" 90000
+click "label=\"Run console\""
+wait text "Approvals" 90000
+scroll down 0.4 --until "id=report.command.${APPROVAL_ID}:approve"
+wait "id=report.command.${APPROVAL_ID}:approve" 90000
+click "id=report.command.${APPROVAL_ID}:approve"
+wait text "Approve synthetic.apply? The agent will run it with the arguments shown." 90000
+# The confirmation button shares the list button label; accept it as the active alert.
+alert accept
+wait text "Granted" 90000

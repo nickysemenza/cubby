@@ -1,0 +1,21 @@
+context platform=ios timeout=240000
+
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 240000
+open "cubby://entity/${PRODUCT_ID}"
+wait "role=Button label=More" 90000
+click "role=Button label=More"
+wait "role=Button label=Discard" 90000
+click "role=Button label=Discard"
+wait text "Also take these units off the shelf" 90000
+wait text "Take from" 90000
+click "role=Button label=\"Take from, Choose a shelf\""
+wait "label=\"Synthetic Pantry Shelf — 3 each\"" 90000
+click "label=\"Synthetic Pantry Shelf — 3 each\""
+wait "role=Button label=\"Take from, Synthetic Pantry Shelf — 3 each\"" 90000
+fill "role=TextField value=Reason" "Synthetic spoilage"
+click "id=heroAction.submit"
+wait text "Discard Synthetic Flour Bag?" 90000
+# The alert button shares its label with the sheet toolbar button (and `alert accept` stalls over a sheet); tap it by position (iPhone 17).
+click 201 506
+wait text "Discarded 1" 90000

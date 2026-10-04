@@ -1,0 +1,23 @@
+context platform=ios timeout=240000
+
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 240000
+open "cubby://entity/${RECIPE_ID}"
+wait "role=Button label=More" 90000
+wait text "Composition" 90000
+scroll down 0.4 --until "id=recipe.workflow.cook"
+wait "id=recipe.workflow.cook" 90000
+wait "label=\"250 g Synthetic Flour\"" 90000
+click "label=2×"
+wait "label=\"500 g Synthetic Flour\"" 90000
+click "id=recipe.workflow.cook"
+wait text "Whisk the flour with 2 cups of water." 90000
+click "label=\"Ingredients for this part\""
+wait text "500 g Synthetic Flour" 90000
+click "label=Next"
+wait text "Rest the batter for 10 minutes, then cook." 90000
+wait text "Step 2 of 2" 90000
+click "label=Previous"
+wait text "Whisk the flour with 2 cups of water." 90000
+click "label=Close"
+wait "id=recipe.workflow.cook" 90000
