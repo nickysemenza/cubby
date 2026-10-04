@@ -1,0 +1,55 @@
+{
+  "_doc": "How a product's one stored `tags` list splits into compatibility Tags and Collections (`collection:*` entries) and merges back. Read by packages/shared/src/collection-tag.unit.test.ts (the rule web's ProductTagsField applies) and CubbyKit's CollectionTagTests (native applies the same rule over the generated prefix and slug pattern in SharedConstants). All data is synthetic.",
+  "split": [
+    { "tags": [], "tagsOut": [], "collections": [] },
+    {
+      "tags": [
+        "M18",
+        "collection:painting",
+        "grinder-4.5in",
+        "collection:metal-working"
+      ],
+      "tagsOut": ["M18", "grinder-4.5in"],
+      "collections": ["metal-working", "painting"]
+    },
+    {
+      "tags": ["collection:painting", "collection:painting"],
+      "tagsOut": [],
+      "collections": ["painting"]
+    },
+    {
+      "tags": [
+        "collection:Not A Slug",
+        "collection:",
+        "collection:a--b",
+        "Collection:x"
+      ],
+      "tagsOut": [
+        "collection:Not A Slug",
+        "collection:",
+        "collection:a--b",
+        "Collection:x"
+      ],
+      "collections": []
+    }
+  ],
+  "merge": [
+    {
+      "tags": ["M18"],
+      "collections": ["painting"],
+      "out": ["M18", "collection:painting"]
+    },
+    {
+      "tags": ["M18"],
+      "collections": ["  Metal Working! ", "painting", "Painting", "!!!", ""],
+      "out": ["M18", "collection:metal-working", "collection:painting"]
+    },
+    { "tags": [], "collections": [], "out": [] }
+  ],
+  "normalize": [
+    { "in": "  Metal Working! ", "out": "metal-working" },
+    { "in": "Café Latte", "out": "caf-latte" },
+    { "in": "a__b--c", "out": "a-b-c" },
+    { "in": "---", "out": "" }
+  ]
+}

@@ -1,5 +1,5 @@
 {
-  "_doc": "Synthetic read payloads for each structured field native edits, with the input the editor must send back untouched (project to the input schema, then shape for the wire). The web unit test parses every `input` with the field's update schema; CubbyKit's StructuredValueTests asserts wireValue(project(read)) == input. A field belongs in STRUCTURED_VALUE_RENDERERS only with a vector here.",
+  "_doc": "Synthetic read payloads for each structured field native edits, with the input the editor must send back untouched (project to the input schema, then shape for the wire). The web unit test parses every `input` with the field's update schema; CubbyKit's StructuredValueTests asserts wireValue(project(read)) == input. A field belongs in STRUCTURED_VALUE_RENDERERS only with a vector here. recipe.sections is generated: recipe-sections-vector.integration.test.ts reads a synthetic recipe through the real server read and fails unless its stabilized payload equals this vector's read (and web's recipeLineAsInput equals the input's lines), so a change to the read shape cannot leave this stale.",
   "vectors": [
     {
       "entity": "product",
@@ -7,10 +7,18 @@
       "read": [
         {
           "id": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
-          "a": { "value": 1, "unit": "cup" },
-          "b": { "value": 120, "unit": "g" },
+          "a": {
+            "value": 1,
+            "unit": "cup"
+          },
+          "b": {
+            "value": 120,
+            "unit": "g"
+          },
           "source": "manual",
-          "sourceMetadata": { "provenance": "synthetic" },
+          "sourceMetadata": {
+            "provenance": "synthetic"
+          },
           "createdAt": "2026-01-01T00:00:00.000Z",
           "updatedAt": "2026-01-01T00:00:00.000Z"
         }
@@ -18,8 +26,14 @@
       "input": [
         {
           "id": "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed",
-          "a": { "value": 1, "unit": "cup" },
-          "b": { "value": 120, "unit": "g" },
+          "a": {
+            "value": 1,
+            "unit": "cup"
+          },
+          "b": {
+            "value": 120,
+            "unit": "g"
+          },
           "source": "manual"
         }
       ]
@@ -55,12 +69,18 @@
       "field": "labelNutrition",
       "read": {
         "servingGrams": 44,
-        "nutrients": { "protein": 3, "fat": 1.5 },
+        "nutrients": {
+          "protein": 3,
+          "fat": 1.5
+        },
         "source": "Synthetic label"
       },
       "input": {
         "servingGrams": 44,
-        "nutrients": { "protein": 3, "fat": 1.5 },
+        "nutrients": {
+          "protein": 3,
+          "fat": 1.5
+        },
         "source": "Synthetic label"
       }
     },
@@ -85,8 +105,229 @@
     {
       "entity": "financialTransaction",
       "field": "sourceRefs",
-      "read": [{ "source": "example-vendor", "externalId": "ORD-1" }],
-      "input": [{ "source": "example-vendor", "externalId": "ORD-1" }]
+      "read": [
+        {
+          "source": "example-vendor",
+          "externalId": "ORD-1"
+        }
+      ],
+      "input": [
+        {
+          "source": "example-vendor",
+          "externalId": "ORD-1"
+        }
+      ]
+    },
+    {
+      "entity": "recipe",
+      "field": "sections",
+      "read": [
+        {
+          "id": "00000001-0000-4000-8000-000000000000",
+          "name": "Dough",
+          "instructions": [
+            {
+              "instruction": "Knead."
+            }
+          ],
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "ingredients": [
+            {
+              "id": "00000002-0000-4000-8000-000000000000",
+              "amounts": [
+                {
+                  "value": 500,
+                  "unit": "g"
+                }
+              ],
+              "rawLine": "500g flour, sifted",
+              "modifier": "sifted",
+              "createdAt": "2026-01-01T00:00:00.000Z",
+              "updatedAt": "2026-01-01T00:00:00.000Z",
+              "type": "ingredient",
+              "recipe": null,
+              "ingredient": {
+                "id": "ING-2222",
+                "name": "vector flour",
+                "createdAt": "2026-01-01T00:00:00.000Z",
+                "updatedAt": "2026-01-01T00:00:00.000Z",
+                "aliases": []
+              }
+            },
+            {
+              "id": "00000003-0000-4000-8000-000000000000",
+              "amounts": [
+                {
+                  "value": 1,
+                  "unit": "batch"
+                }
+              ],
+              "rawLine": null,
+              "modifier": null,
+              "createdAt": "2026-01-01T00:00:00.000Z",
+              "updatedAt": "2026-01-01T00:00:00.000Z",
+              "type": "recipe",
+              "recipe": {
+                "id": "RCP-2222",
+                "name": "Vector starter",
+                "createdAt": "2026-01-01T00:00:00.000Z",
+                "updatedAt": "2026-01-01T00:00:00.000Z",
+                "meta": {
+                  "url": null,
+                  "times": {
+                    "active": null,
+                    "total": null,
+                    "prep": null,
+                    "cook": null,
+                    "activeMinutes": null,
+                    "totalMinutes": null,
+                    "prepMinutes": null,
+                    "cookMinutes": null
+                  },
+                  "equipment": null,
+                  "page": null
+                },
+                "source": {
+                  "type": "other"
+                },
+                "yield": null,
+                "servings": null,
+                "fieldResolutions": {
+                  "servings": {
+                    "mode": "inherit",
+                    "storedValue": null,
+                    "value": null,
+                    "fallbackValue": null,
+                    "source": "No serving yield",
+                    "sourceEntity": null,
+                    "matchesFallback": true,
+                    "canReset": false
+                  }
+                },
+                "tags": [],
+                "notes": null,
+                "forkedFromRecipeId": null,
+                "forkedFromRecipeName": null
+              },
+              "ingredient": null
+            }
+          ]
+        },
+        {
+          "id": "00000004-0000-4000-8000-000000000000",
+          "name": "Water",
+          "instructions": [],
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "ingredients": [
+            {
+              "id": "00000005-0000-4000-8000-000000000000",
+              "amounts": [
+                {
+                  "value": 1,
+                  "unit": "cup"
+                }
+              ],
+              "rawLine": null,
+              "modifier": null,
+              "createdAt": "2026-01-01T00:00:00.000Z",
+              "updatedAt": "2026-01-01T00:00:00.000Z",
+              "type": "ingredient",
+              "recipe": null,
+              "ingredient": {
+                "id": "ING-3333",
+                "name": "vector water",
+                "createdAt": "2026-01-01T00:00:00.000Z",
+                "updatedAt": "2026-01-01T00:00:00.000Z",
+                "aliases": []
+              }
+            }
+          ]
+        },
+        {
+          "id": "00000006-0000-4000-8000-000000000000",
+          "name": "Bake",
+          "instructions": [
+            {
+              "instruction": "Bake until done."
+            }
+          ],
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "ingredients": []
+        }
+      ],
+      "input": [
+        {
+          "id": "00000001-0000-4000-8000-000000000000",
+          "name": "Dough",
+          "ingredients": [
+            {
+              "type": "ingredient",
+              "ingredientId": "ING-2222",
+              "recipeId": null,
+              "amounts": [
+                {
+                  "value": 500,
+                  "unit": "g"
+                }
+              ],
+              "id": "00000002-0000-4000-8000-000000000000",
+              "rawLine": "500g flour, sifted",
+              "modifier": "sifted"
+            },
+            {
+              "type": "recipe",
+              "recipeId": "RCP-2222",
+              "ingredientId": null,
+              "amounts": [
+                {
+                  "value": 1,
+                  "unit": "batch"
+                }
+              ],
+              "id": "00000003-0000-4000-8000-000000000000",
+              "rawLine": null,
+              "modifier": null
+            }
+          ],
+          "instructions": [
+            {
+              "instruction": "Knead."
+            }
+          ]
+        },
+        {
+          "id": "00000004-0000-4000-8000-000000000000",
+          "name": "Water",
+          "ingredients": [
+            {
+              "type": "ingredient",
+              "ingredientId": "ING-3333",
+              "recipeId": null,
+              "amounts": [
+                {
+                  "value": 1,
+                  "unit": "cup"
+                }
+              ],
+              "id": "00000005-0000-4000-8000-000000000000",
+              "rawLine": null,
+              "modifier": null
+            }
+          ]
+        },
+        {
+          "id": "00000006-0000-4000-8000-000000000000",
+          "name": "Bake",
+          "instructions": [
+            {
+              "instruction": "Bake until done."
+            }
+          ]
+        }
+      ]
     }
   ]
 }

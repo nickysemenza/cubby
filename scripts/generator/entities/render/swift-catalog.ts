@@ -13,7 +13,7 @@ import {
   type NativeHeroActionPlan,
   nativeCoverage,
   nativeHeroActionPlans,
-  STRUCTURED_VALUE_RENDERERS,
+  drawsFromValueSchema,
 } from "../../../../packages/schemas/src/native-coverage.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
@@ -400,12 +400,12 @@ const fieldDisplayJSON = (
 
 /** The structured editor's schema description for a field whose renderer draws from one. */
 const valueSchemaJSON = (
+  entity: string,
   field: Field,
   where: string,
   entityForPrefix: EntityForPrefix,
 ): ValueSchemaJSON | null => {
-  const renderer = field.control?.renderer;
-  if (!STRUCTURED_VALUE_RENDERERS.some((id) => id === renderer)) return null;
+  if (!drawsFromValueSchema(entity, field)) return null;
   const input = field.validation.update ?? field.validation.create;
   if (input === null || input === undefined)
     throw new Error(
@@ -435,7 +435,7 @@ const fieldJSON = (
     explanation: explanationJSON(field.explanation),
     resolution: field.resolution,
     ...fieldControlJSON(field.control, vocabulary, where),
-    valueSchema: valueSchemaJSON(field, where, entityForPrefix),
+    valueSchema: valueSchemaJSON(context, field, where, entityForPrefix),
     inCreate: fieldModel.create.includes(field.key),
     // Required when the create schema rejects `undefined` (the same rule as
     // `requiredOnCreate` in `entity-field-model.gen.ts`).

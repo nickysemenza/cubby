@@ -126,7 +126,11 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   `ListSlotRegistry`, `EntityFieldControl.drawing(for:)`), which `NativeCoverageViewPathTests`
   checks in both directions. The structured renderers (`STRUCTURED_VALUE_RENDERERS`) are `generic`:
   `FieldDescriptor.valueSchema`, derived from the field's Zod input schema, is drawn by the one
-  `StructuredValueControl`, so a new structured field is a declaration, not a view. A structured
+  `StructuredValueControl`, so a new structured field is a declaration, not a view (a read payload
+  that nests an input's id declares `readFrom` on the Zod field; `project` applies the emitted
+  `readPath`). The `product-tags` control splits Tags from Collections with `CollectionTag`, which
+  reads the prefix and slug pattern from generated `SharedConstants` and is pinned to web's rule by
+  `golden-vectors/collection-tag.json`. A structured
   detail field needs no view either: it declares where the record carries its server-composed text
   (`display.detailLabelPath`) or worded rows (`display.itemsPath`, drawn by `DetailDisplayRows`), or
   a nested value (`readPath` with `format`/`valueOptions`), and the generic detail row prints that —

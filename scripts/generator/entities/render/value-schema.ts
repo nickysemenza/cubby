@@ -14,6 +14,12 @@ type FieldJSON = {
   label: string;
   required: boolean;
   schema: ValueSchemaJSON;
+  /**
+   * Where the read payload carries this key when it is not at the same key (a dotted path, from
+   * the input schema's `readFrom` metadata): the client's read-to-input projection fills the key
+   * from there.
+   */
+  readPath?: string;
 };
 type NodeJSON =
   | { text: { format: "uri" | "date" | "uuid" | "email" | null } }
@@ -50,6 +56,7 @@ type JsonSchema = {
   const?: z.core.util.JSONType | undefined;
   pattern?: string | undefined;
   format?: string | undefined;
+  readFrom?: string | undefined;
   propertyNames?: { enum?: z.core.util.JSONType[] | undefined } | undefined;
   additionalProperties?: JsonSchema | undefined;
 };
@@ -66,6 +73,7 @@ const jsonSchema: z.ZodType<JsonSchema> = z.lazy(() =>
     const: z.json().optional(),
     pattern: z.string().optional(),
     format: z.string().optional(),
+    readFrom: z.string().optional(),
     propertyNames: z.object({ enum: z.array(z.json()).optional() }).optional(),
     // `false` (a strict object) carries no schema to read.
     additionalProperties: z
@@ -114,15 +122,19 @@ const fieldsOf = (
   const required = new Set(schema.required);
   return Object.entries(schema.properties ?? {})
     .filter(([key]) => key !== skip)
-    .map(([key, property]) => ({
-      key,
-      label: humanize(key),
-      required: required.has(key),
-      schema: convert(property, {
-        ...context,
-        where: `${context.where}.${key}`,
-      }),
-    }));
+    .map(([key, property]) => {
+      const field: FieldJSON = {
+        key,
+        label: humanize(key),
+        required: required.has(key),
+        schema: convert(property, {
+          ...context,
+          where: `${context.where}.${key}`,
+        }),
+      };
+      if (property.readFrom !== undefined) field.readPath = property.readFrom;
+      return field;
+    });
 };
 
 const isAmount = (schema: JsonSchema) => {

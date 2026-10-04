@@ -38,6 +38,7 @@ export {
 export {
   recipeIngredientInput,
   recipeInstructionInput,
+  recipeLineAsInput,
   recipeSectionInput,
   recipeSectionsInput,
 } from "./recipe-fields";

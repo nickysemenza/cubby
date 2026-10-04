@@ -8,7 +8,7 @@ import {
   valueSchemaOf,
   type ValueSchemaJSON,
 } from "../../../scripts/generator/entities/render/value-schema";
-import { STRUCTURED_VALUE_RENDERERS } from "../../../packages/schemas/src/native-coverage";
+import { drawsFromValueSchema } from "../../../packages/schemas/src/native-coverage";
 
 const noEntity: EntityForPrefix = () => null;
 const schemaOf = (
@@ -97,6 +97,19 @@ describe("valueSchemaOf", () => {
     });
   });
 
+  it("carries a field's readFrom metadata as its readPath, and only then", () => {
+    const row = fieldsOf(
+      schemaOf(
+        z.object({
+          ingredientId: z.string().meta({ readFrom: "ingredient.id" }),
+          note: z.string(),
+        }),
+      ),
+    );
+    expect(row.ingredientId?.readPath).toBe("ingredient.id");
+    expect(row.note).not.toHaveProperty("readPath");
+  });
+
   it("describes a discriminated union as a variant whose cases carry their own fields", () => {
     const schema = schemaOf(
       z.discriminatedUnion("kind", [
@@ -180,12 +193,7 @@ describe("declared structured editors", () => {
     const structured: string[] = [];
     for (const entity of await loadEntityDeclarations()) {
       for (const field of entity.fieldModel.fields) {
-        const renderer = field.control?.renderer;
-        if (
-          !renderer ||
-          !STRUCTURED_VALUE_RENDERERS.some((id) => id === renderer)
-        )
-          continue;
+        if (!drawsFromValueSchema(entity.key, field)) continue;
         const schema = field.validation.update ?? field.validation.create;
         if (!schema) throw new Error(`${entity.key}.${field.key} has no input`);
         expect(() =>
@@ -194,13 +202,14 @@ describe("declared structured editors", () => {
         structured.push(`${entity.key}.${field.key}`);
       }
     }
-    // Only fields web also edits; the rest stay read-only natively.
+    // Only fields with a read-to-input vector; the rest stay read-only natively.
     expect(structured.sort()).toEqual([
       "financialAccount.sourceAliases",
       "financialTransaction.sourceRefs",
       "product.externalIds",
       "product.labelNutrition",
       "product.unitMappings",
+      "recipe.sections",
     ]);
   });
 
@@ -229,8 +238,7 @@ describe("declared structured editors", () => {
     );
     for (const entity of await loadEntityDeclarations()) {
       for (const field of entity.fieldModel.fields) {
-        const renderer = field.control?.renderer;
-        if (!STRUCTURED_VALUE_RENDERERS.some((id) => id === renderer)) continue;
+        if (!drawsFromValueSchema(entity.key, field)) continue;
         expect(covered, `${entity.key}.${field.key} needs a vector`).toContain(
           `${entity.key}.${field.key}`,
         );

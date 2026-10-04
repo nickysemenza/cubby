@@ -274,16 +274,18 @@ See also the image operational passes at the end of this file.
   amounts still format separately (web `wasm.format_amount`, native Swift).
   Export the formatter through `cubby-ffi` when a native amount view drifts.
 
-- ⏳ **Native structured-value editor follow-ups.** Native edits only the
-  structured fields web also edits (`unitMappings`, `labelNutrition`,
-  `externalIds`, `sourceAliases`, `sourceRefs`) through the generated
-  `valueSchema`. Still read-only natively: every `structured-field` (recipe
-  `sections`/`meta`/`yield`, meal `recipes`, account `identity`/`cardNumbers`,
-  vendor `agentHints`, `sourceClaims`) and `productTags`. Promote one only
-  after web edits it and a vector proves its read-to-input round trip (recipe
-  sections need the read-to-input adapter in `recipe-line-patch.ts`; tags need
-  the Collections split from `@cubby/shared/collection-tag`). Also: validate on
-  a device, title array rows from their content, and retire the web
+- ⏳ **Native structured-value editor follow-ups.** Native edits `unitMappings`,
+  `labelNutrition`, `externalIds`, `sourceAliases`, `sourceRefs`, recipe
+  `sections` (read-to-input via the `readFrom` declaration) and `productTags`
+  (Tags vs Collections via `@cubby/shared/collection-tag`). Still read-only
+  natively: the other `structured-field`s (recipe `meta`/`yield`, meal
+  `recipes`, account `identity`/`cardNumbers`, vendor `agentHints`,
+  `sourceClaims`); promote one only after a vector proves its round trip
+  (`sourceClaims` reads `sourceKey` where its input wants `providerId`, so it
+  needs a server-side read shape first). Also: validate on a device, show the
+  ingredient or recipe name (not its shortcode) on an existing section line,
+  title array rows from their content, the redundant-tag highlight web draws on
+  a Tags chip, and retire the web
   `ProductUnitMappingsField`/`ProductExternalIdsField`/`SourceAliasesField`/
   `SourceRefsField` once a generic web renderer reads the same `valueSchema`.
 

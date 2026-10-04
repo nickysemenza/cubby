@@ -80,6 +80,34 @@ export const STRUCTURED_VALUE_RENDERERS = [
   "unit-mappings",
 ] as const satisfies readonly ControlRendererId[];
 
+/**
+ * `structured-field` is a shared renderer id for fields web edits in a workflow editor (or not at
+ * all), so it is drawn from a `valueSchema` only for the fields listed here, as `entity.field`:
+ * each needs a read-to-input vector in `structured-roundtrip.json`. The rest (machine-written
+ * `sourceClaims`, a meal's served `recipes`, a recipe's `meta`/`yield`, an account's
+ * `identity`/`cardNumbers`, a vendor's `agentHints`) stay read-only natively: their read shapes
+ * do not round-trip to their inputs, or no client edits them.
+ */
+const NATIVE_EDITED_STRUCTURED_FIELDS = ["recipe.sections"] as const;
+
+/** Whether the generator derives a `valueSchema` (and native draws the structured editor) for a field. */
+export const drawsFromValueSchema = (
+  entity: string,
+  field: {
+    key: string;
+    control?: { renderer?: string | null | undefined } | null;
+  },
+): boolean => {
+  const renderer = field.control?.renderer;
+  return (
+    STRUCTURED_VALUE_RENDERERS.some((id) => id === renderer) ||
+    (renderer === "structured-field" &&
+      NATIVE_EDITED_STRUCTURED_FIELDS.some(
+        (edited) => edited === `${entity}.${field.key}`,
+      ))
+  );
+};
+
 export const nativeCoverage = {
   /**
    * Specialized control renderers; `generic` ones draw as their `controlKind` primitive or, for
@@ -96,14 +124,14 @@ export const nativeCoverage = {
     // `upc-lookup`/`usda-food` are plain text/number fields once their AI action strips away.
     ...generic(["entity-select", "money", "url", "upc-lookup", "usda-food"]),
     ...generic(STRUCTURED_VALUE_RENDERERS),
-    // Native edits a structured field only where web also edits it and a golden read-to-input
-    // vector proves the round trip (`structured-roundtrip.json`). Web draws none of these.
-    ...unsupported(
-      ["structured-field"],
-      "Web has no editor for this structured field; native shows it read-only.",
-    ),
-    // Web splits `collection:*` entries from compatibility tags; native shows the raw list.
-    ...unsupported(["product-tags"], "Tags and Collections are edited on web."),
+    // Drawn from the field's `valueSchema` only where `NATIVE_EDITED_STRUCTURED_FIELDS` lists it
+    // (a golden read-to-input vector proves the round trip); the other fields of this renderer
+    // are read-only, as on web.
+    ...generic(["structured-field"]),
+    // Tags and Collections: the split and merge are `splitProductTags`/`mergeProductTags`
+    // (`@cubby/shared/collection-tag`), reproduced by `CollectionTag` over the generated
+    // `SharedConstants` and pinned by `golden-vectors/collection-tag.json`.
+    ...implemented(["product-tags"]),
     // The editor's image block owns image ordering; it is never a field control.
     ...ownedElsewhere(["image-order"]),
   },
@@ -516,7 +544,7 @@ export const nativeHeroActionPlans = {
  * justification in review.
  */
 export const NATIVE_UNSUPPORTED_CEILING = {
-  control: 2,
+  control: 0,
   list: 0,
   detail: 0,
   heroAction: 0,
