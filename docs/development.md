@@ -67,7 +67,7 @@ CI scoping is in [CI](ci.md). Provider resources and secrets are in
 
 The `usda-api` D1 database does not use the web migration
 workflow. Apply remote D1 migrations before deploying code that depends on
-them, and stage incompatible changes as expand → migrate → deploy → cleanup.
+them.
 
 ## Worktrees and test services
 

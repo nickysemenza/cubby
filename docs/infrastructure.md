@@ -256,7 +256,7 @@ package deploy scripts do not apply them:
 pnpm --filter @cubby/usda-api run edge:d1:migrate:remote
 ```
 
-Apply a compatible migration before deploying code that requires it. The main
+Apply a migration before deploying code that requires it. The main
 Worker uses service bindings in production and checked-in public URLs as
 development fallbacks.
 
