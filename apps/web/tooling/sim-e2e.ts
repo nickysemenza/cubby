@@ -53,7 +53,17 @@ const repoRoot = path.resolve(webRoot, "../..");
 const kitRoot = path.join(repoRoot, "apps/apple/CubbyKit");
 const appleRoot = path.join(repoRoot, "apps/apple");
 // `pnpm test:e2e:sim -- <flags>` may forward the separator itself.
-const flags = process.argv.slice(2).filter((argument) => argument !== "--");
+const rawFlags = process.argv.slice(2).filter((argument) => argument !== "--");
+const journeyFlag = rawFlags.indexOf("--journey");
+if (journeyFlag >= 0) {
+  const value = rawFlags[journeyFlag + 1];
+  if (!value) throw new Error("--journey needs a comma-separated id list");
+  process.env.TESTER_ARMY_JOURNEYS = value;
+}
+const flags = rawFlags.filter(
+  (argument, index) =>
+    argument !== "--journey" && rawFlags[index - 1] !== "--journey",
+);
 const headless = flags.includes("--headless");
 const photo = flags.includes("--photo");
 const purchase = flags.includes("--purchase");
@@ -66,7 +76,7 @@ const productClarity = flags.includes("--product-clarity");
 const emojiReview = flags.includes("--emoji-review");
 const testerArmy = flags.includes("--tester-army");
 const testerArmyReplay = flags.includes("--replay");
-const wrongName = flags.includes("--wrong-name");
+const wrongName = flags.includes("--wrong") || flags.includes("--wrong-name");
 const qa = flags.includes("--qa");
 const qaHold = flags.includes("--hold");
 if (
@@ -123,11 +133,12 @@ if (
         "--wrong-name",
         "--qa",
         "--hold",
+        "--wrong",
       ].includes(argument),
   )
 )
   throw new Error(
-    "Usage: sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --tester-army [--replay] [--wrong-name] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
+    "Usage: sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --tester-army [--journey a,b] [--replay] [--wrong] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] | --watch | --headless [--watch | --photo [--purchase] | --statement-csv]]",
   );
 const lane = qa
   ? "sim-qa-e2e"
@@ -1275,6 +1286,7 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
 }
 
 let qaIds: Record<string, string> = {};
+let journeyIdsFile = "";
 
 async function seedNativeScenario(userId: string): Promise<{
   productId: string;
@@ -1295,6 +1307,16 @@ async function seedNativeScenario(userId: string): Promise<{
       const { seedNativeQa } = await import("./scenarios/native-qa");
       qaIds = await seedNativeQa(seedPool, userId);
       return { productId: qaIds.PRODUCT_ID ?? "" };
+    }
+    if (testerArmy) {
+      const { seedJourneyWorld } =
+        await import("./scenarios/tester-army-journeys");
+      journeyIdsFile = path.join(artifacts, "journey-ids.json");
+      writeFileSync(
+        journeyIdsFile,
+        JSON.stringify(await seedJourneyWorld(seedPool, userId)),
+      );
+      return { productId: "" };
     }
     if (productClarity)
       return await seedSimulatorProductClarity(seedPool, userId);
@@ -1445,13 +1467,11 @@ async function runNativeJourney(
         E2E_TELEMETRY_DISABLED: "1",
         TESTER_ARMY_TARGET: "ios",
         TESTER_ARMY_ORIGIN: process.env.TESTER_ARMY_ORIGIN,
-        TESTER_ARMY_PRODUCT_ID: productId,
+        TESTER_ARMY_IDS_FILE: journeyIdsFile,
         TESTER_ARMY_DEVICE_ID: deviceID,
         TESTER_ARMY_SESSION: `tester-army-${simName}`,
         ...(testerArmyReplay && { TESTER_ARMY_REPLAY: "1" }),
-        ...(wrongName && {
-          TESTER_ARMY_EXPECTED_NAME: "Synthetic deliberately incorrect name",
-        }),
+        ...(wrongName && { TESTER_ARMY_WRONG: "1" }),
       },
     );
     const summary = readTesterArmySummary(output);
