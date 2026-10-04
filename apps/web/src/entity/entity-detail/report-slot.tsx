@@ -1,4 +1,4 @@
-import { reportSlotActions } from "@cubby/schemas/entity-report";
+import { slotActionsOf } from "@cubby/schemas/entity-report";
 import type {
   EntityReportInput,
   ReportBlock,
@@ -206,8 +206,7 @@ export function EntityReportSlot({
 }: EntityReportInput & { record?: object }) {
   const query = useQuery(entityReport.get.queryOptions(input));
   // The slot's own verbs (attach, analyze, validate) stay available while the rows load or fail.
-  const verbs =
-    record === undefined ? [] : (reportSlotActions[input.slot] ?? []);
+  const verbs = record === undefined ? [] : slotActionsOf(input.slot);
   return (
     <Stack gap="sm" className="items-start">
       {record !== undefined

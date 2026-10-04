@@ -53,9 +53,7 @@ export const labelImageItems = (
     subtitle: null,
     trailing: null,
     imageUrl: label.representations?.original ?? label.url,
-    ...(reviewable.has(label.id)
-      ? { actions: ["reviewLabelNutrition" as const] }
-      : {}),
+    actions: reviewable.has(label.id) ? ["reviewLabelNutrition"] : [],
   }));
 
 /** Recipe, then section, then the written line, so a repeated recipe keeps a stable order. */

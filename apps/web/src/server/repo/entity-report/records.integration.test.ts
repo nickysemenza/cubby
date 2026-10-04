@@ -55,7 +55,10 @@ describe("records reports", () => {
     );
 
     const labels = await recordsOf("product.labels", product.id);
-    expect(labels.actions).toEqual(["reviewLabelNutrition"]);
+    // The review is a row verb, offered only where detected nutrition is new; none yet here.
+    expect(labels.actions).toEqual([]);
+    expect(labels.thumbnail).toBe("large");
+    expect(labels.rows[0]?.actions ?? []).toEqual([]);
     expect(labels.rows).toMatchObject([
       { entity: "image", id: labelCode, title: label.filename },
     ]);

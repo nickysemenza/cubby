@@ -33,13 +33,17 @@ export const reportSlot = z.enum(reportSlots);
  * The verbs on the record each `records` slot belongs to. The server puts them on the block, and
  * web shows them from this table so they stay available while the report loads or fails.
  */
-export const reportSlotActions: Partial<
-  Record<(typeof reportSlots)[number], readonly CollectionActionId[]>
-> = {
+export const reportSlotActions = {
   "image.associations": ["attachImage"],
   "location.ai-description": ["analyzeLocation"],
   "purchase.runs": ["validatePurchase"],
-};
+} as const satisfies Partial<
+  Record<(typeof reportSlots)[number], readonly CollectionActionId[]>
+>;
+
+/** The verbs a slot offers on its record (none for most slots). */
+export const slotActionsOf = (slot: string): readonly CollectionActionId[] =>
+  Object.entries(reportSlotActions).find(([key]) => key === slot)?.[1] ?? [];
 
 /**
  * The evidence a saved label reading cites, shared so the server's "is there anything new to
