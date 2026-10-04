@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { COLLECTION_ACTIONS } from "./entity-definitions/collection-actions";
+
 /**
  * The generic read a detail slot draws on every client. The server composes
  * each figure, series and schedule row once (money only from
@@ -15,6 +17,12 @@ export const reportSlots = [
   "project.schedule",
   "location.contents-valuation",
   "meal.composition",
+  "product.labels",
+  "product.cookbooks",
+  "product.recipe-appearances",
+  "image.associations",
+  "purchase.runs",
+  "location.ai-description",
 ] as const;
 export const reportSlot = z.enum(reportSlots);
 export type ReportSlot = z.infer<typeof reportSlot>;
@@ -118,12 +126,44 @@ const reportNote = z.object({
   text: z.string(),
 });
 
+const reportRecordRow = z.object({
+  /** The record the row opens (any entity key), or null for a row that only reads. */
+  entity: z.string().nullable(),
+  id: z.string().nullable(),
+  title: z.string(),
+  /** Display text composed by the server; lines are joined with "\n". */
+  subtitle: z.string().nullable(),
+  trailing: z.string().nullable(),
+  /** A thumbnail the row leads with. */
+  imageUrl: z.string().optional(),
+  /** Short chips worded by the server (a status, a failure code). */
+  badges: z.array(z.string()).optional(),
+  /** An ISO instant each client prints in its own locale and zone. */
+  at: z.string().optional(),
+});
+export type ReportRecordRow = z.infer<typeof reportRecordRow>;
+
+/**
+ * Rows that are records of their own (cookbooks a product is a copy of, the photos of a label, the
+ * import runs of a purchase) with the verbs the slot offers. `actions` name
+ * `COLLECTION_ACTION_SCOPES` verbs: web fills each in `collection-actions.tsx`, native runs the
+ * plan in `nativeCollectionActionPlans`.
+ */
+const reportRecords = z.object({
+  kind: z.literal("records"),
+  title: z.string().optional(),
+  rows: z.array(reportRecordRow),
+  empty: z.string(),
+  actions: z.array(z.enum(COLLECTION_ACTIONS)).optional(),
+});
+
 export const reportBlock = z.discriminatedUnion("kind", [
   reportStats,
   reportChart,
   reportTable,
   reportSchedule,
   reportNote,
+  reportRecords,
 ]);
 export type ReportBlock = z.infer<typeof reportBlock>;
 

@@ -1,6 +1,7 @@
 import type {
   EntityReportInput,
   ReportBlock,
+  ReportRecordRow,
 } from "@cubby/schemas/entity-report";
 import { useQuery } from "@tanstack/react-query";
 
@@ -11,6 +12,8 @@ import { Row, Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Skeleton } from "~/ui/primitives/skeleton";
+
+import { RecordsBlockView } from "./records-block";
 
 const TONE_TEXT = {
   positive: "text-positive",
@@ -147,7 +150,15 @@ const blockKey = (block: ReportBlock) =>
  * with a richer web-only surface (the schedule grid) reads the same blocks
  * itself instead.
  */
-function ReportBlocks({ blocks }: { blocks: readonly ReportBlock[] }) {
+function ReportBlocks({
+  blocks,
+  record,
+  rowBadges,
+}: {
+  blocks: readonly ReportBlock[];
+  record?: object;
+  rowBadges?: (rows: readonly ReportRecordRow[]) => (string | null)[];
+}) {
   return (
     <Stack gap="xs">
       {blocks.map((block) => {
@@ -177,6 +188,15 @@ function ReportBlocks({ blocks }: { blocks: readonly ReportBlock[] }) {
                 {block.text}
               </Description>
             );
+          case "records":
+            return (
+              <RecordsBlockView
+                key={key}
+                block={block}
+                record={record}
+                rowBadges={rowBadges}
+              />
+            );
           case "schedule":
             return null;
         }
@@ -185,8 +205,18 @@ function ReportBlocks({ blocks }: { blocks: readonly ReportBlock[] }) {
   );
 }
 
-/** A detail slot that is nothing but the server's report blocks. */
-export function EntityReportSlot(input: EntityReportInput) {
+/**
+ * A detail slot that is nothing but the server's report blocks. A `records` block's verbs act on
+ * `record` (the loaded detail record) and `rowBadges` adds web-only per-row badges.
+ */
+export function EntityReportSlot({
+  record,
+  rowBadges,
+  ...input
+}: EntityReportInput & {
+  record?: object;
+  rowBadges?: (rows: readonly ReportRecordRow[]) => (string | null)[];
+}) {
   const query = useQuery(entityReport.get.queryOptions(input));
   if (query.isPending) return <Skeleton className="h-16" />;
   if (query.isError)
@@ -197,5 +227,11 @@ export function EntityReportSlot(input: EntityReportInput) {
         onRetry={() => void query.refetch()}
       />
     );
-  return <ReportBlocks blocks={query.data.blocks} />;
+  return (
+    <ReportBlocks
+      blocks={query.data.blocks}
+      record={record}
+      rowBadges={rowBadges}
+    />
+  );
 }

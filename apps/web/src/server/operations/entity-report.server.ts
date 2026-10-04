@@ -5,6 +5,7 @@ import { buildEntityReport } from "~/server/repo/entity-report";
 export const entityReportHandlers = implementOperationDomain(
   entityReportContract,
   {
-    get: (context, input) => buildEntityReport(context.db, input),
+    get: (context, input) =>
+      buildEntityReport(context.db, input, () => context.currentParty()),
   },
 );

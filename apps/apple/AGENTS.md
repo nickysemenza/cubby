@@ -134,7 +134,10 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   detail field needs no view either: it declares where the record carries its server-composed text
   (`display.detailLabelPath`) or worded rows (`display.itemsPath`, drawn by `DetailDisplayRows`), or
   a nested value (`readPath` with `format`/`valueOptions`), and the generic detail row prints that —
-  never re-word a structure in Swift.
+  never re-word a structure in Swift. A server report's `records` block (rows with a
+  thumbnail, badges and a record to open, plus verbs) is drawn by `RecordsBlockView`; each
+  verb is a plan in `nativeCollectionActionPlans` (emitted as `collectionActionPlan`) that
+  `HeroActionRunner` runs — a new verb is a plan plus a typed case in the runner, never a slot view.
 - `CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json` and
   `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift` — from
   `scripts/generator/entities/render/swift-catalog.ts`. Regenerate with `pnpm generate`

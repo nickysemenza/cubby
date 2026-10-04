@@ -186,6 +186,27 @@ public enum EntityDetailSlotID: String, CaseIterable, Codable, Sendable {
     case vendorAccountOrderMail = "vendorAccount.order-mail"
 }
 
+/// The verbs a report `records` block offers; each has a plan in `native-coverage.json`'s
+/// `collectionActionPlan` that `HeroActionRunner` executes.
+public enum CollectionActionID: String, CaseIterable, Codable, Sendable {
+    case analyzeLocation = "analyzeLocation"
+    case attachImage = "attachImage"
+    case reviewLabelNutrition = "reviewLabelNutrition"
+    case validatePurchase = "validatePurchase"
+}
+
+public enum CollectionActionScope: String, Codable, Sendable {
+    case section
+    case row
+}
+
+extension CollectionActionID {
+    /// Whether the verb acts on the record or on one row; single-sourced with the plans.
+    public var scope: CollectionActionScope {
+        NativeCoverageManifest.shared.collectionActionScope[rawValue] ?? .section
+    }
+}
+
 public enum EntityListSlotID: String, CaseIterable, Codable, Sendable {
     case expenseAnalytics = "expense.analytics"
     case locationGallery = "location.gallery"

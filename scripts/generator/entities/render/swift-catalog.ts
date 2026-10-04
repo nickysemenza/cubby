@@ -9,8 +9,13 @@ import {
 } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
 import { connectedViews } from "../../../../packages/schemas/src/connected-view-definitions.ts";
 import {
+  COLLECTION_ACTION_SCOPES,
+  COLLECTION_ACTIONS,
+} from "../../../../packages/schemas/src/entity-definitions/collection-actions.ts";
+import {
   type NativeCoverageEntry,
   type NativeHeroActionPlan,
+  nativeCollectionActionPlans,
   nativeCoverage,
   nativeHeroActionPlans,
   drawsFromValueSchema,
@@ -819,6 +824,7 @@ export const renderSwiftEntityCatalog = (
   vocabulary.exactly("EntityHeroActionID", coverageVocabulary.heroAction);
   vocabulary.exactly("EntityDetailSlotID", coverageVocabulary.detailSlot);
   vocabulary.exactly("EntityListSlotID", coverageVocabulary.listSlot);
+  vocabulary.exactly("CollectionActionID", COLLECTION_ACTIONS);
   const classified = (
     kind: keyof typeof nativeCoverage,
     ids: readonly string[],
@@ -856,6 +862,14 @@ export const renderSwiftEntityCatalog = (
         );
     }
   }
+  // A collection verb runs through exactly one plan, and only on entities the plan names.
+  const collectionPlans: Readonly<Record<string, NativeHeroActionPlan>> =
+    nativeCollectionActionPlans;
+  for (const action of COLLECTION_ACTIONS)
+    if (collectionPlans[action]?.kind !== "operation")
+      throw new Error(
+        `native-coverage.ts: collection action ${JSON.stringify(action)} needs an operation plan`,
+      );
   const nativeCoverageJSON = {
     control: classified("control", coverageVocabulary.control),
     list: classified("list", coverageVocabulary.list),
@@ -864,6 +878,8 @@ export const renderSwiftEntityCatalog = (
     detailSlot: classified("detailSlot", coverageVocabulary.detailSlot),
     listSlot: classified("listSlot", coverageVocabulary.listSlot),
     heroActionPlan: nativeHeroActionPlans,
+    collectionActionPlan: nativeCollectionActionPlans,
+    collectionActionScope: COLLECTION_ACTION_SCOPES,
   };
   vocabulary.exactly("WayfindingDomain", WAYFINDING_DOMAINS);
   vocabulary.exactly(

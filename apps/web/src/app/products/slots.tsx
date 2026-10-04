@@ -1,25 +1,20 @@
 import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";
 import { isNonFoodCategory } from "@cubby/shared";
-import { useMemo } from "react";
+import { type FunctionComponent, useMemo } from "react";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import type { CollectionActionProps } from "~/entity/entity-detail/collection-actions";
+import { parseDrift } from "~/entity/entity-detail/collection-row-badges";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
-import {
-  EntityDisplayImagesProvider,
-  useEntityDisplayImage,
-} from "~/entity/entity-media/entity-display-images";
+import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { RelatednessRail } from "~/entity/relatedness/relatedness-rail";
 import { FullNutrientBreakdown } from "~/features/nutrition/FullNutrientBreakdown";
 import { NutrientDensityStats } from "~/features/nutrition/NutrientDensityStats";
 import { ProductNutritionLabel } from "~/features/nutrition/ProductNutritionLabel";
-import { RecipeUsagesTable } from "~/features/recipes/recipe-usages-table";
 import { UnitCoveragePanel } from "~/features/units/UnitCoveragePanel";
 import { labelNutrientsPer100 } from "~/lib/label-nutrition";
-import { countLabel } from "~/lib/pluralize";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { Row, Stack } from "~/ui/layout";
+import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
-import { Image } from "~/ui/primitives/image";
 
 import { LabelNutritionReview } from "./label-nutrition-review";
 
@@ -125,105 +120,48 @@ export const ProductFitsWith: DetailSlotComponent<"product"> = ({
   record: product,
 }) => <RelatednessRail product={product} />;
 
-/**
- * The cookbooks whose physical copies this product is. No query of its own:
- * the link arrives embedded in the product detail payload, so the panel
- * cannot contradict the page around it. The recipe count doubles as the
- * filter link into the recipe list.
- */
+/** The cookbooks whose physical copies this product is, from the server's report. */
 export const ProductCookbooks: DetailSlotComponent<"product"> = ({
   record: product,
-}) => {
-  const refs = useMemo(
-    () =>
-      product.cookbooks.map((cookbook) => ({
-        entityKind: "cookbook" as const,
-        entityId: cookbook.id,
-      })),
-    [product.cookbooks],
-  );
-  return (
-    <EntityDisplayImagesProvider refs={refs}>
-      <Stack gap="sm">
-        {product.cookbooks.map((cookbook) => (
-          <CookbookLinkRow key={cookbook.id} cookbook={cookbook} />
-        ))}
-      </Stack>
-    </EntityDisplayImagesProvider>
-  );
-};
+}) => (
+  <EntityReportSlot slot="product.cookbooks" id={product.id} record={product} />
+);
 
-function CookbookLinkRow({ cookbook }: { cookbook: ProductCookbooksProps }) {
-  const displayImage = useEntityDisplayImage({
-    entityKind: "cookbook",
-    entityId: cookbook.id,
-  });
-  return (
-    <Row className="items-center justify-between gap-2">
-      <EntityRefLink
-        displayImage={displayImage}
-        entity="cookbook"
-        data={{ id: cookbook.id, name: cookbook.name }}
-      />
-      <EntityRefLink
-        variant="filter"
-        display="value"
-        to="/recipes"
-        search={{ source: cookbook.id }}
-        label={`Show all ${countLabel(cookbook.recipeCount, "recipe")} from ${cookbook.name}`}
-      >
-        {countLabel(cookbook.recipeCount, "recipe")}
-      </EntityRefLink>
-    </Row>
-  );
-}
-
-type ProductCookbooksProps = {
-  id: string;
-  name: string;
-  recipeCount: number;
-};
-
-/** Recipes the product's linked ingredient is used in, one row per usage. */
+/**
+ * Recipes the product's linked ingredient is used in, one row per usage, from the server's
+ * report. The browser adds a badge to a line a fresh parse would change (the WASM parser runs
+ * only here).
+ */
 export const ProductRecipeAppearances: DetailSlotComponent<"product"> = ({
   record: product,
-}) =>
-  product.ingredient && product.recipeUsages.length > 0 ? (
-    <RecipeUsagesTable
-      usages={product.recipeUsages}
-      ingredientName={product.ingredient.name}
-      aliases={product.ingredient.aliases}
-    />
-  ) : (
-    <Description>Not used in any recipes yet.</Description>
-  );
+}) => (
+  <EntityReportSlot
+    slot="product.recipe-appearances"
+    id={product.id}
+    record={product}
+    rowBadges={(rows) => parseDrift(product, rows)}
+  />
+);
 
 /** Package labels are retained as evidence but deliberately excluded from item covers. */
 export const ProductLabels: DetailSlotComponent<"product"> = ({
   record: product,
-}) =>
-  product.labelImages.length > 0 ? (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-      {product.labelImages.map((label) => {
-        // An image can be corrected from an item photo after a historical
-        // cutout completed. Package evidence always renders its retained
-        // original, never that old transparent derivative.
-        const originalUrl = label.representations?.original ?? label.url;
-        return (
-          <Stack key={label.id} gap="sm">
-            <a href={originalUrl} target="_blank" rel="noreferrer">
-              <Image
-                src={originalUrl}
-                alt={label.filename}
-                displayWidth={240}
-                className="aspect-[3/4] w-full rounded-md border border-border object-contain"
-              />
-            </a>
-            <LabelNutritionReview product={product} label={label} />
-          </Stack>
-        );
-      })}
-    </div>
-  ) : (
-    <Description>No labels on file.</Description>
+}) => (
+  <EntityReportSlot slot="product.labels" id={product.id} record={product} />
+);
+
+/**
+ * Row action of the labels report: compares the detected nutrition for one package label against
+ * the product's saved values. The label is looked up on the loaded product, so the review always
+ * sees the evidence the row names.
+ */
+export const ReviewLabelNutritionAction: FunctionComponent<
+  CollectionActionProps<"product">
+> = ({ record: product, item }) => {
+  const label = product.labelImages.find(
+    (candidate) => candidate.id === item?.id,
   );
+  return label ? (
+    <LabelNutritionReview product={product} label={label} />
+  ) : null;
+};

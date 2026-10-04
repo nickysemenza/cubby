@@ -1,6 +1,5 @@
 import type { AiCacheMetadata, Confidence } from "@cubby/schemas/ai";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
-import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
 import type { FC } from "react";
 
 import { VerbButton } from "~/entity/actions/action-verb-ui";
@@ -12,7 +11,7 @@ import {
 import { useAiProposal } from "~/features/ai/use-ai-proposal";
 import { ai } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
-import { Row, Stack } from "~/ui/layout";
+import { Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
 
 interface AiDescriptionSectionProps {
@@ -30,7 +29,8 @@ interface DescriptionReview {
 }
 
 /**
- * "What is in this bin?", answered from the location's photos.
+ * "What is in this bin?", answered from the location's photos. The `ai-description`
+ * collection section lists the saved description; this is its analyze action.
  *
  * The result is reviewed rather than dropped in silently: the card shows the
  * previous description beside the new one, so a re-analysis that lost a detail
@@ -127,16 +127,6 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
           onAccept={dismiss}
           onDismiss={dismiss}
         />
-      )}
-
-      {!review && currentDescription && (
-        <div className="border border-border bg-muted/30 p-4 text-sm">
-          <Row align="center" gap="sm" className="mb-1 text-muted-foreground">
-            <EyeIcon className="size-3" />
-            <span className="font-medium">AI description</span>
-          </Row>
-          <p>{currentDescription}</p>
-        </div>
       )}
     </Stack>
   );

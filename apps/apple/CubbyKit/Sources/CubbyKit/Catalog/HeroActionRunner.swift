@@ -8,6 +8,19 @@ public enum HeroActionError: Error, Equatable, Sendable {
     case missing(String)
     /// The plan names an operation or entity the runner has no typed handler for.
     case unsupported(String)
+    /// The server has nothing to act on yet (a label with no detected nutrition).
+    case unavailable(String)
+}
+
+extension HeroActionError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .confirmationRequired: "Confirm before running this action."
+        case .missing(let field): "Fill in \(field) first."
+        case .unsupported(let operation): "\(operation) is not available in this app."
+        case .unavailable(let reason): reason
+        }
+    }
 }
 
 /// What a finished hero action asks the screen to do next.
@@ -17,6 +30,9 @@ public enum HeroActionOutcome: Sendable, Equatable {
     case completed(String, changed: Set<EntityKey>)
     /// Open the generic editor (create mode) on `entity`, seeded with `prefill`.
     case editor(entity: EntityKey, prefill: [String: JSONValue], context: HeroEditorContext?)
+    /// Open the update editor on an existing record with `staged` values set for review; Save is
+    /// the only write.
+    case editRecord(entity: EntityKey, id: String, staged: [String: JSONValue])
 }
 
 /// The server's answer to "what will this do?" for a verb that has one.
@@ -24,6 +40,45 @@ public enum HeroActionPreview: Sendable {
     case discard(ProductDiscardPreviewOut)
     case addToInventory(ProductAddToInventoryPreviewOut)
     case deleteImpact(EntityConnectionsOut)
+    case launch(TargetedLaunchPreview)
+}
+
+/// What a targeted purchase-validation launch can replay: whether validation may start, why not,
+/// and the evidence sources to choose from.
+public struct TargetedLaunchPreview: Sendable, Equatable {
+    public struct Source: Sendable, Equatable, Identifiable {
+        public let id: String
+        public let label: String
+        public let kind: String
+        public let accountLabel: String?
+        public let usable: Bool
+        public let reason: String?
+        public let isDefault: Bool
+
+        public var detail: String {
+            [kind, accountLabel, reason].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        }
+    }
+
+    public let canValidate: Bool
+    public let reason: String?
+    public let sources: [Source]
+
+    init(_ output: RunTargetedLaunchOutput) throws {
+        let purchase = try JSONValue(encoding: output)["purchase"]
+        canValidate = purchase?["canValidate"]?.boolValue ?? false
+        reason = purchase?["reason"]?.stringValue
+        sources = (purchase?["sources"]?.arrayValue ?? []).compactMap { source in
+            guard let id = source["id"]?.stringValue, let label = source["label"]?.stringValue else {
+                return nil
+            }
+            return Source(
+                id: id, label: label, kind: source["kind"]?.stringValue ?? "",
+                accountLabel: source["vendorAccountLabel"]?.stringValue,
+                usable: source["usable"]?.boolValue ?? false, reason: source["reason"]?.stringValue,
+                isDefault: source["default"]?.boolValue ?? false)
+        }
+    }
 }
 
 /// The one generic native path for manifest hero actions. The verb picks a `HeroActionPlan`
@@ -39,6 +94,15 @@ public struct HeroActionRunner: Sendable {
     }
 
     // MARK: - Verb to plan
+
+    /// The plan for a collection-section verb on `entity`, or nil outside the plan's entity gate.
+    public static func plan(for action: CollectionActionID, on entity: EntityKey) -> HeroActionPlan? {
+        guard let plan = NativeCoverageManifest.shared.collectionActionPlan[action.rawValue] else {
+            return nil
+        }
+        if let entities = plan.entities, !entities.contains(entity) { return nil }
+        return plan
+    }
 
     /// The plan for `verb` on `entity`, or nil when the verb is not implemented natively
     /// (`edit`, `bulkEdit`) or the entity is outside the plan's gate.
@@ -60,9 +124,12 @@ public struct HeroActionRunner: Sendable {
     }
 
     /// Operation ids with a typed handler in `perform`, and previews in `preview`.
-    public static let handledOperations: Set<String> = ["product.discard", "inventory.bulkAdd"]
+    public static let handledOperations: Set<String> = [
+        "product.discard", "inventory.bulkAdd", "ai.describeLocation", "image.attachExisting",
+        "imageProcessing.status", "run.startTargeted",
+    ]
     public static let handledPreviews: Set<String> = [
-        "product.discardPreview", "product.addToInventoryPreview",
+        "product.discardPreview", "product.addToInventoryPreview", "run.targetedLaunch",
     ]
 
     // MARK: - Form
@@ -115,15 +182,32 @@ public struct HeroActionRunner: Sendable {
         return normalized
     }
 
-    /// Replaces `$row.id` and `$field.<key>` slots in a plan template; every other string is literal.
-    public static func fill(_ template: JSONValue, rowID: String, values: [String: JSONValue]) -> JSONValue {
+    /// Replaces `$row.id`, `$item.id` (the tapped collection row) and `$field.<key>` slots in a
+    /// plan template; every other string is literal.
+    public static func fill(
+        _ template: JSONValue, rowID: String, itemID: String? = nil, values: [String: JSONValue]
+    ) -> JSONValue {
         switch template {
         case .string("$row.id"): return .string(rowID)
+        case .string("$item.id"): return itemID.map(JSONValue.string) ?? .null
         case .string(let text) where text.hasPrefix("$field."):
             return values[String(text.dropFirst("$field.".count))] ?? .null
-        case .array(let items): return .array(items.map { fill($0, rowID: rowID, values: values) })
-        case .object(let fields): return .object(fields.mapValues { fill($0, rowID: rowID, values: values) })
+        case .array(let items):
+            return .array(items.map { fill($0, rowID: rowID, itemID: itemID, values: values) })
+        case .object(let fields):
+            return .object(fields.mapValues { fill($0, rowID: rowID, itemID: itemID, values: values) })
         default: return template
+        }
+    }
+
+    /// Why the record cannot take the plan yet (the plan's `requires` is unmet), or nil when it can.
+    public static func unmet(_ plan: HeroActionPlan, in raw: JSONValue) -> String? {
+        guard let requirement = plan.operation?.requires else { return nil }
+        switch raw.pathValue(requirement.path) {
+        case nil, .null?: return requirement.reason
+        case .array(let items)?: return items.isEmpty ? requirement.reason : nil
+        case .string(let text)?: return text.isEmpty ? requirement.reason : nil
+        default: return nil
         }
     }
 
@@ -138,14 +222,15 @@ public struct HeroActionRunner: Sendable {
 
     /// The server's preview for this plan with the current form values; nil when it has none.
     public func preview(
-        _ plan: HeroActionPlan, on entity: EntityKey, rowID: String, values: [String: JSONValue]
+        _ plan: HeroActionPlan, on entity: EntityKey, rowID: String, itemID: String? = nil,
+        values: [String: JSONValue]
     ) async throws -> HeroActionPreview? {
         switch plan.kind {
         case .delete:
             return .deleteImpact(try await client.physicalConnections(id: rowID, previewDelete: true))
         case .operation(let operation):
             guard let preview = operation.preview else { return nil }
-            let body = Self.fill(preview.body, rowID: rowID, values: values)
+            let body = Self.fill(preview.body, rowID: rowID, itemID: itemID, values: values)
             switch preview.operation {
             case "product.discardPreview":
                 return .discard(
@@ -158,6 +243,17 @@ public struct HeroActionRunner: Sendable {
                 return .addToInventory(
                     try await client.addToInventoryPreview(
                         .init(productId: rowID, locationId: body["locationId"]?.stringValue)))
+            case "run.targetedLaunch":
+                guard let targetID = body["targetId"]?.stringValue else {
+                    throw HeroActionError.missing("targetId")
+                }
+                let enrichment = body["purpose"]?.stringValue == "product_enrichment"
+                return .launch(
+                    try TargetedLaunchPreview(
+                        try await client.targetedRunLaunch(
+                            .init(
+                                purpose: enrichment ? .productEnrichment : .purchaseValidation,
+                                targetId: targetID))))
             default: throw HeroActionError.unsupported(preview.operation)
             }
         case .create, .setField, .toggleField:
@@ -171,8 +267,8 @@ public struct HeroActionRunner: Sendable {
     /// screen sets it only after the person taps the confirmation button.
     @discardableResult
     public func perform(
-        _ plan: HeroActionPlan, on entity: EntityKey, row: EntityRow, values: [String: JSONValue],
-        confirmed: Bool
+        _ plan: HeroActionPlan, on entity: EntityKey, row: EntityRow, itemID: String? = nil,
+        values: [String: JSONValue], confirmed: Bool
     ) async throws -> HeroActionOutcome {
         if plan.confirmation == .destructive, !confirmed { throw HeroActionError.confirmationRequired }
         let descriptor = EntityCatalog[entity]
@@ -182,7 +278,7 @@ public struct HeroActionRunner: Sendable {
             return .completed("\(descriptor.singular) deleted", changed: [entity])
         case .operation(let operation):
             let resolved = try Self.resolvedValues(operation.fields, values: values)
-            let body = Self.fill(operation.body, rowID: row.id, values: resolved)
+            let body = Self.fill(operation.body, rowID: row.id, itemID: itemID, values: resolved)
             switch operation.operation {
             case "product.discard":
                 let result = try await client.discardProduct(try body.decoded())
@@ -196,6 +292,19 @@ public struct HeroActionRunner: Sendable {
                     result.mergedCount == 0
                         ? "Added to inventory" : "Added to inventory; merged into stock already there",
                     changed: [entity, .inventory, .location])
+            case "ai.describeLocation":
+                _ = try await client.describeLocation(try body.decoded())
+                return .completed("Location analyzed", changed: [entity])
+            case "image.attachExisting":
+                return try await attachExistingImage(body, changed: entity)
+            case "imageProcessing.status":
+                guard let itemID, let continuation = operation.continueWith else {
+                    throw HeroActionError.missing("id")
+                }
+                return try await reviewDetectedValue(
+                    row: row, entity: entity, imageID: itemID, continuation: continuation)
+            case "run.startTargeted":
+                return try await startTargetedRun(body)
             default: throw HeroActionError.unsupported(operation.operation)
             }
         case .create(let target, let seed, let editor):
@@ -216,5 +325,66 @@ public struct HeroActionRunner: Sendable {
                 descriptor, id: row.id, patch: EntityPatch(values: [field: .bool(!isSet)]))
             return .completed("\(descriptor.singular) updated", changed: [entity])
         }
+    }
+
+    // MARK: - Collection actions
+
+    /// Attaches an existing image to a record. A purpose (item photo or label) only applies to a
+    /// Product, and the server rejects it on any other record, so it is dropped for the rest.
+    private func attachExistingImage(_ body: JSONValue, changed: EntityKey) async throws -> HeroActionOutcome
+    {
+        var fields = body.objectValue ?? [:]
+        let target = fields["targetId"]?.stringValue?.trimmingCharacters(in: .whitespaces).uppercased()
+        guard let target, !target.isEmpty else { throw HeroActionError.missing("targetId") }
+        fields["targetId"] = .string(target)
+        if EntityCatalog.descriptor(forShortcode: target)?.key != .product { fields["purpose"] = .null }
+        let result = try await client.attachExistingImage(try JSONValue.object(fields).decoded())
+        let reused = try JSONValue(encoding: result)["reused"]?.boolValue == true
+        var touched: Set<EntityKey> = [changed]
+        if let key = EntityCatalog.descriptor(forShortcode: target)?.key { touched.insert(key) }
+        return .completed(reused ? "Image was already attached" : "Image attached", changed: touched)
+    }
+
+    /// Reads the image's preferred analysis and stages the detected value on the record's editor.
+    /// Nothing is written until the person saves the reviewed values.
+    private func reviewDetectedValue(
+        row: EntityRow, entity: EntityKey, imageID: String, continuation: HeroOperationPlan.Continuation
+    ) async throws -> HeroActionOutcome {
+        guard case .editRecord(let field) = continuation else {
+            throw HeroActionError.unsupported("continuation")
+        }
+        let status = try JSONValue(
+            encoding: try await client.imageProcessingStatus(.init(id: .init(imageID))))
+        let detected = try Self.detectedValue(in: status, imageID: imageID, saved: row.raw[field])
+        return .editRecord(entity: entity, id: row.id, staged: [field: detected])
+    }
+
+    /// The nutrition facts of an image's preferred analysis, stamped with the evidence they came
+    /// from (`Package label <id> · analysis <time>`), as a value to stage on the record. Refuses
+    /// when the image has none yet, or when the record already carries this very analysis (the
+    /// same rule web uses to hide its review button).
+    static func detectedValue(in status: JSONValue, imageID: String, saved: JSONValue?) throws -> JSONValue {
+        guard
+            let analysis = status["analyses"]?.arrayValue?.first(where: { $0["preferred"]?.boolValue == true }
+            ),
+            var facts = analysis["result"]?["nutritionFacts"]?.objectValue
+        else { throw HeroActionError.unavailable("No nutrition has been detected on this label yet.") }
+        let source = "Package label \(imageID) · analysis \(analysis["createdAt"]?.stringValue ?? "")"
+        if saved?["source"]?.stringValue == source {
+            throw HeroActionError.unavailable("This label's detected nutrition is already saved.")
+        }
+        facts["source"] = .string(source)
+        return .object(facts)
+    }
+
+    private func startTargetedRun(_ body: JSONValue) async throws -> HeroActionOutcome {
+        let result = try JSONValue(encoding: try await client.startTargetedRun(try body.decoded()))
+        let runs = result["runs"]?.arrayValue ?? []
+        if let blocking = runs.compactMap({ $0["blockingRun"] }).first(where: { $0 != .null }) {
+            let id = blocking["id"]?.stringValue ?? "another run"
+            throw HeroActionError.unavailable(
+                "\(id) (\(blocking["status"]?.stringValue ?? "running")) is already using this account.")
+        }
+        return .completed("Validation started", changed: [.run, .purchase])
     }
 }

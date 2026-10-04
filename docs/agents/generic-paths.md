@@ -19,10 +19,15 @@ existing block. Extend the generic path when it almost fits. See
 - Detail pages: generic detail with declared slots (`app/*/slots.tsx`).
 - Slot reports: a slot that is figures, series, a table or dated rows reads
   `entityReport.get` (`server/repo/entity-report/`; block kinds `stats`,
-  `chart`, `table`, `schedule`, `note` in `packages/schemas/src/entity-report.ts`).
+  `chart`, `table`, `schedule`, `note`, `records` in `packages/schemas/src/entity-report.ts`).
   Web draws them with `ReportBlocks` (`entity/entity-detail/report-slot.tsx`),
   native with `ReportDetailSlot`/`ReportPresentation`; add a slot id and a
-  builder, never client-side derivation.
+  builder, never client-side derivation. A `records` block is rows that are
+  records of their own (label, thumbnail, badges, a record to open) with verbs
+  from `COLLECTION_ACTION_SCOPES`: web fills each verb in
+  `entity-detail/collection-actions.tsx`, native runs its plan in
+  `nativeCollectionActionPlans` through `HeroActionRunner`. Rows are worded in
+  `server/repo/collection-items.ts`.
 - Swift: generated OpenAPI client, `entity-manifest.json`, and the generic list
   and detail views; no hand-written mapping layer.
 

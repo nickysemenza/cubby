@@ -60,6 +60,7 @@ const detectedInventoryWithProvenance = detectedInventorySchema.extend({
 
 export const aiContract = defineContract("ai", {
   describeLocation: mutation({
+    native: "Analyze a location's photos from its AI description section",
     input: aiLocationIdInput,
     output: locationDescriptionWithProvenance,
     invalidates: ["location"],

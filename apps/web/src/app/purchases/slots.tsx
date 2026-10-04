@@ -1,15 +1,13 @@
 import type { PurchaseProductOut } from "@cubby/schemas/purchase";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { type FunctionComponent, useState } from "react";
 
-import type { RunSummary } from "~/contracts/run.contract";
+import type { CollectionActionProps } from "~/entity/entity-detail/collection-actions";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { RelationshipSummaryTable } from "~/entity/relationships/relationship-summary-table";
-import {
-  run as runOperations,
-  purchase as purchaseOperations,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
@@ -21,7 +19,6 @@ import { StatusText } from "~/ui/primitives/status-text";
 import { FinancialSettlement } from "./financial-settlement";
 import { LinkExpensesDialog } from "./link-expenses-dialog";
 import { LinkProductsDialog } from "./link-products-dialog";
-import { runHref } from "./purchase-import-links";
 import {
   purchaseReconciliationStatus,
   ReconciliationStatus,
@@ -85,85 +82,21 @@ export const PurchaseOrderMail: DetailSlotComponent<"purchase"> = ({
   );
 };
 
-/** Runs are linked through their AuditLog rows, so replay-only source claims do not appear here. */
-export const Runs: DetailSlotComponent<"purchase"> = ({ record: purchase }) => {
-  const runsQuery = useQuery(
-    runOperations.history.queryOptions({ purchaseId: purchase.id }),
-  );
+/** Import runs are linked through their AuditLog rows; the server's report lists them. */
+export const Runs: DetailSlotComponent<"purchase"> = ({ record: purchase }) => (
+  <EntityReportSlot slot="purchase.runs" id={purchase.id} record={purchase} />
+);
 
-  const startValidation = (
-    <TargetedImportLaunchButton
-      targetId={purchase.id}
-      targetLabel={purchaseLabel(purchase)}
-      purpose="purchase_validation"
-    />
-  );
-  if (runsQuery.isLoading)
-    return (
-      <Stack gap="sm">
-        {startValidation}
-        <StatusText>Loading import runs…</StatusText>
-      </Stack>
-    );
-  if (runsQuery.isError)
-    return (
-      <Stack gap="sm">
-        {startValidation}
-        <StatusText tone="destructive">{runsQuery.error.message}</StatusText>
-      </Stack>
-    );
-  const runs = runsQuery.data?.runs ?? [];
-  if (runs.length === 0) {
-    return (
-      <Stack gap="sm">
-        {startValidation}
-        <StatusText>
-          No import run has been recorded for this purchase.
-        </StatusText>
-      </Stack>
-    );
-  }
-  return (
-    <Stack gap="sm">
-      {startValidation}
-      <div className="grid gap-3">
-        {runs.map((run) => (
-          <RunSummary key={run.publicId} run={run} />
-        ))}
-      </div>
-    </Stack>
-  );
-};
-
-function RunSummary({ run }: { run: RunSummary }) {
-  return (
-    <div className="grid gap-1 border-b border-border pb-3 text-sm last:border-0 last:pb-0">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <span className="font-medium">
-          {run.vendorName ?? run.vendorAccountLabel ?? "Purchase import"}
-        </span>
-        <span className="text-muted-foreground">
-          {run.purpose ? `${run.purpose.replaceAll("_", " ")} · ` : ""}
-          {run.status}
-        </span>
-      </div>
-      <div className="text-muted-foreground">
-        {formatInstant(run.startedAt, "dateTime")} · {run.trigger} ·{" "}
-        {run.ordersSeen} seen · {run.imported} imported · {run.updated} updated
-        · {run.skipped} skipped
-      </div>
-      {run.failureCode ? (
-        <div className="text-destructive">{run.failureCode}</div>
-      ) : null}
-      <a
-        className="w-fit text-xs font-medium text-primary hover:underline"
-        href={runHref(run.publicId)}
-      >
-        Open import run
-      </a>
-    </div>
-  );
-}
+/** Launch action of the runs report. */
+export const ValidatePurchaseAction: FunctionComponent<
+  CollectionActionProps<"purchase">
+> = ({ record: purchase }) => (
+  <TargetedImportLaunchButton
+    targetId={purchase.id}
+    targetLabel={purchaseLabel(purchase)}
+    purpose="purchase_validation"
+  />
+);
 
 /** Spend on this purchase's lines, rolled up by the project they belong to. */
 export const PurchaseProjectAllocation: DetailSlotComponent<"purchase"> = ({

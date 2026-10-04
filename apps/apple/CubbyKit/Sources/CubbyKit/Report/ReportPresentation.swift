@@ -112,7 +112,30 @@ public struct ReportPresentation: Hashable, Sendable {
         }
     }
 
+    /// A record-bearing row: the server's words, a thumbnail, short badges, an instant the
+    /// client prints in its own locale, and the record the row opens.
+    public struct RecordRow: Hashable, Sendable, Identifiable {
+        public let id: Int
+        public let entity: EntityKey?
+        public let recordID: String?
+        public let title: String
+        public let subtitle: String?
+        public let trailing: String?
+        public let imageURL: URL?
+        public let badges: [String]
+        public let at: Date?
+    }
+
+    /// Rows that are records of their own, with the verbs the slot offers (`CollectionActionID`).
+    public struct Records: Hashable, Sendable {
+        public let title: String?
+        public let rows: [RecordRow]
+        public let empty: String
+        public let actions: [CollectionActionID]
+    }
+
     public enum Block: Hashable, Sendable {
+        case records(Records)
         case stats(title: String?, figures: [Figure])
         case chart(Chart)
         case table(Table)
@@ -177,6 +200,20 @@ public struct ReportPresentation: Hashable, Sendable {
                     }))
         case .note(let note):
             return .note(note.text)
+        case .records(let records):
+            return .records(
+                Records(
+                    title: records.title,
+                    rows: records.rows.enumerated().map { index, row in
+                        RecordRow(
+                            id: index, entity: row.entity.flatMap(EntityKey.init(rawValue:)),
+                            recordID: row.id, title: row.title, subtitle: row.subtitle,
+                            trailing: row.trailing, imageURL: row.imageUrl.flatMap(URL.init(string:)),
+                            badges: row.badges ?? [], at: row.at.flatMap(instant))
+                    },
+                    empty: records.empty,
+                    actions: (records.actions ?? []).compactMap { CollectionActionID(rawValue: $0.rawValue) })
+            )
         }
     }
 
@@ -184,6 +221,15 @@ public struct ReportPresentation: Hashable, Sendable {
     private static func text(_ value: Double?, money: Bool) -> String {
         guard let value else { return "—" }
         return money ? value.usd : String(Int(value.rounded()))
+    }
+
+    /// An ISO-8601 instant with or without fractional seconds.
+    private static func instant(_ text: String) -> Date? {
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return withFraction.date(from: text) ?? plain.date(from: text)
     }
 
     /// A household calendar day (`yyyy-MM-dd`) as the start of that day in UTC.

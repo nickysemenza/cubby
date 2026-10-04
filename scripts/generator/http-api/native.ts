@@ -7,6 +7,7 @@ import { generatedEntityFieldModels } from "../../../packages/schemas/src/genera
 import {
   type HeroActionBodyValue,
   type NativeHeroActionPlan,
+  nativeCollectionActionPlans,
   nativeHeroActionPlans,
 } from "../../../packages/schemas/src/native-coverage.ts";
 import { generatedHeader, yamlGeneratedHeader } from "../artifacts.ts";
@@ -193,9 +194,18 @@ const bodyProperties = (
       ? undefined
       : operationBodyRef(context.document, entry.route, entry.method);
   const body = ref === undefined ? undefined : context.components[ref];
-  return body !== undefined && isObjectSchema(body)
-    ? new Set(Object.keys(body.properties ?? {}))
-    : null;
+  if (body === undefined || !isObjectSchema(body)) return null;
+  // A discriminated union (`run.startTargeted`) declares its keys on its members.
+  const members = (body.oneOf ?? []).flatMap((member) => {
+    const memberRef = isObjectSchema(member) ? member.$ref : undefined;
+    const schema = memberRef?.split("/").pop();
+    const resolved =
+      schema === undefined ? undefined : context.components[schema];
+    return resolved !== undefined && isObjectSchema(resolved)
+      ? Object.keys(resolved.properties ?? {})
+      : [];
+  });
+  return new Set([...Object.keys(body.properties ?? {}), ...members]);
 };
 
 const checkOperationPlan = (
@@ -217,10 +227,10 @@ const checkOperationPlan = (
   const templates = [plan.body, plan.preview?.body ?? null];
   for (const template of templates)
     for (const slot of JSON.stringify(template).match(
-      /\$(?:row|field)\.[A-Za-z]+/gu,
+      /\$(?:row|item|field)\.[A-Za-z]+/gu,
     ) ?? []) {
       const [prefix, name] = slot.slice(1).split(".");
-      if (prefix === "row" ? name !== "id" : !fields.has(name ?? ""))
+      if (prefix === "field" ? !fields.has(name ?? "") : name !== "id")
         problems.push(`${verb}: body slot ${slot} has no field`);
     }
   const toggles = new Set(
@@ -280,6 +290,15 @@ const checkHeroActionPlans = (context: PlanContext) => {
       .filter((id) => !context.generatedOperationIds.has(id))
       .map((id) => `${verb}: ${id} is not on the generated client`);
   });
+  const collectionPlans: Readonly<Record<string, NativeHeroActionPlan>> =
+    nativeCollectionActionPlans;
+  problems.push(
+    ...Object.entries(collectionPlans).flatMap(([verb, plan]) =>
+      plan.kind === "operation"
+        ? checkOperationPlan(context, `collection ${verb}`, plan)
+        : [`collection ${verb}: only operation plans run from a collection`],
+    ),
+  );
   if (problems.length > 0)
     throw new Error(
       `nativeHeroActionPlans is invalid:\n${problems.join("\n")}`,

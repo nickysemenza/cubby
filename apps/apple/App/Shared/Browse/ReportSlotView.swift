@@ -14,6 +14,8 @@ struct ReportDetailSlot: View {
 
     let slot: ReportSlot
     let id: String
+    /// The record the slot belongs to; a `records` block's verbs act on it.
+    var host: ReportHost?
     @Environment(AppModel.self) private var appModel
     @State private var phase: Phase = .loading
 
@@ -28,10 +30,10 @@ struct ReportDetailSlot: View {
                     Button("Retry") { Task { await load() } }
                 }
             case .loaded(let report):
-                ReportBlocksView(report: report)
+                ReportBlocksView(report: report, host: host)
             }
         }
-        .task(id: id) { await load() }
+        .task(id: "\(id):\(appModel.entityMutationRevision)") { await load() }
     }
 
     private func load() async {
@@ -49,6 +51,7 @@ struct ReportDetailSlot: View {
 
 struct ReportBlocksView: View {
     let report: ReportPresentation
+    var host: ReportHost?
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
@@ -58,6 +61,7 @@ struct ReportBlocksView: View {
                 case .chart(let chart): ReportChartView(chart: chart)
                 case .table(let table): ReportTableView(table: table)
                 case .schedule(let schedule): ReportScheduleView(schedule: schedule)
+                case .records(let records): RecordsBlockView(records: records, host: host)
                 case .note(let text):
                     Text(text).font(.footnote).foregroundStyle(.secondary)
                 }

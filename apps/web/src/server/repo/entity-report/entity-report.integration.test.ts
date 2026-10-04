@@ -39,7 +39,7 @@ describe("entity report", () => {
     slot: Parameters<typeof buildEntityReport>[1]["slot"],
     id: string,
   ) => {
-    const out = await buildEntityReport(ctx.db, { slot, id });
+    const out = await buildEntityReport(ctx.db, { slot, id }, async () => null);
     // The wire contract must accept what the builder produces.
     return entityReportOut.parse(out).blocks;
   };
@@ -398,10 +398,14 @@ describe("entity report", () => {
       name: "Wrong entity fixture",
     });
     await expect(
-      buildEntityReport(ctx.db, {
-        slot: "project.budget",
-        id: parseShortcodeFor("meal", meal.shortcode),
-      }),
+      buildEntityReport(
+        ctx.db,
+        {
+          slot: "project.budget",
+          id: parseShortcodeFor("meal", meal.shortcode),
+        },
+        async () => null,
+      ),
     ).rejects.toThrow(/project|prefix|shortcode/i);
   });
 });

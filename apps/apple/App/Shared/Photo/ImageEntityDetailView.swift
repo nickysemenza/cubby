@@ -30,7 +30,7 @@ struct ImageEntityDetailView: View {
                 switch tab {
                 case .photo:
                     PhotoTab(
-                        detail: detail, appModel: appModel,
+                        detail: detail, appModel: appModel, onChanged: { Task { await load() } },
                         preferredAnalysis: processing.preferred,
                         history: processing.entries,
                         totalAnalyses: processing.total, jobs: jobs.runs, totalJobs: jobs.total,
@@ -130,6 +130,8 @@ struct ImageEntityDetailView: View {
 private struct PhotoTab: View {
     let detail: ImageWithEntity
     let appModel: AppModel
+    /// Reloads the image after a verb on its sections changed it.
+    let onChanged: () -> Void
     let preferredAnalysis: ImageDescriptionAnalysis?
     let history: [ImageAnalysisHistoryEntry]
     let totalAnalyses: Int
@@ -215,21 +217,10 @@ private struct PhotoTab: View {
             }
         }
         Section("Used in") {
-            if detail.associations.isEmpty {
-                Text("No current associations").foregroundStyle(.secondary)
-            }
-            ForEach(detail.associations) { association in
-                if let key = association.key {
-                    NavigationLink(value: Route.entityDetail(key, id: association.entityId)) {
-                        VStack(alignment: .leading) {
-                            Label(association.entityName, systemImage: entitySymbol(for: key))
-                            Text(association.role.rawValue).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                } else {
-                    Link(association.entityName, destination: appModel.webURL(for: association.entityId))
-                }
-            }
+            ReportDetailSlot(
+                slot: .image_associations, id: detail.id.rawValue,
+                host: EntityCatalog[.image].row(from: (try? JSONValue(encoding: detail)) ?? .null)
+                    .map { ReportHost(entity: .image, row: $0, onChanged: onChanged) })
         }
     }
 
