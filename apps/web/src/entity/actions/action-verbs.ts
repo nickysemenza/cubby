@@ -1,8 +1,6 @@
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
 import { ArrowsSplitIcon } from "@phosphor-icons/react/dist/csr/ArrowsSplit";
-import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
-import { CameraIcon } from "@phosphor-icons/react/dist/csr/Camera";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
@@ -70,8 +68,6 @@ export interface ActionVerb {
 
 export const actionVerbs = {
   // — navigation ————————————————————————————————————————————————————
-  recount: { label: "Recount", icon: BarcodeIcon },
-  photoPass: { label: "Photo pass", icon: CameraIcon },
   printLabel: { label: "Print label", icon: PrinterIcon },
   printLabels: { label: "Print labels", icon: PrinterIcon },
   addToInventory: { label: "Add to inventory", icon: PackageIcon },

@@ -293,11 +293,12 @@ See also the image operational passes at the end of this file.
   `SourceRefsField` and the recipe form's meta/yield inputs in favour of the
   generic `StructuredValueField` (it already reads the same `valueSchema`).
 
-- ⏳ **Retire native-owned web fieldwork and PWA installation.** After native
-  parity ships and passes real-device validation, remove web barcode/QR
-  controls, `/scan`, the sweep UI, superseded recount and location photo-pass
-  routes, and PWA assets. Handle unfinished browser-local passes and old links
-  first; keep record links, photo upload, and the scan/reconcile APIs.
+- ⏳ **Native recipe Share extension.** An iOS and macOS share-sheet extension
+  that sends a shared recipe URL to the existing server recipe import, reading
+  the session token from a Keychain access group shared with the app. Promote
+  when sharing recipes from the phone is wanted. Retiring the web manifest
+  dropped `share_target` from installed Chromium/Android PWAs only; iOS Safari
+  never supported Web Share Target, so nothing iOS-facing was lost.
 
 - ⏳ **Core native inventory experience.** Promote when everyday use exposes a
   specific bottleneck: location-first browsing, stock comparison,

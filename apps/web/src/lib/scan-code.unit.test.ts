@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  resolveLocationScan,
-  resolveProductScan,
-  resolveScanCode,
-} from "./scan-code";
+import { resolveProductScan, resolveScanCode } from "./scan-code";
 
 describe("resolveScanCode", () => {
   it.each([
@@ -61,38 +57,6 @@ describe("resolveScanCode", () => {
     const result = resolveScanCode(raw);
     // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
     if (!result.ok) expect(result.error).toContain(message);
-  });
-});
-
-describe("resolveLocationScan", () => {
-  it.each([
-    ["LOC-4K7M", "LOC-4K7M"],
-    [" loc-4k7m ", "LOC-4K7M"],
-    ["https://cubby.example.com/LOC-4K7M", "LOC-4K7M"],
-    ["https://cubby.example.com/L-4K7M", "LOC-4K7M"],
-  ])("accepts the location label %s", (raw, shortcode) => {
-    expect(resolveLocationScan(raw)).toEqual({ ok: true, value: shortcode });
-  });
-
-  it("names what was scanned, not just what was wanted", () => {
-    expect(resolveLocationScan("PRD-4K7M")).toEqual({
-      ok: false,
-      reason: "wrong-kind",
-      error: "That's a product label — point at a location QR.",
-    });
-    expect(resolveLocationScan("012345678905")).toEqual({
-      ok: false,
-      reason: "wrong-kind",
-      error: "That's a product barcode — point at a location QR.",
-    });
-  });
-
-  it("passes through the resolver's own rejection", () => {
-    expect(resolveLocationScan("not a code")).toEqual({
-      ok: false,
-      reason: "unrecognized",
-      error: "Use a Cubby shortcode, UPC/EAN/GTIN barcode, or valid ISBN.",
-    });
   });
 });
 

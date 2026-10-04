@@ -56,7 +56,7 @@ export function LocationDestinationPicker({
 
 /**
  * The one "pick a destination location" dialog for single-subject moves (the
- * arrange surface's Move to… and the recount session's move). It only chooses
+ * arrange surface's Move to…). It only chooses
  * and validates a destination; the caller owns the mutation.
  *
  * Mount it only while open: the location search stays off the caller's

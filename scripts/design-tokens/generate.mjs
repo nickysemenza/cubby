@@ -143,17 +143,6 @@ function main() {
     renderMetricsSwift(values),
     check,
   );
-  const manifestPath = join(root, "apps/web/public/manifest.json");
-  let manifest = readFileSync(manifestPath, "utf8");
-  for (const key of ["theme_color", "background_color"]) {
-    const pattern = new RegExp(`("${key}"\\s*:\\s*")[^"]+(")`);
-    if (!pattern.test(manifest)) throw new Error(`Missing PWA manifest ${key}`);
-    manifest = manifest.replace(
-      pattern,
-      `$1${colors.canvas.light.toLowerCase()}$2`,
-    );
-  }
-  sync(manifestPath, manifest, check);
   for (const [asset, role] of Object.entries(assetRoles)) {
     const path = join(
       root,

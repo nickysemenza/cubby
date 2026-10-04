@@ -54,7 +54,7 @@ describe("workspace navigation contract", () => {
 
     expect(more.children).toContain(settingsNavItem);
     expect(more.children.map((item) => item.label)).toEqual(
-      expect.arrayContaining(["Scan", "Labels", "Problems"]),
+      expect.arrayContaining(["Labels", "Problems"]),
     );
     expect(getSidebarGroupItems(more)).not.toContain(settingsNavItem);
   });

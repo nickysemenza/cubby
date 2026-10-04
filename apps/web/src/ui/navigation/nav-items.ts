@@ -1,5 +1,4 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
-import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
 import { DatabaseIcon } from "@phosphor-icons/react/dist/csr/Database";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
@@ -29,8 +28,6 @@ import type { WayfindingDomain } from "./domain-wayfinding";
 export type NavItem = {
   to: LinkProps["to"];
   entity?: BrowserRoutedEntity;
-  /** Static search params — only the scanner shortcut needs these today. */
-  search?: Readonly<Record<string, string | undefined>>;
   label: string;
   icon: Icon;
 };
@@ -78,11 +75,6 @@ const inventory: NavItem = {
   entity: "inventory",
   label: "Inventory",
   icon: entities.inventory.phosphorIcon,
-};
-const scan: NavItem = {
-  to: "/scan",
-  label: "Scan",
-  icon: BarcodeIcon,
 };
 export const settingsNavItem: NavItem = {
   to: "/settings",
@@ -141,7 +133,6 @@ export const desktopNav: NavNode[] = [
     icon: DotsThreeIcon,
     tier: "utility",
     children: [
-      scan,
       { to: "/labels", label: "Labels", icon: QrCodeIcon },
       { to: "/problems", label: "Problems", icon: WarningIcon },
       { to: "/activity", label: "Activity", icon: PulseIcon },
@@ -203,7 +194,6 @@ export const mobileHouseholdItems: NavItem[] = [
   homeNavItem,
   activityDirectoryNavItem,
   recordDirectoryNavItem,
-  leafAt("/inventory/session"),
   leafAt("/locations"),
   leafAt("/calendar"),
   leafAt("/meals"),
@@ -223,11 +213,10 @@ export const workspaceUtilitySections: NavSection[] = [
   })),
 ];
 
-/** Four persistent task destinations; the More trigger is the fifth tab. */
+/** Three persistent task destinations; the More trigger is the fourth tab. */
 export const bottomNavItems: NavItem[] = [
   { to: "/", label: "Today", icon: HouseIcon },
   inventory,
-  scan,
   { to: "/search", label: "Search", icon: MagnifyingGlassIcon },
 ];
 

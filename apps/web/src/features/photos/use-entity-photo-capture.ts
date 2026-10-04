@@ -1,9 +1,7 @@
 /**
  * Capture a gallery entity's photo straight from the camera, with no entity
- * form in the way. The one place the upload→attach→cover sequence lives: the
- * location photo pass, the scanned-bin landing, the recount session's capture
- * pane, and any `EntityPhotosSection` add-photo affordance all call this
- * (directly, or through `useLocationPhotoCapture`'s thin wrapper).
+ * form in the way. The one place the upload→attach→cover sequence lives: any
+ * `EntityPhotosSection` add-photo affordance calls this.
  *
  * Three steps, and the ordering of the last two is load-bearing:
  *

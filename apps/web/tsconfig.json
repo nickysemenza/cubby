@@ -2,7 +2,7 @@
   // `scripts/generator` runs under this tsconfig (`pnpm generate`), so it is
   // type-checked here rather than by the root project.
   "include": ["**/*.ts", "**/*.tsx", "../../scripts/generator/**/*.ts"],
-  "exclude": ["node_modules", "dist", "src/sw.ts"],
+  "exclude": ["node_modules", "dist"],
   "compilerOptions": {
     // The typecheck script uses one native checker to avoid duplicating the
     // large generic type graph. Measurements: docs/local-check-performance.md.

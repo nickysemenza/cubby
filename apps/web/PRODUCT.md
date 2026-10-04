@@ -28,7 +28,7 @@ Cubby joins recipes to specific stocked products, locations, prices, unit mappin
 ## Operating Context
 
 - Desktop use supports dense browsing, editing, comparison, planning, visualization, reconciliation, and project tracking.
-- The native iOS and macOS apps carry phone-first work in the physical household: barcode capture, photo import from the Photos library, deliberate inventory recounts, and on-device companion work such as subject lift. The installable PWA remains until native parity lets it retire; writes on every client require a network connection.
+- The native iOS and macOS apps carry phone-first work in the physical household: barcode capture, photo import from the Photos library, deliberate inventory recounts, and on-device companion work such as subject lift. The web app is not installable; writes on every client require a network connection.
 - AI agents work through the MCP server, which exposes the same entities, imports, and review flows as the web app.
 - Inventory truth is restored through an intentional recount rather than inferred from cooking or other activity.
 - Cookbook and EPUB import are rare, interactive workflows performed with a person watching. Unattended work — vendor purchase imports, Gmail order discovery, photo inventory batches, image description, and search indexing — runs as recorded Runs and background jobs with human review before durable writes.
@@ -58,7 +58,7 @@ Cubby joins recipes to specific stocked products, locations, prices, unit mappin
 - The product name is **Cubby**.
 - Cubby is an earnest daily-use household utility and a high-craft personal engineering playground, not a commercial service marketed to strangers.
 - Product language should be direct, practical, precise, and at home in the household rather than promotional or enterprise-oriented.
-- Existing Cubby marks and install assets live in `public/favicon.svg`, `public/apple-touch-icon.png`, and the PWA icon and splash assets under `public/`.
+- The Cubby mark lives in `public/favicon.svg`. The web app is not installable; the native apps carry the home-screen presence.
 
 ## Evidence on Hand
 
@@ -68,7 +68,6 @@ Cubby joins recipes to specific stocked products, locations, prices, unit mappin
 - `../../docs/terminology.md` is the canonical glossary for distinctions such as Vendor, Purchase, Expense, and settlement evidence.
 - `../../docs/todos.md` contains the authoritative product backlog and preserved design decisions.
 - The existing authenticated routes under `src/routes/` demonstrate the shipped inventory, recipe, meal, planning, project, garden, spending, import, reconciliation, search, USDA, and administration workflows.
-- `public/manifest.json` and the PWA assets under `public/` demonstrate the installable, iOS-focused web experience.
 - The repository contains no approved testimonials, customer claims, press, commercial metrics, or public benchmarks. Future work must not fabricate them.
 - Real household records, third-party names, financial details, order identifiers, addresses, screenshots, or other private production data must never appear in outward-facing copy, examples, fixtures, commits, pull requests, or other public artifacts.
 

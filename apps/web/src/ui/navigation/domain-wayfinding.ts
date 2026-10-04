@@ -12,7 +12,7 @@ export type { WayfindingDomain };
 /**
  * The entities whose records live on a line, from each declaration's
  * `presentation.domain`. Route roots below stay hand-listed: they include
- * workbench routes (`/scan`, `/calendar`) that belong to no entity.
+ * workbench routes (`/calendar`) that belong to no entity.
  */
 const entitiesOn = (domain: WayfindingDomain): readonly Entity[] =>
   allEntities.filter((entity) => entitySummary[entity].domain === domain);
@@ -48,7 +48,6 @@ export const DOMAIN_WAYFINDING = {
       "/products",
       "/inventory",
       "/locations",
-      "/scan",
       "/labels",
       "/collections",
       "/pantry-view",

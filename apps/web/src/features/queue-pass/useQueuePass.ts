@@ -22,9 +22,8 @@ import {
 /**
  * The canonical persisted shape of an in-flight pass.
  *
- * `extra` is an opaque per-flow blob — the recount session parks its staged
- * item resolutions and running summary there, while the photo pass has nothing
- * to add. Keeping it opaque is what lets one hook persist three flows without
+ * `extra` is an opaque per-flow blob a flow may park its own staged state in.
+ * Keeping it opaque is what lets one hook persist several flows without
  * knowing any of their domains.
  */
 export interface StoredQueuePass<TExtra> {
@@ -374,16 +373,4 @@ export function useQueuePass<TStop extends QueueStop, TExtra = undefined>({
     resumePass,
     startNewPass,
   };
-}
-
-/** Remove a scope's stored pass — call once its work is committed. */
-export function clearStoredQueuePass<TExtra>(
-  persistence: QueuePassPersistence<TExtra>,
-  scopeKey: string,
-): void {
-  try {
-    localStorage.removeItem(persistence.storageKey(scopeKey));
-  } catch {
-    // SILENT: best effort, as with the write.
-  }
 }

@@ -13,7 +13,6 @@ describe("mobile route descriptors", () => {
     ["/locations/new", "inventory"],
     ["/collections/CLR-TEST", "inventory"],
     ["/pantry-view", "inventory"],
-    ["/scan", "scan"],
     ["/search", "search"],
     ["/recipes/RCP-TEST", "more"],
     ["/settings", "more"],
@@ -30,10 +29,7 @@ describe("mobile route descriptors", () => {
   });
 
   it("marks only the intended viewport-owned flows immersive", () => {
-    expect(resolveMobileRoute("/scan").presentation).toBe("immersive");
-    expect(resolveMobileRoute("/inventory/session").presentation).toBe(
-      "immersive",
-    );
+    expect(resolveMobileRoute("/pantry-view").presentation).toBe("immersive");
     expect(resolveMobileRoute("/products/PRD-TEST").presentation).toBe(
       "standard",
     );

@@ -1,3 +1,4 @@
+import { parseShortcode } from "@cubby/shared";
 import type {
   EnsureQueryDataOptions,
   QueryClient,
@@ -30,6 +31,9 @@ export async function ensureDetailRecord<
    */
   requested?: { shortcode: string; href: string },
 ): Promise<void> {
+  // A segment that is not a shortcode at all (a retired route such as
+  // `/inventory/session`) is a 404, not a validation error from the query.
+  if (requested && !parseShortcode(requested.shortcode)) throw notFound();
   const record = await queryClient.ensureQueryData(options);
   if (!record) throw notFound();
   if (!requested) return;

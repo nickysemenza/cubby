@@ -24,7 +24,7 @@ public enum LookupOutcome: Sendable, Hashable {
     case text(String)
 }
 
-/// Resolves one value the way the web `/scan` page does, minus the create: Cubby labels first
+/// Resolves one scanned value without creating anything: Cubby labels first
 /// (any entity, so a `LOC-` label opens the location rather than being refused as "wrong
 /// kind"), then a barcode/ISBN against existing products, else plain text. Pure until a
 /// barcode needs the server; a label never makes a request.

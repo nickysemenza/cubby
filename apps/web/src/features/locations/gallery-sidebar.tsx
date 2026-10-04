@@ -5,13 +5,18 @@ import { SidebarIcon } from "@phosphor-icons/react/dist/csr/Sidebar";
 import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { locationTypeNoun } from "~/app/inventory/session/session-utils";
 import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 
 import { LocationTreeRow } from "./location-tree-row";
+
+// Null means the location IS a product, so it has no form-factor word of its
+// own. Callers that have the product should show its name instead.
+function locationTypeNoun(type: string | null): string {
+  return type === null ? "container" : type.replaceAll("-", " ");
+}
 
 function buildParentMap(
   locations: InfLocation[],

@@ -52,7 +52,6 @@ type SharedListOptions<TData extends BaseListRow> = Pick<
   | "entity"
   | "columns"
   | "deletable"
-  | "extraActions"
   | "nameEditable"
   | "nameSuffix"
   | "tableStateOptions"
@@ -133,7 +132,6 @@ export function useClientEntityList<TData extends BaseListRow>({
   filters,
   hiddenFilterColumns,
   deletable,
-  extraActions,
   nameEditable,
   nameSuffix,
   tableStateOptions,
@@ -170,7 +168,6 @@ export function useClientEntityList<TData extends BaseListRow>({
     entity,
     tableStateOptions: clientTableStateOptions,
     deletable: resolvedDeletable,
-    extraActions,
     bulkActions,
     onInspectRow: effectiveOnInspectRow,
     includeCatalogActions,

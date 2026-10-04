@@ -80,9 +80,6 @@ function NavigatorLink({
   return (
     <Link
       to={item.to}
-      // SAFETY: nav-item search values are generated for their own literal
-      // routes; the heterogeneous navigation catalog loses that correlation.
-      search={item.search as never}
       onClick={onNavigate}
       className={cn(
         "flex min-h-11 items-center gap-2 border border-transparent px-2 py-2 text-sm transition-colors hover:bg-muted hover:text-primary",

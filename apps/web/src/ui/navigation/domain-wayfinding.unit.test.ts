@@ -7,8 +7,6 @@ describe("Field Guide domain wayfinding", () => {
     ["/recipes", "cook"],
     ["/ingredients/workbench", "cook"],
     ["/products/PROD-42", "pantry"],
-    ["/inventory/session", "pantry"],
-    ["/scan", "pantry"],
     ["/labels", "pantry"],
     ["/meals/shopping-list", "plan"],
     ["/garden-workbench?mode=plan", "house"],

@@ -166,7 +166,6 @@ export interface UseEntityListOptions<
   includeCatalogActions?: boolean;
   /** False for a scoped relation grid: no checkbox column or bulk bar, row menu kept. */
   selectable?: boolean;
-  extraActions?: (row: TData) => ReactNode;
   /**
    * What each row is *about*, when that is a different record — an inventory
    * entry is about its product. That entity's actions then appear in the row
@@ -344,7 +343,6 @@ export function useEntityList<
   preview: previewOptions,
   includeCatalogActions,
   selectable,
-  extraActions,
   deletable,
   deleteEmptyLabel,
   initialColumnVisibility,
@@ -422,7 +420,6 @@ export function useEntityList<
     entity,
     tableStateOptions: serverTableStateOptions,
     deletable: effectiveDeletable,
-    extraActions,
     bulkActions,
     onInspectRow: effectiveOnInspectRow,
     includeCatalogActions,

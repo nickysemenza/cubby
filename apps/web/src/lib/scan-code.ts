@@ -7,11 +7,10 @@ import { upc } from "@cubby/shared/upc";
 
 import { wasm } from "~/lib/wasm";
 
-export type ResolvedScanCode =
+type ResolvedScanCode =
   /**
-   * `type` rides along because every caller needs it: a location-only scanner
-   * has to reject a `PRD-` label, and the sweep routes on it. Re-deriving it
-   * from the shortcode string is what spawned the duplicate resolvers.
+   * `type` rides along because every caller needs it. Re-deriving it from the
+   * shortcode string is what spawned the duplicate resolvers.
    */
   | { kind: "shortcode"; shortcode: string; type: ShortcodeType }
   | {
@@ -117,36 +116,12 @@ export type ScopedScan<T> =
    */
   | { ok: false; reason: "unrecognized" | "wrong-kind"; error: string };
 
-/** A scan that must name a location: bin labels, and nothing else. */
-export function resolveLocationScan(raw: string): ScopedScan<string> {
-  const parsed = resolveScanCode(raw);
-  if (!parsed.ok) {
-    return { ok: false, reason: "unrecognized", error: parsed.error };
-  }
-
-  if (parsed.value.kind === "product") {
-    return {
-      ok: false,
-      reason: "wrong-kind",
-      error: "That's a product barcode — point at a location QR.",
-    };
-  }
-  if (parsed.value.type !== "location") {
-    return {
-      ok: false,
-      reason: "wrong-kind",
-      error: `That's a ${parsed.value.type} label — point at a location QR.`,
-    };
-  }
-  return { ok: true, value: parsed.value.shortcode };
-}
-
 /**
  * A scan that must name something stockable at a location.
  *
- * Cubby's own product labels are QR and the sweep reads QR, so a printed `PRD-`
- * label has to work here — rejecting it would make the label useless on the one
- * screen most likely to see it.
+ * Cubby's own product labels are QR, so a printed `PRD-` label has to work here
+ * — rejecting it would make the label useless where a scan lands (the native
+ * app's sweep calls this server-side).
  */
 export function resolveProductScan(
   raw: string,

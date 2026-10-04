@@ -212,18 +212,6 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
   "inspect-contract.spec.ts": [
     "apps/web/src/routes/_authenticated/products.index.tsx",
   ],
-  "inventory-session-photo-capture.spec.ts": [
-    "apps/web/src/app/inventory/**",
-    "apps/web/src/routes/_authenticated/inventory.session.tsx",
-    "apps/web/src/routes/_authenticated/products.$shortcode.tsx",
-    "apps/web/src/routes/api/v1/$resource/$operation.ts",
-  ],
-  "inventory-session.spec.ts": [
-    "apps/web/src/app/inventory/**",
-    "apps/web/src/routes/_authenticated/inventory.session.tsx",
-    "apps/web/src/routes/_authenticated/inventory.triage.tsx",
-    "apps/web/src/routes/_authenticated/products.index.tsx",
-  ],
   "label-nutrition-review.spec.ts": [
     "apps/web/src/routes/_authenticated/products.index.tsx",
   ],
@@ -242,6 +230,10 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/meals.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/meals.index.tsx",
     "apps/web/src/routes/index.tsx",
+  ],
+  "native-fieldwork-api.spec.ts": [
+    "apps/web/src/routes/api/v1/$resource.ts",
+    "apps/web/src/routes/api/v1/$resource/$operation.ts",
   ],
   "nutrition.spec.ts": [
     "apps/web/src/app/calendar/**",
@@ -322,6 +314,19 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/projects.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/tasks.$shortcode.tsx",
     "apps/web/src/routes/api/v1/$resource/$operation.ts",
+  ],
+  "retired-fieldwork.spec.ts": [
+    "apps/web/src/app/activity/**",
+    "apps/web/src/app/calendar/**",
+    "apps/web/src/app/problems/**",
+    "apps/web/src/routes/_authenticated/$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/inventory.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/locations.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/settings.tsx",
+  ],
+  "shelf-triage.spec.ts": [
+    "apps/web/src/routes/_authenticated/inventory.triage.tsx",
+    "apps/web/src/routes/_authenticated/products.index.tsx",
   ],
   "shortcode-routes.spec.ts": [
     "apps/web/src/routes/_authenticated/$shortcode.tsx",

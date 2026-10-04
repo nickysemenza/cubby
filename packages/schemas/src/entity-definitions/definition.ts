@@ -1252,7 +1252,7 @@ const buildMetadataSchemas = () => {
                   /** A guided pass the view leads into. */
                   flow: z
                     .object({
-                      kind: z.enum(["recount-worklist", "shelf-triage"]),
+                      kind: z.literal("shelf-triage"),
                       label: nonEmptyString(),
                     })
                     .strict()

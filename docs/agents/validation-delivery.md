@@ -11,10 +11,10 @@ not exercise them. Prefer a fresh branch after a squash merge.
 
 Playwright CI covers desktop Chromium only. For changes to phone-web layout or
 interaction, check the affected workflow in phone-width Safari. Require a
-physical iPhone Safari and installed-PWA pass before merge when a change
-depends on device behavior: safe areas, touch gestures, keyboard or focus
-behavior, browser permissions, or installed-PWA launch, return, and navigation
-history. Record the device, modes, affected workflow, observation, and remaining
+physical iPhone Safari pass before merge when a change depends on device
+behavior: safe areas, touch gestures, keyboard or focus behavior, or browser
+permissions. The web app is not installable; native fieldwork (scan, recount,
+sweep, location photo pass) is validated on a device through the app. Record the device, modes, affected workflow, observation, and remaining
 gap for that pass. Desktop browser and simulator tests do not sign off those
 device-dependent behaviors.
 

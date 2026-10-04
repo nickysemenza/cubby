@@ -34,7 +34,6 @@ type ListOverrideListOptions<
     | "additionalReadFields"
     | "deletable"
     | "deleteEmptyLabel"
-    | "extraActions"
     | "filterOptions"
     | "getMappings"
     | "mappingsReadFields"

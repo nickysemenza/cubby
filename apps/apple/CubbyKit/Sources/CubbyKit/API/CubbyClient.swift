@@ -45,9 +45,9 @@ public actor CubbyClient {
         }
     }
 
-    /// Find-or-create by a raw scanned code, resolved server-side the way the web `/scan` page
-    /// does: an ISBN becomes a book, a barcode a product, a product label the product itself; an
-    /// unreadable code is the server's validation error.
+    /// Find-or-create by a raw scanned code, resolved server-side: an ISBN becomes a book, a
+    /// barcode a product, a product label the product itself; an unreadable code is the server's
+    /// validation error.
     public func findOrCreateProduct(raw: String) async throws -> ProductFindOrCreateByUPCOut {
         try await perform {
             try await api.product_findOrCreateByCode(body: .json(.scan(.init(kind: .scan, value: raw))))

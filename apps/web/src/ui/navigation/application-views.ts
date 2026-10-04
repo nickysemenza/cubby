@@ -7,12 +7,9 @@ import {
   entitySummary,
 } from "@cubby/schemas/entity-summary";
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
-import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
 import { BookOpenTextIcon } from "@phosphor-icons/react/dist/csr/BookOpenText";
 import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
-import { CameraIcon } from "@phosphor-icons/react/dist/csr/Camera";
 import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
-import { ClipboardTextIcon } from "@phosphor-icons/react/dist/csr/ClipboardText";
 import { CreditCardIcon } from "@phosphor-icons/react/dist/csr/CreditCard";
 import { CubeFocusIcon } from "@phosphor-icons/react/dist/csr/CubeFocus";
 import { CurrencyCircleDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyCircleDollar";
@@ -114,25 +111,6 @@ export const activityViews = [
     destinations: [
       recordDestination("inventory", "Review what is currently on hand."),
       recordDestination("location", "Browse the places where things live."),
-      {
-        to: "/scan",
-        label: "Scan a product",
-        description: "Find or receive a product from its barcode.",
-        icon: BarcodeIcon,
-      },
-      {
-        to: "/inventory/session",
-        label: "Recount inventory",
-        description: "Restore the household's approximate on-hand picture.",
-        icon: ClipboardTextIcon,
-      },
-      {
-        to: "/locations/photo-pass",
-        label: "Location photo pass",
-        description:
-          "Capture useful location photos while moving around the house.",
-        icon: CameraIcon,
-      },
       {
         to: "/locations/arrange",
         label: "Arrange locations",

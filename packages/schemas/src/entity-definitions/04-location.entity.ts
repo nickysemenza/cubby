@@ -174,7 +174,6 @@ export default defineEntity({
       actionOverrides: ["moveUnder", "delete"],
       links: [
         { label: "Arrange", path: "/locations/arrange" },
-        { label: "Photo pass", path: "/locations/photo-pass" },
         { label: "Print labels", path: "/labels" },
       ],
     },
