@@ -74,7 +74,11 @@ const reportTable = z.object({
   columns: z.array(z.string()),
   /** Cells are display text composed by the server, one per column. */
   rows: z.array(
-    z.object({ cells: z.array(z.string()), ref: reportRef.optional() }),
+    z.object({
+      id: z.string(),
+      cells: z.array(z.string()),
+      ref: reportRef.optional(),
+    }),
   ),
   empty: z.string().optional(),
   truncated: z.boolean().optional(),

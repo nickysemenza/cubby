@@ -22,7 +22,7 @@ struct ReportPresentationTests {
           {"kind":"chart","title":"By project","mark":"bar","format":"money",
            "series":[{"label":"Fixture project","value":75,"ref":{"entity":"project","id":"PRJ-4K7M"}}]},
           {"kind":"table","title":"Funders","columns":["Party","Kind","Funded"],
-           "rows":[{"cells":["Synthetic party","household","$10.00"],"ref":{"entity":"recipe","id":"RCP-4K7M"}}],
+           "rows":[{"id":"LPY-4K7M","cells":["Synthetic party","household","$10.00"],"ref":{"entity":"recipe","id":"RCP-4K7M"}}],
            "empty":"None"},
           {"kind":"schedule","rows":[
             {"id":"PRJ-4K7M","entity":"project","name":"Root","depth":0,"expandable":true,
@@ -86,6 +86,14 @@ struct ReportPresentationTests {
         }
         #expect(chart.bars[0].ref == ReportPresentation.Ref(entity: "project", id: "PRJ-4K7M"))
         #expect(chart.bars[0].text == "$75.00")
+    }
+
+    @Test func tableRowsKeepTheServersUniqueIDs() throws {
+        guard case .table(let table) = try presentation().blocks[3] else {
+            Issue.record("expected table")
+            return
+        }
+        #expect(table.rows.map(\.id) == ["LPY-4K7M"])
     }
 
     @Test func scheduleHidesACollapsedSubtreeOnly() throws {

@@ -4,11 +4,10 @@ import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
+import { locationChildGroupLabel } from "~/lib/location-child-label";
+
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
-import {
-  locationChildGroupLabel,
-  resolveLocationVisual,
-} from "./location-visual-resolver";
+import { resolveLocationVisual } from "./location-visual-resolver";
 
 const image = (id: string, overrides: Partial<ImageOut> = {}): ImageOut =>
   imageOut.parse({

@@ -636,6 +636,8 @@ export const expenseAnalyticsSummary = z.object({
   ...expenseAggregateFields,
   actualCount: z.number().int(),
   plannedCount: z.number().int(),
+  /** Rows with an unknown cost: counted, never summed as $0. */
+  unpricedCount: z.number().int(),
 });
 export type ExpenseAnalyticsSummary = z.infer<typeof expenseAnalyticsSummary>;
 

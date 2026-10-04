@@ -123,7 +123,7 @@ function Table({ block }: { block: Extract<ReportBlock, { kind: "table" }> }) {
       {block.rows.map((row) => (
         <Row
           as="li"
-          key={row.cells.join("\u001f")}
+          key={row.id}
           align="center"
           justify="between"
           className="text-xs"

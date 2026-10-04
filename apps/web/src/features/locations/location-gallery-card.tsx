@@ -7,6 +7,7 @@ import { type Ref, useMemo } from "react";
 
 import { EntityQualityFact } from "~/entity/data-quality-value";
 import { EntityIcon } from "~/entity/entities";
+import { locationChildGroupLabel } from "~/lib/location-child-label";
 import { cn, formatCurrency } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 import { ImageWithPreview } from "~/ui/primitives/image-with-preview";
@@ -14,7 +15,6 @@ import { ImageWithPreview } from "~/ui/primitives/image-with-preview";
 import { useHydratedProductImages } from "../products/product-image-summaries";
 import { LocationIcon } from "./location-icons";
 import { LocationVisual } from "./location-visual";
-import { locationChildGroupLabel } from "./location-visual-resolver";
 
 type ProductPreview = {
   id: string;

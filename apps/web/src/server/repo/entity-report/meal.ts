@@ -28,6 +28,7 @@ export async function mealCompositionReport(
         const ordinal = (seen.get(entry.recipeId) ?? 0) + 1;
         seen.set(entry.recipeId, ordinal);
         return {
+          id: entry.id,
           cells: [
             (total.get(entry.recipeId) ?? 0) > 1
               ? `${entry.recipe.name} · ${ordinal}`

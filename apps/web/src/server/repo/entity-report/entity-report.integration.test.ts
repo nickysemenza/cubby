@@ -220,7 +220,62 @@ describe("entity report", () => {
       stats?.figures.find((entry) => entry.label === "Total value")?.value,
     ).toBe(30);
     const [table] = blocksOf(blocks, "table");
-    expect(table?.rows).toEqual([{ cells: ["Acme Synthetic", "$30.00"] }]);
+    expect(table?.rows.map((row) => row.cells)).toEqual([
+      ["Acme Synthetic", "$30.00"],
+    ]);
+  });
+
+  it("groups direct stock by manufacturer in SQL, largest first, capped, ignoring unpriced and other places", async () => {
+    const bin = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Group bin", type: "shelf" }),
+      ctx.actor,
+    );
+    const elsewhere = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Group elsewhere", type: "shelf" }),
+      ctx.actor,
+    );
+    const stock = async (
+      name: string,
+      manufacturer: string | undefined,
+      price: number | undefined,
+      quantity: number,
+      where = bin,
+    ) => {
+      const sku = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name, price, manufacturer }),
+        ctx.actor,
+      );
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: sku.id,
+          locationId: where.id,
+          amount: { value: quantity, unit: "each" },
+        },
+        ctx.actor,
+      );
+    };
+    for (let index = 1; index <= 7; index += 1)
+      await stock(`Group item ${index}`, `Maker ${index}`, 10 * index, 1);
+    await stock("Group second", "Maker 7", 5, 2);
+    await stock("Group unpriced", "Maker unpriced", undefined, 1);
+    await stock("Group other place", "Maker elsewhere", 999, 1, elsewhere);
+
+    const [table] = blocksOf(
+      await report("location.contents-valuation", bin.id),
+      "table",
+    );
+    expect(table?.rows.map((row) => row.cells)).toEqual([
+      ["Maker 7", "$80.00"],
+      ["Maker 6", "$60.00"],
+      ["Maker 5", "$50.00"],
+      ["Maker 4", "$40.00"],
+      ["Maker 3", "$30.00"],
+      ["Maker 2", "$20.00"],
+    ]);
   });
 
   it("lists a meal's recipes with their scale", async () => {
@@ -246,6 +301,95 @@ describe("entity report", () => {
     expect(table?.rows).toHaveLength(1);
     expect(table?.rows[0]?.cells.slice(0, 2)).toEqual(["Synthetic stew", "×2"]);
     expect(table?.rows[0]?.ref).toMatchObject({ entity: "recipe" });
+  });
+
+  it("keeps unpriced expenses visible instead of reading them as $0", async () => {
+    const unpriced = (projectId: string, name: string) =>
+      createRepoEntity(ctx, "expense", {
+        name,
+        cost: null,
+        date: "2026-08-01",
+        costType: "materials",
+        trade: "other",
+        projectId,
+      });
+    const { output: onlyUnpriced } = await createRepoEntity(ctx, "project", {
+      name: "Unpriced only",
+    });
+    await unpriced(onlyUnpriced.id, "Unpriced fixture one");
+    const only = await report("project.budget", onlyUnpriced.id);
+    expect(only).toHaveLength(1);
+    expect(only[0]).toMatchObject({ kind: "note" });
+    expect(only[0]).toMatchObject({
+      text: expect.stringContaining("1 expense"),
+    });
+    expect(blocksOf(only, "stats")).toEqual([]);
+
+    const { output: mixed } = await createRepoEntity(ctx, "project", {
+      name: "Unpriced mixed",
+      costEstimate: 500,
+    });
+    await unpriced(mixed.id, "Unpriced fixture two");
+    await createRepoEntity(ctx, "expense", {
+      name: "Priced fixture",
+      cost: 40,
+      date: "2026-08-02",
+      costType: "materials",
+      trade: "other",
+      projectId: mixed.id,
+    });
+    for (const slot of ["project.budget", "project.analytics"] as const) {
+      const blocks = await report(slot, mixed.id);
+      expect(blocksOf(blocks, "stats")).toHaveLength(1);
+      expect(
+        blocksOf(blocks, "note").some((note) =>
+          note.text.includes("1 expense"),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  it("budgets only a project's allocated share of a shared purchase adjustment", async () => {
+    const { output: a } = await createRepoEntity(ctx, "project", {
+      name: "Shared purchase A",
+    });
+    const { output: b } = await createRepoEntity(ctx, "project", {
+      name: "Shared purchase B",
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Shared purchase vendor",
+    });
+    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      date: "2026-08-10",
+    });
+    const line = (
+      name: string,
+      cost: number,
+      lineKind: "principal" | "shipping",
+      projectId?: string,
+    ) =>
+      createRepoEntity(ctx, "expense", {
+        name,
+        cost,
+        date: "2026-08-10",
+        costType: "materials",
+        trade: "other",
+        purchaseId: purchase.shortcode,
+        lineKind,
+        projectId: projectId ?? null,
+      });
+    await line("Shared principal A", 100, "principal", a.id);
+    await line("Shared principal B", 300, "principal", b.id);
+    await line("Shared shipping", 40, "shipping");
+
+    const budget = async (id: string) =>
+      blocksOf(await report("project.budget", id), "stats")[0]?.figures.find(
+        (figure) => figure.label === "Actual",
+      )?.value;
+    // The shipping splits 1:3 by principal weight; each project sees only its share.
+    expect(await budget(a.id)).toBe(110);
+    expect(await budget(b.id)).toBe(330);
   });
 
   it("refuses an id whose prefix is not the slot's entity", async () => {

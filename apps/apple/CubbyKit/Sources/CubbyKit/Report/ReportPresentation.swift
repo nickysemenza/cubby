@@ -54,7 +54,7 @@ public struct ReportPresentation: Hashable, Sendable {
 
     public struct Table: Hashable, Sendable {
         public struct Row: Hashable, Sendable, Identifiable {
-            public let id: Int
+            public let id: String
             public let cells: [String]
             public let ref: Ref?
         }
@@ -153,9 +153,9 @@ public struct ReportPresentation: Hashable, Sendable {
             return .table(
                 Table(
                     title: table.title, columns: table.columns,
-                    rows: table.rows.enumerated().map { index, row in
+                    rows: table.rows.map { row in
                         Table.Row(
-                            id: index, cells: row.cells,
+                            id: row.id, cells: row.cells,
                             ref: row.ref.map { Ref(entity: $0.entity.rawValue, id: $0.id) })
                     },
                     empty: table.empty, truncated: table.truncated ?? false))

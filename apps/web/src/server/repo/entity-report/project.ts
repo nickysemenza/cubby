@@ -7,6 +7,7 @@ import {
   projectShortcode,
 } from "@cubby/schemas/identifiers";
 import { expenseFiltersSchema } from "@cubby/schemas/project";
+import { sum } from "es-toolkit";
 
 import { countLabel } from "~/lib/pluralize";
 import { buildDetailScheduleRows } from "~/lib/project-schedule";
@@ -21,15 +22,27 @@ import { projectContribution } from "~/server/repo/household-contribution/report
 import { listAll } from "~/server/repo/list-all";
 import { getProjectByID } from "~/server/repo/project/crud";
 import { projectList } from "~/server/repo/project/lookup";
+import {
+  collectDescendantIds,
+  loadProjectTree,
+} from "~/server/repo/project/subtree";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { taskList } from "~/server/repo/task/lookup";
 
 /** The validated public code of a live project (a mismatched prefix is refused). */
-async function liveProjectCode(db: Database, code: string) {
+async function liveProject(db: Database, code: string) {
   const projectCode = projectShortcode.parse(code);
-  await resolveOrThrow(db, "project", projectCode);
-  return projectCode;
+  return {
+    code: projectCode,
+    id: await resolveOrThrow(db, "project", projectCode),
+  };
 }
+
+/** `n expense(s) have no recorded cost`: unknown spend is counted, never read as $0. */
+const unpricedNote = (count: number): ReportBlock => ({
+  kind: "note",
+  text: `${countLabel(count, "expense")} ${count === 1 ? "has" : "have"} no recorded cost and ${count === 1 ? "is" : "are"} not in these figures.`,
+});
 
 /** The project plus every live sub-project, the scope all spend figures share. */
 const subtreeSpend = (projectId: ProjectShortcode) =>
@@ -40,18 +53,25 @@ export async function projectBudgetReport(
   db: Database,
   code: string,
 ): Promise<ReportBlock[]> {
-  const projectCode = await liveProjectCode(db, code);
-  const [project, spend] = await Promise.all([
-    getProjectByID(db, await resolveOrThrow(db, "project", projectCode)),
+  const { code: projectCode, id } = await liveProject(db, code);
+  const [tree, spend] = await Promise.all([
+    loadProjectTree(db),
     expenseSpendSummary(db, subtreeSpend(projectCode)),
   ]);
-  const estimate = project.rollup.subtree.costEstimate ?? project.costEstimate;
-  if (estimate == null && spend.count === 0)
+  // The subtree estimate is the sum of the non-null estimates; none stays unknown, not $0.
+  const estimates = [id, ...collectDescendantIds(tree.childrenByParent, id)]
+    .map((projectId) => tree.rowsById.get(projectId)?.costEstimate)
+    .filter((value): value is number => value != null);
+  const estimate = estimates.length > 0 ? sum(estimates) : null;
+  const priced = spend.count - spend.unpricedCount;
+  if (estimate == null && priced === 0)
     return [
-      {
-        kind: "note",
-        text: "No estimate or spend yet — set a cost estimate or log the first expense.",
-      },
+      spend.unpricedCount > 0
+        ? unpricedNote(spend.unpricedCount)
+        : {
+            kind: "note",
+            text: "No estimate or spend yet — set a cost estimate or log the first expense.",
+          },
     ];
   const remaining = budgetRemaining(estimate ?? null, spend);
   const figures: Extract<ReportBlock, { kind: "stats" }>["figures"] = [
@@ -95,7 +115,9 @@ export async function projectBudgetReport(
     caption: `${formatCurrency(spend.actual, 0)} spent of ${estimate != null ? formatCurrency(estimate, 0) : "no estimate"}${spend.committed > 0 ? `, ${formatCurrency(spend.committed, 0)} committed` : ""}`,
   };
   if (estimate != null && estimate > 0) chart.marker = estimate;
-  return [{ kind: "stats", figures }, chart];
+  const blocks: ReportBlock[] = [{ kind: "stats", figures }, chart];
+  if (spend.unpricedCount > 0) blocks.push(unpricedNote(spend.unpricedCount));
+  return blocks;
 }
 
 const TOP = 10;
@@ -107,14 +129,16 @@ export async function projectAnalyticsReport(
 ): Promise<ReportBlock[]> {
   const analytics = await expenseAnalytics(
     db,
-    subtreeSpend(await liveProjectCode(db, code)),
+    subtreeSpend((await liveProject(db, code)).code),
   );
   const { summary } = analytics;
   if (summary.count === 0)
     return [{ kind: "note", text: "No expenses recorded for this project." }];
+  if (summary.count === summary.unpricedCount)
+    return [unpricedNote(summary.unpricedCount)];
   const byNet = <Row extends { net: number }>(rows: Row[]) =>
     [...rows].sort((a, b) => b.net - a.net).slice(0, TOP);
-  return [
+  const blocks: ReportBlock[] = [
     {
       kind: "stats",
       figures: [
@@ -192,6 +216,9 @@ export async function projectAnalyticsReport(
       })),
     },
   ];
+  if (summary.unpricedCount > 0)
+    blocks.push(unpricedNote(summary.unpricedCount));
+  return blocks;
 }
 
 /** Whole-group cost, who consumed and funded it, and the attribution gaps. */
@@ -202,7 +229,7 @@ export async function projectContributionReport(
   const data = await projectContribution(
     db,
     projectContributionInput.parse({
-      projectId: await liveProjectCode(db, code),
+      projectId: (await liveProject(db, code)).code,
       includeSubprojects: true,
     }),
   );
@@ -222,7 +249,7 @@ export async function projectContributionReport(
         figure("Whole-group cost", data.wholeGroupCost),
         figure("Actual", data.actualSpend),
         figure("Committed", data.committedSpend),
-        figure("Credits", data.creditsReceived),
+        figure("Credits", -data.creditsReceived),
         figure("Household initial exposure", data.householdInitialExposure),
         figure("Guest initial funding", data.guestInitialFunding),
         figure("Unattributed consumption", data.unattributedConsumption),
@@ -234,6 +261,7 @@ export async function projectContributionReport(
       title: "Beneficiaries",
       columns: ["Beneficiary", "Kind", "Consumed"],
       rows: data.parties.map(({ party, consumed }) => ({
+        id: party.id,
         cells: [party.name, party.kind, formatCurrency(consumed)],
       })),
       empty:
@@ -244,6 +272,7 @@ export async function projectContributionReport(
       title: "Original funders",
       columns: ["Party", "Kind", "Initially funded"],
       rows: data.funders.map(({ party, initiallyFunded }) => ({
+        id: party.id,
         cells: [party.name, party.kind, formatCurrency(initiallyFunded)],
       })),
       empty:
@@ -255,7 +284,8 @@ export async function projectContributionReport(
             kind: "table" as const,
             title: "Attribution gaps",
             columns: ["Issue", "Amount", "Records"],
-            rows: data.gaps.map((gap) => ({
+            rows: data.gaps.map((gap, index) => ({
+              id: `${gap.code}:${index}`,
               cells: [
                 contributionGapLabels[gap.code],
                 gap.amount === undefined ? "—" : formatCurrency(gap.amount),
@@ -276,11 +306,8 @@ export async function projectScheduleReport(
   db: Database,
   code: string,
 ): Promise<ReportBlock[]> {
-  const projectCode = await liveProjectCode(db, code);
-  const root = await getProjectByID(
-    db,
-    await resolveOrThrow(db, "project", projectCode),
-  );
+  const { code: projectCode, id } = await liveProject(db, code);
+  const root = await getProjectByID(db, id);
   const [descendants, tasks] = await Promise.all([
     listAll((pagination) =>
       projectList(

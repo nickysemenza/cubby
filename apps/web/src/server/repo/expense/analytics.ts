@@ -62,8 +62,9 @@ const aggregateForCost = (cost: SQL<number | null>) => ({
   count: sql<number>`count(*)::int`,
 });
 
-const summaryFields = (aggregate: ReturnType<typeof aggregateForCost>) => ({
-  ...aggregate,
+const summaryFields = (cost: SQL<number | null>) => ({
+  ...aggregateForCost(cost),
+  unpricedCount: sql<number>`count(*) filter (where ${cost} is null)::int`,
   actualCount: sql<number>`count(*) filter (where ${expense.future} = false)::int`,
   plannedCount: sql<number>`count(*) filter (where ${expense.future} = true)::int`,
 });
@@ -115,7 +116,7 @@ export async function expenseSpendSummary(
     projectScope,
   });
   const [summary] = await getDb(db)
-    .select(summaryFields(aggregateForCost(analyticsCost(projectScope))))
+    .select(summaryFields(analyticsCost(projectScope)))
     .from(expense)
     .where(whereClause);
   // A GROUP-BY-less aggregate always returns exactly one row.
@@ -155,7 +156,10 @@ export async function expenseAnalytics(
     byProjectResult,
     byVendor,
   ] = await Promise.all([
-    getDb(db).select(summaryFields(aggregate)).from(expense).where(whereClause),
+    getDb(db)
+      .select(summaryFields(analyticsCost(projectScope)))
+      .from(expense)
+      .where(whereClause),
     getDb(db)
       .select({ ...aggregate })
       .from(expense)
