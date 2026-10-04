@@ -228,6 +228,15 @@ verbs that act on them (`SECTION_ACTION_IDS`). Each row's and verb's
 existing operation on each client that implements it, and the rest are
 classified under `sectionAction` in `native-coverage.ts`.
 
+**Report commands and batching.** A `records` row may carry `statuses` (toned chips), `lines`,
+a collapsible `detail` and `commands`: each command names an existing operation and its exact
+body (`run-control`, `resolve-finding`, `retry-gmail-search`) plus the `confirm` copy both clients
+show before sending it (approve, reject and apply confirm; dismiss and retry act on the tap).
+A report may say the record is `live` (clients poll; there is no realtime transport), carry its
+`status` (a client showing another refreshes its record) and a `nextCursor` for paging. A page that
+shows several slots of one record (a Run) polls one `entityReport.getMany`, so the server loads the
+record once per poll.
+
 **Native coverage.** Which of these presentation ids the Apple app does not draw
 is declared once, in `packages/schemas/src/native-coverage.ts`: every control,
 list, and detail renderer id, hero action, and (entity-qualified) detail and

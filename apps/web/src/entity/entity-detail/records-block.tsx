@@ -9,14 +9,22 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { FilterRefLink } from "~/entity/components/ref-link/leaf";
 import { entities } from "~/entity/entities";
 import { formatInstant } from "~/lib/date-format";
+import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
+import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Image } from "~/ui/primitives/image";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { ShortcodeProse } from "~/ui/shortcode-prose";
 
 import { collectionActions } from "./collection-actions";
+import {
+  CommandButton,
+  type ReportCommands,
+  useReportCommands,
+} from "./report-commands";
 import { sectionActionsFor } from "./section-actions";
 
 export type RecordsBlock = Extract<ReportBlock, { kind: "records" }>;
@@ -33,6 +41,7 @@ const routedEntity = (entity: string | null): BrowserRoutedEntity | null => {
 const rowKeys = (rows: readonly ReportRecordRow[]) => {
   const seen = new Map<string, number>();
   return rows.map((row) => {
+    if (row.key !== undefined && row.commands !== undefined) return row.key;
     const base = `${row.entity ?? ""}:${row.id ?? ""}:${row.title}`;
     const occurrence = seen.get(base) ?? 0;
     seen.set(base, occurrence + 1);
@@ -76,7 +85,83 @@ function RowTitle({ row }: { row: ReportRecordRow }) {
         displayImage={null}
       />
     );
-  return <span className="whitespace-pre-line">{row.title}</span>;
+  if (row.title === "") return null;
+  return (
+    <span className="font-medium whitespace-pre-line">
+      <ShortcodeProse>{row.title}</ShortcodeProse>
+    </span>
+  );
+}
+
+const TONE_TEXT = {
+  positive: "text-positive",
+  warning: "text-warning-ink",
+  destructive: "text-destructive",
+  muted: "text-muted-foreground",
+} as const;
+const STATUS_VARIANT = {
+  positive: "positive",
+  warning: "warning",
+  destructive: "destructive",
+  muted: "outline",
+} as const;
+
+/** The toned chips, lines, raw block and commands a row carries beyond its title and subtitle. */
+function RowExtras({
+  row,
+  commands,
+}: {
+  row: ReportRecordRow;
+  commands: ReportCommands;
+}) {
+  return (
+    <>
+      {(row.statuses ?? []).length > 0 ? (
+        <Row gap="xs" className="flex-wrap">
+          {(row.statuses ?? []).map((status) => (
+            <Badge
+              key={status.label}
+              variant={status.tone ? STATUS_VARIANT[status.tone] : "secondary"}
+            >
+              {status.label}
+            </Badge>
+          ))}
+        </Row>
+      ) : null}
+      {(row.lines ?? []).map((entry) => (
+        <span
+          key={`${entry.tone ?? ""}:${entry.text}`}
+          className={cn(
+            "text-xs break-words whitespace-pre-line",
+            entry.tone && TONE_TEXT[entry.tone],
+          )}
+        >
+          <ShortcodeProse>{entry.text}</ShortcodeProse>
+        </span>
+      ))}
+      {row.detail ? (
+        <details className="border border-border bg-muted/30 p-2 text-xs">
+          <summary className="cursor-pointer font-medium">
+            {row.detail.label}
+          </summary>
+          <pre className="mt-2 max-h-80 overflow-auto font-mono break-words whitespace-pre-wrap">
+            {row.detail.text}
+          </pre>
+        </details>
+      ) : null}
+      {(row.commands ?? []).length > 0 ? (
+        <Row wrap gap="sm">
+          {(row.commands ?? []).map((command) => (
+            <CommandButton
+              key={command.id}
+              command={command}
+              commands={commands}
+            />
+          ))}
+        </Row>
+      ) : null}
+    </>
+  );
 }
 
 function RecordRow({
@@ -86,7 +171,9 @@ function RecordRow({
   selectable,
   checked,
   onCheckedChange,
+  commands,
 }: {
+  commands: ReportCommands;
   row: ReportRecordRow;
   record: object | undefined;
   large: boolean;
@@ -130,9 +217,10 @@ function RecordRow({
           <RowTitle row={row} />
           {row.subtitle ? (
             <span className="text-xs whitespace-pre-line text-muted-foreground">
-              {row.subtitle}
+              <ShortcodeProse>{row.subtitle}</ShortcodeProse>
             </span>
           ) : null}
+          <RowExtras row={row} commands={commands} />
           {(row.badges ?? []).length > 0 ? (
             <Row gap="xs" className="flex-wrap">
               {(row.badges ?? []).map((badge) => (
@@ -198,6 +286,7 @@ export function RecordsBlockView({
   list?: ReactNode;
 }) {
   const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
+  const commands = useReportCommands();
   const keys = rowKeys(block.rows);
   const verbs = block.verbs ?? [];
   const available =
@@ -210,14 +299,20 @@ export function RecordsBlockView({
   const erasedRecord = record as never;
   return (
     <Stack gap="sm" className="w-full">
+      {block.title && block.rows.length > 0 ? (
+        <Eyebrow>{block.title}</Eyebrow>
+      ) : null}
       {list ??
         (block.rows.length === 0 ? (
-          <Description>{block.empty}</Description>
+          block.empty ? (
+            <Description>{block.empty}</Description>
+          ) : null
         ) : (
           <ul className="w-full divide-y divide-border">
             {block.rows.map((row, index) => (
               <RecordRow
                 key={keys[index]}
+                commands={commands}
                 row={row}
                 record={record}
                 large={block.thumbnail === "large"}

@@ -23,6 +23,21 @@ export const runStatus = z.enum([
   "failed",
   "dispatch_failed",
 ]);
+/** What `run.control` can do to a Run; the report actions and the operation share it. */
+export const runControlAction = z.enum([
+  "pause",
+  "resume",
+  "cancel",
+  "approve",
+  "reject",
+  "retry",
+  "restart",
+  "escalate_sol",
+  "retry_dispatch",
+  "abort",
+  "upload_evidence",
+  "no_evidence_available",
+]);
 export const runPurpose = z.enum([
   "account_sync",
   "purchase_validation",

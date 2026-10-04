@@ -3,7 +3,9 @@ import {
   collectionSlugPattern,
 } from "../../../../packages/shared/src/collection-tag.ts";
 import {
+  ACTIVE_RUN_STATUSES,
   HOUSEHOLD_TIMEZONE,
+  IMPORT_WORKFLOW_PURPOSES,
   IMAGE_WIDTHS,
   TASK_BOARD_INBOX_LABEL,
   TASK_BOARD_UNTITLED_PROJECT_LABEL,
@@ -54,6 +56,10 @@ export const renderSwiftSharedConstants = (): EntityArtifacts[] => {
         `    public static let collectionTagPrefix = ${swiftString(COLLECTION_TAG_PREFIX)}\n` +
         "    /// What a Collection slug must match (`collectionSlugPattern`).\n" +
         `    public static let collectionSlugPattern = ${swiftString(collectionSlugPattern.source)}\n` +
+        "    /// Run purposes the purchase agent drives (`IMPORT_WORKFLOW_PURPOSES`).\n" +
+        `    public static let importWorkflowPurposes: [String] = [${IMPORT_WORKFLOW_PURPOSES.map(swiftString).join(", ")}]\n` +
+        "    /// Run statuses in which a run is still moving (`ACTIVE_RUN_STATUSES`).\n" +
+        `    public static let activeRunStatuses: [String] = [${ACTIVE_RUN_STATUSES.map(swiftString).join(", ")}]\n` +
         "}\n\n" +
         "extension WayfindingDomain {\n" +
         "    /// The line's name (`WAYFINDING_DOMAIN_PRESENTATION.label`).\n" +

@@ -24,3 +24,23 @@ export const TASK_BOARD_UNTITLED_PROJECT_LABEL = "Untitled project";
  * client, wherever the device is.
  */
 export const HOUSEHOLD_TIMEZONE = "America/Los_Angeles";
+
+/**
+ * Run purposes the purchase agent drives: they carry a vendor, orders, an agent transcript
+ * and evidence. AI-only runs, photo batches and Gmail searches do not. Web and native show the
+ * import report slots for these purposes only.
+ */
+export const IMPORT_WORKFLOW_PURPOSES = [
+  "account_sync",
+  "purchase_validation",
+  "product_enrichment",
+  "file_import",
+] as const;
+
+/** Statuses in which a Run is still moving: clients poll and show the live variants only then. */
+export const ACTIVE_RUN_STATUSES = [
+  "running",
+  "paused_auth",
+  "paused_offline",
+  "paused_approval",
+] as const;

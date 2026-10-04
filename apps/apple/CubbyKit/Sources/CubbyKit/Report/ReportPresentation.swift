@@ -3,7 +3,6 @@ import Foundation
 
 /// A detail slot the server composes a report for (`entityReport.get`); the raw value is the
 /// manifest's slot id, so `ReportSlot(rawValue: slot.rawValue)` maps a declared slot.
-public typealias ReportSlot = Operations.EntityReport_get.Input.Query.SlotPayload
 
 /// The server-composed `entityReport.get` blocks as plain values the one generic report view
 /// draws. The server owns every figure, series and schedule row; this only formats a number and
@@ -115,7 +114,7 @@ public struct ReportPresentation: Hashable, Sendable {
     /// A record-bearing row: the server's words, a thumbnail, short badges, an instant the
     /// client prints in its own locale, and the record the row opens.
     public struct RecordRow: Hashable, Sendable, Identifiable {
-        public let id: Int
+        public var id: Int
         public let entity: EntityKey?
         public let recordID: String?
         public let title: String
@@ -132,6 +131,25 @@ public struct ReportPresentation: Hashable, Sendable {
         public let key: String?
         /// Why the row cannot be checked; nil when it can.
         public let disabledReason: String?
+        /// Toned status chips (a run's approvals, findings and operations).
+        public let statuses: [Status]
+        /// Lines under the title, each with its own tone.
+        public let lines: [Line]
+        /// Raw material kept out of the way (an operation's arguments).
+        public let detailLabel: String?
+        public let detailText: String?
+        /// Commands on this row; each runs an existing operation after its declared confirmation.
+        public let commands: [ReportCommand]
+    }
+
+    public struct Status: Hashable, Sendable {
+        public let label: String
+        public let tone: Tone?
+    }
+
+    public struct Line: Hashable, Sendable {
+        public let text: String
+        public let tone: Tone?
     }
 
     public struct ListLink: Hashable, Sendable {
@@ -178,6 +196,20 @@ public struct ReportPresentation: Hashable, Sendable {
             verbs.first { $0.verb == verb }
         }
 
+        /// These rows with `more` stacked after them (a later page).
+        public func adding(_ more: [RecordRow]) -> Records {
+            Records(
+                title: title,
+                rows: rows
+                    + more.enumerated().map { offset, row in
+                        var next = row
+                        next.id = rows.count + offset
+                        return next
+                    },
+                empty: empty, actions: actions,
+                largeThumbnails: largeThumbnails, footer: footer, verbs: verbs)
+        }
+
         /// The checked keys the server still allows.
         public func allowed(_ selection: Set<String>) -> Set<String> {
             Set(rows.filter { $0.disabledReason == nil }.compactMap(\.key).filter(selection.contains))
@@ -199,13 +231,46 @@ public struct ReportPresentation: Hashable, Sendable {
         case chart(Chart)
         case table(Table)
         case schedule(Schedule)
-        case note(String)
+        case note(String, tone: Tone?, strong: Bool)
     }
 
-    public let blocks: [Block]
+    public private(set) var blocks: [Block]
+    /// The record is still moving; clients poll while true.
+    public let live: Bool
+    /// The record's status as of this read.
+    public let status: String?
+    /// More of the same report; pass it back as the next request's cursor.
+    public let nextCursor: String?
 
     public init(_ report: EntityReportOut) {
         blocks = report.blocks.map(Self.block)
+        live = report.live ?? false
+        status = report.status
+        nextCursor = report.nextCursor
+    }
+
+    private init(blocks: [Block], live: Bool, status: String?, nextCursor: String?) {
+        self.blocks = blocks
+        self.live = live
+        self.status = status
+        self.nextCursor = nextCursor
+    }
+
+    /// The report with `page` (the next cursor's read) stacked under it: records blocks with the
+    /// same title gain the page's rows, and everything else stays as the first page had it.
+    public func appending(_ page: ReportPresentation) -> ReportPresentation {
+        var merged = blocks
+        for case .records(let more) in page.blocks {
+            if let index = merged.firstIndex(where: {
+                if case .records(let existing) = $0 { existing.title == more.title } else { false }
+            }), case .records(let existing) = merged[index] {
+                merged[index] = .records(existing.adding(more.rows))
+            } else {
+                merged.append(.records(more))
+            }
+        }
+        return ReportPresentation(
+            blocks: merged, live: page.live, status: page.status, nextCursor: page.nextCursor)
     }
 
     private static func block(_ block: Components.Schemas.ReportBlock) -> Block {
@@ -260,7 +325,9 @@ public struct ReportPresentation: Hashable, Sendable {
                             blockingIDs: row.blockingIds)
                     }))
         case .note(let note):
-            return .note(note.text)
+            return .note(
+                note.text, tone: note.tone.flatMap { Tone(rawValue: $0.rawValue) },
+                strong: note.strong ?? false)
         case .records(let records):
             return .records(
                 Records(
@@ -279,7 +346,15 @@ public struct ReportPresentation: Hashable, Sendable {
                             actions: (row.actions ?? []).compactMap {
                                 CollectionActionID(rawValue: $0.rawValue)
                             },
-                            key: row.key, disabledReason: row.disabledReason)
+                            key: row.key, disabledReason: row.disabledReason,
+                            statuses: (row.statuses ?? []).map {
+                                Status(label: $0.label, tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
+                            },
+                            lines: (row.lines ?? []).map {
+                                Line(text: $0.text, tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
+                            },
+                            detailLabel: row.detail?.label, detailText: row.detail?.text,
+                            commands: row.commands ?? [])
                     },
                     empty: records.empty,
                     actions: (records.actions ?? []).compactMap { CollectionActionID(rawValue: $0.rawValue) },

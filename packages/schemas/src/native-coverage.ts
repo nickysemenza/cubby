@@ -264,27 +264,35 @@ export const nativeCoverage = {
       "purchase.financial-settlement",
       "expense.settlement",
       "vendorAccount.charge-search",
+      // A run's progress, approvals, findings, transcript, log, usage and changes: the same report
+      // view draws the server's `records` rows, polls (one batched read) while the run is live,
+      // and runs the commands the server offers (approve, reject, apply, dismiss, retry) only
+      // after the confirmation each declares. Web keeps its corrections review (targets) and
+      // audit diffs (changes) as richer fills of the same slots.
+      "run.ai-usage",
+      "run.changes",
+      "run.import-approvals",
+      "run.import-debug-log",
+      "run.import-evidence",
+      "run.import-findings",
+      "run.import-progress-live",
+      "run.import-progress-stopped",
+      "run.import-purchases",
+      "run.import-stats",
+      "run.import-targets",
+      "run.import-timeline",
+      "run.live-progress",
     ]),
+    // The agent conversation streams from the Flue agent route (SSE plus prompt and abort over
+    // its own protocol), not a Cubby operation; native has no transport for it.
     ...unsupported(
-      [
-        "run.ai-usage",
-        "run.changes",
-        "run.import-agent-live",
-        "run.import-agent-stopped",
-        "run.import-approvals",
-        "run.import-debug-log",
-        "run.import-evidence",
-        "run.import-findings",
-        "run.import-prepared-orders",
-        "run.import-progress-live",
-        "run.import-progress-stopped",
-        "run.import-purchases",
-        "run.import-stats",
-        "run.import-targets",
-        "run.import-timeline",
-        "run.live-progress",
-      ],
-      "This detail is available on web.",
+      ["run.import-agent-live", "run.import-agent-stopped"],
+      "The agent conversation streams from the Flue agent route, which native has no client for; review it on web.",
+    ),
+    // Approve-and-import needs a Product picker and a trade choice per prepared line.
+    ...unsupported(
+      ["run.import-prepared-orders"],
+      "Approving prepared orders needs a per-line Product picker and trade choice; do it on web.",
     ),
   },
   /**
@@ -708,7 +716,7 @@ export const NATIVE_UNSUPPORTED_CEILING = {
   list: 0,
   detail: 0,
   heroAction: 0,
-  detailSlot: 16,
+  detailSlot: 3,
   listSlot: 0,
   structuredField: 8,
   sectionAction: 3,

@@ -1,5 +1,7 @@
 import {
   entityReportInput,
+  entityReportManyInput,
+  entityReportManyOut,
   entityReportOut,
 } from "@cubby/schemas/entity-report";
 
@@ -32,5 +34,15 @@ export const entityReportContract = defineContract("entityReport", {
         ["vendor"],
       ],
     },
+  }),
+  /**
+   * Several slots of one record in one read; a Run's page polls this once so the run loads
+   * once per poll instead of once per slot.
+   */
+  getMany: query({
+    native: "Detail slot reports, batched per record",
+    input: entityReportManyInput,
+    output: entityReportManyOut,
+    cache: { tags: [["run"], ["purchase"], ["problems"]] },
   }),
 });

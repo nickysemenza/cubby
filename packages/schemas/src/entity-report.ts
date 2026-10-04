@@ -5,6 +5,8 @@ import {
   type CollectionActionId,
 } from "./entity-definitions/collection-actions";
 import { SECTION_ACTION_IDS } from "./entity-section-actions";
+import { runShortcode } from "./identifiers";
+import { runControlAction } from "./run-fields";
 
 /**
  * The generic read a detail slot draws on every client. The server composes
@@ -32,6 +34,20 @@ export const reportSlots = [
   "purchase.financial-settlement",
   "expense.settlement",
   "vendorAccount.charge-search",
+  // A Run's detail: progress, approvals, findings, transcript, log, AI usage and changes.
+  "run.live-progress",
+  "run.import-stats",
+  "run.import-progress-live",
+  "run.import-progress-stopped",
+  "run.import-purchases",
+  "run.import-approvals",
+  "run.import-findings",
+  "run.import-targets",
+  "run.import-evidence",
+  "run.import-timeline",
+  "run.import-debug-log",
+  "run.ai-usage",
+  "run.changes",
 ] as const;
 export const reportSlot = z.enum(reportSlots);
 
@@ -63,8 +79,20 @@ export const entityReportInput = z.object({
   slot: reportSlot,
   /** The record's public shortcode; its prefix must match the slot's entity. */
   id: z.string().min(1),
+  /** The next page of a paged report (`nextCursor` of the previous one). */
+  cursor: z.string().min(1).optional(),
 });
 export type EntityReportInput = z.infer<typeof entityReportInput>;
+
+/**
+ * Several slots of one record in one read. A page that shows many slots of the same record
+ * (a Run) polls this once, and the server loads the record once for all of them.
+ */
+export const entityReportManyInput = z.object({
+  slots: z.array(reportSlot).min(1).max(16),
+  id: z.string().min(1),
+});
+export type EntityReportManyInput = z.infer<typeof entityReportManyInput>;
 
 const reportTone = z.enum(["positive", "warning", "destructive", "muted"]);
 const reportFormat = z.enum(["money", "count", "text"]);
@@ -158,7 +186,46 @@ const reportSchedule = z.object({
 const reportNote = z.object({
   kind: z.literal("note"),
   text: z.string(),
+  /** A status sentence rather than a caption. */
+  strong: z.boolean().optional(),
+  tone: reportTone.optional(),
 });
+
+/**
+ * What a row command runs. Each member names one existing operation and carries its exact body,
+ * so a client never assembles a request from a label; `confirm` is shown before it is sent and
+ * null means one tap acts.
+ */
+export const reportCommandRequest = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("run-control"),
+    runId: runShortcode,
+    action: runControlAction,
+    operationId: z.string().min(1).nullable(),
+    approvalId: z.string().min(1).nullable(),
+  }),
+  z.object({
+    kind: z.literal("resolve-finding"),
+    findingId: z.uuid(),
+    decision: z.enum(["apply", "dismiss"]),
+    reviewedFingerprint: z.string().nullable(),
+  }),
+  z.object({
+    kind: z.literal("retry-gmail-search"),
+    runId: runShortcode,
+  }),
+]);
+export type ReportCommandRequest = z.infer<typeof reportCommandRequest>;
+
+export const reportCommand = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  /** The main command of its row; the rest draw as secondary. */
+  prominent: z.boolean(),
+  confirm: z.string().min(1).nullable(),
+  request: reportCommandRequest,
+});
+export type ReportCommand = z.infer<typeof reportCommand>;
 
 const reportRecordRow = z.object({
   /** The record the row opens (any entity key), or null for a row that only reads. */
@@ -188,6 +255,18 @@ const reportRecordRow = z.object({
   key: z.string().optional(),
   /** Why the row cannot be checked; absent or null when it can. */
   disabledReason: z.string().nullable().optional(),
+  /** Status chips with a tone (a run's approvals, findings and operations). */
+  statuses: z
+    .array(z.object({ label: z.string(), tone: reportTone.optional() }))
+    .optional(),
+  /** Lines under the title, each with its own tone. */
+  lines: z
+    .array(z.object({ text: z.string(), tone: reportTone.optional() }))
+    .optional(),
+  /** Raw material kept out of the way (an operation's arguments). */
+  detail: z.object({ label: z.string(), text: z.string() }).optional(),
+  /** Commands on this row: each runs an existing operation after its declared confirmation. */
+  commands: z.array(reportCommand).optional(),
 });
 export type ReportRecordRow = z.infer<typeof reportRecordRow>;
 
@@ -236,5 +315,18 @@ export const reportBlock = z.discriminatedUnion("kind", [
 ]);
 export type ReportBlock = z.infer<typeof reportBlock>;
 
-export const entityReportOut = z.object({ blocks: z.array(reportBlock) });
+export const entityReportOut = z.object({
+  blocks: z.array(reportBlock),
+  /** The record is still moving; clients poll while true. */
+  live: z.boolean().optional(),
+  /** The record's status as of this read; a client showing another refreshes its record. */
+  status: z.string().optional(),
+  /** More of the same report; pass it back as `cursor`. */
+  nextCursor: z.string().optional(),
+});
 export type EntityReportOut = z.infer<typeof entityReportOut>;
+
+export const entityReportManyOut = z.object({
+  reports: z.array(z.object({ slot: reportSlot, report: entityReportOut })),
+});
+export type EntityReportManyOut = z.infer<typeof entityReportManyOut>;

@@ -34,21 +34,19 @@ import {
 import { usePhotoRunReview } from "~/app/runs/photo-group-review";
 import { PhotoImportRunView } from "~/app/runs/photo-run-detail";
 import type { RunDetail } from "~/contracts/run.contract";
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
   purchaseImport,
   run as runOperations,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { formatInstant } from "~/lib/date-format";
 import { putPresignedObject } from "~/lib/presigned-upload";
-import { cn, formatCurrency } from "~/lib/utils";
+import { formatCurrency } from "~/lib/utils";
 import { useSectionVisible } from "~/ui/data-table/detail-page";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Badge, type BadgeVariant } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import { StatGrid, StatTile } from "~/ui/primitives/stat-tile";
 import { StatusText } from "~/ui/primitives/status-text";
 import {
   Table,
@@ -69,7 +67,6 @@ import {
   type AgentWorkItem,
 } from "./agent-work-summary";
 import { PreparedPurchaseReview } from "./prepared-purchase-review";
-import { RunFindingActions } from "./run-finding-actions";
 import { ValidationCorrectionsReview } from "./validation-corrections-review";
 
 const ACTIVE_RUN_STATUSES = new Set([
@@ -94,9 +91,6 @@ const statusBadgeVariant = (status: string): BadgeVariant => {
   if (status.startsWith("paused")) return "warning";
   return "secondary";
 };
-
-const formatMoment = (value: string | null): string =>
-  value ? formatInstant(value, "dateTime") : "Still active";
 
 const EMPTY_AGENT_SNAPSHOT: AgentConversationObservationSnapshot = {
   conversation: undefined,
@@ -188,12 +182,10 @@ function runActions(run: RunDetail): RunAction[] {
 function RunActionButtons({
   runId,
   actions,
-  target,
   children,
 }: {
   runId: RunDetail["publicId"];
   actions: readonly RunAction[];
-  target?: Pick<RunControlInput, "operationId" | "approvalId">;
   children?: ReactNode;
 }) {
   const control = useMutation(
@@ -214,9 +206,7 @@ function RunActionButtons({
             size="sm"
             variant={item.variant}
             disabled={control.isPending || item.disabled}
-            onClick={() =>
-              control.mutate({ runId, action: item.action, ...target })
-            }
+            onClick={() => control.mutate({ runId, action: item.action })}
           >
             {item.label}
           </Button>
@@ -739,90 +729,6 @@ function useAbsentAgentRefresh(
   }, [phase, dispatchEventId, observation]);
 }
 
-/** Timestamped rows, newest or oldest first as the caller orders them. */
-function TimedRows({
-  label,
-  rows,
-  className = "max-h-[32rem]",
-}: {
-  label: string;
-  rows: ReadonlyArray<{ key: string; at: string; body: ReactNode }>;
-  className?: string;
-}) {
-  return (
-    <div className={cn("overflow-auto", className)} aria-label={label}>
-      {rows.map((row) => (
-        <div
-          key={row.key}
-          className="grid gap-1 border-b border-border py-2 last:border-0 md:grid-cols-[12rem_minmax(0,1fr)] md:gap-2"
-        >
-          <time
-            className="font-mono text-xs text-muted-foreground"
-            dateTime={row.at}
-          >
-            {new Date(row.at).toISOString()}
-          </time>
-          <div className="min-w-0">{row.body}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-const memberName = (member: RunDetail["actor"]) =>
-  member.name ?? member.ledgerParty?.name ?? "Household member";
-
-function RunProgress({ run }: { run: RunDetail }) {
-  return (
-    <Section
-      description={
-        run.latestProgress ? (
-          <ShortcodeProse>{`${run.latestProgress.phase}${run.latestProgress.detail ? ` · ${run.latestProgress.detail}` : ""}`}</ShortcodeProse>
-        ) : (
-          "No progress updates have been recorded."
-        )
-      }
-    >
-      {run.controllingMembers.length ? (
-        <p className="text-sm text-muted-foreground">
-          Controlled by {run.controllingMembers.map(memberName).join(", ")}.
-        </p>
-      ) : null}
-      {run.controlHistory.length ? (
-        <TimedRows
-          label="Control history"
-          className="max-h-60"
-          rows={run.controlHistory.map((event) => ({
-            key: `${event.action}-${event.createdAt}`,
-            at: event.createdAt,
-            body: (
-              <p className="text-sm">
-                <span className="font-medium">{memberName(event)}</span>{" "}
-                {event.action.replaceAll("_", " ")}
-              </p>
-            ),
-          }))}
-        />
-      ) : null}
-      {run.progress.length ? (
-        <TimedRows
-          label="Run progress history"
-          className="max-h-[50vh]"
-          rows={[...run.progress].reverse().map((progress) => ({
-            key: progress.eventId,
-            at: progress.createdAt,
-            body: (
-              <p className="text-sm">
-                <ShortcodeProse>{`${progress.phase}${progress.currentItem ? ` · ${progress.currentItem}` : ""}${progress.detail ? ` · ${progress.detail}` : ""}`}</ShortcodeProse>
-              </p>
-            ),
-          }))}
-        />
-      ) : null}
-    </Section>
-  );
-}
-
 function TerminalAgentSurface({ run }: { run: RunDetail }) {
   const client = useMemo(
     () => createFlueClient({ url: agentUrl(run.publicId) }),
@@ -1116,51 +1022,6 @@ function ToolValue({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-function RunTimeline({
-  run,
-  titled = true,
-}: {
-  run: RunDetail;
-  titled?: boolean;
-}) {
-  return (
-    <Section
-      title={titled ? "Durable transcript" : undefined}
-      description="Oldest first. System and Mac events are retained as structured operation evidence; sensitive page content and credentials are excluded."
-    >
-      {run.operations.length > 0 ? (
-        <TimedRows
-          label="Import run transcript"
-          rows={run.operations.map((operation) => ({
-            key: operation.operationId,
-            at: operation.startedAt,
-            body: (
-              <>
-                <Row wrap gap="sm" align="center">
-                  <code className="text-xs">{operation.kind}</code>
-                  <Badge variant={statusBadgeVariant(operation.state)}>
-                    {operation.state}
-                  </Badge>
-                </Row>
-                <p className="font-mono text-xs break-all text-muted-foreground">
-                  {operation.operationId}
-                </p>
-                {operation.error ? (
-                  <p className="text-sm text-destructive">{operation.error}</p>
-                ) : null}
-              </>
-            ),
-          }))}
-        />
-      ) : (
-        <StatusText>
-          No durable operations have been recorded for this run.
-        </StatusText>
-      )}
-    </Section>
-  );
-}
-
 /** One titled list of run records, or its empty copy. */
 function RunRecordList<T>({
   description,
@@ -1192,64 +1053,6 @@ function RunRecordList<T>({
       ) : (
         <StatusText>{empty}</StatusText>
       )}
-    </Section>
-  );
-}
-
-function RunDebugLog({
-  runId,
-  active,
-  titled = true,
-}: {
-  runId: RunDetail["publicId"];
-  active: boolean;
-  titled?: boolean;
-}) {
-  const log = useQuery({
-    ...runOperations.logs.queryOptions({ runId }),
-    refetchInterval: active ? 3_000 : false,
-  });
-  return (
-    <Section
-      title={titled ? "System and Mac log" : undefined}
-      description="Structured server and browser-bridge events are retained when the agent conversation cannot explain a transition."
-    >
-      {log.isLoading ? <StatusText>Loading structured log…</StatusText> : null}
-      {log.isError ? (
-        <StatusText tone="destructive">{log.error.message}</StatusText>
-      ) : null}
-      {log.data?.entries.length ? (
-        <TimedRows
-          label="System and Mac log"
-          className="max-h-80"
-          rows={log.data.entries.map((entry) => ({
-            key: entry.id,
-            at: entry.occurredAt,
-            body: (
-              <>
-                <Row wrap gap="sm" align="center">
-                  <Badge
-                    variant={
-                      entry.level === "error" ? "destructive" : "outline"
-                    }
-                  >
-                    {entry.source}
-                  </Badge>
-                  <code className="text-xs">{entry.event}</code>
-                </Row>
-                {entry.error ? (
-                  <p className="text-sm text-destructive">{entry.error}</p>
-                ) : null}
-              </>
-            ),
-          }))}
-        />
-      ) : null}
-      {log.data?.truncated ? (
-        <p className="text-xs text-warning">
-          This view is limited to the first 2,000 events.
-        </p>
-      ) : null}
     </Section>
   );
 }
@@ -1361,35 +1164,6 @@ export function RunImportControls({ record }: { record: RunOut }) {
   );
 }
 
-/** Run detail slot: the order counts. Owns the shared read's loading and error copy. */
-export function RunImportStats({ record }: { record: RunOut }) {
-  return (
-    <ImportRunSlot record={record} primary>
-      {(run) => (
-        <StatGrid>
-          <StatTile label="Orders seen">{run.ordersSeen}</StatTile>
-          <StatTile label="Imported">{run.imported}</StatTile>
-          <StatTile label="Updated">{run.updated}</StatTile>
-          <StatTile label="Skipped">{run.skipped}</StatTile>
-        </StatGrid>
-      )}
-    </ImportRunSlot>
-  );
-}
-
-// A live run leads with its progress and agent; a stopped run carries the
-// same two after its evidence. Both placements are declared, and each shows
-// only in its own state.
-
-/** Run detail slot: progress and control history while the run is live. */
-export function RunImportProgressActive({ record }: { record: RunOut }) {
-  return (
-    <ImportRunSlot record={record} visible={isActiveRun}>
-      {(run) => <RunProgress run={run} />}
-    </ImportRunSlot>
-  );
-}
-
 /** Run detail slot: the live agent conversation while the run is live. */
 export function RunImportAgentActive({ record }: { record: RunOut }) {
   return (
@@ -1399,141 +1173,11 @@ export function RunImportAgentActive({ record }: { record: RunOut }) {
   );
 }
 
-/** Run detail slot: progress and control history once the run has stopped. */
-export function RunImportProgressStopped({ record }: { record: RunOut }) {
-  return (
-    <ImportRunSlot record={record} visible={isStoppedRun}>
-      {(run) => <RunProgress run={run} />}
-    </ImportRunSlot>
-  );
-}
-
 /** Run detail slot: the view-only agent history once the run has stopped. */
 export function RunImportAgentStopped({ record }: { record: RunOut }) {
   return (
     <ImportRunSlot record={record} visible={isStoppedRun}>
       {(run) => <TerminalAgentSurface run={run} />}
-    </ImportRunSlot>
-  );
-}
-
-/** Run detail slot: the purchases this run wrote. */
-export function RunImportPurchases({ record }: { record: RunOut }) {
-  return (
-    <ImportRunSlot record={record}>
-      {(run) =>
-        run.affectedPurchases.length > 0 ? (
-          <Stack gap="sm">
-            {run.affectedPurchases.map((purchase) => (
-              <EntityRefLink
-                key={purchase.shortcode}
-                entity="purchase"
-                data={{
-                  id: purchase.shortcode,
-                  orderId: purchase.orderId,
-                  displayLabel: purchase.displayName,
-                }}
-                displayImage={null}
-              />
-            ))}
-          </Stack>
-        ) : (
-          <StatusText>No purchases were changed by this run.</StatusText>
-        )
-      }
-    </ImportRunSlot>
-  );
-}
-
-/** Run detail slot: approval proposals, with grant and reject while pending. */
-export function RunImportApprovals({ record }: { record: RunOut }) {
-  return (
-    <ImportRunSlot record={record}>
-      {(run) => (
-        <RunRecordList
-          items={run.approvals}
-          empty="No approvals were required for this run."
-          render={(approval) => ({
-            key: approval.id,
-            body: (
-              <>
-                <Row wrap gap="sm" align="center">
-                  <Badge variant={statusBadgeVariant(approval.state)}>
-                    {approval.state}
-                  </Badge>
-                  <code className="text-xs">{approval.operationKind}</code>
-                  <code className="text-xs break-all text-muted-foreground">
-                    {approval.operationId}
-                  </code>
-                </Row>
-                <ToolValue label="Proposed arguments" value={approval.args} />
-                <span className="text-xs text-muted-foreground">
-                  {approval.rejectedAt
-                    ? `Rejected ${formatMoment(approval.rejectedAt)}`
-                    : approval.grantedAt
-                      ? `Granted ${formatMoment(approval.grantedAt)}`
-                      : "Awaiting explicit approval"}
-                </span>
-                {approval.state === "pending" ? (
-                  <RunActionButtons
-                    runId={run.publicId}
-                    target={{
-                      operationId: approval.operationId,
-                      approvalId: approval.id,
-                    }}
-                    actions={APPROVAL_ACTIONS}
-                  />
-                ) : null}
-              </>
-            ),
-          })}
-        />
-      )}
-    </ImportRunSlot>
-  );
-}
-
-/** Run detail slot: findings the run recorded. */
-export function RunImportFindings({ record }: { record: RunOut }) {
-  return (
-    <ImportRunSlot record={record}>
-      {(run) => (
-        <RunRecordList
-          items={run.findings}
-          empty="No findings were recorded for this run."
-          render={(finding) => ({
-            key: finding.id,
-            body: (
-              <>
-                <Row wrap gap="sm" align="center">
-                  <Badge variant={statusBadgeVariant(finding.status)}>
-                    {finding.status}
-                  </Badge>
-                  <code className="text-xs">{finding.kind}</code>
-                  {finding.autoApplied ? (
-                    <Badge variant="outline">auto-applied</Badge>
-                  ) : null}
-                </Row>
-                <p>
-                  <ShortcodeProse>{finding.summary}</ShortcodeProse>
-                </p>
-                <p className="font-mono text-xs text-muted-foreground">
-                  {formatMoment(finding.createdAt)}
-                  {finding.probability == null
-                    ? ""
-                    : ` · ${(finding.probability * 100).toFixed(0)}%`}
-                  {finding.expiresAt
-                    ? ` · expires ${formatMoment(finding.expiresAt)}`
-                    : ""}
-                </p>
-                {finding.status === "open" ? (
-                  <RunFindingActions finding={finding} />
-                ) : null}
-              </>
-            ),
-          })}
-        />
-      )}
     </ImportRunSlot>
   );
 }
@@ -1614,65 +1258,11 @@ export function RunImportTargets({ record }: { record: RunOut }) {
   );
 }
 
-/** Run detail slot: evidence retained by the run itself. */
-export function RunImportEvidence({ record }: { record: RunOut }) {
-  return (
-    <ImportRunSlot record={record} visible={hasTargetsOrEvidence}>
-      {(run) => (
-        <RunRecordList
-          description="This evidence belongs to the run. Validation does not attach it to a purchase or product."
-          items={run.evidence}
-          empty="No run-scoped evidence was retained."
-          render={(evidence) => ({
-            key: evidence.id,
-            body: (
-              <>
-                <span className="font-medium">
-                  {evidence.filename ?? evidence.sourceKind}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {evidence.sourceKind}
-                  {evidence.mediaType ? ` · ${evidence.mediaType}` : ""}
-                  {evidence.checksum ? ` · ${evidence.checksum}` : ""}
-                </span>
-              </>
-            ),
-          })}
-        />
-      )}
-    </ImportRunSlot>
-  );
-}
-
 /** Run detail slot: immutable prepared lines and their explicit review decisions. */
 export function RunImportPreparedOrders({ record }: { record: RunOut }) {
   return (
     <ImportRunSlot record={record}>
       {(run) => <PreparedPurchaseReview run={run} />}
-    </ImportRunSlot>
-  );
-}
-
-/** Run detail slot: the durable operation transcript. */
-export function RunImportTimeline({ record }: { record: RunOut }) {
-  return (
-    <ImportRunSlot record={record}>
-      {(run) => <RunTimeline run={run} titled={false} />}
-    </ImportRunSlot>
-  );
-}
-
-/** Run detail slot: structured server and browser-bridge events. */
-export function RunImportDebugLog({ record }: { record: RunOut }) {
-  return (
-    <ImportRunSlot record={record}>
-      {(run) => (
-        <RunDebugLog
-          runId={run.publicId}
-          active={ACTIVE_RUN_STATUSES.has(run.status)}
-          titled={false}
-        />
-      )}
     </ImportRunSlot>
   );
 }
@@ -1697,10 +1287,19 @@ export function RunPhotoBatch({ record }: { record: RunOut }) {
               Timeline and system log
             </summary>
             <div className="mt-4 grid gap-4">
-              <RunTimeline run={run} />
-              <RunDebugLog
-                runId={run.publicId}
-                active={ACTIVE_RUN_STATUSES.has(run.status)}
+              <h3 className="text-sm font-medium">Durable transcript</h3>
+              <EntityReportSlot
+                slot="run.import-timeline"
+                id={run.publicId}
+                status={run.status}
+                nested
+              />
+              <h3 className="text-sm font-medium">System and Mac log</h3>
+              <EntityReportSlot
+                slot="run.import-debug-log"
+                id={run.publicId}
+                status={run.status}
+                nested
               />
             </div>
           </details>
@@ -1709,11 +1308,6 @@ export function RunPhotoBatch({ record }: { record: RunOut }) {
     </RunGate>
   );
 }
-
-const APPROVAL_ACTIONS: readonly RunAction[] = [
-  { action: "approve", label: "Approve import proposal" },
-  { action: "reject", label: "Reject import proposal", variant: "outline" },
-];
 
 function RunLink({ label, publicId }: { label: string; publicId: string }) {
   return (
