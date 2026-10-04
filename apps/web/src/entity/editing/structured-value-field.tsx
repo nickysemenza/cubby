@@ -514,11 +514,13 @@ function VariantEditor({
           placeholder={`Choose ${title.toLowerCase()}`}
           onValueChange={(chosen) => {
             const next = cases.find((candidate) => candidate.value === chosen);
-            if (next !== undefined && next !== selected)
-              form.setValue(path, blankCase(discriminator, next), {
-                shouldDirty: true,
-                shouldTouch: true,
-              });
+            if (next === undefined || next === selected) return;
+            form.setValue(path, blankCase(discriminator, next), {
+              shouldDirty: true,
+              shouldTouch: true,
+            });
+            // A refusal of the unchosen (or previous) case no longer applies to this one.
+            form.clearErrors(path);
           }}
         />
       </FormFieldGroup>

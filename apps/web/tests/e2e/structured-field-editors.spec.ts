@@ -46,7 +46,7 @@ test("a new account must choose its identity kind instead of getting a default",
   await expect(identity).toHaveValue("");
   await expect(dialog.getByRole("textbox", { name: "Issuer" })).toHaveCount(0);
   await dialog.getByRole("button", { name: "Create" }).click();
-  // The server refuses an account with no identity, and the dialog stays open.
+  // The form refuses an account with no identity, and the dialog stays open.
   await expect(dialog).toBeVisible();
 
   await identity.click();
@@ -60,5 +60,7 @@ test("a new account must choose its identity kind instead of getting a default",
   await page.getByRole("option", { name: "Primary" }).click();
   await dialog.getByRole("button", { name: "Create" }).click();
   await expect(dialog).toBeHidden();
-  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+  const row = page.getByRole("row").filter({ hasText: name });
+  await expect(row).toBeVisible();
+  await expect(row).toContainText("Credit card");
 });
