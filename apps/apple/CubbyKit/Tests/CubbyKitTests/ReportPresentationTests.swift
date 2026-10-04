@@ -58,6 +58,39 @@ struct ReportPresentationTests {
         #expect(kinds == ["stats", "chart", "chart", "table", "schedule", "note"])
     }
 
+    @Test func aNamedFigureHandsItsNumberToTheClientThatActsOnIt() throws {
+        let report = try JSONDecoder.cubby().decode(
+            EntityReportOut.self,
+            from: Data(
+                #"{"blocks":[{"kind":"stats","figures":[{"id":"weightGrams","label":"Total weight","value":812,"format":"text","text":"812 g"},{"label":"Totals","value":0,"format":"text","text":"Complete"}]}]}"#
+                    .utf8))
+        let presentation = ReportPresentation(report)
+        #expect(presentation.figureValue("weightGrams") == 812)
+        // An unnamed or unknown figure is never read by number: native derives nothing from a label.
+        #expect(presentation.figureValue("Totals") == nil)
+        let none = ReportPresentation(
+            try JSONDecoder.cubby().decode(
+                EntityReportOut.self,
+                from: Data(
+                    #"{"blocks":[{"kind":"stats","figures":[{"id":"weightGrams","label":"Total weight","value":null,"format":"text","text":"—"}]}]}"#
+                        .utf8)))
+        #expect(none.figureValue("weightGrams") == nil)
+    }
+
+    @Test func aBlocksOwnCommandsAreCarriedBesideItsRows() throws {
+        let report = try JSONDecoder.cubby().decode(
+            EntityReportOut.self,
+            from: Data(
+                #"{"blocks":[{"kind":"records","rows":[],"empty":"None yet","commands":[{"id":"generate-flow:first","label":"Generate walkthrough","prominent":true,"confirm":"Uses the model.","request":{"kind":"generate-recipe-flow","recipeId":"RCP-4K7M","force":false}}]}]}"#
+                    .utf8))
+        guard case .records(let records) = ReportPresentation(report).blocks[0] else {
+            Issue.record("expected records")
+            return
+        }
+        #expect(records.commands.map(\.label) == ["Generate walkthrough"])
+        #expect(records.commands.first?.confirm == "Uses the model.")
+    }
+
     @Test func missingFigureIsADashNotZero() throws {
         guard case .stats(_, let figures) = try presentation().blocks[0] else {
             Issue.record("expected stats")

@@ -3,8 +3,8 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 
 import { AddToMeal } from "~/app/meals/add-to-meal";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { CopyRecipeParseButton } from "~/features/recipes/copy-corpus-button";
-import { RecipeAvailabilityPanel } from "~/features/recipes/RecipeAvailabilityPanel";
 import RecipeDetail, {
   type RecipeViewMode,
 } from "~/features/recipes/RecipeDetail";
@@ -71,7 +71,7 @@ export const RecipeWorkflow: DetailSlotComponent<"recipe"> = ({
         <AddToMeal recipeId={recipe.id} recipeName={recipe.name} />
         <CopyRecipeParseButton recipe={recipe} />
       </Row>
-      <RecipeAvailabilityPanel recipeId={recipe.id} />
+      <EntityReportSlot slot="recipe.availability" id={recipe.id} />
       <RecipeDetail
         recipe={recipe}
         openCostingGap={openCostingGap}

@@ -16,7 +16,6 @@ struct RecordRowView: View {
     var large = false
     /// Runs the row's commands (a run's approve, apply, dismiss); nil where none are offered.
     var model: ReportSlotModel?
-    @State private var confirming: ReportCommand?
 
     var body: some View {
         if let entity = row.entity, let id = row.recordID {
@@ -58,16 +57,6 @@ struct RecordRowView: View {
             .multilineTextAlignment(.trailing)
         }
         .accessibilityElement(children: .combine)
-        .confirmationDialog(
-            confirming?.label ?? "", isPresented: confirmingBinding, titleVisibility: .visible,
-            presenting: confirming
-        ) { command in
-            Button(command.label) {
-                if let model { Task { await model.run(command, confirmed: true) } }
-            }
-        } message: { command in
-            Text(command.confirm ?? "")
-        }
     }
 
     /// Toned status chips, lines, the raw block and commands a row carries beyond its title.
@@ -90,19 +79,47 @@ struct RecordRowView: View {
             .font(.caption)
         }
         if let model, !row.commands.isEmpty {
-            // Server-worded commands ("Approve import proposal") can be wider than half a phone
-            // row: stack them rather than wrapping a label mid-word.
-            ViewThatFits(in: .horizontal) {
-                HStack { commandButtons(model: model) }
-                VStack(alignment: .leading) { commandButtons(model: model) }
+            ReportCommandBar(commands: row.commands, model: model)
+        }
+    }
+}
+
+/// The commands the server offers on a row or a whole block. One with a declared confirmation
+/// asks first; one with inputs opens a form for them first; the rest act on the tap. Nothing is
+/// sent from a label: the model runs the exact request the server composed, plus only what the
+/// person entered.
+struct ReportCommandBar: View {
+    let commands: [ReportCommand]
+    let model: ReportSlotModel
+    @State private var confirming: ReportCommand?
+    @State private var draft: ReportCommandDraft?
+
+    var body: some View {
+        // Server-worded commands ("Approve import proposal") can be wider than half a phone
+        // row: stack them rather than wrapping a label mid-word.
+        ViewThatFits(in: .horizontal) {
+            HStack { commandButtons }
+            VStack(alignment: .leading) { commandButtons }
+        }
+        .confirmationDialog(
+            confirming?.label ?? "", isPresented: confirmingBinding, titleVisibility: .visible,
+            presenting: confirming
+        ) { command in
+            Button(command.label) { Task { await model.run(command, confirmed: true) } }
+        } message: { command in
+            Text(command.confirm ?? "")
+        }
+        .sheet(item: $draft) { _ in
+            if let binding = Binding($draft) {
+                ReportCommandFormSheet(draft: binding, model: model)
+                    .nativeSheet(.editor)
             }
         }
     }
 
-    @ViewBuilder
-    private func commandButtons(model: ReportSlotModel) -> some View {
-        ForEach(row.commands) { command in
-            Button(command.label) { start(command, model: model) }
+    @ViewBuilder private var commandButtons: some View {
+        ForEach(commands) { command in
+            Button(command.label) { start(command) }
                 .buttonStyle(.borderless)
                 .fontWeight(command.prominent ? .semibold : .regular)
                 .lineLimit(1)
@@ -115,12 +132,134 @@ struct RecordRowView: View {
         Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } })
     }
 
-    /// A command with a declared confirmation asks first; the rest act on the tap.
-    private func start(_ command: ReportCommand, model: ReportSlotModel) {
-        if command.confirm == nil {
+    private func start(_ command: ReportCommand) {
+        if !(command.inputs ?? []).isEmpty {
+            draft = ReportCommandDraft(command: command)
+        } else if command.confirm == nil {
             Task { await model.run(command, confirmed: false) }
         } else {
             confirming = command
+        }
+    }
+}
+
+/// A command's inputs being filled in; each presentation starts from the server's starting values.
+struct ReportCommandDraft: Identifiable {
+    let id = UUID()
+    let command: ReportCommand
+    var form: ReportCommandForm
+
+    init(command: ReportCommand) {
+        self.command = command
+        form = ReportCommandForm(command: command)
+    }
+}
+
+/// The inputs a command asks for (a number, a record from the picker, one of a few options). Run
+/// stays unavailable until every input has a usable answer, and asks the command's confirmation
+/// first when it declares one.
+struct ReportCommandFormSheet: View {
+    @Binding var draft: ReportCommandDraft
+    let model: ReportSlotModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var picking: ReportCommandForm.Field?
+    @State private var confirming = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                ForEach(draft.form.fields) { field in
+                    switch field.kind {
+                    case .number:
+                        TextField(
+                            field.label,
+                            text: Binding(
+                                get: { draft.form.numberText(field.key) },
+                                set: { draft.form.setNumberText(field.key, $0) })
+                        )
+                        #if os(iOS)
+                            .keyboardType(.decimalPad)
+                        #endif
+                        .accessibilityIdentifier("report.input.\(field.key)")
+                    case .record:
+                        Button {
+                            picking = field
+                        } label: {
+                            LabeledContent(field.label) {
+                                Text(draft.form.title(field.key) ?? "Choose…")
+                                    .foregroundStyle(
+                                        draft.form.text(field.key) == nil
+                                            ? Color.secondary : FieldGuideTokens.graphite
+                                    )
+                                    .lineLimit(1)
+                            }
+                            .frame(minHeight: FieldGuideTokens.touchTarget)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("report.input.\(field.key)")
+                    case .choice(let options):
+                        Picker(
+                            field.label,
+                            selection: Binding(
+                                get: { draft.form.text(field.key) },
+                                set: { draft.form.setChoice(field.key, $0) })
+                        ) {
+                            ForEach(options) { option in
+                                Text(option.label).tag(Optional(option.value))
+                            }
+                        }
+                        .accessibilityIdentifier("report.input.\(field.key)")
+                    }
+                }
+                if !draft.form.isComplete {
+                    Text("Still needed: \(draft.form.missing.joined(separator: ", "))")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if let error = model.actionError {
+                    Text(error).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
+                }
+            }
+            .navigationTitle(draft.command.label)
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(draft.command.label) {
+                        if draft.command.confirm == nil { run() } else { confirming = true }
+                    }
+                    .disabled(!draft.form.isComplete || model.busyActionID != nil)
+                    .accessibilityIdentifier("report.input.run")
+                }
+            }
+            .confirmationDialog(
+                draft.command.label, isPresented: $confirming, titleVisibility: .visible
+            ) {
+                Button(draft.command.label) { run() }
+            } message: {
+                Text(draft.command.confirm ?? "")
+            }
+            .sheet(item: $picking) { field in
+                if case .record(let entity) = field.kind, let target = EntityKey(rawValue: entity) {
+                    EntityPickerSheet(
+                        target: target, selected: [draft.form.text(field.key)].compactMap { $0 }
+                    ) {
+                        picks in
+                        guard let picked = picks.first else { return }
+                        draft.form.setRecord(field.key, id: picked.id, title: picked.title)
+                    }
+                }
+            }
+        }
+    }
+
+    private func run() {
+        let command = draft.command
+        let form = draft.form
+        Task {
+            if await model.run(command, confirmed: true, form: form) != nil { dismiss() }
         }
     }
 }
@@ -148,6 +287,7 @@ struct RecordsBlockView: View {
     @Environment(AppModel.self) private var appModel
     @State private var action: HeroActionModel?
     @State private var staged: StagedEdit?
+    @State private var reviewing: AIReviewRequest?
     @State private var notice: String?
     @State private var busy = false
     // Finance verbs (`records.verbs`): checked rows, and the flows they open.
@@ -236,6 +376,9 @@ struct RecordsBlockView: View {
                 Divider()
                 Text(footer).font(.subheadline).foregroundStyle(.secondary)
             }
+            if let model, !records.commands.isEmpty {
+                ReportCommandBar(commands: records.commands, model: model)
+            }
             if let form = records.form, let model {
                 ReportFormFooterView(
                     form: form, rowChoices: records.rowChoices, answers: $answers, model: model)
@@ -279,6 +422,10 @@ struct RecordsBlockView: View {
                 stagedValues: edit.values
             ) { _ in host?.onChanged() }
             .environment(appModel)
+        }
+        .sheet(item: $reviewing) { request in
+            AIReviewSheet(review: request.review)
+                .nativeSheet(.preview)
         }
         .alert(notice ?? "", isPresented: noticeBinding) { Button("OK") {} }
     }
@@ -490,9 +637,19 @@ struct RecordsBlockView: View {
             host?.onChanged()
         case .editRecord(let entity, let id, let values):
             staged = StagedEdit(entity: entity, recordID: id, values: values)
+        case .review(let review):
+            appModel.recordEntityMutation(keys: review.changed)
+            host?.onChanged()
+            reviewing = AIReviewRequest(review: review)
         case .editor:
             // Only hero verbs open a create editor; no records verb has such a plan.
             break
         }
     }
+}
+
+/// A review waiting to be read; each analysis is its own presentation.
+private struct AIReviewRequest: Identifiable {
+    let id = UUID()
+    let review: HeroActionReview
 }

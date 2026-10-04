@@ -454,6 +454,33 @@ export const recipeHandlers = implementOperationDomain(recipeContract, {
       await imports.insertImportWorkflow(context, importRecipe),
     );
   },
+  reprocessCookbookOnce: async (context, input) => {
+    let result = { reprocessed: 0, importableExtras: 0 };
+    for await (const event of imports.reprocessCookbookWorkflow(context, input))
+      if (event.type === "done")
+        result = {
+          reprocessed: event.result.reprocessed,
+          importableExtras: event.result.importableExtras.length,
+        };
+    return result;
+  },
+  importCookbookRecipesOnce: async (context, input) => {
+    const failures: { sourceRecipeId: string; error: string }[] = [];
+    let summary = { succeeded: 0, failed: 0 };
+    for await (const event of imports.importCookbookWorkflow(context, input)) {
+      if (event.type === "progress" && event.item?.ok === false)
+        failures.push({
+          sourceRecipeId: event.item.sourceRecipeId,
+          error: event.item.error,
+        });
+      if (event.type === "done") summary = event.result;
+    }
+    return { ...summary, failures };
+  },
+  reparseLine: async (context, input) => {
+    const { reparseRecipeLine } = await import("./recipe-line-reparse");
+    return reparseRecipeLine(context, input);
+  },
   patchLine: async (context, input) => {
     const patched = await patchRecipeLine(context, input);
     return {

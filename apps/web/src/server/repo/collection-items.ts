@@ -1,5 +1,8 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { ReportRecordRow } from "@cubby/schemas/entity-report";
+import type {
+  ReportCommand,
+  ReportRecordRow,
+} from "@cubby/schemas/entity-report";
 import type { ImageAssociation } from "@cubby/schemas/image";
 import type { ProductCookbookRefOut } from "@cubby/schemas/product";
 import type { RunSummary } from "@cubby/schemas/run";
@@ -64,6 +67,8 @@ const compareUsages = (a: UsageForItems, b: UsageForItems) =>
   (a.rawLine ?? "").localeCompare(b.rawLine ?? "");
 
 export type UsageForItems = {
+  /** The recipe line's row id, the handle a re-parse of that one line needs. */
+  id: string;
   recipe: { id: string; name: string };
   sectionName?: string | null;
   amounts: readonly Amount[];
@@ -80,6 +85,8 @@ export const recipeUsageItems = (
   formatAmount: (amount: Amount) => string,
   /** Badges for a line a fresh parse would change, composed by the caller (it owns the parser). */
   badgesOf: (usage: UsageForItems) => string[] = () => [],
+  /** What the person can do to a line (re-parse it), composed by the caller. */
+  commandsOf: (usage: UsageForItems) => ReportCommand[] = () => [],
 ): ReportRecordRow[] =>
   [...usages].sort(compareUsages).map((usage) => ({
     entity: "recipe",
@@ -99,6 +106,7 @@ export const recipeUsageItems = (
       .join("\n"),
     trailing: null,
     badges: badgesOf(usage),
+    commands: commandsOf(usage),
   }));
 
 /** The records an image is attached to, one row each opening the record. */

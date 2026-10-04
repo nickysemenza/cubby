@@ -145,6 +145,32 @@ const recipeLinePatchOut = z.object({
   }),
 });
 
+const cookbookReprocessOnceOut = z.object({
+  reprocessed: z.number().int().nonnegative(),
+  /** Source recipes the book does not hold yet. */
+  importableExtras: z.number().int().nonnegative(),
+});
+const cookbookImportOnceOut = z.object({
+  succeeded: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  /** The raw reason each failed source recipe gave. */
+  failures: z.array(
+    z.object({ sourceRecipeId: z.string(), error: z.string() }),
+  ),
+});
+
+const recipeLineReparseInput = z.object({
+  recipeId: recipeShortcode,
+  // Declared exception: a recipe line has no shortcode (see `recipeLinePatchInput`).
+  lineId: z.uuid(),
+});
+const recipeLineReparseOut = z.object({
+  recipeId: recipeShortcode,
+  status: z.enum(["updated", "unchanged"]),
+  /** The axes written, in the order the parser reports drift. */
+  changed: z.array(z.enum(["amount", "modifier", "name"])),
+});
+
 export const recipeContract = defineContract("recipe", {
   getManyByIDs: query({
     input: recipeIdsInput,
@@ -196,6 +222,7 @@ export const recipeContract = defineContract("recipe", {
     cache: { tags: [["recipe", "flow"]] },
   }),
   generateFlow: mutation({
+    native: "Generate a recipe's AI walkthrough from its report",
     input: recipeFlowGenerateInputSchema,
     output: recipeFlowArtifactSchema,
     invalidates: ["recipe"],
@@ -257,6 +284,30 @@ export const recipeContract = defineContract("recipe", {
     input: recipeLinePatchInput,
     output: recipeLinePatchOut,
     invalidates: ["recipe"],
+  }),
+  /**
+   * `reprocessCookbook` run to its end for a client with no stream: the same workflow, answered
+   * once with its summary.
+   */
+  reprocessCookbookOnce: mutation({
+    native: "Reprocess a cookbook from its report command",
+    input: cookbookIdInput,
+    output: cookbookReprocessOnceOut,
+    invalidates: ["recipe", "cookbook"],
+  }),
+  /** `importCookbookStream` run to its end, answered once with its summary. */
+  importCookbookRecipesOnce: mutation({
+    native: "Add source recipes to a cookbook from its report command",
+    input: importCookbookStreamInput,
+    output: cookbookImportOnceOut,
+    invalidates: ["recipe", "cookbook"],
+  }),
+  /** Re-parse one stored line with the current parser and write what changed. */
+  reparseLine: mutation({
+    native: "Re-parse a recipe line from a report row",
+    input: recipeLineReparseInput,
+    output: recipeLineReparseOut,
+    invalidates: ["recipe", "ingredient"],
   }),
   parseHtml: mutation({
     input: parseRecipeHtmlInput,

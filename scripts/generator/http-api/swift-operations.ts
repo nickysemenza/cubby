@@ -796,6 +796,38 @@ const CLIENT_PASSTHROUGH_METHODS = {
   },
   "product.purchases": { method: "productPurchases", doc: null },
   "recipe.getIngredientUsage": { method: "ingredientUsage", doc: null },
+  "meal.addRecipe": {
+    method: "addRecipeToMeal",
+    doc: "Plans a recipe into a meal at a scale; the composition report's Add recipe command sends it.",
+  },
+  "meal.updateRecipe": {
+    method: "updateMealRecipe",
+    doc: "Changes the scale of one recipe in a meal.",
+  },
+  "meal.removeRecipe": {
+    method: "removeMealRecipe",
+    doc: "Removes one recipe from a meal, after the report's confirmation.",
+  },
+  "meal.savePreparation": {
+    method: "saveMealPreparation",
+    doc: "Sets or removes a prepared recipe's portions and records its yield.",
+  },
+  "recipe.reprocessCookbookOnce": {
+    method: "reprocessCookbook",
+    doc: "Re-derives a cookbook's imported recipes from its stored extraction (no AI) and answers once with the summary.",
+  },
+  "recipe.importCookbookRecipesOnce": {
+    method: "importCookbookRecipes",
+    doc: "Imports the named source recipes from a cookbook's stored extraction and answers once with the summary.",
+  },
+  "recipe.generateFlow": {
+    method: "generateRecipeFlow",
+    doc: "Asks the AI to arrange a recipe's steps into a walkthrough; the report slot offers it behind a confirmation.",
+  },
+  "recipe.reparseLine": {
+    method: "reparseRecipeLine",
+    doc: "Re-parses one stored recipe line with the current parser; the server decides what changes and writes only that.",
+  },
   "run.history": { method: "runHistory", doc: null },
   // The collection-section actions' operations (`nativeCollectionActionPlans`), decoded from the
   // runner's form values into these typed inputs.

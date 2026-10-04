@@ -20,6 +20,15 @@ export type IngredientAvailabilityStatus = z.infer<
   typeof ingredientAvailabilityStatus
 >;
 
+/** The wording of each verdict, shared by every surface that prints one. */
+export const AVAILABILITY_STATUS_LABELS = {
+  ok: "Have enough",
+  short: "Short",
+  missing: "Need to buy",
+  unconvertible: "Can't compare units",
+  subrecipe: "Sub-recipe",
+} as const satisfies Record<IngredientAvailabilityStatus, string>;
+
 /** Whether planning coverage comes from counted stock or a staple assumption. */
 export const availabilitySource = z.enum(["inventory", "assumed"]);
 export type AvailabilitySource = z.infer<typeof availabilitySource>;

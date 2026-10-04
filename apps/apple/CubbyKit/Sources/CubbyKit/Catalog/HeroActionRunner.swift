@@ -33,6 +33,40 @@ public enum HeroActionOutcome: Sendable, Equatable {
     /// Open the update editor on an existing record with `staged` values set for review; Save is
     /// the only write.
     case editRecord(entity: EntityKey, id: String, staged: [String: JSONValue])
+    /// An AI answer the server already saved, shown against what it replaced before the person
+    /// moves on. Keep and Hide both just close it, as on web.
+    case review(HeroActionReview)
+}
+
+/// One AI answer set beside the text it replaced. The server composes both sides (`previous` is
+/// the description before this run), so nothing here is derived from a record that refetched.
+public struct HeroActionReview: Sendable, Equatable {
+    public let label: String
+    public let previous: String?
+    public let proposed: String
+    public let confidence: String
+    public let reasoning: String
+    public let model: String
+    public let analyzedAt: Date
+    /// `hit` replays a stored analysis, `miss` read the photos again.
+    public let cacheStatus: String
+    /// The entity kinds the run changed, so the screens showing them refresh.
+    public let changed: Set<EntityKey>
+
+    public init(
+        label: String, previous: String?, proposed: String, confidence: String, reasoning: String,
+        model: String, analyzedAt: Date, cacheStatus: String, changed: Set<EntityKey>
+    ) {
+        self.label = label
+        self.previous = previous
+        self.proposed = proposed
+        self.confidence = confidence
+        self.reasoning = reasoning
+        self.model = model
+        self.analyzedAt = analyzedAt
+        self.cacheStatus = cacheStatus
+        self.changed = changed
+    }
 }
 
 /// The server's answer to "what will this do?" for a verb that has one.
@@ -293,8 +327,14 @@ public struct HeroActionRunner: Sendable {
                         ? "Added to inventory" : "Added to inventory; merged into stock already there",
                     changed: [entity, .inventory, .location])
             case "ai.describeLocation":
-                _ = try await client.describeLocation(try body.decoded())
-                return .completed("Location analyzed", changed: [entity])
+                let result = try await client.describeLocation(try body.decoded())
+                return .review(
+                    HeroActionReview(
+                        label: "Analyzed contents", previous: result.previousDescription,
+                        proposed: result.description, confidence: result.confidence.rawValue,
+                        reasoning: "Read from this location's photos.", model: result.cache.model,
+                        analyzedAt: result.analyzedAt, cacheStatus: result.cache.status.rawValue,
+                        changed: [entity]))
             case "image.attachExisting":
                 return try await attachExistingImage(body, changed: entity)
             case "imageProcessing.status":

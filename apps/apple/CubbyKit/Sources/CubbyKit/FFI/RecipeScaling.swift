@@ -16,6 +16,15 @@ public enum RecipeScaling {
         CubbyFFI.scaleFactorForIngredient(originalValue: original, newValue: newValue)
     }
 
+    /// The factor that makes the recipe weigh `target` grams. `scaledWeight` is the weight as
+    /// shown (the unscaled weight times `currentFactor`), so the target never compounds on it.
+    public static func factor(forTotalWeight target: Double, scaledWeight: Double, currentFactor: Double)
+        -> Double
+    {
+        CubbyFFI.scaleFactorForTotalWeight(
+            targetGrams: target, scaledWeight: scaledWeight, currentFactor: currentFactor)
+    }
+
     /// A yield or serving count at `factor`, rounded to two decimals.
     public static func count(_ value: Double, factor: Double) -> Double {
         CubbyFFI.scaleDisplayCount(value: value, factor: factor)

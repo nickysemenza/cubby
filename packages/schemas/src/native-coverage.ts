@@ -233,9 +233,16 @@ export const nativeCoverage = {
       "product.unit-mappings",
       "product.fits-with",
       "product.runs",
+      // Scaling and cooking are Rust; the pantry's coverage, the totals gaps (with the unscaled
+      // weight a weight target measures against) and the AI walkthrough are server reports
+      // (`recipe.availability`, `recipe.costing-coverage`, `recipe.walkthrough`). The flow's
+      // "map" layout is a graph drawing and stays web's.
       "recipe.workflow",
       "ingredient.nutrition-product",
+      // A `records` report: a drifted line carries a confirmed Re-parse command.
       "ingredient.recipe-usages",
+      // Contents plus the server-worded extraction report; import progress with Add and a
+      // confirmed Reprocess as report commands.
       "cookbook.toc",
       "cookbook.import-progress",
       // One generic report view draws these from the server-composed
@@ -245,8 +252,10 @@ export const nativeCoverage = {
       "project.analytics",
       "project.schedule",
       "location.contents-valuation",
-      // Read-only recipes with scale and cost; adding food, rescaling, removing and the portion
-      // preparation workflow stay on web.
+      // The server's recipes (scale, cost) and portions, edited with report commands that carry
+      // the exact meal operation: add a recipe, change its scale, remove it (confirmed), set or
+      // remove a portion, mark it eaten, record the yield. Non-recipe foods and moving a portion
+      // to another meal (leftovers) stay on web.
       "meal.composition",
       // The same report view draws these as `records` blocks (rows with a thumbnail, badges and a
       // record to open); their verbs are `nativeCollectionActionPlans`, run by the hero-action

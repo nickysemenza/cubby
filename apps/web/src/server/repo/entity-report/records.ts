@@ -3,24 +3,27 @@ import type { CollectionActionId } from "@cubby/schemas/entity-definitions/colle
 import {
   labelNutritionSource,
   type ReportBlock,
+  type ReportCommand,
   reportSlotActions,
 } from "@cubby/schemas/entity-report";
 import {
   type ImageId,
+  type IngredientId,
   type LedgerPartyId,
   parseEntityId,
   parseShortcodeFor,
+  recipeShortcode,
 } from "@cubby/schemas/identifiers";
 import { runPurpose } from "@cubby/schemas/run-fields";
 import { and, asc, eq } from "drizzle-orm";
 
-import { computeParseDrift } from "~/lib/parse-drift";
+import { computeParseDrift, driftAxes } from "~/lib/parse-drift";
 import type { Database } from "~/server/db";
 import {
   cookbook,
   entityAttachment,
   image,
-  location,
+  ingredient,
   product,
   recipe,
 } from "~/server/db/schema";
@@ -38,7 +41,7 @@ import { getDb, mapImages, notDeleted } from "~/server/repo/database-helpers";
 import { getImageById } from "~/server/repo/image";
 import { getImageProcessingReadProjection } from "~/server/repo/image-processing";
 import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient/search";
-import { locationAiDescriptionSql } from "~/server/repo/location/ai-description";
+import { readLocationAiDescription } from "~/server/repo/location/ai-description";
 import {
   resolveLiveShortcode,
   resolveOrThrow,
@@ -61,7 +64,7 @@ const records = (
  * Loaded on demand: the WASM formatter (the one web and native share) is only needed once a
  * report has recipe lines to word.
  */
-const amountFormatter = async () => {
+export const amountFormatter = async () => {
   const { wasm } = await import("~/lib/wasm");
   return (amount: Amount) => {
     const request: Parameters<typeof wasm.format_amount_labeled>[0] = {
@@ -164,8 +167,12 @@ export const productCookbooksReport = async (db: Database, code: string) => {
   );
 };
 
-/** Lines a fresh parse would change, named by axis; parsed once for the whole report. */
-const driftBadges = async (
+/**
+ * Lines a fresh parse would change, named by axis, with the one command that applies it; parsed
+ * once for the whole report. The command carries only the line's ids: the server re-parses and
+ * decides what to write (`reparseRecipeLine`), so no client composes a patch.
+ */
+const driftExtras = async (
   usages: readonly UsageForItems[],
   knownNames: readonly string[],
 ) => {
@@ -173,23 +180,62 @@ const driftBadges = async (
   const fresh = wasm.parse_ingredient_lines(
     usages.map((usage) => usage.rawLine ?? ""),
   );
-  const byUsage = new Map<UsageForItems, string[]>();
+  const byUsage = new Map<UsageForItems, readonly string[]>();
   usages.forEach((usage, index) => {
     const parsed = fresh[index];
     if (!usage.rawLine || !parsed) return;
-    const drift = computeParseDrift(
-      { knownNames, amounts: usage.amounts, modifier: usage.modifier ?? null },
-      parsed,
+    const axes = driftAxes(
+      computeParseDrift(
+        {
+          knownNames,
+          amounts: usage.amounts,
+          modifier: usage.modifier ?? null,
+        },
+        parsed,
+      ),
     );
-    const axes = [
-      drift.amounts !== null ? "amount" : null,
-      drift.modifier !== null ? "modifier" : null,
-      drift.name !== null ? "name" : null,
-    ].filter((axis) => axis !== null);
-    if (axes.length > 0)
-      byUsage.set(usage, [`Re-parse changes ${axes.join(", ")}`]);
+    if (axes.length > 0) byUsage.set(usage, axes);
   });
-  return (usage: UsageForItems) => byUsage.get(usage) ?? [];
+  return {
+    badgesOf: (usage: UsageForItems) => {
+      const axes = byUsage.get(usage);
+      return axes ? [`Re-parse changes ${axes.join(", ")}`] : [];
+    },
+    commandsOf: (usage: UsageForItems): ReportCommand[] =>
+      byUsage.has(usage)
+        ? [
+            {
+              id: `reparse:${usage.id}`,
+              label: "Re-parse",
+              prominent: false,
+              confirm: `Re-parse this line in ${usage.recipe.name} with the current parser and apply the result to the recipe?`,
+              request: {
+                kind: "reparse-line",
+                recipeId: recipeShortcode.parse(usage.recipe.id),
+                lineId: usage.id,
+              },
+            },
+          ]
+        : [],
+  };
+};
+
+/** Every recipe line an ingredient is used in, each drifted one with its re-parse. */
+const recipeUsagesReport = async (
+  db: Database,
+  ingredient: { id: IngredientId; name: string; aliases: readonly string[] },
+) => {
+  const usages = (await getRecipeUsagesForIngredient(db, ingredient.id))
+    .recipeUsages;
+  if (usages.length === 0) return records([], "Not used in any recipes yet.");
+  const { badgesOf, commandsOf } = await driftExtras(usages, [
+    ingredient.name,
+    ...ingredient.aliases,
+  ]);
+  return records(
+    recipeUsageItems(usages, await amountFormatter(), badgesOf, commandsOf),
+    "Not used in any recipes yet.",
+  );
 };
 
 export const productRecipeAppearancesReport = async (
@@ -206,21 +252,22 @@ export const productRecipeAppearancesReport = async (
       },
     },
   });
-  const ingredient =
-    row?.ingredient?.deletedAt === null ? row.ingredient : null;
-  const usages = ingredient
-    ? (await getRecipeUsagesForIngredient(db, ingredient.id)).recipeUsages
-    : [];
-  if (!ingredient || usages.length === 0)
-    return records([], "Not used in any recipes yet.");
-  return records(
-    recipeUsageItems(
-      usages,
-      await amountFormatter(),
-      await driftBadges(usages, [ingredient.name, ...ingredient.aliases]),
-    ),
-    "Not used in any recipes yet.",
-  );
+  const linked = row?.ingredient?.deletedAt === null ? row.ingredient : null;
+  if (!linked) return records([], "Not used in any recipes yet.");
+  return recipeUsagesReport(db, linked);
+};
+
+export const ingredientRecipeUsagesReport = async (
+  db: Database,
+  code: string,
+) => {
+  const id = await resolveOrThrow(db, "ingredient", code);
+  const row = await getDb(db).query.ingredient.findFirst({
+    where: and(eq(ingredient.id, id), notDeleted(ingredient)),
+    columns: { id: true, name: true, aliases: true },
+  });
+  if (!row) return records([], "Not used in any recipes yet.");
+  return recipeUsagesReport(db, row);
 };
 
 export const imageAssociationsReport = async (db: Database, code: string) =>
@@ -238,12 +285,8 @@ export const locationAiDescriptionReport = async (
   code: string,
 ) => {
   const id = await resolveOrThrow(db, "location", code);
-  const [row] = await getDb(db)
-    .select({ aiDescription: locationAiDescriptionSql(location.id) })
-    .from(location)
-    .where(and(eq(location.id, id), notDeleted(location)));
   return records(
-    aiDescriptionItems(row?.aiDescription),
+    aiDescriptionItems(await readLocationAiDescription(db, id)),
     "No photos analyzed yet.",
     reportSlotActions["location.ai-description"],
   );

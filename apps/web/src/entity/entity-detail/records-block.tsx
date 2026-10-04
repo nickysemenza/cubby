@@ -393,6 +393,17 @@ export function RecordsBlockView({
           }
         />
       ) : null}
+      {(block.commands ?? []).length > 0 ? (
+        <Row wrap gap="sm">
+          {(block.commands ?? []).map((command) => (
+            <CommandButton
+              key={command.id}
+              command={command}
+              commands={commands}
+            />
+          ))}
+        </Row>
+      ) : null}
       {verbs.length > 0 ? (
         <Row gap="sm" wrap align="center" aria-live="polite">
           {verbs.map((verb) => {

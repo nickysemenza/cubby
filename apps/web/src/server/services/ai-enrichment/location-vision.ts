@@ -49,6 +49,7 @@ import {
   createInventoryEntry,
   getInventoryByLocationIds,
 } from "~/server/repo/inventory/crud";
+import { readLocationAiDescription } from "~/server/repo/location/ai-description";
 import {
   findLocationsNeedingAiDescription,
   getLocationById,
@@ -242,6 +243,11 @@ async function recordLocationAiUsage(
 export interface LocationDescriptionResult extends LocationDescription {
   cache: ReturnType<typeof cacheMetadata>;
   analyzedAt: Date;
+  /**
+   * The description that stood before this run (null for the first). The run itself replaces it,
+   * so a client can only show "what it was" because the server says it in the same answer.
+   */
+  previousDescription: string | null;
 }
 
 /**
@@ -260,6 +266,7 @@ export async function describeLocation(
   if (images.length === 0) {
     throw new LocationHasNoImagesToAnalyzeError();
   }
+  const previousDescription = await readLocationAiDescription(db, locationId);
 
   const inputFingerprint = buildLocationAnalysisFingerprint(
     LOCATION_DESCRIPTION_FEATURE,
@@ -295,6 +302,7 @@ export async function describeLocation(
       ...cached.result,
       cache: hitMetadata,
       analyzedAt: cached.analyzedAt,
+      previousDescription,
     };
   }
 
@@ -327,7 +335,12 @@ export async function describeLocation(
     source: "location-ai.description",
   });
 
-  return { ...result, cache: missMetadata, analyzedAt: new Date() };
+  return {
+    ...result,
+    cache: missMetadata,
+    analyzedAt: new Date(),
+    previousDescription,
+  };
 }
 
 async function matchDetectedItems(

@@ -3,13 +3,16 @@ import SwiftUI
 
 /// `recipe.workflow`: scale a recipe and cook it step by step. Scaling is Rust through CubbyKit's
 /// `RecipeScaling` (the same code web runs as WASM); the scale and the cook-mode position are
-/// local view state, never written back, as on web where they live only in the URL.
+/// local view state, never written back, as on web where they live only in the URL. What the
+/// pantry covers, why the totals are incomplete, the unscaled weight a weight target measures
+/// against, and the AI walkthrough are the server's reports (`recipe.availability`,
+/// `recipe.costing-coverage`, `recipe.walkthrough`): this loads and draws them.
 struct RecipeWorkflowDetailSlot: View {
     let row: EntityRow
 
     var body: some View {
         if let plan = RecipeCookPlan(recipe: row.raw), !plan.sections.isEmpty {
-            RecipeWorkflowView(plan: plan)
+            RecipeWorkflowView(plan: plan, recipeID: row.id)
         } else {
             Text("This recipe has no ingredients or method yet.").foregroundStyle(.secondary)
         }
@@ -18,9 +21,18 @@ struct RecipeWorkflowDetailSlot: View {
 
 struct RecipeWorkflowView: View {
     let plan: RecipeCookPlan
+    /// The recipe's code, for the server's reports; nil in a preview.
+    var recipeID: String?
     @State private var factor = 1.0
     @State private var customText = ""
+    @State private var weightText = ""
+    @State private var weightOpen = false
     @State private var cooking = false
+    @State private var walkthroughOpen = false
+    /// The unscaled total weight in grams, from the server's costing report; nil until it loads
+    /// or when no ingredient line reaches grams.
+    @State private var baseWeight: Double?
+    @State private var coverageLoaded = false
 
     private static let presets: [(label: String, factor: Double)] = [
         ("½×", 0.5), ("1×", 1), ("2×", 2), ("3×", 3),
@@ -28,6 +40,9 @@ struct RecipeWorkflowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+            if let recipeID {
+                ReportDetailSlot(slot: .recipe_availability, id: recipeID)
+            }
             scaleControls
             if let makes = plan.yieldLabel(factor: factor) {
                 Text("Makes \(makes)").font(.subheadline).foregroundStyle(.secondary)
@@ -55,6 +70,17 @@ struct RecipeWorkflowView: View {
             if plan.steps.isEmpty {
                 Text("This recipe has no method steps to cook through.")
                     .font(.caption).foregroundStyle(.secondary)
+            }
+            if let recipeID {
+                RecipeCoverageSection(
+                    recipeID: recipeID, requested: weightOpen, baseWeight: $baseWeight,
+                    loaded: $coverageLoaded)
+                DisclosureGroup("AI walkthrough", isExpanded: $walkthroughOpen) {
+                    if walkthroughOpen {
+                        ReportDetailSlot(slot: .recipe_walkthrough, id: recipeID)
+                    }
+                }
+                .accessibilityIdentifier("recipe.walkthrough")
             }
         }
         .sheet(isPresented: $cooking) {
@@ -85,7 +111,43 @@ struct RecipeWorkflowView: View {
                 Button("Apply", action: applyCustom)
                     .disabled(Double(customText) == nil)
             }
+            if recipeID != nil { weightAnchor }
         }
+    }
+
+    /// "Make this much": the target weight is measured against the unscaled weight the server
+    /// reported, by the same Rust rule web runs, so it never compounds on the current scale.
+    @ViewBuilder private var weightAnchor: some View {
+        if !weightOpen {
+            Button("Scale to a total weight…") { weightOpen = true }
+                .accessibilityIdentifier("recipe.workflow.weightOpen")
+        } else if let baseWeight {
+            HStack {
+                TextField(
+                    "Target total weight (g) — now \(Int((baseWeight * factor).rounded()))",
+                    text: $weightText
+                )
+                #if os(iOS)
+                    .keyboardType(.decimalPad)
+                #endif
+                .onSubmit(applyWeight)
+                .accessibilityIdentifier("recipe.workflow.weight")
+                Button("Apply", action: applyWeight)
+                    .disabled(Double(weightText) == nil)
+            }
+        } else if coverageLoaded {
+            Text("No weight conversion yet — add a unit mapping to scale by weight.")
+                .font(.caption).foregroundStyle(.secondary)
+        } else {
+            LoadingIndicator(label: "Loading weights")
+        }
+    }
+
+    private func applyWeight() {
+        guard let target = Double(weightText), let baseWeight else { return }
+        factor = RecipeScaling.factor(
+            forTotalWeight: target, scaledWeight: baseWeight * factor, currentFactor: factor)
+        weightText = ""
     }
 
     private var presetSelection: Binding<Double?> {
@@ -99,6 +161,43 @@ struct RecipeWorkflowView: View {
         // The clamp (finite, positive, floored) is Rust's, not a Swift rule.
         factor = RecipeScaling.clamp(value)
         customText = ""
+    }
+}
+
+/// Why a recipe's totals are incomplete, from the server's `recipe.costing-coverage` report. Read
+/// once the weight target or the disclosure asks for it (it costs the recipe), and hands the
+/// unscaled weight to the scale control.
+private struct RecipeCoverageSection: View {
+    let recipeID: String
+    /// The weight target was opened, which needs the report before the disclosure is.
+    let requested: Bool
+    @Binding var baseWeight: Double?
+    @Binding var loaded: Bool
+    @Environment(AppModel.self) private var appModel
+    @State private var open = false
+    @State private var model: ReportSlotModel?
+
+    var body: some View {
+        DisclosureGroup("Totals coverage", isExpanded: $open) {
+            if let presentation = model?.presentation {
+                ReportBlocksView(report: presentation, host: nil, model: model)
+            } else if let failure = model?.failure {
+                Text(failure).foregroundStyle(.secondary)
+            } else {
+                LoadingIndicator(label: "Loading")
+            }
+        }
+        .accessibilityIdentifier("recipe.costingCoverage")
+        .task(id: "\(recipeID)|\(open || requested)") {
+            guard open || requested else { return }
+            let next =
+                model
+                ?? ReportSlotModel(slot: .recipe_costingCoverage, id: recipeID, service: appModel.client)
+            model = next
+            await next.refresh()
+            baseWeight = next.presentation?.figureValue("weightGrams")
+            loaded = true
+        }
     }
 }
 

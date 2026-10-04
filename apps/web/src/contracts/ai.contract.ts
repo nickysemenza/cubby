@@ -52,6 +52,8 @@ import {
 const locationDescriptionWithProvenance = locationDescriptionSchema.extend({
   cache: aiCacheMetadataSchema,
   analyzedAt: zod.coerce.date(),
+  /** What the location said before this run: the left side of the review. */
+  previousDescription: zod.string().nullable(),
 });
 
 const detectedInventoryWithProvenance = detectedInventorySchema.extend({

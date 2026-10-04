@@ -1,69 +1,32 @@
 import type { RecipeUsage } from "@cubby/schemas/recipe";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 
-import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { recipe } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import type { ParseDrift } from "~/lib/parse-drift";
-import { showErrorToast } from "~/ui/feedback/error-details";
-
-import { useResolveIngredientName } from "./use-resolve-ingredient-names";
-
-type UsageWithDrift = Pick<RecipeUsage, "id" | "recipe"> & {
-  drift: ParseDrift;
-};
+import { useActionMutation } from "~/ui/hooks/useActionMutation";
 
 /**
- * Apply a usage's fresh parse to its stored line through `recipe.patchLine`.
- * A drifted name is resolved through the server's find-or-create (the same
- * resolution the Problems page's batch re-parse uses), so the line points at a
- * real ingredient rather than a name.
- *
- * `patchLine` cannot clear amounts (a patch carries at least one), so a parse
- * that drifted to no amount leaves the stored amount alone.
+ * Re-parse one usage's stored line through `recipe.reparseLine`. The server parses the source
+ * line, compares it axis by axis, resolves a drifted name and writes only what changed (the rule
+ * native's report row runs too), so this sends the line's ids and nothing more.
  */
 export function useReparseUsage() {
-  const queryClient = useQueryClient();
-  const patchLine = useMutation(recipe.patchLine.mutationOptions());
-  const { resolveName } = useResolveIngredientName();
+  const reparseLine = useActionMutation({
+    mutationFn: recipe.reparseLine.mutationOptions,
+    error: "Re-parse failed",
+    success: (result) =>
+      result.status === "updated"
+        ? `Re-parsed the line (${result.changed.join(", ")})`
+        : "Nothing to update from a fresh parse.",
+  });
 
   const reparse = async ({
     id,
     recipe: usageRecipe,
-    drift,
-  }: UsageWithDrift) => {
-    try {
-      const freshAmounts = drift.amounts?.filter((a) => a.value > 0) ?? [];
-      const patch = {
-        ...(freshAmounts.length > 0 && {
-          amounts: freshAmounts.map((a) => ({
-            value: a.value,
-            unit: a.unit,
-            ...(a.upper_value != null && { upperValue: a.upper_value }),
-          })),
-        }),
-        ...(drift.modifier !== null && { modifier: drift.modifier }),
-        ...(drift.name !== null && {
-          ingredientId: (await resolveName(drift.name)).id,
-        }),
-      };
-      if (Object.keys(patch).length === 0) {
-        toast.info("Nothing to update from a fresh parse.");
-        return;
-      }
-      await patchLine.mutateAsync({
-        recipeId: usageRecipe.id,
-        lineId: id,
-        patch,
-      });
-      // The usage list is an ingredient read, not a recipe one.
-      await invalidateOperationTags(queryClient, ripple.ingredient);
-      toast.success(`Re-parsed the line in ${usageRecipe.name}`);
-    } catch (error) {
-      showErrorToast(error, "Re-parse failed");
-    }
+  }: Pick<RecipeUsage, "id" | "recipe">) => {
+    await reparseLine
+      .mutateAsync({ recipeId: usageRecipe.id, lineId: id })
+      // `useActionMutation` already surfaces its own error toast.
+      .catch(() => undefined);
   };
 
-  return { reparse, isPending: patchLine.isPending };
+  return { reparse, isPending: reparseLine.isPending };
 }

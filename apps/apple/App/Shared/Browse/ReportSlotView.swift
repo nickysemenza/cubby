@@ -107,8 +107,11 @@ private struct ReportSlotContent: View {
         .onChange(of: model.actionNotice) { appModel.recordEntityMutation(keys: Self.written) }
     }
 
-    /// A command can change the run and the records its fix writes.
-    private static let written: Set<EntityKey> = [.run, .purchase, .expense, .financialTransaction]
+    /// A command can change the run and the records its fix writes (a re-parse writes a recipe
+    /// line and may create an ingredient; a composition change writes a meal).
+    private static let written: Set<EntityKey> = [
+        .run, .purchase, .expense, .financialTransaction, .recipe, .ingredient, .meal,
+    ]
 }
 
 struct ReportBlocksView: View {

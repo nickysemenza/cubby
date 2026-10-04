@@ -16,7 +16,6 @@ import { Description } from "~/ui/primitives/description";
 
 interface AiDescriptionSectionProps {
   locationId: LocationShortcode;
-  currentDescription: string | null;
   hasImages: boolean;
 }
 
@@ -46,7 +45,6 @@ interface DescriptionReview {
  */
 export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
   locationId,
-  currentDescription,
   hasImages,
 }) => {
   const describeMutation = useActionMutation({
@@ -66,11 +64,10 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
     basisKey: locationId,
     run: async () => {
       const data = await describeMutation.mutateAsync({ locationId });
-      // The description as it stood when this run started — the left side
-      // of the diff. Read here rather than snapshotted earlier because the
-      // location query refetches under the card.
+      // The server says what the description was before this run (the left
+      // side of the diff): the run replaces it, and native reads the same field.
       return {
-        previous: currentDescription,
+        previous: data.previousDescription,
         next: data.description,
         confidence: data.confidence,
         cache: data.cache,

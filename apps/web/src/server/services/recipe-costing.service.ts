@@ -276,6 +276,26 @@ export class RecipeCostingService {
     return result;
   }
 
+  /**
+   * One recipe's complete costing with the ingredient context it was computed from. Coverage reads
+   * need both: the per-row measures say what could not be resolved, the ingredients say which fix
+   * would resolve it.
+   */
+  async costingWithContext(recipeId: RecipeId) {
+    const [recipe] = await getRecipesByIDs(this.db, [recipeId]);
+    if (!recipe) throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
+    const { ingMap, recipeMap } = await this.loadContext([recipe]);
+    const costing = computeRecipeCosting(
+      [recipe],
+      ingMap,
+      getRecipeIngredientName,
+      recipeMap,
+    ).get(recipe.id);
+    if (!costing)
+      throw createAppError("RECIPE_NOT_FOUND", "Recipe could not be costed");
+    return { costing, ingMap };
+  }
+
   async explainRecipe(recipeId: RecipeId): Promise<RecipeCostingExplain> {
     const [state, recipes] = await Promise.all([
       getRecipeTotalsState(this.db, recipeId),

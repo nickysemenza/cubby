@@ -1,4 +1,5 @@
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
+import { match } from "ts-pattern";
 
 import type { BaseKind, ConversionCoverage } from "~/lib/conversion-coverage";
 import type { RecipeCosting } from "~/lib/recipe-costing";
@@ -335,3 +336,70 @@ export const deriveRecipeTotalsGaps = (
   // Highest-leverage fixes first; ties keep input order (stable name grouping).
   return gaps.sort((a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind]);
 };
+
+/** Example package mapping to show, matched to how the recipe line measures. */
+const purchaseExample = (lineKind: LineKind): string =>
+  lineKind === "volume" ? "1 qt = $4.00" : "4 oz = $5.99";
+
+/**
+ * The prioritized suggestion copy for a gap, worded once for the coverage popover, the per-row
+ * missing-cost cell and the server's `recipe.costing-coverage` report. `lead` is the specific
+ * thing to add; `cta` is the link label. USDA is preferred wherever it applies (it adds portions
+ * + nutrition at once); the price variants are unit-aware.
+ */
+export const suggestionFor = (
+  gap: RecipeTotalsGap,
+): { lead: string; cta: string } =>
+  match(gap)
+    .with({ kind: "no-product" }, () => ({
+      lead: "No product linked. Link one (with a USDA food) to cost it.",
+      cta: "Link product",
+    }))
+    .with({ kind: "link-usda" }, () => ({
+      lead: "Link a USDA food — adds weight & nutrition conversions automatically.",
+      cta: "Link USDA",
+    }))
+    .with({ kind: "set-per-item-price" }, () => ({
+      // A count line could be a discrete item (priced per each) or something
+      // sold by weight ("1 clove" of a head of garlic) — so offer both rather
+      // than assert it's sold individually.
+      lead: "Set a per-item price (if sold individually) or add a purchase mapping.",
+      cta: "Add price",
+    }))
+    .with({ kind: "add-purchase-mapping" }, (gap) => ({
+      lead: `No price path for this ${gap.lineKind} line. Add a purchase mapping (e.g. ${purchaseExample(gap.lineKind)}).`,
+      cta: "Add mapping",
+    }))
+    .with({ kind: "add-weight-mapping" }, () => ({
+      lead: "Add a weight mapping (e.g. 1 cup = 120 g) — or link a USDA food for portions.",
+      cta: "Add mapping",
+    }))
+    .with({ kind: "add-volume-mapping" }, () => ({
+      // The per-recipe path never emits this (volume isn't a costing blocker); the
+      // arm exists only to keep the match exhaustive over the shared totals kind.
+      lead: "Add a volume mapping (e.g. 1 cup = 240 ml) — or link a USDA food for portions.",
+      cta: "Add mapping",
+    }))
+    .with({ kind: "set-subrecipe-amount" }, () => ({
+      lead: "Set how much of this sub-recipe is used so it can be scaled into these totals.",
+      cta: "Edit recipe",
+    }))
+    .with({ kind: "set-subrecipe-yield" }, () => ({
+      lead: "Set the sub-recipe yield so this recipe can scale its totals.",
+      cta: "Set yield",
+    }))
+    .with({ kind: "fix-subrecipe-totals" }, () => ({
+      lead: "This sub-recipe has incomplete totals. Open it to fix the underlying ingredients.",
+      cta: "Open recipe",
+    }))
+    .exhaustive();
+
+/** The measures the engine couldn't resolve, as small chips. */
+export const TOTALS_MISSING_MEASURES: {
+  key: keyof RecipeTotalsGap["missing"];
+  label: string;
+}[] = [
+  { key: "price", label: "price" },
+  { key: "weight", label: "weight" },
+  { key: "nutrients", label: "nutrition" },
+];

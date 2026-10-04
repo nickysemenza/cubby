@@ -203,6 +203,19 @@ pub fn scale_factor_for_ingredient(original_value: f64, new_value: f64) -> f64 {
     recipebridge::scale_factor_for_ingredient_value(original_value, new_value)
 }
 
+/// The factor that makes the recipe's total weigh `target_grams` (the "make this much" anchor).
+/// `scaled_weight` is the weight as currently displayed (`unscaled x current_factor`), so the
+/// target is measured against the original, not compounded on the current scale; an unknown
+/// weight (`<= 0`) leaves the recipe unscaled.
+#[uniffi::export]
+pub fn scale_factor_for_total_weight(
+    target_grams: f64,
+    scaled_weight: f64,
+    current_factor: f64,
+) -> f64 {
+    recipebridge::scale_factor_for_total_weight_value(target_grams, scaled_weight, current_factor)
+}
+
 /// A yield or serving count at `factor`, rounded to two decimals as web does.
 #[uniffi::export]
 pub fn scale_display_count(value: f64, factor: f64) -> f64 {
@@ -302,6 +315,10 @@ mod tests {
         assert_eq!(clamp_scale_factor(0.0), 1.0);
         assert_eq!(clamp_scale_factor(0.001), 0.01);
         assert_eq!(scale_factor_for_ingredient(2.0, 3.0), 1.5);
+        // Displayed at 2x and weighing 800 g, the original is 400 g: 600 g is 1.5x, never 0.75x.
+        assert_eq!(scale_factor_for_total_weight(600.0, 800.0, 2.0), 1.5);
+        // An unknown weight cannot anchor, so the recipe stays unscaled.
+        assert_eq!(scale_factor_for_total_weight(600.0, 0.0, 1.0), 1.0);
         assert_eq!(scale_display_count(4.0, 1.5), 6.0);
     }
 

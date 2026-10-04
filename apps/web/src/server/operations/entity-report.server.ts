@@ -14,6 +14,7 @@ export const entityReportHandlers = implementOperationDomain(
         input,
         () => context.currentParty(),
         context.actorContext,
+        context.services,
       ),
     getMany: (context, input) =>
       buildEntityReports(
@@ -21,6 +22,7 @@ export const entityReportHandlers = implementOperationDomain(
         input,
         () => context.currentParty(),
         context.actorContext,
+        context.services,
       ),
   },
 );
