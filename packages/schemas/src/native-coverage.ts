@@ -49,6 +49,7 @@ export const NATIVE_COVERAGE_KINDS = [
   "heroAction",
   "detailSlot",
   "listSlot",
+  "structuredField",
 ] as const;
 export type NativeCoverageKind = (typeof NATIVE_COVERAGE_KINDS)[number];
 
@@ -80,16 +81,6 @@ export const STRUCTURED_VALUE_RENDERERS = [
   "unit-mappings",
 ] as const satisfies readonly ControlRendererId[];
 
-/**
- * `structured-field` is a shared renderer id for fields web edits in a workflow editor (or not at
- * all), so it is drawn from a `valueSchema` only for the fields listed here, as `entity.field`:
- * each needs a read-to-input vector in `structured-roundtrip.json`. The rest (machine-written
- * `sourceClaims`, a meal's served `recipes`, a recipe's `meta`/`yield`, an account's
- * `identity`/`cardNumbers`, a vendor's `agentHints`) stay read-only natively: their read shapes
- * do not round-trip to their inputs, or no client edits them.
- */
-const NATIVE_EDITED_STRUCTURED_FIELDS = ["recipe.sections"] as const;
-
 /** Whether the generator derives a `valueSchema` (and native draws the structured editor) for a field. */
 export const drawsFromValueSchema = (
   entity: string,
@@ -102,8 +93,9 @@ export const drawsFromValueSchema = (
   return (
     STRUCTURED_VALUE_RENDERERS.some((id) => id === renderer) ||
     (renderer === "structured-field" &&
-      NATIVE_EDITED_STRUCTURED_FIELDS.some(
-        (edited) => edited === `${entity}.${field.key}`,
+      Object.entries<NativeCoverageEntry>(nativeCoverage.structuredField).some(
+        ([id, entry]) =>
+          id === `${entity}.${field.key}` && entry.status === "implemented",
       ))
   );
 };
@@ -124,7 +116,7 @@ export const nativeCoverage = {
     // `upc-lookup`/`usda-food` are plain text/number fields once their AI action strips away.
     ...generic(["entity-select", "money", "url", "upc-lookup", "usda-food"]),
     ...generic(STRUCTURED_VALUE_RENDERERS),
-    // Drawn from the field's `valueSchema` only where `NATIVE_EDITED_STRUCTURED_FIELDS` lists it
+    // Drawn from the field's `valueSchema` only where `structuredField` marks it implemented
     // (a golden read-to-input vector proves the round trip); the other fields of this renderer
     // are read-only, as on web.
     ...generic(["structured-field"]),
@@ -288,6 +280,36 @@ export const nativeCoverage = {
    * `apps/apple/App/Shared/Browse/SpecialistListViews.swift`; `ownedElsewhere` ones are
    * covered by the generic list's own affordances and never selectable as a slot.
    */
+  /**
+   * `structured-field` is a shared renderer id for fields web edits in a workflow editor (or not
+   * at all), so each field is classified here as `<entity>.<field>`: `implemented` ones are drawn
+   * from a `valueSchema` (each needs a read-to-input vector in `structured-roundtrip.json`); the
+   * rest are read-only natively. Every field with that renderer must appear (asserted by the
+   * unit test), and `NATIVE_UNSUPPORTED_CEILING.structuredField` only shrinks.
+   */
+  structuredField: {
+    ...implemented(["recipe.sections"]),
+    ...unsupported(
+      ["expense.sourceClaims", "ledgerTransfer.sourceClaims"],
+      "Machine-written provenance: the read carries sourceKey where the input wants providerId, so it cannot round-trip.",
+    ),
+    ...unsupported(
+      ["recipe.meta", "recipe.yield"],
+      "No client edits this through the generic editor yet; it needs a read-to-input vector first.",
+    ),
+    ...unsupported(
+      ["meal.recipes"],
+      "Served recipes are edited through the meal composition workflow; the read nests a recipe where the input wants recipeId.",
+    ),
+    ...unsupported(
+      ["financialAccount.identity", "financialAccount.cardNumbers"],
+      "Account identity and card numbers are edited on web only; no native vector yet.",
+    ),
+    ...unsupported(
+      ["vendor.agentHints"],
+      "Agent hints are edited on web only; no native vector yet.",
+    ),
+  },
   listSlot: {
     ...implemented([
       "location.gallery",
@@ -314,6 +336,7 @@ export const nativeCoverage = {
   heroAction: Record<HeroActionId, NativeCoverageEntry>;
   detailSlot: Record<DetailSlotKey, NativeCoverageEntry>;
   listSlot: Record<ListSlotKey, NativeCoverageEntry>;
+  structuredField: Record<string, NativeCoverageEntry>;
 };
 
 /**
@@ -550,4 +573,5 @@ export const NATIVE_UNSUPPORTED_CEILING = {
   heroAction: 0,
   detailSlot: 38,
   listSlot: 0,
+  structuredField: 8,
 } as const satisfies Record<NativeCoverageKind, number>;

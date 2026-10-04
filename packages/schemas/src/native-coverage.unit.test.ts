@@ -53,6 +53,15 @@ const vocabulary = {
       ),
     ),
   ),
+  structuredField: used(
+    Object.entries(generatedEntityFieldModels).flatMap(([entity, model]) =>
+      model.fields.flatMap((field) =>
+        field.control?.renderer === "structured-field"
+          ? [`${entity}.${field.key}`]
+          : [],
+      ),
+    ),
+  ),
 } satisfies Record<NativeCoverageKind, readonly string[]>;
 
 const entries = (kind: NativeCoverageKind): [string, NativeCoverageEntry][] =>

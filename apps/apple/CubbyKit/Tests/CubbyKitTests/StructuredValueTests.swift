@@ -62,7 +62,7 @@ struct StructuredValueTests {
                     #expect(field.valueSchema != nil, "\(descriptor.key.rawValue).\(field.key) has no schema")
                 }
                 // The shared `structured-field` id is drawn only for the fields the generator opts in
-                // (`NATIVE_EDITED_STRUCTURED_FIELDS`); no other renderer carries a schema.
+                // (`nativeCoverage.structuredField`); no other renderer carries a schema.
                 if field.valueSchema != nil {
                     drawn += 1
                     #expect(structured || field.controlRenderer == .structuredField)

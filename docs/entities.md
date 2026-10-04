@@ -228,8 +228,8 @@ path, flip the status, and lower the ceiling.
 
 **Structured values.** A field whose control renderer is in
 `STRUCTURED_VALUE_RENDERERS` (`external-ids`, `label-nutrition`,
-`source-aliases`, `source-refs`, `unit-mappings`), or a `structured-field` listed in
-`NATIVE_EDITED_STRUCTURED_FIELDS` (`recipe.sections`), is an object or array of
+`source-aliases`, `source-refs`, `unit-mappings`), or a `structured-field` marked `implemented` in
+`nativeCoverage.structuredField` (`recipe.sections`), is an object or array of
 objects native edits. A field joins only with a read-to-input vector in
 `packages/shared/golden-vectors/structured-roundtrip.json` (web parses it with
 the update schema, CubbyKit round-trips it); the other `structured-field`s
