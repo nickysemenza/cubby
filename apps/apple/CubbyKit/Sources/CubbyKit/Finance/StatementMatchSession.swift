@@ -103,7 +103,8 @@ public final class StatementMatchSession {
     public var displayOrder: [String] {
         let listed = (candidates?.candidates ?? []).map(\.transaction.id)
         guard let suggestion, let order = Self.displayOrder(of: suggestion) else { return listed }
-        let position = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($1, $0) })
+        let position = Dictionary(
+            order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
         return listed.sorted { (position[$0] ?? listed.count) < (position[$1] ?? listed.count) }
     }
 
@@ -120,6 +121,8 @@ public final class StatementMatchSession {
         guard let candidate = candidates?.candidates.first(where: { $0.transaction.id == transactionID })
         else { return }
         selectedTransactionID = transactionID
+        // A check still in flight for the previous entry must not set `check` for this one.
+        checkGeneration += 1
         rows = candidate.proposedAllocations.map { Row(purchaseID: $0.purchaseId, amount: $0.amount) }
         check = nil
         didSave = false

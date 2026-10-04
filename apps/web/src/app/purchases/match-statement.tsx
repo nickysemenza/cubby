@@ -11,7 +11,8 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { z } from "zod";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
@@ -40,6 +41,15 @@ type AllocationRow = SettlementAllocationDraft & { key: string };
 
 /** A well-formed placeholder for the disabled check; never sent. */
 const IDLE_TRANSACTION = financialTransactionShortcode.parse("FTX-2222");
+
+const settledDraft = z.object({
+  transactionId: financialTransactionShortcode,
+  allocations: z.array(
+    z.object({ purchaseId: z.string(), amount: z.string() }),
+  ),
+});
+
+const REFUSED = "These allocations cannot be saved.";
 
 const withKeys = (
   rows: readonly SettlementAllocationDraft[],
@@ -95,18 +105,27 @@ export function MatchStatementDialog({
       }
     : (suggest.data ?? null);
 
-  const [typed] = useDebouncedValue(rows.map(bare), { wait: 250 });
+  // Debounce one primitive key pairing the chosen entry with its rows, so the two change
+  // together and an idle dialog never re-renders on a fresh array.
+  const draftKey = JSON.stringify({
+    transactionId: selected?.id ?? IDLE_TRANSACTION,
+    allocations: rows.map(bare),
+  });
+  const [settledKey] = useDebouncedValue(draftKey, { wait: 250 });
+  const settled = useMemo(
+    () => settledDraft.parse(JSON.parse(settledKey)),
+    [settledKey],
+  );
+  const [saveError, setSaveError] = useState<string | null>(null);
   // `queryOptions` parses its input, so it needs a well-formed code even while no entry is
-  // chosen; the query stays disabled until one is.
+  // chosen; the query waits until the debounced draft is the chosen entry's.
   const check = useQuery({
-    ...purchaseOperations.checkSettlementAllocation.queryOptions({
-      transactionId: selected?.id ?? IDLE_TRANSACTION,
-      allocations: typed,
-    }),
-    enabled: selected !== null,
+    ...purchaseOperations.checkSettlementAllocation.queryOptions(settled),
+    enabled: selected !== null && settled.transactionId === selected.id,
     placeholderData: keepPreviousData,
   });
 
+  const note = saveError ?? check.data?.reason;
   const choose = (candidate: SettlementCandidate) => {
     setSelected(candidate.transaction);
     setRows(withKeys(candidate.proposedAllocations));
@@ -197,9 +216,7 @@ export function MatchStatementDialog({
             >
               Add Purchase
             </Button>
-            {check.data?.reason ? (
-              <Description size="xs">{check.data.reason}</Description>
-            ) : null}
+            {note ? <Description size="xs">{note}</Description> : null}
           </div>
         ) : null}
         <DialogFormActions
@@ -217,7 +234,11 @@ export function MatchStatementDialog({
               }),
               staleTime: 0,
             });
-            if (!latest.allocations) return;
+            if (!latest.allocations) {
+              setSaveError(latest.reason ?? REFUSED);
+              return;
+            }
+            setSaveError(null);
             await update.mutateAsync({
               id: selected.id,
               data: { allocations: latest.allocations },

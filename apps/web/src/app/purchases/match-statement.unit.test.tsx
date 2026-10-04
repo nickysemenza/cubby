@@ -1,6 +1,7 @@
 import { financialTransactionOut } from "@cubby/schemas/financial-transaction";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { Profiler } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -146,5 +147,26 @@ describe("MatchStatementDialog", () => {
         ],
       },
     });
+  });
+
+  // Regression: the dialog is mounted (closed) on every Purchase detail; a debounce input that
+  // is a fresh array each render re-rendered it every 250 ms forever.
+  it("does not re-render while idle", async () => {
+    restoreDispatch = overrideStartDispatch(async () => {
+      throw new Error("a closed dialog must not read anything");
+    });
+    const commits = vi.fn();
+    render(
+      <Profiler id="idle" onRender={commits}>
+        <MatchStatementDialog
+          purchaseId="PUR-2345"
+          open={false}
+          onOpenChange={vi.fn()}
+        />
+      </Profiler>,
+      { wrapper: harness.wrapper },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(commits.mock.calls.length).toBeLessThanOrEqual(3);
   });
 });
