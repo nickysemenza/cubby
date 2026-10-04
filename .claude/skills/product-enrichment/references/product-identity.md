@@ -15,6 +15,12 @@ a different color or size is a different Product, never a variant field on
 one record. Identical copies of the same exact variant are one Product with
 an inventory quantity, never duplicate Products.
 
+Seed packets from any seed company: `<Variety> <Crop> Seeds`, with
+certifications in trailing parentheses and the company in `manufacturer`
+only — `Lime Basil Seeds`, `Bloomsdale Spinach Seeds (Organic Heirloom)`,
+never the catalog's `Crop 'Variety'` form. Garlic bulbs and onion sets are not
+seeds and take no suffix.
+
 Match before create. Search existing Products (name, aliases, external ids,
 `entity_read.resolve`, `search.similar`) before writing a new one — a
 duplicate costs a merge later, a missed match costs nothing now.
