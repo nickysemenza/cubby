@@ -69,7 +69,8 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
 
 - Change an API, RPC, MCP tool, manifest, or stored shape directly, update
   every client in the same change, and delete the old shape. A client running
-  old code reloads, reconnects, or updates.
+  old code reloads, reconnects, or updates; a wire break for the native app
+  bumps `MINIMUM_APPLE_CLIENT_VERSION` (`apps/web/src/server/apple-client-gate.ts`).
 - Household data is real: carry it through a migration that transforms it.
   Ask before deleting a database or resetting data.
 
@@ -99,8 +100,8 @@ per-entity code as possible.
   and the codebase for an existing helper or generic path, and extend it rather
   than fork it.
 - **Finish migrations.** A change that introduces a generic path moves every
-  caller, or records the remainder in a shrink-only baseline. Never leave two
-  live paths silently. Lint rules in `tools/oxlint/cubby/` and shrink-only
+  caller in the same change. Only a migration too large for one PR records its
+  remainder in a shrink-only baseline and a `docs/todos.md` entry. Lint rules in `tools/oxlint/cubby/` and shrink-only
   boundary tests enforce the common cases.
 
 ## Product constraints

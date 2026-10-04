@@ -3,13 +3,13 @@
 The canonical backlog, grouped by area. Items are not ranked. Each item starts
 with one status marker naming its next blocker:
 
-| Marker | Meaning                                                   |
-| ------ | --------------------------------------------------------- |
-| 🟢     | Ready: decided, no schema change                          |
-| 🧱     | Ready once schema, migration, or compatibility is planned |
-| 🤔     | Needs a decision, investigation, or evidence              |
-| ⏳     | Waiting on a named trigger; promote only when it fires    |
-| 🔭     | Long-term direction                                       |
+| Marker | Meaning                                                |
+| ------ | ------------------------------------------------------ |
+| 🟢     | Ready: decided, no schema change                       |
+| 🧱     | Ready once schema or migration is planned              |
+| 🤔     | Needs a decision, investigation, or evidence           |
+| ⏳     | Waiting on a named trigger; promote only when it fires |
+| 🔭     | Long-term direction                                    |
 
 An unresolved decision or missing evidence outranks an eventual schema change.
 **Probably not anytime soon** parks wanted-but-unpulled work, **Dormant
@@ -407,13 +407,6 @@ See also the image operational passes at the end of this file.
 
 ## Entity platform & data model
 
-- 🟢 **Complete MCP SDK v2 adoption.** After restoring ChatGPT connectivity,
-  migrate remaining legacy transport/test helpers and retire obsolete v1
-  compatibility code. Preserve tool contracts, purchase-agent authorization,
-  MCP Apps, and Cloudflare-safe validation. Keep legacy protocol support until
-  the agent supports modern version negotiation; its current MCP client defaults
-  to legacy requests without exposing a negotiation option.
-
 - 🤔 **One FROM context per entity list.** Each list repo pairs a relational
   `findMany` (root aliased) with an unaliased `$count`, so a predicate
   referencing the outer row compiles on one leg and fails on the other — six
@@ -600,6 +593,58 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
 
 - ⏳ **Production query-cost repair.** Promote the specific offender a fresh
   production trace confirms; remeasure before restructuring counters.
+
+---
+
+## Compatibility removal
+
+[Breaking changes](../AGENTS.md#breaking-changes) is the rule; these are the
+compatibility paths still live. Printed `P-`/`L-` QR labels and stored agent
+transcript tool names (`app/purchases/agent-tool-names.ts`) are physical or
+historical records and stay readable.
+
+- 🟢 **Drop legacy MCP protocol support.** Move the purchase agent's MCP client
+  to modern version negotiation (replace or wrap the client if it cannot), then
+  delete the `isLegacyRequest` branch in `server/mcp/server.ts` and the
+  remaining SDK v1 transport/test helpers. Preserve tool contracts,
+  purchase-agent authorization, MCP Apps, and Cloudflare-safe validation.
+- 🟢 **Delete the `public/sw.js` unregister stub** and its
+  `docs/inventory-audit.md` note; household browsers have long since reloaded.
+- 🟢 **Delete retired fieldwork recovery** (`ui/feedback/retired-fieldwork.tsx`,
+  `lib/retired-fieldwork-storage.ts`) after confirming no household browser
+  still holds `cubby:audit-session:*` or `cubby:photo-pass:*` keys.
+- 🟢 **Remove old-client wire inputs.** Photo import `idempotencyKey`
+  (`contracts/photo-import.contract.ts`, `PhotoImportStager.swift`); the
+  single-object `sort` arm of `sortInput` (`packages/schemas/src/pagination.ts`;
+  update MCP tool descriptions to the stack form); the former ISO audit cursor
+  (`schemas/src/audit.ts`, `repo/audit-log.ts`); the `validateParent` forwarder
+  in `routes/_authenticated/problems.tsx`.
+- 🤔 **Require statement-row positions.** `repo/statement-row.ts` keeps a v1
+  path for callers without file positions. Require positions on input; decide
+  whether the frozen identity hash (`repo/statement-row-identity.ts`) must stay
+  because stored `settlement_ref` values derive from it.
+- 🟢 **Collapse internal shims.** Ingredient/product `resolveNames` shims for
+  MCP (`repo/ingredient/crud.ts`, `repo/product/resolve-names.ts`) →
+  `resolveEntity`; the `legacyCount` overload of `executeListQueryWithCount`
+  (`database-helpers/query.ts`); the legacy `touchDataQualityTargets` hook
+  (`repo/data-quality/touch.ts`); the legacy list field-override consumption in
+  `entity/entity-display.tsx`; optional-column fixture shapes in
+  `database-helpers/transform.ts` (fix the fixtures); terracotta and shadow
+  alias tokens in `styles.css`.
+- 🧱 **Drop legacy OAuth client columns** (`public`, `type`, `requirePKCE`,
+  `referenceId` in `server/db/auth.schema.ts`), which Better Auth 1.7 ignores.
+- 🧱 **Backfill data, then delete read-time fallbacks.** Each needs a data
+  migration first: null `sortOrder`/purpose image joins
+  (`db/schema.ts`, `repo/database-helpers/relations.ts`,
+  `repo/entity-display-image.ts`); `legacy_unspecified` external-id kinds
+  (`schemas/src/external-id.ts`); data exceptions without a fingerprint
+  (`repo/data-quality/exceptions.ts`); flat-array cookbook extractions
+  (`repo/cookbook.ts`; re-extract); legacy costing rows
+  (`services/recipe-costing.service.ts`).
+- 🟢 **Delete one-time Apple migrations** once every household device runs the
+  current build: the JSON hash-cache import
+  (`PhotoAnalysisStore.migrateLegacyHashCacheIfNeeded`), legacy credential-file
+  reads in `FileSessionTokenStore.swift`, and `DockBadge.clear()`.
 
 ---
 
