@@ -205,6 +205,15 @@ struct RunReviewView: View {
                     )
                     .font(.caption).foregroundStyle(.secondary)
                 }
+                if run.purpose != .photoInventory {
+                    // The route for a Run is this review screen, so the server-composed console
+                    // (progress, approvals, findings, log, usage) is one push away from it.
+                    NavigationLink {
+                        RunConsoleView(run: run)
+                    } label: {
+                        Label("Run console", systemImage: "list.bullet.rectangle")
+                    }
+                }
                 if run.status == .pausedAuth || run.status == .pausedOffline {
                     Label(
                         run.status == .pausedAuth
