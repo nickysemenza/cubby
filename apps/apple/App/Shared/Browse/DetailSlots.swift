@@ -21,6 +21,11 @@ enum DetailSlotRegistry {
             return AnyView(ProductJourneySummaryView(product: detail))
         },
         .mealNutrition: { AnyView(MealNutritionSlot(mealID: $0.id)) },
+        .recipeWorkflow: { AnyView(RecipeWorkflowDetailSlot(row: $0)) },
+        .ingredientNutritionProduct: { AnyView(IngredientNutritionProductSlot(row: $0)) },
+        .ingredientRecipeUsages: { AnyView(IngredientRecipeUsagesSlot(row: $0)) },
+        .cookbookToc: { AnyView(CookbookContentsSlot(cookbookID: $0.id)) },
+        .cookbookImportProgress: { AnyView(CookbookImportProgressSlot(row: $0)) },
         .ledgerPartyWardrobe: { AnyView(WardrobeDetailSlot(ownerID: $0.id, ownerName: $0.title)) },
         .vendorOrderMail: { AnyView(OrderMailDetailSlot(scope: .vendor($0.id, nil))) },
         .vendorSpendingClassification: { AnyView(SpendingClassificationView(key: .vendor, row: $0)) },

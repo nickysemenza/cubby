@@ -62,7 +62,7 @@ export function IngredientUsagePanel({
     );
   }
 
-  const { rows, totalRecipes } = data;
+  const { rows } = data;
 
   if (limit != null) {
     const topIngredients = [...rows]
@@ -108,18 +108,12 @@ export function IngredientUsagePanel({
         </Description>
       )}
 
-      <UsageTable rows={rows} totalRecipes={totalRecipes} />
+      <UsageTable rows={rows} />
     </Stack>
   );
 }
 
-function UsageTable({
-  rows,
-  totalRecipes,
-}: {
-  rows: IngredientUsageRow[];
-  totalRecipes: number;
-}) {
+function UsageTable({ rows }: { rows: IngredientUsageRow[] }) {
   return (
     <StaticTable
       rows={rows}
@@ -153,8 +147,7 @@ function UsageTable({
           header: "% of recipes",
           headClassName: "text-right",
           cellClassName: "text-right text-muted-foreground tabular-nums",
-          cell: (row) =>
-            `${totalRecipes > 0 ? Math.round((row.recipeCount / totalRecipes) * 100) : 0}%`,
+          cell: (row) => `${row.sharePercent}%`,
         },
       ]}
     />

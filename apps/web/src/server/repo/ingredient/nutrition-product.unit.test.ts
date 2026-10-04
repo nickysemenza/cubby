@@ -5,12 +5,13 @@ import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
 
-import { selectNutritionProduct } from "./slots";
+import {
+  buildIngredientNutritionProduct,
+  selectNutritionProduct,
+} from "./nutrition-product";
 
-// `food.nutritionInfo` is a required (non-nullable) field on `foodSummary`, so
-// once `food` is non-null it always carries a (possibly empty) nutritionInfo
-// object — the truthiness check in selectNutritionProduct is really gated on
-// `food` being present at all.
+// `food.nutritionInfo` is required once `food` is non-null, so the selection is
+// really gated on `food` being present at all.
 const productWithFood = (shortcode: string, price: number | null) =>
   mock(productWithMappingsAndFoodOut, {
     seed: 1,
@@ -54,13 +55,11 @@ const productWithLabel = (shortcode: string, price: number | null) =>
     },
   });
 
+// Failure modes: nutrition paired with a different product's price (cost per
+// nutrient silently misattributed), list order deciding the pick, a USDA food
+// leading a package label, and a client re-deriving the choice differently.
 describe("selectNutritionProduct", () => {
   it("prefers the product that carries both nutrition and price over one with nutrition but no price", () => {
-    // Regression fixture for the pre-existing bug: nutrition came from
-    // `ingredient.product.find(p => p.food?.nutritionInfo)` — an arbitrary
-    // product not necessarily the one supplying price — so a priced product
-    // with no nutrition data could silently pair with an unrelated product's
-    // nutrients.
     const noPriceButFood = productWithFood("PRD-AAAA", null);
     const pricedWithFood = productWithFood("PRD-BBBB", 12.5);
 
@@ -110,5 +109,28 @@ describe("selectNutritionProduct", () => {
     const selected = selectNutritionProduct([labelNoPrice, labelWithPrice]);
 
     expect(selected?.id).toBe(labelWithPrice.id);
+  });
+});
+
+describe("buildIngredientNutritionProduct", () => {
+  it("is null when no product carries nutrition", () => {
+    expect(
+      buildIngredientNutritionProduct([productWithoutFood("PRD-LLLL", 1)]),
+    ).toBeNull();
+  });
+
+  it("names the chosen product and carries its label display", () => {
+    const labelled = productWithLabel("PRD-MMMM", 3.5);
+
+    expect(buildIngredientNutritionProduct([labelled])).toMatchObject({
+      productId: labelled.id,
+      name: labelled.name,
+      manufacturer: labelled.manufacturer,
+      display: {
+        source: "label",
+        basis: "Per serving · 44 g",
+        rows: [{ key: "kcal", amount: 120, inferred: false }],
+      },
+    });
   });
 });

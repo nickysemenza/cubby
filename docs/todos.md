@@ -262,8 +262,10 @@ See also the image operational passes at the end of this file.
   `packages/schemas/src/native-coverage.ts` with a shrink-only unsupported
   ceiling per kind; hero actions and list cells are covered. Remaining gaps
   are bespoke detail slots (the Run import console is 16 of them; project
-  budget/schedule/analytics; recipe workflow; cookbook TOC; settlement and
-  reconciliation), and the controls below. Every detail renderer is drawn
+  budget/schedule/analytics; settlement and reconciliation; the recipe
+  walkthrough/costing/availability panels, cookbook reprocess and extraction
+  report, and ingredient usage re-parse, which stay on web inside the now-drawn
+  recipe/cookbook/ingredient slots), and the controls below. Every detail renderer is drawn
   (structured values arrive as server-composed `detailLabelPath` text or
   `itemsPath` rows). Add editor focus order or comprehensive sheet
   lifecycle only on demonstrated friction. Owners: `apps/apple/App/Shared`,
@@ -321,10 +323,16 @@ See also the image operational passes at the end of this file.
   use or concurrent windows block a workflow; needs a write/retry/conflict
   model and window ownership rules.
 
-- ⏳ **Expose recipebridge conversion, needs, costing, and nutrition via
-  cubby-ffi** alongside the first native screen that scales a recipe or prices
-  a meal. Until then the FFI stays `parse_ingredient`, `size_unit_aliases`,
-  `normalize_isbn`, `scan_code_gtin14`.
+- ⏳ **Web-only parts inside the implemented native recipe/cookbook/ingredient
+  slots.** Recipe AI walkthrough, costing coverage, availability panel, flow
+  layout and total-weight scale anchor; cookbook extraction report, reprocess
+  and add-from-source; ingredient recipe-usage re-parse. Promote one when a
+  household task needs it on the phone.
+
+- ⏳ **Expose the rest of recipebridge via cubby-ffi.** Scaling (`scale_amount`,
+  scale-factor anchors, scaled counts) ships with native cook mode. Conversion,
+  needs, costing, and nutrition stay web-only until a native screen prices a
+  meal or shows a costed recipe.
 
 ---
 

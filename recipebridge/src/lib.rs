@@ -7,6 +7,7 @@
 //! - [`food_mappings`] — USDA food/product → unit-mapping synthesis
 //! - [`food_calculation`] — live product, ingredient, recipe, and manual food totals
 //! - [`costing`] — the recipe costing engine (consumption model, two-pass totals)
+//! - [`scaling`] — scale-factor anchors and scaled-count rounding shared with native
 //! - [`needs`] — sub-recipe expansion into flat, scaled ingredient needs
 //! - [`epub`] — EPUB cookbook extraction (re-exported from upstream `cookbook::wasm`)
 //! - [`display_format`] — currency, bare-number, and compact nutrition cell text shared with native
@@ -45,6 +46,7 @@ mod isbn;
 mod needs;
 mod parse;
 mod reconcile;
+mod scaling;
 
 pub use availability::*;
 pub use conversion::*;
@@ -58,6 +60,7 @@ pub use food_mappings::*;
 pub use isbn::*;
 pub use needs::*;
 pub use parse::*;
+pub use scaling::*;
 
 // WASM initialization - called automatically when module loads
 #[wasm_bindgen(start)]

@@ -174,6 +174,41 @@ pub fn format_amount(unit: String, value: f64, upper_value: Option<f64>) -> Stri
     })
 }
 
+/// An amount multiplied by a recipe scale factor, by the rule web runs as WASM: weight, volume
+/// and counts scale, a pan size, oven temperature or rest time does not, and the authored unit
+/// spelling is kept.
+#[uniffi::export]
+pub fn scale_amount(unit: String, value: f64, upper_value: Option<f64>, factor: f64) -> Amount {
+    recipebridge::scale_amount(
+        recipebridge::WAmount {
+            unit,
+            value,
+            upper_value,
+        },
+        factor,
+    )
+    .into()
+}
+
+/// A usable scale factor: finite, positive, floored at 0.01; anything else is 1 (unscaled).
+#[uniffi::export]
+pub fn clamp_scale_factor(factor: f64) -> f64 {
+    recipebridge::clamp_scale_factor_value(factor)
+}
+
+/// The factor that makes an ingredient's primary amount `new_value` when its unscaled amount is
+/// `original_value` (the "make this much of it" anchor).
+#[uniffi::export]
+pub fn scale_factor_for_ingredient(original_value: f64, new_value: f64) -> f64 {
+    recipebridge::scale_factor_for_ingredient_value(original_value, new_value)
+}
+
+/// A yield or serving count at `factor`, rounded to two decimals as web does.
+#[uniffi::export]
+pub fn scale_display_count(value: f64, factor: f64) -> f64 {
+    recipebridge::scale_display_count_value(value, factor)
+}
+
 /// USD text with grouping and `min..=max` fraction digits (half away from
 /// zero); `-$5.00` for a negative, never `+`.
 #[uniffi::export]
@@ -254,6 +289,20 @@ mod tests {
             format_compact_estimate(EstimateFigure::Unknown, CompactUnit::Kcal),
             "—"
         );
+    }
+
+    #[test]
+    fn scale_exports_are_wired_to_the_shared_scaling_rules() {
+        let flour = scale_amount("cup".to_string(), 2.0, Some(3.0), 1.5);
+        assert_eq!((flour.value, flour.upper_value), (3.0, Some(4.5)));
+        assert_eq!(flour.unit, "cup");
+        // A pan size is not an ingredient quantity: it must not double.
+        let pan = scale_amount("inch".to_string(), 9.0, None, 2.0);
+        assert_eq!(pan.value, 9.0);
+        assert_eq!(clamp_scale_factor(0.0), 1.0);
+        assert_eq!(clamp_scale_factor(0.001), 0.01);
+        assert_eq!(scale_factor_for_ingredient(2.0, 3.0), 1.5);
+        assert_eq!(scale_display_count(4.0, 1.5), 6.0);
     }
 
     #[test]

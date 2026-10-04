@@ -7,7 +7,16 @@ const ingredientUsageRowSchema = z.object({
   ingredientId: ingredientShortcode,
   name: z.string(),
   recipeCount: z.number(),
+  // Whole-number percent of the scope's recipes using it, rounded once on the
+  // server so every client prints the same figure (`recipeSharePercent`).
+  sharePercent: z.number(),
 });
+
+export const recipeSharePercent = (
+  recipeCount: number,
+  totalRecipes: number,
+): number =>
+  totalRecipes > 0 ? Math.round((recipeCount / totalRecipes) * 100) : 0;
 
 export const ingredientUsageSchema = z.object({
   rows: z.array(ingredientUsageRowSchema),

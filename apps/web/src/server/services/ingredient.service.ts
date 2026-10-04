@@ -21,6 +21,7 @@ import type { Database } from "~/server/db";
 
 import { getIngredientByID as getIngredientByIDRepo } from "../repo/ingredient/crud";
 import { findFuzzyMergeCandidates } from "../repo/ingredient/merge";
+import { buildIngredientNutritionProduct } from "../repo/ingredient/nutrition-product";
 import {
   enrichmentWorkbenchIngredients as enrichmentWorkbenchIngredientsRepo,
   getIngredientByName as getIngredientByNameRepo,
@@ -53,6 +54,7 @@ export const getIngredientByID = async (
   return {
     ...ingredient,
     product: enrichedProducts,
+    nutritionProduct: buildIngredientNutritionProduct(enrichedProducts),
   };
 };
 
@@ -100,6 +102,7 @@ export const getIngredientByName = async (
   return {
     ...ingredient,
     product: enrichedProducts,
+    nutritionProduct: buildIngredientNutritionProduct(enrichedProducts),
   };
 };
 

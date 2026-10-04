@@ -161,6 +161,10 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   `formatCalendarDay`) and timestamps stay locale-aware platform code. Never format a catalog value
   with `.formatted()` in a view, and never re-implement a rule in Swift or TypeScript: edit the
   vector, then Rust.
+- Recipe scaling is single-sourced in Rust too (`recipebridge/src/scaling.rs` plus `scale_amount`):
+  web calls it as WASM, native through `cubby-ffi`'s `scale_*` exports wrapped by CubbyKit
+  `RecipeScaling`/`RecipeCookPlan`. Swift never multiplies an amount or clamps a factor; which
+  units scale (not a pan size or oven temperature) is Rust's call.
 - `CubbyKit/Sources/CubbyKit/Generated/SharedConstants.swift` — constants and vocabulary with one
   TypeScript declaration: the image-transform rungs (`IMAGE_WIDTHS`) and household zone
   (`HOUSEHOLD_TIMEZONE`) from `packages/shared/src/client-constants.ts`, the media origin from

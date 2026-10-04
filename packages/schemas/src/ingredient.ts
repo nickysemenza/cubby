@@ -8,6 +8,7 @@ import {
 } from "./identifiers";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
+  productNutritionDisplay,
   productWithMappingsAndFoodMcpEntityOut,
   productWithMappingsAndFoodOut,
   productWithMappingsMcpEntityOut,
@@ -145,12 +146,29 @@ export type IngredientWithRecipesAndProductOut = z.infer<
   typeof ingredientWithRecipesAndProductOut
 >;
 
+/**
+ * The one linked product that supplies an ingredient's nutrition, chosen once on
+ * the server so web and native show the same product: the one carrying both
+ * nutrition and a price (nutrition and cost-per-nutrient must share a basis),
+ * a package label before USDA. `display` is that product's `nutritionDisplay`.
+ */
+export const ingredientNutritionProductOut = z.object({
+  productId: productShortcode,
+  name: z.string(),
+  manufacturer: z.string(),
+  display: productNutritionDisplay,
+});
+export type IngredientNutritionProductOut = z.infer<
+  typeof ingredientNutritionProductOut
+>;
+
 export const ingredientWithFoodOut = z.object({
   ...ingredientOutFields,
   recipe: recipeTopLevel.nullable(),
   recipeUsages: z.array(recipeUsageOut),
   appearsInRecipes: z.array(recipeTopLevel),
   product: z.array(productWithMappingsAndFoodOut),
+  nutritionProduct: ingredientNutritionProductOut.nullable(),
 });
 export type IngredientWithFoodOut = z.infer<typeof ingredientWithFoodOut>;
 
