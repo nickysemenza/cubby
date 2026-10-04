@@ -18,6 +18,8 @@ import {
   deleteCookbookOut,
   gatewayForwardInput,
   gatewayForwardOut,
+  cookbookImportChunkInput,
+  cookbookReprocessChunkInput,
   importCookbookStreamInput,
   importNotionSyncInput,
   importRecipeSchema,
@@ -145,6 +147,34 @@ const recipeLinePatchOut = z.object({
   }),
 });
 
+const cookbookReprocessOnceOut = z.object({
+  reprocessed: z.number().int().nonnegative(),
+  /** Where the next call starts; null when this window was the last. */
+  nextOffset: z.number().int().nonnegative().nullable(),
+});
+const cookbookImportOnceOut = z.object({
+  imported: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  /** The raw reason each failed source recipe gave. */
+  failures: z.array(
+    z.object({ sourceRecipeId: z.string(), error: z.string() }),
+  ),
+  /** Source recipes the book still does not hold. */
+  remaining: z.number().int().nonnegative(),
+});
+
+const recipeLineReparseInput = z.object({
+  recipeId: recipeShortcode,
+  // Declared exception: a recipe line has no shortcode (see `recipeLinePatchInput`).
+  lineId: z.uuid(),
+});
+const recipeLineReparseOut = z.object({
+  recipeId: recipeShortcode,
+  status: z.enum(["updated", "unchanged"]),
+  /** The axes written, in the order the parser reports drift. */
+  changed: z.array(z.enum(["amount", "modifier", "name"])),
+});
+
 export const recipeContract = defineContract("recipe", {
   getManyByIDs: query({
     input: recipeIdsInput,
@@ -196,6 +226,7 @@ export const recipeContract = defineContract("recipe", {
     cache: { tags: [["recipe", "flow"]] },
   }),
   generateFlow: mutation({
+    native: "Generate a recipe's AI walkthrough from its report",
     input: recipeFlowGenerateInputSchema,
     output: recipeFlowArtifactSchema,
     invalidates: ["recipe"],
@@ -257,6 +288,30 @@ export const recipeContract = defineContract("recipe", {
     input: recipeLinePatchInput,
     output: recipeLinePatchOut,
     invalidates: ["recipe"],
+  }),
+  /**
+   * `reprocessCookbook` for a client with no stream, one bounded window per call (the server
+   * caps it): the same workflow, finalized per window, answered with where to continue.
+   */
+  reprocessCookbookOnce: mutation({
+    native: "Reprocess a cookbook from its report command",
+    input: cookbookReprocessChunkInput,
+    output: cookbookReprocessOnceOut,
+    invalidates: ["recipe", "cookbook"],
+  }),
+  /** `importCookbookStream` for one capped chunk of source recipes, answered with its counts. */
+  importCookbookRecipesOnce: mutation({
+    native: "Add source recipes to a cookbook from its report command",
+    input: cookbookImportChunkInput,
+    output: cookbookImportOnceOut,
+    invalidates: ["recipe", "cookbook"],
+  }),
+  /** Re-parse one stored line with the current parser and write what changed. */
+  reparseLine: mutation({
+    native: "Re-parse a recipe line from a report row",
+    input: recipeLineReparseInput,
+    output: recipeLineReparseOut,
+    invalidates: ["recipe", "ingredient"],
   }),
   parseHtml: mutation({
     input: parseRecipeHtmlInput,

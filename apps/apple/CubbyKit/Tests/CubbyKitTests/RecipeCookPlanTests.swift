@@ -104,4 +104,11 @@ struct RecipeCookPlanTests {
         // No original amount to anchor on leaves the recipe unscaled.
         #expect(RecipeScaling.factor(original: 0, setTo: 3) == 1)
     }
+
+    @Test func aTotalWeightTargetIsMeasuredAgainstTheUnscaledRecipe() {
+        // Shown at 2x and weighing 800 g, the original is 400 g: 600 g is 1.5x, not 0.75x.
+        #expect(RecipeScaling.factor(forTotalWeight: 600, scaledWeight: 800, currentFactor: 2) == 1.5)
+        // Without a known weight there is nothing to anchor on.
+        #expect(RecipeScaling.factor(forTotalWeight: 600, scaledWeight: 0, currentFactor: 1) == 1)
+    }
 }

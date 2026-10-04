@@ -12,8 +12,18 @@ private final class FakeReports: ReportServing {
         var controls: [RunControlInput] = []
         var findings: [ResolveRunFindingInput] = []
         var retries = 0
+        var reparses: [RecipeReparseLineInput] = []
+        var flows: [RecipeFlowGenerateInput] = []
+        var reprocessed: [CookbookReprocessChunkInput] = []
+        var imported: [CookbookImportChunkInput] = []
+        var added: [MealAddRecipeInput] = []
+        var scaled: [MealUpdateRecipeInput] = []
+        var removed: [MealRecipeIdInput] = []
+        var prepared: [SaveMealRecipePreparationInput] = []
     }
     let calls = Mutex(Calls())
+    /// The import call (1-based) that reports a failure; 0 means none do.
+    let importFailsOnCall = Mutex(0)
     let pages: Mutex<[EntityReportOut]>
 
     /// How long a read takes, so a test can act while one is in flight.
@@ -53,6 +63,40 @@ private final class FakeReports: ReportServing {
         calls.withLock { $0.retries += 1 }
         throw URLError(.badServerResponse)
     }
+    func reparseLine(_ input: RecipeReparseLineInput) async throws -> RecipeReparseLineOutput {
+        calls.withLock { $0.reparses.append(input) }
+        return try decode(
+            #"{"recipeId": "\#(input.recipeId)", "status": "updated", "changed": ["amount", "name"]}"#)
+    }
+    func generateFlow(_ input: RecipeFlowGenerateInput) async throws {
+        calls.withLock { $0.flows.append(input) }
+    }
+    func reprocessCookbook(_ input: CookbookReprocessChunkInput) async throws -> CookbookChunkResult {
+        calls.withLock { $0.reprocessed.append(input) }
+        // Two windows of two, then a short last one.
+        return input.offset < 4
+            ? CookbookChunkResult(done: 2, failureText: nil, next: input.offset + 2)
+            : CookbookChunkResult(done: 1, failureText: nil, next: nil)
+    }
+    func importCookbookRecipes(_ input: CookbookImportChunkInput) async throws -> CookbookChunkResult {
+        calls.withLock { $0.imported.append(input) }
+        let failing = calls.withLock { $0.imported.count } == importFailsOnCall.withLock { $0 }
+        return CookbookChunkResult(
+            done: failing ? 0 : input.recipeIds.count,
+            failureText: failing ? "1 failed: 001.0003: boom" : nil, next: nil)
+    }
+    func addMealRecipe(_ input: MealAddRecipeInput) async throws {
+        calls.withLock { $0.added.append(input) }
+    }
+    func updateMealRecipe(_ input: MealUpdateRecipeInput) async throws {
+        calls.withLock { $0.scaled.append(input) }
+    }
+    func removeMealRecipe(_ input: MealRecipeIdInput) async throws {
+        calls.withLock { $0.removed.append(input) }
+    }
+    func saveMealPreparation(_ input: SaveMealRecipePreparationInput) async throws {
+        calls.withLock { $0.prepared.append(input) }
+    }
     func commitPrepared(_ input: RunCommitPreparedInput) async throws {}
 }
 
@@ -84,6 +128,65 @@ private let dismiss = #"""
     {"id": "f:dismiss", "label": "Dismiss", "prominent": false, "confirm": null,
      "request": {"kind": "resolve-finding", "findingId": "8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91",
                  "decision": "dismiss", "reviewedFingerprint": null}}
+    """#
+
+private let reparse = #"""
+    {"id": "reparse:8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91", "label": "Re-parse", "prominent": false,
+     "confirm": "Re-parse this line in Synthetic Tart with the current parser?",
+     "request": {"kind": "reparse-line", "recipeId": "RCP-4K7M",
+                 "lineId": "8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91"}}
+    """#
+
+private let generateFlow = #"""
+    {"id": "generate-flow:first", "label": "Generate walkthrough", "prominent": true,
+     "confirm": "Ask the AI to arrange this recipe's steps? It uses the model.",
+     "request": {"kind": "generate-recipe-flow", "recipeId": "RCP-4K7M", "force": false}}
+    """#
+
+private let mealRecipeID = "8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91"
+
+private let scaleCommand = #"""
+    {"id": "scale:x", "label": "Change scale", "prominent": false, "confirm": null,
+     "inputs": [{"kind": "number", "key": "scale", "label": "Recipe scale", "initial": 2, "min": 0.01}],
+     "request": {"kind": "meal-scale-recipe", "mealRecipeId": "\#(mealRecipeID)", "scale": null}}
+    """#
+
+private let removeCommand = #"""
+    {"id": "remove:x", "label": "Remove", "prominent": false,
+     "confirm": "Remove Synthetic stew from this meal?",
+     "request": {"kind": "meal-remove-recipe", "mealRecipeId": "\#(mealRecipeID)"}}
+    """#
+
+private let addRecipeCommand = #"""
+    {"id": "add-recipe", "label": "Add recipe", "prominent": true, "confirm": null,
+     "inputs": [{"kind": "record", "key": "recipeId", "label": "Recipe", "entity": "recipe"},
+                {"kind": "number", "key": "scale", "label": "Recipe scale", "initial": 1, "min": 0.01},
+                {"kind": "choice", "key": "convertToCooked", "label": "Not cooked yet", "initial": "true",
+                 "options": [{"value": "true", "label": "Switch"}, {"value": "false", "label": "Keep"}]}],
+     "request": {"kind": "meal-add-recipe", "mealId": "MEL-4K7M", "recipeId": null, "scale": null,
+                 "convertToCooked": null}}
+    """#
+
+private let addPortionCommand = #"""
+    {"id": "portion-add", "label": "Add portion", "prominent": true, "confirm": null,
+     "inputs": [{"kind": "record", "key": "ledgerPartyId", "label": "Eater", "entity": "ledgerParty"},
+                {"kind": "number", "key": "value", "label": "Amount", "initial": 1, "min": 0.01},
+                {"kind": "choice", "key": "unit", "label": "Unit", "initial": "serving",
+                 "options": [{"value": "serving", "label": "serving"}, {"value": "g", "label": "g"}]}],
+     "request": {"kind": "meal-portion-set", "mealRecipeId": "\#(mealRecipeID)", "mealId": "MEL-4K7M",
+                 "ledgerPartyId": null, "value": null, "unit": null, "confirmed": false}}
+    """#
+
+private let markEatenCommand = #"""
+    {"id": "portion-status", "label": "Mark eaten", "prominent": false, "confirm": null,
+     "request": {"kind": "meal-portion-set", "mealRecipeId": "\#(mealRecipeID)", "mealId": "MEL-4K7M",
+                 "ledgerPartyId": "LPY-4K7M", "value": 1, "unit": "serving", "confirmed": true}}
+    """#
+
+private let yieldCommand = #"""
+    {"id": "yield", "label": "Set actual yield", "prominent": false, "confirm": null,
+     "inputs": [{"kind": "number", "key": "grams", "label": "Made (g)", "initial": null, "min": 1}],
+     "request": {"kind": "meal-yield", "mealRecipeId": "\#(mealRecipeID)", "field": "actual", "grams": null}}
     """#
 
 /// Waits (bounded) for `condition`, so a polling test does not depend on how loaded the machine is.
@@ -124,6 +227,190 @@ struct ReportSlotModelTests {
         #expect(sent.operationId == "op-1")
         #expect(sent.approvalId == "approval-1")
         #expect(service.calls.withLock { $0.controls.count } == 1)
+    }
+
+    @Test("A re-parse asks first, then sends only the line's ids and words what the server changed")
+    func reparseSendsOnlyTheLine() async throws {
+        let action: ReportCommand = try decode(reparse)
+        let service = FakeReports([try report(live: false, status: "completed")])
+        let model = model(service)
+
+        #expect(await model.run(action, confirmed: false) == nil)
+        #expect(service.calls.withLock { $0.reparses.isEmpty })
+
+        #expect(await model.run(action, confirmed: true) == .done("Re-parsed the line (amount, name)"))
+        let sent = try #require(service.calls.withLock { $0.reparses.first })
+        #expect(sent.recipeId == "RCP-4K7M")
+        #expect(sent.lineId == "8f0d4c2a-6b1e-4c7a-9a52-0d3f1e5b7c91")
+        // The report is read again so the drifted badge and its command disappear.
+        #expect(service.calls.withLock { $0.reads.count } == 1)
+    }
+
+    @Test("Generating a walkthrough spends the model, so it waits for the confirmation")
+    func generatingAWalkthroughNeedsConfirmation() async throws {
+        let action: ReportCommand = try decode(generateFlow)
+        let service = FakeReports([try report(live: false, status: "completed")])
+        let model = model(service)
+
+        #expect(await model.run(action, confirmed: false) == nil)
+        #expect(service.calls.withLock { $0.flows.isEmpty })
+
+        #expect(await model.run(action, confirmed: true) == .done("Walkthrough generated"))
+        let sent = try #require(service.calls.withLock { $0.flows.first })
+        #expect(sent.id == "RCP-4K7M")
+        #expect(sent.force == false)
+        #expect(sent.guidance == nil)
+    }
+
+    @Test("A scale the person types goes out with the server's ids; an empty or too-small one sends nothing")
+    func scaleSendsTheTypedValue() async throws {
+        let command: ReportCommand = try decode(scaleCommand)
+        let service = FakeReports([try report(live: false, status: "completed")])
+        let model = model(service)
+
+        var form = ReportCommandForm(command: command)
+        // Seeded with the current scale, so an untouched form is already complete.
+        #expect(form.number("scale") == 2)
+        form.setNumber("scale", nil)
+        #expect(!form.isComplete)
+        #expect(await model.run(command, confirmed: false, form: form) == nil)
+        form.setNumber("scale", 0.001)
+        #expect(!form.isComplete)
+        #expect(service.calls.withLock { $0.scaled.isEmpty })
+
+        form.setNumber("scale", 3)
+        #expect(await model.run(command, confirmed: false, form: form) == .done("Scale changed"))
+        let sent = try #require(service.calls.withLock { $0.scaled.first })
+        #expect(sent.id == mealRecipeID)
+        #expect(sent.scale == 3)
+    }
+
+    @Test("A number field keeps what was typed, and only a number counts as an answer")
+    func numberFieldsKeepTheirText() throws {
+        var form = ReportCommandForm(command: try decode(scaleCommand))
+        #expect(form.numberText("scale") == "2")
+        form.setNumberText("scale", "1.")
+        #expect(form.numberText("scale") == "1.")
+        #expect(form.number("scale") == 1)
+        form.setNumberText("scale", "1.5")
+        #expect(form.number("scale") == 1.5)
+        form.setNumberText("scale", "a lot")
+        #expect(form.number("scale") == nil)
+        #expect(form.missing == ["Recipe scale"])
+    }
+
+    @Test("Reprocessing asks first, then walks the server's windows until the last")
+    func reprocessWalksWindows() async throws {
+        let reprocess: ReportCommand = try decode(
+            #"{"id":"reprocess","label":"Reprocess","prominent":false,"confirm":"Re-derive 5 recipes (no AI)?","request":{"kind":"reprocess-cookbook","cookbookId":"CKB-4K7M"}}"#
+        )
+        let service = FakeReports([try report(live: false, status: "completed")])
+        let model = model(service)
+        #expect(await model.run(reprocess, confirmed: false) == nil)
+        #expect(service.calls.withLock { $0.reprocessed.isEmpty })
+        #expect(await model.run(reprocess, confirmed: true) == .done("Reprocessed 5 recipes"))
+        #expect(service.calls.withLock { $0.reprocessed.map(\.offset) } == [0, 2, 4])
+    }
+
+    @Test("Adding source recipes goes a server-sized chunk at a time and stops at the first failure")
+    func importIsChunkedAndStopsOnError() async throws {
+        let add: ReportCommand = try decode(
+            #"{"id":"import:all","label":"Add all 5","prominent":true,"confirm":"Import all 5 (no AI)?","request":{"kind":"import-cookbook-recipes","cookbookId":"CKB-4K7M","recipeIds":["a","b","c","d","e"],"chunkSize":2}}"#
+        )
+        let service = FakeReports([try report(live: false, status: "completed")])
+        let model = model(service)
+        #expect(await model.run(add, confirmed: false) == nil)
+        #expect(service.calls.withLock { $0.imported.isEmpty })
+        #expect(await model.run(add, confirmed: true) == .done("Added 5 recipes"))
+        #expect(service.calls.withLock { $0.imported.map(\.recipeIds) } == [["a", "b"], ["c", "d"], ["e"]])
+
+        // The second chunk fails: nothing after it is sent, and the raw reason is shown.
+        let failing = FakeReports([try report(live: false, status: "completed")])
+        failing.importFailsOnCall.withLock { $0 = 2 }
+        let failingModel = self.model(failing)
+        #expect(await failingModel.run(add, confirmed: true) == nil)
+        #expect(failing.calls.withLock { $0.imported.count } == 2)
+        #expect(failingModel.actionError?.contains("001.0003: boom") == true)
+    }
+
+    @Test("Removing a recipe from a meal waits for the confirmation")
+    func removingNeedsConfirmation() async throws {
+        let command: ReportCommand = try decode(removeCommand)
+        let service = FakeReports([try report(live: false, status: "completed")])
+        let model = model(service)
+        #expect(await model.run(command, confirmed: false) == nil)
+        #expect(service.calls.withLock { $0.removed.isEmpty })
+        #expect(await model.run(command, confirmed: true) == .done("Removed from the meal"))
+        #expect(service.calls.withLock { $0.removed.first?.id } == mealRecipeID)
+    }
+
+    @Test("Adding a recipe needs the picked recipe, and sends it with the scale and the meal")
+    func addingARecipeNeedsThePick() async throws {
+        let command: ReportCommand = try decode(addRecipeCommand)
+        let service = FakeReports([try report(live: false, status: "completed")])
+        let model = model(service)
+
+        var form = ReportCommandForm(command: command)
+        #expect(form.missing == ["Recipe"])
+        #expect(await model.run(command, confirmed: false, form: form) == nil)
+        #expect(service.calls.withLock { $0.added.isEmpty })
+
+        form.setRecord("recipeId", id: "RCP-4K7M", title: "Synthetic stew")
+        form.setNumber("scale", 1.5)
+        #expect(form.isComplete)
+        #expect(await model.run(command, confirmed: false, form: form) == .done("Added to the meal"))
+        let sent = try #require(service.calls.withLock { $0.added.first })
+        #expect(sent.mealId == "MEL-4K7M")
+        #expect(sent.recipeId == "RCP-4K7M")
+        #expect(sent.scale == 1.5)
+        // The seeded answer is the reviewed one; changing it changes what is sent.
+        #expect(sent.convertToCooked == true)
+    }
+
+    @Test("A portion is one set change; marking eaten resends the server's amount")
+    func portionsAreSetChanges() async throws {
+        let service = FakeReports([try report(live: false, status: "completed")])
+        let model = model(service)
+
+        let add: ReportCommand = try decode(addPortionCommand)
+        var form = ReportCommandForm(command: add)
+        form.setRecord("ledgerPartyId", id: "LPY-4K7M", title: "Test eater")
+        form.setNumber("value", 250)
+        form.setChoice("unit", "g")
+        #expect(await model.run(add, confirmed: false, form: form) == .done("Portion saved"))
+
+        let eaten: ReportCommand = try decode(markEatenCommand)
+        #expect(await model.run(eaten, confirmed: false) == .done("Portion saved"))
+
+        let sent = service.calls.withLock { $0.prepared }
+        #expect(sent.count == 2)
+        let first = try JSONValue(encoding: sent[0])
+        #expect(first["mealRecipeId"]?.stringValue == mealRecipeID)
+        #expect(first["changes"]?.arrayValue?.count == 1)
+        let change = try #require(first["changes"]?.arrayValue?.first)
+        #expect(change["action"]?.stringValue == "set")
+        #expect(change["mealId"]?.stringValue == "MEL-4K7M")
+        #expect(change["ledgerPartyId"]?.stringValue == "LPY-4K7M")
+        #expect(change["amount"]?["value"]?.doubleValue == 250)
+        #expect(change["amount"]?["unit"]?.stringValue == "g")
+        #expect(change["confirmed"]?.boolValue == false)
+        let second = try JSONValue(encoding: sent[1])
+        #expect(second["changes"]?.arrayValue?.first?["confirmed"]?.boolValue == true)
+        #expect(second["changes"]?.arrayValue?.first?["amount"]?["unit"]?.stringValue == "serving")
+    }
+
+    @Test("A yield is whole grams the person enters")
+    func yieldSendsTheActualGrams() async throws {
+        let command: ReportCommand = try decode(yieldCommand)
+        let service = FakeReports([try report(live: false, status: "completed")])
+        let model = model(service)
+        var form = ReportCommandForm(command: command)
+        #expect(!form.isComplete)
+        form.setNumber("grams", 1200)
+        #expect(await model.run(command, confirmed: false, form: form) == .done("Yield saved"))
+        let sent = try JSONValue(encoding: try #require(service.calls.withLock { $0.prepared.first }))
+        #expect(sent["actualYieldGrams"]?.doubleValue == 1200)
+        #expect(sent["changes"]?.arrayValue?.isEmpty == true)
     }
 
     @Test("An action with no confirmation acts on the tap and refreshes the report")

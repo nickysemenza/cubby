@@ -23,8 +23,13 @@ enum DetailSlotRegistry {
         .mealNutrition: { AnyView(MealNutritionSlot(mealID: $0.id)) },
         .recipeWorkflow: { AnyView(RecipeWorkflowDetailSlot(row: $0)) },
         .ingredientNutritionProduct: { AnyView(IngredientNutritionProductSlot(row: $0)) },
-        .ingredientRecipeUsages: { AnyView(IngredientRecipeUsagesSlot(row: $0)) },
-        .cookbookToc: { AnyView(CookbookContentsSlot(cookbookID: $0.id)) },
+        .ingredientRecipeUsages: { reportSlot(.ingredient_recipeUsages, $0) },
+        .cookbookToc: { row in
+            AnyView(
+                CookbookContentsSlot(
+                    cookbookID: row.id,
+                    hasReadableExtraction: row.raw["needsReextract"]?.boolValue != true))
+        },
         .cookbookImportProgress: { AnyView(CookbookImportProgressSlot(row: $0)) },
         .mealComposition: { reportSlot(.meal_composition, $0) },
         .projectBudget: { reportSlot(.project_budget, $0) },

@@ -26,6 +26,8 @@ export const entityReportContract = defineContract("entityReport", {
         ["inventory"],
         ["meal"],
         ["recipe"],
+        ["ingredient"],
+        ["cookbook"],
         ["product"],
         ["image"],
         ["purchase"],

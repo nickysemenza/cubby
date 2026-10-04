@@ -92,3 +92,11 @@ export const computeParseDrift = (
  */
 export const hasDrift = (d: ParseDrift): boolean =>
   d.name !== null || d.amounts !== null || d.modifier !== null;
+
+/** The axes that drifted, named once so the report's badge and the re-parse's answer agree. */
+export const driftAxes = (d: ParseDrift) =>
+  [
+    d.amounts !== null ? ("amount" as const) : null,
+    d.modifier !== null ? ("modifier" as const) : null,
+    d.name !== null ? ("name" as const) : null,
+  ].filter((axis) => axis !== null);

@@ -40,7 +40,7 @@ import type {
   CookbookSummary,
   CookbookUpdateInput,
 } from "@cubby/schemas/recipe";
-import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -770,3 +770,42 @@ export const reprocessCookbookRecipe = async (
       selection.importContext,
     )
   ).id;
+
+/**
+ * The source recipes a book does not hold yet (matched by name, as the import and reprocess do)
+ * and how many it does. One rule for the report's list, a chunk's `remaining` and the commands.
+ */
+export const getCookbookSourceCoverage = async (
+  db: Database,
+  id: CookbookId,
+) => {
+  const source = await getCookbookSource(db, id);
+  const imported = new Set(
+    (await getCookbookRecipeTitles(db, id)).map((title) =>
+      title.trim().toLowerCase(),
+    ),
+  );
+  const all = flattenCookbookRecipes(source.cookbook);
+  const missing = all.filter(
+    (entry) => !imported.has(entry.recipe.name.trim().toLowerCase()),
+  );
+  return { total: all.length, missing };
+};
+
+/** Live recipes of a book whose totals were never (re)computed: an interrupted call's leftovers. */
+export const getStaleCookbookRecipeIds = async (
+  db: Database,
+  id: CookbookId,
+): Promise<RecipeId[]> =>
+  (
+    await getDb(db)
+      .select({ id: recipe.id })
+      .from(recipe)
+      .where(
+        and(
+          eq(recipe.cookbookId, id),
+          notDeleted(recipe),
+          isNull(recipe.totalsComputedAt),
+        ),
+      )
+  ).map((row) => row.id);

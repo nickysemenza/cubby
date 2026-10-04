@@ -54,56 +54,17 @@ struct IngredientNutritionProductSlot: View {
     }
 }
 
-/// `ingredient.recipe-usages`: every recipe line using this ingredient, from the detail payload's
-/// `recipeUsages`. Re-parsing a drifted line stays on web.
-struct IngredientRecipeUsagesSlot: View {
-    let row: EntityRow
-
-    private var usages: [JSONValue] { row.raw["recipeUsages"]?.arrayValue ?? [] }
-
-    var body: some View {
-        if usages.isEmpty {
-            Text("Not used in any recipes yet.").foregroundStyle(.secondary)
-        } else {
-            ForEach(usages, id: \.self) { usage in
-                let recipeName = usage["recipe"]?["name"]?.stringValue ?? "Recipe"
-                let label = VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    Text(recipeName)
-                    Text(Self.line(usage)).font(.caption).foregroundStyle(.secondary)
-                    if let section = usage["sectionName"]?.stringValue, !section.isEmpty {
-                        Text(section).font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
-                if let recipeID = usage["recipe"]?["id"]?.stringValue {
-                    NavigationLink(value: Route.entityDetail(.recipe, id: recipeID)) { label }
-                } else {
-                    label
-                }
-            }
-        }
-    }
-
-    /// The line as written, else its parsed amounts.
-    static func line(_ usage: JSONValue) -> String {
-        if let raw = usage["rawLine"]?.stringValue, !raw.isEmpty { return raw }
-        let amounts = (usage["amounts"]?.arrayValue ?? []).compactMap { amount -> String? in
-            guard let value = amount["value"]?.doubleValue else { return nil }
-            return ValueFormat.amount(
-                unit: amount["unit"]?.stringValue, value: value, upperValue: amount["upperValue"]?.doubleValue
-            )
-        }
-        return amounts.isEmpty ? "No amount" : amounts.joined(separator: " · ")
-    }
-}
-
 /// `cookbook.toc`: which ingredients the book's recipes use most, from `recipe.getIngredientUsage`
-/// scoped to this cookbook. The share is the server's rounded percent.
+/// scoped to this cookbook (the share is the server's rounded percent), and the stored extraction's
+/// report, which the server words (`cookbook.extraction-report`) and is read only once opened.
+/// A book in the retired format has no readable report, as on web.
 struct CookbookContentsSlot: View {
     let cookbookID: String
+    var hasReadableExtraction = true
     @Environment(AppModel.self) private var appModel
     @State private var usage: IngredientUsage?
     @State private var error: String?
+    @State private var reportOpen = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
@@ -114,6 +75,14 @@ struct CookbookContentsSlot: View {
                 Button("Retry") { Task { await load() } }
             } else {
                 LoadingIndicator(label: "Loading contents")
+            }
+            if hasReadableExtraction {
+                DisclosureGroup("Extraction report", isExpanded: $reportOpen) {
+                    if reportOpen {
+                        ReportDetailSlot(slot: .cookbook_extractionReport, id: cookbookID)
+                    }
+                }
+                .accessibilityIdentifier("cookbook.extractionReport")
             }
         }
         .task(id: cookbookID) { await load() }
@@ -164,17 +133,19 @@ struct CookbookContentsList: View {
     }
 }
 
-/// `cookbook.import-progress`: how much of the book's source has become recipes. Reprocessing and
-/// the add-from-source picker stream per-recipe progress and stay on web.
+/// `cookbook.import-progress`: how much of the book's source has become recipes (from the record),
+/// and, once opened, the server's section: the source recipes not yet imported with a command to
+/// add each (or all) and a confirmed Reprocess. Both write through existing recipe operations.
 struct CookbookImportProgressSlot: View {
     let row: EntityRow
-    @Environment(AppModel.self) private var appModel
+    @State private var open = false
 
     var body: some View {
         let imported = row.raw["recipeCount"]?.doubleValue ?? 0
         let source = row.raw["sourceRecipeCount"]?.doubleValue ?? 0
+        let retired = row.raw["needsReextract"]?.boolValue == true
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            if row.raw["needsReextract"]?.boolValue == true {
+            if retired {
                 Label(
                     "Extracted with a retired format. Re-extract from the EPUB on web to restore the source, its run report, and sub-recipe links.",
                     systemImage: "exclamationmark.triangle"
@@ -188,10 +159,13 @@ struct CookbookImportProgressSlot: View {
                 "\(ValueFormat.number(imported)) of \(ValueFormat.number(source)) source recipes imported."
             )
             .font(.caption).foregroundStyle(.secondary)
-            if imported < source {
-                Link(
-                    "Add or reprocess recipes on web",
-                    destination: appModel.webURL(for: .cookbook, id: row.id))
+            if !retired {
+                DisclosureGroup("Add or reprocess recipes", isExpanded: $open) {
+                    if open {
+                        ReportDetailSlot(slot: .cookbook_importProgress, id: row.id)
+                    }
+                }
+                .accessibilityIdentifier("cookbook.importProgress")
             }
         }
     }
@@ -228,22 +202,6 @@ struct CookbookImportProgressSlot: View {
                                 ])
                             ]),
                         ]),
-                    ])
-                ])))
-    }
-}
-
-#Preview("Ingredient recipe usages") {
-    List {
-        IngredientRecipeUsagesSlot(
-            row: EntityRow(
-                id: "ING-4K7M", title: "Flour", subtitle: nil, imageURL: nil,
-                raw: .object([
-                    "recipeUsages": .array([
-                        .object([
-                            "recipe": .object(["id": .string("RCP-4K7M"), "name": .string("Synthetic Tart")]),
-                            "sectionName": .string("Crust"), "rawLine": .string("2 cups flour"),
-                        ])
                     ])
                 ])))
     }

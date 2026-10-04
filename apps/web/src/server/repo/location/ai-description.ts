@@ -8,9 +8,12 @@
  * the relational-query layer rewrites an embedded typed `Column` to the
  * primary table's alias, which breaks a correlated subquery over another table.
  */
-import { type AnyColumn, type SQL, sql } from "drizzle-orm";
+import type { LocationId } from "@cubby/schemas/identifiers";
+import { type AnyColumn, eq, type SQL, sql } from "drizzle-orm";
 
+import type { Database } from "~/server/db";
 import { location } from "~/server/db/schema";
+import { getDb } from "~/server/repo/database-helpers";
 
 /** The analysis feature id `describeLocation` writes under. */
 export const LOCATION_DESCRIPTION_FEATURE_ID = "location-description";
@@ -32,4 +35,22 @@ export const locationAiDescriptionSql = (
  */
 export const locationAiDescriptionExtras = {
   aiDescription: locationAiDescriptionSql(location.id).as("aiDescription"),
+};
+
+/**
+ * The description a location shows right now (null when none was ever analyzed).
+ *
+ * The id goes in as a bound value, never `location.id`: drizzle prints a single-table select's
+ * columns unqualified, so `location.id` inside the correlated subquery would read the analysis
+ * row's own `id` and the description would always come back null.
+ */
+export const readLocationAiDescription = async (
+  db: Database,
+  locationId: LocationId,
+): Promise<string | null> => {
+  const [row] = await getDb(db)
+    .select({ description: locationAiDescriptionSql(sql`${locationId}`) })
+    .from(location)
+    .where(eq(location.id, locationId));
+  return row?.description ?? null;
 };

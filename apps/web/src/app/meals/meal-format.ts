@@ -1,4 +1,7 @@
-import type { IngredientAvailabilityStatus } from "@cubby/schemas/availability";
+import {
+  AVAILABILITY_STATUS_LABELS,
+  type IngredientAvailabilityStatus,
+} from "@cubby/schemas/availability";
 import type { MealTotals } from "@cubby/schemas/meal";
 import {
   MEAL_TYPE_LABELS,
@@ -121,19 +124,5 @@ export const shortClass = (row: ShoppingRow): string =>
       ? statusClass(row.status)
       : "text-muted-foreground";
 
-export const statusLabel = (status: IngredientAvailabilityStatus): string => {
-  switch (status) {
-    case "ok":
-      return "Have enough";
-    case "short":
-      return "Short";
-    case "missing":
-      return "Need to buy";
-    case "unconvertible":
-      return "Can't compare units";
-    case "subrecipe":
-      return "Sub-recipe";
-    default:
-      return status;
-  }
-};
+export const statusLabel = (status: IngredientAvailabilityStatus): string =>
+  AVAILABILITY_STATUS_LABELS[status];

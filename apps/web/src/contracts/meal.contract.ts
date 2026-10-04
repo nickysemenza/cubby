@@ -142,16 +142,19 @@ export const mealContract = defineContract("meal", {
     output: schemas.shoppingListOut,
   }),
   addRecipe: mutation({
+    native: "Plan a recipe into a meal from its composition report",
     input: schemas.mealAddRecipeInput,
     output: schemas.mealOut,
     invalidates: ["meal"],
   }),
   updateRecipe: mutation({
+    native: "Change a meal recipe's scale from the composition report",
     input: schemas.mealUpdateRecipeInput,
     output: schemas.mealOut,
     invalidates: ["meal"],
   }),
   removeRecipe: mutation({
+    native: "Remove a recipe from a meal from the composition report",
     input: schemas.mealRecipeIdInput,
     output: schemas.mealOut,
     invalidates: ["meal"],
@@ -168,6 +171,7 @@ export const mealContract = defineContract("meal", {
     invalidates: ["meal"],
   }),
   savePreparation: mutation({
+    native: "Set or remove portions and the yield from the composition report",
     input: schemas.saveMealRecipePreparationInput,
     output: schemas.saveMealRecipePreparationOut,
     invalidates: ["meal"],

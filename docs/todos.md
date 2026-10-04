@@ -263,8 +263,8 @@ See also the image operational passes at the end of this file.
   ceiling per kind. Every control, list cell, detail renderer and hero action
   is native. Remaining gaps: two Run detail slots (the live and stopped
   agent conversation, which stream over the coordinator's own protocol; see the next
-  item) and the web-only parts inside drawn recipe/cookbook/ingredient and
-  meal-composition slots. Add editor focus order or
+  item) and the few web-only parts listed under "Web-only parts inside the
+  implemented native slots". Add editor focus order or
   comprehensive sheet lifecycle only on demonstrated friction. Owners:
   `apps/apple/App/Shared`, generated `EntityCatalog`.
 
@@ -326,14 +326,16 @@ See also the image operational passes at the end of this file.
   use or concurrent windows block a workflow; needs a write/retry/conflict
   model and window ownership rules.
 
-- ⏳ **Web-only parts inside the implemented native recipe/cookbook/ingredient
-  slots.** Recipe AI walkthrough, costing coverage, availability panel, flow
-  layout and total-weight scale anchor; cookbook extraction report, reprocess
-  and add-from-source; ingredient recipe-usage re-parse. Promote one when a
-  household task needs it on the phone.
+- ⏳ **Web-only parts inside the implemented native slots.** What is left
+  after the report commands: the recipe flow's "map" layout (a graph drawing);
+  non-recipe foods and moving a portion to another meal (leftovers) in a meal's
+  composition; the web cookbook reprocess progress bar (native runs the same
+  workflow to its end and shows the summary). Promote one when a household
+  task needs it on the phone.
 
 - ⏳ **Expose the rest of recipebridge via cubby-ffi.** Scaling (`scale_amount`,
-  scale-factor anchors, scaled counts) ships with native cook mode. Conversion,
+  every scale-factor anchor including total weight, scaled counts) ships with
+  native cook mode. Conversion,
   needs, costing, and nutrition stay web-only until a native screen prices a
   meal or shows a costed recipe.
 

@@ -31,7 +31,6 @@ export const AnalyzeLocationAction: FunctionComponent<
 > = ({ record: location }) => (
   <AiDescriptionSection
     locationId={location.id}
-    currentDescription={location.aiDescription ?? null}
     hasImages={(location.images ?? []).length > 0}
   />
 );

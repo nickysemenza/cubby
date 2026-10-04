@@ -5,7 +5,15 @@ import {
   type CollectionActionId,
 } from "./entity-definitions/collection-actions";
 import { SECTION_ACTION_IDS } from "./entity-section-actions";
-import { runShortcode } from "./identifiers";
+import {
+  cookbookShortcode,
+  ledgerPartyShortcode,
+  mealRecipeId,
+  mealShortcode,
+  recipeShortcode,
+  runShortcode,
+} from "./identifiers";
+import { mealScale, mealYieldGrams } from "./meal-shared";
 import { runControlAction } from "./run-fields";
 
 /**
@@ -17,6 +25,9 @@ import { runControlAction } from "./run-fields";
  * values, bar/stack/line), `table`, `schedule` (dated spans) and `note`.
  */
 export const reportSlots = [
+  "recipe.availability",
+  "recipe.costing-coverage",
+  "recipe.walkthrough",
   "project.budget",
   "project.contribution",
   "project.analytics",
@@ -26,6 +37,9 @@ export const reportSlots = [
   "product.labels",
   "product.cookbooks",
   "product.recipe-appearances",
+  "ingredient.recipe-usages",
+  "cookbook.extraction-report",
+  "cookbook.import-progress",
   "image.associations",
   "purchase.runs",
   "location.ai-description",
@@ -109,6 +123,11 @@ const reportStats = z.object({
   title: z.string().optional(),
   figures: z.array(
     z.object({
+      /**
+       * A stable name for a figure a client acts on rather than prints (the unscaled total
+       * weight a scale anchor measures against); absent for a figure that is only read.
+       */
+      id: z.string().optional(),
       label: z.string(),
       /** Null renders as an em dash (no estimate to measure against). */
       value: z.number().nullable(),
@@ -215,8 +234,110 @@ export const reportCommandRequest = z.discriminatedUnion("kind", [
     kind: z.literal("retry-gmail-search"),
     runId: runShortcode,
   }),
+  /** Re-derive a book's imported recipes from its stored extraction (no AI). */
+  z.object({
+    kind: z.literal("reprocess-cookbook"),
+    cookbookId: cookbookShortcode,
+  }),
+  /**
+   * Import these source recipes (the tree's item ids) from the book's stored extraction. The
+   * client sends at most `chunkSize` per call (the server's cap) and stops at the first error.
+   */
+  z.object({
+    kind: z.literal("import-cookbook-recipes"),
+    cookbookId: cookbookShortcode,
+    recipeIds: z.array(z.string().min(1)).min(1),
+    chunkSize: z.number().int().positive(),
+  }),
+  /** Ask the AI to arrange a recipe's steps into a walkthrough (`force` replaces a current one). */
+  z.object({
+    kind: z.literal("generate-recipe-flow"),
+    recipeId: recipeShortcode,
+    force: z.boolean(),
+  }),
+  /** Plan a recipe into a meal: the person picks the recipe (`recipeId`) and its scale. */
+  z.object({
+    kind: z.literal("meal-add-recipe"),
+    mealId: mealShortcode,
+    recipeId: recipeShortcode.nullable(),
+    scale: mealScale.nullable(),
+    /** The person's reviewed answer for a meal that is not cooked yet; false for a cooked one. */
+    convertToCooked: z.boolean().nullable(),
+  }),
+  /** Change how much of a meal's recipe is served (`scale`, entered by the person). */
+  z.object({
+    kind: z.literal("meal-scale-recipe"),
+    mealRecipeId,
+    scale: mealScale.nullable(),
+  }),
+  z.object({ kind: z.literal("meal-remove-recipe"), mealRecipeId }),
+  /**
+   * Set one eater's portion of a prepared recipe on a target meal. `value`/`unit` are entered by
+   * the person to add a portion and carried by the server to change its status.
+   */
+  z.object({
+    kind: z.literal("meal-portion-set"),
+    mealRecipeId,
+    mealId: mealShortcode,
+    ledgerPartyId: ledgerPartyShortcode.nullable(),
+    value: z.number().positive().nullable(),
+    unit: z.string().min(1).nullable(),
+    confirmed: z.boolean(),
+  }),
+  z.object({
+    kind: z.literal("meal-portion-remove"),
+    mealRecipeId,
+    mealId: mealShortcode,
+    ledgerPartyId: ledgerPartyShortcode,
+  }),
+  /** Record how much a preparation made, in whole grams (entered by the person). */
+  z.object({
+    kind: z.literal("meal-yield"),
+    mealRecipeId,
+    field: z.enum(["actual", "estimated"]),
+    grams: mealYieldGrams.nullable(),
+  }),
+  /** Re-parse one stored recipe line with the current parser; the server decides what changes. */
+  z.object({
+    kind: z.literal("reparse-line"),
+    recipeId: recipeShortcode,
+    lineId: z.uuid(),
+  }),
 ]);
 export type ReportCommandRequest = z.infer<typeof reportCommandRequest>;
+
+/**
+ * Something the person supplies before a command runs. The client collects it and puts it in the
+ * request field of the same `key`; nothing is sent while a required input is empty. Each kind is
+ * a primitive both clients already draw (a number field, the entity picker, an option list).
+ */
+export const reportCommandInput = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("number"),
+    key: z.string().min(1),
+    label: z.string().min(1),
+    /** Shown first (the current value, or a sensible default). */
+    initial: z.number().nullable(),
+    min: z.number(),
+  }),
+  z.object({
+    kind: z.literal("record"),
+    key: z.string().min(1),
+    label: z.string().min(1),
+    /** The entity whose records the client searches. */
+    entity: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal("choice"),
+    key: z.string().min(1),
+    label: z.string().min(1),
+    options: z
+      .array(z.object({ value: z.string().min(1), label: z.string().min(1) }))
+      .min(1),
+    initial: z.string().nullable(),
+  }),
+]);
+export type ReportCommandInput = z.infer<typeof reportCommandInput>;
 
 export const reportCommand = z.object({
   id: z.string().min(1),
@@ -224,6 +345,8 @@ export const reportCommand = z.object({
   /** The main command of its row; the rest draw as secondary. */
   prominent: z.boolean(),
   confirm: z.string().min(1).nullable(),
+  /** What the person fills in first; absent for a command one tap runs. */
+  inputs: z.array(reportCommandInput).optional(),
   request: reportCommandRequest,
 });
 export type ReportCommand = z.infer<typeof reportCommand>;
@@ -394,6 +517,8 @@ const reportRecords = z.object({
     .optional(),
   /** Row choices plus the one command they unlock (approve a prepared import). */
   form: reportForm.optional(),
+  /** Commands on the whole block (generate a walkthrough), each after its declared confirmation. */
+  commands: z.array(reportCommand).optional(),
 });
 
 export const reportBlock = z.discriminatedUnion("kind", [

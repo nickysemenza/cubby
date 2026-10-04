@@ -12,8 +12,53 @@ public protocol ReportServing: Sendable {
     /// `problems.resolveRunFinding`; true when the fix was applied rather than dismissed.
     func resolveFinding(_ input: ResolveRunFindingInput) async throws -> Bool
     func resendGmailSearch(_ input: RunRetryGmailSearchInput) async throws
+    /// `recipe.reparseLine`: the server re-parses one stored line and writes what drifted.
+    func reparseLine(_ input: RecipeReparseLineInput) async throws -> RecipeReparseLineOutput
+    /// `recipe.generateFlow`: the AI arranges a recipe's steps into a walkthrough.
+    func generateFlow(_ input: RecipeFlowGenerateInput) async throws
+    /// The meal composition operations (`meal.addRecipe`, `updateRecipe`, `removeRecipe`,
+    /// `savePreparation`); the server composed every id, the person supplied the rest.
+    /// The cookbook commands, run to their end; each answers with the sentence to show.
+    func reprocessCookbook(_ input: CookbookReprocessChunkInput) async throws -> CookbookChunkResult
+    func importCookbookRecipes(_ input: CookbookImportChunkInput) async throws -> CookbookChunkResult
+    func addMealRecipe(_ input: MealAddRecipeInput) async throws
+    func updateMealRecipe(_ input: MealUpdateRecipeInput) async throws
+    func removeMealRecipe(_ input: MealRecipeIdInput) async throws
+    func saveMealPreparation(_ input: SaveMealRecipePreparationInput) async throws
     /// `run.commitPrepared`: approve and import one prepared batch.
     func commitPrepared(_ input: RunCommitPreparedInput) async throws
+}
+
+/// Commands a read-only fake need not implement; `CubbyClient` always does.
+extension ReportServing {
+    public func reparseLine(_ input: RecipeReparseLineInput) async throws -> RecipeReparseLineOutput {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
+    public func generateFlow(_ input: RecipeFlowGenerateInput) async throws {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
+    public func reprocessCookbook(_ input: CookbookReprocessChunkInput) async throws
+        -> CookbookChunkResult
+    {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
+    public func importCookbookRecipes(_ input: CookbookImportChunkInput) async throws
+        -> CookbookChunkResult
+    {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
+    public func addMealRecipe(_ input: MealAddRecipeInput) async throws {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
+    public func updateMealRecipe(_ input: MealUpdateRecipeInput) async throws {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
+    public func removeMealRecipe(_ input: MealRecipeIdInput) async throws {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
+    public func saveMealPreparation(_ input: SaveMealRecipePreparationInput) async throws {
+        throw ReportActionError.unavailable("Not supported by this service.")
+    }
 }
 
 extension CubbyClient: ReportServing {
@@ -39,8 +84,66 @@ extension CubbyClient: ReportServing {
         let _: VendorSearchMailOut = try await retryGmailSearch(input)
     }
 
+    public func reparseLine(_ input: RecipeReparseLineInput) async throws -> RecipeReparseLineOutput {
+        try await reparseRecipeLine(input)
+    }
+
+    public func generateFlow(_ input: RecipeFlowGenerateInput) async throws {
+        let _: RecipeFlowArtifact = try await generateRecipeFlow(input)
+    }
+
+    public func reprocessCookbook(_ input: CookbookReprocessChunkInput) async throws
+        -> CookbookChunkResult
+    {
+        let out: RecipeReprocessCookbookOnceOutput = try await reprocessCookbook(input)
+        return CookbookChunkResult(done: out.reprocessed, failureText: nil, next: out.nextOffset)
+    }
+
+    public func importCookbookRecipes(_ input: CookbookImportChunkInput) async throws
+        -> CookbookChunkResult
+    {
+        let out: RecipeImportCookbookRecipesOnceOutput = try await importCookbookRecipes(input)
+        return CookbookChunkResult(
+            done: out.imported,
+            failureText: out.failed > 0
+                ? "\(out.failed) failed: "
+                    + out.failures.map { "\($0.sourceRecipeId): \($0.error)" }.joined(separator: "; ")
+                : nil,
+            next: nil)
+    }
+
+    public func addMealRecipe(_ input: MealAddRecipeInput) async throws {
+        let _: MealOut = try await addRecipeToMeal(input)
+    }
+
+    public func updateMealRecipe(_ input: MealUpdateRecipeInput) async throws {
+        let _: MealOut = try await updateMealRecipe(input)
+    }
+
+    public func removeMealRecipe(_ input: MealRecipeIdInput) async throws {
+        let _: MealOut = try await removeMealRecipe(input)
+    }
+
+    public func saveMealPreparation(_ input: SaveMealRecipePreparationInput) async throws {
+        let _: SaveMealRecipePreparationOut = try await saveMealPreparation(input)
+    }
+
     public func commitPrepared(_ input: RunCommitPreparedInput) async throws {
         let _: CommitPurchaseImportOut = try await commitPreparedImport(input)
+    }
+}
+
+/// One bounded call of a cookbook command: how many recipes it finished, the raw reason any
+/// failed, and where a reprocess continues (nil when it was the last window).
+public struct CookbookChunkResult: Sendable, Equatable {
+    public let done: Int
+    public let failureText: String?
+    public let next: Int?
+
+    public init(done: Int, failureText: String?, next: Int?) {
+        self.done = done
+        self.failureText = failureText
+        self.next = next
     }
 }
 
@@ -78,6 +181,8 @@ public final class ReportSlotModel {
     public private(set) var busyActionID: String?
     public private(set) var actionError: String?
     public private(set) var actionNotice: String?
+    /// How far a command that runs in several calls has got ("Added 40 recipes…").
+    public private(set) var actionProgress: String?
     public private(set) var openedRunID: String?
 
     public let slot: ReportSlot
@@ -204,10 +309,17 @@ public final class ReportSlotModel {
     /// Runs `action`'s exact request. An action with a confirmation does nothing until the
     /// caller passes `confirmed: true` (the person tapped the dialog's button).
     @discardableResult
-    public func run(_ action: ReportCommand, confirmed: Bool) async -> ReportActionOutcome? {
+    public func run(
+        _ action: ReportCommand, confirmed: Bool, form: ReportCommandForm? = nil
+    ) async -> ReportActionOutcome? {
         guard busyActionID == nil else { return nil }
         if action.confirm != nil, !confirmed {
             actionError = ReportActionError.confirmationRequired.localizedDescription
+            return nil
+        }
+        // A command that asks for inputs is not sent until every one has a usable answer.
+        if !(action.inputs ?? []).isEmpty, !(form?.isComplete ?? false) {
+            actionError = ReportActionError.incompleteAnswers.localizedDescription
             return nil
         }
         busyActionID = action.id
@@ -215,7 +327,10 @@ public final class ReportSlotModel {
         actionNotice = nil
         defer { busyActionID = nil }
         do {
-            let outcome = try await Self.perform(action.request, service: service)
+            defer { actionProgress = nil }
+            let outcome = try await Self.perform(
+                action.request, form: form, service: service
+            ) { [weak self] in self?.actionProgress = $0 }
             switch outcome {
             case .openedRun(let runID): openedRunID = runID
             case .done(let message): actionNotice = message
@@ -267,7 +382,8 @@ public final class ReportSlotModel {
     }
 
     static func perform(
-        _ request: ReportCommandRequest, service: any ReportServing
+        _ request: ReportCommandRequest, form: ReportCommandForm?, service: any ReportServing,
+        progress: @MainActor (String) -> Void = { _ in }
     ) async throws -> ReportActionOutcome {
         switch request {
         case .runControl(let control):
@@ -286,6 +402,99 @@ public final class ReportSlotModel {
         case .retryGmailSearch(let retry):
             try await service.resendGmailSearch(.init(shortcode: retry.runId))
             return .done("Resent to the background queue")
+        case .mealAddRecipe(let add):
+            guard let recipeID = form?.text("recipeId") ?? add.recipeId,
+                let scale = form?.number("scale") ?? add.scale
+            else { throw ReportActionError.incompleteAnswers }
+            let convert = form?.text("convertToCooked").map { $0 == "true" } ?? add.convertToCooked
+            try await service.addMealRecipe(
+                .init(
+                    mealId: add.mealId, recipeId: recipeID, scale: scale, convertToCooked: convert))
+            return .done("Added to the meal")
+        case .mealScaleRecipe(let change):
+            guard let scale = form?.number("scale") ?? change.scale
+            else { throw ReportActionError.incompleteAnswers }
+            try await service.updateMealRecipe(.init(id: change.mealRecipeId, scale: scale))
+            return .done("Scale changed")
+        case .mealRemoveRecipe(let remove):
+            try await service.removeMealRecipe(.init(id: remove.mealRecipeId))
+            return .done("Removed from the meal")
+        case .mealPortionSet(let portion):
+            guard let eater = form?.text("ledgerPartyId") ?? portion.ledgerPartyId,
+                let value = form?.number("value") ?? portion.value,
+                let unit = form?.text("unit") ?? portion.unit
+            else { throw ReportActionError.incompleteAnswers }
+            try await service.saveMealPreparation(
+                .init(
+                    mealRecipeId: portion.mealRecipeId,
+                    changes: [
+                        .set(
+                            .init(
+                                action: .set, mealId: portion.mealId, ledgerPartyId: eater,
+                                amount: .init(value: value, unit: unit), confirmed: portion.confirmed))
+                    ]))
+            return .done("Portion saved")
+        case .mealPortionRemove(let portion):
+            try await service.saveMealPreparation(
+                .init(
+                    mealRecipeId: portion.mealRecipeId,
+                    changes: [
+                        .remove(
+                            .init(
+                                action: .remove, mealId: portion.mealId, ledgerPartyId: portion.ledgerPartyId)
+                        )
+                    ]))
+            return .done("Portion removed")
+        case .mealYield(let made):
+            guard let grams = form?.number("grams") ?? made.grams.map(Double.init)
+            else { throw ReportActionError.incompleteAnswers }
+            let whole = Int(grams.rounded())
+            try await service.saveMealPreparation(
+                .init(
+                    mealRecipeId: made.mealRecipeId,
+                    estimatedYieldGrams: made.field == .estimated ? whole : nil,
+                    actualYieldGrams: made.field == .actual ? whole : nil, changes: []))
+            return .done("Yield saved")
+        case .reprocessCookbook(let book):
+            // One bounded window per call; the first error ends the loop, and what landed is
+            // already finalized by the server.
+            var offset = 0
+            var total = 0
+            while true {
+                let result = try await service.reprocessCookbook(
+                    .init(cookbookId: book.cookbookId, offset: offset))
+                total += result.done
+                progress("Reprocessed \(total) recipes…")
+                guard let next = result.next else { break }
+                offset = next
+            }
+            return .done("Reprocessed \(total) recipes")
+        case .importCookbookRecipes(let book):
+            var added = 0
+            var start = 0
+            let size = max(1, book.chunkSize)
+            while start < book.recipeIds.count {
+                let chunk = Array(book.recipeIds[start..<min(start + size, book.recipeIds.count)])
+                let result = try await service.importCookbookRecipes(
+                    .init(cookbookId: book.cookbookId, recipeIds: chunk))
+                added += result.done
+                if let failure = result.failureText {
+                    throw ReportActionError.unavailable(
+                        "Added \(added) of \(book.recipeIds.count); \(failure)")
+                }
+                start += size
+                progress("Added \(added) of \(book.recipeIds.count)…")
+            }
+            return .done("Added \(added) recipes")
+        case .generateRecipeFlow(let flow):
+            try await service.generateFlow(.init(id: flow.recipeId, force: flow.force))
+            return .done("Walkthrough generated")
+        case .reparseLine(let line):
+            let result = try await service.reparseLine(.init(recipeId: line.recipeId, lineId: line.lineId))
+            return .done(
+                result.status == .updated
+                    ? "Re-parsed the line (\(result.changed.map(\.rawValue).joined(separator: ", ")))"
+                    : "Nothing to update from a fresh parse.")
         }
     }
 }

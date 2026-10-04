@@ -335,9 +335,9 @@ struct EntityDetailView: View {
             }
         case .editor(let entity, let prefill, let context):
             heroEditor = HeroEditorRequest(entity: entity, prefill: prefill, context: context)
-        case .editRecord:
-            // Only a report `records` verb stages an edit (`RecordsBlockView` opens it); no hero
-            // verb has such a plan.
+        case .editRecord, .review:
+            // Only a report `records` verb stages an edit or an AI review (`RecordsBlockView`
+            // opens them); no hero verb has such a plan.
             break
         }
     }

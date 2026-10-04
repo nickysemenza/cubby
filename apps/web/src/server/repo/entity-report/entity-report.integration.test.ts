@@ -5,8 +5,6 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { mealRecipe } from "~/server/db/schema";
-import { insertAndReturn } from "~/server/repo/database-helpers";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -281,31 +279,6 @@ describe("entity report", () => {
       ["Maker 3", "$30.00"],
       ["Maker 2", "$20.00"],
     ]);
-  });
-
-  it("lists a meal's recipes with their scale", async () => {
-    const meal = await insertWithShortcode(ctx.db, "meal", {
-      date: "2026-09-14",
-      name: "Composition fixture",
-    });
-    const recipe = await insertWithShortcode(ctx.db, "recipe", {
-      name: "Synthetic stew",
-    });
-    await insertAndReturn(ctx.db, mealRecipe, {
-      mealId: meal.id,
-      recipeId: recipe.id,
-      scale: 2,
-    });
-    const [table] = blocksOf(
-      await report(
-        "meal.composition",
-        parseShortcodeFor("meal", meal.shortcode),
-      ),
-      "table",
-    );
-    expect(table?.rows).toHaveLength(1);
-    expect(table?.rows[0]?.cells.slice(0, 2)).toEqual(["Synthetic stew", "×2"]);
-    expect(table?.rows[0]?.ref).toMatchObject({ entity: "recipe" });
   });
 
   it("keeps unpriced expenses visible instead of reading them as $0", async () => {

@@ -177,12 +177,12 @@ struct CollectionActionTests {
         #expect(HeroActionRunner.unmet(try plan(.attachImage, .image), in: [:]) == nil)
     }
 
-    @Test func analyzingPostsTheLocationAndRefreshesIt() async throws {
+    @Test func analyzingPostsTheLocationAndOffersTheServersPreviousVersusNewReview() async throws {
         let recorder = capture { _ in
             (
                 200,
                 Data(
-                    #"{"description":"Shelves of jars","confidence":"high","cache":{"status":"miss","feature":"location-description","model":"sample","promptVersion":"1","inputFingerprint":"f"},"analyzedAt":"2026-06-03T00:00:00.000Z"}"#
+                    #"{"description":"Shelves of jars and a tarp","confidence":"high","previousDescription":"Shelves of jars","cache":{"status":"miss","feature":"location-description","model":"sample-model","promptVersion":"1","inputFingerprint":"f"},"analyzedAt":"2026-06-03T00:00:00.000Z"}"#
                         .utf8)
             )
         }
@@ -191,11 +191,39 @@ struct CollectionActionTests {
             values: [:], confirmed: false)
         #expect(recorder.requests.first?.path == "/api/v1/ai/describeLocation")
         #expect(recorder.requests.first?.body["locationId"] == "LOC-4K7M")
-        guard case .completed(_, let changed) = outcome else {
-            Issue.record("expected completion")
+        // The run already saved the description, so the review is an acknowledgement: it carries
+        // both sides of the diff, the model and the answer's age, and the screens that show the
+        // location refresh behind it. Keep and Hide change nothing, as on web.
+        guard case .review(let review) = outcome else {
+            Issue.record("expected a review")
             return
         }
-        #expect(changed == [.location])
+        #expect(review.previous == "Shelves of jars")
+        #expect(review.proposed == "Shelves of jars and a tarp")
+        #expect(review.confidence == "high")
+        #expect(review.model == "sample-model")
+        #expect(review.cacheStatus == "miss")
+        #expect(review.changed == [.location])
+    }
+
+    @Test func aFirstAnalysisHasNothingToCompareAgainst() async throws {
+        _ = capture { _ in
+            (
+                200,
+                Data(
+                    #"{"description":"Shelves of jars","confidence":"low","previousDescription":null,"cache":{"status":"hit","feature":"location-description","model":"m","promptVersion":"1","inputFingerprint":"f"},"analyzedAt":"2026-06-03T00:00:00.000Z"}"#
+                        .utf8)
+            )
+        }
+        let outcome = try await makeRunner().perform(
+            try plan(.analyzeLocation, .location), on: .location, row: Self.row("LOC-4K7M"),
+            values: [:], confirmed: false)
+        guard case .review(let review) = outcome else {
+            Issue.record("expected a review")
+            return
+        }
+        #expect(review.previous == nil)
+        #expect(review.cacheStatus == "hit")
     }
 
     @Test func attachingTrimsTheShortcodeAndSendsAPurposeOnlyForProducts() async throws {

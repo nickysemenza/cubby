@@ -7,6 +7,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
+import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { IngredientUsagePanel } from "~/features/ingredients/ingredient-usage-panel";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { recipeStreams } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -16,8 +17,6 @@ import { Row, Stack } from "~/ui/layout";
 import { BulkProgressBar } from "~/ui/primitives/bulk-progress-bar";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
-
-import { CookbookRunReportPanel } from "./cookbook-run-report";
 
 /**
  * A book stored in the retired extraction format. Nothing reads it any
@@ -65,7 +64,12 @@ export const CookbookContents: DetailSlotComponent<"cookbook"> = ({
           <summary className="cursor-pointer py-2 text-sm font-medium">
             Extraction report
           </summary>
-          {reportOpen && <CookbookRunReportPanel cookbookId={cookbook.id} />}
+          {reportOpen && (
+            <EntityReportSlot
+              slot="cookbook.extraction-report"
+              id={cookbook.id}
+            />
+          )}
         </details>
       )}
     </Stack>

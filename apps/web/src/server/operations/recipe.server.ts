@@ -454,6 +454,14 @@ export const recipeHandlers = implementOperationDomain(recipeContract, {
       await imports.insertImportWorkflow(context, importRecipe),
     );
   },
+  reprocessCookbookOnce: (context, input) =>
+    imports.reprocessCookbookChunkWorkflow(context, input),
+  importCookbookRecipesOnce: (context, input) =>
+    imports.importCookbookChunkWorkflow(context, input),
+  reparseLine: async (context, input) => {
+    const { reparseRecipeLine } = await import("./recipe-line-reparse");
+    return reparseRecipeLine(context, input);
+  },
   patchLine: async (context, input) => {
     const patched = await patchRecipeLine(context, input);
     return {

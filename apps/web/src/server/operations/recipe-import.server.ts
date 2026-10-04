@@ -4,13 +4,18 @@ import {
   parseShortcodeFor,
   type RecipeId,
 } from "@cubby/schemas/identifiers";
-import { cookbookBundleMetadataSchema } from "@cubby/schemas/import-recipe";
+import {
+  COOKBOOK_COMMAND_CHUNK,
+  cookbookBundleMetadataSchema,
+} from "@cubby/schemas/import-recipe";
 import type {
   attachCookbookRecipePhotoInput,
   attachCookbookRecipePhotoOut,
   cookbookDiffInput,
   cookbookIdInput,
   gatewayForwardInput,
+  cookbookImportChunkInput,
+  cookbookReprocessChunkInput,
   importCookbookStreamInput,
   importNotionSyncInput,
   importRecipeSchema,
@@ -42,6 +47,8 @@ import {
   getCookbookByName,
   getCookbookRecipePhotoSource,
   getCookbookSource,
+  getCookbookSourceCoverage,
+  getStaleCookbookRecipeIds,
   prepareCookbookReprocessing,
   reprocessCookbookRecipe,
   setCookbookProduct,
@@ -781,9 +788,12 @@ type ReprocessPreparedInput = {
     ReturnType<typeof prepareCookbookReprocessing>
   >["recipes"];
 };
+/** A bounded slice of the imported recipes; absent means all of them (the stream). */
+type ReprocessWindow = { readonly offset: number; readonly limit: number };
+
 const reprocessCookbookPreparation = workflow<
   AuthenticatedStartOperationContext,
-  z.output<typeof cookbookIdInput>
+  z.output<typeof cookbookIdInput> & { readonly window?: ReprocessWindow }
 >("recipe.reprocessCookbook.prepare")
   .call("cookbookId", ({ context }, { input }) =>
     cookbookShortcodes.one(context.db, input.cookbookId),
@@ -791,9 +801,16 @@ const reprocessCookbookPreparation = workflow<
   .call("selection", ({ context }, { cookbookId }) =>
     prepareCookbookReprocessing(context.db, cookbookId),
   )
-  .call("prepared", async ({ context }, { selection }) => ({
+  .call("prepared", async ({ context }, { selection, input }) => ({
     context: { operation: context, selection },
-    input: { recipes: selection.recipes },
+    input: {
+      recipes: input.window
+        ? selection.recipes.slice(
+            input.window.offset,
+            input.window.offset + input.window.limit,
+          )
+        : selection.recipes,
+    },
   }))
   .output(({ prepared }) => prepared);
 const reprocessCookbookDefinition = defineBulkWorkflow({
@@ -839,11 +856,12 @@ export const reprocessCookbookWorkflow = Object.assign(
     context: AuthenticatedStartOperationContext,
     input: z.output<typeof cookbookIdInput>,
     signal?: AbortSignal,
+    window?: ReprocessWindow,
   ) => {
     const run = async function* () {
       const prepared = await executeWorkflow(reprocessCookbookPreparation, {
         context,
-        input,
+        input: { ...input, window },
         signal,
       });
       const { context: preparedContext, input: preparedInput } = prepared;
@@ -857,6 +875,81 @@ export const reprocessCookbookWorkflow = Object.assign(
   },
   { definition: reprocessCookbookDefinition },
 );
+/**
+ * What a chunked call does after its bulk workflow: stamp stale and re-dispatch costing for the
+ * book's recipes an earlier interrupted call left without fresh totals, with the side effects a
+ * finished import runs. The workflow's own finalize covers the recipes that landed this call.
+ */
+async function refinalizeStrandedRecipes(
+  context: AuthenticatedStartOperationContext,
+  cookbookId: Awaited<ReturnType<typeof cookbookShortcodes.one>>,
+  source: string,
+) {
+  const stranded = await getStaleCookbookRecipeIds(context.db, cookbookId);
+  if (stranded.length === 0) return;
+  await context.services.recipeCosting.dispatchRecompute(stranded, { source });
+  await runMutationSideEffectsForEntities(
+    context.db,
+    mutationEvents("recipe", "updated", stranded, source),
+  );
+}
+
+/** `importCookbookWorkflow` for one bounded call: counts, raw errors and what is still missing. */
+export async function importCookbookChunkWorkflow(
+  context: AuthenticatedStartOperationContext,
+  input: z.output<typeof cookbookImportChunkInput>,
+) {
+  const failures: { sourceRecipeId: string; error: string }[] = [];
+  let summary = { succeeded: 0, failed: 0 };
+  for await (const event of importCookbookWorkflow(context, input)) {
+    if (event.type === "progress" && event.item?.ok === false)
+      failures.push({
+        sourceRecipeId: event.item.sourceRecipeId,
+        error: event.item.error,
+      });
+    if (event.type === "done") summary = event.result;
+  }
+  const id = await cookbookShortcodes.one(context.db, input.cookbookId);
+  await refinalizeStrandedRecipes(
+    context,
+    id,
+    "recipe.importCookbookRecipesOnce",
+  );
+  const { missing } = await getCookbookSourceCoverage(context.db, id);
+  return {
+    imported: summary.succeeded,
+    failed: summary.failed,
+    failures,
+    remaining: missing.length,
+  };
+}
+
+/**
+ * `reprocessCookbookWorkflow` for one bounded window of the imported recipes. `nextOffset` is
+ * where the next call starts, or null once a window came up short (a full window may be followed
+ * by an empty one).
+ */
+export async function reprocessCookbookChunkWorkflow(
+  context: AuthenticatedStartOperationContext,
+  input: z.output<typeof cookbookReprocessChunkInput>,
+  limit: number = COOKBOOK_COMMAND_CHUNK,
+) {
+  let reprocessed = 0;
+  for await (const event of reprocessCookbookWorkflow(
+    context,
+    { cookbookId: input.cookbookId },
+    undefined,
+    { offset: input.offset, limit },
+  ))
+    if (event.type === "done") reprocessed = event.result.reprocessed;
+  const id = await cookbookShortcodes.one(context.db, input.cookbookId);
+  await refinalizeStrandedRecipes(context, id, "recipe.reprocessCookbookOnce");
+  return {
+    reprocessed,
+    nextOffset: reprocessed === limit ? input.offset + limit : null,
+  };
+}
+
 type GatewayForwardInput = z.output<typeof gatewayForwardInput>;
 export async function forwardGatewayRequestWorkflow(
   context: AuthenticatedStartOperationContext,

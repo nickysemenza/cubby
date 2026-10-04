@@ -23,8 +23,12 @@ public struct ReportPresentation: Hashable, Sendable {
 
     public struct Figure: Hashable, Sendable, Identifiable {
         public var id: String { label }
+        /// A stable name for a figure a client acts on instead of printing (`weightGrams`).
+        public let key: String?
         public let label: String
         public let text: String
+        /// The number behind the text, for a figure a client acts on.
+        public let value: Double?
         public let tone: Tone?
     }
 
@@ -255,6 +259,8 @@ public struct ReportPresentation: Hashable, Sendable {
         public let footer: String?
         /// Finance verbs with the server's word on each (`SectionActionID`).
         public let verbs: [Verb]
+        /// Commands on the whole block (generate a walkthrough), each after its confirmation.
+        public let commands: [ReportCommand]
         /// Row choices and the one command they unlock (approve a prepared import).
         public let form: Form?
 
@@ -285,7 +291,8 @@ public struct ReportPresentation: Hashable, Sendable {
                         return next
                     },
                 empty: empty, actions: actions,
-                largeThumbnails: largeThumbnails, footer: footer, verbs: verbs, form: form)
+                largeThumbnails: largeThumbnails, footer: footer, verbs: verbs, commands: commands,
+                form: form)
         }
 
         /// The checked keys the server still allows.
@@ -313,6 +320,14 @@ public struct ReportPresentation: Hashable, Sendable {
     }
 
     public private(set) var blocks: [Block]
+
+    /// The number behind the stats figure the server named `key` (nil when absent or unknown).
+    public func figureValue(_ key: String) -> Double? {
+        for case .stats(_, let figures) in blocks {
+            if let figure = figures.first(where: { $0.key == key }) { return figure.value }
+        }
+        return nil
+    }
     /// The record is still moving; clients poll while true.
     public let live: Bool
     /// The record's status as of this read.
@@ -358,10 +373,10 @@ public struct ReportPresentation: Hashable, Sendable {
                 title: stats.title,
                 figures: stats.figures.map {
                     Figure(
-                        label: $0.label,
+                        key: $0.id, label: $0.label,
                         text: $0.format == .text
                             ? ($0.text ?? "—") : text($0.value, money: $0.format == .money),
-                        tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
+                        value: $0.value, tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
                 })
         case .chart(let chart):
             let money = chart.format == .money
@@ -444,6 +459,7 @@ public struct ReportPresentation: Hashable, Sendable {
                                 disabledReason: verb.disabledReason)
                         }
                     },
+                    commands: records.commands ?? [],
                     form: records.form.map { form in
                         Form(
                             choices: form.choices.map(choice), note: form.note, noun: form.noun,
