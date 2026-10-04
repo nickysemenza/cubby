@@ -7,7 +7,6 @@ import {
 import { ArrayFieldManager } from "~/ui/forms/array-field-manager";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { Input } from "~/ui/primitives/input";
-import { NativeSelect } from "~/ui/primitives/native-select";
 
 /** Small structured editors for finance evidence.  These deliberately expose
  * source-owned fields rather than a JSON textarea: array updates replace the
@@ -93,7 +92,7 @@ export function SourceRefsField<T extends FieldValues>({
   );
 }
 
-export function TextField<T extends FieldValues>({
+function TextField<T extends FieldValues>({
   form,
   name,
   label,
@@ -136,47 +135,6 @@ export function TextField<T extends FieldValues>({
             }
             className="min-w-28 flex-1"
           />
-        </FormFieldGroup>
-      )}
-    />
-  );
-}
-
-export function SelectField<T extends FieldValues>({
-  form,
-  name,
-  label,
-  values,
-}: {
-  form: UseFormReturn<T>;
-  name: string;
-  label: string;
-  values: readonly string[];
-}) {
-  return (
-    <Controller
-      control={form.control}
-      // SAFETY: SelectField deliberately accepts a caller-owned path string;
-      // React Hook Form cannot correlate that dynamic path with T here.
-      name={name as never}
-      render={({ field, fieldState }) => (
-        <FormFieldGroup
-          label={label}
-          invalid={fieldState.invalid}
-          error={fieldState.error}
-        >
-          <NativeSelect
-            className="w-full"
-            value={field.value ?? ""}
-            onChange={(event) => field.onChange(event.target.value)}
-          >
-            <option value="">Select…</option>
-            {values.map((value) => (
-              <option key={value} value={value}>
-                {value.replaceAll("_", " ")}
-              </option>
-            ))}
-          </NativeSelect>
         </FormFieldGroup>
       )}
     />
