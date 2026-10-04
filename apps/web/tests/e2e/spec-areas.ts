@@ -257,6 +257,11 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/server/repo/vendor.ts`,
     `${WEB}/src/server/repo/vendor.entity-adapter.ts`,
   ],
+  "structured-field-editors.spec.ts": [
+    `${WEB}/src/app/finance/**`,
+    `${WEB}/src/server/repo/vendor.ts`,
+    `${WEB}/src/server/repo/financial-account.ts`,
+  ],
   "field-guide-mobile.spec.ts": [
     `${WEB}/src/ui/data-table/shelf.tsx`,
     `${WEB}/src/ui/layouts/page-hero.tsx`,

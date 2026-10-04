@@ -1,5 +1,5 @@
 {
-  "_doc": "Synthetic read payloads for each structured field native edits, with the input the editor must send back untouched (project to the input schema, then shape for the wire). The web unit test parses every `input` with the field's update schema; CubbyKit's StructuredValueTests asserts wireValue(project(read)) == input. A field belongs in STRUCTURED_VALUE_RENDERERS only with a vector here. recipe.sections is generated: recipe-sections-vector.integration.test.ts reads a synthetic recipe through the real server read and fails unless its stabilized payload equals this vector's read (and web's recipeLineAsInput equals the input's lines), so a change to the read shape cannot leave this stale.",
+  "_doc": "Synthetic read payloads for each structured field the generic editor draws on web and native, with the input the editor must send back untouched (project to the input schema, then shape for the wire). The web unit test parses every `input` with the field's update (else create) schema; CubbyKit's StructuredValueTests asserts wireValue(project(read)) == input. A `structured-field` is `implemented` in native-coverage.ts only with a vector here. recipe.sections and every field in structured-field-vectors.integration.test.ts is generated: the test writes a synthetic record through the real server, reads it back, and fails unless its stabilized payload equals this vector's read and the web editor's projection equals the input, so a change to a read shape cannot leave this stale. meal.recipes elides the bulky totals blocks (null) because they are not part of the input.",
   "vectors": [
     {
       "entity": "product",
@@ -326,6 +326,232 @@
               "instruction": "Bake until done."
             }
           ]
+        }
+      ]
+    },
+    {
+      "entity": "recipe",
+      "field": "meta",
+      "read": {
+        "url": "https://example.test/vector-loaf",
+        "times": {
+          "active": null,
+          "total": "1 hr 10 min",
+          "prep": null,
+          "cook": null,
+          "activeMinutes": null,
+          "totalMinutes": 70,
+          "prepMinutes": null,
+          "cookMinutes": null
+        },
+        "equipment": ["Dutch oven"],
+        "page": "12"
+      },
+      "input": {
+        "url": "https://example.test/vector-loaf",
+        "times": {
+          "active": null,
+          "total": "1 hr 10 min",
+          "prep": null,
+          "cook": null,
+          "activeMinutes": null,
+          "totalMinutes": 70,
+          "prepMinutes": null,
+          "cookMinutes": null
+        },
+        "equipment": ["Dutch oven"],
+        "page": "12"
+      }
+    },
+    {
+      "entity": "recipe",
+      "field": "yield",
+      "read": {
+        "value": 24,
+        "unit": "cookies",
+        "upperValue": 30
+      },
+      "input": {
+        "value": 24,
+        "unit": "cookies",
+        "upperValue": 30
+      }
+    },
+    {
+      "entity": "meal",
+      "field": "recipes",
+      "read": [
+        {
+          "id": "00000001-0000-4000-8000-000000000000",
+          "mealId": "MEL-2222",
+          "recipeId": "RCP-2222",
+          "recipe": {
+            "id": "RCP-2222",
+            "name": "Vector stew",
+            "servings": null,
+            "yield": null,
+            "totals": null
+          },
+          "scale": 2,
+          "sortOrder": 1,
+          "estimatedYieldGrams": null,
+          "actualYieldGrams": null,
+          "scaledTotals": null,
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z"
+        }
+      ],
+      "input": [
+        {
+          "recipeId": "RCP-2222",
+          "scale": 2,
+          "sortOrder": 1
+        }
+      ]
+    },
+    {
+      "entity": "financialAccount",
+      "field": "identity",
+      "read": {
+        "kind": "credit_card",
+        "issuer": "Synthetic Bank",
+        "network": "visa"
+      },
+      "input": {
+        "issuer": "Synthetic Bank",
+        "network": "visa",
+        "kind": "credit_card"
+      }
+    },
+    {
+      "entity": "financialAccount",
+      "field": "cardNumbers",
+      "read": [
+        {
+          "last4": "1111",
+          "kind": "primary",
+          "validFrom": "2025-01-01",
+          "validTo": "2026-06-30",
+          "note": "Reissued"
+        },
+        {
+          "last4": "2222",
+          "kind": "primary",
+          "validFrom": "2026-07-01",
+          "validTo": null,
+          "note": null
+        }
+      ],
+      "input": [
+        {
+          "last4": "1111",
+          "kind": "primary",
+          "validFrom": "2025-01-01",
+          "validTo": "2026-06-30",
+          "note": "Reissued"
+        },
+        {
+          "last4": "2222",
+          "kind": "primary",
+          "validFrom": "2026-07-01",
+          "validTo": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "entity": "vendor",
+      "field": "agentHints",
+      "read": {
+        "ordersListUrl": "https://example.test/orders",
+        "pagination": "Next link at the bottom",
+        "orderLinkPattern": "/orders/",
+        "notes": ["Sign in first", "Orders load lazily"]
+      },
+      "input": {
+        "ordersListUrl": "https://example.test/orders",
+        "pagination": "Next link at the bottom",
+        "orderLinkPattern": "/orders/",
+        "notes": ["Sign in first", "Orders load lazily"]
+      }
+    },
+    {
+      "entity": "expense",
+      "field": "sourceClaims",
+      "read": [
+        {
+          "source": "synthetic-provider",
+          "normalizedEvidence": {
+            "amount": 10,
+            "occurredOn": "2026-08-20",
+            "description": "Synthetic claim evidence",
+            "context": null,
+            "disambiguator": null
+          },
+          "reconciliation": {
+            "decision": "amounts_match"
+          },
+          "sourceKey": "v1:0000000000000000000000000000000000000000000000000000000000000001",
+          "sourceKeyVersion": 1,
+          "targetAmountAtClaim": 10,
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z"
+        }
+      ],
+      "input": [
+        {
+          "source": "synthetic-provider",
+          "sourceKey": "v1:0000000000000000000000000000000000000000000000000000000000000001",
+          "normalizedEvidence": {
+            "amount": 10,
+            "occurredOn": "2026-08-20",
+            "description": "Synthetic claim evidence",
+            "context": null,
+            "disambiguator": null
+          },
+          "reconciliation": {
+            "decision": "amounts_match"
+          }
+        }
+      ]
+    },
+    {
+      "entity": "ledgerTransfer",
+      "field": "sourceClaims",
+      "read": [
+        {
+          "source": "synthetic-provider",
+          "normalizedEvidence": {
+            "amount": 10,
+            "occurredOn": "2026-08-20",
+            "description": "Synthetic claim evidence",
+            "context": null,
+            "disambiguator": null
+          },
+          "reconciliation": {
+            "decision": "amounts_match"
+          },
+          "sourceKey": "v1:0000000000000000000000000000000000000000000000000000000000000001",
+          "sourceKeyVersion": 1,
+          "targetAmountAtClaim": 10,
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z"
+        }
+      ],
+      "input": [
+        {
+          "source": "synthetic-provider",
+          "sourceKey": "v1:0000000000000000000000000000000000000000000000000000000000000001",
+          "normalizedEvidence": {
+            "amount": 10,
+            "occurredOn": "2026-08-20",
+            "description": "Synthetic claim evidence",
+            "context": null,
+            "disambiguator": null
+          },
+          "reconciliation": {
+            "decision": "amounts_match"
+          }
         }
       ]
     }

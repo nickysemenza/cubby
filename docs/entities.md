@@ -269,27 +269,42 @@ path, flip the status, and lower the ceiling.
 **Structured values.** A field whose control renderer is in
 `STRUCTURED_VALUE_RENDERERS` (`external-ids`, `label-nutrition`,
 `source-aliases`, `source-refs`, `unit-mappings`), or a `structured-field` marked `implemented` in
-`nativeCoverage.structuredField` (`recipe.sections`), is an object or array of
-objects native edits. A field joins only with a read-to-input vector in
-`packages/shared/golden-vectors/structured-roundtrip.json` (web parses it with
-the update schema, CubbyKit round-trips it); the other `structured-field`s
-(`sourceClaims`, meal `recipes`, recipe `meta`/`yield`, account
-`identity`/`cardNumbers`, vendor `agentHints`) stay read-only natively. Where a
-read payload nests what the input names flat, the input field declares
-`.meta({ readFrom: "ingredient.id" })`: the generator emits it as the field's
-`readPath` for `StructuredValue.project`, and web applies the same declaration in
-`recipeLineAsInput` (`packages/schemas/src/recipe-fields.ts`). The recipe vector
-is pinned to a real server read by
-`recipe-sections-vector.integration.test.ts`. `pnpm generate` derives its `valueSchema` from the
-field's Zod input schema (`update`, else `create`;
-`scripts/generator/entities/render/value-schema.ts`) and writes it to the Swift
-manifest: nullable text, number, boolean, enum, shortcode reference (a pattern
-that names an entity prefix), amount (`{value, unit}`), constants, objects,
-arrays, maps over an enum of keys, and variants over a literal key. Native draws
-every one with the single `StructuredValueControl`; a schema the converter
-cannot describe fails generation. Validation stays server-side: issues land at
-`GenericEntityEditModel.nestedError(key, path:)`. A new structured field needs
-only its Zod input schema and a renderer in that list, never per-entity Swift.
+`nativeCoverage.structuredField` (`recipe.sections`, `recipe.meta`, `recipe.yield`, meal `recipes`,
+account `identity`/`cardNumbers`, vendor `agentHints`, expense and ledger-transfer `sourceClaims`),
+is an object or array of objects that **both clients edit with one generic editor** over the same
+generated description: CubbyKit's `StructuredValueControl` and web's `StructuredValueField`
+(`apps/web/src/entity/editing/structured-value-field.tsx`, which binds existing form primitives to
+nested react-hook-form paths; the older bespoke product and finance editors stay where they exist). A
+field joins only with a read-to-input vector in
+`packages/shared/golden-vectors/structured-roundtrip.json` (web parses it with the input schema;
+`StructuredValue.swift` and `structured-value.ts` both project and shape the read to that input).
+The `structured-field` vectors are generated: `structured-field-vectors.integration.test.ts` (and
+`recipe-sections-vector.integration.test.ts`) write a synthetic record through the real server, read
+it back, and fail unless the stabilized payload equals the vector's `read` and the web editor's
+projection equals its `input`. Where a read payload nests what the input names flat, the input
+field declares `.meta({ readFrom: "ingredient.id" })`: the generator emits it as the field's
+`readPath` for `StructuredValue.project`, and `structured-value.ts` applies the same path.
+`pnpm generate` derives the `valueSchema` from the field's Zod input schema (`update`, else `create`;
+a create-only field such as a meal's `recipes` draws on create alone;
+`scripts/generator/entities/render/value-schema.ts`) and writes it to the Swift manifest and to
+`generated/structured-value-schemas.gen.ts` (web imports it only from the editor): nullable text,
+number, boolean, enum, shortcode reference (a pattern that names an entity prefix), amount
+(`{value, unit}`), constants, objects, arrays, maps over an enum of keys, and variants over a
+literal key; `.meta({ opaque: true })` marks a key carried untouched and never shown. A variant
+starts with no case chosen, so a new account must pick its identity kind. Validation stays
+server-side: issues land at `GenericEntityEditModel.nestedError(key, path:)` on native and at the
+nested form path on web. A new structured field needs only its Zod input schema, a renderer in that
+list or a `structuredField` entry, and a vector, never per-entity UI.
+
+A source claim is edited under the identity its read exposes: the read carries `sourceKey` (a hash
+of the provider id or the evidence, so the provider id is unrecoverable) and the input accepts it
+(`ledgerSourceClaimInput.sourceKey`, opaque, exclusive with `providerId`). The server
+(`resolveClaimKeys`) refuses a key the record does not hold and a request that resolves two claims
+to one identity. A held key survives an evidence edit when it is provider-keyed (re-hashing the
+stored evidence does not reproduce it, so the provider id still resolves to this claim); an
+evidence-keyed claim is re-hashed to its new key in the same replacement. A kept key keeps the
+stored `sourceKeyVersion`. `.meta({ createOnly: true })` on a value (an account's identity kind;
+the server refuses a change too) locks it on edit, and `.meta({ notice })` shows a caution with it.
 
 An `implemented` hero action also needs a plan in `nativeHeroActionPlans` (same
 file, emitted as `heroActionPlan`): the declared verb maps to one generated

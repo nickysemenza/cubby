@@ -3,6 +3,7 @@ import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { projectOut, taskOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
 import { mock } from "~/lib/test/mock-schema";
@@ -230,6 +231,82 @@ describe("entity edit definitions", () => {
       ok: true,
       changed: true,
       command: { data: { merchant: "New merchant" } },
+    });
+  });
+
+  // A claim's read carries `sourceKey` (its identity hash) and audit stamps, never the
+  // `providerId` it was made from. The form holds the read clipped to the input schema, so an
+  // untouched claim is not a patch and an edited one goes back under the identity it was read
+  // with instead of being rehashed from its evidence.
+  it("edits a source claim under the identity key it was read with", () => {
+    const claim = {
+      source: "synthetic-provider",
+      normalizedEvidence: {
+        amount: 10,
+        occurredOn: "2026-08-20",
+        description: null,
+        context: null,
+        disambiguator: null,
+      },
+      reconciliation: { decision: "amounts_match" as const },
+      sourceKey: `v1:${"0".repeat(64)}`,
+      sourceKeyVersion: 1,
+      targetAmountAtClaim: 10,
+      createdAt: "2026-08-20T00:00:00.000Z",
+      updatedAt: "2026-08-20T00:00:00.000Z",
+    };
+    const record = {
+      id: testShortcode("ledgerTransfer", "LTR-TEST"),
+      fromPartyId: testShortcode("ledgerParty", "LPY-FROM"),
+      toPartyId: testShortcode("ledgerParty", "LPY-TO"),
+      amount: 10,
+      date: "2026-08-20",
+      notes: null,
+      sourceClaims: [claim],
+    };
+    const request = {
+      entity: "ledgerTransfer" as const,
+      operation: "update" as const,
+      intent: "full" as const,
+      surface: "dialog" as const,
+      record,
+    };
+    const resolved = resolveEntityEdit(entityEditRegistry, request);
+    if (!("definition" in resolved)) throw new Error("transfer must resolve");
+    const values = initialEntityEditValues(resolved, request);
+
+    const untouched = buildEntityEdit(resolved, request, values);
+    if (!untouched.ok) throw new Error(JSON.stringify(untouched.issues));
+    expect(untouched).toMatchObject({ ok: true, changed: false });
+    const [held] = z
+      .array(z.record(z.string(), z.json()))
+      .parse(values.sourceClaims);
+    expect(held).toMatchObject({ sourceKey: claim.sourceKey });
+    expect(held).not.toHaveProperty("sourceKeyVersion");
+
+    const reviewed = buildEntityEdit(resolved, request, {
+      ...values,
+      sourceClaims: [
+        {
+          ...held,
+          reconciliation: {
+            decision: "accept_target_amount",
+            note: "Reviewed",
+          },
+        },
+      ],
+    });
+    if (!reviewed.ok || !reviewed.changed)
+      throw new Error("must build a patch");
+    expect(reviewed.command).toMatchObject({
+      data: {
+        sourceClaims: [
+          {
+            sourceKey: claim.sourceKey,
+            reconciliation: { decision: "accept_target_amount" },
+          },
+        ],
+      },
     });
   });
 

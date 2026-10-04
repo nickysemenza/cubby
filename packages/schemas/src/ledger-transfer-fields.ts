@@ -37,21 +37,34 @@ export type LedgerSourceClaimReconciliation = z.infer<
 const ledgerSourceClaimInputFields = {
   source: ledgerSource,
   providerId: z.string().trim().min(1).optional(),
+  /**
+   * The identity a read exposes (`ledgerSourceClaimOut.sourceKey`): a hash of the provider id or
+   * the evidence, so the provider id itself is never recoverable. A client editing an existing
+   * claim sends it back so the server keeps that identity instead of rehashing the evidence into
+   * a new one; the server refuses a key the record does not hold and any change to the
+   * evidence under a held key. A new claim leaves it out.
+   */
+  sourceKey: z.string().min(1).optional().meta({ opaque: true }),
   normalizedEvidence: ledgerSourceClaimNormalizedEvidence,
   reconciliation: ledgerSourceClaimReconciliation,
 };
-export const ledgerSourceClaimInput = z.strictObject(
-  ledgerSourceClaimInputFields,
-);
+export const ledgerSourceClaimInput = z
+  .strictObject(ledgerSourceClaimInputFields)
+  .refine(
+    (claim) => claim.providerId === undefined || claim.sourceKey === undefined,
+    "A source claim names its identity by providerId (new) or sourceKey (existing), not both",
+  );
 export type LedgerSourceClaimInput = z.infer<typeof ledgerSourceClaimInput>;
 export const ledgerSourceClaims = z
   .array(ledgerSourceClaimInput)
   .refine(
     ...uniqueBy<LedgerSourceClaimInput>(
       (claim) =>
-        claim.providerId
-          ? `provider\u0000${claim.source}\u0000${claim.providerId}`
-          : `canonical\u0000${claim.source}\u0000${claim.normalizedEvidence.occurredOn ?? ""}\u0000${claim.normalizedEvidence.amount}\u0000${claim.normalizedEvidence.description ?? ""}\u0000${claim.normalizedEvidence.context ?? ""}\u0000${claim.normalizedEvidence.disambiguator ?? ""}`,
+        claim.sourceKey
+          ? `key\u0000${claim.source}\u0000${claim.sourceKey}`
+          : claim.providerId
+            ? `provider\u0000${claim.source}\u0000${claim.providerId}`
+            : `canonical\u0000${claim.source}\u0000${claim.normalizedEvidence.occurredOn ?? ""}\u0000${claim.normalizedEvidence.amount}\u0000${claim.normalizedEvidence.description ?? ""}\u0000${claim.normalizedEvidence.context ?? ""}\u0000${claim.normalizedEvidence.disambiguator ?? ""}`,
       "sourceClaims must not contain duplicate canonical evidence",
     ),
   );

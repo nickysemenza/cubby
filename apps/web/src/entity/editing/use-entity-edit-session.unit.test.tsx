@@ -114,6 +114,8 @@ describe("useEntityEditSession", () => {
             record: {
               id: "FAC-4K7M",
               name: "Household card",
+              identity: { kind: "cash" },
+              cardNumbers: [],
               providerVendorId: null,
               provisional: false,
               inventoryOwnerDefaultEnabled: false,

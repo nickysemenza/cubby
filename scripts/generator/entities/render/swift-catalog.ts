@@ -18,16 +18,15 @@ import {
   nativeCollectionActionPlans,
   nativeCoverage,
   nativeHeroActionPlans,
-  drawsFromValueSchema,
 } from "../../../../packages/schemas/src/native-coverage.ts";
 import { SECTION_ACTION_IDS } from "../../../../packages/schemas/src/entity-section-actions.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 import {
-  type EntityForPrefix,
-  type ValueSchemaJSON,
-  valueSchemaOf,
-} from "./value-schema.ts";
+  entityPrefixLookup,
+  valueSchemaForField,
+} from "./structured-value-schemas.ts";
+import type { EntityForPrefix } from "./value-schema.ts";
 
 /** The hand-written Swift types the manifest JSON decodes into. */
 const SWIFT_MANIFEST_TYPES =
@@ -404,22 +403,6 @@ const fieldDisplayJSON = (
   mobileInteractive: display.mobile?.interactive ?? false,
 });
 
-/** The structured editor's schema description for a field whose renderer draws from one. */
-const valueSchemaJSON = (
-  entity: string,
-  field: Field,
-  where: string,
-  entityForPrefix: EntityForPrefix,
-): ValueSchemaJSON | null => {
-  if (!drawsFromValueSchema(entity, field)) return null;
-  const input = field.validation.update ?? field.validation.create;
-  if (input === null || input === undefined)
-    throw new Error(
-      `${where}: a structured renderer needs a create or update input schema.`,
-    );
-  return valueSchemaOf(input, where, entityForPrefix);
-};
-
 const fieldJSON = (
   field: Field,
   fieldModel: CompiledEntity["fieldModel"],
@@ -441,7 +424,7 @@ const fieldJSON = (
     explanation: explanationJSON(field.explanation),
     resolution: field.resolution,
     ...fieldControlJSON(field.control, vocabulary, where),
-    valueSchema: valueSchemaJSON(context, field, where, entityForPrefix),
+    valueSchema: valueSchemaForField(context, field, where, entityForPrefix),
     inCreate: fieldModel.create.includes(field.key),
     // Required when the create schema rejects `undefined` (the same rule as
     // `requiredOnCreate` in `entity-field-model.gen.ts`).
@@ -916,15 +899,7 @@ export const renderSwiftEntityCatalog = (
       );
     return raw;
   };
-  const entityByPrefix = new Map(
-    entities.flatMap((entity) =>
-      entity.shortcode === undefined || entity.shortcode === null
-        ? []
-        : [[entity.shortcode, entity.key] as const],
-    ),
-  );
-  const entityForPrefix: EntityForPrefix = (prefix) =>
-    entityByPrefix.get(prefix) ?? null;
+  const entityForPrefix = entityPrefixLookup(entities);
   const entityKeyCases = entities
     .map(({ key }) => `  case ${swiftCaseName(key)} = ${swiftString(key)}`)
     .join("\n");

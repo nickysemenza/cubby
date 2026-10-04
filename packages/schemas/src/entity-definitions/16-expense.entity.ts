@@ -803,7 +803,11 @@ export default defineEntity({
       {
         key: "sourceClaims",
         kind: "json",
-        control: { kind: "specialized", renderer: "structured-field" },
+        control: {
+          kind: "specialized",
+          renderer: "structured-field",
+          sectionOverride: "evidence",
+        },
         provenance: { kind: "relation", sources: [{ label: "Source claims" }] },
         explanation: {
           ruleId: "expense.source-claims",
@@ -1101,6 +1105,7 @@ export default defineEntity({
           "funders",
           "url",
           "notes",
+          "sourceClaims",
         ],
         planned: ["name", "cost", "date"],
         cost: ["cost"],

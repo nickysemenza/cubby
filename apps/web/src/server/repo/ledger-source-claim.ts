@@ -1,7 +1,10 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import { toPublicImpact } from "@cubby/schemas/entity-integrity";
 import type { ExpenseId, LedgerTransferId } from "@cubby/schemas/identifiers";
-import type { LedgerSourceClaimInput } from "@cubby/schemas/ledger-transfer";
+import {
+  ledgerSourceClaimNormalizedEvidence,
+  type LedgerSourceClaimInput,
+} from "@cubby/schemas/ledger-transfer";
 import { and, eq, inArray } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 
@@ -19,32 +22,42 @@ const toHex = (bytes: ArrayBuffer) =>
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 
-async function ledgerSourceKey(claim: LedgerSourceClaimInput) {
+const digestKey = async (payload: readonly unknown[]) =>
+  `v${SOURCE_KEY_VERSION}:${toHex(
+    await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(JSON.stringify(payload)),
+    ),
+  )}`;
+
+// The evidence is hashed in `ledgerSourceClaimNormalizedEvidence` key order, the
+// order it had when the key was first made; a stored jsonb value is reordered.
+const evidenceKey = (
+  source: string,
+  evidence: LedgerSourceClaimInput["normalizedEvidence"],
+) =>
+  digestKey([
+    SOURCE_KEY_VERSION,
+    source,
+    ledgerSourceClaimNormalizedEvidence.parse(evidence),
+  ]);
+
+type ResolvedKey = { key: string; version: number };
+
+async function newClaimKey(
+  claim: LedgerSourceClaimInput,
+): Promise<ResolvedKey> {
   // Provider identities are stable, but still external identifiers: hash the
   // source namespace and provider id rather than storing either in sourceKey.
-  if (claim.providerId) {
-    const providerPayload = new TextEncoder().encode(
-      JSON.stringify([
+  const key = claim.providerId
+    ? await digestKey([
         SOURCE_KEY_VERSION,
         claim.source,
         "provider",
         claim.providerId,
-      ]),
-    );
-    return `v${SOURCE_KEY_VERSION}:${toHex(
-      await crypto.subtle.digest("SHA-256", providerPayload),
-    )}`;
-  }
-  const payload = new TextEncoder().encode(
-    JSON.stringify([
-      SOURCE_KEY_VERSION,
-      claim.source,
-      claim.normalizedEvidence,
-    ]),
-  );
-  return `v${SOURCE_KEY_VERSION}:${toHex(
-    await crypto.subtle.digest("SHA-256", payload),
-  )}`;
+      ])
+    : await evidenceKey(claim.source, claim.normalizedEvidence);
+  return { key, version: SOURCE_KEY_VERSION };
 }
 
 type ClaimOwner =
@@ -115,13 +128,10 @@ export async function assertExplicitSourceClaimsForAmountChange(
   if (sourceClaims !== undefined || sameAmount(previousAmount, nextAmount))
     return;
 
-  const ownerWhere = isExpenseOwner(owner)
-    ? eq(ledgerSourceClaim.expenseId, owner.expenseId)
-    : eq(ledgerSourceClaim.ledgerTransferId, owner.ledgerTransferId);
   const [claim] = await tx
     .select({ id: ledgerSourceClaim.id })
     .from(ledgerSourceClaim)
-    .where(and(ownerWhere, notDeleted(ledgerSourceClaim)))
+    .where(and(ownerClaims(owner), notDeleted(ledgerSourceClaim)))
     .limit(1);
   if (!claim) return;
 
@@ -132,20 +142,96 @@ export async function assertExplicitSourceClaimsForAmountChange(
   );
 }
 
+const ownerClaims = (owner: ClaimOwnerReference) =>
+  isExpenseOwner(owner)
+    ? eq(ledgerSourceClaim.expenseId, owner.expenseId)
+    : eq(ledgerSourceClaim.ledgerTransferId, owner.ledgerTransferId);
+
+/**
+ * A claim sent with a `sourceKey` is an edit of a claim this record already
+ * holds. The key is a hash, so whether it came from a provider id or from the
+ * evidence is recovered by re-hashing the stored evidence: if that reproduces
+ * the stored key the claim is evidence-keyed, and an evidence edit re-hashes it
+ * to its new key in this one replacement (the old row retires with it);
+ * otherwise it is provider-keyed and keeps its key through an evidence edit, so
+ * the provider id still resolves to this claim. A key the record does not hold
+ * is refused (it could otherwise adopt another record's, or a retired,
+ * identity). A kept key keeps the stored row's `sourceKeyVersion`.
+ */
+async function resolveClaimKeys(
+  tx: DrizzleTransaction,
+  owner: ClaimOwnerReference,
+  claims: readonly LedgerSourceClaimInput[],
+): Promise<ResolvedKey[]> {
+  const held = claims.some((claim) => claim.sourceKey !== undefined)
+    ? await tx
+        .select({
+          source: ledgerSourceClaim.source,
+          sourceKey: ledgerSourceClaim.sourceKey,
+          sourceKeyVersion: ledgerSourceClaim.sourceKeyVersion,
+          normalizedEvidence: ledgerSourceClaim.normalizedEvidence,
+        })
+        .from(ledgerSourceClaim)
+        .where(and(ownerClaims(owner), notDeleted(ledgerSourceClaim)))
+    : [];
+  const resolved = await Promise.all(
+    claims.map(async (claim): Promise<ResolvedKey> => {
+      if (claim.sourceKey === undefined) return newClaimKey(claim);
+      const row = held.find(
+        (candidate) =>
+          candidate.source === claim.source &&
+          candidate.sourceKey === claim.sourceKey,
+      );
+      if (!row)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `Source claim identity ${claim.source}/${claim.sourceKey} is not held by this record. Send a new claim without sourceKey instead.`,
+        );
+      const kept = { key: row.sourceKey, version: row.sourceKeyVersion };
+      if (isEqual(row.normalizedEvidence, claim.normalizedEvidence))
+        return kept;
+      const evidenceKeyed =
+        row.sourceKeyVersion === SOURCE_KEY_VERSION &&
+        (await evidenceKey(row.source, row.normalizedEvidence)) ===
+          row.sourceKey;
+      return evidenceKeyed
+        ? {
+            key: await evidenceKey(claim.source, claim.normalizedEvidence),
+            version: SOURCE_KEY_VERSION,
+          }
+        : kept;
+    }),
+  );
+  const seen = new Set<string>();
+  for (const [index, { key }] of resolved.entries()) {
+    const id = `${claims[index]!.source}\0${key}`;
+    if (seen.has(id))
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Source claims must not repeat an identity: ${claims[index]!.source}/${key}.`,
+      );
+    seen.add(id);
+  }
+  return resolved;
+}
+
 export async function replaceLedgerSourceClaims(
   tx: DrizzleTransaction,
   owner: ClaimOwner,
   claims: readonly LedgerSourceClaimInput[],
 ): Promise<void> {
   const { targetAmount } = owner;
-  const keys = await Promise.all(claims.map(ledgerSourceKey));
+  const keys = await resolveClaimKeys(tx, owner, claims);
   assertClaimAmounts(targetAmount, claims);
-  const valuesFor = (claim: LedgerSourceClaimInput, key: string) => ({
+  const valuesFor = (
+    claim: LedgerSourceClaimInput,
+    { key, version }: ResolvedKey,
+  ) => ({
     expenseId: isExpenseOwner(owner) ? owner.expenseId : null,
     ledgerTransferId: isExpenseOwner(owner) ? null : owner.ledgerTransferId,
     source: claim.source,
     sourceKey: key,
-    sourceKeyVersion: SOURCE_KEY_VERSION,
+    sourceKeyVersion: version,
     normalizedEvidence: claim.normalizedEvidence,
     targetAmountAtClaim: targetAmount!,
     reconciliationDecision: claim.reconciliation.decision,
@@ -245,9 +331,7 @@ export async function replaceLedgerSourceClaims(
       [blocker],
     );
   }
-  const currentOwner = isExpenseOwner(owner)
-    ? eq(ledgerSourceClaim.expenseId, owner.expenseId)
-    : eq(ledgerSourceClaim.ledgerTransferId, owner.ledgerTransferId);
+  const currentOwner = ownerClaims(owner);
   const currentRows = await tx
     .select({
       id: ledgerSourceClaim.id,
@@ -257,7 +341,7 @@ export async function replaceLedgerSourceClaims(
     .from(ledgerSourceClaim)
     .where(and(currentOwner, notDeleted(ledgerSourceClaim)));
   const wanted = new Set(
-    claims.map((claim, index) => `${claim.source}\0${keys[index]}`),
+    claims.map((claim, index) => `${claim.source}\0${keys[index]!.key}`),
   );
   const retired = currentRows
     .filter((row) => !wanted.has(`${row.source}\0${row.sourceKey}`))
@@ -268,14 +352,15 @@ export async function replaceLedgerSourceClaims(
       .set({ deletedAt: new Date() })
       .where(inArray(ledgerSourceClaim.id, retired));
   for (const [index, claim] of claims.entries()) {
-    const key = keys[index]!;
+    const resolved = keys[index]!;
+    const key = resolved.key;
     const row = existing.find(
       (candidate) =>
         candidate.source === claim.source && candidate.sourceKey === key,
     );
     // A released tombstone can be claimed by either owner kind. Set both
     // sides, rather than spreading a partial owner, so the XOR check holds.
-    const values = valuesFor(claim, key);
+    const values = valuesFor(claim, resolved);
     const unchanged =
       row !== undefined &&
       own(row) &&
