@@ -4,7 +4,6 @@ import type { Icon } from "@phosphor-icons/react/lib";
 import { Link, useLocation } from "@tanstack/react-router";
 import * as React from "react";
 
-import type { FilterSearch } from "~/entity/filters";
 import { cn } from "~/lib/utils";
 import { useNavAuthed } from "~/ui/hooks/useNavAuthed";
 import { useVirtualKeyboard } from "~/ui/hooks/useVirtualKeyboard";
@@ -25,7 +24,6 @@ type BottomNavItemProps = {
   as?: React.ElementType;
   className?: string;
   to?: string;
-  search?: FilterSearch;
   params?: Readonly<Record<string, string>>;
   type?: "button" | "submit" | "reset";
   onClick?: React.MouseEventHandler<HTMLElement>;
@@ -112,16 +110,11 @@ export function BottomNav() {
               <BottomNavItem
                 key={item.to}
                 to={item.to}
-                // `search` can't be correlated to the union `to` here. Keep
-                // the local cast so manifest-backed shortcuts can add static
-                // search state without widening every bottom-tab route.
-                search={item.search}
                 icon={item.icon}
                 label={item.label}
                 active={
                   (item.to === "/" && activeTab === "today") ||
                   (item.to === "/inventory" && activeTab === "inventory") ||
-                  (item.to === "/scan" && activeTab === "scan") ||
                   (item.to === "/search" && activeTab === "search")
                 }
               />

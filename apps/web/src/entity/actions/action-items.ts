@@ -129,27 +129,10 @@ function verbAction(
  * forgotten in this menu.
  */
 export const actionItems: ActionItem[] = [
-  // `home-quick` is deliberately only the four recurring household verbs.
+  // `home-quick` is deliberately only the recurring household verbs.
   // Home is an operate surface, not an alternate create menu; new records
   // remain available from their lists, the command palette, and the masthead.
   // Order in this array is the order each surface renders.
-  verbAction(
-    "recount",
-    "recount",
-    "/inventory/session",
-    ["navbar-create", "palette-quick", "inventory-page", "home-quick"],
-    ["barcode", "scan", "inventory", "add", "garage", "audit"],
-  ),
-  // Same recurring-verb slot as Recount: both are passes you walk the house
-  // with. Palette-only left the newest of the three queue passes reachable
-  // from three places where recount had seven.
-  verbAction(
-    "photoPass",
-    "photo-pass",
-    "/locations/photo-pass",
-    ["palette-quick", "home-quick"],
-    ["photo", "camera", "picture", "location", "bin", "shelf"],
-  ),
   {
     id: "what-can-i-make",
     name: "What can I make?",

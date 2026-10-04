@@ -21,7 +21,7 @@ agent sessions over MCP.
   list against stock, and log who ate what for per-person nutrition
   (`cubby-meal-logging`).
 - **Where is X?** A location tree (house → room → shelf → bin) with printable
-  QR labels, barcode scanning, and deliberate recount passes.
+  QR labels, and barcode scanning and deliberate recount passes in the native app.
 - **Orders and receipts.** Import retailer orders, receipt photos, order emails
   and statement CSVs, then reconcile purchases against card charges
   (`purchase-import`).

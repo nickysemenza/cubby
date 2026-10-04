@@ -4,10 +4,8 @@ import {
   locationType,
 } from "@cubby/schemas/location";
 import { getLocationTypeColor } from "@cubby/shared";
-import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import { VerbMenuItem } from "~/entity/actions/action-verb-ui";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { entityListHiddenColumns } from "~/entity/entity-display";
 import { relationshipFieldProvenance } from "~/entity/field-provenance";
@@ -57,19 +55,6 @@ export const LOCATION_GROUP_CONFIG: GroupConfig<LocationListItemOut> = {
     return getLocationTypeColor(parsedType.success ? parsedType.data : null);
   },
 };
-
-const extraActions = (row: LocationListItemOut) => (
-  <>
-    <VerbMenuItem
-      verb="recount"
-      render={<Link to="/inventory/session" search={{ parent: row.id }} />}
-    />
-    <VerbMenuItem
-      verb="photoPass"
-      render={<Link to="/locations/photo-pass" search={{ parent: row.id }} />}
-    />
-  </>
-);
 
 export const locationListOverride = defineListOverride<
   LocationListItemOut,
@@ -154,7 +139,6 @@ export const locationListOverride = defineListOverride<
       () => ({
         deletable: true as const,
         filterOptions,
-        extraActions,
         initialColumnVisibility: locationInitialColumnVisibility(),
         groupConfig: LOCATION_GROUP_CONFIG,
       }),

@@ -156,9 +156,6 @@ export default defineEntity({
           // narrower acquisition-history gap — more recorded units gone than
           // arrived — is surfaced separately as `negativeExpectedQuantity`.
           filters: [{ id: "quantityVariance", value: "mismatched" }],
-          // Snapshots this product set, then recounts every location holding it —
-          // full bins, so the pass confirms the whole shelf rather than one row.
-          flow: { kind: "recount-worklist", label: "Recount these" },
           // Both hidden by default on a table this wide, so the view has to reveal
           // them — otherwise it selects rows on a signal nothing on screen explains.
           // `servingAsLocations` joins them because a product can now be short

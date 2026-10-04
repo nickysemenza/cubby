@@ -1,46 +1,19 @@
-import { locationShortcode } from "@cubby/schemas/identifiers";
-import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { InventorySessionWorkbench } from "~/app/inventory/session/InventorySessionWorkbench";
-import { RECOUNT_WORKLISTS } from "~/app/inventory/worklist/worklist-locations";
-import { pageTitle } from "~/lib/page-title";
-import { RouteErrorComponent } from "~/ui/lazy-route-error";
-import { Page } from "~/ui/page/Page";
-import { DetailPagePending } from "~/ui/route-pending";
+import { retiredRecountTarget } from "~/lib/retired-fieldwork";
 
+// Recount and sweep moved to the native app. Kept as a redirect so old
+// bookmarks and printed links land on the location (or the inventory list)
+// instead of a 404.
 const searchSchema = z.object({
-  parent: locationShortcode.optional().catch(undefined),
-  // A saved view's products, recounted across every location holding them.
-  worklist: z.enum(RECOUNT_WORKLISTS).optional().catch(undefined),
+  parent: z.string().optional().catch(undefined),
+  worklist: z.string().optional().catch(undefined),
 });
-
-const searchDefaults = { parent: undefined, worklist: undefined } as const;
 
 export const Route = createFileRoute("/_authenticated/inventory/session")({
   validateSearch: searchSchema,
-  search: { middlewares: [stripSearchParams(searchDefaults)] },
-  pendingComponent: DetailPagePending,
-  errorComponent: RouteErrorComponent,
-  component: InventorySessionPage,
-  head: () => ({ meta: [{ title: pageTitle("Inventory session") }] }),
+  beforeLoad: ({ search }) => {
+    throw redirect({ ...retiredRecountTarget(search), replace: true });
+  },
 });
-
-function InventorySessionPage() {
-  const { parent, worklist } = Route.useSearch();
-
-  return (
-    <Page
-      variant="list"
-      title="Inventory session"
-      eyebrow="Inventory"
-      compact
-      decoration="none"
-    >
-      <InventorySessionWorkbench
-        initialParentShortcode={parent}
-        worklist={worklist}
-      />
-    </Page>
-  );
-}

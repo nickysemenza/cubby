@@ -50,7 +50,7 @@ struct ProductMatchesPanel: View {
 
 /// A well-formed barcode or ISBN no product carries yet. Offers to create one (seeded from the
 /// upstream catalog answer when there is one) or to stock it at a location without creating
-/// anything — the same two exits the web `/scan` page offers.
+/// anything.
 struct UnknownCodePanel: View {
     /// The GTIN-14 the code is stored as.
     let code: String

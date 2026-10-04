@@ -293,12 +293,6 @@ See also the image operational passes at the end of this file.
   `SourceRefsField` and the recipe form's meta/yield inputs in favour of the
   generic `StructuredValueField` (it already reads the same `valueSchema`).
 
-- ⏳ **Retire native-owned web fieldwork and PWA installation.** After native
-  parity ships and passes real-device validation, remove web barcode/QR
-  controls, `/scan`, the sweep UI, superseded recount and location photo-pass
-  routes, and PWA assets. Handle unfinished browser-local passes and old links
-  first; keep record links, photo upload, and the scan/reconcile APIs.
-
 - ⏳ **Core native inventory experience.** Promote when everyday use exposes a
   specific bottleneck: location-first browsing, stock comparison,
   capture/recount, photo completion. Owners: `App/Shared/Browse`, `Capture`,

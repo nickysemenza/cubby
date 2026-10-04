@@ -56,8 +56,8 @@ export const Route = createFileRoute("/_authenticated/$shortcode")({
           This QR label doesn't match anything in Cubby.
         </EmptyDescription>
         <EmptyActions>
-          <Button render={<Link to="/scan" />} nativeButton={false}>
-            Scan another code
+          <Button render={<Link to="/" />} nativeButton={false}>
+            Back to Today
           </Button>
         </EmptyActions>
       </Empty>

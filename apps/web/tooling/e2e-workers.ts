@@ -16,7 +16,7 @@ export function resolveE2EWorkers(
   // harness, and a database, so they contend for the same finite CPU. CI's
   // default remains one worker; the two-runner workflow currently benchmarks
   // --workers=2 after browser-cache and reduced-motion changes. The prior
-  // attempt flaked on inventory-session.spec (2026-09-21, a 15s visibility
+  // attempt flaked on the since-retired recount spec (2026-09-21, a 15s visibility
   // timeout).
   return !env.CI && platform === "darwin" ? 2 : 1;
 }

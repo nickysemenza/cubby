@@ -50,7 +50,7 @@ export const ALL_SPECS_TRIGGERS: readonly string[] = [
   "pnpm-workspace.yaml",
   "tsconfig*.json",
   `${WEB}/src/routes/__root.tsx`,
-  `${WEB}/src/routes/_authenticated.tsx`,
+  `${WEB}/src/routes/__root.tsx`,
   // App shell / global navigation, rendered on every authenticated page.
   `${WEB}/src/ui/navigation/**`,
   `${WEB}/src/ui/navbar/**`,
@@ -304,21 +304,32 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/app/products/**`,
     `${WEB}/src/server/repo/product/**`,
   ],
-  "inventory-session.spec.ts": [
+  "shelf-triage.spec.ts": [
     `${WEB}/src/routes/_authenticated/inventory.index.tsx`,
     `${WEB}/src/routes/_authenticated/inventory.$shortcode.tsx`,
     `${WEB}/src/server/repo/inventory/**`,
   ],
-  "inventory-session-photo-capture.spec.ts": [
-    `${WEB}/src/app/inventory/session/**`,
+  "native-fieldwork-api.spec.ts": [
     `${WEB}/src/contracts/product.contract.ts`,
+    `${WEB}/src/contracts/inventory.contract.ts`,
     `${WEB}/src/contracts/image-upload.contract.ts`,
     `${WEB}/src/server/operations/product.server.ts`,
+    `${WEB}/src/server/operations/inventory.server.ts`,
     `${WEB}/src/server/operations/image.server.ts`,
     `${WEB}/src/server/repo/product/capture.ts`,
+    `${WEB}/src/server/repo/inventory/**`,
+    `${WEB}/src/server/services/scan-into-location.service.ts`,
+    `${WEB}/src/server/services/scan-plan.ts`,
     `${WEB}/src/lib/presigned-upload.ts`,
     "packages/schemas/src/product-capture.ts",
+    "packages/schemas/src/scan.ts",
     "packages/schemas/src/image.ts",
+  ],
+  "retired-fieldwork.spec.ts": [
+    `${WEB}/src/lib/retired-fieldwork*.ts`,
+    `${WEB}/src/ui/feedback/retired-fieldwork.tsx`,
+    `${WEB}/public/sw.js`,
+    `${WEB}/src/routes/__root.tsx`,
   ],
   "mcp-worklist.spec.ts": [
     `${WEB}/src/features/developer/mcp-usage-dashboard.tsx`,

@@ -3,7 +3,7 @@ import type { LinkProps } from "@tanstack/react-router";
 
 import { completeNavLeaves, findActiveTo } from "./nav-items";
 
-type MobileTabId = "today" | "inventory" | "scan" | "search" | "more";
+type MobileTabId = "today" | "inventory" | "search" | "more";
 type MobilePresentation = "standard" | "immersive";
 
 export interface MobileRouteDescriptor {
@@ -21,11 +21,7 @@ const INVENTORY_PREFIXES = [
   "/pantry-view",
 ] as const;
 
-const IMMERSIVE_PREFIXES = [
-  "/scan",
-  "/pantry-view",
-  "/inventory/session",
-] as const;
+const IMMERSIVE_PREFIXES = ["/pantry-view"] as const;
 
 function segmentMatches(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
@@ -78,9 +74,6 @@ export function resolveMobileRoute(pathname: string): MobileRouteDescriptor {
       tab: "today",
       presentation,
     };
-  }
-  if (segmentMatches(pathname, "/scan")) {
-    return { label: "Scan", parentTo: "/", tab: "scan", presentation };
   }
   if (segmentMatches(pathname, "/search")) {
     return { label: "Search", parentTo: "/", tab: "search", presentation };

@@ -66,4 +66,4 @@ Coverage remains manually dispatchable in GitHub Actions.
 - [Quality and local diagnostics](validation-quality.md) for lint/type failures,
   dependencies, generated surfaces, or broad local verification.
 - [PR, CI, and device acceptance](validation-delivery.md) for a PR, failing
-  hosted check, deployment path, or phone/PWA behavior.
+  hosted check, deployment path, or phone browser behavior.

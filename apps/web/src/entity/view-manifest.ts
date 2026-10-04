@@ -67,7 +67,7 @@ interface ViewProblem {
  * a typed link.
  */
 interface ViewFlow {
-  kind: "recount-worklist" | "shelf-triage";
+  kind: "shelf-triage";
   label: string;
 }
 

@@ -126,16 +126,7 @@ function ViewFlowMenuItem({
 }) {
   return (
     <DropdownMenuItem
-      render={
-        flow.kind === "recount-worklist" ? (
-          <Link
-            to="/inventory/session"
-            search={{ worklist: "shelf-disagrees" }}
-          />
-        ) : (
-          <Link to="/inventory/triage" search={{ run: undefined }} />
-        )
-      }
+      render={<Link to="/inventory/triage" search={{ run: undefined }} />}
     >
       <ListChecksIcon className="size-3.5" />
       <span>{flow.label}</span>

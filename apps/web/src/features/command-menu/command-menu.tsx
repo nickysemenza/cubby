@@ -83,11 +83,7 @@ interface GlobalCommandMenuProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-type NavigationSearch = NonNullable<NavItem["search"]>;
-type GoToPage = (
-  path: string,
-  searchParams?: NavigationSearch | { create: true },
-) => void;
+type GoToPage = (path: string, searchParams?: { create: true }) => void;
 type CommandMenuNavigate = ReturnType<typeof useNavigate>;
 
 /**
@@ -211,10 +207,7 @@ export function GlobalCommandMenu({
   // `search` carries an action's deep-link params (e.g. the tracker quick
   // captures' `{ create: true }`) — a query string on `path` would be treated
   // as part of the pathname.
-  const goToPage = (
-    path: string,
-    searchParams?: NavigationSearch | { create: true },
-  ) => {
+  const goToPage: GoToPage = (path, searchParams) => {
     navigate({
       to: path,
       search: searchParams ? { ...searchParams } : undefined,

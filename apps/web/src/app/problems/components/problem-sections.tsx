@@ -16,7 +16,6 @@ import type {
   ProjectAttentionItem,
   ProjectAttentionType,
 } from "@cubby/schemas/project";
-import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
 import { DownloadIcon } from "@phosphor-icons/react/dist/csr/Download";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken";
@@ -555,20 +554,18 @@ function renderTrackerItem(item: ProjectAttentionItem): RenderedProblemItem {
 }
 
 /**
- * "Recount" action for the recount-staleness sections — the only thing that
- * actually restores inventory truth (tenet 1), so link straight into the audit
- * session scoped to the offending location rather than to a form.
+ * Recounting happens in the native app, so the recount-staleness sections link
+ * to the offending location's page rather than to a form.
  */
-function RecountLink({ shortcode }: { shortcode: string | undefined }) {
+function OpenLocationLink({ shortcode }: { shortcode: string | undefined }) {
   if (!shortcode) return null;
   return (
     <Button
       size="sm"
-      render={<Link to="/inventory/session" search={{ parent: shortcode }} />}
+      render={<Link to="/locations/$shortcode" params={{ shortcode }} />}
       nativeButton={false}
     >
-      <BarcodeIcon className="mr-1 size-3" />
-      Recount
+      Open location
     </Button>
   );
 }
@@ -1139,7 +1136,9 @@ const DECLARED_SECTIONS = [
       meter: { total: (t) => t.staleLocations, doneLabel: "recounted" },
     },
     entity: "location",
-    actions: (row) => ({ customActions: <RecountLink shortcode={row.id} /> }),
+    actions: (row) => ({
+      customActions: <OpenLocationLink shortcode={row.id} />,
+    }),
   }),
   rowSection("neverVerifiedInventory", {
     id: "never-verified",
@@ -1152,7 +1151,7 @@ const DECLARED_SECTIONS = [
     actions: (row) => ({
       customActions: (
         <Row gap="sm">
-          <RecountLink shortcode={rowBadgeId(row, "location")} />
+          <OpenLocationLink shortcode={rowBadgeId(row, "location")} />
           <Link
             to="/recommendations/workbench"
             search={{ kind: "placement", inventory: row.id }}
@@ -1238,10 +1237,12 @@ const DECLARED_SECTIONS = [
     id: "unknown-parked",
     label: "Parked in Unknown",
     entity: "inventory",
-    // Draining Unknown is a recount rooted there — same deep link the other
-    // recount detectors offer.
+    // Draining Unknown is a recount rooted there (done in the native app) —
+    // same location link the other recount detectors offer.
     actions: (row) => ({
-      customActions: <RecountLink shortcode={rowBadgeId(row, "location")} />,
+      customActions: (
+        <OpenLocationLink shortcode={rowBadgeId(row, "location")} />
+      ),
     }),
   }),
   rowSection("inventoryWithoutPricePath", {

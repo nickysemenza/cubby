@@ -24,12 +24,6 @@ export const requiredLocationField = ComboboxItem.nullable().refine(
 
 export const optionalLocationField = ComboboxItem.nullable();
 
-export function getProductShortcode(
-  item: z.input<typeof requiredProductField>,
-): ProductShortcode {
-  return productShortcode.parse(item!.id);
-}
-
 export function getLocationId(
   item: z.input<typeof requiredLocationField>,
 ): LocationShortcode {
