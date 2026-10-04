@@ -356,6 +356,7 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/api/v1/$resource/$operation.ts",
   ],
   "structured-field-editors.spec.ts": [
+    "apps/web/src/routes/_authenticated/expenses.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/financial-accounts.index.tsx",
     "apps/web/src/routes/_authenticated/vendors.$shortcode.tsx",
   ],
