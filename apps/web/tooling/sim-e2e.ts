@@ -1402,6 +1402,10 @@ async function runQaJourneys(common: string[]): Promise<void> {
           "test",
           `apps/apple/e2e/${journey}`,
           ...common,
+          // A scroll can land short while a detail page is still laying out; a journey
+          // only writes after its last scroll, so a retry replays from a clean read.
+          "--retries",
+          "1",
           "--artifacts-dir",
           artifacts,
           "--reporter",
