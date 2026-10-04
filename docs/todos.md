@@ -261,11 +261,11 @@ See also the image operational passes at the end of this file.
   task still needs the web. Coverage is declared once in
   `packages/schemas/src/native-coverage.ts` with a shrink-only unsupported
   ceiling per kind; hero actions and list cells are covered. Remaining gaps
-  are bespoke detail slots (the Run import console is 16 of them; project
-  budget/schedule/analytics; settlement and reconciliation; the recipe
+  are bespoke detail slots (the Run import console is 16 of them; the recipe
   walkthrough/costing/availability panels, cookbook reprocess and extraction
   report, and ingredient usage re-parse, which stay on web inside the now-drawn
-  recipe/cookbook/ingredient slots), and the controls below. Every detail renderer is drawn
+  recipe/cookbook/ingredient slots), the three finance verbs web alone runs (split an expense, attach expenses,
+  attach products), and the controls below. Every detail renderer is drawn
   (structured values arrive as server-composed `detailLabelPath` text or
   `itemsPath` rows). Add editor focus order or comprehensive sheet
   lifecycle only on demonstrated friction. Owners: `apps/apple/App/Shared`,

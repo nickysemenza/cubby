@@ -1,11 +1,7 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type {
-  PurchaseOut,
-  PurchaseSettlementSuggestOut,
-} from "@cubby/schemas/purchase";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { PurchaseOut } from "@cubby/schemas/purchase";
 import { useState } from "react";
 
 import {
@@ -16,31 +12,16 @@ import {
   EntityEditDialog,
   type EntityEditDialogRequest,
 } from "~/entity/editing/entity-edit-dialog";
-import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { formatFieldProvenance } from "~/entity/field-provenance";
-import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
-import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/utils";
 import { TableCellWorkbench } from "~/ui/data-table/table-cell-workbench";
-import { useUpdateMutation } from "~/ui/hooks/useUpdateMutation";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/ui/primitives/dialog";
-import { DialogFormActions } from "~/ui/primitives/dialog-form-actions";
 import { EnumPill } from "~/ui/primitives/enum-pill";
-import { Input } from "~/ui/primitives/input";
 
 import { LinkedTransactions } from "../finance/linked-transactions";
-import { SettlementCandidateList } from "./settlement-candidate-list";
+import { MatchStatementButton } from "./match-statement";
 
 type FinancialPurchase = PurchaseOut & {
   financialReconciliation: {
@@ -64,255 +45,6 @@ const settlementProvenanceDescription = formatFieldProvenance(
   settlementField.provenance,
 );
 
-type SettlementAllocationInput = { purchaseId: string; amount: string };
-type SettlementAllocationDraft = SettlementAllocationInput & { key: string };
-const parsePurchaseId = (value: string) => parseShortcodeFor("purchase", value);
-
-export function initialSettlementAllocations(
-  purchaseId: string,
-  transaction: Pick<FinancialTransactionOut, "amount" | "kind">,
-  purchase: Pick<PurchaseOut, "statedTotal">,
-): SettlementAllocationInput[] {
-  const totalCents = Math.round(transaction.amount * 100);
-  const statedCents = Math.round((purchase.statedTotal ?? 0) * 100);
-  const firstCents =
-    transaction.kind === "purchase" && statedCents > 0
-      ? Math.min(totalCents, statedCents)
-      : totalCents;
-  const rows = [{ purchaseId, amount: (firstCents / 100).toFixed(2) }];
-  if (firstCents !== totalCents)
-    rows.push({
-      purchaseId: "",
-      amount: ((totalCents - firstCents) / 100).toFixed(2),
-    });
-  return rows;
-}
-
-export function parseSettlementAllocations(
-  rows: SettlementAllocationInput[],
-  transactionAmount: number,
-) {
-  const totalCents = Math.round(transactionAmount * 100);
-  if (!rows.length || !Number.isSafeInteger(totalCents)) return null;
-  const parsed: {
-    purchaseId: ReturnType<typeof parsePurchaseId>;
-    amount: number;
-  }[] = [];
-  const seen = new Set<string>();
-  let allocatedCents = 0;
-  for (const row of rows) {
-    let purchaseId: ReturnType<typeof parsePurchaseId>;
-    try {
-      purchaseId = parsePurchaseId(row.purchaseId.trim());
-    } catch {
-      return null;
-    }
-    const cents = Math.round(Number(row.amount) * 100);
-    if (
-      !row.amount.trim() ||
-      !Number.isSafeInteger(cents) ||
-      cents === 0 ||
-      Math.abs(Number(row.amount) * 100 - cents) > 0.000001 ||
-      Math.sign(cents) !== Math.sign(totalCents) ||
-      seen.has(purchaseId)
-    )
-      return null;
-    seen.add(purchaseId);
-    allocatedCents += cents;
-    parsed.push({ purchaseId, amount: cents / 100 });
-  }
-  return allocatedCents === totalCents ? parsed : null;
-}
-
-function MatchStatementTransaction({
-  purchase,
-}: {
-  purchase: FinancialPurchase;
-}) {
-  const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<FinancialTransactionOut | null>(
-    null,
-  );
-  const [allocations, setAllocations] = useState<SettlementAllocationDraft[]>(
-    [],
-  );
-  const date = purchase.date ? Date.parse(`${purchase.date}T00:00:00Z`) : NaN;
-  const candidatesQuery = useQuery({
-    ...purchaseOperations.settlementCandidates.queryOptions({
-      purchaseId: purchase.id,
-    }),
-    enabled: open && Number.isFinite(date),
-  });
-  const candidates = candidatesQuery.data?.candidates ?? [];
-  const update = useUpdateMutation({
-    mutationFn: entityMutationOptionsFactory("financialTransaction", "update"),
-    entity: "financialTransaction",
-  });
-  const queryClient = useQueryClient();
-  // Advisory only: the result reorders and highlights tied candidates, and
-  // never selects or allocates on the person's behalf.
-  const suggest = useMutation(
-    purchaseOperations.suggestSettlementMatch.mutationOptions(),
-  );
-  const suggestion: PurchaseSettlementSuggestOut | null = suggest.isError
-    ? { status: "unavailable", error: String(suggest.error) }
-    : (suggest.data ?? null);
-  return (
-    <>
-      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-        Match statement activity
-      </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Match statement activity</DialogTitle>
-            <DialogDescription>
-              Review unallocated charges and refunds near this order. Allocate
-              the full statement amount across Purchases before saving.
-            </DialogDescription>
-          </DialogHeader>
-          {!Number.isFinite(date) ? (
-            <Description>
-              Add the order date to see likely statement activity.
-            </Description>
-          ) : candidatesQuery.isPending ? (
-            <Description>Checking statement activity…</Description>
-          ) : null}
-          {candidatesQuery.isError ? (
-            <Description>{String(candidatesQuery.error)}</Description>
-          ) : null}
-          {candidatesQuery.isSuccess && !candidates.length ? (
-            <Description>
-              No unallocated vendor or exact amount match within 45 days. You
-              can still add a transaction manually.
-            </Description>
-          ) : null}
-          <SettlementCandidateList
-            candidates={candidates}
-            selectedId={selected?.id ?? null}
-            suggestion={suggestion}
-            suggesting={suggest.isPending}
-            onSuggest={() => suggest.mutate({ purchaseId: purchase.id })}
-            onSelect={({ transaction }) => {
-              setSelected(transaction);
-              setAllocations(
-                initialSettlementAllocations(
-                  purchase.id,
-                  transaction,
-                  purchase,
-                ).map((row) => ({ ...row, key: crypto.randomUUID() })),
-              );
-            }}
-          />
-          {selected ? (
-            <div className="space-y-2 border-t border-border pt-3">
-              <div className="text-sm font-medium">
-                Allocate {formatCurrency(selected.amount)}
-              </div>
-              {allocations.map((allocation, index) => (
-                <div
-                  key={allocation.key}
-                  className="grid grid-cols-[1fr_8rem] gap-2"
-                >
-                  <label
-                    htmlFor={`purchase-${allocation.key}`}
-                    className="space-y-1 text-xs text-muted-foreground"
-                  >
-                    Purchase code
-                    <Input
-                      id={`purchase-${allocation.key}`}
-                      aria-label={`Purchase code ${index + 1}`}
-                      value={allocation.purchaseId}
-                      onChange={(event) =>
-                        setAllocations((current) =>
-                          current.map((row, rowIndex) =>
-                            rowIndex === index
-                              ? { ...row, purchaseId: event.target.value }
-                              : row,
-                          ),
-                        )
-                      }
-                    />
-                  </label>
-                  <label
-                    htmlFor={`amount-${allocation.key}`}
-                    className="space-y-1 text-xs text-muted-foreground"
-                  >
-                    Amount
-                    <Input
-                      id={`amount-${allocation.key}`}
-                      aria-label={`Amount ${index + 1}`}
-                      type="number"
-                      step="0.01"
-                      value={allocation.amount}
-                      onChange={(event) =>
-                        setAllocations((current) =>
-                          current.map((row, rowIndex) =>
-                            rowIndex === index
-                              ? { ...row, amount: event.target.value }
-                              : row,
-                          ),
-                        )
-                      }
-                    />
-                  </label>
-                </div>
-              ))}
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  setAllocations((current) => [
-                    ...current,
-                    { key: crypto.randomUUID(), purchaseId: "", amount: "" },
-                  ])
-                }
-              >
-                Add Purchase
-              </Button>
-              {!parseSettlementAllocations(allocations, selected.amount) ? (
-                <Description size="xs">
-                  Enter unique Purchase codes whose signed amounts total{" "}
-                  {formatCurrency(selected.amount)}.
-                </Description>
-              ) : null}
-            </div>
-          ) : null}
-          <DialogFormActions
-            onCancel={() => setOpen(false)}
-            submitLabel="Save allocation"
-            pending={update.isPending}
-            submitDisabled={
-              !selected ||
-              !parseSettlementAllocations(allocations, selected.amount)
-            }
-            onSubmit={async () => {
-              if (!selected) return;
-              const parsedAllocations = parseSettlementAllocations(
-                allocations,
-                selected.amount,
-              );
-              if (!parsedAllocations) return;
-              await update.mutateAsync({
-                id: selected.id,
-                data: { allocations: parsedAllocations },
-              });
-              // The global handler fires this ripple without awaiting it;
-              // await it so the panel is fresh before the dialog closes.
-              await invalidateOperationTags(
-                queryClient,
-                entityRipple("financialTransaction"),
-              );
-              setOpen(false);
-              setSelected(null);
-            }}
-          />
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
 export function FinancialSettlementStatus({
   purchase,
 }: {
@@ -328,7 +60,7 @@ export function FinancialSettlementStatus({
     </EnumPill>
   );
 }
-export function FinancialSettlement({
+function FinancialSettlement({
   purchase,
   onAddTransaction,
   onEditTransaction,
@@ -375,7 +107,7 @@ export function FinancialSettlement({
         onAddTransaction={onAddTransaction}
         onEditTransaction={onEditTransaction}
       />
-      <MatchStatementTransaction purchase={purchase} />
+      <MatchStatementButton purchaseId={purchase.id} />
     </Stack>
   );
 }

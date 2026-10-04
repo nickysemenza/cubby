@@ -1,5 +1,5 @@
 {
-  "originHash" : "fae700d6109aa2358206639b853861297808c1169582493a13a851d8ffbf14ae",
+  "originHash" : "eae05ad19d015362bbb07f6c8b3fe200eaa4d0fae0b6622f5ad866d790d840e6",
   "pins" : [
     {
       "identity" : "grdb.swift",
@@ -11,30 +11,12 @@
       }
     },
     {
-      "identity" : "nuke",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/kean/Nuke",
-      "state" : {
-        "revision" : "30f7a7e72e0607d304fbf69c799474bd5fb6d1ce",
-        "version" : "13.2.0"
-      }
-    },
-    {
       "identity" : "openapikit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/mattpolzin/OpenAPIKit",
       "state" : {
         "revision" : "0311432a8bb107c058b9f1895b581b48c69ad410",
         "version" : "6.3.0"
-      }
-    },
-    {
-      "identity" : "sentry-cocoa",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/getsentry/sentry-cocoa",
-      "state" : {
-        "revision" : "d9df1c4e8d8466c7f8b3c56150378927dadf1b8e",
-        "version" : "9.29.0"
       }
     },
     {

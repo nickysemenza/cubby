@@ -41,6 +41,8 @@ public struct NativeCoverageManifest: Decodable, Sendable {
     public let heroAction: [String: NativeCoverageStatus]
     public let detailSlot: [String: NativeCoverageStatus]
     public let listSlot: [String: NativeCoverageStatus]
+    /// The verbs a `summary` or `recordList` section offers, keyed by `SectionActionID`.
+    public let sectionAction: [String: NativeCoverageStatus]
     /// The runner plan for each `implemented` hero action, keyed by its manifest id.
     public let heroActionPlan: [String: HeroActionPlan]
     /// The runner plan for each verb a `collection` section offers, keyed by `CollectionActionID`.

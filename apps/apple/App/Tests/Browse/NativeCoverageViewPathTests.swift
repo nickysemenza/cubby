@@ -30,6 +30,13 @@ struct NativeCoverageViewPathTests {
         #expect(Set(ListSlotRegistry.builders.keys) == implemented)
     }
 
+    @Test func recordsViewRunsExactlyTheImplementedVerbs() {
+        let implemented = ids(SectionActionID.self) {
+            SectionActionRunner.coverage(of: SectionActionID(rawValue: $0)!) == .implemented
+        }
+        #expect(RecordsBlockView.handledVerbs == implemented)
+    }
+
     @Test func implementedControlsHaveAControlAndUnsupportedOnesDoNot() {
         for renderer in ControlRendererID.allCases {
             let drawn = EntityFieldControl.drawing(for: renderer) != nil

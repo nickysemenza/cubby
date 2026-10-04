@@ -4,6 +4,7 @@ import type {
   ReportBlock,
 } from "@cubby/schemas/entity-report";
 import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -28,7 +29,7 @@ const TONE_FILL = {
   muted: "bg-muted-foreground",
 } as const;
 
-const formatValue = (value: number, format: "money" | "count") =>
+const formatValue = (value: number, format: "money" | "count" | "text") =>
   format === "money" ? formatCurrency(value, 0) : String(value);
 
 function Stats({ block }: { block: Extract<ReportBlock, { kind: "stats" }> }) {
@@ -43,9 +44,11 @@ function Stats({ block }: { block: Extract<ReportBlock, { kind: "stats" }> }) {
               figure.tone && TONE_TEXT[figure.tone],
             )}
           >
-            {figure.value == null
-              ? "—"
-              : formatValue(figure.value, figure.format)}
+            {figure.format === "text"
+              ? (figure.text ?? "—")
+              : figure.value == null
+                ? "—"
+                : formatValue(figure.value, figure.format)}
           </span>
         </Stack>
       ))}
@@ -153,9 +156,15 @@ const blockKey = (block: ReportBlock) =>
 function ReportBlocks({
   blocks,
   record,
+  entity,
+  recordsList,
 }: {
   blocks: readonly ReportBlock[];
   record?: object;
+  /** The record's entity, for the finance verbs a `records` block offers. */
+  entity?: string;
+  /** A richer web list for a `records` block (an editable table); the verbs stay generic. */
+  recordsList?: (block: Extract<ReportBlock, { kind: "records" }>) => ReactNode;
 }) {
   return (
     <Stack gap="xs">
@@ -187,7 +196,15 @@ function ReportBlocks({
               </Description>
             );
           case "records":
-            return <RecordsBlockView key={key} block={block} record={record} />;
+            return (
+              <RecordsBlockView
+                key={key}
+                block={block}
+                record={record}
+                entity={entity}
+                list={recordsList?.(block)}
+              />
+            );
           case "schedule":
             return null;
         }
@@ -200,11 +217,21 @@ function ReportBlocks({
  * A detail slot that is nothing but the server's report blocks. A `records` block's verbs act on
  * `record` (the loaded detail record) and `rowBadges` adds web-only per-row badges.
  */
+function useReportBlocks(input: EntityReportInput) {
+  return useQuery(entityReport.get.queryOptions(input));
+}
+
 export function EntityReportSlot({
   record,
+  entity,
+  recordsList,
   ...input
-}: EntityReportInput & { record?: object }) {
-  const query = useQuery(entityReport.get.queryOptions(input));
+}: EntityReportInput & {
+  record?: object;
+  entity?: string;
+  recordsList?: (block: Extract<ReportBlock, { kind: "records" }>) => ReactNode;
+}) {
+  const query = useReportBlocks(input);
   // The slot's own verbs (attach, analyze, validate) stay available while the rows load or fail.
   const verbs = record === undefined ? [] : slotActionsOf(input.slot);
   return (
@@ -223,7 +250,12 @@ export function EntityReportSlot({
           onRetry={() => void query.refetch()}
         />
       ) : (
-        <ReportBlocks blocks={query.data.blocks} record={record} />
+        <ReportBlocks
+          blocks={query.data.blocks}
+          record={record}
+          entity={entity}
+          recordsList={recordsList}
+        />
       )}
     </Stack>
   );

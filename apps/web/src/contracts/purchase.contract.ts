@@ -7,6 +7,8 @@ import {
   purchaseOut,
   purchaseProductsInput,
   purchaseProductsOut,
+  purchaseSettlementAllocationCheckInput,
+  purchaseSettlementAllocationCheckOut,
   purchaseSettlementCandidatesInput,
   purchaseSettlementCandidatesOut,
   purchaseSettlementSuggestInput,
@@ -46,6 +48,7 @@ export const splitExpenseWithDeltaOut = z.object({
 
 export const purchaseContract = defineContract("purchase", {
   settlementCandidates: query({
+    native: "Review statement activity near a Purchase",
     input: purchaseSettlementCandidatesInput,
     output: purchaseSettlementCandidatesOut,
     cache: { tags: [["purchase"], ["financialTransaction"]] },
@@ -57,8 +60,21 @@ export const purchaseContract = defineContract("purchase", {
    * MCP on purpose, so agents keep the deterministic candidates.
    */
   suggestSettlementMatch: mutation({
+    native: "Ask for an advisory ordering of equally ranked statement charges",
     input: purchaseSettlementSuggestInput,
     output: purchaseSettlementSuggestOut,
+  }),
+  /**
+   * Whether typed allocation rows can be saved against a statement entry, and why not. The
+   * allocation form's one rule (whole cents, same sign, one row per Purchase, sums to the entry),
+   * so no client restates it; the write still validates on its own.
+   */
+  checkSettlementAllocation: query({
+    native: "Validate settlement allocation rows before saving",
+    transport: "post",
+    input: purchaseSettlementAllocationCheckInput,
+    output: purchaseSettlementAllocationCheckOut,
+    cache: { tags: [] },
   }),
   orderMail: query({
     native: "Show linked order email events on native Purchase detail",

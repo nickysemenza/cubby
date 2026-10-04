@@ -4,6 +4,7 @@ import {
   COLLECTION_ACTIONS,
   type CollectionActionId,
 } from "./entity-definitions/collection-actions";
+import { SECTION_ACTION_IDS } from "./entity-section-actions";
 
 /**
  * The generic read a detail slot draws on every client. The server composes
@@ -26,6 +27,11 @@ export const reportSlots = [
   "image.associations",
   "purchase.runs",
   "location.ai-description",
+  "purchase.reconciliation",
+  "purchase.project-allocation",
+  "purchase.financial-settlement",
+  "expense.settlement",
+  "vendorAccount.charge-search",
 ] as const;
 export const reportSlot = z.enum(reportSlots);
 
@@ -61,7 +67,7 @@ export const entityReportInput = z.object({
 export type EntityReportInput = z.infer<typeof entityReportInput>;
 
 const reportTone = z.enum(["positive", "warning", "destructive", "muted"]);
-const reportFormat = z.enum(["money", "count"]);
+const reportFormat = z.enum(["money", "count", "text"]);
 
 /** A record a row or bar links to. */
 const reportRef = z.object({
@@ -78,6 +84,8 @@ const reportStats = z.object({
       /** Null renders as an em dash (no estimate to measure against). */
       value: z.number().nullable(),
       format: reportFormat,
+      /** The figure for a `text` format (a verdict), already worded. */
+      text: z.string().optional(),
       tone: reportTone.optional(),
     }),
   ),
@@ -176,6 +184,10 @@ const reportRecordRow = z.object({
     .optional(),
   /** Row verbs offered on this row only (the server decides when one applies). */
   actions: z.array(z.enum(COLLECTION_ACTIONS)).optional(),
+  /** What a checked row or a section verb acts on, when that is not the opened record. */
+  key: z.string().optional(),
+  /** Why the row cannot be checked; absent or null when it can. */
+  disabledReason: z.string().nullable().optional(),
 });
 export type ReportRecordRow = z.infer<typeof reportRecordRow>;
 
@@ -194,6 +206,24 @@ const reportRecords = z.object({
   actions: z.array(z.enum(COLLECTION_ACTIONS)).optional(),
   /** `large` for evidence photos that must stay legible (a package label). */
   thumbnail: z.enum(["small", "large"]).optional(),
+  /** One line under the rows, such as a total. */
+  footer: z.string().optional(),
+  /**
+   * Finance verbs (`SECTION_ACTION_IDS`) with the server's word on each: a verb with a
+   * `disabledReason` is shown unavailable with it, and a `selection` verb acts on the checked
+   * rows (never a row with a `disabledReason`). Each runs an existing operation on every client
+   * that implements it; `native-coverage.ts` classifies the rest.
+   */
+  verbs: z
+    .array(
+      z.object({
+        id: z.enum(SECTION_ACTION_IDS),
+        label: z.string(),
+        scope: z.enum(["section", "selection"]),
+        disabledReason: z.string().nullable(),
+      }),
+    )
+    .optional(),
 });
 
 export const reportBlock = z.discriminatedUnion("kind", [

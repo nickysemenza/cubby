@@ -28,6 +28,8 @@ export const entityReportContract = defineContract("entityReport", {
         ["image"],
         ["purchase"],
         ["run"],
+        ["financialTransaction"],
+        ["vendor"],
       ],
     },
   }),

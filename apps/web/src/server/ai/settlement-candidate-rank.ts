@@ -84,7 +84,11 @@ export async function suggestSettlementMatch(args: {
   jev?: JevPort;
 }): Promise<PurchaseSettlementSuggestOut> {
   const tied = tiedTopSettlementCandidates(args.ranks);
-  if (tied.length < 2) return { status: "not_ambiguous" };
+  if (tied.length < 2)
+    return {
+      status: "not_ambiguous",
+      note: "These charges are no longer tied, so there is nothing to suggest.",
+    };
 
   const candidates: TiedCandidate[] = [];
   for (const { transactionId } of tied) {
@@ -101,23 +105,61 @@ export async function suggestSettlementMatch(args: {
       usage: await args.openUsage(),
       jev: args.jev,
     });
+    const selectedTransactionId = outcome.selected
+      ? financialTransactionShortcode.parse(outcome.selected.id)
+      : null;
+    const ranked = outcome.distribution.map(({ candidate, probability }) => {
+      const transactionId = financialTransactionShortcode.parse(candidate.id);
+      const percent = `${Math.round(probability * 100)}%`;
+      return {
+        transactionId,
+        probability,
+        badge:
+          transactionId === selectedTransactionId
+            ? `Suggested · ${percent}`
+            : percent,
+      };
+    });
+    // Tied candidates by the model's probability, then the rest as the server listed them.
+    const rankedIds = new Set<string>(
+      ranked.map((entry) => entry.transactionId),
+    );
+    const tiedIds = new Set<string>(
+      tied.map(({ transactionId }) => transactionId),
+    );
+    const displayOrder = [
+      ...ranked.map((entry) => entry.transactionId),
+      ...tied
+        .filter(({ transactionId }) => !rankedIds.has(transactionId))
+        .map(({ transactionId }) =>
+          financialTransactionShortcode.parse(transactionId),
+        ),
+      ...args.ranks
+        .filter(({ transactionId }) => !tiedIds.has(transactionId))
+        .map(({ transactionId }) =>
+          financialTransactionShortcode.parse(transactionId),
+        ),
+    ];
     return {
       status: "ranked",
       advisory: true,
-      selectedTransactionId: outcome.selected
-        ? financialTransactionShortcode.parse(outcome.selected.id)
-        : null,
-      ranked: outcome.distribution.map(({ candidate, probability }) => ({
-        transactionId: financialTransactionShortcode.parse(candidate.id),
-        probability,
-      })),
+      selectedTransactionId,
+      ranked,
+      displayOrder,
+      note:
+        `Suggestion only. Jev ordered the ${tied.length} equally ranked charges; nothing is saved until you allocate.` +
+        (selectedTransactionId === null
+          ? " Jev found no clear match among them."
+          : ""),
     };
   } catch (error) {
+    const message = scrubErrorMessage(
+      error instanceof Error ? error.message : String(error),
+    );
     return {
       status: "unavailable",
-      error: scrubErrorMessage(
-        error instanceof Error ? error.message : String(error),
-      ),
+      error: message,
+      note: `Suggestion unavailable: ${message}`,
     };
   }
 }

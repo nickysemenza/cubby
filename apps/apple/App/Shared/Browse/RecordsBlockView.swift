@@ -69,6 +69,21 @@ struct RecordsBlockView: View {
     @State private var staged: StagedEdit?
     @State private var notice: String?
     @State private var busy = false
+    // Finance verbs (`records.verbs`): checked rows, and the flows they open.
+    @State private var selection: Set<String> = []
+    @State private var statementMatch: StatementMatchSession?
+    @State private var receiving: ReceivingModel?
+    @State private var isSearching = false
+    @State private var startedRun: String?
+    @State private var verbError: String?
+
+    /// Exactly the finance verbs `native-coverage.ts` marks `implemented`
+    /// (`NativeCoverageViewPathTests` asserts it); `verbButton` runs each.
+    static let handledVerbs: Set<SectionActionID> = [.searchCharges, .matchStatement, .receiveExpense]
+
+    private var offersSelection: Bool {
+        records.verbs.contains { Self.handledVerbs.contains($0.verb) && $0.actsOnSelection }
+    }
 
     /// An update editor a verb opened with a derived value staged for review.
     private struct StagedEdit: Identifiable {
@@ -100,18 +115,47 @@ struct RecordsBlockView: View {
                 Text(records.empty).foregroundStyle(.secondary)
             }
             ForEach(records.rows) { row in
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    RecordRowView(row: row, large: records.largeThumbnails)
-                    if let link = row.listLink, let trailing = row.trailing {
-                        NavigationLink(value: Route.entityList(link.entity, filters: link.filterState)) {
-                            Label(trailing, systemImage: "list.bullet").font(.fieldGuideLabel)
+                HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
+                    if offersSelection, let key = row.key {
+                        Button {
+                            selection = records.toggled(selection, key)
+                        } label: {
+                            Image(systemName: selection.contains(key) ? "checkmark.circle.fill" : "circle")
                         }
+                        .buttonStyle(.borderless)
+                        .disabled(row.disabledReason != nil)
+                        .accessibilityLabel("Select \(row.title)")
+                        .accessibilityAddTraits(selection.contains(key) ? .isSelected : [])
                     }
-                    ForEach(plans(row.actions, scope: .row), id: \.0) { id, plan in
-                        if let itemID = row.recordID { actionButton(id, plan, itemID: itemID) }
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                        RecordRowView(row: row, large: records.largeThumbnails)
+                        if let link = row.listLink, let trailing = row.trailing {
+                            NavigationLink(value: Route.entityList(link.entity, filters: link.filterState)) {
+                                Label(trailing, systemImage: "list.bullet").font(.fieldGuideLabel)
+                            }
+                        }
+                        ForEach(plans(row.actions, scope: .row), id: \.0) { id, plan in
+                            if let itemID = row.recordID { actionButton(id, plan, itemID: itemID) }
+                        }
                     }
                 }
             }
+            if let footer = records.footer {
+                Divider()
+                Text(footer).font(.subheadline).foregroundStyle(.secondary)
+            }
+            verbs
+        }
+        // A fresh read (a run claimed a charge) drops any checked row the server now refuses.
+        .onChange(of: records) { _, fresh in selection = fresh.allowed(selection) }
+        .sheet(item: $statementMatch) { session in
+            StatementMatchSheet(session: session) {
+                appModel.recordEntityMutation(keys: [.financialTransaction, .purchase])
+            }
+            .nativeSheet(.editor)
+        }
+        .sheet(item: $receiving) { model in
+            ReceiveExpenseSheet(model: model)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .sheet(item: $action) { model in
@@ -139,6 +183,97 @@ struct RecordsBlockView: View {
                 .buttonStyle(.borderless)
                 .disabled(busy)
                 .accessibilityIdentifier("report.\(id.rawValue)")
+        }
+    }
+
+    @ViewBuilder private var verbs: some View {
+        ForEach(records.verbs.filter { Self.handledVerbs.contains($0.verb) }) { verb in
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                verbButton(verb)
+                if let reason = verb.disabledReason {
+                    Text(reason).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+        if let verbError {
+            Text(verbError).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
+        }
+        if let startedRun {
+            NavigationLink {
+                RunReviewView(runID: startedRun)
+            } label: {
+                Label("View charge search", systemImage: "arrow.up.right.square")
+            }
+        }
+        let unsupported = records.verbs.compactMap { verb -> String? in
+            if case .unsupported(let reason) = SectionActionRunner.coverage(of: verb.verb) { return reason }
+            return nil
+        }
+        if let host, !unsupported.isEmpty {
+            ForEach(unsupported, id: \.self) { reason in
+                Text(reason).font(.caption).foregroundStyle(.secondary)
+            }
+            Link("Open on web", destination: appModel.webURL(for: host.entity, id: host.row.id))
+                .font(.caption)
+        }
+    }
+
+    @ViewBuilder
+    private func verbButton(_ verb: ReportPresentation.Records.Verb) -> some View {
+        switch verb.verb {
+        case .searchCharges:
+            Button {
+                Task { await searchCharges() }
+            } label: {
+                Text(isSearching ? "Starting search…" : "\(verb.label) (\(selection.count))")
+            }
+            .disabled(selection.isEmpty || isSearching || verb.disabledReason != nil)
+            .accessibilityIdentifier("section.searchCharges")
+        case .matchStatement:
+            Button(verb.label) {
+                verbError = nil
+                if let host {
+                    statementMatch = StatementMatchSession(purchaseID: host.row.id, client: appModel.client)
+                }
+            }
+            .disabled(verb.disabledReason != nil || host == nil)
+            .accessibilityIdentifier("section.matchStatement")
+        case .receiveExpense:
+            let productID = host?.row.raw["productId"]?.stringValue
+            Button {
+                guard let host, let productID else { return }
+                receiving = ReceivingModel(
+                    expenseID: host.row.id, productID: ProductCode(productID), service: appModel.client)
+            } label: {
+                Label("Receive into Inventory", systemImage: "tray.and.arrow.down")
+            }
+            .disabled(verb.disabledReason != nil || productID == nil)
+            .accessibilityIdentifier("receive.open.\(host?.row.id ?? "")")
+        case .splitExpense, .linkExpenses, .linkProducts:
+            EmptyView()
+        }
+    }
+
+    private func searchCharges() async {
+        guard let host else { return }
+        isSearching = true
+        verbError = nil
+        defer { isSearching = false }
+        do {
+            startedRun = try await SectionActionRunner(client: appModel.client).searchCharges(
+                vendorAccountID: host.row.id, records: records, selection: selection)
+            selection = []
+            appModel.recordEntityMutation(keys: [.vendorAccount, .run])
+        } catch let error as SectionActionError {
+            verbError =
+                switch error {
+                case .unavailable(let reason), .refusedSelection(let reason), .unsupported(let reason):
+                    reason
+                case .nothingSelected: "Check at least one charge first."
+                }
+        } catch {
+            Diagnostics.report(error, context: "Start charge search")
+            verbError = error.userMessage
         }
     }
 

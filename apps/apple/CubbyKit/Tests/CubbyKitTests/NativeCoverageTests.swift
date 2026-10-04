@@ -17,12 +17,13 @@ struct NativeCoverageTests {
         #expect(Set(coverage.heroAction.keys) == Set(EntityHeroActionID.allCases.map(\.rawValue)))
         #expect(Set(coverage.detailSlot.keys) == Set(EntityDetailSlotID.allCases.map(\.rawValue)))
         #expect(Set(coverage.listSlot.keys) == Set(EntityListSlotID.allCases.map(\.rawValue)))
+        #expect(Set(coverage.sectionAction.keys) == Set(SectionActionID.allCases.map(\.rawValue)))
     }
 
     @Test func everyUnsupportedIdCarriesAReason() {
         let all = [
             coverage.control, coverage.list, coverage.detail, coverage.heroAction, coverage.detailSlot,
-            coverage.listSlot,
+            coverage.listSlot, coverage.sectionAction,
         ]
         for statuses in all {
             for case .unsupported(let reason) in statuses.values {

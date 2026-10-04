@@ -20,6 +20,7 @@ import {
   nativeHeroActionPlans,
   drawsFromValueSchema,
 } from "../../../../packages/schemas/src/native-coverage.ts";
+import { SECTION_ACTION_IDS } from "../../../../packages/schemas/src/entity-section-actions.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 import {
@@ -817,6 +818,7 @@ export const renderSwiftEntityCatalog = (
         ),
       ),
     ),
+    sectionAction: used(SECTION_ACTION_IDS),
   } as const;
   vocabulary.exactly("ControlRendererID", coverageVocabulary.control);
   vocabulary.exactly("ListRendererID", coverageVocabulary.list);
@@ -825,6 +827,7 @@ export const renderSwiftEntityCatalog = (
   vocabulary.exactly("EntityDetailSlotID", coverageVocabulary.detailSlot);
   vocabulary.exactly("EntityListSlotID", coverageVocabulary.listSlot);
   vocabulary.exactly("CollectionActionID", COLLECTION_ACTIONS);
+  vocabulary.exactly("SectionActionID", coverageVocabulary.sectionAction);
   const classified = (
     kind: keyof typeof nativeCoverage,
     ids: readonly string[],
@@ -877,6 +880,10 @@ export const renderSwiftEntityCatalog = (
     heroAction: classified("heroAction", coverageVocabulary.heroAction),
     detailSlot: classified("detailSlot", coverageVocabulary.detailSlot),
     listSlot: classified("listSlot", coverageVocabulary.listSlot),
+    sectionAction: classified(
+      "sectionAction",
+      coverageVocabulary.sectionAction,
+    ),
     heroActionPlan: nativeHeroActionPlans,
     collectionActionPlan: nativeCollectionActionPlans,
     collectionActionScope: COLLECTION_ACTION_SCOPES,

@@ -124,7 +124,13 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   `pnpm generate` checks the plan against the contract (operation flagged `native:`, body keys
   declared); an `implemented` slot or control needs its view path (`DetailSlotRegistry`,
   `ListSlotRegistry`, `EntityFieldControl.drawing(for:)`), which `NativeCoverageViewPathTests`
-  checks in both directions. The structured renderers (`STRUCTURED_VALUE_RENDERERS`) are `generic`:
+  checks in both directions. Report slots (`entityReport.get`) draw through the one
+  `ReportDetailSlot`; its `records` block (finance slots) shows the server's checkable rows and
+  verbs, every figure, candidate and disabled reason being the server's. A verb is a
+  `sectionAction` id: `implemented` ones are cases of `ReportRecordsView.handledVerbs`, run through
+  `SectionActionRunner` or `StatementMatchSession` (the same operations web calls, behind the
+  server's `disabledReason` and, for a write, a fresh server check of exactly what is sent);
+  `unsupported` ones show their reason. The structured renderers (`STRUCTURED_VALUE_RENDERERS`) are `generic`:
   `FieldDescriptor.valueSchema`, derived from the field's Zod input schema, is drawn by the one
   `StructuredValueControl`, so a new structured field is a declaration, not a view (a read payload
   that nests an input's id declares `readFrom` on the Zod field; `project` applies the emitted

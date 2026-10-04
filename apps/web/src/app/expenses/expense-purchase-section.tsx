@@ -2,7 +2,6 @@ import type { ExpenseOut } from "@cubby/schemas/project";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { sumBy } from "es-toolkit";
 import { useMemo, type FC } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
@@ -33,6 +32,13 @@ export interface ExpensePurchaseOperations {
 interface ExpensePurchaseSectionProps {
   expense: ExpenseOut;
   operations?: ExpensePurchaseOperations;
+  /**
+   * The purchase total line ("3 expenses · $50.00 · 1 without a cost"), as the section read
+   * words it. Summed on the server so every client reconciles to the same figure.
+   */
+  summaryLine?: string | null;
+  /** What to say when this line is the only one in its purchase. */
+  soloNote?: string | null;
 }
 
 const productionOperations: ExpensePurchaseOperations = {
@@ -52,13 +58,15 @@ const productionOperations: ExpensePurchaseOperations = {
  *
  * Multi-line purchases are the normal case: an aggregate row covering several
  * export lines, siblings deliberately split one-per-product, and a
- * buy-and-return pair all sit under one purchase. Because it sums the purchase's
- * lines it doubles as the reconciliation readout the import pass used to run
- * `GROUP BY vendor, orderId` by hand for.
+ * buy-and-return pair all sit under one purchase. The server sums the purchase's
+ * lines into `summaryLine`, so it doubles as the reconciliation readout the
+ * import pass used to run `GROUP BY vendor, orderId` by hand for.
  */
 export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
   expense,
   operations = productionOperations,
+  summaryLine = null,
+  soloNote = null,
 }) => {
   // Called unconditionally, before the no-purchase return below: `purchaseId` can
   // change under the same component instance (clearing a vendor detaches the
@@ -112,13 +120,6 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
   // payload was fetched. Do not render a stale purchase link in that window.
   if (!data) return null;
 
-  // The whole Purchase, not just the other Expenses — this Expense is one of them,
-  // and a total that excluded it would never reconcile against a receipt.
-  const lines = [expense, ...others];
-  const priced = lines.filter((line) => line.cost != null);
-  const total = sumBy(priced, (line) => line.cost ?? 0);
-  const unpriced = lines.length - priced.length;
-
   return (
     <Stack gap="sm">
       <Row align="center" gap="sm" className="min-w-0">
@@ -153,7 +154,9 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
       </Row>
 
       {others.length === 0 ? (
-        <Description>This is the only expense in the purchase.</Description>
+        soloNote ? (
+          <Description>{soloNote}</Description>
+        ) : null
       ) : (
         <Stack gap="tight">
           {others.map((line) => (
@@ -188,14 +191,11 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
         </Stack>
       )}
 
-      <p className="border-t border-[var(--border)] pt-2 text-sm text-muted-foreground">
-        {lines.length} expense{lines.length === 1 ? "" : "s"} ·{" "}
-        <span className="font-mono tabular-nums">{formatCurrency(total)}</span>
-        {/* Called out rather than folded in as zero: a purchase that doesn't
-            reconcile because a line has no cost recorded is a different
-            problem from one that doesn't reconcile because a price is wrong. */}
-        {unpriced > 0 && <> · {unpriced} without a cost</>}
-      </p>
+      {summaryLine ? (
+        <p className="border-t border-[var(--border)] pt-2 text-sm text-muted-foreground">
+          {summaryLine}
+        </p>
+      ) : null}
     </Stack>
   );
 };

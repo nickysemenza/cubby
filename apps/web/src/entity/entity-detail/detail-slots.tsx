@@ -227,7 +227,7 @@ export const detailSlots = {
       })),
     ),
     "project-allocation": slot(() =>
-      import("~/app/purchases/slots").then((m) => ({
+      import("~/app/purchases/project-allocation-table").then((m) => ({
         default: m.PurchaseProjectAllocation,
       })),
     ),
@@ -242,14 +242,14 @@ export const detailSlots = {
       })),
     ),
     "financial-settlement": slot(() =>
-      import("~/app/purchases/slots").then((m) => ({
+      import("~/app/purchases/financial-settlement-body").then((m) => ({
         default: m.PurchaseFinancialSettlement,
       })),
     ),
   },
   expense: {
     settlement: slot(() =>
-      import("~/app/expenses/slots").then((m) => ({
+      import("~/app/expenses/expense-settlement-body").then((m) => ({
         default: m.ExpenseSettlement,
       })),
     ),

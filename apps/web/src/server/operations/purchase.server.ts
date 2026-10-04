@@ -23,7 +23,9 @@ import {
   splitExpense,
 } from "~/server/repo/purchase";
 import { listPurchaseProducts } from "~/server/repo/purchase-products";
+import { checkSettlementAllocationDraft } from "~/server/repo/purchase-settlement-allocation";
 import { listPurchaseSettlementCandidates } from "~/server/repo/purchase-settlement-candidates";
+import { composeSettlementReview } from "~/server/repo/purchase-settlement-review";
 import {
   resolveAllPresent,
   resolveOrThrow,
@@ -129,19 +131,40 @@ async function loadSettlementTransaction(
 
 export const purchaseHandlers = implementOperationDomain(purchaseContract, {
   settlementCandidates: async (context, input) => {
+    const purchase = await getPurchaseByShortcode(context.db, input.purchaseId);
+    if (!purchase)
+      throw createAppError("PURCHASE_NOT_FOUND", "Purchase not found");
     const candidates = await listPurchaseSettlementCandidates(
       context.db,
       input.purchaseId,
     );
+    const ranked = await Promise.all(
+      candidates.map(async ({ transactionId, ...rank }) => ({
+        ...rank,
+        transaction: await loadSettlementTransaction(context, transactionId),
+      })),
+    );
     return {
       advisory: true,
-      candidates: await Promise.all(
-        candidates.map(async ({ transactionId, ...rank }) => ({
-          ...rank,
-          transaction: await loadSettlementTransaction(context, transactionId),
-        })),
+      ...composeSettlementReview(
+        {
+          id: input.purchaseId,
+          date: purchase.date,
+          statedTotal: purchase.statedTotal,
+        },
+        ranked,
       ),
     } satisfies typeof purchaseSettlementCandidatesOut._output;
+  },
+  checkSettlementAllocation: async (context, input) => {
+    const transaction = await loadSettlementTransaction(
+      context,
+      input.transactionId,
+    );
+    return checkSettlementAllocationDraft(
+      input.allocations,
+      transaction.amount,
+    );
   },
   suggestSettlementMatch: async (context, input) => {
     const purchase = await getPurchaseByShortcode(context.db, input.purchaseId);

@@ -3,7 +3,7 @@ import type {
   ReportBlock,
   ReportRecordRow,
 } from "@cubby/schemas/entity-report";
-import { Suspense } from "react";
+import { type ReactNode, Suspense, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { FilterRefLink } from "~/entity/components/ref-link/leaf";
@@ -11,10 +11,13 @@ import { entities } from "~/entity/entities";
 import { formatInstant } from "~/lib/date-format";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
+import { Checkbox } from "~/ui/primitives/checkbox";
 import { Description } from "~/ui/primitives/description";
 import { Image } from "~/ui/primitives/image";
+import { Skeleton } from "~/ui/primitives/skeleton";
 
 import { collectionActions } from "./collection-actions";
+import { sectionActionsFor } from "./section-actions";
 
 export type RecordsBlock = Extract<ReportBlock, { kind: "records" }>;
 type Action = NonNullable<ReportRecordRow["actions"]>[number];
@@ -80,15 +83,30 @@ function RecordRow({
   row,
   record,
   large,
+  selectable,
+  checked,
+  onCheckedChange,
 }: {
   row: ReportRecordRow;
   record: object | undefined;
   large: boolean;
+  /** Whether a selection verb is offered, so rows carry a checkbox. */
+  selectable: boolean;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
 }) {
   const listEntity = routedEntity(row.listLink?.entity ?? null);
   return (
     <li className="flex items-start justify-between gap-3 py-2">
       <Row gap="sm" className="min-w-0 items-start">
+        {selectable && row.key !== undefined ? (
+          <Checkbox
+            aria-label={`Select ${row.title}`}
+            checked={checked}
+            disabled={row.disabledReason != null}
+            onCheckedChange={(next) => onCheckedChange(next === true)}
+          />
+        ) : null}
         {row.imageUrl ? (
           <a
             href={row.imageUrl}
@@ -169,23 +187,87 @@ function RecordRow({
 export function RecordsBlockView({
   block,
   record,
+  entity,
+  list,
 }: {
   block: RecordsBlock;
   record?: object;
+  /** The record's entity, for the finance verbs the block offers (`block.verbs`). */
+  entity?: string;
+  /** Replaces the generic rows and footer (a sortable table, thumbnails). */
+  list?: ReactNode;
 }) {
+  const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
   const keys = rowKeys(block.rows);
-  return block.rows.length === 0 ? (
-    <Description>{block.empty}</Description>
-  ) : (
-    <ul className="w-full divide-y divide-border">
-      {block.rows.map((row, index) => (
-        <RecordRow
-          key={keys[index]}
-          row={row}
-          record={record}
-          large={block.thumbnail === "large"}
-        />
-      ))}
-    </ul>
+  const verbs = block.verbs ?? [];
+  const available =
+    entity === undefined || record === undefined
+      ? {}
+      : sectionActionsFor(entity);
+  const selectable = verbs.some((verb) => verb.scope === "selection");
+  const clearSelection = () => setSelection(new Set());
+  // SAFETY: the verb registry is keyed by this entity, so it takes this entity's record.
+  const erasedRecord = record as never;
+  return (
+    <Stack gap="sm" className="w-full">
+      {list ??
+        (block.rows.length === 0 ? (
+          <Description>{block.empty}</Description>
+        ) : (
+          <ul className="w-full divide-y divide-border">
+            {block.rows.map((row, index) => (
+              <RecordRow
+                key={keys[index]}
+                row={row}
+                record={record}
+                large={block.thumbnail === "large"}
+                selectable={selectable}
+                checked={row.key !== undefined && selection.has(row.key)}
+                onCheckedChange={(checked) =>
+                  setSelection((current) => {
+                    const next = new Set(current);
+                    if (row.key === undefined) return next;
+                    if (checked) next.add(row.key);
+                    else next.delete(row.key);
+                    return next;
+                  })
+                }
+              />
+            ))}
+          </ul>
+        ))}
+      {block.footer && list === undefined ? (
+        <p className="border-t border-border pt-2 text-sm text-muted-foreground">
+          {block.footer}
+        </p>
+      ) : null}
+      {verbs.length > 0 ? (
+        <Row gap="sm" wrap align="center" aria-live="polite">
+          {verbs.map((verb) => {
+            const Verb = available[verb.id];
+            return Verb ? (
+              <Suspense
+                key={verb.id}
+                fallback={<Skeleton className="h-8 w-24" />}
+              >
+                <Verb
+                  record={erasedRecord}
+                  action={verb}
+                  selection={[...selection]}
+                  clearSelection={clearSelection}
+                />
+              </Suspense>
+            ) : null;
+          })}
+        </Row>
+      ) : null}
+      {verbs.map((verb) =>
+        verb.disabledReason ? (
+          <Description key={verb.id} size="xs">
+            {verb.label}: {verb.disabledReason}
+          </Description>
+        ) : null,
+      )}
+    </Stack>
   );
 }
