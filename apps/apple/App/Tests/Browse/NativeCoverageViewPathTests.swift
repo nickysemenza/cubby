@@ -47,7 +47,7 @@ struct NativeCoverageViewPathTests {
     /// without a schema would silently draw nothing.
     @Test func structuredRenderersAreDrawnFromTheirFieldsSchema() {
         let structured: [ControlRendererID] = [
-            .externalIds, .labelNutrition, .sourceAliases, .sourceRefs, .structuredField, .unitMappings,
+            .externalIds, .labelNutrition, .sourceAliases, .sourceRefs, .unitMappings,
         ]
         for renderer in structured {
             #expect(NativePresentationCoverage.control(renderer) == .generic)

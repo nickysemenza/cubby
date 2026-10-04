@@ -76,7 +76,7 @@ private struct StructuredSchemaView: View {
     /// An amount draws two controls on one path, so it also shows its parts' messages.
     private var errors: [String] {
         var paths = [path]
-        if case .amount = schema.node { paths += [path + ["value"], path + ["unit"]] }
+        if case .amount = schema.node { paths += [path + ["value"], path + ["unit"], path + ["upperValue"]] }
         return paths.compactMap(context.error)
     }
 
@@ -115,7 +115,7 @@ private struct StructuredSchemaView: View {
         case .reference(let entity):
             StructuredReferenceRow(
                 context: context, entity: entity, title: title, path: path, clearable: schema.nullable)
-        case .amount: amountRow
+        case .amount(let upper): amountRow(upper: upper)
         case .constant: EmptyView()
         case .object(let fields): fieldRows(fields)
         case .array(let item): arrayRows(item)
@@ -176,7 +176,7 @@ private struct StructuredSchemaView: View {
         .accessibilityIdentifier(context.identifier(path))
     }
 
-    private var amountRow: some View {
+    private func amountRow(upper: Bool) -> some View {
         LabeledContent(title) {
             HStack {
                 TextField(
@@ -191,6 +191,21 @@ private struct StructuredSchemaView: View {
                     .keyboardType(.decimalPad)
                 #endif
                 .accessibilityIdentifier(context.identifier(path + ["value"]))
+                if upper {
+                    TextField(
+                        "up to",
+                        value: Binding(
+                            get: { context.value(path + ["upperValue"]).doubleValue },
+                            set: { context.set(path + ["upperValue"], $0.map(JSONValue.number) ?? .null) }),
+                        format: .number
+                    )
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: 72)
+                    #if os(iOS)
+                        .keyboardType(.decimalPad)
+                    #endif
+                    .accessibilityIdentifier(context.identifier(path + ["upperValue"]))
+                }
                 TextField(
                     "unit",
                     text: Binding(

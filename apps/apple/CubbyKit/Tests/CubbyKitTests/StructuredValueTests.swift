@@ -23,7 +23,7 @@ private final class StructuredStub: URLProtocol, @unchecked Sendable {
 @MainActor
 struct StructuredValueTests {
     private static let structuredRenderers: Set<ControlRendererID> = [
-        .externalIds, .labelNutrition, .sourceAliases, .sourceRefs, .structuredField, .unitMappings,
+        .externalIds, .labelNutrition, .sourceAliases, .sourceRefs, .unitMappings,
     ]
 
     private func schema(_ entity: EntityKey, _ field: String) throws -> ValueSchema {
@@ -64,7 +64,7 @@ struct StructuredValueTests {
                 if structured { drawn += 1 }
             }
         }
-        #expect(drawn >= 14)
+        #expect(drawn == 5)
     }
 
     @Test func unitMappingsDescribeRowsOfAmountsWithAnOpaqueId() throws {
@@ -87,28 +87,25 @@ struct StructuredValueTests {
         #expect(value.node == .number(integer: false))
     }
 
-    @Test func identityIsAVariantAndIngredientsReferenceTheirEntity() throws {
-        guard case .variant(let discriminator, let cases) = try schema(.financialAccount, "identity").node
-        else { throw Failure("identity is not a variant") }
-        #expect(discriminator == "kind")
-        #expect(cases.map(\.value).contains("credit_card"))
-        let sections = try schema(.recipe, "sections")
-        #expect(Self.references(in: sections).contains(.ingredient))
-    }
-
-    private static func references(in schema: ValueSchema) -> Set<EntityKey> {
-        switch schema.node {
-        case .reference(let entity): [entity]
-        case .array(let item): references(in: item)
-        case .map(_, let value): references(in: value)
-        case .object(let fields): fields.reduce(into: []) { $0.formUnion(references(in: $1.schema)) }
-        case .variant(_, let cases):
-            cases.reduce(into: []) { found, option in
-                for field in option.fields { found.formUnion(references(in: field.schema)) }
-            }
-        default: []
-        }
-    }
+    /// No declared field uses a variant today (the fields that did are read-only natively), so the
+    /// editor's variant handling is exercised on a synthetic schema.
+    private static let accountKind = ValueSchema(
+        node: .variant(
+            discriminator: "kind",
+            cases: [
+                .init(value: "cash", label: "Cash", fields: []),
+                .init(
+                    value: "bank", label: "Bank",
+                    fields: [
+                        .init(
+                            key: "institution", label: "Institution", required: true,
+                            schema: ValueSchema(nullable: true, node: .text(format: nil))),
+                        .init(
+                            key: "accountType", label: "Type", required: true,
+                            schema: ValueSchema(
+                                node: .enum(options: [LabeledOption(value: "checking", label: "Checking")]))),
+                    ]),
+            ]))
 
     // MARK: - Round trip
 
@@ -163,6 +160,66 @@ struct StructuredValueTests {
         #expect(try model.patch().cleared == ["labelNutrition"])
     }
 
+    private struct Vector: Decodable {
+        let entity: EntityKey
+        let field: String
+        let read: JSONValue
+        let input: JSONValue
+    }
+
+    /// Each native-edited field's read payload, projected and shaped, is exactly the input the
+    /// server accepts (`structured-roundtrip.json`; the web suite parses the same `input`s with
+    /// the update schemas).
+    @Test func everyEditedFieldRoundTripsItsReadPayloadToItsInput() throws {
+        struct File: Decodable { let vectors: [Vector] }
+        let vectors = try GoldenVectors.decode(File.self, named: "structured-roundtrip").vectors
+        let edited = EntityCatalog.all.flatMap { descriptor in
+            descriptor.fields.filter { $0.valueSchema != nil }.map { "\(descriptor.key.rawValue).\($0.key)" }
+        }
+        #expect(Set(edited) == Set(vectors.map { "\($0.entity.rawValue).\($0.field)" }))
+        for vector in vectors {
+            let schema = try schema(vector.entity, vector.field)
+            let projected = StructuredValue.project(vector.read, to: schema)
+            #expect(
+                StructuredValue.wireValue(projected, schema: schema) == vector.input,
+                "\(vector.entity.rawValue).\(vector.field)")
+            // Untouched through the editor model, the field is not in the patch.
+            let model = GenericEntityEditModel(
+                descriptor: EntityCatalog[vector.entity], mode: .update(id: "X-1"),
+                client: try makeClient(), original: .object([vector.field: vector.read]))
+            #expect(try model.patch().isEmpty, "\(vector.entity.rawValue).\(vector.field) patch")
+        }
+    }
+
+    @Test func storedEmptyTextOrNullsDoNotMakeAnUntouchedRowLookEdited() throws {
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.product], mode: .update(id: "PRD-2345"), client: try makeClient(),
+            original: [
+                "id": "PRD-2345",
+                "unitMappings": [
+                    ["a": ["value": 1, "unit": "cup"], "b": ["value": 2, "unit": "g"], "source": ""]
+                ],
+                "externalIds": [["source": "synthetic", "kind": "asin", "externalId": "B0", "url": ""]],
+            ])
+        #expect(try model.patch().isEmpty)
+        #expect(!model.canSave)
+    }
+
+    @Test func aRangeAmountKeepsAndSendsItsUpperValue() throws {
+        let mappings = try schema(.product, "unitMappings")
+        let row: JSONValue = [
+            "a": ["value": 1, "unit": "cup", "upperValue": 2], "b": ["value": 100, "unit": "g"],
+            "source": .null,
+        ]
+        let wire = StructuredValue.wireValue(.array([row]), schema: mappings)
+        #expect(wire.arrayValue?.first?["a"]?["upperValue"] == 2)
+        // A cleared range end is absent (the input is `.positive().optional()`), never `null`.
+        let cleared = StructuredValue.setting(.null, at: ["a", "upperValue"], in: row)
+        let sent = StructuredValue.wireValue(.array([cleared]), schema: mappings)
+        #expect(sent.arrayValue?.first?["a"]?.objectValue?.keys.contains("upperValue") == false)
+        #expect(StructuredValue.draws(path: ["0", "a", "upperValue"], in: .array([row]), schema: mappings))
+    }
+
     // MARK: - Wire value
 
     @Test func unfilledOptionalTextIsLeftOutAndRequiredTextIsKeptForTheServerToReject() throws {
@@ -175,15 +232,18 @@ struct StructuredValueTests {
             .array([["source": "synthetic", "kind": "asin", "externalId": "B0", "url": ""]]), schema: ids)
         // `url` is optional and nullable: an emptied box clears it rather than sending "".
         #expect(row == .array([["source": "synthetic", "kind": "asin", "externalId": "B0", "url": .null]]))
-        // `providerId` is optional and not nullable: an emptied box is simply absent.
-        let claims = StructuredValue.wireValue(
-            .array([
-                [
-                    "source": "synthetic-source", "providerId": "", "normalizedEvidence": ["amount": 5],
-                    "reconciliation": ["decision": "amounts_match"],
-                ]
-            ]), schema: try schema(.ledgerTransfer, "sourceClaims"))
-        #expect(claims.arrayValue?.first?.objectValue?.keys.contains("providerId") == false)
+        // An empty optional list is absent, not `[]` (the input is `.min(1).optional()`).
+        let optionalList = ValueSchema(
+            node: .object(fields: [
+                .init(
+                    key: "note", label: "Note", required: false,
+                    schema: ValueSchema(node: .text(format: nil))),
+                .init(
+                    key: "items", label: "Items", required: false,
+                    schema: ValueSchema(node: .array(item: ValueSchema(node: .text(format: nil))))),
+            ]))
+        let sent = StructuredValue.wireValue(["note": "", "items": []], schema: optionalList)
+        #expect(sent == .object([:]))
     }
 
     @Test func aMapDropsEmptyEntriesAndAVariantKeepsItsTag() throws {
@@ -192,18 +252,17 @@ struct StructuredValueTests {
             schema: try schema(.product, "labelNutrition"))
         #expect(nutrition["nutrients"] == ["protein": 3])
         let identity = StructuredValue.wireValue(
-            ["kind": "bank_account", "institution": "", "accountType": "checking"],
-            schema: try schema(.financialAccount, "identity"))
-        #expect(identity["kind"] == "bank_account")
+            ["kind": "bank", "institution": "", "accountType": "checking"], schema: Self.accountKind)
+        #expect(identity["kind"] == "bank")
         #expect(identity["accountType"] == "checking")
         #expect(identity["institution"] == .null)
     }
 
     @Test func blankValuesCarryOnlyRequiredKeysAndAVariantsTag() throws {
-        let identity = try schema(.financialAccount, "identity")
+        let identity = Self.accountKind
         #expect(
             StructuredValue.blank(identity)
-                == ["kind": "credit_card", "issuer": .null, "network": .null])
+                == ["kind": "cash"])
         guard case .variant(let discriminator, let cases) = identity.node,
             let cash = cases.first(where: { $0.value == "cash" })
         else { throw Failure("no cash case") }
@@ -212,16 +271,6 @@ struct StructuredValueTests {
         #expect(
             StructuredValue.blank(try schema(.product, "labelNutrition"), populated: true)
                 == ["servingGrams": .null, "nutrients": [:], "source": .null])
-    }
-
-    @Test func aRequiredStructuredFieldStartsPopulatedOnCreate() throws {
-        let model = GenericEntityEditModel(
-            descriptor: EntityCatalog[.financialAccount], mode: .create(prefill: [:]),
-            client: try makeClient())
-        #expect(model.draft["identity"]?["kind"] == "credit_card")
-        #expect(!model.missingRequiredKeys.contains("identity"))
-        #expect(model.createBody()["identity"]?["kind"] == "credit_card")
-        #expect(model.createBody()["sourceAliases"] == nil)
     }
 
     @Test func positionsReadAndReplaceInsideRowsWithoutTouchingTheirSiblings() {

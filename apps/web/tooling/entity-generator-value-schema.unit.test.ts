@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -193,16 +194,53 @@ describe("declared structured editors", () => {
         structured.push(`${entity.key}.${field.key}`);
       }
     }
-    expect(structured).toEqual(
-      expect.arrayContaining([
-        "product.unitMappings",
-        "product.labelNutrition",
-        "product.externalIds",
-        "financialAccount.sourceAliases",
-        "financialTransaction.sourceRefs",
-        "recipe.sections",
-        "financialAccount.identity",
-      ]),
+    // Only fields web also edits; the rest stay read-only natively.
+    expect(structured.sort()).toEqual([
+      "financialAccount.sourceAliases",
+      "financialTransaction.sourceRefs",
+      "product.externalIds",
+      "product.labelNutrition",
+      "product.unitMappings",
+    ]);
+  });
+
+  it("every native-edited field has a read-to-input vector the update schema accepts", async () => {
+    const vectors = z
+      .object({
+        vectors: z.array(
+          z.object({
+            entity: z.string(),
+            field: z.string(),
+            read: z.json(),
+            input: z.json(),
+          }),
+        ),
+      })
+      .parse(
+        JSON.parse(
+          readFileSync(
+            "../../packages/shared/golden-vectors/structured-roundtrip.json",
+            "utf8",
+          ),
+        ),
+      ).vectors;
+    const covered = new Set(
+      vectors.map((vector) => `${vector.entity}.${vector.field}`),
     );
+    for (const entity of await loadEntityDeclarations()) {
+      for (const field of entity.fieldModel.fields) {
+        const renderer = field.control?.renderer;
+        if (!STRUCTURED_VALUE_RENDERERS.some((id) => id === renderer)) continue;
+        expect(covered, `${entity.key}.${field.key} needs a vector`).toContain(
+          `${entity.key}.${field.key}`,
+        );
+        const vector = vectors.find(
+          (candidate) =>
+            candidate.entity === entity.key && candidate.field === field.key,
+        );
+        const update = field.validation.update;
+        expect(update?.safeParse(vector?.input).success).toBe(true);
+      }
+    }
   });
 });

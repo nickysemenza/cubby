@@ -270,15 +270,21 @@ See also the image operational passes at the end of this file.
   lifecycle only on demonstrated friction. Owners: `apps/apple/App/Shared`,
   generated `EntityCatalog`.
 
-- ⏳ **Native structured-value editor follow-ups.** All seven specialized
-  renderers edit natively: `StructuredValueControl` draws the `valueSchema`
-  that `pnpm generate` derives from each field's Zod input schema, and
-  `product-tags` reuses the token list (Collections show as raw `collection:*`
-  tags, not the web's split). Open: validate the editor on a device against a
-  real household (recipe `sections` and `cardNumbers` are drawn generically
-  and untested by hand; web has no editor for either, `cardNumbers` being
-  MCP-only history, so decide whether to keep them off native), title array rows
-  from their content instead of "<Field> N", and retire the web
+- ⏳ **Single-source amount formatting.** Field formats are pinned by
+  `packages/shared/golden-vectors/display-format.json`, but `{value, unit}`
+  amounts still format separately (web `wasm.format_amount`, native Swift).
+  Export the formatter through `cubby-ffi` when a native amount view drifts.
+
+- ⏳ **Native structured-value editor follow-ups.** Native edits only the
+  structured fields web also edits (`unitMappings`, `labelNutrition`,
+  `externalIds`, `sourceAliases`, `sourceRefs`) through the generated
+  `valueSchema`. Still read-only natively: every `structured-field` (recipe
+  `sections`/`meta`/`yield`, meal `recipes`, account `identity`/`cardNumbers`,
+  vendor `agentHints`, `sourceClaims`) and `productTags`. Promote one only
+  after web edits it and a vector proves its read-to-input round trip (recipe
+  sections need the read-to-input adapter in `recipe-line-patch.ts`; tags need
+  the Collections split from `@cubby/shared/collection-tag`). Also: validate on
+  a device, title array rows from their content, and retire the web
   `ProductUnitMappingsField`/`ProductExternalIdsField`/`SourceAliasesField`/
   `SourceRefsField` once a generic web renderer reads the same `valueSchema`.
 

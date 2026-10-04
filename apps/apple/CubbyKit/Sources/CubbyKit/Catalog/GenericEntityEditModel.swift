@@ -355,10 +355,12 @@ public final class GenericEntityEditModel {
             if let resolution = FieldResolutionPresentation(raw: original, field: field) {
                 stored[field.key] = resolution.storedValue
             }
-            // A read payload carries keys the input schema rejects; the diff base is the schema
-            // the editor would send back, so an untouched structured field stays out of the patch.
+            // A read payload carries keys the input schema rejects and stored quirks (`""`, a
+            // `null` the input omits). The diff base is exactly what the editor would send back
+            // untouched, so an unedited structured field stays out of the patch.
             if let schema = field.valueSchema, let value = stored[field.key] {
-                stored[field.key] = StructuredValue.project(value, to: schema)
+                stored[field.key] = StructuredValue.wireValue(
+                    StructuredValue.project(value, to: schema), schema: schema)
             }
         }
         let original = JSONValue.object(stored)
@@ -405,9 +407,6 @@ public final class GenericEntityEditModel {
                 !suppressDefaultKeys.contains(field.key)
             {
                 seeded[field.key] = .string(PlainDate(.now).rawValue)
-            } else if let schema = field.valueSchema, field.requiredOnCreate {
-                // A required structured value starts as an empty one the person fills in.
-                seeded[field.key] = StructuredValue.blank(schema, populated: true)
             } else {
                 seeded[field.key] = .null
             }

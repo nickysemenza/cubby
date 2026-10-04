@@ -106,12 +106,16 @@ public enum StructuredValue {
             return unfilled(.null)
         case (.text, .string(let text)):
             return text.isEmpty ? unfilled(value) : value
-        case (.amount, .object(let object)):
-            guard let quantity = object["value"], quantity != .null else { return unfilled(value) }
-            return value
+        case (.amount, .object(var object)):
+            // The range end is optional and not nullable: an emptied one is absent.
+            if object["upperValue"] == .null { object.removeValue(forKey: "upperValue") }
+            guard let quantity = object["value"], quantity != .null else { return unfilled(.object(object)) }
+            return .object(object)
         case (.object(let fields), .object(let object)):
             return .object(normalizeFields(object, fields))
         case (.array(let item), .array(let items)):
+            // An empty optional list is absent (the input says `.min(1).optional()`).
+            if items.isEmpty && !required { return unfilled(value) }
             return .array(items.map { normalize($0, schema: item, required: true) ?? .null })
         case (.map(_, let item), .object(let object)):
             // A map's present keys are its rows: an emptied one is removed, never sent as `null`.
@@ -184,8 +188,9 @@ public enum StructuredValue {
         guard let head = path.first else { return false }
         let rest = Array(path.dropFirst())
         switch schema.node {
-        case .amount:
-            return rest.isEmpty && ["value", "unit"].contains(head)
+        case .amount(let upper):
+            return rest.isEmpty
+                && (upper ? ["value", "unit", "upperValue"] : ["value", "unit"]).contains(head)
         case .object(let fields):
             return drawsField(head, rest, value, fields)
         case .variant(let discriminator, let cases):

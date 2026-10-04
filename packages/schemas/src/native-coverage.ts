@@ -73,7 +73,6 @@ export const STRUCTURED_VALUE_RENDERERS = [
   "label-nutrition",
   "source-aliases",
   "source-refs",
-  "structured-field",
   "unit-mappings",
 ] as const satisfies readonly ControlRendererId[];
 
@@ -87,13 +86,20 @@ export const nativeCoverage = {
       "amount",
       "entity-multi-select",
       "ledger-attributions",
-      "product-tags",
       "tag-list",
       "vendor-name",
     ]),
     // `upc-lookup`/`usda-food` are plain text/number fields once their AI action strips away.
     ...generic(["entity-select", "money", "url", "upc-lookup", "usda-food"]),
     ...generic(STRUCTURED_VALUE_RENDERERS),
+    // Native edits a structured field only where web also edits it and a golden read-to-input
+    // vector proves the round trip (`structured-roundtrip.json`). Web draws none of these.
+    ...unsupported(
+      ["structured-field"],
+      "Web has no editor for this structured field; native shows it read-only.",
+    ),
+    // Web splits `collection:*` entries from compatibility tags; native shows the raw list.
+    ...unsupported(["product-tags"], "Tags and Collections are edited on web."),
     // The editor's image block owns image ordering; it is never a field control.
     ...ownedElsewhere(["image-order"]),
   },
@@ -501,7 +507,7 @@ export const nativeHeroActionPlans = {
  * justification in review.
  */
 export const NATIVE_UNSUPPORTED_CEILING = {
-  control: 0,
+  control: 2,
   list: 0,
   detail: 15,
   heroAction: 0,

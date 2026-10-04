@@ -227,9 +227,12 @@ ceiling with a justification in review; to close a gap, build the native view
 path, flip the status, and lower the ceiling.
 
 **Structured values.** A field whose control renderer is in
-`STRUCTURED_VALUE_RENDERERS` (`structured-field`, `external-ids`,
-`label-nutrition`, `source-aliases`, `source-refs`, `unit-mappings`) is an
-object or array of objects. `pnpm generate` derives its `valueSchema` from the
+`STRUCTURED_VALUE_RENDERERS` (`external-ids`, `label-nutrition`,
+`source-aliases`, `source-refs`, `unit-mappings`) is an object or array of
+objects that web also edits. A field joins the list only with a read-to-input
+vector in `packages/shared/golden-vectors/structured-roundtrip.json` (web parses
+it with the update schema, CubbyKit round-trips it); `structured-field`
+renderers, which web does not edit, stay read-only natively. `pnpm generate` derives its `valueSchema` from the
 field's Zod input schema (`update`, else `create`;
 `scripts/generator/entities/render/value-schema.ts`) and writes it to the Swift
 manifest: nullable text, number, boolean, enum, shortcode reference (a pattern

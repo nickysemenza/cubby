@@ -154,7 +154,7 @@ struct EntityFieldControl: View {
         case .entitySelect: .entityReference
         case .entityMultiSelect: .entityMultiReference
         case .amount: .amount
-        case .tagList, .productTags: .tokens
+        case .tagList: .tokens
         case .vendorName, .url: .text
         case .money: .money
         case .ledgerAttributions: .ledgerAttributions
