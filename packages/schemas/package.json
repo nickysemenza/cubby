@@ -14,6 +14,7 @@
     "./display-images": "./src/display-images.ts",
     "./entity-definitions/collection-actions": "./src/entity-definitions/collection-actions.ts",
     "./entity-report": "./src/entity-report.ts",
+    "./report-choice": "./src/report-choice.ts",
     "./entity-attachment": "./src/entity-attachment.ts",
     "./entity-connections": "./src/entity-connections.ts",
     "./connected-views": "./src/connected-views.ts",

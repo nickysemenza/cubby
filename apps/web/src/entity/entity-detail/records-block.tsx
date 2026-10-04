@@ -21,6 +21,12 @@ import { ShortcodeProse } from "~/ui/shortcode-prose";
 
 import { collectionActions } from "./collection-actions";
 import {
+  type ChoiceAnswerState,
+  ChoiceControl,
+  ChoiceFormFooter,
+  useChoiceAnswers,
+} from "./report-choices";
+import {
   CommandButton,
   type ReportCommands,
   useReportCommands,
@@ -164,6 +170,28 @@ function RowExtras({
   );
 }
 
+/** The decision a row asks for, answered in place; the block's form says what it unlocks. */
+function RowChoice({
+  row,
+  choices,
+  locked,
+}: {
+  row: ReportRecordRow;
+  choices: ChoiceAnswerState | null;
+  locked: boolean;
+}) {
+  const { choice } = row;
+  if (!choice || !choices) return null;
+  return (
+    <ChoiceControl
+      choice={choice}
+      answer={choices.answers[choice.id]}
+      disabled={locked}
+      onAnswer={(next) => choices.answer(choice.id, next)}
+    />
+  );
+}
+
 function RecordRow({
   row,
   record,
@@ -172,8 +200,13 @@ function RecordRow({
   checked,
   onCheckedChange,
   commands,
+  choices,
+  choicesLocked,
 }: {
   commands: ReportCommands;
+  /** The answers to the block's choices, when the block has a form. */
+  choices: ChoiceAnswerState | null;
+  choicesLocked: boolean;
   row: ReportRecordRow;
   record: object | undefined;
   large: boolean;
@@ -221,6 +254,7 @@ function RecordRow({
             </span>
           ) : null}
           <RowExtras row={row} commands={commands} />
+          <RowChoice row={row} choices={choices} locked={choicesLocked} />
           {(row.badges ?? []).length > 0 ? (
             <Row gap="xs" className="flex-wrap">
               {(row.badges ?? []).map((badge) => (
@@ -287,6 +321,9 @@ export function RecordsBlockView({
 }) {
   const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
   const commands = useReportCommands();
+  const choices = useChoiceAnswers();
+  const { form } = block;
+  const choicesLocked = commands.pending || commands.committed;
   const keys = rowKeys(block.rows);
   const verbs = block.verbs ?? [];
   const available =
@@ -313,6 +350,8 @@ export function RecordsBlockView({
               <RecordRow
                 key={keys[index]}
                 commands={commands}
+                choices={form ? choices : null}
+                choicesLocked={choicesLocked}
                 row={row}
                 record={record}
                 large={block.thumbnail === "large"}
@@ -335,6 +374,24 @@ export function RecordsBlockView({
         <p className="border-t border-border pt-2 text-sm text-muted-foreground">
           {block.footer}
         </p>
+      ) : null}
+      {form ? (
+        <ChoiceFormFooter
+          form={form}
+          rowChoices={block.rows.flatMap((row) =>
+            row.choice ? [row.choice] : [],
+          )}
+          state={choices}
+          pending={commands.pending}
+          done={commands.committed}
+          onRun={() =>
+            commands.commit(
+              form.command.request,
+              choices.answers,
+              choices.operationId,
+            )
+          }
+        />
       ) : null}
       {verbs.length > 0 ? (
         <Row gap="sm" wrap align="center" aria-live="polite">

@@ -140,6 +140,79 @@ public struct ReportPresentation: Hashable, Sendable {
         public let detailText: String?
         /// Commands on this row; each runs an existing operation after its declared confirmation.
         public let commands: [ReportCommand]
+        /// A decision the person makes on this row (see `Records.form`).
+        public let choice: Choice?
+    }
+
+    /// A decision the server asks for. The server words every label, ranks the suggestions and
+    /// says what is required; nothing is preselected, so an answer starts empty
+    /// (`ReportChoiceAnswers`).
+    public struct Choice: Hashable, Sendable, Identifiable {
+        public struct Option: Hashable, Sendable, Identifiable {
+            public struct Pick: Hashable, Sendable {
+                /// The entity the person searches for, as the server's entity key.
+                public let entity: String
+                public let label: String
+            }
+            public let id: String
+            public let label: String
+            /// Choosing this option also picks one record of an entity.
+            public let pick: Pick?
+            /// Choosing this option also needs a written reason; this is the field's label.
+            public let text: String?
+            /// Said once the option is chosen.
+            public let hint: String?
+        }
+
+        /// A ranked record the server proposes for an option's pick.
+        public struct Suggestion: Hashable, Sendable, Identifiable {
+            public var id: String { "\(optionID):\(recordID)" }
+            public let optionID: String
+            public let entity: String
+            public let recordID: String
+            public let name: String
+            public let label: String
+            public let subtitle: String?
+            public let badges: [String]
+        }
+
+        public let id: String
+        public let label: String
+        public let required: Bool
+        public let options: [Option]
+        public let suggestions: [Suggestion]
+    }
+
+    /// The one command a block's choices unlock: approve a prepared import.
+    public struct Form: Hashable, Sendable {
+        public struct Line: Hashable, Sendable {
+            public let choiceID: String
+            public let stableOrderID: String
+            public let stableLineID: String
+        }
+
+        public struct Command: Hashable, Sendable {
+            public let id: String
+            public let label: String
+            public let prominent: Bool
+            /// Shown before anything is sent.
+            public let confirm: String?
+            public let runID: String
+            public let prepareOperationID: String
+            /// The block choice that carries the default trade; nil when no line needs one.
+            public let tradeChoiceID: String?
+            public let lines: [Line]
+        }
+
+        /// Choices for the whole block (a trade), answered beside the command.
+        public let choices: [Choice]
+        public let note: String
+        /// What a row choice asks for, singular ("Product decision").
+        public let noun: String
+        public let completeText: String
+        /// Why the command cannot run; nil when it can.
+        public let disabledReason: String?
+        public let command: Command
     }
 
     public struct Status: Hashable, Sendable {
@@ -182,6 +255,11 @@ public struct ReportPresentation: Hashable, Sendable {
         public let footer: String?
         /// Finance verbs with the server's word on each (`SectionActionID`).
         public let verbs: [Verb]
+        /// Row choices and the one command they unlock (approve a prepared import).
+        public let form: Form?
+
+        /// The decisions the rows ask for, in row order.
+        public var rowChoices: [Choice] { rows.compactMap(\.choice) }
 
         public struct Verb: Hashable, Sendable, Identifiable {
             public var id: String { verb.rawValue }
@@ -207,7 +285,7 @@ public struct ReportPresentation: Hashable, Sendable {
                         return next
                     },
                 empty: empty, actions: actions,
-                largeThumbnails: largeThumbnails, footer: footer, verbs: verbs)
+                largeThumbnails: largeThumbnails, footer: footer, verbs: verbs, form: form)
         }
 
         /// The checked keys the server still allows.
@@ -354,7 +432,7 @@ public struct ReportPresentation: Hashable, Sendable {
                                 Line(text: $0.text, tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) })
                             },
                             detailLabel: row.detail?.label, detailText: row.detail?.text,
-                            commands: row.commands ?? [])
+                            commands: row.commands ?? [], choice: row.choice.map(choice))
                     },
                     empty: records.empty,
                     actions: (records.actions ?? []).compactMap { CollectionActionID(rawValue: $0.rawValue) },
@@ -365,9 +443,41 @@ public struct ReportPresentation: Hashable, Sendable {
                                 verb: $0, label: verb.label, actsOnSelection: verb.scope == .selection,
                                 disabledReason: verb.disabledReason)
                         }
+                    },
+                    form: records.form.map { form in
+                        Form(
+                            choices: form.choices.map(choice), note: form.note, noun: form.noun,
+                            completeText: form.completeText, disabledReason: form.disabledReason,
+                            command: Form.Command(
+                                id: form.command.id, label: form.command.label,
+                                prominent: form.command.prominent, confirm: form.command.confirm,
+                                runID: form.command.request.runId,
+                                prepareOperationID: form.command.request.prepareOperationId,
+                                tradeChoiceID: form.command.request.tradeChoiceId,
+                                lines: form.command.request.lines.map {
+                                    Form.Line(
+                                        choiceID: $0.choiceId, stableOrderID: $0.stableOrderId,
+                                        stableLineID: $0.stableLineId)
+                                }))
                     })
             )
         }
+    }
+
+    private static func choice(_ choice: Components.Schemas.ReportChoice) -> Choice {
+        Choice(
+            id: choice.id, label: choice.label, required: choice.required,
+            options: choice.options.map {
+                Choice.Option(
+                    id: $0.id, label: $0.label,
+                    pick: $0.pick.map { Choice.Option.Pick(entity: $0.entity, label: $0.label) },
+                    text: $0.text?.label, hint: $0.hint)
+            },
+            suggestions: (choice.suggestions ?? []).map {
+                Choice.Suggestion(
+                    optionID: $0.optionId, entity: $0.entity, recordID: $0.id, name: $0.name,
+                    label: $0.label, subtitle: $0.subtitle, badges: $0.badges)
+            })
     }
 
     /// Money is whole USD at the server's precision; a missing figure is a dash, never zero.

@@ -39,6 +39,16 @@ beforeEach(() => {
       };
     if (operation === "run.control")
       return { ok: true, data: { run: {}, successor: null } };
+    if (operation === "run.commitPrepared")
+      return {
+        ok: true,
+        data: {
+          runId: RUN_ID,
+          operationId: "ignored",
+          status: "running",
+          items: [],
+        },
+      };
     throw new Error(`Unexpected operation: ${operation}`);
   });
 });
@@ -252,5 +262,165 @@ describe("EntityReportSlot records", () => {
     expect(
       screen.queryByRole("button", { name: "Load more" }),
     ).not.toBeInTheDocument();
+  });
+
+  describe("a records block with a form", () => {
+    const choice = {
+      id: "o1/l1",
+      label: "Product decision for Item l1",
+      required: true,
+      options: [
+        {
+          id: "existing",
+          label: "Use an existing Product",
+          pick: { entity: "product", label: "Product for Item l1" },
+        },
+        { id: "new", label: "Create a new Product" },
+        {
+          id: "unresolved",
+          label: "Leave Product unresolved",
+          text: { label: "Reason for leaving Item l1 unresolved" },
+        },
+      ],
+      suggestions: [
+        {
+          optionId: "existing",
+          entity: "product",
+          id: "PRD-4K7M",
+          name: "Exact thing",
+          label: "Use Exact thing",
+          badges: ["Exact identifier"],
+        },
+      ],
+    };
+    const prepared = (disabledReason: string | null): EntityReportOut => ({
+      live: true,
+      status: "running",
+      blocks: [
+        {
+          kind: "records",
+          empty: "",
+          rows: [{ ...row("line:o1:l1", "Item l1"), choice }],
+          form: {
+            choices: [
+              {
+                id: "trade",
+                label: "Trade for imported expenses",
+                required: true,
+                options: [
+                  { id: "other", label: "Other" },
+                  { id: "plumbing", label: "Plumbing" },
+                ],
+              },
+            ],
+            note: "Approval imports the prepared orders and expenses.",
+            noun: "Product decision",
+            completeText: "All Product decisions reviewed.",
+            disabledReason,
+            command: {
+              id: "commit:prepare-1",
+              label: "Approve and import",
+              prominent: true,
+              confirm: "Import 1 prepared order?",
+              request: {
+                kind: "commit-prepared",
+                runId: RUN_ID,
+                prepareOperationId: "prepare-1",
+                tradeChoiceId: "trade",
+                lines: [
+                  {
+                    choiceId: "o1/l1",
+                    stableOrderId: "o1",
+                    stableLineId: "l1",
+                  },
+                ],
+              },
+            },
+          },
+        },
+      ],
+    });
+
+    it("stays disabled until the decision and the trade are answered, then sends the assembled body", async () => {
+      answer = () => prepared(null);
+      render(
+        <EntityReportSlot slot="run.import-prepared-orders" id={RUN_ID} />,
+        { wrapper: harness.wrapper },
+      );
+      const approve = await screen.findByRole("button", {
+        name: "Approve and import",
+      });
+      expect(approve).toBeDisabled();
+      expect(
+        screen.getByText(/1 Product decision remaining\./),
+      ).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText("Trade for imported expenses"), {
+        target: { value: "plumbing" },
+      });
+      expect(approve).toBeDisabled();
+      // A suggestion answers only on a tap; the exact match was not preselected.
+      fireEvent.click(screen.getByRole("button", { name: "Use Exact thing" }));
+      expect(approve).toBeEnabled();
+      expect(
+        screen.getByText(/All Product decisions reviewed\./),
+      ).toBeInTheDocument();
+      fireEvent.click(approve);
+      await waitFor(() =>
+        expect(
+          calls.find((call) => call.operation === "run.commitPrepared")?.input,
+        ).toEqual({
+          runId: RUN_ID,
+          operationId: expect.any(String),
+          prepareOperationId: "prepare-1",
+          defaultTrade: "plumbing",
+          resolutions: [
+            {
+              stableOrderId: "o1",
+              stableLineId: "l1",
+              resolution: { kind: "existing", productId: "PRD-4K7M" },
+            },
+          ],
+        }),
+      );
+    });
+
+    it("asks for a written reason before an unresolved decision counts", async () => {
+      answer = () => prepared(null);
+      render(
+        <EntityReportSlot slot="run.import-prepared-orders" id={RUN_ID} />,
+        { wrapper: harness.wrapper },
+      );
+      await screen.findByRole("button", { name: "Approve and import" });
+      fireEvent.change(screen.getByLabelText("Trade for imported expenses"), {
+        target: { value: "other" },
+      });
+      fireEvent.change(screen.getByLabelText("Product decision for Item l1"), {
+        target: { value: "unresolved" },
+      });
+      expect(
+        screen.getByRole("button", { name: "Approve and import" }),
+      ).toBeDisabled();
+      fireEvent.change(
+        screen.getByLabelText("Reason for leaving Item l1 unresolved"),
+        { target: { value: "Cannot tell which" } },
+      );
+      expect(
+        screen.getByRole("button", { name: "Approve and import" }),
+      ).toBeEnabled();
+    });
+
+    it("shows the server's reason instead of controls when approval is unavailable", async () => {
+      answer = () => prepared("Prepared import approved and committed.");
+      render(
+        <EntityReportSlot slot="run.import-prepared-orders" id={RUN_ID} />,
+        { wrapper: harness.wrapper },
+      );
+      expect(
+        await screen.findByText("Prepared import approved and committed."),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Approve and import" }),
+      ).not.toBeInTheDocument();
+    });
   });
 });

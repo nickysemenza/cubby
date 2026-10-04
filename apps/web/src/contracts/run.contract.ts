@@ -375,6 +375,8 @@ export const runContract = defineContract("run", {
     cache: { tags: [["run"]] },
   }),
   commitPrepared: mutation({
+    native:
+      "Approve a prepared import batch after the per-line Product and trade decisions",
     input: commitPurchaseImportInput.omit({ _runExecution: true }).extend({
       runId: runShortcode,
       operationId:

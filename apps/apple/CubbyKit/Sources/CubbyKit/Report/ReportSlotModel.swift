@@ -12,6 +12,8 @@ public protocol ReportServing: Sendable {
     /// `problems.resolveRunFinding`; true when the fix was applied rather than dismissed.
     func resolveFinding(_ input: ResolveRunFindingInput) async throws -> Bool
     func resendGmailSearch(_ input: RunRetryGmailSearchInput) async throws
+    /// `run.commitPrepared`: approve and import one prepared batch.
+    func commitPrepared(_ input: RunCommitPreparedInput) async throws
 }
 
 extension CubbyClient: ReportServing {
@@ -36,6 +38,10 @@ extension CubbyClient: ReportServing {
     public func resendGmailSearch(_ input: RunRetryGmailSearchInput) async throws {
         let _: VendorSearchMailOut = try await retryGmailSearch(input)
     }
+
+    public func commitPrepared(_ input: RunCommitPreparedInput) async throws {
+        let _: CommitPurchaseImportOut = try await commitPreparedImport(input)
+    }
 }
 
 /// What happened when a report action ran.
@@ -48,7 +54,17 @@ public enum ReportActionOutcome: Sendable, Equatable {
 public enum ReportActionError: Error, LocalizedError, Equatable {
     /// The action carries a confirmation the person has not given; nothing was sent.
     case confirmationRequired
-    public var errorDescription: String? { "Confirm this action before it runs." }
+    /// A required decision has no complete answer yet; nothing was sent.
+    case incompleteAnswers
+    /// The server says the command cannot run (already done, wrong state).
+    case unavailable(String)
+    public var errorDescription: String? {
+        switch self {
+        case .confirmationRequired: "Confirm this action before it runs."
+        case .incompleteAnswers: "Answer every required decision first."
+        case .unavailable(let reason): reason
+        }
+    }
 }
 
 /// One report slot's server read, kept fresh by polling while the server says the record is
@@ -204,6 +220,43 @@ public final class ReportSlotModel {
             case .openedRun(let runID): openedRunID = runID
             case .done(let message): actionNotice = message
             }
+            await refresh()
+            restartPolling()
+            return outcome
+        } catch {
+            actionError = error.localizedDescription
+            return nil
+        }
+    }
+
+    /// Approves a prepared batch with the person's answers: the form's confirmation first, then
+    /// exactly the body `answers` assemble, and only while the server allows it and every
+    /// required decision is answered. The same answers retried reuse their operation id.
+    @discardableResult
+    public func approve(
+        _ form: ReportPresentation.Form, answers: ReportChoiceAnswers, confirmed: Bool
+    ) async -> ReportActionOutcome? {
+        guard busyActionID == nil else { return nil }
+        actionError = nil
+        actionNotice = nil
+        if let reason = form.disabledReason {
+            actionError = ReportActionError.unavailable(reason).localizedDescription
+            return nil
+        }
+        if form.command.confirm != nil, !confirmed {
+            actionError = ReportActionError.confirmationRequired.localizedDescription
+            return nil
+        }
+        guard let input = answers.commitInput(for: form) else {
+            actionError = ReportActionError.incompleteAnswers.localizedDescription
+            return nil
+        }
+        busyActionID = form.command.id
+        defer { busyActionID = nil }
+        do {
+            try await service.commitPrepared(input)
+            let outcome = ReportActionOutcome.done("Approved and imported.")
+            actionNotice = "Approved and imported."
             await refresh()
             restartPolling()
             return outcome

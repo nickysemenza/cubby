@@ -2,10 +2,12 @@ import type { AiRunUsage } from "@cubby/schemas/ai";
 import type { AuditJsonValue, AuditLogListOut } from "@cubby/schemas/audit";
 import type {
   EntityReportOut,
+  ReportChoice,
   ReportCommand,
   ReportBlock,
 } from "@cubby/schemas/entity-report";
 import { runStatus } from "@cubby/schemas/run-fields";
+import { TRADE_LABELS, tradeValues } from "@cubby/schemas/task-fields";
 import {
   ACTIVE_RUN_STATUSES,
   HOUSEHOLD_TIMEZONE,
@@ -459,6 +461,192 @@ const importTimeline = (run: RunDetail): ReportBlock[] => [
   ),
 ];
 
+type PreparedOrder = RunDetail["preparedOrders"][number];
+type PreparedLine = PreparedOrder["lines"][number];
+
+const APPROVE_BLOCKED =
+  "Prepared orders can be approved only while an account sync run is running.";
+const TRADE_CHOICE_ID = "trade";
+
+/** One decision per line; the id joins the ids' own character set, which excludes "/". */
+const lineChoiceId = (order: PreparedOrder, prepared: PreparedLine) =>
+  `${order.stableOrderId}/${prepared.stableLineId}`;
+
+/**
+ * The decision a prepared line asks for. Nothing is preselected, even for a single exact
+ * identifier match: identity is chosen by the person, and the candidates only rank the options.
+ */
+function productChoice(id: string, prepared: PreparedLine): ReportChoice {
+  return {
+    id,
+    label: `Product decision for ${prepared.title}`,
+    required: true,
+    options: [
+      {
+        id: "existing",
+        label: "Use an existing Product",
+        pick: { entity: "product", label: `Product for ${prepared.title}` },
+      },
+      {
+        id: "new",
+        label: "Create a new Product",
+        hint: "A new Product will use this prepared line’s title and identifiers.",
+      },
+      {
+        id: "unresolved",
+        label: "Leave Product unresolved",
+        text: { label: `Reason for leaving ${prepared.title} unresolved` },
+      },
+    ],
+    suggestions: prepared.candidates.map((candidate) => {
+      const subtitle = [
+        candidate.manufacturer,
+        candidate.model,
+        candidate.matchReason,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      const suggestion: NonNullable<ReportChoice["suggestions"]>[number] = {
+        optionId: "existing",
+        entity: "product",
+        id: candidate.productId,
+        name: candidate.name,
+        label: `Use ${candidate.name}`,
+        badges: candidate.exactIdentifierMatch ? ["Exact identifier"] : [],
+      };
+      if (subtitle) suggestion.subtitle = subtitle;
+      return suggestion;
+    }),
+  };
+}
+
+function preparedLineRow(
+  order: PreparedOrder,
+  prepared: PreparedLine,
+  decidable: boolean,
+): Row {
+  const exactCount = prepared.candidates.filter(
+    (candidate) => candidate.exactIdentifierMatch,
+  ).length;
+  const lines = [
+    ...Object.entries(prepared.identifiers).map(([key, value]) =>
+      line(`${key}: ${value}`, "muted"),
+    ),
+    ...(!prepared.requiresProductResolution
+      ? [line("Purchase adjustment · no Product selection", "muted")]
+      : decidable && exactCount > 1
+        ? [
+            line(
+              "Conflicting exact matches. Choose the Product to use.",
+              "warning",
+            ),
+          ]
+        : []),
+  ];
+  const built: Row = {
+    ...row(`line:${order.stableOrderId}:${prepared.stableLineId}`, {
+      title: prepared.title,
+      lines,
+    }),
+    trailing: formatCurrency(prepared.amount),
+  };
+  if (decidable && prepared.requiresProductResolution)
+    built.choice = productChoice(lineChoiceId(order, prepared), prepared);
+  return built;
+}
+
+function preparedBatch(
+  run: RunDetail,
+  prepareOperationId: string,
+  orders: PreparedOrder[],
+  title: string | undefined,
+): Block<"records"> {
+  const committed = orders.every((order) => order.committed);
+  const blocked = run.status !== "running" || run.purpose !== "account_sync";
+  const disabledReason = committed
+    ? "Prepared import approved and committed."
+    : blocked
+      ? APPROVE_BLOCKED
+      : null;
+  const decidable = disabledReason === null;
+  const required = orders.flatMap((order) =>
+    order.lines
+      .filter((prepared) => prepared.requiresProductResolution)
+      .map((prepared) => ({ order, prepared })),
+  );
+  const lineCount = orders.reduce((sum, order) => sum + order.lines.length, 0);
+  const rows = orders.flatMap((order) => [
+    {
+      ...row(`order:${order.stableOrderId}`, {
+        title: `${order.sourceKind} · ${order.externalKey ?? order.stableOrderId}`,
+      }),
+      trailing: `${order.lineCount} lines`,
+    },
+    ...order.lines.map((prepared) =>
+      preparedLineRow(order, prepared, decidable),
+    ),
+  ]);
+  const orderWord = orders.length === 1 ? "order" : "orders";
+  return {
+    ...records(rows, { title }),
+    form: {
+      choices:
+        decidable && required.length > 0
+          ? [
+              {
+                id: TRADE_CHOICE_ID,
+                label: "Trade for imported expenses",
+                required: true,
+                options: tradeValues.map((value) => ({
+                  id: value,
+                  label: TRADE_LABELS[value],
+                })),
+              },
+            ]
+          : [],
+      note: "Approval imports the prepared orders and expenses.",
+      noun: "Product decision",
+      completeText: "All Product decisions reviewed.",
+      disabledReason,
+      command: {
+        id: `commit:${prepareOperationId}`,
+        label: "Approve and import",
+        prominent: true,
+        confirm: `Import ${orders.length} prepared ${orderWord} (${lineCount} lines) as purchases and expenses? Inventory is not changed.`,
+        request: {
+          kind: "commit-prepared",
+          runId: run.publicId,
+          prepareOperationId,
+          tradeChoiceId: required.length > 0 ? TRADE_CHOICE_ID : null,
+          lines: required.map(({ order, prepared }) => ({
+            choiceId: lineChoiceId(order, prepared),
+            stableOrderId: order.stableOrderId,
+            stableLineId: prepared.stableLineId,
+          })),
+        },
+      },
+    },
+  };
+}
+
+/** Prepared orders grouped by the batch that prepared them, each reviewed and approved alone. */
+function importPreparedOrders(run: RunDetail): ReportBlock[] {
+  const batches = new Map<string, PreparedOrder[]>();
+  for (const order of run.preparedOrders)
+    batches.set(order.prepareOperationId, [
+      ...(batches.get(order.prepareOperationId) ?? []),
+      order,
+    ]);
+  return [...batches].map(([id, orders], index) =>
+    preparedBatch(
+      run,
+      id,
+      orders,
+      batches.size > 1 ? `Prepared batch ${index + 1}` : undefined,
+    ),
+  );
+}
+
 /** The import-workflow slots built from the run detail alone. */
 const IMPORT_BUILDERS = {
   "run.import-stats": importStats,
@@ -471,6 +659,7 @@ const IMPORT_BUILDERS = {
   "run.import-findings": importFindings,
   "run.import-targets": importTargets,
   "run.import-evidence": importEvidence,
+  "run.import-prepared-orders": importPreparedOrders,
   "run.import-timeline": importTimeline,
 } as const satisfies Record<string, (run: RunDetail) => ReportBlock[]>;
 export type ImportReportSlot = keyof typeof IMPORT_BUILDERS;

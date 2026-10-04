@@ -275,6 +275,10 @@ export const nativeCoverage = {
       "run.import-debug-log",
       "run.import-evidence",
       "run.import-findings",
+      // Approve-and-import: the server's prepared lines are `records` rows with a `choice`
+      // each (ranked Product candidates, the existing-Product picker, new, or unresolved with a
+      // reason), the block's trade choice and one confirmed approve command.
+      "run.import-prepared-orders",
       "run.import-progress-live",
       "run.import-progress-stopped",
       "run.import-purchases",
@@ -283,16 +287,13 @@ export const nativeCoverage = {
       "run.import-timeline",
       "run.live-progress",
     ]),
-    // The agent conversation streams from the Flue agent route (SSE plus prompt and abort over
-    // its own protocol), not a Cubby operation; native has no transport for it.
+    // The agent conversation is web-only on purpose: it streams from the Flue agent route (SSE
+    // plus prompt and abort over its own protocol), not a Cubby operation, and CubbyKit has no
+    // client, reconnect or transcript model for it. docs/todos.md ("Native agent conversation
+    // streaming") records what promoting it takes.
     ...unsupported(
       ["run.import-agent-live", "run.import-agent-stopped"],
-      "The agent conversation streams from the Flue agent route, which native has no client for; review it on web.",
-    ),
-    // Approve-and-import needs a Product picker and a trade choice per prepared line.
-    ...unsupported(
-      ["run.import-prepared-orders"],
-      "Approving prepared orders needs a per-line Product picker and trade choice; do it on web.",
+      "The live agent conversation is web-only: it streams from the Flue agent route, which native has no client for. Prompt, stop and review the agent on web.",
     ),
   },
   /**
@@ -716,7 +717,7 @@ export const NATIVE_UNSUPPORTED_CEILING = {
   list: 0,
   detail: 0,
   heroAction: 0,
-  detailSlot: 3,
+  detailSlot: 2,
   listSlot: 0,
   structuredField: 8,
   sectionAction: 3,

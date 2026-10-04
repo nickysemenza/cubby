@@ -304,11 +304,8 @@ export const detailSlots = {
       isImportRun,
     ),
     "import-evidence": runReportSlot("import-evidence", isImportRun),
-    "import-prepared-orders": slot(
-      () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportPreparedOrders,
-        })),
+    "import-prepared-orders": runReportSlot(
+      "import-prepared-orders",
       isImportRun,
     ),
     "import-progress-stopped": runReportSlot(

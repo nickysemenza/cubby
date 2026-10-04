@@ -1,5 +1,9 @@
 import type { ReportBlock } from "@cubby/schemas/entity-report";
-import { expenseShortcode, runShortcode } from "@cubby/schemas/identifiers";
+import {
+  expenseShortcode,
+  productShortcode,
+  runShortcode,
+} from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 
 import type { RunDetail } from "~/contracts/run.contract";
@@ -492,6 +496,257 @@ describe("import report blocks", () => {
       expect(row?.statuses).toEqual([{ label: "dismissed" }]);
     });
   });
+});
+
+describe("prepared orders", () => {
+  // Failure modes this guards: a single exact match silently chosen for the person (identity
+  // is explicit); two exact matches shown without the conflict; an adjustment line asked for a
+  // Product; a committed or stopped run still offering Approve; a trade demanded when no line
+  // needs one; a resolution sent against the wrong order or batch; a commit with no confirmation.
+  type Prepared = RunDetail["preparedOrders"][number];
+  const candidate = (
+    productId: string,
+    name: string,
+    exactIdentifierMatch: boolean,
+  ) => ({
+    productId: productShortcode.parse(productId),
+    name,
+    manufacturer: "Fixture maker",
+    model: null,
+    exactIdentifierMatch,
+  });
+  const line = (
+    stableLineId: string,
+    overrides: Partial<Prepared["lines"][number]> = {},
+  ): Prepared["lines"][number] => ({
+    stableLineId,
+    title: `Item ${stableLineId}`,
+    amount: 12.5,
+    identifiers: { sku: `SKU-${stableLineId}` },
+    candidates: [],
+    requiresProductResolution: true,
+    ...overrides,
+  });
+  const order = (
+    stableOrderId: string,
+    lines: Prepared["lines"],
+    overrides: Partial<Prepared> = {},
+  ): Prepared => ({
+    stableOrderId,
+    prepareOperationId: "prepare-1",
+    itemOperationId: `item-${stableOrderId}`,
+    sourceKind: "retailer",
+    externalKey: `ORDER-${stableOrderId}`,
+    preparedAt: "2026-09-20T16:00:00.000Z",
+    lineCount: lines.length,
+    committed: false,
+    lines,
+    ...overrides,
+  });
+  const reviewing = (preparedOrders: Prepared[], overrides = {}) =>
+    run({
+      purpose: "account_sync",
+      status: "running",
+      preparedOrders,
+      ...overrides,
+    });
+  const formOf = (blocks: ReportBlock[]) => {
+    const form = recordsOf(blocks).form;
+    if (!form) throw new Error("no form");
+    return form;
+  };
+
+  it("composes nothing when no order was prepared, or for a photo batch", () => {
+    expect(
+      importReportBlocks("run.import-prepared-orders", reviewing([])),
+    ).toEqual([]);
+    expect(
+      importReportBlocks(
+        "run.import-prepared-orders",
+        reviewing([order("o1", [line("l1")])], { purpose: "photo_inventory" }),
+      ),
+    ).toEqual([]);
+  });
+
+  it("asks for an explicit decision on every Product line and preselects none", () => {
+    const blocks = importReportBlocks(
+      "run.import-prepared-orders",
+      reviewing([
+        order("o1", [
+          // One exact match is a suggestion only: identity is never chosen for the person.
+          line("l1", {
+            candidates: [candidate("PRD-4K7M", "Exact thing", true)],
+          }),
+          line("l2"),
+        ]),
+      ]),
+    );
+    const rows = recordsOf(blocks).rows;
+    expect(rows.map((row) => row.title)).toEqual([
+      "retailer · ORDER-o1",
+      "Item l1",
+      "Item l2",
+    ]);
+    const choice = rows[1]?.choice;
+    expect(choice).toMatchObject({
+      id: "o1/l1",
+      label: "Product decision for Item l1",
+      required: true,
+    });
+    expect(choice?.options.map((option) => option.id)).toEqual([
+      "existing",
+      "new",
+      "unresolved",
+    ]);
+    expect(choice?.options[0]?.pick).toEqual({
+      entity: "product",
+      label: "Product for Item l1",
+    });
+    expect(choice?.options[2]?.text?.label).toBe(
+      "Reason for leaving Item l1 unresolved",
+    );
+    expect(choice?.suggestions).toEqual([
+      {
+        optionId: "existing",
+        entity: "product",
+        id: "PRD-4K7M",
+        name: "Exact thing",
+        label: "Use Exact thing",
+        subtitle: "Fixture maker",
+        badges: ["Exact identifier"],
+      },
+    ]);
+    expect(JSON.stringify(choice)).not.toMatch(/"(selected|default|initial)"/);
+    expect(rows[1]?.trailing).toBe("$12.50");
+    expect(rows[1]?.lines?.map((entry) => entry.text)).toContain("sku: SKU-l1");
+  });
+
+  it("warns when several candidates match exactly", () => {
+    const [block] = importReportBlocks(
+      "run.import-prepared-orders",
+      reviewing([
+        order("o1", [
+          line("l1", {
+            candidates: [
+              candidate("PRD-4K7M", "First", true),
+              candidate("PRD-8H2N", "Second", true),
+            ],
+          }),
+        ]),
+      ]),
+    );
+    const only = block?.kind === "records" ? block.rows[1] : undefined;
+    expect(only?.lines).toContainEqual({
+      text: "Conflicting exact matches. Choose the Product to use.",
+      tone: "warning",
+    });
+  });
+
+  it("gives a purchase adjustment no choice and no demand", () => {
+    const blocks = importReportBlocks(
+      "run.import-prepared-orders",
+      reviewing([
+        order("o1", [line("l1", { requiresProductResolution: false })]),
+      ]),
+    );
+    const adjustment = recordsOf(blocks).rows[1];
+    expect(adjustment?.choice).toBeUndefined();
+    expect(adjustment?.lines?.map((entry) => entry.text)).toContain(
+      "Purchase adjustment · no Product selection",
+    );
+    const form = formOf(blocks);
+    // No line needs a Product, so there is no trade to ask for and no decision to wait on.
+    expect(form.choices).toEqual([]);
+    expect(form.command.request).toMatchObject({
+      kind: "commit-prepared",
+      tradeChoiceId: null,
+      lines: [],
+    });
+  });
+
+  it("builds the approve command from the batch it belongs to, with a confirmation", () => {
+    const blocks = importReportBlocks(
+      "run.import-prepared-orders",
+      reviewing([
+        order("o1", [
+          line("l1"),
+          line("l2", { requiresProductResolution: false }),
+        ]),
+        order("o2", [line("l1")]),
+        order("o3", [line("l1")], { prepareOperationId: "prepare-2" }),
+      ]),
+    );
+    const batches = blocks.filter((block) => block.kind === "records");
+    expect(batches).toHaveLength(2);
+    const [first, second] = batches.map((block) => block.form);
+    expect(first?.command).toMatchObject({
+      label: "Approve and import",
+      prominent: true,
+      request: {
+        kind: "commit-prepared",
+        runId: RUN_ID,
+        prepareOperationId: "prepare-1",
+        tradeChoiceId: "trade",
+        // The same stable line id in two orders stays two decisions.
+        lines: [
+          { choiceId: "o1/l1", stableOrderId: "o1", stableLineId: "l1" },
+          { choiceId: "o2/l1", stableOrderId: "o2", stableLineId: "l1" },
+        ],
+      },
+    });
+    expect(first?.command.confirm).toMatch(/2 prepared orders/);
+    expect(first?.command.confirm).toMatch(/Inventory is not changed/);
+    expect(second?.command.request).toMatchObject({
+      prepareOperationId: "prepare-2",
+      lines: [{ choiceId: "o3/l1", stableOrderId: "o3", stableLineId: "l1" }],
+    });
+    expect(first?.choices).toHaveLength(1);
+    expect(first?.choices[0]?.options.map((option) => option.id)).toContain(
+      "other",
+    );
+    expect(first?.choices[0]).toMatchObject({
+      id: "trade",
+      label: "Trade for imported expenses",
+      required: true,
+    });
+    expect(first).toMatchObject({
+      noun: "Product decision",
+      disabledReason: null,
+    });
+  });
+
+  it.each([
+    [
+      "a committed batch",
+      { committed: true },
+      {},
+      "Prepared import approved and committed.",
+    ],
+    [
+      "a stopped run",
+      {},
+      { status: "completed" as const },
+      "Prepared orders can be approved only while an account sync run is running.",
+    ],
+    [
+      "a validation run",
+      {},
+      { purpose: "purchase_validation" as const },
+      "Prepared orders can be approved only while an account sync run is running.",
+    ],
+  ])(
+    "offers no choices for %s and says why",
+    (_name, orderChange, runChange, reason) => {
+      const blocks = importReportBlocks(
+        "run.import-prepared-orders",
+        reviewing([order("o1", [line("l1")], orderChange)], runChange),
+      );
+      const block = recordsOf(blocks);
+      expect(block.rows.every((row) => row.choice === undefined)).toBe(true);
+      expect(block.form?.disabledReason).toBe(reason);
+      expect(block.form?.choices).toEqual([]);
+    },
+  );
 });
 
 describe("isLiveRunStatus", () => {
