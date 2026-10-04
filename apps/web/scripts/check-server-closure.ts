@@ -7,6 +7,16 @@
  * everything those import statically. A route or helper that statically
  * imports a heavy module (an SDK, a generated document) lands it here even if
  * only one rarely used handler calls it — load those inside the handler.
+ *
+ * Must stay off the first-request path (each has landed here by accident):
+ * - Sentry build-time instrumentation. `sentryTanstackStart` injects
+ *   `require("@sentry/server-utils")` into pg, pg-pool and other dependencies;
+ *   Rolldown then bundles the CommonJS builds of @sentry/core, server-utils and
+ *   conventions (a 1.1 MB `assets/cjs-*.js` chunk) beside the ESM copies the
+ *   SDK already uses. vite.config.ts sets `buildTimeInstrumentation: false`;
+ *   `findSentryOrchestrionInjection` fails the build if it comes back.
+ * - Generated tables and contract schemas (entity-field-model.gen, OpenAPI
+ *   documents) needed by one route family: import them where used.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -18,7 +28,8 @@ const MB = 1_000_000;
 // (@sentry/cloudflare) adds a ~1.1 MB chunk (the shared tracer provider,
 // attribute conventions, and channel-instrumentation tables) that Cubby never
 // uses at runtime because tracing is sampled to 0: 6.27 MB first request /
-// 16.9 MB total. Staying on Sentry 10 restores the 6 MB budget. The purchase
+// 16.9 MB total (since removed: see the orchestrion note below, which brought
+// the first request to 5.39 MB / 17.00 MB total). The purchase
 // and inventory batch of 2026-10 (settlement, corrections, receiving, identity
 // proof) reached 18.01 MB total with an unchanged 6.44 MB first request; the
 // total is lazily loaded and far inside Cloudflare's compressed limit, so it
@@ -115,6 +126,20 @@ export function findBundledFaker(root: string): string[] {
   });
 }
 
+/**
+ * Files carrying Sentry's orchestrion runtime hook. Its presence means build
+ * time instrumentation rewrote a dependency to `require("@sentry/server-utils")`,
+ * which bundles ~1.1 MB of CommonJS Sentry code the Worker never runs (tracing
+ * is sampled to 0 and `db-pg-tracing` traces queries itself).
+ */
+export function findSentryOrchestrionInjection(root: string): string[] {
+  return listJs(root).filter((file) =>
+    readFileSync(path.join(root, file), "utf8").includes(
+      "__SENTRY_ORCHESTRION_INJECT__",
+    ),
+  );
+}
+
 const invokedPath = process.argv[1]
   ? pathToFileURL(path.resolve(process.argv[1])).href
   : undefined;
@@ -124,6 +149,11 @@ if (invokedPath === import.meta.url) {
   if (faker.length > 0)
     throw new Error(
       `@faker-js/faker reached the Worker bundle (${faker.join(", ")}). It is for tests and dev seeding only; keep tooling/factories and *.fixtures imports out of src/ production code.`,
+    );
+  const orchestrion = findSentryOrchestrionInjection(serverRoot);
+  if (orchestrion.length > 0)
+    throw new Error(
+      `Sentry build-time instrumentation reached the Worker bundle (${orchestrion.join(", ")}). Keep buildTimeInstrumentation: false in vite.config.ts; it adds ~1.1 MB of CommonJS Sentry code to the first request.`,
     );
   const report = measureServerClosure(serverRoot);
   const mb = (bytes: number) => `${(bytes / MB).toFixed(2)} MB`;

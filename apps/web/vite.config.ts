@@ -440,6 +440,7 @@ export default defineConfig(async ({ command }) => {
               authToken: process.env.SENTRY_AUTH_TOKEN,
               telemetry: false,
               autoInstrumentMiddleware: false,
+              buildTimeInstrumentation: false,
               release: {
                 name: `cubby@${gitCommit}`, // must equal the runtime `release` in router.tsx and cf-server.ts
                 setCommits: {

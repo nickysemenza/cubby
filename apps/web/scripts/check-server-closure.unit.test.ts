@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { findBundledFaker, measureServerClosure } from "./check-server-closure";
+import {
+  findBundledFaker,
+  findSentryOrchestrionInjection,
+  measureServerClosure,
+} from "./check-server-closure";
 
 let root: string | undefined;
 
@@ -62,6 +66,17 @@ describe("measureServerClosure", () => {
       "assets/run-service-1.js",
       "assets/ai-sdk-1.js",
     ]);
+  });
+});
+
+describe("findSentryOrchestrionInjection", () => {
+  it("flags a dependency rewritten to load @sentry/server-utils", () => {
+    const root = dist({
+      "index.js": "export const a=1;",
+      "assets/db-1.js":
+        "globalThis.__SENTRY_ORCHESTRION_INJECT__=n(`pg`,()=>r());",
+    });
+    expect(findSentryOrchestrionInjection(root)).toEqual(["assets/db-1.js"]);
   });
 });
 
