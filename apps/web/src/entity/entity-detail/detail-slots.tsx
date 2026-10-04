@@ -1,5 +1,10 @@
 import type { DetailSlotId } from "@cubby/schemas/entity-manifest";
+import type { RunOut } from "@cubby/schemas/run";
 import type { RunPurpose } from "@cubby/schemas/run-fields";
+import {
+  ACTIVE_RUN_STATUSES,
+  IMPORT_WORKFLOW_PURPOSES as IMPORT_PURPOSES,
+} from "@cubby/shared/client-constants";
 import { type FunctionComponent, lazy, type LazyExoticComponent } from "react";
 
 import {
@@ -23,20 +28,31 @@ export interface DetailSlot<E extends GenericDetailEntity> {
   applies?(record: DetailRecordOf<E>): boolean;
 }
 
-/**
- * Run purposes the purchase agent drives: they carry a vendor, orders, an
- * agent transcript and evidence. AI-only runs (`ai_suggest`,
- * `background`) and photo batches do not.
- */
-const IMPORT_WORKFLOW_PURPOSES: ReadonlySet<RunPurpose> = new Set([
-  "account_sync",
-  "purchase_validation",
-  "product_enrichment",
-  "file_import",
-]);
+const IMPORT_WORKFLOW_PURPOSES: ReadonlySet<RunPurpose> = new Set(
+  IMPORT_PURPOSES,
+);
+
+/** The Run slots that are nothing but their server-composed report. */
+type RunReportSlotId = keyof typeof import("~/app/runs/slots").runReportSlots;
 
 const isImportRun = (run: { purpose: RunPurpose }) =>
   IMPORT_WORKFLOW_PURPOSES.has(run.purpose);
+
+const isLiveRun = (run: { status: string }) =>
+  ACTIVE_RUN_STATUSES.some((status) => status === run.status);
+
+/** A Run slot that is nothing but its server-composed report (`run.<slot>` in `reportSlots`). */
+const runReportSlot = (
+  report: RunReportSlotId,
+  applies?: (run: RunOut) => boolean,
+): PresentationCoverage<DetailSlot<"run">> =>
+  slot(
+    () =>
+      import("~/app/runs/slots").then((m) => ({
+        default: m.runReportSlots[report],
+      })),
+    applies,
+  );
 
 type SlotModule<T> = Promise<{ default: T }>;
 const slot = <E extends GenericDetailEntity>(
@@ -255,11 +271,9 @@ export const detailSlots = {
     ),
   },
   run: {
-    "live-progress": slot(() =>
-      import("~/app/runs/slots").then((m) => ({
-        default: m.RunLiveProgress,
-      })),
-    ),
+    // Progress, usage and changes are server-composed report slots; `runReportSlot` is their one
+    // component (`app/runs/slots.tsx`).
+    "live-progress": runReportSlot("live-progress"),
     "import-controls": slot(
       () =>
         import("~/app/purchases/purchase-import-run-detail").then((m) => ({
@@ -267,19 +281,10 @@ export const detailSlots = {
         })),
       isImportRun,
     ),
-    "import-stats": slot(
-      () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportStats,
-        })),
-      isImportRun,
-    ),
-    "import-progress-live": slot(
-      () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportProgressActive,
-        })),
-      isImportRun,
+    "import-stats": runReportSlot("import-stats", isImportRun),
+    "import-progress-live": runReportSlot(
+      "import-progress-live",
+      (run) => isImportRun(run) && isLiveRun(run),
     ),
     "import-agent-live": slot(
       () =>
@@ -288,27 +293,9 @@ export const detailSlots = {
         })),
       isImportRun,
     ),
-    "import-purchases": slot(
-      () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportPurchases,
-        })),
-      isImportRun,
-    ),
-    "import-approvals": slot(
-      () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportApprovals,
-        })),
-      isImportRun,
-    ),
-    "import-findings": slot(
-      () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportFindings,
-        })),
-      isImportRun,
-    ),
+    "import-purchases": runReportSlot("import-purchases", isImportRun),
+    "import-approvals": runReportSlot("import-approvals", isImportRun),
+    "import-findings": runReportSlot("import-findings", isImportRun),
     "import-targets": slot(
       () =>
         import("~/app/purchases/purchase-import-run-detail").then((m) => ({
@@ -316,13 +303,7 @@ export const detailSlots = {
         })),
       isImportRun,
     ),
-    "import-evidence": slot(
-      () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportEvidence,
-        })),
-      isImportRun,
-    ),
+    "import-evidence": runReportSlot("import-evidence", isImportRun),
     "import-prepared-orders": slot(
       () =>
         import("~/app/purchases/purchase-import-run-detail").then((m) => ({
@@ -330,12 +311,9 @@ export const detailSlots = {
         })),
       isImportRun,
     ),
-    "import-progress-stopped": slot(
-      () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportProgressStopped,
-        })),
-      isImportRun,
+    "import-progress-stopped": runReportSlot(
+      "import-progress-stopped",
+      (run) => isImportRun(run) && !isLiveRun(run),
     ),
     "import-agent-stopped": slot(
       () =>
@@ -344,20 +322,8 @@ export const detailSlots = {
         })),
       isImportRun,
     ),
-    "import-timeline": slot(
-      () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportTimeline,
-        })),
-      isImportRun,
-    ),
-    "import-debug-log": slot(
-      () =>
-        import("~/app/purchases/purchase-import-run-detail").then((m) => ({
-          default: m.RunImportDebugLog,
-        })),
-      isImportRun,
-    ),
+    "import-timeline": runReportSlot("import-timeline", isImportRun),
+    "import-debug-log": runReportSlot("import-debug-log", isImportRun),
     "photo-batch": slot(
       () =>
         import("~/app/purchases/purchase-import-run-detail").then((m) => ({
@@ -365,11 +331,7 @@ export const detailSlots = {
         })),
       (run) => run.purpose === "photo_inventory",
     ),
-    "ai-usage": slot(() =>
-      import("~/app/runs/slots").then((m) => ({
-        default: m.RunAiUsage,
-      })),
-    ),
+    "ai-usage": runReportSlot("ai-usage"),
     changes: slot(() =>
       import("~/app/runs/slots").then((m) => ({
         default: m.RunChanges,

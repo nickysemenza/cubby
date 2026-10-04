@@ -21,18 +21,9 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import {
   RunImportAgentActive,
   RunImportAgentStopped,
-  RunImportApprovals,
   RunImportControls,
-  RunImportDebugLog,
-  RunImportEvidence,
-  RunImportFindings,
   RunImportPreparedOrders,
-  RunImportProgressActive,
-  RunImportProgressStopped,
-  RunImportPurchases,
-  RunImportStats,
   RunImportTargets,
-  RunImportTimeline,
   RunPhotoBatch,
 } from "./purchase-import-run-detail";
 
@@ -136,8 +127,51 @@ beforeEach(() => {
   restoreDispatch = overrideStartDispatch(async (operation, input) => {
     operationCalls.push({ operation, input });
     if (operation === "run.work") return { ok: true, data: detailRun };
-    if (operation === "run.logs")
-      return { ok: true, data: { entries: [], truncated: false } };
+    // The transcript and system log are server-composed report slots.
+    if (operation === "entityReport.getMany")
+      return {
+        ok: true,
+        data: {
+          // SAFETY: the test controls the input shape it sends.
+          reports: (input as { slots: string[] }).slots.map((slot) => ({
+            slot,
+            report: {
+              live: false,
+              status: detailRun.status,
+              blocks:
+                slot === "run.import-timeline"
+                  ? [
+                      {
+                        kind: "records",
+                        empty: "",
+                        rows: detailRun.operations.map((operation) => ({
+                          entity: null,
+                          id: null,
+                          title: operation.kind,
+                          subtitle: null,
+                          trailing: null,
+                          key: operation.operationId,
+                          at: operation.startedAt,
+                          lines: [
+                            { text: operation.operationId, tone: "muted" },
+                          ],
+                        })),
+                      },
+                    ]
+                  : [],
+            },
+          })),
+        },
+      };
+    if (operation === "entityReport.get")
+      return {
+        ok: true,
+        data: {
+          live: false,
+          status: detailRun.status,
+          blocks: [{ kind: "note", text: "No structured log entries." }],
+        },
+      };
     if (operation === "run.control")
       return { ok: true, data: { run: detailRun, successor: null } };
     if (operation === "purchaseImport.applyValidationCorrections")
@@ -195,19 +229,10 @@ function RunImportSlots({ record }: { record: RunOut }) {
   return (
     <>
       <RunImportControls record={record} />
-      <RunImportStats record={record} />
-      <RunImportProgressActive record={record} />
       <RunImportAgentActive record={record} />
-      <RunImportPurchases record={record} />
-      <RunImportApprovals record={record} />
-      <RunImportFindings record={record} />
       <RunImportTargets record={record} />
-      <RunImportEvidence record={record} />
       <RunImportPreparedOrders record={record} />
-      <RunImportProgressStopped record={record} />
       <RunImportAgentStopped record={record} />
-      <RunImportTimeline record={record} />
-      <RunImportDebugLog record={record} />
     </>
   );
 }
@@ -244,57 +269,17 @@ describe("import run slots", () => {
     );
   });
 
-  it("links image shortcodes in progress summaries and history", async () => {
-    const update = {
-      eventId: "progress-1",
-      phase: "investigating",
-      currentItem: "IMG-4S9Q + IMG-R6MW",
-      awaitingApproval: false,
-      detail: "Checking both label photos.",
-      createdAt: "2026-09-20T16:02:00.000Z",
-    };
-    detailRun = {
-      ...run,
-      progress: [update],
-      latestProgress: { ...update, detail: "Review IMG-4S9Q." },
-    };
-    render(<RunImportSlots record={record} />, {
-      wrapper: harness.wrapper,
-    });
-
-    const history = await screen.findByLabelText("Run progress history");
-    expect(
-      within(history).getByRole("link", { name: "IMG-4S9Q" }),
-    ).toHaveAttribute("href", "/images/IMG-4S9Q");
-    expect(
-      within(history).getByRole("link", { name: "IMG-R6MW" }),
-    ).toHaveAttribute("href", "/images/IMG-R6MW");
-    expect(screen.getAllByRole("link", { name: "IMG-4S9Q" })).toHaveLength(2);
-  });
   it("keeps terminal evidence view-only while showing the transcript", async () => {
     render(<RunImportSlots record={record} />, {
       wrapper: harness.wrapper,
     });
 
     expect(
-      await screen.findByRole("link", { name: /Fixture purchase/ }),
-    ).toHaveAttribute("href", "/purchases/PUR-ABCDE12345");
-    expect(screen.getByLabelText("Import run transcript")).toHaveTextContent(
-      "extract-1",
-    );
-    expect(screen.getByText("Orders seen")).toBeInTheDocument();
-    expect(
-      screen.getByText(
+      await screen.findByText(
         "The selected source and target are frozen for this run.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Outcome: replayed")).toBeInTheDocument();
-    expect(screen.getByText("fixture-order.pdf")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(operationCalls.map((call) => call.operation)).toContain(
-        "run.logs",
-      ),
-    );
     expect(
       await screen.findByText(/This terminal run is view-only/),
     ).toBeInTheDocument();
@@ -497,10 +482,8 @@ it("shows durable progress and diagnostics alongside photo group review", async 
   ).toBeInTheDocument();
   expect(screen.queryByText("Run progress")).not.toBeInTheDocument();
   expect(screen.getByText("Timeline and system log")).toBeInTheDocument();
-  expect(screen.getByLabelText("Import run transcript")).toHaveTextContent(
-    "group-1",
-  );
-  expect(await screen.findByText("System and Mac log")).toBeInTheDocument();
+  expect(await screen.findByText("group-1")).toBeInTheDocument();
+  expect(screen.getByText("System and Mac log")).toBeInTheDocument();
   expect(await screen.findByText("Work at a glance")).toBeInTheDocument();
   expect(
     screen.getByRole("region", { name: "Run step timing table" }),

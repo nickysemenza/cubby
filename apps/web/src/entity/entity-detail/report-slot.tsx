@@ -3,16 +3,27 @@ import type {
   EntityReportInput,
   ReportBlock,
 } from "@cubby/schemas/entity-report";
-import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import {
+  type QueryClient,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { type ReactNode, useEffect } from "react";
+import { z } from "zod";
 
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { cn, formatCurrency } from "~/lib/utils";
+import { useSectionVisible } from "~/ui/data-table/detail-page";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
+import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Skeleton } from "~/ui/primitives/skeleton";
+import { ShortcodeProse } from "~/ui/shortcode-prose";
 
 import { RecordsBlockView, ReportVerb } from "./records-block";
 
@@ -145,8 +156,8 @@ function Table({ block }: { block: Extract<ReportBlock, { kind: "table" }> }) {
 }
 
 /** Blocks have no id; a kind plus its title or text names each one within a report. */
-const blockKey = (block: ReportBlock) =>
-  `${block.kind}:${block.kind === "note" ? block.text : block.kind === "schedule" ? "" : (block.title ?? "")}`;
+const blockKey = (block: ReportBlock, index: number) =>
+  `${index}:${block.kind}:${block.kind === "note" ? block.text : block.kind === "schedule" ? "" : (block.title ?? "")}`;
 
 /**
  * Draws the generic report blocks a detail slot's server read returns. A slot
@@ -168,8 +179,8 @@ function ReportBlocks({
 }) {
   return (
     <Stack gap="xs">
-      {blocks.map((block) => {
-        const key = blockKey(block);
+      {blocks.map((block, index) => {
+        const key = blockKey(block, index);
         switch (block.kind) {
           case "stats":
             return <Stats key={key} block={block} />;
@@ -191,8 +202,15 @@ function ReportBlocks({
             );
           case "note":
             return (
-              <Description key={key} size="xs">
-                {block.text}
+              <Description
+                key={key}
+                size={block.strong ? "sm" : "xs"}
+                className={cn(
+                  block.strong && "font-medium text-foreground",
+                  block.tone && TONE_TEXT[block.tone],
+                )}
+              >
+                <ShortcodeProse>{block.text}</ShortcodeProse>
               </Description>
             );
           case "records":
@@ -213,25 +231,160 @@ function ReportBlocks({
   );
 }
 
+/** A record being worked refreshes its reports this often while the server says it is live. */
+const LIVE_POLL_MS = 3_000;
+
 /**
- * A detail slot that is nothing but the server's report blocks. A `records` block's verbs act on
- * `record` (the loaded detail record) and `rowBadges` adds web-only per-row badges.
+ * The Run slots one page polls together: a single `getMany` read loads the run once for all of
+ * them. The paged and large ones (usage, log) read on their own and do not poll.
  */
-function useReportBlocks(input: EntityReportInput) {
-  return useQuery(entityReport.get.queryOptions(input));
+const RUN_BATCH_SLOTS = [
+  "run.live-progress",
+  "run.import-stats",
+  "run.import-progress-live",
+  "run.import-progress-stopped",
+  "run.import-purchases",
+  "run.import-approvals",
+  "run.import-findings",
+  "run.import-targets",
+  "run.import-evidence",
+  "run.import-timeline",
+] as const satisfies readonly EntityReportInput["slot"][];
+const isBatchSlot = (slot: EntityReportInput["slot"]) =>
+  RUN_BATCH_SLOTS.some((candidate) => candidate === slot);
+
+type Records = Extract<ReportBlock, { kind: "records" }>;
+
+/**
+ * Pages after the first stack their rows under the first page's same-titled `records` block;
+ * every other block comes from the first page alone.
+ */
+function mergePages(
+  pages: ReadonlyArray<{ blocks: readonly ReportBlock[] }>,
+): ReportBlock[] {
+  const merged: ReportBlock[] = (pages[0]?.blocks ?? []).map((block) =>
+    block.kind === "records" ? { ...block } : block,
+  );
+  for (const page of pages.slice(1)) {
+    for (const block of page.blocks) {
+      if (block.kind !== "records") continue;
+      const earlier = merged.find(
+        (candidate): candidate is Records =>
+          candidate.kind === "records" && candidate.title === block.title,
+      );
+      if (earlier) earlier.rows = [...earlier.rows, ...block.rows];
+      else merged.push({ ...block });
+    }
+  }
+  return merged;
 }
 
+/** The status each polled run last made the page refresh its record for. */
+const syncedStatus = new WeakMap<object, Map<string, string>>();
+
+/**
+ * The one place a report compares the server's status with the record's: the polled batch
+ * reports a status the record does not show, and the record is refreshed once per new status
+ * however many slots read the batch.
+ */
+function syncRecordStatus(
+  client: QueryClient,
+  id: string,
+  serverStatus: string | undefined,
+  shownStatus: string | undefined,
+) {
+  if (!serverStatus || !shownStatus || serverStatus === shownStatus) return;
+  const seen = syncedStatus.get(client) ?? new Map<string, string>();
+  syncedStatus.set(client, seen);
+  if (seen.get(id) === serverStatus) return;
+  seen.set(id, serverStatus);
+  void invalidateOperationTags(client, ripple.runOnly);
+}
+
+/**
+ * The blocks of one slot. A Run slot of the page's polled batch reads the shared `getMany`
+ * query; every other slot reads on its own and pages with the server's `nextCursor`.
+ */
+function useReportBlocks(
+  input: EntityReportInput,
+  status: string | undefined,
+  nested: boolean,
+) {
+  const client = useQueryClient();
+  const batched = isBatchSlot(input.slot);
+  const batch = useQuery({
+    ...entityReport.getMany.queryOptions({
+      slots: [...RUN_BATCH_SLOTS],
+      id: input.id,
+    }),
+    enabled: batched,
+    refetchInterval: (state) =>
+      state.state.data?.reports.some((entry) => entry.report.live)
+        ? LIVE_POLL_MS
+        : false,
+  });
+  const paged = useInfiniteQuery({
+    ...entityReport.get.infiniteQueryOptions(input, {
+      pageParamSchema: z.string().nullable(),
+      page: (pageInput, cursor) =>
+        cursor === null ? pageInput : { ...pageInput, cursor },
+      initialPageParam: null,
+      getNextPageParam: (last) => last.nextCursor ?? undefined,
+    }),
+    enabled: !batched,
+  });
+  const report = batch.data?.reports.find(
+    (entry) => entry.slot === input.slot,
+  )?.report;
+  const serverStatus = report?.status;
+  useEffect(() => {
+    if (batched) syncRecordStatus(client, input.id, serverStatus, status);
+  }, [batched, client, input.id, serverStatus, status]);
+  const blocks = batched
+    ? (report?.blocks ?? [])
+    : mergePages(paged.data?.pages ?? []);
+  const loaded = batched ? batch.isSuccess : paged.isSuccess;
+  // A Run report with no blocks hides its section (nothing to show for this run).
+  useSectionVisible(nested || !loaded || blocks.length > 0);
+  const state = batched ? batch : paged;
+  return {
+    isPending: state.isPending,
+    isError: state.isError,
+    error: state.error,
+    refetch: () => void state.refetch(),
+    blocks,
+    more:
+      !batched && paged.hasNextPage
+        ? {
+            pending: paged.isFetchingNextPage,
+            load: () => void paged.fetchNextPage(),
+          }
+        : undefined,
+  };
+}
+
+/**
+ * A detail slot that is nothing but the server's report blocks. A `records` block's verbs act on
+ * `record` (the loaded detail record). The Run slots a page shows share one polled batch;
+ * `status` is the record's own status as the page shows it, and the record refreshes once when
+ * the batch read another.
+ */
 export function EntityReportSlot({
   record,
   entity,
   recordsList,
+  status,
+  nested = false,
   ...input
 }: EntityReportInput & {
   record?: object;
   entity?: string;
   recordsList?: (block: Extract<ReportBlock, { kind: "records" }>) => ReactNode;
+  status?: string | undefined;
+  /** Drawn inside another section: an empty report must not hide that section. */
+  nested?: boolean;
 }) {
-  const query = useReportBlocks(input);
+  const query = useReportBlocks(input, status, nested);
   // The slot's own verbs (attach, analyze, validate) stay available while the rows load or fail.
   const verbs = record === undefined ? [] : slotActionsOf(input.slot);
   return (
@@ -247,15 +400,28 @@ export function EntityReportSlot({
         <ErrorDisplay
           error={query.error}
           title="this section"
-          onRetry={() => void query.refetch()}
+          onRetry={query.refetch}
         />
       ) : (
-        <ReportBlocks
-          blocks={query.data.blocks}
-          record={record}
-          entity={entity}
-          recordsList={recordsList}
-        />
+        <>
+          <ReportBlocks
+            blocks={query.blocks}
+            record={record}
+            entity={entity}
+            recordsList={recordsList}
+          />
+          {query.more ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={query.more.pending}
+              onClick={query.more.load}
+            >
+              {query.more.pending ? "Loading…" : "Load more"}
+            </Button>
+          ) : null}
+        </>
       )}
     </Stack>
   );

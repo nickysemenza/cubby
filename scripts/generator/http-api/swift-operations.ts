@@ -885,6 +885,8 @@ const CLIENT_PASSTHROUGH_METHODS = {
   "purchase.orderMail": { method: "purchaseOrderMail", doc: null },
   "run.aiUsage": { method: "runAiUsage", doc: null },
   "run.workSnapshot": { method: "runWorkSnapshot", doc: null },
+  "run.control": { method: "controlRun", doc: null },
+  "run.retryGmailSearch": { method: "retryGmailSearch", doc: null },
   "statementRow.commitCsv": { method: "commitStatementCsv", doc: null },
   "statementRow.previewCsv": { method: "previewStatementCsv", doc: null },
   "task.todayBriefing": {

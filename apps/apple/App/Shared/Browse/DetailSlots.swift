@@ -57,6 +57,19 @@ enum DetailSlotRegistry {
         },
         .purchaseReceiving: { AnyView(PurchaseReceivingSlot(purchaseID: $0.id)) },
         .purchaseOrderMail: { AnyView(OrderMailDetailSlot(scope: .purchase($0.id))) },
+        .runLiveProgress: { runReportSlot(.run_liveProgress, $0, imports: false) },
+        .runImportStats: { runReportSlot(.run_importStats, $0) },
+        .runImportProgressLive: { runReportSlot(.run_importProgressLive, $0, liveness: true) },
+        .runImportProgressStopped: { runReportSlot(.run_importProgressStopped, $0, liveness: false) },
+        .runImportPurchases: { runReportSlot(.run_importPurchases, $0) },
+        .runImportApprovals: { runReportSlot(.run_importApprovals, $0) },
+        .runImportFindings: { runReportSlot(.run_importFindings, $0) },
+        .runImportTargets: { runReportSlot(.run_importTargets, $0) },
+        .runImportEvidence: { runReportSlot(.run_importEvidence, $0) },
+        .runImportTimeline: { runReportSlot(.run_importTimeline, $0) },
+        .runImportDebugLog: { runReportSlot(.run_importDebugLog, $0) },
+        .runAiUsage: { runReportSlot(.run_aiUsage, $0, imports: false) },
+        .runChanges: { runReportSlot(.run_changes, $0, imports: false) },
         .runImportControls: { row in
             guard row.raw["purpose"]?.stringValue != "photo_inventory" else { return nil }
             return AnyView(
@@ -84,6 +97,25 @@ enum DetailSlotRegistry {
         let entity = slot.rawValue.split(separator: ".").first.flatMap { EntityKey(rawValue: String($0)) }
         return AnyView(
             ReportDetailSlot(slot: slot, id: row.id, host: entity.map { ReportHost(entity: $0, row: row) }))
+    }
+
+    /// A run's report slot; nil (the section is skipped) when the run does not take it. The
+    /// import slots are for the purchase agent's runs, and the live and stopped progress
+    /// variants split on whether the run is still moving; the server enforces the same rules.
+    @MainActor
+    private static func runReportSlot(
+        _ slot: ReportSlot, _ row: EntityRow, imports: Bool = true, liveness: Bool? = nil
+    ) -> AnyView? {
+        if imports,
+            !SharedConstants.importWorkflowPurposes.contains(row.raw["purpose"]?.stringValue ?? "")
+        {
+            return nil
+        }
+        let status = row.raw["status"]?.stringValue
+        if let liveness, liveness != SharedConstants.activeRunStatuses.contains(status ?? "") {
+            return nil
+        }
+        return AnyView(ReportDetailSlot(slot: slot, id: row.id, shownStatus: status))
     }
 
     /// Section content for `slot` on a detail screen; nil renders nothing (the section is skipped).

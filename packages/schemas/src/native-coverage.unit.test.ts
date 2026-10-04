@@ -114,6 +114,22 @@ describe("native presentation coverage", () => {
     },
   );
 
+  it("keeps the Run agent and prepared-order slots explained as web-only", () => {
+    // The agent conversation is a Flue stream and prepared orders need per-line pickers; each
+    // reason names why, so a future reader does not mistake them for an oversight.
+    for (const id of [
+      "run.import-agent-live",
+      "run.import-agent-stopped",
+      "run.import-prepared-orders",
+    ] as const) {
+      const entry = nativeCoverage.detailSlot[id];
+      expect(entry.status).toBe("unsupported");
+      expect("reason" in entry && entry.reason).not.toBe(
+        "This detail is available on web.",
+      );
+    }
+  });
+
   it("gives exactly the implemented hero actions a runner plan", () => {
     const implemented = entries("heroAction")
       .filter(([, entry]) => entry.status === "implemented")

@@ -14,6 +14,9 @@ struct ReportHost {
 struct RecordRowView: View {
     let row: ReportPresentation.RecordRow
     var large = false
+    /// Runs the row's commands (a run's approve, apply, dismiss); nil where none are offered.
+    var model: ReportSlotModel?
+    @State private var confirming: ReportCommand?
 
     var body: some View {
         if let entity = row.entity, let id = row.recordID {
@@ -39,6 +42,7 @@ struct RecordRowView: View {
                     Label(badge, systemImage: "exclamationmark.triangle")
                         .font(.fieldGuideLabel).foregroundStyle(.orange)
                 }
+                extras
             }
             Spacer(minLength: FieldGuideTokens.Space.sm)
             VStack(alignment: .trailing, spacing: 2) {
@@ -54,6 +58,72 @@ struct RecordRowView: View {
             .multilineTextAlignment(.trailing)
         }
         .accessibilityElement(children: .combine)
+        .confirmationDialog(
+            confirming?.label ?? "", isPresented: confirmingBinding, titleVisibility: .visible,
+            presenting: confirming
+        ) { command in
+            Button(command.label) {
+                if let model { Task { await model.run(command, confirmed: true) } }
+            }
+        } message: { command in
+            Text(command.confirm ?? "")
+        }
+    }
+
+    /// Toned status chips, lines, the raw block and commands a row carries beyond its title.
+    @ViewBuilder private var extras: some View {
+        if !row.statuses.isEmpty {
+            HStack(spacing: FieldGuideTokens.Space.xs) {
+                ForEach(Array(row.statuses.enumerated()), id: \.offset) { _, status in
+                    StatusChip(text: status.label, tone: status.tone?.chipTone ?? .neutral)
+                }
+            }
+        }
+        ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
+            Text(line.text).font(.caption).foregroundStyle(line.tone?.color ?? Color.primary)
+                .textSelection(.enabled)
+        }
+        if let label = row.detailLabel, let text = row.detailText {
+            DisclosureGroup(label) {
+                Text(text).font(.caption.monospaced()).textSelection(.enabled)
+            }
+            .font(.caption)
+        }
+        if let model, !row.commands.isEmpty {
+            HStack {
+                ForEach(row.commands) { command in
+                    Button(command.label) { start(command, model: model) }
+                        .buttonStyle(.borderless)
+                        .fontWeight(command.prominent ? .semibold : .regular)
+                        .disabled(model.busyActionID != nil)
+                        .accessibilityIdentifier("report.command.\(command.id)")
+                }
+            }
+        }
+    }
+
+    private var confirmingBinding: Binding<Bool> {
+        Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } })
+    }
+
+    /// A command with a declared confirmation asks first; the rest act on the tap.
+    private func start(_ command: ReportCommand, model: ReportSlotModel) {
+        if command.confirm == nil {
+            Task { await model.run(command, confirmed: false) }
+        } else {
+            confirming = command
+        }
+    }
+}
+
+extension ReportPresentation.Tone {
+    fileprivate var chipTone: StatusChip.Tone {
+        switch self {
+        case .positive: .positive
+        case .warning: .warning
+        case .destructive: .destructive
+        case .muted: .neutral
+        }
     }
 }
 
@@ -63,6 +133,8 @@ struct RecordRowView: View {
 struct RecordsBlockView: View {
     let records: ReportPresentation.Records
     let host: ReportHost?
+    /// Runs row commands and shows their outcome; nil where the slot has none.
+    var model: ReportSlotModel?
 
     @Environment(AppModel.self) private var appModel
     @State private var action: HeroActionModel?
@@ -107,11 +179,11 @@ struct RecordsBlockView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            if let title = records.title { Eyebrow(title) }
+            if let title = records.title, !records.rows.isEmpty { Eyebrow(title) }
             ForEach(plans(records.actions, scope: .section), id: \.0) { id, plan in
                 actionButton(id, plan, itemID: nil)
             }
-            if records.rows.isEmpty {
+            if records.rows.isEmpty, !records.empty.isEmpty {
                 Text(records.empty).foregroundStyle(.secondary)
             }
             ForEach(records.rows) { row in
@@ -128,7 +200,7 @@ struct RecordsBlockView: View {
                         .accessibilityAddTraits(selection.contains(key) ? .isSelected : [])
                     }
                     VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                        RecordRowView(row: row, large: records.largeThumbnails)
+                        RecordRowView(row: row, large: records.largeThumbnails, model: model)
                         if let link = row.listLink, let trailing = row.trailing {
                             NavigationLink(value: Route.entityList(link.entity, filters: link.filterState)) {
                                 Label(trailing, systemImage: "list.bullet").font(.fieldGuideLabel)

@@ -1,7 +1,6 @@
 import { aiRunUsageInput, aiRunUsageOut } from "@cubby/schemas/ai";
 import {
   runShortcode,
-  financialTransactionShortcode,
   imageShortcode,
   productShortcode,
   purchaseShortcode,
@@ -28,8 +27,7 @@ import {
   type TargetedImportStartOutput,
 } from "@cubby/schemas/run";
 import {
-  chargeHuntOutcome,
-  runOrderCandidateState,
+  runControlAction,
   runPurpose,
   runStatus,
 } from "@cubby/schemas/run-fields";
@@ -315,50 +313,8 @@ export const runContract = defineContract("run", {
     output: runOut.nullable(),
     cache: { tags: [["run"]] },
   }),
-  liveProgress: query({
-    input: z.object({ shortcode: runShortcode }),
-    output: z
-      .object({
-        status: runStatus,
-        progress: z.array(
-          z.object({
-            id: z.string(),
-            phase: z.string(),
-            detail: z.string().nullable(),
-            createdAt: z.iso.datetime(),
-            ageSeconds: z.number().int().nonnegative(),
-          }),
-        ),
-        gmail: z
-          .object({
-            status: z.enum(["queued", "running", "completed", "failed"]),
-            searched: z.number().int().nonnegative(),
-            skipped: z.number().int().nonnegative(),
-            reviewable: z.number().int().nonnegative(),
-            pagesScanned: z.number().int().nonnegative(),
-            after: z.string(),
-            searchTerms: z.array(z.string()),
-            startedFromOlderPage: z.boolean(),
-            hasMorePages: z.boolean(),
-            error: z.string().nullable(),
-          })
-          .nullable(),
-        /** A selected-orders mail import's per-order outcomes; empty otherwise. */
-        orders: z.array(
-          z.object({ orderId: z.string(), state: runOrderCandidateState }),
-        ),
-        /** A selected-charges run's per-charge outcomes; empty otherwise. */
-        charges: z.array(
-          z.object({
-            chargeId: financialTransactionShortcode,
-            outcome: chargeHuntOutcome,
-          }),
-        ),
-      })
-      .nullable(),
-    cache: { tags: [["run"]] },
-  }),
   retryGmailSearch: mutation({
+    native: "Resend a stalled Gmail search from the Run's progress section",
     input: z.object({ shortcode: runShortcode }),
     output: vendorSearchMailOut,
   }),
@@ -428,22 +384,10 @@ export const runContract = defineContract("run", {
     invalidates: ["runOnly", "purchase", "product"],
   }),
   control: mutation({
+    native: "Approve, reject, stop or retry a Run from its detail sections",
     input: z.object({
       runId: runShortcode,
-      action: z.enum([
-        "pause",
-        "resume",
-        "cancel",
-        "approve",
-        "reject",
-        "retry",
-        "restart",
-        "escalate_sol",
-        "retry_dispatch",
-        "abort",
-        "upload_evidence",
-        "no_evidence_available",
-      ]),
+      action: runControlAction,
       operationId: z.string().min(1).optional(),
       approvalId: z.string().min(1).optional(),
     }),

@@ -367,6 +367,7 @@ struct EntityDetailContent: View {
     @State private var timelineError: String?
     @State private var selectedSection = "overview"
     @State private var reviewedRelationship: RelationshipRecommendationReview?
+    @State private var reportBatches = ReportBatchStore()
 
     private var presentation: EntityPresentation { descriptor.presentation }
 
@@ -514,6 +515,8 @@ struct EntityDetailContent: View {
             }
         }
         .modifier(FieldGuideRecordInspector(descriptor: descriptor, row: row))
+        .environment(\.reportBatchStore, reportBatches)
+        .task { reportBatches.onRecordStale = onChanged }
     }
 
     @ViewBuilder

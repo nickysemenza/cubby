@@ -906,10 +906,28 @@ public actor CubbyClient {
     }
 
     /// The server-composed blocks (stats, chart, table, schedule, note) behind a detail slot.
-    public func entityReport(slot: ReportSlot, id: String) async throws -> EntityReportOut {
-        try await perform {
-            try await api.entityReport_get(query: .init(slot: slot, id: id)).ok.body.json
+    public func entityReport(slot: ReportSlot, id: String, cursor: String? = nil) async throws
+        -> EntityReportOut
+    {
+        // The query's slot enum shares the manifest slot id with `ReportSlot` as its raw value.
+        guard let queryed = Operations.EntityReport_get.Input.Query.SlotPayload(rawValue: slot.rawValue)
+        else { throw URLError(.badURL) }
+        return try await perform {
+            try await api.entityReport_get(query: .init(slot: queryed, id: id, cursor: cursor)).ok.body.json
         }
+    }
+
+    /// Several slots of one record in one read; the server loads the record once for all of them.
+    public func entityReports(slots: [ReportSlot], id: String) async throws
+        -> [(ReportSlot, EntityReportOut)]
+    {
+        let wanted = slots.compactMap {
+            Operations.EntityReport_getMany.Input.Query.SlotsPayloadPayload(rawValue: $0.rawValue)
+        }
+        let out = try await perform {
+            try await api.entityReport_getMany(query: .init(slots: wanted, id: id)).ok.body.json
+        }
+        return out.reports.map { ($0.slot, $0.report) }
     }
 
     public func lookupUPC(_ upc: String) async throws -> UpcLookupOutput {
