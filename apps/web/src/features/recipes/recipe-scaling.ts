@@ -24,16 +24,6 @@ export type ScaleAnchor =
   | { type: "totalWeight"; grams: number }
   | { type: "ingredient"; rowId: string; newValue: number };
 
-// Below this the recipe is effectively zeroed out; clamp so a stray 0/blank
-// input can't wipe every amount or divide-by-zero.
-const MIN_FACTOR = 0.01;
-
-const clampFactor = (f: number): number =>
-  Number.isFinite(f) && f > 0 ? Math.max(MIN_FACTOR, f) : 1;
-
-/** Round a display value (yield/servings) to 2 decimals, stripping float noise. */
-const round2 = (n: number): number => Math.round(n * 100) / 100;
-
 const findRow = (
   recipe: RecipeOut,
   rowId: string,
@@ -59,19 +49,22 @@ export const resolveScaleFactor = (
   currentFactor: number,
 ): number =>
   match(anchor)
-    .with({ type: "multiplier" }, (a) => clampFactor(a.value))
-    .with({ type: "totalWeight" }, (a) => {
-      const scaledWeight = totals?.weight ?? 0;
-      if (scaledWeight <= 0 || currentFactor <= 0) return 1;
-      // totals.weight = unscaledWeight × currentFactor; recover the original.
-      const unscaledWeight = scaledWeight / currentFactor;
-      return clampFactor(a.grams / unscaledWeight);
-    })
-    .with({ type: "ingredient" }, (a) => {
-      const orig = findRow(recipe, a.rowId)?.amounts[0]?.value;
-      if (!orig || orig <= 0) return 1;
-      return clampFactor(a.newValue / orig);
-    })
+    .with({ type: "multiplier" }, (a) => wasm.clamp_scale_factor(a.value))
+    // The anchor arithmetic (clamp, unscaled-weight recovery, ratio) is
+    // recipebridge's, shared with native through cubby-ffi.
+    .with({ type: "totalWeight" }, (a) =>
+      wasm.scale_factor_for_total_weight(
+        a.grams,
+        totals?.weight ?? 0,
+        currentFactor,
+      ),
+    )
+    .with({ type: "ingredient" }, (a) =>
+      wasm.scale_factor_for_ingredient(
+        findRow(recipe, a.rowId)?.amounts[0]?.value ?? 0,
+        a.newValue,
+      ),
+    )
     .exhaustive();
 
 /**
@@ -104,11 +97,14 @@ export const scaleRecipe = (recipe: RecipeOut, factor: number): RecipeOut => {
     // and per-serving cost/calories stay invariant (both numerator and divisor
     // scale by the same factor).
     yield: recipe.yield
-      ? { ...recipe.yield, value: round2(recipe.yield.value * factor) }
+      ? {
+          ...recipe.yield,
+          value: wasm.scale_display_count(recipe.yield.value, factor),
+        }
       : recipe.yield,
     servings:
       recipe.servings != null
-        ? round2(recipe.servings * factor)
+        ? wasm.scale_display_count(recipe.servings, factor)
         : recipe.servings,
   };
   const servingResolution = recipe.fieldResolutions?.servings;
@@ -121,7 +117,7 @@ export const scaleRecipe = (recipe: RecipeOut, factor: number): RecipeOut => {
       })
       .parse(servingResolution);
     const scaleServingValue = (value: number | null) =>
-      value === null ? null : round2(value * factor);
+      value === null ? null : wasm.scale_display_count(value, factor);
     // Transform the server's selected values for this display preview; provenance stays intact.
     result.fieldResolutions = {
       ...recipe.fieldResolutions,
