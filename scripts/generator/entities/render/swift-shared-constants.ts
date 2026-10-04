@@ -1,4 +1,8 @@
 import {
+  COLLECTION_TAG_PREFIX,
+  collectionSlugPattern,
+} from "../../../../packages/shared/src/collection-tag.ts";
+import {
   HOUSEHOLD_TIMEZONE,
   IMAGE_WIDTHS,
   TASK_BOARD_INBOX_LABEL,
@@ -34,7 +38,7 @@ export const renderSwiftSharedConstants = (): EntityArtifacts[] => {
         generatedHeader +
         "// swift-format-ignore-file\n\n" +
         "/// Constants declared once in TypeScript (`packages/shared/src/client-constants.ts`,\n" +
-        "/// `apps/web/wrangler.jsonc`) and shared with the web client.\n" +
+        "/// `collection-tag.ts`, `apps/web/wrangler.jsonc`) and shared with the web client.\n" +
         "public enum SharedConstants {\n" +
         "    /// Cloudflare image-transform rungs (`IMAGE_WIDTHS`).\n" +
         `    public static let imageWidths: [Int] = [${IMAGE_WIDTHS.join(", ")}]\n` +
@@ -46,6 +50,10 @@ export const renderSwiftSharedConstants = (): EntityArtifacts[] => {
         `    public static let taskBoardInboxLabel = ${swiftString(TASK_BOARD_INBOX_LABEL)}\n` +
         "    /// A board lane's title for a project with no name (`TASK_BOARD_UNTITLED_PROJECT_LABEL`).\n" +
         `    public static let taskBoardUntitledProjectLabel = ${swiftString(TASK_BOARD_UNTITLED_PROJECT_LABEL)}\n` +
+        "    /// The prefix of a product tag that names a Collection (`COLLECTION_TAG_PREFIX`).\n" +
+        `    public static let collectionTagPrefix = ${swiftString(COLLECTION_TAG_PREFIX)}\n` +
+        "    /// What a Collection slug must match (`collectionSlugPattern`).\n" +
+        `    public static let collectionSlugPattern = ${swiftString(collectionSlugPattern.source)}\n` +
         "}\n\n" +
         "extension WayfindingDomain {\n" +
         "    /// The line's name (`WAYFINDING_DOMAIN_PRESENTATION.label`).\n" +

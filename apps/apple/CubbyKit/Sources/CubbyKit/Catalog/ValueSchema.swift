@@ -43,6 +43,19 @@ public struct ValueSchema: Codable, Sendable, Hashable {
         /// The input schema rejects this key absent; an absent optional key is left out of the value.
         public let required: Bool
         public let schema: ValueSchema
+        /// Where the read payload carries this key when it is not at the same key (dotted, from
+        /// the input schema's `readFrom`): a recipe line's `ingredientId` is read at
+        /// `ingredient.id`. `StructuredValue.project` fills the key from there.
+        public let readPath: String?
+
+        public init(key: String, label: String, required: Bool, schema: ValueSchema, readPath: String? = nil)
+        {
+            self.key = key
+            self.label = label
+            self.required = required
+            self.schema = schema
+            self.readPath = readPath
+        }
     }
 
     public struct Case: Codable, Sendable, Hashable {

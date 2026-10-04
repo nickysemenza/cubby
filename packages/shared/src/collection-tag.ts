@@ -38,3 +38,27 @@ export const setCollectionTag = (
   const withoutTarget = tags.filter((tag) => tag !== target);
   return assigned ? [...withoutTarget, target] : withoutTarget;
 };
+
+/**
+ * A product's one stored `tags` list as the two lists every client edits: real
+ * compatibility tags, and Collection slugs (`collection:*` entries). The
+ * native editor applies the same rule (`golden-vectors/collection-tag.json`).
+ */
+export const splitProductTags = (tags: readonly string[]) => ({
+  tags: tags.filter((tag) => !isCollectionTag(tag)),
+  collections: collectionSlugsFromTags(tags),
+});
+
+/** The inverse of `splitProductTags`: collections are normalized to slugs, deduplicated and last. */
+export const mergeProductTags = (
+  tags: readonly string[],
+  collections: readonly string[],
+): string[] => [
+  ...tags,
+  ...new Set(
+    collections
+      .map(normalizeCollectionSlug)
+      .filter((slug) => slug !== "")
+      .map(collectionTagFromSlug),
+  ),
+];

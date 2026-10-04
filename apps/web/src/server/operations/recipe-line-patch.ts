@@ -1,8 +1,9 @@
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
-import type {
-  recipeOut,
-  recipeIngredientInput,
-  recipeUpdateData,
+import {
+  type recipeOut,
+  type recipeIngredientInput,
+  recipeLineAsInput,
+  type recipeUpdateData,
 } from "@cubby/schemas/recipe";
 import type { z } from "zod";
 
@@ -18,29 +19,6 @@ type RecipeDetail = z.infer<typeof recipeOut>;
 type LineInput = z.infer<typeof recipeIngredientInput>;
 type SectionsUpdate = NonNullable<z.infer<typeof recipeUpdateData>["sections"]>;
 export type RecipeLinePatch = z.infer<typeof recipeLinePatchFields>;
-
-const lineAsInput = (
-  line: RecipeDetail["sections"][number]["ingredients"][number],
-): LineInput =>
-  line.type === "ingredient"
-    ? {
-        type: "ingredient",
-        ingredientId: line.ingredient.id,
-        recipeId: null,
-        amounts: line.amounts,
-        id: line.id,
-        rawLine: line.rawLine,
-        modifier: line.modifier,
-      }
-    : {
-        type: "recipe",
-        recipeId: line.recipe.id,
-        ingredientId: null,
-        amounts: line.amounts,
-        id: line.id,
-        rawLine: line.rawLine,
-        modifier: line.modifier,
-      };
 
 const applyPatch = (line: LineInput, patch: RecipeLinePatch): LineInput => {
   const shared = {
@@ -106,9 +84,9 @@ function buildRecipeLinePatch(
       `Line ${lineId} is not in recipe ${recipe.id}`,
     );
   const { section, line: target } = located;
-  const patched = applyPatch(lineAsInput(target), patch);
+  const patched = applyPatch(recipeLineAsInput(target), patch);
   const ingredients = section.ingredients.map((line) =>
-    line.id === lineId ? patched : lineAsInput(line),
+    line.id === lineId ? patched : recipeLineAsInput(line),
   );
   return {
     sections: recipe.sections.map((candidate) =>

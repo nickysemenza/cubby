@@ -58,13 +58,30 @@ struct StructuredValueTests {
         for descriptor in EntityCatalog.all {
             for field in descriptor.fields {
                 let structured = field.controlRenderer.map(Self.structuredRenderers.contains) ?? false
-                #expect(
-                    (field.valueSchema != nil) == structured,
-                    "\(descriptor.key.rawValue).\(field.key) valueSchema disagrees with its renderer")
-                if structured { drawn += 1 }
+                if structured {
+                    #expect(field.valueSchema != nil, "\(descriptor.key.rawValue).\(field.key) has no schema")
+                }
+                // The shared `structured-field` id is drawn only for the fields the generator opts in
+                // (`nativeCoverage.structuredField`); no other renderer carries a schema.
+                if field.valueSchema != nil {
+                    drawn += 1
+                    #expect(structured || field.controlRenderer == .structuredField)
+                }
             }
         }
-        #expect(drawn == 5)
+        #expect(drawn == 6)
+    }
+
+    @Test func aRecipeSectionLineReadsItsTargetsIdFromTheNestedRecord() throws {
+        let lines = try #require(
+            EntityCatalog[.recipe].field("sections")?.valueSchema)
+        guard case .array(let section) = lines.node, case .object(let sectionFields) = section.node,
+            let ingredients = sectionFields.first(where: { $0.key == "ingredients" })?.schema,
+            case .array(let line) = ingredients.node, case .variant(_, let cases) = line.node
+        else { throw Failure("recipe.sections is not an array of sections of variant lines") }
+        let targets = Dictionary(
+            uniqueKeysWithValues: cases.map { ($0.value, $0.fields.compactMap { $0.readPath }) })
+        #expect(targets == ["ingredient": ["ingredient.id"], "recipe": ["recipe.id"]])
     }
 
     @Test func unitMappingsDescribeRowsOfAmountsWithAnOpaqueId() throws {

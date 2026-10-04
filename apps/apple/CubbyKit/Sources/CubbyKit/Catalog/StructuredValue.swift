@@ -36,12 +36,24 @@ public enum StructuredValue {
         }
     }
 
+    /// A key the read payload does not carry at its own name is read from the field's `readPath`
+    /// (the nested record a flat input id names), and a required key the schema fixes (a union's
+    /// `null` arm) is written as that constant, so a read line is exactly the input line.
     private static func projectFields(
         _ object: [String: JSONValue], _ fields: [ValueSchema.Field]
     ) -> [String: JSONValue] {
         var projected: [String: JSONValue] = [:]
         for field in fields {
-            if let child = object[field.key] { projected[field.key] = project(child, to: field.schema) }
+            if let child = object[field.key] {
+                projected[field.key] = project(child, to: field.schema)
+            } else if let path = field.readPath,
+                case let found = value(at: path.split(separator: ".").map(String.init), in: .object(object)),
+                found != .null
+            {
+                projected[field.key] = project(found, to: field.schema)
+            } else if field.required, case .constant(let fixed) = field.schema.node {
+                projected[field.key] = fixed
+            }
         }
         return projected
     }

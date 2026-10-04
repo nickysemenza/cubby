@@ -6,10 +6,8 @@ import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import {
-  collectionSlugsFromTags,
-  collectionTagFromSlug,
-  isCollectionTag,
-  normalizeCollectionSlug,
+  mergeProductTags,
+  splitProductTags,
 } from "@cubby/shared/collection-tag";
 import { redundantTokens } from "@cubby/shared/redundant-tokens";
 import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda";
@@ -84,8 +82,7 @@ export function ProductTagsField({
   );
   const raw = useWatch({ control: form.control, name: field.key });
   const value = z.array(z.string()).catch([]).parse(raw);
-  const tags = value.filter((tag) => !isCollectionTag(tag));
-  const collections = collectionSlugsFromTags(value);
+  const { tags, collections } = splitProductTags(value);
   const redundant = useMemo(
     () =>
       new Map(
@@ -102,11 +99,9 @@ export function ProductTagsField({
     [tags, manufacturer, category, aliases],
   );
   const write = (nextTags: string[], nextCollections: string[]) =>
-    form.setValue(
-      field.key,
-      [...nextTags, ...nextCollections.map(collectionTagFromSlug)],
-      { shouldDirty: true },
-    );
+    form.setValue(field.key, mergeProductTags(nextTags, nextCollections), {
+      shouldDirty: true,
+    });
   return (
     <Stack gap="sm">
       <FormFieldGroup label="Tags">
@@ -136,12 +131,7 @@ export function ProductTagsField({
       <FormFieldGroup label="Collections">
         <ChipsInput
           value={collections}
-          onChange={(next) =>
-            write(
-              tags,
-              next.map(normalizeCollectionSlug).filter((slug) => slug !== ""),
-            )
-          }
+          onChange={(next) => write(tags, next)}
           placeholder="e.g. painting"
         />
       </FormFieldGroup>

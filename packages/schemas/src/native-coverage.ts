@@ -49,6 +49,7 @@ export const NATIVE_COVERAGE_KINDS = [
   "heroAction",
   "detailSlot",
   "listSlot",
+  "structuredField",
 ] as const;
 export type NativeCoverageKind = (typeof NATIVE_COVERAGE_KINDS)[number];
 
@@ -72,13 +73,32 @@ const unsupported = <const Id extends string>(
  * has a per-renderer view path. Classified `generic` below; the generator refuses a field here
  * whose input schema it cannot describe.
  */
-export const STRUCTURED_VALUE_RENDERERS = [
+const STRUCTURED_VALUE_RENDERERS = [
   "external-ids",
   "label-nutrition",
   "source-aliases",
   "source-refs",
   "unit-mappings",
 ] as const satisfies readonly ControlRendererId[];
+
+/** Whether the generator derives a `valueSchema` (and native draws the structured editor) for a field. */
+export const drawsFromValueSchema = (
+  entity: string,
+  field: {
+    key: string;
+    control?: { renderer?: string | null | undefined } | null;
+  },
+): boolean => {
+  const renderer = field.control?.renderer;
+  return (
+    STRUCTURED_VALUE_RENDERERS.some((id) => id === renderer) ||
+    (renderer === "structured-field" &&
+      Object.entries<NativeCoverageEntry>(nativeCoverage.structuredField).some(
+        ([id, entry]) =>
+          id === `${entity}.${field.key}` && entry.status === "implemented",
+      ))
+  );
+};
 
 export const nativeCoverage = {
   /**
@@ -96,14 +116,14 @@ export const nativeCoverage = {
     // `upc-lookup`/`usda-food` are plain text/number fields once their AI action strips away.
     ...generic(["entity-select", "money", "url", "upc-lookup", "usda-food"]),
     ...generic(STRUCTURED_VALUE_RENDERERS),
-    // Native edits a structured field only where web also edits it and a golden read-to-input
-    // vector proves the round trip (`structured-roundtrip.json`). Web draws none of these.
-    ...unsupported(
-      ["structured-field"],
-      "Web has no editor for this structured field; native shows it read-only.",
-    ),
-    // Web splits `collection:*` entries from compatibility tags; native shows the raw list.
-    ...unsupported(["product-tags"], "Tags and Collections are edited on web."),
+    // Drawn from the field's `valueSchema` only where `structuredField` marks it implemented
+    // (a golden read-to-input vector proves the round trip); the other fields of this renderer
+    // are read-only, as on web.
+    ...generic(["structured-field"]),
+    // Tags and Collections: the split and merge are `splitProductTags`/`mergeProductTags`
+    // (`@cubby/shared/collection-tag`), reproduced by `CollectionTag` over the generated
+    // `SharedConstants` and pinned by `golden-vectors/collection-tag.json`.
+    ...implemented(["product-tags"]),
     // The editor's image block owns image ordering; it is never a field control.
     ...ownedElsewhere(["image-order"]),
   },
@@ -260,6 +280,36 @@ export const nativeCoverage = {
    * `apps/apple/App/Shared/Browse/SpecialistListViews.swift`; `ownedElsewhere` ones are
    * covered by the generic list's own affordances and never selectable as a slot.
    */
+  /**
+   * `structured-field` is a shared renderer id for fields web edits in a workflow editor (or not
+   * at all), so each field is classified here as `<entity>.<field>`: `implemented` ones are drawn
+   * from a `valueSchema` (each needs a read-to-input vector in `structured-roundtrip.json`); the
+   * rest are read-only natively. Every field with that renderer must appear (asserted by the
+   * unit test), and `NATIVE_UNSUPPORTED_CEILING.structuredField` only shrinks.
+   */
+  structuredField: {
+    ...implemented(["recipe.sections"]),
+    ...unsupported(
+      ["expense.sourceClaims", "ledgerTransfer.sourceClaims"],
+      "Machine-written provenance: the read carries sourceKey where the input wants providerId, so it cannot round-trip.",
+    ),
+    ...unsupported(
+      ["recipe.meta", "recipe.yield"],
+      "No client edits this through the generic editor yet; it needs a read-to-input vector first.",
+    ),
+    ...unsupported(
+      ["meal.recipes"],
+      "Served recipes are edited through the meal composition workflow; the read nests a recipe where the input wants recipeId.",
+    ),
+    ...unsupported(
+      ["financialAccount.identity", "financialAccount.cardNumbers"],
+      "Account identity and card numbers are edited on web only; no native vector yet.",
+    ),
+    ...unsupported(
+      ["vendor.agentHints"],
+      "Agent hints are edited on web only; no native vector yet.",
+    ),
+  },
   listSlot: {
     ...implemented([
       "location.gallery",
@@ -286,6 +336,7 @@ export const nativeCoverage = {
   heroAction: Record<HeroActionId, NativeCoverageEntry>;
   detailSlot: Record<DetailSlotKey, NativeCoverageEntry>;
   listSlot: Record<ListSlotKey, NativeCoverageEntry>;
+  structuredField: Record<string, NativeCoverageEntry>;
 };
 
 /**
@@ -516,10 +567,11 @@ export const nativeHeroActionPlans = {
  * justification in review.
  */
 export const NATIVE_UNSUPPORTED_CEILING = {
-  control: 2,
+  control: 0,
   list: 0,
   detail: 0,
   heroAction: 0,
   detailSlot: 38,
   listSlot: 0,
+  structuredField: 8,
 } as const satisfies Record<NativeCoverageKind, number>;

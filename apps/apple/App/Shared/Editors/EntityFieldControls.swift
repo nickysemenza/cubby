@@ -11,6 +11,7 @@ struct EntityFieldControl: View {
     @Binding var pickedTitles: [String: String]
     @State private var picking = false
     @State private var newToken = ""
+    @State private var newCollection = ""
 
     private var key: String { field.key }
     private var value: JSONValue { model.draft[key] ?? .null }
@@ -146,7 +147,8 @@ struct EntityFieldControl: View {
     /// `native-coverage.ts` marks `implemented` or `generic`; `NativeCoverageViewPathTests` fails
     /// when they differ.
     enum Drawing {
-        case entityReference, entityMultiReference, amount, tokens, text, money, ledgerAttributions
+        case entityReference, entityMultiReference, amount, tokens, productTags, text, money,
+            ledgerAttributions
     }
 
     static func drawing(for renderer: ControlRendererID) -> Drawing? {
@@ -155,6 +157,7 @@ struct EntityFieldControl: View {
         case .entityMultiSelect: .entityMultiReference
         case .amount: .amount
         case .tagList: .tokens
+        case .productTags: .productTags
         case .vendorName, .url: .text
         case .money: .money
         case .ledgerAttributions: .ledgerAttributions
@@ -178,6 +181,8 @@ struct EntityFieldControl: View {
                 amountControl
             case .tokens:
                 tokenControl
+            case .productTags:
+                productTagsControl
             case .text:
                 textControl
             case .money:
@@ -328,15 +333,49 @@ struct EntityFieldControl: View {
     }
 
     private var tokenControl: some View {
-        let tokens = value.arrayValue?.compactMap(\.stringValue) ?? []
-        return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            Text(label).font(.fieldGuideLabel).foregroundStyle(.secondary)
+        tokenEditor(
+            title: label, singular: field.label.lowercased(),
+            tokens: value.arrayValue?.compactMap(\.stringValue) ?? [],
+            draft: $newToken, normalize: { $0.trimmingCharacters(in: .whitespaces) }
+        ) { model.draft[key] = .array($0.map(JSONValue.string)) }
+    }
+
+    /// `tags` as web's `ProductTagsField` draws it: compatibility Tags and Collections
+    /// (`collection:*` entries) as two lists over the one stored list, split and merged by the
+    /// shared `CollectionTag` rule.
+    private var productTagsControl: some View {
+        let split = CollectionTag.split(value.arrayValue?.compactMap(\.stringValue) ?? [])
+        return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+            tokenEditor(
+                title: "Tags", singular: "tag", tokens: split.tags, draft: $newToken,
+                normalize: { $0.trimmingCharacters(in: .whitespaces) }
+            ) { writeProductTags(tags: $0, collections: split.collections) }
+            tokenEditor(
+                title: "Collections", singular: "collection", tokens: split.collections,
+                draft: $newCollection, normalize: CollectionTag.normalizedSlug
+            ) { writeProductTags(tags: split.tags, collections: $0) }
+        }
+    }
+
+    private func writeProductTags(tags: [String], collections: [String]) {
+        model.draft[key] = .array(
+            CollectionTag.merge(tags: tags, collections: collections).map(JSONValue.string))
+    }
+
+    /// A list of removable tokens with an entry field. `normalize` shapes a typed entry; an empty
+    /// or repeated one is ignored.
+    private func tokenEditor(
+        title: String, singular: String, tokens: [String], draft: Binding<String>,
+        normalize: @escaping (String) -> String, commit: @escaping ([String]) -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            Text(title).font(.fieldGuideLabel).foregroundStyle(.secondary)
             ForEach(tokens, id: \.self) { token in
                 HStack {
                     Text(token)
                     Spacer()
                     Button("Remove", systemImage: "xmark.circle.fill") {
-                        model.draft[key] = .array(tokens.filter { $0 != token }.map(JSONValue.string))
+                        commit(tokens.filter { $0 != token })
                     }
                     .labelStyle(.iconOnly)
                     .foregroundStyle(.secondary)
@@ -345,12 +384,12 @@ struct EntityFieldControl: View {
                 }
                 .frame(minHeight: FieldGuideTokens.touchTarget)
             }
-            TextField("Add \(field.label.lowercased())", text: $newToken)
+            TextField("Add \(singular)", text: draft)
                 .onSubmit {
-                    let trimmed = newToken.trimmingCharacters(in: .whitespaces)
-                    guard !trimmed.isEmpty, !tokens.contains(trimmed) else { return }
-                    model.draft[key] = .array((tokens + [trimmed]).map(JSONValue.string))
-                    newToken = ""
+                    let entry = normalize(draft.wrappedValue)
+                    guard !entry.isEmpty, !tokens.contains(entry) else { return }
+                    commit(tokens + [entry])
+                    draft.wrappedValue = ""
                 }
         }
     }
