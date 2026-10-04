@@ -27,6 +27,15 @@ and replays it without duplicating economics. Run this lane directly or with
 sanitized results and replay command are checksummed under
 `artifacts/headless-e2e/statement-csv/`.
 
+`pnpm test:e2e:sim -- --qa` seeds a synthetic household (`tooling/scenarios/native-qa.ts`) and replays
+every `apps/apple/e2e/qa-*.ad` journey against it: hero Discard with a shelf choice, statement match
+save, Run approval, a structured unit-mapping edit, and recipe scaling in cook mode. After the
+replays it reads the database back (one unit from the chosen shelf only, both allocations, the
+granted approval) before writing the usual checksummed bundle under `artifacts/sim-qa-e2e/`. Add
+`--hold` to keep the server and simulator up after seeding (ids in `qa-ids.json`; `touch qa.stop`
+ends it) for manual driving. Scroll to a target by counting from `scroll bottom`, not with
+`--until` on a lazily loaded detail page.
+
 `pnpm test:e2e:sim -- --product-clarity --video` runs a focused synthetic Product
 presentation journey. It opens and closes the valuation explanation, checks the
 manual and expense-derived values, and verifies recorded movement, planned, and

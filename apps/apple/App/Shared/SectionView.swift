@@ -65,7 +65,10 @@ struct RouteDestinationView: View {
         case .localActivity(let id): LocalActivityDetailView(id: id)
         case .entityDetail(.image, let id): ImageEntityDetailView(id: ImageCode(id))
         case .entityDetail(.run, let id): RunReviewView(runID: id)
-        case .entityDetail(let key, let id): EntityDetailView(key: key, id: id)
+        // Keyed by record: a deep link opened over a visible detail reuses this view's
+        // identity, and its model/sections are bound to the first record's descriptor.
+        case .entityDetail(let key, let id):
+            EntityDetailView(key: key, id: id).id("\(key.rawValue)/\(id)")
         case .wardrobe(let ownerID, let ownerName):
             WardrobeView(ownerID: ownerID, ownerName: ownerName)
         case .entityList(let key, let filters): EntityListView(key: key, filters: filters)

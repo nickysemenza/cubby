@@ -1,0 +1,18 @@
+context platform=ios timeout=240000
+
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 240000
+open "cubby://entity/${SPLIT_PURCHASE_ID}"
+wait "role=Button label=More" 90000
+wait text "Details" 90000
+# Counted from the end of the page, which is stable once every section has loaded.
+scroll bottom
+scroll up 0.6
+wait "id=section.matchStatement" 90000
+click "id=section.matchStatement"
+wait "label=\"Synthetic Split Vendor, Charge, 2026-09-12 · 2 days apart · vendor name matches, $91.00\"" 90000
+click "label=\"Synthetic Split Vendor, Charge, 2026-09-12 · 2 days apart · vendor name matches, $91.00\""
+wait "role=TextField value=\"Purchase code\"" 90000
+fill "role=TextField value=\"Purchase code\"" "${SPLIT_PURCHASE_2_ID}"
+click "label=\"Save allocation\""
+wait text "Financial settlement" 90000

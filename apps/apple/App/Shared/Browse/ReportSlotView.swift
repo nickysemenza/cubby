@@ -35,11 +35,16 @@ struct ReportDetailSlot: View {
         Group {
             if let model {
                 ReportSlotContent(model: model, host: host)
+                    .id("\(slot.rawValue)|\(id)")
             } else {
                 LoadingIndicator(label: "Loading")
             }
         }
         .task(id: "\(slot.rawValue)|\(id)") {
+            // A lazy container restarts this task when the row scrolls back in. Replacing the
+            // model then would orphan it: `ReportSlotContent` keeps its identity, never fires
+            // `onAppear` for the new model, and the slot stays on "Loading" forever.
+            if let model, model.slot == slot, model.id == id { return }
             // A run's batched slots share one polled read through the screen's store.
             let batch =
                 RunReportBatch.contains(slot)
@@ -125,6 +130,7 @@ struct ReportBlocksView: View {
                     Text(text)
                         .font(strong ? .subheadline.weight(.medium) : .footnote)
                         .foregroundStyle(tone?.color ?? (strong ? Color.primary : Color.secondary))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -254,6 +260,7 @@ private struct ReportTableView: View {
             if table.rows.isEmpty {
                 if let empty = table.empty {
                     Text(empty).font(.footnote).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
                 ForEach(table.rows) { row in

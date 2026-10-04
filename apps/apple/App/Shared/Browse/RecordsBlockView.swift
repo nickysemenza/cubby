@@ -90,15 +90,24 @@ struct RecordRowView: View {
             .font(.caption)
         }
         if let model, !row.commands.isEmpty {
-            HStack {
-                ForEach(row.commands) { command in
-                    Button(command.label) { start(command, model: model) }
-                        .buttonStyle(.borderless)
-                        .fontWeight(command.prominent ? .semibold : .regular)
-                        .disabled(model.busyActionID != nil)
-                        .accessibilityIdentifier("report.command.\(command.id)")
-                }
+            // Server-worded commands ("Approve import proposal") can be wider than half a phone
+            // row: stack them rather than wrapping a label mid-word.
+            ViewThatFits(in: .horizontal) {
+                HStack { commandButtons(model: model) }
+                VStack(alignment: .leading) { commandButtons(model: model) }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func commandButtons(model: ReportSlotModel) -> some View {
+        ForEach(row.commands) { command in
+            Button(command.label) { start(command, model: model) }
+                .buttonStyle(.borderless)
+                .fontWeight(command.prominent ? .semibold : .regular)
+                .lineLimit(1)
+                .disabled(model.busyActionID != nil)
+                .accessibilityIdentifier("report.command.\(command.id)")
         }
     }
 

@@ -99,12 +99,19 @@ struct HeroActionSheet: View {
     @ViewBuilder private func control(for field: HeroActionField) -> some View {
         switch field.kind {
         case .number:
-            TextField(field.label, value: numberBinding(field.key), format: .number)
-                #if os(iOS)
-                    .keyboardType(.decimalPad)
-                #endif
+            // A filled number field loses its placeholder, so the label has to be visible beside it.
+            LabeledContent(field.label) {
+                TextField(field.label, value: numberBinding(field.key), format: .number)
+                    .multilineTextAlignment(.trailing)
+                    #if os(iOS)
+                        .keyboardType(.decimalPad)
+                    #endif
+            }
         case .text:
-            TextField(field.label, text: stringBinding(field.key))
+            LabeledContent(field.label) {
+                TextField(field.label, text: stringBinding(field.key))
+                    .multilineTextAlignment(.trailing)
+            }
         case .date:
             DatePicker(field.label, selection: dateBinding(field.key), displayedComponents: .date)
         case .toggle:
