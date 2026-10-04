@@ -181,13 +181,6 @@ const AI_MODEL_REGISTRY = {
   },
 } as const satisfies Record<SupportedAiModel, AiModelConfig>;
 
-export type SupportedAiModelRef = {
-  [Model in SupportedAiModel]: {
-    provider: (typeof AI_MODEL_REGISTRY)[Model]["provider"];
-    model: Model;
-  };
-}[SupportedAiModel];
-
 /**
  * The cookbook catalog prices its extraction models. The same pinned Rust
  * models crate prices other app chat models through `rust_model_rates`.

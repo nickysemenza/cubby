@@ -14,6 +14,7 @@ import {
 import {
   type ChatRoute,
   type SupportedChatModel,
+  adaptiveThinkingFor,
   getChatModelConfig,
 } from "~/server/ai/models";
 import {
@@ -166,12 +167,11 @@ export function chatCompletionOptionsFor(
       return options;
     }
     case "anthropic": {
-      const adaptiveThinking = config.adaptiveThinking ?? true;
       const options: AnthropicOptions = {
         maxTokens: args.maxTokens,
         toolChoice: { type: "tool", name: toolName },
       };
-      if (adaptiveThinking) {
+      if (adaptiveThinkingFor(model)) {
         options.thinkingEnabled = true;
         if (args.effort) {
           // SAFETY: `args.effort` is `OpenAiEffort | AnthropicEffort |

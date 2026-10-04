@@ -24,14 +24,10 @@ import type {
 } from "@cubby/schemas/purchase-agent-rpc";
 import { z } from "zod";
 
-export type { AgentUsageEvent };
-
 const purchaseImportServiceResult = z
   .record(z.string(), z.unknown())
   .nullable();
-export type PurchaseImportServiceResult = z.infer<
-  typeof purchaseImportServiceResult
->;
+type PurchaseImportServiceResult = z.infer<typeof purchaseImportServiceResult>;
 
 interface PurchaseImportMcpAccess {
   token: string;

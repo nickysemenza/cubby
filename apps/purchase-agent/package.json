@@ -26,7 +26,6 @@
     "agents": "0.26.0",
     "ai": "7.0.127",
     "just-bash": "3.6.0",
-    "valibot": "^1.5.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {

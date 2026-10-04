@@ -71,7 +71,7 @@ import { wrapAiGatewayError } from "~/server/clients/ai-gateway-error";
 import type { Database } from "~/server/db";
 
 /** One part of a user message's content: text, or an image/document fetched by URL. */
-export interface AiTextPart {
+interface AiTextPart {
   type: "text";
   content: string;
 }
@@ -84,11 +84,11 @@ export interface AiImagePart {
  * content type; this is the one caller (the vision-batch/Gemini receipt
  * tier) that sends one, and Gemini accepts inline PDF bytes the same way it
  * accepts an inline image. */
-export interface AiDocumentPart {
+interface AiDocumentPart {
   type: "document";
   source: { type: "url"; value: string; mimeType: string };
 }
-export type AiContentPart = AiTextPart | AiImagePart | AiDocumentPart;
+type AiContentPart = AiTextPart | AiImagePart | AiDocumentPart;
 /** Every message `runStructuredFeature` sends is a single-turn user prompt —
  * no caller here carries a multi-turn conversation with prior assistant
  * turns, so this intentionally only models `role: "user"`. */

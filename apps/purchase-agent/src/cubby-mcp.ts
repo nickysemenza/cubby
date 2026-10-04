@@ -27,7 +27,7 @@ const mcpAccess = z.object({
 // fetch below rewrites it to the URL the run-bound grant authorizes and sends
 // it over the service binding.
 const MCP_PLACEHOLDER_URL = "https://cubby-mcp.invalid/mcp";
-export const MCP_TOOL_PREFIX = "mcp__cubby__";
+const MCP_TOOL_PREFIX = "mcp__cubby__";
 
 /** What the agent caches per run so a cold start never lists tools again. */
 export const cachedMcpToolSchema = z.object({
