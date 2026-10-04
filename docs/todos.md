@@ -270,11 +270,23 @@ See also the image operational passes at the end of this file.
   lifecycle only on demonstrated friction. Owners: `apps/apple/App/Shared`,
   generated `EntityCatalog`.
 
-- ⏳ **Native specialized-renderer editors.** Promote per field as a native
-  workflow needs it: product `unitMappings`/`labelNutrition` (read-only today),
-  financialAccount `sourceAliases`, financialTransaction `sourceRefs`, and
-  every `structured-field`. They show "Additional fields are available on
-  web". On web, `cardNumbers` has no editor (MCP-only history).
+- ⏳ **Single-source amount formatting.** Field formats are pinned by
+  `packages/shared/golden-vectors/display-format.json`, but `{value, unit}`
+  amounts still format separately (web `wasm.format_amount`, native Swift).
+  Export the formatter through `cubby-ffi` when a native amount view drifts.
+
+- ⏳ **Native structured-value editor follow-ups.** Native edits only the
+  structured fields web also edits (`unitMappings`, `labelNutrition`,
+  `externalIds`, `sourceAliases`, `sourceRefs`) through the generated
+  `valueSchema`. Still read-only natively: every `structured-field` (recipe
+  `sections`/`meta`/`yield`, meal `recipes`, account `identity`/`cardNumbers`,
+  vendor `agentHints`, `sourceClaims`) and `productTags`. Promote one only
+  after web edits it and a vector proves its read-to-input round trip (recipe
+  sections need the read-to-input adapter in `recipe-line-patch.ts`; tags need
+  the Collections split from `@cubby/shared/collection-tag`). Also: validate on
+  a device, title array rows from their content, and retire the web
+  `ProductUnitMappingsField`/`ProductExternalIdsField`/`SourceAliasesField`/
+  `SourceRefsField` once a generic web renderer reads the same `valueSchema`.
 
 - ⏳ **Retire native-owned web fieldwork and PWA installation.** After native
   parity ships and passes real-device validation, remove web barcode/QR

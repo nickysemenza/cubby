@@ -13,9 +13,15 @@ import {
   type NativeHeroActionPlan,
   nativeCoverage,
   nativeHeroActionPlans,
+  STRUCTURED_VALUE_RENDERERS,
 } from "../../../../packages/schemas/src/native-coverage.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
+import {
+  type EntityForPrefix,
+  type ValueSchemaJSON,
+  valueSchemaOf,
+} from "./value-schema.ts";
 
 /** The hand-written Swift types the manifest JSON decodes into. */
 const SWIFT_MANIFEST_TYPES =
@@ -390,10 +396,27 @@ const fieldDisplayJSON = (
   mobileInteractive: display.mobile?.interactive ?? false,
 });
 
+/** The structured editor's schema description for a field whose renderer draws from one. */
+const valueSchemaJSON = (
+  field: Field,
+  where: string,
+  entityForPrefix: EntityForPrefix,
+): ValueSchemaJSON | null => {
+  const renderer = field.control?.renderer;
+  if (!STRUCTURED_VALUE_RENDERERS.some((id) => id === renderer)) return null;
+  const input = field.validation.update ?? field.validation.create;
+  if (input === null || input === undefined)
+    throw new Error(
+      `${where}: a structured renderer needs a create or update input schema.`,
+    );
+  return valueSchemaOf(input, where, entityForPrefix);
+};
+
 const fieldJSON = (
   field: Field,
   fieldModel: CompiledEntity["fieldModel"],
   entityKey: EntityKeyLookup,
+  entityForPrefix: EntityForPrefix,
   vocabulary: Vocabulary,
   context: string,
 ) => {
@@ -410,6 +433,7 @@ const fieldJSON = (
     explanation: explanationJSON(field.explanation),
     resolution: field.resolution,
     ...fieldControlJSON(field.control, vocabulary, where),
+    valueSchema: valueSchemaJSON(field, where, entityForPrefix),
     inCreate: fieldModel.create.includes(field.key),
     // Required when the create schema rejects `undefined` (the same rule as
     // `requiredOnCreate` in `entity-field-model.gen.ts`).
@@ -620,6 +644,7 @@ const presentationJSON = (
 const entityJSON = (
   entity: CompiledEntity,
   entityKey: EntityKeyLookup,
+  entityForPrefix: EntityForPrefix,
   vocabulary: Vocabulary,
 ) => {
   if (entity.route === null) {
@@ -674,7 +699,14 @@ const entityJSON = (
             `${context}.capabilities.timeline`,
           ),
     fields: entity.fieldModel.fields.map((field) =>
-      fieldJSON(field, entity.fieldModel, entityKey, vocabulary, context),
+      fieldJSON(
+        field,
+        entity.fieldModel,
+        entityKey,
+        entityForPrefix,
+        vocabulary,
+        context,
+      ),
     ),
     filters: entity.filterDescriptors.map((filter) =>
       filterJSON(filter, entityKey, vocabulary, context),
@@ -859,6 +891,15 @@ export const renderSwiftEntityCatalog = (
       );
     return raw;
   };
+  const entityByPrefix = new Map(
+    entities.flatMap((entity) =>
+      entity.shortcode === undefined || entity.shortcode === null
+        ? []
+        : [[entity.shortcode, entity.key] as const],
+    ),
+  );
+  const entityForPrefix: EntityForPrefix = (prefix) =>
+    entityByPrefix.get(prefix) ?? null;
   const entityKeyCases = entities
     .map(({ key }) => `  case ${swiftCaseName(key)} = ${swiftString(key)}`)
     .join("\n");
@@ -877,7 +918,9 @@ export const renderSwiftEntityCatalog = (
       relativePath:
         "apps/apple/CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json",
       source: `${JSON.stringify(
-        entities.map((entity) => entityJSON(entity, entityKey, vocabulary)),
+        entities.map((entity) =>
+          entityJSON(entity, entityKey, entityForPrefix, vocabulary),
+        ),
         null,
         2,
       )}\n`,

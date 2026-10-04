@@ -42,10 +42,25 @@ struct NativeCoverageViewPathTests {
         }
     }
 
+    /// The structured renderers have no per-renderer view: they are `generic`, drawn by the one
+    /// structured-value editor from the field's declared schema, so a field that declares one
+    /// without a schema would silently draw nothing.
+    @Test func structuredRenderersAreDrawnFromTheirFieldsSchema() {
+        let structured: [ControlRendererID] = [
+            .externalIds, .labelNutrition, .sourceAliases, .sourceRefs, .unitMappings,
+        ]
+        for renderer in structured {
+            #expect(NativePresentationCoverage.control(renderer) == .generic)
+            #expect(EntityFieldControl.drawing(for: renderer) == nil)
+        }
+        for descriptor in EntityCatalog.all {
+            for field in descriptor.fields where field.controlRenderer.map(structured.contains) == true {
+                #expect(field.valueSchema != nil, "\(descriptor.key.rawValue).\(field.key) has no schema")
+            }
+        }
+    }
+
     @Test func nativeCoverageDecodesAndSurfacesUnsupportedReasons() {
-        #expect(
-            NativePresentationCoverage.control(.structuredField)
-                == .unsupported("Structured fields are available on web."))
         #expect(NativePresentationCoverage.detailSlot("purchase.receiving") == .implemented)
         #expect(
             NativePresentationCoverage.detailSlot("not.a-slot")
