@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import { COLLECTION_ACTIONS } from "./entity-definitions/collection-actions";
+import {
+  COLLECTION_ACTIONS,
+  type CollectionActionId,
+} from "./entity-definitions/collection-actions";
 
 /**
  * The generic read a detail slot draws on every client. The server composes
@@ -25,6 +28,25 @@ export const reportSlots = [
   "location.ai-description",
 ] as const;
 export const reportSlot = z.enum(reportSlots);
+
+/**
+ * The verbs on the record each `records` slot belongs to. The server puts them on the block, and
+ * web shows them from this table so they stay available while the report loads or fails.
+ */
+export const reportSlotActions: Partial<
+  Record<(typeof reportSlots)[number], readonly CollectionActionId[]>
+> = {
+  "image.associations": ["attachImage"],
+  "location.ai-description": ["analyzeLocation"],
+  "purchase.runs": ["validatePurchase"],
+};
+
+/**
+ * The evidence a saved label reading cites, shared so the server's "is there anything new to
+ * review" and the review itself agree.
+ */
+export const labelNutritionSource = (imageId: string, analysisAt: string) =>
+  `Package label ${imageId} · analysis ${analysisAt}`;
 export type ReportSlot = z.infer<typeof reportSlot>;
 
 export const entityReportInput = z.object({
@@ -140,6 +162,16 @@ const reportRecordRow = z.object({
   badges: z.array(z.string()).optional(),
   /** An ISO instant each client prints in its own locale and zone. */
   at: z.string().optional(),
+  /** The list of other records this row summarises, opened as the trailing link. */
+  listLink: z
+    .object({
+      entity: z.string(),
+      /** Filter values keyed by the list's URL key. */
+      filters: z.record(z.string(), z.string()),
+    })
+    .optional(),
+  /** Row verbs offered on this row only (the server decides when one applies). */
+  actions: z.array(z.enum(COLLECTION_ACTIONS)).optional(),
 });
 export type ReportRecordRow = z.infer<typeof reportRecordRow>;
 
@@ -154,7 +186,10 @@ const reportRecords = z.object({
   title: z.string().optional(),
   rows: z.array(reportRecordRow),
   empty: z.string(),
+  /** Verbs on the record the slot belongs to (`reportSlotActions`). */
   actions: z.array(z.enum(COLLECTION_ACTIONS)).optional(),
+  /** `large` for evidence photos that must stay legible (a package label). */
+  thumbnail: z.enum(["small", "large"]).optional(),
 });
 
 export const reportBlock = z.discriminatedUnion("kind", [

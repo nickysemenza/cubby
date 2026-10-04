@@ -13,6 +13,7 @@ struct ReportHost {
 /// trailing figure and instant. Opens the record it names.
 struct RecordRowView: View {
     let row: ReportPresentation.RecordRow
+    var large = false
 
     var body: some View {
         if let entity = row.entity, let id = row.recordID {
@@ -25,7 +26,9 @@ struct RecordRowView: View {
     private var content: some View {
         HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
             if let url = row.imageURL {
-                Thumb(url: url, size: 48, symbol: row.entity.map { EntityCatalog[$0].sfSymbol } ?? "photo")
+                Thumb(
+                    url: url, size: large ? 112 : 48,
+                    symbol: row.entity.map { EntityCatalog[$0].sfSymbol } ?? "photo")
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
@@ -39,7 +42,8 @@ struct RecordRowView: View {
             }
             Spacer(minLength: FieldGuideTokens.Space.sm)
             VStack(alignment: .trailing, spacing: 2) {
-                if let trailing = row.trailing, !trailing.isEmpty {
+                // A trailing figure that links to a list is shown by the row's own link instead.
+                if row.listLink == nil, let trailing = row.trailing, !trailing.isEmpty {
                     Text(trailing).font(.fieldGuideLabel).foregroundStyle(.secondary)
                 }
                 if let at = row.at {
@@ -74,9 +78,11 @@ struct RecordsBlockView: View {
         let values: [String: JSONValue]
     }
 
-    private func plans(scope: CollectionActionScope) -> [(CollectionActionID, HeroActionPlan)] {
+    private func plans(
+        _ actions: [CollectionActionID], scope: CollectionActionScope
+    ) -> [(CollectionActionID, HeroActionPlan)] {
         guard let host else { return [] }
-        return records.actions.compactMap { id in
+        return actions.compactMap { id in
             guard id.scope == scope, let plan = HeroActionRunner.plan(for: id, on: host.entity) else {
                 return nil
             }
@@ -87,14 +93,21 @@ struct RecordsBlockView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             if let title = records.title { Eyebrow(title) }
-            ForEach(plans(scope: .section), id: \.0) { id, plan in actionButton(id, plan, itemID: nil) }
+            ForEach(plans(records.actions, scope: .section), id: \.0) { id, plan in
+                actionButton(id, plan, itemID: nil)
+            }
             if records.rows.isEmpty {
                 Text(records.empty).foregroundStyle(.secondary)
             }
             ForEach(records.rows) { row in
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    RecordRowView(row: row)
-                    ForEach(plans(scope: .row), id: \.0) { id, plan in
+                    RecordRowView(row: row, large: records.largeThumbnails)
+                    if let link = row.listLink, let trailing = row.trailing {
+                        NavigationLink(value: Route.entityList(link.entity, filters: link.filterState)) {
+                            Label(trailing, systemImage: "list.bullet").font(.fieldGuideLabel)
+                        }
+                    }
+                    ForEach(plans(row.actions, scope: .row), id: \.0) { id, plan in
                         if let itemID = row.recordID { actionButton(id, plan, itemID: itemID) }
                     }
                 }

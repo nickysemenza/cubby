@@ -27,12 +27,14 @@ describe("cookbookItems", () => {
         entity: "cookbook",
         id: cookbookId,
         title: "Weeknight Dinners",
-        subtitle: "1 recipe",
+        trailing: "1 recipe",
+        // The count links to the recipes taken from this cookbook.
+        listLink: { entity: "recipe", filters: { source: cookbookId } },
       },
     ]);
     expect(
       cookbookItems([{ id: cookbookId, name: "Weeknight", recipeCount: 12 }])[0]
-        ?.subtitle,
+        ?.trailing,
     ).toBe("12 recipes");
   });
 });
@@ -66,7 +68,65 @@ describe("labelImageItems", () => {
   });
 });
 
+describe("labelImageItems review verb", () => {
+  it("offers the review only on labels the server found something new on", () => {
+    const labels = ["a", "b"].map((name) => ({
+      id: testShortcode("image", name),
+      filename: `${name}.jpg`,
+      url: `https://media.example.test/${name}.jpg`,
+    }));
+    const rows = labelImageItems(labels, new Set([labels[1]!.id]));
+    expect(rows.map((row) => row.actions ?? [])).toEqual([
+      [],
+      ["reviewLabelNutrition"],
+    ]);
+  });
+});
+
 describe("recipeUsageItems", () => {
+  it("orders a recipe's repeated lines the same way every time", () => {
+    const line = (id: string, rawLine: string) => ({
+      id,
+      recipe: { id: recipeId, name: "Beef Stew" },
+      sectionName: "Gravy",
+      amounts: [],
+      rawLine,
+      modifier: null,
+    });
+    const format = () => "";
+    const forward = recipeUsageItems(
+      [line("1", "b line"), line("2", "a line")],
+      format,
+    );
+    const reverse = recipeUsageItems(
+      [line("2", "a line"), line("1", "b line")],
+      format,
+    );
+    expect(forward).toEqual(reverse);
+    expect(forward.map((row) => row.subtitle)).toEqual([
+      "Gravy\na line",
+      "Gravy\nb line",
+    ]);
+  });
+
+  it("carries the badges the caller computed for a line", () => {
+    const only = {
+      id: "u",
+      recipe: { id: recipeId, name: "Beef Stew" },
+      sectionName: null,
+      amounts: [],
+      rawLine: "1 onion",
+      modifier: null,
+    };
+    expect(
+      recipeUsageItems(
+        [only],
+        () => "",
+        () => ["Re-parse changes amount"],
+      )[0]?.badges,
+    ).toEqual(["Re-parse changes amount"]);
+  });
+
   const usage = (
     id: string,
     recipe: { id: string; name: string },

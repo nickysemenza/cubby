@@ -1,7 +1,7 @@
+import { reportSlotActions } from "@cubby/schemas/entity-report";
 import type {
   EntityReportInput,
   ReportBlock,
-  ReportRecordRow,
 } from "@cubby/schemas/entity-report";
 import { useQuery } from "@tanstack/react-query";
 
@@ -13,7 +13,7 @@ import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
-import { RecordsBlockView } from "./records-block";
+import { RecordsBlockView, ReportVerb } from "./records-block";
 
 const TONE_TEXT = {
   positive: "text-positive",
@@ -153,11 +153,9 @@ const blockKey = (block: ReportBlock) =>
 function ReportBlocks({
   blocks,
   record,
-  rowBadges,
 }: {
   blocks: readonly ReportBlock[];
   record?: object;
-  rowBadges?: (rows: readonly ReportRecordRow[]) => (string | null)[];
 }) {
   return (
     <Stack gap="xs">
@@ -189,14 +187,7 @@ function ReportBlocks({
               </Description>
             );
           case "records":
-            return (
-              <RecordsBlockView
-                key={key}
-                block={block}
-                record={record}
-                rowBadges={rowBadges}
-              />
-            );
+            return <RecordsBlockView key={key} block={block} record={record} />;
           case "schedule":
             return null;
         }
@@ -211,27 +202,30 @@ function ReportBlocks({
  */
 export function EntityReportSlot({
   record,
-  rowBadges,
   ...input
-}: EntityReportInput & {
-  record?: object;
-  rowBadges?: (rows: readonly ReportRecordRow[]) => (string | null)[];
-}) {
+}: EntityReportInput & { record?: object }) {
   const query = useQuery(entityReport.get.queryOptions(input));
-  if (query.isPending) return <Skeleton className="h-16" />;
-  if (query.isError)
-    return (
-      <ErrorDisplay
-        error={query.error}
-        title="this section"
-        onRetry={() => void query.refetch()}
-      />
-    );
+  // The slot's own verbs (attach, analyze, validate) stay available while the rows load or fail.
+  const verbs =
+    record === undefined ? [] : (reportSlotActions[input.slot] ?? []);
   return (
-    <ReportBlocks
-      blocks={query.data.blocks}
-      record={record}
-      rowBadges={rowBadges}
-    />
+    <Stack gap="sm" className="items-start">
+      {record !== undefined
+        ? verbs.map((action) => (
+            <ReportVerb key={action} action={action} record={record} />
+          ))
+        : null}
+      {query.isPending ? (
+        <Skeleton className="h-16 w-full" />
+      ) : query.isError ? (
+        <ErrorDisplay
+          error={query.error}
+          title="this section"
+          onRetry={() => void query.refetch()}
+        />
+      ) : (
+        <ReportBlocks blocks={query.data.blocks} record={record} />
+      )}
+    </Stack>
   );
 }

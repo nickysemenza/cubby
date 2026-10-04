@@ -655,7 +655,14 @@ export const nativeCollectionActionPlans = {
       body: { purpose: "purchase_validation", targetId: "$row.id" },
     },
     fields: [
-      { key: "sourceId", label: "Evidence to replay", kind: "evidence" },
+      // The server allows no chosen source (it then searches for evidence itself), so the
+      // field is optional exactly as on web.
+      {
+        key: "sourceId",
+        label: "Evidence to replay",
+        kind: "evidence",
+        optional: true,
+      },
     ],
     body: {
       purpose: "purchase_validation",

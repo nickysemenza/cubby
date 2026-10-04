@@ -138,7 +138,7 @@ struct HeroActionSheet: View {
             }
         case .evidence:
             Picker(field.label, selection: stringBinding(field.key)) {
-                Text("Choose evidence").tag("")
+                Text("Search automatically").tag("")
                 ForEach(model.evidenceOptions, id: \.value) { Text($0.label).tag($0.value) }
             }
         }

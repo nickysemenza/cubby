@@ -2,7 +2,6 @@ import type { Amount } from "@cubby/schemas/codec";
 import type { ReportRecordRow } from "@cubby/schemas/entity-report";
 import type { ImageAssociation } from "@cubby/schemas/image";
 import type { ProductCookbookRefOut } from "@cubby/schemas/product";
-import { compareRecipeUsages } from "@cubby/schemas/recipe-usage-order";
 import type { RunSummary } from "@cubby/schemas/run";
 
 /**
@@ -26,8 +25,10 @@ export const cookbookItems = (
     entity: "cookbook",
     id: cookbook.id,
     title: cookbook.name,
-    subtitle: count(cookbook.recipeCount, "recipe"),
-    trailing: null,
+    subtitle: null,
+    // The count doubles as the link to the recipes taken from this cookbook.
+    trailing: count(cookbook.recipeCount, "recipe"),
+    listLink: { entity: "recipe", filters: { source: cookbook.id } },
   }));
 
 /**
@@ -42,6 +43,8 @@ export const labelImageItems = (
     url: string;
     representations?: { original?: string | null } | null;
   }[],
+  /** Labels whose detected nutrition is new and unsaved: the server's one rule for the review verb. */
+  reviewable: ReadonlySet<string> = new Set(),
 ): ReportRecordRow[] =>
   labels.map((label) => ({
     entity: "image",
@@ -50,9 +53,19 @@ export const labelImageItems = (
     subtitle: null,
     trailing: null,
     imageUrl: label.representations?.original ?? label.url,
+    ...(reviewable.has(label.id)
+      ? { actions: ["reviewLabelNutrition" as const] }
+      : {}),
   }));
 
-type UsageForItems = {
+/** Recipe, then section, then the written line, so a repeated recipe keeps a stable order. */
+const compareUsages = (a: UsageForItems, b: UsageForItems) =>
+  a.recipe.name.localeCompare(b.recipe.name) ||
+  a.recipe.id.localeCompare(b.recipe.id) ||
+  (a.sectionName ?? "").localeCompare(b.sectionName ?? "") ||
+  (a.rawLine ?? "").localeCompare(b.rawLine ?? "");
+
+export type UsageForItems = {
   recipe: { id: string; name: string };
   sectionName?: string | null;
   amounts: readonly Amount[];
@@ -67,8 +80,10 @@ type UsageForItems = {
 export const recipeUsageItems = (
   usages: readonly UsageForItems[],
   formatAmount: (amount: Amount) => string,
+  /** Badges for a line a fresh parse would change, composed by the caller (it owns the parser). */
+  badgesOf: (usage: UsageForItems) => string[] = () => [],
 ): ReportRecordRow[] =>
-  [...usages].sort(compareRecipeUsages).map((usage) => ({
+  [...usages].sort(compareUsages).map((usage) => ({
     entity: "recipe",
     id: usage.recipe.id,
     title: usage.recipe.name,
@@ -85,6 +100,7 @@ export const recipeUsageItems = (
       .filter(Boolean)
       .join("\n"),
     trailing: null,
+    badges: badgesOf(usage),
   }));
 
 /** The records an image is attached to, one row each opening the record. */

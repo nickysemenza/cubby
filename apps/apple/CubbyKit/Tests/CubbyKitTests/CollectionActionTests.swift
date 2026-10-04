@@ -127,7 +127,8 @@ struct CollectionActionTests {
                 #"""
                 {"blocks":[{"kind":"records","title":null,"empty":"None.","actions":["attachImage"],"rows":[
                   {"entity":"run","id":"RUN-4K7M","title":"Sample Vendor","subtitle":"line one\nline two","trailing":"failed",
-                   "imageUrl":"https://media.example.test/a.jpg","badges":["login_expired"],"at":"2026-03-04T10:15:00.000Z"},
+                   "imageUrl":"https://media.example.test/a.jpg","badges":["login_expired"],"at":"2026-03-04T10:15:00.000Z",
+                   "listLink":{"entity":"recipe","filters":{"source":"CKB-4K7M"}},"actions":["reviewLabelNutrition"]},
                   {"entity":null,"id":null,"title":"Plain","subtitle":null,"trailing":null}
                 ]}]}
                 """#.utf8))
@@ -142,6 +143,11 @@ struct CollectionActionTests {
         #expect(first.imageURL?.absoluteString == "https://media.example.test/a.jpg")
         #expect(first.badges == ["login_expired"])
         #expect(first.at == Date(timeIntervalSince1970: 1_772_619_300))
+        // A row's list link resolves its URL key to the list's wire parameter, and the verbs are
+        // the ones the server offered on this row.
+        #expect(first.listLink?.entity == .recipe)
+        #expect(first.listLink?.filterState.names == ["cookbookId"])
+        #expect(first.actions == [.reviewLabelNutrition])
         // A row that names no record reads without a link, thumbnail, badge or instant.
         let plain = records.rows[1]
         #expect(plain.entity == nil && plain.imageURL == nil && plain.badges.isEmpty && plain.at == nil)
@@ -314,8 +320,40 @@ struct CollectionActionTests {
         await model.refreshPreview()
         await model.refreshPreview()
         #expect(model.advisory?.message == "A run is already active.")
-        #expect(model.advisory?.isDestructive == true)
+        // The server's words, as a neutral note rather than native's own warning.
+        #expect(model.advisory?.isDestructive == false)
         #expect(!model.canSubmit)
+    }
+
+    nonisolated private static let noEvidence = Data(
+        #"{"purpose":"purchase_validation","purchase":{"id":"PUR-4K7M","label":"Sample order","canValidate":true,"reason":null,"sources":[],"products":[]},"products":[]}"#
+            .utf8)
+
+    @MainActor @Test func aPurchaseWithNoReplayableEvidenceCanStillSearchAutomatically() async throws {
+        let (model, recorder) = try launchModel(Self.noEvidence)
+        await model.refreshPreview()
+        await model.refreshPreview()
+        // The server allows no chosen source, so only `canValidate` gates the run.
+        #expect(model.evidenceOptions.isEmpty)
+        #expect(model.advisory == nil)
+        #expect(model.canSubmit)
+        model.submit(confirmed: false) { _ in }
+        while model.isRunning { await Task.yield() }
+        let start = try #require(recorder.requests.last { $0.path.hasSuffix("startTargeted") })
+        #expect(start.body["sourceId"] == nil || start.body["sourceId"] == .null)
+        #expect(start.body["purchaseId"] == "PUR-4K7M")
+    }
+
+    @MainActor @Test func aFailedRunShowsTheServersMessage() async throws {
+        let (model, _) = try launchModel(Self.launch)
+        await model.refreshPreview()
+        await model.refreshPreview()
+        _ = capture { _ in
+            (400, Data(#"{"code":"BAD_REQUEST","message":"No evidence matched."}"#.utf8))
+        }
+        model.submit(confirmed: false) { _ in }
+        while model.isRunning { await Task.yield() }
+        #expect(model.errorMessage == "BAD_REQUEST: No evidence matched.")
     }
 
     @MainActor @Test func submittingStartsTheRunWithTheChosenSource() async throws {

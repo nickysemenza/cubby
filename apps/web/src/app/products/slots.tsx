@@ -3,7 +3,6 @@ import { isNonFoodCategory } from "@cubby/shared";
 import { type FunctionComponent, useMemo } from "react";
 
 import type { CollectionActionProps } from "~/entity/entity-detail/collection-actions";
-import { parseDrift } from "~/entity/entity-detail/collection-row-badges";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { RelatednessRail } from "~/entity/relatedness/relatedness-rail";
@@ -139,7 +138,6 @@ export const ProductRecipeAppearances: DetailSlotComponent<"product"> = ({
     slot="product.recipe-appearances"
     id={product.id}
     record={product}
-    rowBadges={(rows) => parseDrift(product, rows)}
   />
 );
 

@@ -89,16 +89,12 @@ public final class HeroActionModel: Identifiable {
     public var advisory: (message: String, isDestructive: Bool)? {
         switch currentPreview {
         case .launch(let launch)?:
+            // The server's own words, as a neutral note: with no replayable evidence the run can
+            // still search for it itself, so only `canValidate` blocks.
             if !launch.canValidate {
-                return (launch.reason ?? "Validation is not available for this purchase.", true)
+                return (launch.reason ?? "Validation is not available for this purchase.", false)
             }
-            if !launch.sources.contains(where: \.usable) {
-                return (
-                    "No replayable evidence was found. Upload evidence or record that it is unavailable.",
-                    true
-                )
-            }
-            return nil
+            return launch.reason.map { ($0, false) }
         case .discard(let preview)?:
             return preview.warning.map { ($0.message, $0.tone == .destructive) }
         case .addToInventory(let preview)?:
@@ -152,7 +148,7 @@ public final class HeroActionModel: Identifiable {
             // Never leave a previous answer standing for a form it was not computed for.
             preview = nil
             previewValues = nil
-            previewError = String(describing: error)
+            previewError = error.userMessage
         }
     }
 
@@ -198,7 +194,7 @@ public final class HeroActionModel: Identifiable {
                     plan, on: entity, row: row, itemID: itemID, values: values, confirmed: confirmed)
                 onFinished(outcome)
             } catch {
-                errorMessage = String(describing: error)
+                errorMessage = error.userMessage
             }
         }
     }

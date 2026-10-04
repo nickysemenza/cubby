@@ -1,4 +1,3 @@
-import { COLLECTION_ACTION_SCOPES } from "@cubby/schemas/entity-definitions/collection-actions";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type {
   ReportBlock,
@@ -7,6 +6,7 @@ import type {
 import { Suspense } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { FilterRefLink } from "~/entity/components/ref-link/leaf";
 import { entities } from "~/entity/entities";
 import { formatInstant } from "~/lib/date-format";
 import { Row, Stack } from "~/ui/layout";
@@ -17,7 +17,7 @@ import { Image } from "~/ui/primitives/image";
 import { collectionActions } from "./collection-actions";
 
 export type RecordsBlock = Extract<ReportBlock, { kind: "records" }>;
-type Action = NonNullable<RecordsBlock["actions"]>[number];
+type Action = NonNullable<ReportRecordRow["actions"]>[number];
 
 /** A row's declared entity, when the browser has a detail route for it. */
 const routedEntity = (entity: string | null): BrowserRoutedEntity | null => {
@@ -41,14 +41,14 @@ const rowKeys = (rows: readonly ReportRecordRow[]) => {
  * One declared verb. The action registry is erased to `never` because each verb reads its own
  * entity's record; the slot only hands a verb the record of the entity whose slot declared it.
  */
-function ActionSlot({
+export function ReportVerb({
   action,
   record,
-  row,
+  row = null,
 }: {
   action: Action;
   record: object;
-  row: ReportRecordRow | null;
+  row?: ReportRecordRow | null;
 }) {
   const Verb = collectionActions[action];
   // SAFETY: a report builder offers a verb only on the slot of the entity its plan names, and
@@ -78,16 +78,14 @@ function RowTitle({ row }: { row: ReportRecordRow }) {
 
 function RecordRow({
   row,
-  rowActions,
   record,
-  extraBadges,
+  large,
 }: {
   row: ReportRecordRow;
-  rowActions: readonly Action[];
-  record: object;
-  extraBadges: readonly string[];
+  record: object | undefined;
+  large: boolean;
 }) {
-  const badges = [...(row.badges ?? []), ...extraBadges];
+  const listEntity = routedEntity(row.listLink?.entity ?? null);
   return (
     <li className="flex items-start justify-between gap-3 py-2">
       <Row gap="sm" className="min-w-0 items-start">
@@ -101,8 +99,12 @@ function RecordRow({
             <Image
               src={row.imageUrl}
               alt={row.title}
-              displayWidth={96}
-              className="size-12 rounded-md border border-border object-contain"
+              displayWidth={large ? 240 : 96}
+              className={
+                large
+                  ? "h-40 w-32 rounded-md border border-border object-contain"
+                  : "size-12 rounded-md border border-border object-contain"
+              }
             />
           </a>
         ) : null}
@@ -113,82 +115,77 @@ function RecordRow({
               {row.subtitle}
             </span>
           ) : null}
-          {badges.length > 0 ? (
+          {(row.badges ?? []).length > 0 ? (
             <Row gap="xs" className="flex-wrap">
-              {badges.map((badge) => (
+              {(row.badges ?? []).map((badge) => (
                 <Badge key={badge} variant="warning">
                   {badge}
                 </Badge>
               ))}
             </Row>
           ) : null}
+          {record !== undefined
+            ? (row.actions ?? []).map((action) => (
+                <ReportVerb
+                  key={action}
+                  action={action}
+                  record={record}
+                  row={row}
+                />
+              ))
+            : null}
         </Stack>
       </Row>
       <Stack gap="xs" className="shrink-0 items-end text-right text-xs">
-        {row.trailing ? <span>{row.trailing}</span> : null}
+        {row.trailing && row.listLink && listEntity ? (
+          <FilterRefLink
+            variant="filter"
+            display="value"
+            to={entities[listEntity].routes.list}
+            // SAFETY: the server names the list's own URL keys.
+            search={row.listLink.filters as never}
+            label={`Show all ${row.trailing} from ${row.title}`}
+          >
+            {row.trailing}
+          </FilterRefLink>
+        ) : row.trailing ? (
+          <span>{row.trailing}</span>
+        ) : null}
         {row.at ? (
           <span className="text-muted-foreground">
             {formatInstant(row.at, "dateTime")}
           </span>
         ) : null}
-        {rowActions.map((action) => (
-          <ActionSlot key={action} action={action} record={record} row={row} />
-        ))}
       </Stack>
     </li>
   );
 }
 
 /**
- * The `records` report block: the server's rows, each opening the record it names, and the verbs
- * the slot declares. `record` is the loaded detail record the verbs act on; `rowBadges` are
- * web-only badges the browser computes per row (a re-parse that would change a recipe line).
+ * The `records` report block: the server's rows, each opening the record it names, with the
+ * row verbs the server offered. `record` is the loaded detail record those verbs act on; the
+ * slot's own verbs are shown by `EntityReportSlot`, so they survive a loading or failed report.
  */
 export function RecordsBlockView({
   block,
   record,
-  rowBadges,
 }: {
   block: RecordsBlock;
   record?: object;
-  rowBadges?: (rows: readonly ReportRecordRow[]) => (string | null)[];
 }) {
-  const actions = record === undefined ? [] : (block.actions ?? []);
-  const sectionActions = actions.filter(
-    (action) => COLLECTION_ACTION_SCOPES[action] === "section",
-  );
-  const rowActions = actions.filter(
-    (action) => COLLECTION_ACTION_SCOPES[action] === "row",
-  );
-  const extra = rowBadges?.(block.rows) ?? [];
   const keys = rowKeys(block.rows);
-  return (
-    <Stack gap="sm" className="items-start">
-      {record !== undefined
-        ? sectionActions.map((action) => (
-            <ActionSlot
-              key={action}
-              action={action}
-              record={record}
-              row={null}
-            />
-          ))
-        : null}
-      {block.rows.length === 0 ? (
-        <Description>{block.empty}</Description>
-      ) : (
-        <ul className="w-full divide-y divide-border">
-          {block.rows.map((row, index) => (
-            <RecordRow
-              key={keys[index]}
-              row={row}
-              rowActions={rowActions}
-              record={record ?? {}}
-              extraBadges={extra[index] ? [extra[index]] : []}
-            />
-          ))}
-        </ul>
-      )}
-    </Stack>
+  return block.rows.length === 0 ? (
+    <Description>{block.empty}</Description>
+  ) : (
+    <ul className="w-full divide-y divide-border">
+      {block.rows.map((row, index) => (
+        <RecordRow
+          key={keys[index]}
+          row={row}
+          record={record}
+          large={block.thumbnail === "large"}
+        />
+      ))}
+    </ul>
   );
 }

@@ -124,6 +124,28 @@ public struct ReportPresentation: Hashable, Sendable {
         public let imageURL: URL?
         public let badges: [String]
         public let at: Date?
+        /// The list of other records this row summarises, opened from the trailing figure.
+        public let listLink: ListLink?
+        /// Verbs offered on this row only; the server decides when one applies.
+        public let actions: [CollectionActionID]
+    }
+
+    public struct ListLink: Hashable, Sendable {
+        public let entity: EntityKey
+        public let filters: [String: String]
+
+        /// The list's filter state: each declared URL key mapped to its wire parameter.
+        public var filterState: EntityFilterState {
+            var state = EntityFilterState()
+            for (urlKey, value) in filters {
+                guard
+                    let name = EntityCatalog[entity].filters.first(where: { $0.urlKey == urlKey })?.wire.names
+                        .first
+                else { continue }
+                state.set(.single(value), for: name)
+            }
+            return state
+        }
     }
 
     /// Rows that are records of their own, with the verbs the slot offers (`CollectionActionID`).
@@ -132,6 +154,8 @@ public struct ReportPresentation: Hashable, Sendable {
         public let rows: [RecordRow]
         public let empty: String
         public let actions: [CollectionActionID]
+        /// Large for evidence photos that must stay legible (a package label).
+        public let largeThumbnails: Bool
     }
 
     public enum Block: Hashable, Sendable {
@@ -209,10 +233,19 @@ public struct ReportPresentation: Hashable, Sendable {
                             id: index, entity: row.entity.flatMap(EntityKey.init(rawValue:)),
                             recordID: row.id, title: row.title, subtitle: row.subtitle,
                             trailing: row.trailing, imageURL: row.imageUrl.flatMap(URL.init(string:)),
-                            badges: row.badges ?? [], at: row.at.flatMap(instant))
+                            badges: row.badges ?? [], at: row.at.flatMap(instant),
+                            listLink: row.listLink.flatMap { link in
+                                EntityKey(rawValue: link.entity).map {
+                                    ListLink(entity: $0, filters: link.filters.additionalProperties)
+                                }
+                            },
+                            actions: (row.actions ?? []).compactMap {
+                                CollectionActionID(rawValue: $0.rawValue)
+                            })
                     },
                     empty: records.empty,
-                    actions: (records.actions ?? []).compactMap { CollectionActionID(rawValue: $0.rawValue) })
+                    actions: (records.actions ?? []).compactMap { CollectionActionID(rawValue: $0.rawValue) },
+                    largeThumbnails: records.thumbnail == .large)
             )
         }
     }
