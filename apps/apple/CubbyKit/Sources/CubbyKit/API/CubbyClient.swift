@@ -905,6 +905,13 @@ public actor CubbyClient {
         }
     }
 
+    /// The server-composed blocks (stats, chart, table, schedule, note) behind a detail slot.
+    public func entityReport(slot: ReportSlot, id: String) async throws -> EntityReportOut {
+        try await perform {
+            try await api.entityReport_get(query: .init(slot: slot, id: id)).ok.body.json
+        }
+    }
+
     public func lookupUPC(_ upc: String) async throws -> UpcLookupOutput {
         try await perform { try await api.upc_lookup(query: .init(upc: upc)).ok.body.json }
     }

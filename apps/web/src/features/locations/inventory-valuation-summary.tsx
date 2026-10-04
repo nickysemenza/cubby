@@ -1,6 +1,7 @@
 import type { LocationValuation } from "@cubby/schemas/location";
 import { useMemo } from "react";
 
+import { formatPricingCountsSummary } from "~/lib/pricing-counts";
 import { formatCurrency } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
 import { Description } from "~/ui/primitives/description";
@@ -8,7 +9,6 @@ import { NoneValue } from "~/ui/primitives/none-value";
 
 import {
   calculateInventoryValuation,
-  formatPricingCountsSummary,
   formatPricingStatusSummary,
   type InventoryItem,
 } from "./calculate-inventory-valuation";

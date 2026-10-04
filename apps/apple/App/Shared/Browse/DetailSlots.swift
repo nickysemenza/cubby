@@ -26,6 +26,12 @@ enum DetailSlotRegistry {
         .ingredientRecipeUsages: { AnyView(IngredientRecipeUsagesSlot(row: $0)) },
         .cookbookToc: { AnyView(CookbookContentsSlot(cookbookID: $0.id)) },
         .cookbookImportProgress: { AnyView(CookbookImportProgressSlot(row: $0)) },
+        .mealComposition: { reportSlot(.meal_composition, $0) },
+        .projectBudget: { reportSlot(.project_budget, $0) },
+        .projectContribution: { reportSlot(.project_contribution, $0) },
+        .projectAnalytics: { reportSlot(.project_analytics, $0) },
+        .projectSchedule: { reportSlot(.project_schedule, $0) },
+        .locationContentsValuation: { reportSlot(.location_contentsValuation, $0) },
         .ledgerPartyWardrobe: { AnyView(WardrobeDetailSlot(ownerID: $0.id, ownerName: $0.title)) },
         .vendorOrderMail: { AnyView(OrderMailDetailSlot(scope: .vendor($0.id, nil))) },
         .vendorSpendingClassification: { AnyView(SpendingClassificationView(key: .vendor, row: $0)) },
@@ -59,6 +65,12 @@ enum DetailSlotRegistry {
                 })
         },
     ]
+
+    /// The server-composed report slots share one generic view; the row id is the record's code.
+    @MainActor
+    private static func reportSlot(_ slot: ReportSlot, _ row: EntityRow) -> AnyView {
+        AnyView(ReportDetailSlot(slot: slot, id: row.id))
+    }
 
     /// Section content for `slot` on a detail screen; nil renders nothing (the section is skipped).
     @MainActor

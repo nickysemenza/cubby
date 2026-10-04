@@ -22,7 +22,7 @@ import type { TaskBoardPatch } from "./board-types";
 
 /**
  * The board's `chartData` filters — the workflow *input* type (branded ids widen to
- * `string`), so `projectSubtreeTasksFilters` and a bare `{ topLevelOnly: true }`
+ * `string`), so a bare `{ topLevelOnly: true }`
  * both fit. The same value keys the query and this optimistic patch. Not
  * exported — only `BoardCacheTarget` (below) is a public surface now that
  * `TaskBoard`'s callers pass a `BoardCacheTarget`, not a bare filters object.

@@ -28,7 +28,7 @@ import type {
  * Every record is keyed by the generated id union, so adding a renderer, slot,
  * or hero action to a declaration is a type error here until it is classified.
  * `unsupported` is a deliberate, disclosed gap (the native screen shows the
- * reason); `NATIVE_UNSUPPORTED_CEILING` only shrinks.
+ * reason); `NATIVE_27_CEILING` only shrinks.
  */
 export type NativeCoverageEntry =
   | { readonly status: "implemented" | "generic" | "ownedElsewhere" }
@@ -235,21 +235,25 @@ export const nativeCoverage = {
       "ingredient.recipe-usages",
       "cookbook.toc",
       "cookbook.import-progress",
+      // One generic report view draws these from the server-composed
+      // `entityReport.get` blocks (stats, chart, table, schedule, note).
+      "project.budget",
+      "project.contribution",
+      "project.analytics",
+      "project.schedule",
+      "location.contents-valuation",
+      // Read-only recipes with scale and cost; adding food, rescaling, removing and the portion
+      // preparation workflow stay on web.
+      "meal.composition",
     ]),
     ...unsupported(
       [
         "expense.settlement",
         "image.associations",
         "location.ai-description",
-        "location.contents-valuation",
-        "meal.composition",
         "product.cookbooks",
         "product.labels",
         "product.recipe-appearances",
-        "project.analytics",
-        "project.budget",
-        "project.contribution",
-        "project.schedule",
         "purchase.financial-settlement",
         "purchase.project-allocation",
         "purchase.reconciliation",
@@ -285,7 +289,7 @@ export const nativeCoverage = {
    * at all), so each field is classified here as `<entity>.<field>`: `implemented` ones are drawn
    * from a `valueSchema` (each needs a read-to-input vector in `structured-roundtrip.json`); the
    * rest are read-only natively. Every field with that renderer must appear (asserted by the
-   * unit test), and `NATIVE_UNSUPPORTED_CEILING.structuredField` only shrinks.
+   * unit test), and `NATIVE_27_CEILING.structuredField` only shrinks.
    */
   structuredField: {
     ...implemented(["recipe.sections"]),
@@ -566,12 +570,12 @@ export const nativeHeroActionPlans = {
  * new web-only declaration shipped without a native path and needs a
  * justification in review.
  */
-export const NATIVE_UNSUPPORTED_CEILING = {
+export const NATIVE_27_CEILING = {
   control: 0,
   list: 0,
   detail: 0,
   heroAction: 0,
-  detailSlot: 33,
+  detailSlot: 27,
   listSlot: 0,
   structuredField: 8,
 } as const satisfies Record<NativeCoverageKind, number>;

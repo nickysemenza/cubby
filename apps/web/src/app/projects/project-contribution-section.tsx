@@ -1,4 +1,5 @@
-import type { ProjectContributionOut } from "@cubby/schemas/household-contribution";
+import { type ProjectContributionOut } from "@cubby/schemas/household-contribution";
+import { contributionGapLabels } from "@cubby/schemas/household-contribution-labels";
 import { UsersIcon } from "@phosphor-icons/react/dist/csr/Users";
 import { WalletIcon } from "@phosphor-icons/react/dist/csr/Wallet";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
@@ -9,7 +10,6 @@ import { useId } from "react";
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import {
   ContributionGapTargets,
-  contributionGapLabels,
   MoneyCell,
 } from "~/features/finance/household-contribution-format";
 import { householdContribution } from "~/integrations/tanstack-query/generated/catalog.gen";
@@ -51,7 +51,7 @@ export function ProjectContributionReport({
         <StatTile label="Whole-group cost">
           {formatCurrency(data.wholeGroupCost)}
         </StatTile>
-        {/* The same three quantities BudgetStrip shows above, from the same
+        {/* The same three quantities project budget shows above, from the same
             helper — a single netted figure hides which is which. */}
         <StatTile label="Actual">{formatCurrency(data.actualSpend)}</StatTile>
         <StatTile label="Committed">

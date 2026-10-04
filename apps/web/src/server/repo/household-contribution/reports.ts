@@ -462,7 +462,7 @@ export async function projectContribution(
   // ship one entry per expense — 5,717 on the Household project alone.
   const gapLimit = 200;
 
-  // The same decomposition the project page's BudgetStrip already shows, computed
+  // The same decomposition the project budget already shows, computed
   // from the identical helper so the two panels cannot disagree about what
   // "committed" means. `wholeGroupCost` stays the blended figure it always was.
   const spend = splitExpenseSpend(

@@ -1,27 +1,9 @@
-import type {
-  HouseholdContributionGapCode,
-  HouseholdContributionGapOut,
-} from "@cubby/schemas/household-contribution";
+import type { HouseholdContributionGapOut } from "@cubby/schemas/household-contribution";
 import { Link } from "@tanstack/react-router";
 
 import { entityDetailLink } from "~/entity/entities";
 import { formatCurrency } from "~/lib/utils";
 import { TableCell } from "~/ui/primitives/table";
-
-export const contributionGapLabels = {
-  missing_beneficiaries: "No beneficiaries recorded",
-  missing_funders: "No original funder recorded",
-  partial_beneficiaries: "Some beneficiary share is unattributed",
-  partial_funders: "Some original funding is unattributed",
-  unpriced_expense: "Expense has no price",
-  transfer_evidence_one_sided: "Transfer has evidence from only one side",
-  beneficiary_assumed_household: "Consumption assumed to be the household's",
-  funder_account_unowned: "Paid from an account with no owner recorded",
-  // "Committed" is the word BudgetStrip already uses for future spend on this
-  // same page; two panels disagreeing about vocabulary is how this got
-  // confusing in the first place.
-  funder_not_yet_paid: "Committed, not yet paid",
-} satisfies Record<HouseholdContributionGapCode, string>;
 
 /** Both EXP- and LTR- records now have browser detail routes. */
 export function ContributionGapTargets({

@@ -62,6 +62,12 @@ const aggregateForCost = (cost: SQL<number | null>) => ({
   count: sql<number>`count(*)::int`,
 });
 
+const summaryFields = (aggregate: ReturnType<typeof aggregateForCost>) => ({
+  ...aggregate,
+  actualCount: sql<number>`count(*) filter (where ${expense.future} = false)::int`,
+  plannedCount: sql<number>`count(*) filter (where ${expense.future} = true)::int`,
+});
+
 const analyticsCost = (scope: ExpenseAllocationProjectScope | undefined) =>
   scope
     ? expenseAllocatedCostSql(sql`${expense.id}`, scope)
@@ -93,6 +99,27 @@ export async function expenseMonthlySummary(
     .where(datedWhereClause)
     .groupBy(MONTH_BUCKET)
     .orderBy(MONTH_BUCKET);
+}
+
+/**
+ * Actual / committed / credits / net under a filter set: `expenseAnalytics`'s
+ * `summary`, without its other eight queries. The project budget reads this so
+ * its figures cannot drift from the analytics view's totals.
+ */
+export async function expenseSpendSummary(
+  db: Database,
+  filters: ExpenseFilters,
+): Promise<ExpenseAnalyticsOut["summary"]> {
+  const projectScope = await resolveExpenseProjectAllocationScope(db, filters);
+  const whereClause = await buildExpenseWhereClause(db, filters, {
+    projectScope,
+  });
+  const [summary] = await getDb(db)
+    .select(summaryFields(aggregateForCost(analyticsCost(projectScope))))
+    .from(expense)
+    .where(whereClause);
+  // A GROUP-BY-less aggregate always returns exactly one row.
+  return summary!;
 }
 
 export async function expenseAnalytics(
@@ -128,14 +155,7 @@ export async function expenseAnalytics(
     byProjectResult,
     byVendor,
   ] = await Promise.all([
-    getDb(db)
-      .select({
-        ...aggregate,
-        actualCount: sql<number>`count(*) filter (where ${expense.future} = false)::int`,
-        plannedCount: sql<number>`count(*) filter (where ${expense.future} = true)::int`,
-      })
-      .from(expense)
-      .where(whereClause),
+    getDb(db).select(summaryFields(aggregate)).from(expense).where(whereClause),
     getDb(db)
       .select({ ...aggregate })
       .from(expense)

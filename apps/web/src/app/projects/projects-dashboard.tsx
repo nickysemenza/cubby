@@ -335,7 +335,7 @@ function OverviewView({
       {
         // `estimateTotal` is null when NOTHING in scope has a `costEstimate`
         // (nullable end-to-end — see dashboard-summary.ts) — "—", not "$0",
-        // for the same reason a per-project BudgetStrip never shows a $0
+        // for the same reason a per-project budget never shows a $0
         // estimate it doesn't have. A PARTIAL population still sums (real
         // money from the projects that DO have one) but discloses which
         // slice of the portfolio that is, rather than presenting it as a
@@ -352,7 +352,7 @@ function OverviewView({
             : undefined,
       },
       {
-        // Portfolio equivalent of the per-project BudgetStrip's "Committed"
+        // Portfolio equivalent of the per-project budget's "Committed"
         // figure, split forward by day window (90d is the headline since it's
         // the widest — the sub-line breaks out how much of it lands sooner).
         label: "Committed (90d)",
