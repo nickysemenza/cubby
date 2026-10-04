@@ -130,7 +130,12 @@ const countLabel = (count: number) =>
  * `lines` are the live expenses that exist among the requested ids.
  */
 export function checkLinkExpenses(
-  purchase: { id: PurchaseShortcode; expenseTotal: number },
+  purchase: {
+    id: PurchaseShortcode;
+    expenseTotal: number;
+    /** Expenses already on the purchase with no cost: they keep the total partial. */
+    unpricedExpenseCount: number;
+  },
   lines: readonly {
     id: ExpenseShortcode;
     cost: number | null;
@@ -181,6 +186,10 @@ export function checkLinkExpenses(
     reason: null,
     note: `${countLabel(ids.length)} selected · ${formatCurrency(selectedTotal)}${
       unpriced > 0 ? ` · ${unpriced} without a cost` : ""
+    }${
+      purchase.unpricedExpenseCount > 0
+        ? ` · ${purchase.unpricedExpenseCount} already on this purchase without a cost`
+        : ""
     }. Purchase expense total would go to ${formatCurrency((toCents(purchase.expenseTotal) + totalCents) / 100)}.`,
     confirm:
       movedCount > 0

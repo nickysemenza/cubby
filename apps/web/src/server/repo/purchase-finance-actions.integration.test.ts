@@ -12,6 +12,7 @@ import { notDeleted } from "./database-helpers";
 import {
   checkLinkExpensesFor,
   explicitlyAttachedProductIds,
+  checkSplitFor,
   listLinkExpenseCandidates,
   loadSplitOriginal,
 } from "./purchase-finance-actions";
@@ -252,6 +253,56 @@ describe("split and attach checks against the ledger", () => {
           and(eq(expense.shortcode, source.shortcode), notDeleted(expense)),
         );
       expect(live).toHaveLength(1);
+    });
+
+    it("refuses a project that does not exist, as the write would", async () => {
+      const source = await original(10);
+      const code = parseShortcodeFor("expense", source.shortcode);
+      const check = await checkSplitFor(ctx.db, {
+        expenseId: code,
+        parts: [{ ...draft("A", "4"), projectId: "PRJ-ZZZZ" }, draft("B", "6")],
+      });
+      expect(check.split).toBeNull();
+      expect(check.reason).toMatch(/^Part 1:/);
+    });
+
+    it("refuses a part with no resolvable trade, as the write would", async () => {
+      const source = await original(10);
+      const code = parseShortcodeFor("expense", source.shortcode);
+      const parts = [
+        { ...draft("A", "4"), trade: null },
+        { ...draft("B", "6"), trade: null },
+      ];
+      const check = await checkSplitFor(ctx.db, { expenseId: code, parts });
+      expect(check.split).toBeNull();
+      expect(check.reason).toMatch(/requires a trade/);
+      await expect(
+        splitExpense(
+          ctx.db,
+          {
+            expenseId: code,
+            parts: parts.map((part) => ({
+              ...part,
+              cost: Number(part.cost),
+              projectId: null,
+              productId: null,
+              productQuantity: null,
+            })),
+          },
+          ctx.actor,
+        ),
+      ).rejects.toThrow(/requires a trade/);
+    });
+
+    it("accepts parts the write accepts", async () => {
+      const source = await original(10);
+      const code = parseShortcodeFor("expense", source.shortcode);
+      const check = await checkSplitFor(ctx.db, {
+        expenseId: code,
+        parts: [draft("A", "4"), draft("B", "6")],
+      });
+      expect(check.reason).toBeNull();
+      expect(check.split).not.toBeNull();
     });
 
     it("asks for an attribution choice instead of defaulting one", async () => {

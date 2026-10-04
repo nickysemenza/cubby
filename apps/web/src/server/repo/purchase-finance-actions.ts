@@ -1,3 +1,4 @@
+import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   type ExpenseShortcode,
   parseShortcodeFor,
@@ -9,6 +10,8 @@ import type {
   purchaseLinkExpensesCandidatesOut,
   purchaseLinkExpensesCheckInput,
   purchaseLinkExpensesCheckOut,
+  purchaseSplitCheckInput,
+  purchaseSplitCheckOut,
 } from "@cubby/schemas/purchase";
 import { and, count, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
@@ -20,8 +23,9 @@ import {
   ledgerSourceClaim,
   purchase,
 } from "~/server/db/schema";
-import { createAppError } from "~/server/errors/app-error";
+import { AppError, createAppError } from "~/server/errors/app-error";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { validateExpenseInheritance } from "~/server/repo/expense-inheritance";
 import { getExpenseByShortcode } from "~/server/repo/expense/crud";
 import { expenseList } from "~/server/repo/expense/lookup";
 import { getPurchaseByShortcode } from "~/server/repo/purchase";
@@ -33,7 +37,10 @@ import {
   expenseFiltersForScope,
 } from "~/server/repo/purchase-link-draft";
 import { listPurchaseProducts } from "~/server/repo/purchase-products";
-import type { SplitOriginal } from "~/server/repo/purchase-split-draft";
+import {
+  checkSplitDraft,
+  type SplitOriginal,
+} from "~/server/repo/purchase-split-draft";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 /**
@@ -143,7 +150,11 @@ export async function checkLinkExpensesFor(
             and(inArray(expense.shortcode, requested), notDeleted(expense)),
           );
   return checkLinkExpenses(
-    { id: target.id, expenseTotal: target.expenseTotal },
+    {
+      id: target.id,
+      expenseTotal: target.expenseTotal,
+      unpricedExpenseCount: target.unpricedExpenseCount,
+    },
     rows.map((row) => ({
       id: parseShortcodeFor("expense", row.id),
       cost: row.cost,
@@ -170,4 +181,66 @@ export async function explicitlyAttachedProductIds(
       .filter((item) => item.linkAttachedAt !== null)
       .map((item) => item.productId),
   );
+}
+
+type SplitCheckInput = z.output<typeof purchaseSplitCheckInput>;
+type SplitCheckOut = z.output<typeof purchaseSplitCheckOut>;
+
+/**
+ * The split form's check: the pure rules of `checkSplitDraft`, then the same per-part checks the
+ * write makes — the project exists, only a principal line carries a product, and the part's
+ * trade and project resolve (`validateExpenseInheritance`). A split this accepts is one the write
+ * accepts; the write still validates on its own.
+ */
+export async function checkSplitFor(
+  db: Database,
+  input: SplitCheckInput,
+): Promise<SplitCheckOut> {
+  const original = await loadSplitOriginal(db, input.expenseId);
+  const result = checkSplitDraft(original, input);
+  const body = result.split;
+  if (!body || !original.purchaseId) return result;
+  try {
+    const purchaseId = await resolveOrThrow(
+      db,
+      "purchase",
+      original.purchaseId,
+    );
+    for (const [index, part] of body.parts.entries()) {
+      const where = `Part ${index + 1}`;
+      try {
+        const productId = part.productId
+          ? await resolveOrThrow(db, "product", part.productId)
+          : null;
+        const lineKind = inferExpenseLineKind({ name: part.name, productId });
+        if (lineKind !== "principal" && productId !== null)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Only principal Expenses may link a Product.",
+          );
+        await validateExpenseInheritance(db, {
+          lineKind,
+          projectId: part.projectId
+            ? await resolveOrThrow(db, "project", part.projectId)
+            : null,
+          productId,
+          purchaseId,
+          trade: part.trade,
+        });
+      } catch (error) {
+        if (error instanceof AppError)
+          return {
+            ...result,
+            split: null,
+            reason: `${where}: ${error.message}`,
+          };
+        throw error;
+      }
+    }
+  } catch (error) {
+    if (error instanceof AppError)
+      return { ...result, split: null, reason: error.message };
+    throw error;
+  }
+  return result;
 }

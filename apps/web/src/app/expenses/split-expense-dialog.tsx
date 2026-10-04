@@ -451,7 +451,8 @@ export function SplitExpenseDialog({
         label: `Split into ${parts.length}`,
         pendingLabel: "Splitting...",
         pending: splitMutation.isPending,
-        disabled: blocked || start.data === undefined,
+        disabled:
+          blocked || start.data === undefined || check.isPlaceholderData,
         onClick: async () => {
           // Ask again with exactly what is typed now: the live check may lag a keystroke.
           const latest = await queryClient.fetchQuery({

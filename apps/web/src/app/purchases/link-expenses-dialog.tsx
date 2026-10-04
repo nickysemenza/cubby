@@ -5,7 +5,11 @@ import {
   type purchaseLinkExpenseCandidate,
 } from "@cubby/schemas/purchase";
 import { useDebouncedValue } from "@tanstack/react-pacer";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import type { z } from "zod";
@@ -39,6 +43,7 @@ import { Description } from "~/ui/primitives/description";
 import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
 import { Input } from "~/ui/primitives/input";
 import { NoneValue } from "~/ui/primitives/none-value";
+import { StatusText } from "~/ui/primitives/status-text";
 
 /** The table shows every candidate the server returns (it caps the list at 100). */
 const CANDIDATE_PAGE_SIZE = 100;
@@ -49,6 +54,33 @@ const isUpdater = (
   updater: Updater<RowSelectionState>,
 ): updater is (previous: RowSelectionState) => RowSelectionState =>
   typeof updater === "function";
+
+/** What the selection amounts to, in the server's words, and why it cannot be attached. */
+function AttachSummary({
+  count,
+  note,
+  confirmation,
+  problem,
+}: {
+  count: number;
+  note: string | null | undefined;
+  confirmation: string | null;
+  problem: string | null | undefined;
+}) {
+  return (
+    <Stack gap="tight" className="mr-auto text-left">
+      <span className="font-mono text-xs tabular-nums">
+        {count === 0 ? "0 selected" : (note ?? `${count} selected`)}
+      </span>
+      {confirmation ? (
+        <StatusText tone="warning" className="text-xs">
+          {confirmation}
+        </StatusText>
+      ) : null}
+      {problem ? <Description size="2xs">{problem}</Description> : null}
+    </Stack>
+  );
+}
 
 export function LinkExpensesDialog({
   open,
@@ -99,8 +131,20 @@ export function LinkExpensesDialog({
     placeholderData: keepPreviousData,
   });
 
+  const queryClient = useQueryClient();
+  // The sentence a person has been shown for the selection they are about to attach; it only
+  // counts for that exact selection.
+  const [shown, setShown] = useState<{ key: string; text: string } | null>(
+    null,
+  );
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const selectionKey = selected.join(",");
+  const confirmation = shown?.key === selectionKey ? shown.text : null;
+
   const resetAndClose = (next: boolean) => {
     if (!next) {
+      setShown(null);
+      setAttachError(null);
       setSelectedRows(new Map());
       setSearchInput("");
       setScope("vendorOrUnattached");
@@ -112,6 +156,33 @@ export function LinkExpensesDialog({
     success: "Expenses attached to this purchase",
     onSuccess: () => resetAndClose(false),
   });
+
+  // The live check may describe an earlier selection (it keeps the previous answer while the
+  // next loads), so attaching asks again for exactly the selection as it is now, and sends only
+  // what that answer returns. Expenses that would move off another purchase wait for a second,
+  // explicit tap.
+  const attach = async () => {
+    const latest = await queryClient.fetchQuery({
+      ...purchaseOperations.checkLinkExpenses.queryOptions({
+        purchaseId: purchase.id,
+        expenseIds: selected,
+      }),
+      staleTime: 0,
+    });
+    if (!latest.expenseIds) {
+      setAttachError(latest.reason ?? "These expenses cannot be attached.");
+      return;
+    }
+    setAttachError(null);
+    if (latest.confirm && confirmation !== latest.confirm) {
+      setShown({ key: selectionKey, text: latest.confirm });
+      return;
+    }
+    linkMutation.mutate({
+      purchaseId: purchase.id,
+      expenseIds: latest.expenseIds,
+    });
+  };
 
   const rowSelection = useMemo<RowSelectionState>(
     () => Object.fromEntries(selected.map((id) => [id, true])),
@@ -239,30 +310,25 @@ export function LinkExpensesDialog({
       title={`Attach expenses to ${purchaseLabel(purchase)}`}
       description="One purchase can span trades. Attaching moves each expense onto this purchase and off its current purchase."
       summary={
-        <Stack gap="tight" className="mr-auto text-left">
-          <span className="font-mono text-xs tabular-nums">
-            {selected.length === 0
-              ? "0 selected"
-              : (check.data?.note ?? `${selected.length} selected`)}
-          </span>
-          {check.data?.reason ? (
-            <Description size="2xs">{check.data.reason}</Description>
-          ) : null}
-        </Stack>
+        <AttachSummary
+          count={selected.length}
+          note={check.data?.note}
+          confirmation={confirmation}
+          problem={attachError ?? check.data?.reason}
+        />
       }
       onCancel={() => resetAndClose(false)}
       primary={{
-        label: `Attach ${selected.length}`,
+        label: confirmation
+          ? `Confirm: attach ${selected.length}`
+          : `Attach ${selected.length}`,
         pendingLabel: "Attaching...",
         pending: linkMutation.isPending,
-        disabled: !check.data?.expenseIds,
-        onClick: () => {
-          if (check.data?.expenseIds)
-            linkMutation.mutate({
-              purchaseId: purchase.id,
-              expenseIds: check.data.expenseIds,
-            });
-        },
+        disabled:
+          selected.length === 0 ||
+          check.isPlaceholderData ||
+          !check.data?.expenseIds,
+        onClick: attach,
       }}
     >
       <Row align="center" gap="sm">

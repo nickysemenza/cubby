@@ -109,7 +109,11 @@ describe("composeLinkExpenseCandidates", () => {
 });
 
 describe("checkLinkExpenses", () => {
-  const purchase = { id: pur("PUR-4K7M"), expenseTotal: 100 };
+  const purchase = {
+    id: pur("PUR-4K7M"),
+    expenseTotal: 100,
+    unpricedExpenseCount: 0,
+  };
   const lines = [
     { id: exp("EXP-AAAA"), cost: 12.5, purchaseId: null },
     { id: exp("EXP-BBBB"), cost: 0.1, purchaseId: pur("PUR-ZZZZ") },
@@ -153,6 +157,15 @@ describe("checkLinkExpenses", () => {
     ]);
     expect(result.selectedTotal).toBe(12.5);
     expect(result.note).toMatch(/1 without a cost/);
+  });
+
+  it("also discloses expenses already on the purchase that have no cost", () => {
+    const result = checkLinkExpenses(
+      { ...purchase, unpricedExpenseCount: 2 },
+      lines,
+      [exp("EXP-AAAA")],
+    );
+    expect(result.note).toMatch(/2 already on this purchase without a cost/);
   });
 
   it("refuses an expense that is gone or already here", () => {

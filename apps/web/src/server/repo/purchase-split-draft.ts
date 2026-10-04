@@ -80,9 +80,11 @@ export function startSplitDraft(original: SplitOriginal): StartOut {
     confirm: SPLIT_CONFIRM,
     originalCost: original.cost,
     productName: original.productName,
-    productNote: original.productId
-      ? `"Product" hands ${original.productName ?? "the linked product"} to one part; the rest start with no product.`
-      : null,
+    // An unitemized allocation cannot link a product, so none is offered.
+    productNote:
+      original.productId && !original.unitemized
+        ? `"Product" hands ${original.productName ?? "the linked product"} to one part; the rest start with no product.`
+        : null,
     maxParts: MAX_SPLIT_EXPENSE_PARTS,
     parts: [
       {
@@ -144,6 +146,10 @@ export function checkSplitDraft(
   parts.forEach((part, index) => {
     const name = part.name.trim();
     if (name === "") return refuse(`${label(index)} needs a name.`);
+    if (original.cost === null && part.cost.trim() === "")
+      return refuse(
+        `${label(index)}: enter a cost — the original has no cost recorded, so a blank would invent $0.`,
+      );
     const cost = costs[index];
     if (cost === null || cost === undefined)
       return refuse(

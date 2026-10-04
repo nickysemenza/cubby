@@ -138,6 +138,27 @@ describe("checkSplitDraft", () => {
     expect(result.note).toMatch(/no cost recorded/);
   });
 
+  it("refuses a blank part cost when the original has none, never inventing $0", () => {
+    const result = check(
+      [part({ cost: "5" }), part({ cost: "" })],
+      original({ cost: null }),
+    );
+    expect(result.split).toBeNull();
+    expect(result.reason).toMatch(/Part 2: enter a cost/);
+    expect(result.reason).toMatch(/no cost recorded/);
+  });
+
+  it("does not offer a product on an unitemized allocation", () => {
+    const start = startSplitDraft(
+      original({
+        productId: productShortcode.parse("PRD-4K7M"),
+        productName: "Sample saw",
+        unitemized: true,
+      }),
+    );
+    expect(start.productNote).toBeNull();
+  });
+
   it("allows a negative part for a credit line", () => {
     const result = check([part({ cost: "35" }), part({ cost: "-5" })]);
     expect(result.reason).toBeNull();

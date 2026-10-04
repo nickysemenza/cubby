@@ -24,6 +24,7 @@ import {
 } from "~/server/repo/purchase";
 import {
   checkLinkExpensesFor,
+  checkSplitFor,
   explicitlyAttachedProductIds,
   listLinkExpenseCandidates,
   loadSplitOriginal,
@@ -36,10 +37,7 @@ import { listPurchaseProducts } from "~/server/repo/purchase-products";
 import { checkSettlementAllocationDraft } from "~/server/repo/purchase-settlement-allocation";
 import { listPurchaseSettlementCandidates } from "~/server/repo/purchase-settlement-candidates";
 import { composeSettlementReview } from "~/server/repo/purchase-settlement-review";
-import {
-  checkSplitDraft,
-  startSplitDraft,
-} from "~/server/repo/purchase-split-draft";
+import { startSplitDraft } from "~/server/repo/purchase-split-draft";
 import {
   resolveAllPresent,
   resolveOrThrow,
@@ -216,11 +214,7 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
   split: (context, input) => splitExpenseWorkflow(context, input),
   splitStart: async (context, input) =>
     startSplitDraft(await loadSplitOriginal(context.db, input.expenseId)),
-  checkSplit: async (context, input) =>
-    checkSplitDraft(
-      await loadSplitOriginal(context.db, input.expenseId),
-      input,
-    ),
+  checkSplit: (context, input) => checkSplitFor(context.db, input),
   linkExpenseCandidates: (context, input) =>
     listLinkExpenseCandidates(context.db, input),
   checkLinkExpenses: (context, input) =>
