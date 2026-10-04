@@ -106,7 +106,7 @@ successful preparation still capture the UI tree.
 A cold cache still requires compilation; warm-cache performance must be
 measured from the full hosted job, not just the agent test duration.
 
-Dispatch **CI** manually with `tester_army` set to `web`, `ios`, or `both` and
+Dispatch **CI** manually with `tester_army` set to `web`, `ios`, `both`, or `import` and
 `simulator_e2e` disabled. These optional jobs do not run on PRs and do not replace
 the required checks. Run each engine three times for the live acceptance sample.
 
@@ -117,9 +117,27 @@ read-write cache; normal runs disable it. Compare the resulting summaries for
 model calls, tokens, timings, replay hits and handoffs. Cache eligibility depends
 on the engine's observed state, so a warm run may still use the model.
 
+## Live import journey
+
+`pnpm test:e2e:agent:import` is the one journey where nothing behind the
+browser is scripted. Tester Army opens a synthetic vendor, imports its saved
+itemized order confirmation, and follows the import run. The browser talks to
+the coupled web + purchase-agent harness (local workerd, queue, Durable
+Objects, MCP) instead of the standard E2E runtime. Its two model peers are
+replaced by `tooling/tester-army/live-gateway.ts`, so the pi coordinator and
+the web Worker's extraction and audit call real models. The driver uses the
+same `cubby-testing` gateway and token. The journey passes only when the run
+completes on its own and the committed Purchase carries the confirmation's
+order and amount. The run page must also stream the agent transcript. The
+bundle adds `gateway-usage.json`: request counts per gateway route, never
+content. Deterministic coverage of the same orchestration stays in
+`purchase-agent-scenarios.integration.test.ts`; this lane checks that real
+models complete it.
+
 ## Evidence
 
-Bundles live under `artifacts/tester-army/web/<run>/` or
+Bundles live under `artifacts/tester-army/web/<run>/`,
+`artifacts/tester-army/import/<run>/`, or
 `artifacts/sim-tester-army-e2e/<run>/`. They contain `run-manifest.json`,
 `run-results.json`, `agent-summary.json` when the engine produced one, and
 `SHA256SUMS`. Verify transferred evidence from its run directory with
