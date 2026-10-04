@@ -56,7 +56,6 @@ type OptimisticDeleteMutationOptions = UseMutationOptions<
 
 interface UseOptimisticDeleteOptions<TData extends { id: string }> {
   deletable: DeletableConfig | undefined;
-  extraActions?: (row: TData) => ReactNode;
   /** Testable command boundary; production uses the registered entity command. */
   commandPort?: DeleteCommandPort;
   /** Test-injectable seam for the confirm dialog's impact preview. */
@@ -97,7 +96,6 @@ export function useOptimisticDelete<
   TData extends { id: string; name?: string | null },
 >({
   deletable,
-  extraActions,
   commandPort,
   impactPreviewOperations,
   emptyLabel,
@@ -274,13 +272,11 @@ export function useOptimisticDelete<
     [],
   );
 
-  // Combine user's extra actions with delete action if deletable is provided
   const combinedExtraActions = useMemo(() => {
-    if (!deletable && !extraActions) return undefined;
+    if (!deletable) return undefined;
 
     return (row: TData) => (
       <>
-        {extraActions?.(row)}
         {deletable && (
           <>
             <DropdownMenuSeparator />
@@ -295,7 +291,7 @@ export function useOptimisticDelete<
         )}
       </>
     );
-  }, [deletable, extraActions, requestDelete]);
+  }, [deletable, requestDelete]);
 
   const submitDelete = useCallback(async () => {
     if (!deleteTargets || deleteTargets.length === 0) return;
