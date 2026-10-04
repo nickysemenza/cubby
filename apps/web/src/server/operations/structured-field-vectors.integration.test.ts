@@ -70,7 +70,8 @@ describe("structured field read-to-input vectors", () => {
           "ledgerParty",
         ])
         .parse(entity),
-      data: z.json().parse(wireJson(data)),
+      // SAFETY: each case passes the create input of the entity it names; the kernel parses it.
+      data: data as never,
     });
     if (created.action !== "create") throw new Error("unreachable");
     return z.object({ id: z.string() }).loose().parse(created.item).id;
@@ -233,7 +234,9 @@ describe("structured field read-to-input vectors", () => {
       )?.[1];
       if (schema === undefined) throw new Error(`No valueSchema for ${id}`);
       const stableInput = stabilize(
-        wireValue(project(record[field] ?? null, schema), schema),
+        z
+          .json()
+          .parse(wireValue(project(record[field] ?? null, schema), schema)),
       );
       const vector = vectors.find(
         (candidate) => `${candidate.entity}.${candidate.field}` === id,

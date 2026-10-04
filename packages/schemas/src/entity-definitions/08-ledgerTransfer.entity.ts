@@ -164,7 +164,11 @@ export default defineEntity({
       {
         key: "sourceClaims",
         kind: "json",
-        control: { kind: "specialized", renderer: "structured-field" },
+        control: {
+          kind: "specialized",
+          renderer: "structured-field",
+          sectionOverride: "evidence",
+        },
         provenance: {
           kind: "relation",
           sources: [{ label: "Source claims" }],
@@ -326,7 +330,14 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        full: ["fromPartyId", "toPartyId", "amount", "date", "notes"],
+        full: [
+          "fromPartyId",
+          "toPartyId",
+          "amount",
+          "date",
+          "notes",
+          "sourceClaims",
+        ],
       },
       create: ["full"],
       update: ["full"],

@@ -60,6 +60,7 @@ const jsonSchema: z.ZodType<JsonSchema> = z.lazy(() =>
 const humanize = (raw: string) => {
   const words = raw
     .replaceAll(/([a-z0-9])([A-Z])/gu, "$1 $2")
+    .replaceAll(/([a-z]{2})(\d)/gu, "$1 $2")
     .replaceAll(/[_-]+/gu, " ")
     .toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);

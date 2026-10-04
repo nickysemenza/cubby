@@ -622,6 +622,7 @@ export default defineEntity({
           "orderEvidence",
           "orderEmailSenders",
           "browserDomains",
+          "agentHints",
           "returnWindowDays",
           "notes",
         ],

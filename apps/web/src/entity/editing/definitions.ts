@@ -39,6 +39,8 @@ import {
   parseEntityEditUpdateInput,
 } from "./mutation-data";
 import type { EntityEditRegistry } from "./registry";
+import { structuredSchemaFor } from "./structured-schema";
+import { blank, project, wireValue } from "./structured-value";
 import type {
   EditableEntity,
   EntityEditAccess,
@@ -396,6 +398,23 @@ const builderFor = <E extends EditableEntity>(
     return mode === "inherit" || mode === undefined ? "inherit" : "explicit";
   };
 
+  // A `structured-field` is edited by the generic structured-value editor over its generated
+  // schema: the form holds exactly what the editor would send back untouched (the read clipped to
+  // the input schema, hidden keys such as a claim's `sourceKey` kept), so an unedited field is
+  // never in the patch and an edited claim keeps its identity.
+  const structuredSchemaOf = (id: string) =>
+    fieldModelByKey.get(id)?.control?.renderer === "structured-field"
+      ? structuredSchemaFor(entity, id)
+      : undefined;
+  const recordValueFor = (id: string, record: EntityEditRecord | undefined) => {
+    const raw = valueFor(record, id);
+    const structured = structuredSchemaOf(id);
+    const json = z.json().safeParse(raw);
+    return structured !== undefined && json.success
+      ? z.json().parse(wireValue(project(json.data, structured), structured))
+      : raw;
+  };
+
   const makeField = (id: string, options?: FieldOptions<E>): EditField<E> => ({
     entity,
     id,
@@ -407,7 +426,7 @@ const builderFor = <E extends EditableEntity>(
       if (id === IMAGE_PURPOSES_FIELD) return {};
       if (id === "imageOrder")
         return operation === "update" ? recordImageIds(record) : [];
-      const existing = valueFor(record, id);
+      const existing = recordValueFor(id, record);
       if (existing !== undefined) return existing;
       const resolutionMode = initialResolutionMode(id, record);
       if (resolutionMode !== undefined) return resolutionMode;
@@ -424,9 +443,25 @@ const builderFor = <E extends EditableEntity>(
         return context.parentProjectId;
       }
       if (operation !== "create") return null;
-      return field ? genericCreateDefault(entity, field) : null;
+      const created = field ? genericCreateDefault(entity, field) : null;
+      const structured = structuredSchemaOf(id);
+      // A non-nullable structured value starts as its blank (an empty list, an object of its
+      // required keys; a variant stays unchosen) rather than a `null` the create input rejects.
+      return created === null &&
+        structured !== undefined &&
+        !structured.nullable
+        ? z.json().parse(blank(structured))
+        : created;
     },
-    normalize: options?.normalize ?? ((value) => value),
+    normalize:
+      options?.normalize ??
+      ((value) => {
+        const structured = structuredSchemaOf(id);
+        const json = z.json().safeParse(value);
+        return structured !== undefined && json.success
+          ? z.json().parse(wireValue(json.data, structured))
+          : value;
+      }),
     validate: (input) => {
       const { value } = input;
       const text = z.string().safeParse(value);
@@ -470,7 +505,7 @@ const builderFor = <E extends EditableEntity>(
       const baseline =
         options?.initial && record
           ? options.initial(input)
-          : valueFor(record, id);
+          : recordValueFor(id, record);
       if (absentRecordIdentity(entity, id, record, baseline, value))
         return undefined;
       return changed({
@@ -799,60 +834,11 @@ const normalizeSourceAliases = (value: EntityEditValue) => {
     .filter((alias) => alias.source && alias.alias);
 };
 
-const financialAccountIdentity = (patch: EntityEditValueBag) => {
-  const kind = patch.kind;
-  let identity: EntityEditValue;
-  if (kind === "credit_card") {
-    identity = {
-      kind,
-      issuer: String(patch.issuer ?? "").trim() || null,
-      network: String(patch.network ?? "").trim() || null,
-    };
-  } else if (kind === "bank_account") {
-    identity = {
-      kind,
-      institution: String(patch.institution ?? "").trim() || null,
-      accountType: String(patch.accountType ?? "checking"),
-    };
-  } else if (kind === "stored_value") {
-    identity = { kind, provider: String(patch.provider ?? "").trim() };
-  } else if (kind === "other") {
-    identity = {
-      kind,
-      institution: String(patch.institution ?? "").trim() || null,
-    };
-  } else {
-    identity = { kind: "cash" };
-  }
-  return identity;
-};
-
-/**
- * The editor's single "Last four" becomes the account's current primary card;
- * the full dated `cardNumbers` history is MCP-only.
- */
-const financialAccountCardNumbers = (patch: EntityEditValueBag) => {
-  const last4 = String(patch.last4 ?? "").trim();
-  return last4 && patch.kind !== "cash"
-    ? [{ last4, kind: "primary", validFrom: null, validTo: null, note: null }]
-    : [];
-};
-
-/** Creates flatten the identity discriminant; updates patch it in place. */
-const financialAccountCreateData = (
-  patch: EntityEditValueBag,
-): EntityEditValueBag => ({
-  name: patch.name,
-  provisional: patch.provisional,
-  identity: financialAccountIdentity(patch),
-  // Switching the kind away from stored value after picking a provider must
-  // not submit it: the server rejects a provider on any other kind.
-  providerVendorId:
-    patch.kind === "stored_value" ? (patch.providerVendorId ?? null) : null,
-  cardNumbers: financialAccountCardNumbers(patch),
-  sourceAliases: normalizeSourceAliases(patch.sourceAliases),
-  notes: patch.notes,
-});
+/** Alias rows the person left blank are dropped, not sent for the server to reject. */
+const withNormalizedAliases = (patch: EntityEditValueBag) =>
+  "sourceAliases" in patch
+    ? { ...patch, sourceAliases: normalizeSourceAliases(patch.sourceAliases) }
+    : patch;
 
 const sourceReferenceDraft = z.object({
   source: z.string(),
@@ -1174,52 +1160,10 @@ export const editHooks: EditHooksMap = {
   },
   financialAccount: {
     create: {
-      // `kind`, `issuer`, `network`, `institution`, `accountType`,
-      // `provider`, and `last4` are editor-only fields that flatten into the
-      // stored `identity` discriminant (and `last4` into the primary
-      // `cardNumbers` entry) at submit time (see `financialAccountCreateData`
-      // below) — none of them has a model field or generated schema to derive
-      // a default from.
-      capture: {
-        defaults: {
-          name: "",
-          kind: "credit_card",
-          issuer: "",
-          network: "",
-          institution: "",
-          accountType: "checking",
-          provider: "",
-          providerVendorId: null,
-          last4: "",
-          provisional: false,
-          sourceAliases: [],
-          notes: null,
-        },
-        buildData: financialAccountCreateData,
-      },
-      full: {
-        // The full create still collects the whole identity discriminant.
-        fields: fieldsFor("financialAccount", "capture"),
-        defaults: {
-          provisional: false,
-          providerVendorId: null,
-          sourceAliases: [],
-          notes: null,
-        },
-        buildData: financialAccountCreateData,
-      },
+      capture: { buildData: withNormalizedAliases },
+      full: { buildData: withNormalizedAliases },
     },
-    update: {
-      full: {
-        buildData: (patch) => {
-          if (!("sourceAliases" in patch)) return patch;
-          return {
-            ...patch,
-            sourceAliases: normalizeSourceAliases(patch.sourceAliases),
-          };
-        },
-      },
-    },
+    update: { full: { buildData: withNormalizedAliases } },
   },
   financialTransaction: {
     // `purchaseId`, `transactionDate`, `merchant`, … are editor blanks
