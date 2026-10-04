@@ -12,8 +12,10 @@
   duration, relevant output, and limits). The root owns any needed broad
   validation; others continue useful work while it runs. Reuse unchanged
   results at handoff instead of rerunning checks for publication.
-- Production migrations have one exclusive owner; establish safe data and
-  deployed-code compatibility before pushing, then verify the schema afterward.
+- Production migrations have one exclusive owner; establish that household data
+  survives before pushing, then verify the schema afterward.
+- Update the doc that owns a behavior in the same change; docs agree with the
+  code and with each other.
 - Keep edits disjoint across agents/worktrees. Claude main sessions default to
   `opus` at medium effort (`.claude/settings.json`); Codex pins no model. A
   session's explicit `/model` or effort choice wins. Work directly by default:
@@ -55,6 +57,21 @@
   routing](docs/agents/model-routing.md), select an explicit supported
   model/effort pair, and use its compact handoff contract. Preserve an explicit
   user model choice and the current main session.
+- The done report lists what the change deleted and names every check that did
+  not run.
+- A correction becomes a rule in the doc that owns it. A repeated mistake means
+  that rule is unclear: rewrite it in place.
+
+## Breaking changes
+
+One trusted household uses Cubby, and we ship and refresh every client (web,
+iOS/macOS, HTTP, MCP connections), so change contracts in place:
+
+- Change an API, RPC, MCP tool, manifest, or stored shape directly, update
+  every client in the same change, and delete the old shape. A client running
+  old code reloads, reconnects, or updates.
+- Household data is real: carry it through a migration that transforms it.
+  Ask before deleting a database or resetting data.
 
 ## Generic by default
 

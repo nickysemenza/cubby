@@ -4,8 +4,9 @@
 
 Serialize production schema changes: one owner verifies the migration and no
 application overlaps another session. Inspect constraints/data, run relevant checks,
-keep deployed and prepared code compatible, and use expand → backfill → deploy
-→ cleanup for incompatible work. Schema reaches every database only through
+and transform existing rows in the same migration that changes their shape;
+clients update with the change ([breaking changes](../../AGENTS.md#breaking-changes)).
+Schema reaches every database only through
 committed migrations in `apps/web/drizzle/`: `pnpm db:generate` writes them
 (drizzle-kit for `schema.ts`, plus a custom migration when the derived DDL in
 `src/server/db/derived-ddl.ts` changes), and `pnpm db:migrate

@@ -1065,8 +1065,8 @@ precedence rule.
 2. Add its branded id, declare its table's indexes, checks, and Drizzle
    relations in `storage`, and compose canonical input/output schemas from
    the generated factories. Keep domain refinements and relationship
-   projections explicit. A physical change still requires a compatible
-   migration; generation does not apply production DDL.
+   projections explicit. A physical change still requires a migration that
+   carries existing rows; generation does not apply production DDL.
 3. Declare its repository with `defineRepository(entity, { get, list, … })`
    (`apps/web/src/server/repo/repository.ts`) and point
    `extensions.ports.repository` at the export; the generator binds it to
