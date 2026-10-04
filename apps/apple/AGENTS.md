@@ -144,6 +144,10 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   thumbnail, badges and a record to open, plus verbs) is drawn by `RecordsBlockView`; each
   verb is a plan in `nativeCollectionActionPlans` (emitted as `collectionActionPlan`) that
   `HeroActionRunner` runs — a new verb is a plan plus a typed case in the runner, never a slot view.
+  A row `choice` and the block's `form` (approve prepared orders) are drawn by `ReportChoiceView` and
+  `ReportFormFooterView`; `ReportChoiceAnswers` (CubbyKit) holds the answers, never preselects one,
+  and assembles the `run.commitPrepared` body that `ReportSlotModel.approve` sends after the form's
+  confirmation, with a new operation id per answer change.
 - `CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json` and
   `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift` — from
   `scripts/generator/entities/render/swift-catalog.ts`. Regenerate with `pnpm generate`

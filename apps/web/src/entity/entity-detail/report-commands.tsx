@@ -1,7 +1,12 @@
 import type {
+  CommitPreparedRequest,
   ReportCommand,
   ReportCommandRequest,
 } from "@cubby/schemas/entity-report";
+import {
+  type ChoiceAnswers,
+  commitPreparedInput,
+} from "@cubby/schemas/report-choice";
 import { match } from "ts-pattern";
 
 import { runHref } from "~/app/purchases/purchase-import-links";
@@ -33,8 +38,26 @@ export function useReportCommands() {
     mutationFn: run.retryGmailSearch.mutationOptions,
     error: "Could not resend Gmail work",
   });
+  const commit = useActionMutation({
+    mutationFn: run.commitPrepared.mutationOptions,
+    error: "Could not import the prepared orders",
+  });
   return {
-    pending: control.isPending || finding.isPending || retry.isPending,
+    pending:
+      control.isPending ||
+      finding.isPending ||
+      retry.isPending ||
+      commit.isPending,
+    committed: commit.isSuccess,
+    /** Approves a prepared batch with the answers given; nothing is sent while any is missing. */
+    commit: (
+      request: CommitPreparedRequest,
+      answers: ChoiceAnswers,
+      operationId: string,
+    ) => {
+      const input = commitPreparedInput(request, answers, operationId);
+      if (input) commit.mutate(input);
+    },
     run: (request: ReportCommandRequest) =>
       match(request)
         .with({ kind: "run-control" }, (r) => {

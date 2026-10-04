@@ -53,6 +53,7 @@ private final class FakeReports: ReportServing {
         calls.withLock { $0.retries += 1 }
         throw URLError(.badServerResponse)
     }
+    func commitPrepared(_ input: RunCommitPreparedInput) async throws {}
 }
 
 private func decode<T: Decodable>(_ json: String) throws -> T {

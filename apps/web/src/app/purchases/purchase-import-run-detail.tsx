@@ -66,7 +66,6 @@ import {
   summarizePhotoDescriptions,
   type AgentWorkItem,
 } from "./agent-work-summary";
-import { PreparedPurchaseReview } from "./prepared-purchase-review";
 import { ValidationCorrectionsReview } from "./validation-corrections-review";
 
 const ACTIVE_RUN_STATUSES = new Set([
@@ -1254,15 +1253,6 @@ export function RunImportTargets({ record }: { record: RunOut }) {
           })}
         />
       )}
-    </ImportRunSlot>
-  );
-}
-
-/** Run detail slot: immutable prepared lines and their explicit review decisions. */
-export function RunImportPreparedOrders({ record }: { record: RunOut }) {
-  return (
-    <ImportRunSlot record={record}>
-      {(run) => <PreparedPurchaseReview run={run} />}
     </ImportRunSlot>
   );
 }

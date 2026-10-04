@@ -261,14 +261,26 @@ See also the image operational passes at the end of this file.
   task still needs the web. Coverage is declared once in
   `packages/schemas/src/native-coverage.ts` with a shrink-only unsupported
   ceiling per kind. Every control, list cell, detail renderer and hero action
-  is native. Remaining gaps: three Run detail slots (the live agent
-  conversation, which streams over Flue's own protocol, and prepared-order
-  approve-and-import, which needs a per-line Product picker), three finance
-  verbs (split an expense, attach expenses, attach products), eight read-only
+  is native. Remaining gaps: two Run detail slots (the live and stopped
+  agent conversation, which stream over Flue's own protocol; see the next
+  item), three finance verbs (split an expense, attach expenses, attach products), eight read-only
   structured fields, and the web-only parts inside drawn recipe/cookbook/
   ingredient and meal-composition slots. Add editor focus order or
   comprehensive sheet lifecycle only on demonstrated friction. Owners:
   `apps/apple/App/Shared`, generated `EntityCatalog`.
+
+- ⏳ **Native agent conversation streaming.** The live and stopped agent slots
+  (`run.import-agent-live`, `run.import-agent-stopped`) stay web-only on
+  purpose: the conversation is Flue's SSE stream plus prompt and abort over
+  `/api/import/runs/{id}/agent/*` (`apps/web/src/routes/api/import/`), not a
+  Cubby operation, so nothing in the OpenAPI client reaches it. Native needs a
+  Flue client in CubbyKit (authenticated SSE read, prompt POST, the abort that
+  cancels the run and its browser commands), reconnect with resume after a
+  suspended or dropped connection, and a transcript model that folds stream
+  events into the durable timeline (which native already draws from
+  `run.import-timeline`). Promote when a household member needs to prompt or
+  steer a running import from the phone instead of waiting for it to pause on
+  web, then lower `NATIVE_UNSUPPORTED_CEILING.detailSlot` to zero.
 
 - ⏳ **Native structured-value editor follow-ups.** Native edits `unitMappings`,
   `labelNutrition`, `externalIds`, `sourceAliases`, `sourceRefs`, recipe

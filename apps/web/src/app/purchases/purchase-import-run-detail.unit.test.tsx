@@ -22,7 +22,6 @@ import {
   RunImportAgentActive,
   RunImportAgentStopped,
   RunImportControls,
-  RunImportPreparedOrders,
   RunImportTargets,
   RunPhotoBatch,
 } from "./purchase-import-run-detail";
@@ -231,7 +230,6 @@ function RunImportSlots({ record }: { record: RunOut }) {
       <RunImportControls record={record} />
       <RunImportAgentActive record={record} />
       <RunImportTargets record={record} />
-      <RunImportPreparedOrders record={record} />
       <RunImportAgentStopped record={record} />
     </>
   );

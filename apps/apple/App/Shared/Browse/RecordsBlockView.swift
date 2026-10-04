@@ -148,6 +148,8 @@ struct RecordsBlockView: View {
     @State private var isSearching = false
     @State private var startedRun: String?
     @State private var verbError: String?
+    // The answers to the block's choices (a prepared import's per-line decisions).
+    @State private var answers = ReportChoiceAnswers()
 
     /// Exactly the finance verbs `native-coverage.ts` marks `implemented`
     /// (`NativeCoverageViewPathTests` asserts it); `verbButton` runs each.
@@ -201,6 +203,10 @@ struct RecordsBlockView: View {
                     }
                     VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                         RecordRowView(row: row, large: records.largeThumbnails, model: model)
+                        if let choice = row.choice {
+                            ReportChoiceView(
+                                choice: choice, answers: $answers, disabled: model?.busyActionID != nil)
+                        }
                         if let link = row.listLink, let trailing = row.trailing {
                             NavigationLink(value: Route.entityList(link.entity, filters: link.filterState)) {
                                 Label(trailing, systemImage: "list.bullet").font(.fieldGuideLabel)
@@ -215,6 +221,10 @@ struct RecordsBlockView: View {
             if let footer = records.footer {
                 Divider()
                 Text(footer).font(.subheadline).foregroundStyle(.secondary)
+            }
+            if let form = records.form, let model {
+                ReportFormFooterView(
+                    form: form, rowChoices: records.rowChoices, answers: $answers, model: model)
             }
             verbs
         }

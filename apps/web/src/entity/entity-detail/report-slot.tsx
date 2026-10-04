@@ -157,7 +157,10 @@ function Table({ block }: { block: Extract<ReportBlock, { kind: "table" }> }) {
 
 /** Blocks have no id; a kind plus its title or text names each one within a report. */
 const blockKey = (block: ReportBlock, index: number) =>
-  `${index}:${block.kind}:${block.kind === "note" ? block.text : block.kind === "schedule" ? "" : (block.title ?? "")}`;
+  block.kind === "records" && block.form
+    ? // A form keeps its answers while other batches appear or the block's title changes.
+      `form:${block.form.command.id}`
+    : `${index}:${block.kind}:${block.kind === "note" ? block.text : block.kind === "schedule" ? "" : (block.title ?? "")}`;
 
 /**
  * Draws the generic report blocks a detail slot's server read returns. A slot
@@ -248,6 +251,7 @@ const RUN_BATCH_SLOTS = [
   "run.import-findings",
   "run.import-targets",
   "run.import-evidence",
+  "run.import-prepared-orders",
   "run.import-timeline",
 ] as const satisfies readonly EntityReportInput["slot"][];
 const isBatchSlot = (slot: EntityReportInput["slot"]) =>

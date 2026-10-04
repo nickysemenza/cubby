@@ -237,6 +237,15 @@ A report may say the record is `live` (clients poll; there is no realtime transp
 shows several slots of one record (a Run) polls one `entityReport.getMany`, so the server loads the
 record once per poll.
 
+**Report choices.** A `records` row may carry a `choice` (a decision the person makes) and the block
+a `form` (its own choices, the progress wording, a `disabledReason` and the one command the answers
+unlock). The server words every label, ranks the `suggestions` (a prepared line's Product
+candidates), says what is `required` and never preselects an answer: identity is chosen by the
+person. A client records answers and asks the shared rules whether each is complete
+(`packages/schemas/src/report-choice.ts`, mirrored by CubbyKit's `ReportChoiceAnswers`), then sends
+the body those answers assemble (`commitPreparedInput`) with a fresh operation id per answer change.
+`run.import-prepared-orders` is the first user.
+
 **Native coverage.** Which of these presentation ids the Apple app does not draw
 is declared once, in `packages/schemas/src/native-coverage.ts`: every control,
 list, and detail renderer id, hero action, and (entity-qualified) detail and

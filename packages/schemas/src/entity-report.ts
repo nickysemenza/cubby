@@ -44,6 +44,7 @@ export const reportSlots = [
   "run.import-findings",
   "run.import-targets",
   "run.import-evidence",
+  "run.import-prepared-orders",
   "run.import-timeline",
   "run.import-debug-log",
   "run.ai-usage",
@@ -193,8 +194,8 @@ const reportNote = z.object({
 
 /**
  * What a row command runs. Each member names one existing operation and carries its exact body,
- * so a client never assembles a request from a label; `confirm` is shown before it is sent and
- * null means one tap acts.
+ * so a client never assembles a request from a label; `confirm` is shown before it is sent by
+ * native; web acts on the tap as it always has. Null means one tap acts on both.
  */
 export const reportCommandRequest = z.discriminatedUnion("kind", [
   z.object({
@@ -226,6 +227,92 @@ export const reportCommand = z.object({
   request: reportCommandRequest,
 });
 export type ReportCommand = z.infer<typeof reportCommand>;
+
+/**
+ * Approve and import one prepared batch. The body is assembled from the person's answers
+ * (`commitPreparedInput`): `lines` names which stable order and line each row choice decides,
+ * and `tradeChoiceId` the block choice that carries the default trade (null when no line needs
+ * one). A client sends nothing until every required choice is answered. Only a form's command
+ * carries it, never a row's.
+ */
+export const commitPreparedRequest = z.object({
+  kind: z.literal("commit-prepared"),
+  runId: runShortcode,
+  prepareOperationId: z.string().min(1),
+  tradeChoiceId: z.string().min(1).nullable(),
+  lines: z.array(
+    z.object({
+      choiceId: z.string().min(1),
+      stableOrderId: z.string().min(1),
+      stableLineId: z.string().min(1),
+    }),
+  ),
+});
+export type CommitPreparedRequest = z.infer<typeof commitPreparedRequest>;
+
+/**
+ * A decision the person makes on a row (or for a whole block) before a command runs. The server
+ * words every label, ranks the suggestions and says what is required; nothing is preselected
+ * (identity and merges are explicit), so a client starts with no answer. An answer is the chosen
+ * option plus, when the option asks for them, a picked record (`pick`) and/or a reason (`text`).
+ */
+export const reportChoice = z.object({
+  /** Unique within the report; the key an answer is stored under. */
+  id: z.string().min(1),
+  label: z.string().min(1),
+  /** The command stays unavailable until a required choice has a complete answer. */
+  required: z.boolean(),
+  options: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        label: z.string().min(1),
+        /** Choosing this option also picks one record of `entity` (searched by the client). */
+        pick: z.object({ entity: z.string(), label: z.string() }).optional(),
+        /** Choosing this option also needs a written reason. */
+        text: z.object({ label: z.string() }).optional(),
+        /** Said once the option is chosen. */
+        hint: z.string().optional(),
+      }),
+    )
+    .min(1),
+  /** Ranked records the server proposes for an option's `pick`; choosing one answers it. */
+  suggestions: z
+    .array(
+      z.object({
+        optionId: z.string().min(1),
+        entity: z.string(),
+        id: z.string(),
+        name: z.string(),
+        /** The button that chooses the suggestion ("Use X"). */
+        label: z.string(),
+        subtitle: z.string().optional(),
+        badges: z.array(z.string()),
+      }),
+    )
+    .optional(),
+});
+export type ReportChoice = z.infer<typeof reportChoice>;
+
+/**
+ * Decisions that apply to a whole `records` block and the one command they unlock. The rows'
+ * own `choice`s are answered in place; `choices` here are the block's (a trade for the batch).
+ */
+const reportForm = z.object({
+  choices: z.array(reportChoice),
+  /** What running the command does, said before it is run. */
+  note: z.string(),
+  /** What a row choice asks for, singular ("Product decision"), for the remaining count. */
+  noun: z.string(),
+  /** Said when every required choice is answered. */
+  completeText: z.string(),
+  /** Why the command cannot run (already done, wrong state); null when it can. */
+  disabledReason: z.string().nullable(),
+  /** Said right after the command succeeds, before the next read reports it as done. */
+  doneText: z.string(),
+  command: reportCommand.extend({ request: commitPreparedRequest }),
+});
+export type ReportForm = z.infer<typeof reportForm>;
 
 const reportRecordRow = z.object({
   /** The record the row opens (any entity key), or null for a row that only reads. */
@@ -267,6 +354,8 @@ const reportRecordRow = z.object({
   detail: z.object({ label: z.string(), text: z.string() }).optional(),
   /** Commands on this row: each runs an existing operation after its declared confirmation. */
   commands: z.array(reportCommand).optional(),
+  /** A decision the person makes on this row; see `reportForm` for what it unlocks. */
+  choice: reportChoice.optional(),
 });
 export type ReportRecordRow = z.infer<typeof reportRecordRow>;
 
@@ -303,6 +392,8 @@ const reportRecords = z.object({
       }),
     )
     .optional(),
+  /** Row choices plus the one command they unlock (approve a prepared import). */
+  form: reportForm.optional(),
 });
 
 export const reportBlock = z.discriminatedUnion("kind", [

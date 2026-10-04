@@ -78,6 +78,7 @@ const BUILDERS = {
   "run.import-findings": runBuilder("run.import-findings"),
   "run.import-targets": runBuilder("run.import-targets"),
   "run.import-evidence": runBuilder("run.import-evidence"),
+  "run.import-prepared-orders": runBuilder("run.import-prepared-orders"),
   "run.import-timeline": runBuilder("run.import-timeline"),
   "run.import-debug-log": runBuilder("run.import-debug-log"),
   "run.ai-usage": runBuilder("run.ai-usage"),

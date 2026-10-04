@@ -66,6 +66,7 @@ enum DetailSlotRegistry {
         .runImportFindings: { runReportSlot(.run_importFindings, $0) },
         .runImportTargets: { runReportSlot(.run_importTargets, $0) },
         .runImportEvidence: { runReportSlot(.run_importEvidence, $0) },
+        .runImportPreparedOrders: { runReportSlot(.run_importPreparedOrders, $0) },
         .runImportTimeline: { runReportSlot(.run_importTimeline, $0) },
         .runImportDebugLog: { runReportSlot(.run_importDebugLog, $0) },
         .runAiUsage: { runReportSlot(.run_aiUsage, $0, imports: false) },

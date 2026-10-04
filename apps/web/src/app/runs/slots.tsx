@@ -26,6 +26,7 @@ export const runReportSlots = {
   "import-approvals": runReport("run.import-approvals"),
   "import-findings": runReport("run.import-findings"),
   "import-evidence": runReport("run.import-evidence"),
+  "import-prepared-orders": runReport("run.import-prepared-orders"),
   "import-timeline": runReport("run.import-timeline"),
   "import-debug-log": runReport("run.import-debug-log"),
   "ai-usage": runReport("run.ai-usage"),

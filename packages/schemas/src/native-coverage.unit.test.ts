@@ -114,20 +114,20 @@ describe("native presentation coverage", () => {
     },
   );
 
-  it("keeps the Run agent and prepared-order slots explained as web-only", () => {
-    // The agent conversation is a Flue stream and prepared orders need per-line pickers; each
-    // reason names why, so a future reader does not mistake them for an oversight.
+  it("keeps the Run agent conversation explained as web-only", () => {
+    // The agent conversation is a Flue stream with no native client; each reason says so, so a
+    // future reader does not mistake it for an oversight.
     for (const id of [
       "run.import-agent-live",
       "run.import-agent-stopped",
-      "run.import-prepared-orders",
     ] as const) {
       const entry = nativeCoverage.detailSlot[id];
       expect(entry.status).toBe("unsupported");
-      expect("reason" in entry && entry.reason).not.toBe(
-        "This detail is available on web.",
-      );
+      expect("reason" in entry && entry.reason).toMatch(/web-only.*Flue/);
     }
+    expect(nativeCoverage.detailSlot["run.import-prepared-orders"].status).toBe(
+      "implemented",
+    );
   });
 
   it("gives exactly the implemented hero actions a runner plan", () => {
