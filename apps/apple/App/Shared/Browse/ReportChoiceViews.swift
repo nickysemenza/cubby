@@ -165,6 +165,7 @@ struct ReportFormFooterView: View {
               "form": {"choices": [], "note": "Approval imports the prepared orders and expenses.",
                        "noun": "Product decision", "completeText": "All Product decisions reviewed.",
                        "disabledReason": null,
+                       "doneText": "Prepared import approved and committed.",
                        "command": {"id": "commit:1", "label": "Approve and import", "prominent": true,
                                    "confirm": "Import 1 prepared order?",
                                    "request": {"kind": "commit-prepared", "runId": "RUN-4K7M",
@@ -178,8 +179,8 @@ struct ReportFormFooterView: View {
     }
 
     #Preview("Choice") {
+        @Previewable @State var answers = ReportChoiceAnswers()
         if let choice = previewRecords()?.rowChoices.first {
-            @Previewable @State var answers = ReportChoiceAnswers()
             ReportChoiceView(choice: choice, answers: $answers).padding()
         }
     }

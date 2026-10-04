@@ -712,6 +712,7 @@ describe("prepared orders", () => {
     expect(first).toMatchObject({
       noun: "Product decision",
       disabledReason: null,
+      doneText: "Prepared import approved and committed.",
     });
   });
 

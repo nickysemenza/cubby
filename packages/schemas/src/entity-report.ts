@@ -308,6 +308,8 @@ const reportForm = z.object({
   completeText: z.string(),
   /** Why the command cannot run (already done, wrong state); null when it can. */
   disabledReason: z.string().nullable(),
+  /** Said right after the command succeeds, before the next read reports it as done. */
+  doneText: z.string(),
   command: reportCommand.extend({ request: commitPreparedRequest }),
 });
 export type ReportForm = z.infer<typeof reportForm>;

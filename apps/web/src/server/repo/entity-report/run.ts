@@ -464,6 +464,7 @@ const importTimeline = (run: RunDetail): ReportBlock[] => [
 type PreparedOrder = RunDetail["preparedOrders"][number];
 type PreparedLine = PreparedOrder["lines"][number];
 
+const COMMITTED = "Prepared import approved and committed.";
 const APPROVE_BLOCKED =
   "Prepared orders can be approved only while an account sync run is running.";
 const TRADE_CHOICE_ID = "trade";
@@ -564,7 +565,7 @@ function preparedBatch(
   const committed = orders.every((order) => order.committed);
   const blocked = run.status !== "running" || run.purpose !== "account_sync";
   const disabledReason = committed
-    ? "Prepared import approved and committed."
+    ? COMMITTED
     : blocked
       ? APPROVE_BLOCKED
       : null;
@@ -608,6 +609,7 @@ function preparedBatch(
       noun: "Product decision",
       completeText: "All Product decisions reviewed.",
       disabledReason,
+      doneText: COMMITTED,
       command: {
         id: `commit:${prepareOperationId}`,
         label: "Approve and import",

@@ -56,7 +56,7 @@ private func preparedReport(disabledReason: String? = nil, committedTrade: Bool 
          "form": {"choices": [\#(trade)],
                   "note": "Approval imports the prepared orders and expenses.",
                   "noun": "Product decision", "completeText": "All Product decisions reviewed.",
-                  "disabledReason": \#(reason),
+                  "disabledReason": \#(reason), "doneText": "Prepared import approved and committed.",
                   "command": {"id": "commit:prepare-1", "label": "Approve and import",
                               "prominent": true,
                               "confirm": "Import 2 prepared orders (3 lines)? Inventory is not changed.",

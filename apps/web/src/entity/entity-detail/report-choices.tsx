@@ -213,7 +213,7 @@ export function ChoiceFormFooter({
   done: boolean;
   onRun: () => void;
 }) {
-  if (done) return <StatusText>Submitted.</StatusText>;
+  if (done) return <StatusText>{form.doneText}</StatusText>;
   if (form.disabledReason !== null)
     return <StatusText>{form.disabledReason}</StatusText>;
   const remaining = remainingChoices(rowChoices, state.answers);

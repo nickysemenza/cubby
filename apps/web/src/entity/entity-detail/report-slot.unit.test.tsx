@@ -317,6 +317,7 @@ describe("EntityReportSlot records", () => {
             noun: "Product decision",
             completeText: "All Product decisions reviewed.",
             disabledReason,
+            doneText: "Prepared import approved and committed.",
             command: {
               id: "commit:prepare-1",
               label: "Approve and import",
@@ -365,6 +366,9 @@ describe("EntityReportSlot records", () => {
         screen.getByText(/All Product decisions reviewed\./),
       ).toBeInTheDocument();
       fireEvent.click(approve);
+      expect(
+        await screen.findByText("Prepared import approved and committed."),
+      ).toBeInTheDocument();
       await waitFor(() =>
         expect(
           calls.find((call) => call.operation === "run.commitPrepared")?.input,
