@@ -141,9 +141,16 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   `display-format.json`, `household-day.json`). The Swift tests (`ScanCodeTests`,
   `ImageTransformTests`, `BinPlanTests`, `DisplayFormatTests`, `HouseholdDayTests`) and the
   web/Rust tests read the same files; change a rule by editing the vector first, then both
-  implementations. Field display text (`currency`, `signedCurrency`, `plainDate`, bare numbers, the
-  compact nutrition cell) goes through `DisplayFormat`, fixed en-US like the web — never format a
-  catalog value with `.formatted()` in a view.
+  implementations.
+- Value formatting is single-sourced in Rust (`recipebridge/src/display_format.rs` plus
+  `format_amount_labeled`): `currency`, `signedCurrency`, bare numbers, `{value, unit}` amounts, and
+  the compact nutrition cell run the same code as web (WASM) and native (UniFFI `format_*` in
+  `cubby-ffi`, wrapped by `CubbyKit` `ValueFormat`). The Rust tests read `display-format.json`
+  directly; `DisplayFormatTests` and the web `display-format.unit.test.ts` are binding checks. Only
+  `plainDate` stays per platform (no timezone database in Rust; `DisplayFormat.plainDate` /
+  `formatCalendarDay`) and timestamps stay locale-aware platform code. Never format a catalog value
+  with `.formatted()` in a view, and never re-implement a rule in Swift or TypeScript: edit the
+  vector, then Rust.
 - `CubbyKit/Sources/CubbyKit/Generated/SharedConstants.swift` — constants and vocabulary with one
   TypeScript declaration: the image-transform rungs (`IMAGE_WIDTHS`) and household zone
   (`HOUSEHOLD_TIMEZONE`) from `packages/shared/src/client-constants.ts`, the media origin from

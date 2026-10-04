@@ -65,3 +65,18 @@ struct DisplayFormatTests {
         }
     }
 }
+
+/// Amounts are formatted by the same Rust the web calls (`wasm.format_amount_labeled`).
+@Suite("ValueFormat")
+struct ValueFormatTests {
+    @Test func amountMatchesTheWebUnitFormatter() {
+        #expect(ValueFormat.amount(unit: "each", value: 3) == "3 each")
+        #expect(ValueFormat.amount(unit: "cup", value: 2.5) == "2½ cups")
+        #expect(ValueFormat.amount(unit: "cup", value: 2, upperValue: 3) == "2 - 3 cups")
+    }
+
+    @Test func aBareCountIsAPlainNumber() {
+        #expect(ValueFormat.amount(unit: nil, value: 1.5) == "1.5")
+        #expect(ValueFormat.amount(unit: "", value: 12) == "12")
+    }
+}

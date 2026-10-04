@@ -384,6 +384,20 @@ pub fn format_amount(amount: WAmount) -> String {
     amount.to_measure().to_string()
 }
 
+/// [`format_amount`] for display: `each` parses to `Unit::Whole`, which renders
+/// unit-less (`3`, `2 - 4`), so the caller's `each` is re-attached to stay
+/// visible (`3 each`). Web and native amount cells both render through this.
+#[wasm_bindgen]
+pub fn format_amount_labeled(amount: WAmount) -> String {
+    let is_each = amount.unit == "each";
+    let text = amount.to_measure().to_string();
+    if is_each {
+        format!("{text} each")
+    } else {
+        text
+    }
+}
+
 /// Format an amount the way it would be read off a shopping list rather than
 /// out of the conversion graph.
 ///
@@ -512,6 +526,15 @@ mod tests {
             value,
             upper_value: None,
         }
+    }
+
+    #[test]
+    fn labeled_amount_keeps_each_visible() {
+        assert_eq!(format_amount_labeled(amount("each", 3.0)), "3 each");
+        assert_eq!(
+            format_amount_labeled(amount("cup", 2.0)),
+            format_amount(amount("cup", 2.0))
+        );
     }
 
     /// The shopping-list ladder. `format_amount` renders the base unit the

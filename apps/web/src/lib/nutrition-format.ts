@@ -11,7 +11,7 @@ import {
   type NutrientKey,
 } from "@cubby/usda";
 
-import { roundTo } from "~/lib/utils";
+import { roundTo } from "~/lib/round-to";
 
 /** One decimal place, dropping a trailing `.0` (`12.0` → `12`, `0.25` → `0.3`). */
 export const trimAmount = (v: number) => roundTo(v, 1).toString();
@@ -42,38 +42,6 @@ export function formatEstimate(
   return (estimate.coverage.inferredZero ?? 0) > 0
     ? `${confidence} · includes inferred zero`
     : confidence;
-}
-
-export type CompactEstimateUnit = "kcal" | "macro";
-
-/**
- * A figure in a compact nutrition cell: kcal rounds half-up to a whole number,
- * a macro to one decimal (`roundTo`), both grouped en-US. The native app
- * renders the same cell from `golden-vectors/display-format.json`.
- */
-export const compactNumberText = (
-  value: number,
-  unit: CompactEstimateUnit,
-): string =>
-  (unit === "kcal" ? Math.round(value) : roundTo(value, 1)).toLocaleString(
-    "en-US",
-  );
-
-/**
- * The one-line macro cell: a range joins with an en dash, a partial estimate
- * ends in `+`, and anything unavailable or pending is `—`.
- */
-export function compactEstimateText(
-  estimate: MeasureEstimate,
-  unit: CompactEstimateUnit,
-): string {
-  if (!hasKnownEstimate(estimate)) return "—";
-  const lower = compactNumberText(estimate.lower, unit);
-  const value =
-    estimate.upper != null && estimate.upper !== estimate.lower
-      ? `${lower}–${compactNumberText(estimate.upper, unit)}`
-      : lower;
-  return `${value}${estimate.status === "partial" ? "+" : ""}`;
 }
 
 /** Accessible detail for an otherwise compact unavailable/pending cell. */

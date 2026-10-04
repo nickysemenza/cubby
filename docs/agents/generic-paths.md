@@ -50,6 +50,9 @@ existing block. Extend the generic path when it almost fits. See
   matrices, cross-tabs, and debug views.
 - Formatting: `lib/utils` formatters (`formatCurrency`, `formatCount`,
   `formatPercent`, `roundTo`, compact variants) and the WASM amount formatter.
+  Currency, bare numbers, amounts, and the compact nutrition cell are one Rust
+  implementation (`recipebridge/src/display_format.rs`) shared with native via
+  UniFFI; add a rule there and to `golden-vectors/display-format.json`.
 - Errors and clipboard: `showErrorToast`, `ErrorDisplay`, `copyTextWithToast`.
 - Data: generated query catalog operations, `useActionMutation`,
   `useUpdateMutation`, `useDeletableConfig`, `useAllEntityRecords`.
