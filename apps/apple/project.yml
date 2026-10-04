@@ -48,7 +48,7 @@ packages:
     path: CubbyKit
   Sentry:
     url: https://github.com/getsentry/sentry-cocoa
-    from: "9.28.0"
+    from: "9.29.2"
   Nuke:
     url: https://github.com/kean/Nuke
     from: "13.2.0"
