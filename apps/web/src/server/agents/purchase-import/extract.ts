@@ -7,7 +7,6 @@ import {
   normalizeImportAuditModelOutput,
   normalizeImportExtractionModelOutput,
 } from "@cubby/schemas/purchase-import";
-import type { ModelMessage } from "@tanstack/ai";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -25,7 +24,7 @@ import {
   AUDIT_RECOVERY_MODEL,
   estimateAiUsageCostUsd,
 } from "~/server/ai/models";
-import { runStructuredFeature } from "~/server/ai/run-feature";
+import { type AiMessage, runStructuredFeature } from "~/server/ai/run-feature";
 import { cachedCall } from "~/server/clients/ai-adapters";
 import { gatewayBaseURL, gatewayFetch } from "~/server/clients/ai-gateway";
 import type { Database } from "~/server/db";
@@ -180,11 +179,11 @@ const extractPurchaseText = async (
 };
 
 function purchaseRepairMessages(
-  originalMessages: readonly ModelMessage[],
+  originalMessages: readonly AiMessage[],
   issues: readonly string[],
   previous: ImportExtractionOutcome,
   screenshotUrl: string | null,
-): ModelMessage[] {
+): AiMessage[] {
   return [
     ...originalMessages,
     {
@@ -393,7 +392,7 @@ export const extractPurchaseEvidence = async (args: {
                   },
               { type: "text", content: "Extract this confirmed receipt." },
             ],
-          } satisfies ModelMessage,
+          } satisfies AiMessage,
         ],
       },
       {

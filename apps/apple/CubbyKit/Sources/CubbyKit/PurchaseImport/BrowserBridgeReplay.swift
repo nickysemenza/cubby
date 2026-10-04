@@ -103,7 +103,7 @@ public actor FileBrowserBridgeReplayStore: BrowserBridgeReplayStoring {
                 BrowserBridgeReplayLedger.self, from: fileURL, decoder: .browserBridge)
                 ?? BrowserBridgeReplayLedger()
         } catch is DecodingError {
-            // v1 results cannot safely be replayed to the v2 Flue broker. Those old runs are
+            // v1 results cannot safely be replayed to the v2 coordinator broker. Those old runs are
             // terminalized in the server migration, so start this account's new ledger cleanly.
             try? FileManager.default.removeItem(at: fileURL)
             return BrowserBridgeReplayLedger()

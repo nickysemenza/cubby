@@ -15,11 +15,13 @@ import {
   MAX_EXTERNAL_IMAGE_BYTES,
 } from "@cubby/shared/external-fetch";
 import { TIER1_NUTRIENTS } from "@cubby/usda";
-import type { ImagePart } from "@tanstack/ai";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/features";
 import { providerFor } from "~/server/ai/models";
-import { runStructuredFeature } from "~/server/ai/run-feature";
+import {
+  type AiImagePart,
+  runStructuredFeature,
+} from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import { IMAGE_ANALYSIS_NORMALIZATION_REVISION } from "~/server/image-processing/description-policy";
 import {
@@ -96,7 +98,7 @@ export function imageDescriptionInputFingerprint(input: {
 }
 
 export function descriptionRequest(imageUrl: string) {
-  const imagePart: ImagePart = {
+  const imagePart: AiImagePart = {
     type: "image",
     source: { type: "url", value: imageUrl },
   };

@@ -115,7 +115,7 @@ describe("native presentation coverage", () => {
   );
 
   it("keeps the Run agent conversation explained as web-only", () => {
-    // The agent conversation is a Flue stream with no native client; each reason says so, so a
+    // The agent conversation is an import-run agent stream with no native client; each reason says so, so a
     // future reader does not mistake it for an oversight.
     for (const id of [
       "run.import-agent-live",
@@ -123,7 +123,9 @@ describe("native presentation coverage", () => {
     ] as const) {
       const entry = nativeCoverage.detailSlot[id];
       expect(entry.status).toBe("unsupported");
-      expect("reason" in entry && entry.reason).toMatch(/web-only.*Flue/);
+      expect("reason" in entry && entry.reason).toMatch(
+        /web-only.*import-run agent/,
+      );
     }
     expect(nativeCoverage.detailSlot["run.import-prepared-orders"].status).toBe(
       "implemented",

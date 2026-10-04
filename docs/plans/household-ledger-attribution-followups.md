@@ -77,7 +77,7 @@ Verified on `main` at `537d853c6`. Do not rebuild any of this.
   `updateExpensesInBulk` in `crud.ts`. That function is typed to the four
   scalars and writes them with one `.set()`. The web surface is
   `apps/web/src/entity/actions/bulk-edit-entity-action.tsx`.
-- **Import pipeline.** The Flue agent imports only
+- **Import pipeline.** The import-run agent imports only
   `.claude/skills/purchase-import/SKILL.md`
   (`apps/purchase-agent/src/purchase-import-run.ts`), **not** its `references/`.
   Gmail sync targets are vendor order senders only; nothing ingests
@@ -172,7 +172,7 @@ bulk id cap applies.
 
 ## 6. Phase 3 — Importer guidance
 
-1. **`SKILL.md` — inline rule.** Because the Flue agent loads only `SKILL.md`,
+1. **`SKILL.md` — inline rule.** Because the import-run agent loads only `SKILL.md`,
    state the rule there in a few sentences: a person-to-person repayment is a
    `LedgerTransfer` between parties, never a negative Expense and never a
    refund; a vendor refund stays a negative Expense (a Credit). Point to the

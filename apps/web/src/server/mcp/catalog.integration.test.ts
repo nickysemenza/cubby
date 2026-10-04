@@ -48,7 +48,7 @@ const write = ({ destructive = false, openWorld = false } = {}) => ({
 });
 
 /**
- * Flue resends every mounted tool's input schema on every model call, so each
+ * The purchase agent resends every mounted tool's input schema on every model call, so each
  * published schema has a ceiling. Before consolidation the largest tool was
  * `entity` at 242,971 characters and the largest non-kernel tool
  * `prepare_purchase_import` at 8,616. The two entity-kernel tools carry every

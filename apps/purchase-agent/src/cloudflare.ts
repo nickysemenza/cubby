@@ -1,23 +1,17 @@
-import { createLogger } from "@cubby/worker-tracing";
 import {
-  flueImportRunPurpose,
+  agentImportRunPurpose,
   importRunAgentIdentity,
 } from "@cubby/schemas/import-run-agent";
-import { withSpan, type WorkerSpan } from "@cubby/worker-tracing";
-import { dispatch } from "@flue/runtime";
-import type { CloudflareContext } from "@flue/runtime/cloudflare";
+import { createLogger, withSpan, type WorkerSpan } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/cloudflare";
+import { getAgentByName } from "agents";
 import { z } from "zod";
 
 import { parsePurchaseAgentEvent, type PurchaseAgentEvent } from "./contracts";
-import { PurchaseImportRun } from "./purchase-import-run";
-import { dispatchPurchaseAgentEvent } from "./queue-dispatch";
-import { purchaseAgentSentryOptions } from "./sentry-bridge";
-import { purchaseImportService } from "./service";
+import { dispatchInputForEvent } from "./queue-dispatch";
+import { purchaseImportService, type PurchaseImportService } from "./service";
 
 const log = createLogger("purchase-agent");
-
-type QueueService = ReturnType<typeof purchaseImportService>;
 
 /**
  * How one queue delivery ended, recorded as the `dispatch.outcome` attribute
@@ -35,7 +29,8 @@ type DispatchOutcome =
 
 async function deliverEvent(
   event: PurchaseAgentEvent,
-  service: QueueService,
+  service: PurchaseImportService,
+  env: CloudflareBindings,
 ): Promise<
   Extract<DispatchOutcome, "dispatched" | "fenced" | "acknowledged_by_peer">
 > {
@@ -52,21 +47,23 @@ async function deliverEvent(
   }
   const scope = z
     .object({
-      public: z.object({
-        purpose: flueImportRunPurpose,
-        agentId: z.string(),
-      }),
+      public: z.object({ purpose: agentImportRunPurpose, agentId: z.string() }),
     })
     .parse(await service.loadRunScope({ runId: event.runId })).public;
   if (scope.agentId !== importRunAgentIdentity(event.runId, scope.purpose)) {
     throw new Error("Import run agent identity does not match its purpose");
   }
-  await dispatchPurchaseAgentEvent(
-    { ...event, purpose: scope.purpose },
-    async (request) => {
-      await dispatch(PurchaseImportRun, request);
-    },
+  const agent = await getAgentByName(env.PURCHASE_IMPORT_RUN, scope.agentId);
+  const { accepted } = await agent.dispatch(
+    dispatchInputForEvent(event, scope.purpose),
   );
+  if (accepted && event.type === "start_or_resume")
+    await service.updateAgentProgress({
+      runId: event.runId,
+      eventId: `coordinator-started:${event.eventId}`,
+      phase: "preparing",
+      detail: "Coordinator started",
+    });
   if (
     event.type === "start_or_resume" &&
     !(await service.acknowledgeCoordinator({
@@ -75,8 +72,8 @@ async function deliverEvent(
     }))
   ) {
     // A crash or competing redelivery won the DB acknowledgement. The
-    // idempotency key still makes this Flue dispatch safe; acknowledge the
-    // queue message so it cannot re-open a terminal generation.
+    // operation id still makes this submission safe; acknowledge the queue
+    // message so it cannot re-open a terminal generation.
     return "acknowledged_by_peer";
   }
   return "dispatched";
@@ -84,7 +81,8 @@ async function deliverEvent(
 
 async function consumeMessage(
   message: Message<unknown>,
-  service: QueueService,
+  service: PurchaseImportService,
+  env: CloudflareBindings,
   span: WorkerSpan,
 ): Promise<void> {
   // SAFETY: Cloudflare Queue messages expose delivery attempts at runtime,
@@ -99,7 +97,10 @@ async function consumeMessage(
       "event.type": event.type,
       "event.id": event.eventId,
     });
-    span.setAttribute("dispatch.outcome", await deliverEvent(event, service));
+    span.setAttribute(
+      "dispatch.outcome",
+      await deliverEvent(event, service, env),
+    );
     message.ack();
   } catch (error) {
     log.error("queue event was not dispatched", { error });
@@ -107,7 +108,7 @@ async function consumeMessage(
     // this consumer never lets one escape, so report it here.
     Sentry.captureException(error);
     // Invalid bodies cannot succeed on redelivery; valid events retry after a
-    // transient Flue/service admission failure.
+    // transient agent or service admission failure.
     if (!event) {
       span.setAttribute("dispatch.outcome", "invalid");
       message.ack();
@@ -124,7 +125,7 @@ async function consumeMessage(
         await service.markRunFailed({
           runId: event.runId,
           operationId: `queue:${event.eventId}`,
-          failureCode: "flue_failed",
+          failureCode: "agent_failed",
           detail: "Purchase-agent queue delivery exhausted its retry budget",
           dispatchEventId: event.eventId,
         });
@@ -137,24 +138,14 @@ async function consumeMessage(
   }
 }
 
-// `withSentry` initializes the SDK for each queue invocation so the captures
-// above resolve against a client; native Workers Traces own the spans here
-// (tracesSampleRate 0), the same split as usda-api and upc-lookup. Flue's
-// generated Worker entry composes this default export into the final Worker,
-// so it must stay an object of non-HTTP handlers with no `fetch`.
-export default Sentry.withSentry(
-  (env: CloudflareContext["env"]) => purchaseAgentSentryOptions(env),
-  {
-    async queue(
-      batch: MessageBatch<unknown>,
-      env: CloudflareContext["env"],
-    ): Promise<void> {
-      const service = purchaseImportService(env);
-      for (const message of batch.messages) {
-        await withSpan("job.purchase_agent_event", (span) =>
-          consumeMessage(message, service, span),
-        );
-      }
-    },
-  },
-);
+export async function consumePurchaseAgentQueue(
+  batch: MessageBatch<unknown>,
+  env: CloudflareBindings,
+): Promise<void> {
+  const service = purchaseImportService(env);
+  for (const message of batch.messages) {
+    await withSpan("job.purchase_agent_event", (span) =>
+      consumeMessage(message, service, env, span),
+    );
+  }
+}

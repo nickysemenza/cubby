@@ -1,5 +1,5 @@
+import type { AgentConversationMessage } from "@cubby/schemas/agent-conversation";
 import type { PhotoRunImage } from "@cubby/schemas/photo-import-run";
-import type { FlueConversationMessage } from "@flue/sdk";
 
 import type { RunDetail } from "~/contracts/run.contract";
 
@@ -125,7 +125,7 @@ function operationWorkKind(kind: string): WorkKind | null {
 
 /** Bounded task-level facts from recorded work. No model-generated recap or inferred timing. */
 export function summarizeAgentWork(
-  messages: readonly FlueConversationMessage[],
+  messages: readonly AgentConversationMessage[],
   operations: RunDetail["operations"],
 ): AgentWorkItem[] {
   const items = new Map<WorkKind, AgentWorkItem>();
@@ -156,7 +156,7 @@ export function summarizeAgentWork(
 
   for (const message of messages) {
     for (const part of message.parts) {
-      if (part.type !== "dynamic-tool") continue;
+      if (part.type !== "tool") continue;
       const kind = toolWorkKind(displayToolAction(part.toolName, part.input));
       if (!kind) continue;
       toolKinds.add(kind);

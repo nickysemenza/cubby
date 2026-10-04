@@ -562,7 +562,7 @@ describe("selected statement-charge runs", () => {
     const failed = await start(s, [s.a]);
     await markRunFailed(ctx.db, {
       runId: failed.run.id,
-      failureCode: "flue_failed",
+      failureCode: "agent_failed",
     });
     expect((await huntOf(s.a.shortcode)).state).toBe("deferred_for_review");
 

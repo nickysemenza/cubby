@@ -11,10 +11,10 @@ extraction and post-commit audit, load the respective
 [extraction](references/extraction.md) and [audit](references/audit.md)
 instructions. For a photographed receipt or a Gmail order event, load
 [receipt extraction](references/receipt-extraction.md) or
-[order mail](references/order-mail.md). Flue, Codex, and Claude share these
+[order mail](references/order-mail.md). The import-run agent, Codex, and Claude share these
 contracts.
 
-Flue, Claude, and Codex use this same workflow. Flue owns routine browser,
+The import-run agent, Claude, and Codex use this same workflow. The agent owns routine browser,
 email, receipt, retry, audit, and lifecycle orchestration; a human agent may
 continue the same work for unusual evidence. Source-backed orders always pass
 through Cubby's prepare/commit writer rather than generic entity mutation.
@@ -25,7 +25,7 @@ through Cubby's prepare/commit writer rather than generic entity mutation.
    mail by the Vendor website's domain, any optional known sender, order id,
    and time window. On Vendor detail, **Search Gmail now** scans a bounded page
    from the past year; **Search older email** continues when Gmail has more.
-   An email event establishes lifecycle context. Use **Import order** on a saved placement confirmation to let Flue extract its itemization through Cubby’s Gmail integration and prepare/commit writer. If the confirmation lacks itemized variants, stop for review and open the retailer order detail or a receipt. Shipping and delivery notices cannot start an order import. If a retailer requests login, pause the browser run
+   An email event establishes lifecycle context. Use **Import order** on a saved placement confirmation to let the agent extract its itemization through Cubby’s Gmail integration and prepare/commit writer. If the confirmation lacks itemized variants, stop for review and open the retailer order detail or a receipt. Shipping and delivery notices cannot start an order import. If a retailer requests login, pause the browser run
    and let the member sign in to the Cubby-managed browser tab before resuming.
 2. For a statement CSV, use `/statement-rows/import` or parse the export in the
    MCP client. Known provider columns (Monarch, Mint, Copilot, Apple Card) use
@@ -48,7 +48,7 @@ through Cubby's prepare/commit writer rather than generic entity mutation.
    ambiguous allocation and Product identity separately; show evidence and
    the changes that approval would make.
 
-Flue coordinates durable steps, browser handoffs, progress, and review stops.
+The agent coordinates durable steps, browser handoffs, progress, and review stops.
 Frontier AI can propose a mapping for an unfamiliar layout; a person verifies
 the columns and sign before saving. Jev can rank a bounded set of ambiguous
 account, transaction, or Purchase candidates using evidence. A choice is a
@@ -108,7 +108,7 @@ same outcome without prescribing an agent runtime.
    terminal; `conflict` requires review.
 7. Report every conflict or open finding; resolve it through the Problems UI.
 
-For a Flue run, call `claim_next_import_work` before selecting an evidence
+For an agent run, call `claim_next_import_work` before selecting an evidence
 path and after each committed item. Account-sync work is a `cursor_walk`
 (capture the order-history page; importing it records an `order_list` of
 orders with `nextPageUrl`, or `null` once the page predates the account
@@ -222,7 +222,7 @@ approval in an agent run, including the `entity.create`/`entity.update` steps
 the settlement reference describes; prose in a prompt is never approval.
 Reference steps that use a live browser console, scripts, or file parsing
 (payment-ledger scraping, statement CSV parsing) are for an interactive Claude
-or Codex session; a Flue run uses only its mounted tools and retained evidence. Receiving remains a human
+or Codex session; an agent run uses only its mounted tools and retained evidence. Receiving remains a human
 decision and inventory never changes merely because an order arrived.
 
 ## Completion report

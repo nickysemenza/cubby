@@ -1,9 +1,6 @@
 import type { RunId } from "@cubby/schemas/identifiers";
-import {
-  createOpenaiEmbedding,
-  type OpenAIEmbeddingAdapter,
-} from "@tanstack/ai-openai";
 import { LRUCache } from "lru-cache";
+import { z } from "zod";
 
 import { SEMANTIC_QUERY_FEATURE } from "~/server/ai/features";
 import { runEmbeddingFeature } from "~/server/ai/run-feature";
@@ -18,32 +15,29 @@ import type { Database } from "~/server/db";
 import { ensureRun, systemActor } from "~/server/runs/ensure-run";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-import {
-  getSemanticEmbeddingConfig,
-  type SemanticEmbeddingConfig,
-} from "./config";
+import { getSemanticEmbeddingConfig } from "./config";
 import { productionVectorStore, type VectorStorePort } from "./vector-store";
 
-type SemanticEmbeddingAdapter = OpenAIEmbeddingAdapter<
-  SemanticEmbeddingConfig["model"]
->;
-
-/**
- * The gateway pays for the call under unified billing, so the SDK's mandatory
- * key slot gets a placeholder that `gatewayFetch` strips before forwarding — a
- * real `authorization` header would out-rank unified billing upstream.
- */
-const UNIFIED_BILLING_PLACEHOLDER_KEY = "cf-aig-unified-billing";
+/** The OpenAI embeddings endpoint's response shape, parsed directly — there
+ * is no provider SDK on this path, just the gateway's `/openai/embeddings`. */
+const embeddingsResponseSchema = z.object({
+  data: z.array(
+    z.object({ index: z.number(), embedding: z.array(z.number()) }),
+  ),
+  usage: z
+    .object({
+      prompt_tokens: z.number().optional(),
+      total_tokens: z.number().optional(),
+    })
+    .optional(),
+});
 
 export interface EmbeddingPorts {
   /**
-   * One adapter per call: the gateway's request metadata is fixed when the
+   * One fetch per call: the gateway's request metadata is fixed when the
    * transport is built, so it cannot be hoisted to a shared client.
    */
-  readonly adapter: (
-    config: SemanticEmbeddingConfig,
-    metadata: GatewayMetadata,
-  ) => SemanticEmbeddingAdapter;
+  readonly fetchFor: (metadata: GatewayMetadata) => typeof fetch;
   /** Provider reachability only; `embedTexts` guards on this alone. */
   readonly configured: () => boolean;
   readonly vectorStore: VectorStorePort;
@@ -51,15 +45,11 @@ export interface EmbeddingPorts {
 }
 
 const productionEmbeddingPorts: EmbeddingPorts = {
-  adapter: (config, metadata) =>
-    createOpenaiEmbedding(config.model, UNIFIED_BILLING_PLACEHOLDER_KEY, {
-      baseURL: gatewayBaseURL("openai"),
-      // The gateway keys its cache on the request body, so changed text
-      // always misses; caching only ever short-circuits an identical
-      // (model, input) pair, which is deterministic. Repeat search queries
-      // were paying the full provider round-trip (p50 ~940ms) without this.
-      fetch: gatewayFetch("openai", cachedCall({ metadata })),
-    }),
+  // The gateway keys its cache on the request body, so changed text always
+  // misses; caching only ever short-circuits an identical (model, input)
+  // pair, which is deterministic. Repeat search queries were paying the full
+  // provider round-trip (p50 ~940ms) without this.
+  fetchFor: (metadata) => gatewayFetch("openai", cachedCall({ metadata })),
   configured: gatewayConfigured,
   vectorStore: productionVectorStore,
   config: getSemanticEmbeddingConfig,
@@ -139,9 +129,37 @@ export async function embedTexts(
     const result = await runEmbeddingFeature(
       { feature, model: config.model },
       {
-        adapter: ports.adapter(config, metadata),
-        texts,
-        dimensions: config.dimensions,
+        embed: async () => {
+          const fetchThroughGateway = ports.fetchFor(metadata);
+          const response = await fetchThroughGateway(
+            `${gatewayBaseURL("openai")}/embeddings`,
+            {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                model: config.model,
+                input: texts,
+                dimensions: config.dimensions,
+              }),
+            },
+          );
+          if (!response.ok) {
+            throw new Error(
+              `Embeddings request failed (HTTP ${response.status} ${response.statusText}): ${await response.text()}`,
+            );
+          }
+          const body = embeddingsResponseSchema.parse(await response.json());
+          return {
+            embeddings: body.data.map((item) => ({
+              index: item.index,
+              vector: item.embedding,
+            })),
+            usage: {
+              promptTokens: body.usage?.prompt_tokens ?? null,
+              totalTokens: body.usage?.total_tokens ?? null,
+            },
+          };
+        },
       },
       { db: opts?.db, runId, operation, entity: opts?.entity },
     );

@@ -43,7 +43,7 @@ export type EnsureRunInput = {
 };
 
 /**
- * The run this actor's work belongs to. An inherited run always wins (Flue's
+ * The run this actor's work belongs to. An inherited run always wins (the agent's
  * token-scoped run, an import's own run), so nothing nests. Otherwise a new
  * run is inserted and committed on the root connection, never inside a
  * caller's transaction: AI usage rows reference it through the telemetry

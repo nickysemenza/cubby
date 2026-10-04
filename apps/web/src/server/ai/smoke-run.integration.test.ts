@@ -1,3 +1,12 @@
+import {
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxToolCall,
+  type Context,
+  type JsonObject,
+  type ModelsApiStreamOptions,
+} from "@earendil-works/pi-ai";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -12,24 +21,41 @@ import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { PURCHASE_IMPORT_MAIL_FEATURE } from "./features";
-import type { StructuredRunPorts } from "./run-feature";
+import { RESPOND_TOOL_NAME, type StructuredRunPorts } from "./run-feature";
 import { runAiSmoke } from "./smoke-run";
 
-function fakeChat<T extends object>(response: T) {
-  const calls: unknown[] = [];
-  const capture = async (
-    args: Parameters<StructuredRunPorts["chat"]>[0],
-  ): Promise<string> => {
-    calls.push(args);
-    const widened: unknown = response;
-    // SAFETY: the runner validates the returned fixture against the mail schema.
-    // This port has the full generic chat signature only for the smoke test.
-    return widened as string;
-  };
-  // SAFETY: capture observes the options and returns the fixture for the
-  // non-streaming structured branch exercised by this test.
+/**
+ * Fakes `callTarget` on pi-ai's own faux provider (`fauxProvider()`, see
+ * "Faux Provider for Tests"): answers every `complete()` with a forced
+ * `respond` tool call carrying `response`, so the smoke dispatch's
+ * production request building, schema validation, and writer code all run
+ * unmodified, without placing a real model call.
+ */
+function fakeCallTarget(response: JsonObject) {
+  const calls: Context[] = [];
+  const faux = fauxProvider();
+  const models = createModels();
+  models.setProvider(faux.provider);
+  faux.setResponses([
+    fauxAssistantMessage(fauxToolCall(RESPOND_TOOL_NAME, response), {
+      stopReason: "toolUse",
+    }),
+  ]);
   const ports: StructuredRunPorts = {
-    chat: capture as StructuredRunPorts["chat"],
+    callTarget: () => ({
+      model: faux.getModel(),
+      complete: (context, options) => {
+        calls.push(context);
+        // SAFETY: the faux provider accepts any API's stream options as an
+        // untyped bag; `options` already came from `chatCompletionOptionsFor`,
+        // shaped for the real model's API.
+        return models.complete(
+          faux.getModel(),
+          context,
+          options as ModelsApiStreamOptions<string>,
+        );
+      },
+    }),
   };
   return { calls, ports };
 }
@@ -38,12 +64,16 @@ describe("AI smoke dispatch", () => {
   const ctx = withTestDb();
 
   it("routes order mail through its production request without workflow writes", async () => {
-    const { calls, ports } = fakeChat({
-      event: "other",
-      orderId: null,
-      amount: null,
-      currency: null,
-      occurredAt: null,
+    const { calls, ports } = fakeCallTarget({
+      events: [
+        {
+          event: "other",
+          orderId: null,
+          amount: null,
+          currency: null,
+          occurredAt: null,
+        },
+      ],
     });
     const actor = requireActor(
       createTestRequestContext(ctx.db, {
@@ -60,10 +90,8 @@ describe("AI smoke dispatch", () => {
     );
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]).toMatchObject({
-      outputSchema: PURCHASE_IMPORT_MAIL_FEATURE.schema,
-      messages: expect.any(Array),
-    });
+    expect(calls[0]?.tools?.[0]?.name).toBe(RESPOND_TOOL_NAME);
+    expect(calls[0]?.messages).toEqual(expect.any(Array));
     expect(attempt).toMatchObject({
       status: "no_model_call",
       feature: PURCHASE_IMPORT_MAIL_FEATURE.feature,

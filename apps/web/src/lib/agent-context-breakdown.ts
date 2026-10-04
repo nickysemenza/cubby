@@ -1,17 +1,19 @@
+import type { AgentConversationMessage } from "@cubby/schemas/agent-conversation";
 import {
   contextBreakdownSchema,
   type ContextCall,
 } from "@cubby/schemas/context-breakdown";
-import type { FlueConversationMessage } from "@flue/sdk";
 
 export type { ContextCall };
 
-type MessageWithMetadata = Pick<
-  FlueConversationMessage,
-  "id" | "submissionId" | "metadata"
->;
+type MessageWithMetadata = Pick<AgentConversationMessage, "id" | "metadata">;
 
-/** Model calls in transcript order, one metadata block per response. */
+/**
+ * Model calls in transcript order, one metadata block per response. Dedupes
+ * on `message.id`: the same entry can appear twice in the array (a refetch
+ * overlapping a stream update), but never legitimately twice under distinct
+ * ids.
+ */
 export function contextCallsFromMessages(
   messages: readonly MessageWithMetadata[],
 ): ContextCall[] {
@@ -22,9 +24,8 @@ export function contextCallsFromMessages(
       message.metadata?.contextBreakdown,
     );
     if (!parsed.success) continue;
-    const response = message.submissionId ?? message.id;
-    if (seen.has(response)) continue;
-    seen.add(response);
+    if (seen.has(message.id)) continue;
+    seen.add(message.id);
     calls.push(...parsed.data.calls);
   }
   return calls;
@@ -53,7 +54,7 @@ const FIXED_SEGMENTS = [
 ] as const;
 const OTHER_TOOLS = { key: "otherToolResults", label: "Other tool results" };
 
-/** Drops Flue's `mcp__<server>__` prefix for display. */
+/** Drops the agent's `mcp__<server>__` prefix for display. */
 const displayToolName = (name: string) => name.replace(/^mcp__.+?__/, "");
 
 const toolKey = (name: string) => `tool:${name}`;

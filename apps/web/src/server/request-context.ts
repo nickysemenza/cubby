@@ -115,7 +115,7 @@ export type RequestActor = {
   channel: AuditChannel;
   /** The MCP OAuth client (JWT `azp`). */
   oauthClientId?: string | null;
-  /** A run the credential is scoped to, e.g. Flue's delegation token. */
+  /** A run the credential is scoped to, e.g. the agent's delegation token. */
   runId?: RunId | null;
 };
 

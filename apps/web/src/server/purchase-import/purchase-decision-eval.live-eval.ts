@@ -27,7 +27,6 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
-import { learnPurchaseProductExternalId } from "./external-id-learning";
 import {
   type EvalCandidate,
   evalCandidates,
@@ -35,7 +34,8 @@ import {
   evalUsageReport,
   evalWebRoot,
   liveEvalModelWorker,
-} from "./flue-eval-live-support";
+} from "./agent-eval-live-support";
+import { learnPurchaseProductExternalId } from "./external-id-learning";
 import { startOrderMailImport } from "./gmail/import";
 import { authorizePurchaseAgent } from "./purchase-agent-workerd.fixtures";
 import {
@@ -52,8 +52,8 @@ import {
 } from "./purchase-decision-eval.score";
 
 /**
- * Live purchase-coordinator decision eval. Opt-in and billed: the real Flue
- * agent runs in workerd against an isolated database, its model calls go to
+ * Live purchase-coordinator decision eval. Opt-in and billed: the real
+ * import-run agent runs in workerd against an isolated database, its model calls go to
  * Cubby's AI Gateway as each candidate, and the web Worker's extractor and
  * audit answer deterministically (`purchase-import-test-gateway.ts`) so only
  * the coordinator's decisions vary. Run with
@@ -64,7 +64,7 @@ const caseFilter = process.env.PURCHASE_EVAL_CASES?.split(",");
 const cases = purchaseDecisionCases.filter(
   (decision) => !caseFilter || caseFilter.includes(decision.name),
 );
-const repeats = Number(process.env.FLUE_EVAL_REPEATS ?? "1");
+const repeats = Number(process.env.AGENT_EVAL_REPEATS ?? "1");
 const RUN_TIMEOUT_MS = 8 * 60_000;
 const SETTLED = new Set(["completed", "needs_review", "failed"]);
 

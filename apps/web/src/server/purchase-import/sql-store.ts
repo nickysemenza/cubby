@@ -55,7 +55,7 @@ type ClaimedBrowserResult = {
   newlyCompleted: boolean;
 };
 
-/** Durable transport state only. Purchase-import orchestration lives in Flue. */
+/** Durable transport state only. Purchase-import orchestration lives in the coordinator agent. */
 export class PurchaseImportSqlStore {
   constructor(private readonly storage: DurableObjectStorage) {}
 

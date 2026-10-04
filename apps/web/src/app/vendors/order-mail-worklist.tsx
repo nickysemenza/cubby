@@ -142,7 +142,7 @@ function OrderMailEvent({
                 {importOrder.isPending ? "Starting import…" : "Import order"}
               </Button>
               <p className="mt-1 text-muted-foreground">
-                Flue reads the saved confirmation and imports its itemized
+                The agent reads the saved confirmation and imports its itemized
                 order.
               </p>
             </div>

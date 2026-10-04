@@ -147,7 +147,7 @@ See also the image operational passes at the end of this file.
   changing matching or purchase-run model routing. Baseline, 2026-10-03:
   GPT-6 Sol high 12/12 correct, 0 unsafe, about $0.58 per run; GPT-6 Luna
   high 8/12, 1 unsafe (duplicate Product) and three runs that misread the
-  extractor result, so purchase runs stay on Sol. Scripted Flue scenarios
+  extractor result, so purchase runs stay on Sol. Scripted agent scenarios
   prove orchestration, not model judgment.
 
 ---
@@ -262,7 +262,7 @@ See also the image operational passes at the end of this file.
   `packages/schemas/src/native-coverage.ts` with a shrink-only unsupported
   ceiling per kind. Every control, list cell, detail renderer and hero action
   is native. Remaining gaps: two Run detail slots (the live and stopped
-  agent conversation, which stream over Flue's own protocol; see the next
+  agent conversation, which stream over the coordinator's own protocol; see the next
   item), three finance verbs (split an expense, attach expenses, attach products), eight read-only
   structured fields, and the web-only parts inside drawn recipe/cookbook/
   ingredient and meal-composition slots. Add editor focus order or
@@ -271,10 +271,10 @@ See also the image operational passes at the end of this file.
 
 - ⏳ **Native agent conversation streaming.** The live and stopped agent slots
   (`run.import-agent-live`, `run.import-agent-stopped`) stay web-only on
-  purpose: the conversation is Flue's SSE stream plus prompt and abort over
+  purpose: the conversation is the coordinator's SSE stream plus prompt and abort over
   `/api/import/runs/{id}/agent/*` (`apps/web/src/routes/api/import/`), not a
-  Cubby operation, so nothing in the OpenAPI client reaches it. Native needs a
-  Flue client in CubbyKit (authenticated SSE read, prompt POST, the abort that
+  Cubby operation, so nothing in the OpenAPI client reaches it. Native needs an
+  agent client in CubbyKit (authenticated SSE read, prompt POST, the abort that
   cancels the run and its browser commands), reconnect with resume after a
   suspended or dropped connection, and a transcript model that folds stream
   events into the durable timeline (which native already draws from
@@ -412,7 +412,7 @@ See also the image operational passes at the end of this file.
   migrate remaining legacy transport/test helpers and retire obsolete v1
   compatibility code. Preserve tool contracts, purchase-agent authorization,
   MCP Apps, and Cloudflare-safe validation. Keep legacy protocol support until
-  Flue supports modern version negotiation; its current MCP client defaults
+  the agent supports modern version negotiation; its current MCP client defaults
   to legacy requests without exposing a negotiation option.
 
 - 🤔 **One FROM context per entity list.** Each list repo pairs a relational
@@ -576,7 +576,7 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   paused by hand. Wanted: status in a Durable Object checked per request (503
   page except a new health route and the switch), by every queue consumer
   (`background-tasks/consume.ts`, `telemetry-queue.ts`, the purchase-agent
-  consumer), and by the Flue purchase-import run before each tool call (via a
+  consumer), and by the agent's purchase-import run before each tool call (via a
   `PurchaseImportService` RPC); toggle from Settings and MCP. Decide first how
   consumers hold messages: a normally returning handler acks them, and
   `retry()` spends `max_retries: 3` with no dead-letter queue, so either call
@@ -644,9 +644,9 @@ related active work can find its deferred follow-ups.
   or cost-basis exports are actually needed. Generalize location valuation
   into replacement forecasts and cost-per-project analysis.
 
-- **Attribute Flue provider calls to their run.** The Flue provider
+- **Attribute agent provider calls to their run.** The agent provider
   (`apps/purchase-agent/src/cubby-ai-provider.ts`) still tags gateway metadata
-  with `jobKind: "purchase_import_run"`; send the run id once Flue exposes the
+  with `jobKind: "purchase_import_run"`; send the run id once the agent exposes the
   current run to module-scope providers.
 
 - **`imports_read.vendor_coverage` per account.** Promote when two members

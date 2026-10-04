@@ -4,7 +4,6 @@ import type {
   ProductIdentification,
 } from "@cubby/schemas/ai";
 import type { RecipeFlowAiPlan } from "@cubby/schemas/recipe-flow";
-import type { ImagePart } from "@tanstack/ai";
 
 import {
   LOCATION_DESCRIPTION_FEATURE,
@@ -14,6 +13,7 @@ import {
 } from "~/server/ai/features";
 import {
   type AiChatRequest,
+  type AiImagePart,
   type AiRunContext,
   runStructuredFeature,
 } from "~/server/ai/run-feature";
@@ -35,7 +35,7 @@ Rules:
 }
 
 /** Photo URLs as the image parts every vision request opens with. */
-function imageParts(imageUrls: string[]): ImagePart[] {
+function imageParts(imageUrls: string[]): AiImagePart[] {
   return imageUrls.map((url) => ({
     type: "image",
     source: { type: "url", value: url },

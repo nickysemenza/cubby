@@ -1,32 +1,26 @@
+import { cubbyPiProviders, type GatewayRoute } from "@cubby/shared/pi-gateway";
 import {
-  type AnthropicChatModelProviderOptionsByName,
-  createAnthropicChat,
-} from "@tanstack/ai-anthropic";
-import {
-  type OpenAITextProviderOptions,
-  createOpenaiChat,
-} from "@tanstack/ai-openai";
-import {
-  type OpenAICompatibleChatAdapter,
-  openaiCompatibleText,
-} from "@tanstack/ai-openai/compatible";
+  createModels,
+  type Api,
+  type AnthropicOptions,
+  type AssistantMessage,
+  type Context,
+  type Model,
+  type ModelsApiStreamOptions,
+  type OpenAICompletionsOptions,
+  type OpenAIResponsesOptions,
+} from "@earendil-works/pi-ai";
 
 import {
-  FAST_MODEL,
-  REASONING_MODEL,
-  type SupportedAiModelRef,
+  type ChatRoute,
   type SupportedChatModel,
-  VISION_BATCH_MODEL,
   getChatModelConfig,
-  providerFor,
 } from "~/server/ai/models";
 import {
   type GatewayCallOptions,
   type GatewayMetadata,
-  gatewayBaseURL,
   gatewayFetch,
 } from "~/server/clients/ai-gateway";
-import type { AiGatewayUsageContext } from "~/server/clients/ai-gateway-usage";
 
 /**
  * The one cache lifetime deterministic structured calls get: the gateway's
@@ -53,180 +47,79 @@ export function cachedCall(args: {
     : { metadata, cacheTtlSeconds: AI_CACHE_TTL_SECONDS };
 }
 
-/**
- * The placeholder the SDKs send as their provider credential. It never reaches
- * a provider: {@link gatewayFetch} strips `authorization` / `x-api-key` on both
- * the binding and the REST branch, leaving the gateway to authenticate with
- * BYOK or unified billing. The SDKs refuse to construct without *some* key.
- */
-const UNIFIED_BILLING_PLACEHOLDER = "cf-aig-unified-billing";
-
-/**
- * Claude Sonnet 5's wholesale pool meters tokens per minute and refuses bursts
- * with `429` code 2018, so the Anthropic client backs off rather than failing
- * the interactive call.
- */
-const ANTHROPIC_MAX_RETRIES = 4;
-
-/**
- * Adapters are built per call, never cached: the gateway binding is
- * per-request in prod, and the per-feature metadata lives in the shim's
- * closure. Construction is cheap.
- */
-function anthropicAdapter<
-  TModel extends Parameters<typeof createAnthropicChat>[0],
->(model: TModel, opts: GatewayCallOptions) {
-  return createAnthropicChat(model, UNIFIED_BILLING_PLACEHOLDER, {
-    baseURL: gatewayBaseURL("anthropic"),
-    fetch: gatewayFetch("anthropic", opts),
-    maxRetries: ANTHROPIC_MAX_RETRIES,
-  });
-}
-
-function openaiAdapter<TModel extends Parameters<typeof createOpenaiChat>[0]>(
-  model: TModel,
-  opts: GatewayCallOptions,
-) {
-  return createOpenaiChat(model, UNIFIED_BILLING_PLACEHOLDER, {
-    baseURL: gatewayBaseURL("openai"),
-    fetch: gatewayFetch("openai", opts),
-  });
-}
-
-// The installed TanStack catalog trails the provider's newly released ids.
-// The Responses adapter sends its model argument verbatim; keep the cast at
-// this boundary until TanStack adds GPT-6 to its type catalog.
-function newOpenaiAdapter(
-  model: typeof FAST_MODEL | typeof REASONING_MODEL,
-  opts: GatewayCallOptions,
-) {
-  // SAFETY: TanStack forwards this literal id to Responses without parsing it;
-  // the registry limits callers to GPT-6 ids verified through the gateway.
-  return openaiAdapter(model as Parameters<typeof createOpenaiChat>[0], opts);
-}
-
-function compatAdapter<TModel extends string>(
-  wireModel: TModel,
-  opts: GatewayCallOptions,
-) {
-  const adapter = openaiCompatibleText(wireModel, {
-    baseURL: gatewayBaseURL("compat"),
-    apiKey: UNIFIED_BILLING_PLACEHOLDER,
-    api: "chat-completions",
-    fetch: gatewayFetch("compat", opts),
-  });
-  // SAFETY: `api` is optional in the factory's signature, so it returns a
-  // Responses-or-Chat union; passing "chat-completions" always selects the
-  // Chat Completions adapter. Narrowing here keeps the tier factories
-  // concretely typed.
-  return adapter as OpenAICompatibleChatAdapter<TModel>;
-}
-
-/**
- * GPT-6 Luna on `/openai/responses`: classification and identification.
- */
-export function fastAdapter(opts: GatewayCallOptions) {
-  return newOpenaiAdapter(getChatModelConfig(FAST_MODEL).wireModel, opts);
-}
-
-/**
- * Gemini 2.5 Flash on the gateway's `/compat/chat/completions`: the cheapest
- * accurate vision reader, but ~14 s to first token — batch and backfill work
- * only, never an interactive wait.
- */
-export function visionBatchAdapter(opts: GatewayCallOptions) {
-  return compatAdapter(getChatModelConfig(VISION_BATCH_MODEL).wireModel, opts);
-}
-
-/** GPT-6 Sol on `/openai/responses`: the accuracy tier. */
-export function reasoningAdapter(opts: GatewayCallOptions) {
-  return newOpenaiAdapter(getChatModelConfig(REASONING_MODEL).wireModel, opts);
-}
-
-/**
- * Any registered chat model, routed by the registry. The return type is a
- * union, which collapses `modelOptions` typing — use it only where the model
- * is chosen at runtime (the smoke test and the eval harness); features call a
- * tier factory.
- */
-export function chatAdapterFor(
-  model: SupportedChatModel,
-  opts: GatewayCallOptions,
-) {
-  const config = getChatModelConfig(model);
-  switch (config.route) {
-    case "anthropic":
-      // SAFETY: the registry's Anthropic route supplies provider wire ids;
-      // TanStack's catalog predates Opus 5.5 but forwards the id unchanged.
-      return anthropicAdapter(
-        config.wireModel as Parameters<typeof createAnthropicChat>[0],
-        opts,
-      );
+/** The registry's chat route, translated to the shared gateway module's provider id. */
+function gatewayRouteFor(route: ChatRoute): GatewayRoute {
+  switch (route) {
     case "openai-responses":
-      // SAFETY: all registry rows on this route are OpenAI Responses ids;
-      // TanStack's type catalog predates GPT-6 but forwards the id unchanged.
-      return openaiAdapter(
-        config.wireModel as Parameters<typeof createOpenaiChat>[0],
-        opts,
-      );
+      return "openai";
+    case "anthropic":
+      return "anthropic";
     case "compat":
-      return compatAdapter(config.wireModel, opts);
+      return "compat";
   }
 }
 
-type AnthropicTierOptions =
-  AnthropicChatModelProviderOptionsByName["claude-sonnet-5"];
-export type AnthropicEffort = NonNullable<
-  NonNullable<AnthropicTierOptions["output_config"]>["effort"]
->;
-
-/**
- * Sonnet 5 rejects `temperature` / `top_p` / `top_k` and a manual
- * `budget_tokens`: send only the output cap, adaptive thinking, and the
- * effort dial. Thinking tokens count against `maxTokens`.
- */
-export function anthropicOptions(args: {
-  maxTokens: number;
-  effort?: AnthropicEffort;
-  /** From the registry row; `false` drops thinking and effort (Haiku 4.5). */
-  adaptiveThinking?: boolean;
-}): AnthropicTierOptions {
-  if (args.adaptiveThinking === false) return { max_tokens: args.maxTokens };
-  const options: AnthropicTierOptions = {
-    max_tokens: args.maxTokens,
-    thinking: { type: "adaptive" },
-  };
-  if (args.effort) options.output_config = { effort: args.effort };
-  return options;
+/** A chat model resolved against pi-ai's catalog, plus a `complete()` bound to it. */
+export interface PiCallTarget {
+  model: Model<Api>;
+  complete: (
+    context: Context,
+    options: ModelsApiStreamOptions<Api>,
+  ) => Promise<AssistantMessage>;
 }
 
-type OpenAiTierOptions = OpenAITextProviderOptions;
-export type OpenAiEffort = NonNullable<
-  NonNullable<OpenAiTierOptions["reasoning"]>["effort"]
->;
-
-/** Luna's cap covers visible output plus reasoning tokens. */
-export function openaiOptions(args: {
-  maxTokens: number;
-  effort: OpenAiEffort;
-}): OpenAiTierOptions {
+/**
+ * Builds a fresh pi-ai `Models` collection per call: the gateway's per-call
+ * metadata and cache policy (`call`) live in the provider's fetch closure
+ * (`cubbyPiProviders`'s doc comment), so a provider cannot be shared across
+ * calls with different `GatewayCallOptions`. Construction is cheap — no
+ * network I/O, just object literals — so a fresh collection per call is the
+ * correct cost, not a corner cut for simplicity.
+ */
+export function piCallTarget(
+  model: SupportedChatModel,
+  call: GatewayCallOptions,
+): PiCallTarget {
+  const config = getChatModelConfig(model);
+  const gatewayRoute = gatewayRouteFor(config.route);
+  const models = createModels();
+  for (const provider of cubbyPiProviders((route) =>
+    gatewayFetch(route, call),
+  )) {
+    models.setProvider(provider);
+  }
+  const resolved = models.getModel(gatewayRoute, config.wireModel);
+  if (!resolved) {
+    throw new Error(
+      `pi-ai does not declare a model for ${gatewayRoute}/${config.wireModel} (Cubby model "${model}")`,
+    );
+  }
   return {
-    max_output_tokens: args.maxTokens,
-    reasoning: { effort: args.effort },
+    model: resolved,
+    complete: (context, options) => models.complete(resolved, context, options),
   };
 }
 
 /**
- * The compat route is plain Chat Completions, whose options the adapter
- * leaves untyped (`Record<string, any>`); this is the one place Cubby's
- * spelling of them is written down.
+ * The reasoning dial OpenAI's Responses API accepts. GPT-6 (like gpt-5.1)
+ * supports "none" to disable reasoning entirely; pi-ai's own type omits it
+ * because most reasoning models reject it, but it forwards the raw string
+ * to the wire unvalidated (`openai-responses.js`'s `reasoningEffort` branch),
+ * so passing it through is safe and preserves the old TanStack behavior.
  */
-interface CompatTierOptions {
-  max_tokens: number;
-  reasoning_effort?: "none" | "low" | "medium" | "high";
-}
+export type OpenAiEffort =
+  | "none"
+  | "minimal"
+  | "low"
+  | "medium"
+  | "high"
+  | "xhigh"
+  | "max";
 
-export type CompatEffort = NonNullable<CompatTierOptions["reasoning_effort"]>;
+export type AnthropicEffort = NonNullable<AnthropicOptions["effort"]>;
+export type CompatEffort = NonNullable<
+  OpenAICompletionsOptions["reasoningEffort"]
+>;
 
 /**
  * The reasoning dial every route accepts — the intersection of the three
@@ -237,27 +130,71 @@ export type CompatEffort = NonNullable<CompatTierOptions["reasoning_effort"]>;
  */
 export type SharedEffort = OpenAiEffort & AnthropicEffort & CompatEffort;
 
-export function compatOptions(args: {
-  maxTokens: number;
-  reasoningEffort?: CompatTierOptions["reasoning_effort"];
-}): CompatTierOptions {
-  const options: CompatTierOptions = { max_tokens: args.maxTokens };
-  if (args.reasoningEffort) options.reasoning_effort = args.reasoningEffort;
-  return options;
-}
-
 /**
- * The usage context for a call, with `provider` taken from the registry rather
- * than hardcoded — a non-Anthropic row with `provider: "anthropic"` would be
- * priced as `null` and vanish from the cost ledger.
+ * pi-ai's per-API stream options for a forced tool call named `toolName`,
+ * with the tier's token cap and reasoning dial mapped onto each provider's
+ * own fields. Mirrors the effective parameters the old TanStack adapters
+ * sent: OpenAI reasoning effort + an output cap, Anthropic adaptive
+ * thinking/effort with no temperature (Haiku 4.5 rejects both — see
+ * `adaptiveThinkingFor`), and compat's `reasoning_effort` + token cap.
  */
-export function usageFor(
+export function chatCompletionOptionsFor(
   model: SupportedChatModel,
-  ctx: Omit<AiGatewayUsageContext, "provider" | "model">,
-): AiGatewayUsageContext {
-  // SAFETY: `SupportedAiModelRef` is a union of registry-derived
-  // {provider, model} pairs and `providerFor` reads that same registry, but
-  // the compiler cannot correlate them across a runtime-chosen model.
-  const ref = { provider: providerFor(model), model } as SupportedAiModelRef;
-  return { ...ctx, ...ref };
+  args: {
+    maxTokens: number;
+    /** Whichever provider vocabulary `model`'s route takes — the caller's
+     * feature record is already tiered to the matching route, so this
+     * accepts any of the three rather than only their (narrower) shared
+     * intersection. */
+    effort?: OpenAiEffort | AnthropicEffort | CompatEffort;
+  },
+  toolName: string,
+): OpenAIResponsesOptions | AnthropicOptions | OpenAICompletionsOptions {
+  const config = getChatModelConfig(model);
+  switch (config.route) {
+    case "openai-responses": {
+      const options: OpenAIResponsesOptions = {
+        maxTokens: args.maxTokens,
+        toolChoice: { type: "function", name: toolName },
+      };
+      if (args.effort) {
+        // SAFETY: pi-ai's `reasoningEffort` type excludes "none"; the
+        // provider forwards it verbatim (see `OpenAiEffort`'s comment).
+        options.reasoningEffort =
+          args.effort as OpenAIResponsesOptions["reasoningEffort"];
+      }
+      return options;
+    }
+    case "anthropic": {
+      const adaptiveThinking = config.adaptiveThinking ?? true;
+      const options: AnthropicOptions = {
+        maxTokens: args.maxTokens,
+        toolChoice: { type: "tool", name: toolName },
+      };
+      if (adaptiveThinking) {
+        options.thinkingEnabled = true;
+        if (args.effort) {
+          // SAFETY: `args.effort` is `OpenAiEffort | AnthropicEffort |
+          // CompatEffort` (see this function's own comment) because the
+          // caller's feature record is already tiered to this route; on the
+          // Anthropic route it is always an `AnthropicEffort` value.
+          options.effort = args.effort as AnthropicEffort;
+        }
+      }
+      return options;
+    }
+    case "compat": {
+      const options: OpenAICompletionsOptions = {
+        maxTokens: args.maxTokens,
+        toolChoice: { type: "function", function: { name: toolName } },
+      };
+      if (args.effort) {
+        // SAFETY: as above — on the compat route `args.effort` is always a
+        // `CompatEffort` value, since the caller's feature record is already
+        // tiered to this route.
+        options.reasoningEffort = args.effort as CompatEffort;
+      }
+      return options;
+    }
+  }
 }

@@ -216,7 +216,7 @@ export async function startScenarioHarness(
         outcomes?: Record<string, unknown>;
         delayMs?: number;
       }) => post(toQueue, "/browser-connect", input),
-      /** Deliver a member's chat turn to the run's Flue conversation. */
+      /** Deliver a member's chat turn to the run's agent conversation. */
       prompt: (agentId: string, body: string) =>
         post(
           toAgent,
@@ -227,7 +227,7 @@ export async function startScenarioHarness(
         readJson(z.array(z.string()), () =>
           model.fetch("https://model.test/violations"),
         ),
-      /** Each step the scripted model emitted: what Flue actually executed. */
+      /** Each step the scripted model emitted: what the agent actually executed. */
       emitted: async () =>
         readJson(z.array(z.string()), () =>
           model.fetch("https://model.test/emitted"),

@@ -35,7 +35,7 @@ export async function handleMcpHttpRequest(request: Request) {
             sessionId: actor.sessionId,
             channel: "mcp",
             oauthClientId: actor.clientId,
-            // Flue's token is scoped to its run, so everything it writes
+            // The agent's token is scoped to its run, so everything it writes
             // inherits that run (validated against the grant below).
             runId: actor.purchaseAgentRunId
               ? runEntityId.parse(actor.purchaseAgentRunId)

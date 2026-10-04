@@ -7,33 +7,33 @@ import type {
 import { runEntityId } from "./identifier-fields";
 import { runPurpose } from "./run-fields";
 
-/** Purposes currently coordinated by the durable Flue Run agent. */
-export const flueImportRunPurpose = runPurpose.extract([
+/** Purposes currently coordinated by the durable import-run agent. */
+export const agentImportRunPurpose = runPurpose.extract([
   "account_sync",
   "purchase_validation",
   "product_enrichment",
   "photo_inventory",
 ]);
-export type FlueImportRunPurpose = z.infer<typeof flueImportRunPurpose>;
+export type AgentImportRunPurpose = z.infer<typeof agentImportRunPurpose>;
 
-// These prefixes are persisted in Run.agentSessionId and Flue Durable
+// These prefixes are persisted in Run.agentSessionId and the agent's Durable
 // Object storage. Existing conversations must retain their original identity.
 const instancePrefix = {
   account_sync: "import-run",
   purchase_validation: "import-run",
   product_enrichment: "import-run",
   photo_inventory: "photo-inventory",
-} satisfies Record<FlueImportRunPurpose, string>;
+} satisfies Record<AgentImportRunPurpose, string>;
 const validPrefixes = new Set<string>(Object.values(instancePrefix));
 
 export function importRunAgentIdentity(
   runId: string,
-  purpose: FlueImportRunPurpose,
+  purpose: AgentImportRunPurpose,
 ): string {
   return `${instancePrefix[purpose]}:${runEntityId.parse(runId)}`;
 }
 
-/** Resolve only agent-owned Flue instances; other observations are ignored. */
+/** Resolve only agent-owned instances; other observations are ignored. */
 export function importRunIdFromAgentIdentity(
   instanceId: string | undefined,
 ): string | undefined {
@@ -112,7 +112,7 @@ const PURCHASE_MCP_ACTIONS = [
   "image.schedule_processing",
 ] as const satisfies readonly CubbyMcpToolAction[];
 
-/** The tools Flue mounts for a set of actions: it mounts by tool name. */
+/** The tools the coordinator mounts for a set of actions: it mounts by tool name. */
 const toolsOf = <const Actions extends readonly CubbyMcpToolAction[]>(
   actions: Actions,
 ) =>
@@ -123,14 +123,14 @@ const toolsOf = <const Actions extends readonly CubbyMcpToolAction[]>(
   >;
 
 export type ImportRunAgentConfig = {
-  /** OpenAI model id the Flue coordinator runs on. */
+  /** OpenAI model id the coordinator runs on. */
   model: "gpt-6-luna" | "gpt-6-sol";
   effort: "low" | "medium" | "high";
   agentTools: readonly ImportRunAgentToolName[];
   /**
-   * Flue mounts MCP tools by name and sends every mounted schema on every
-   * call; Cubby narrows each mounted tool's advertised schema to these
-   * actions and refuses any other action from the run.
+   * The coordinator mounts MCP tools by name and sends every mounted schema
+   * on every call; Cubby narrows each mounted tool's advertised schema to
+   * these actions and refuses any other action from the run.
    */
   mcpActions: readonly CubbyMcpToolAction[];
   mcpTools: readonly CubbyMcpToolName[];
@@ -160,7 +160,7 @@ const enrichmentAgent = {
 
 /**
  * Model, effort, and tools per agent run purpose. Photo grouping moved to Luna
- * after the live eval (`pnpm --dir apps/web eval:flue-models`) matched Sol on
+ * after the live eval (`pnpm --dir apps/web eval:agent-models`) matched Sol on
  * every case at a fraction of the cost; purchase runs stay on Sol until the
  * same eval covers them.
  */
@@ -179,4 +179,4 @@ export const importRunAgentManifest = {
   account_sync: purchaseAgent,
   purchase_validation: purchaseAgent,
   product_enrichment: enrichmentAgent,
-} as const satisfies Record<FlueImportRunPurpose, ImportRunAgentConfig>;
+} as const satisfies Record<AgentImportRunPurpose, ImportRunAgentConfig>;

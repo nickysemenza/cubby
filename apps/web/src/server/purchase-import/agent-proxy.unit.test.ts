@@ -6,7 +6,7 @@ import {
 } from "./agent-proxy";
 
 describe("purchase-agent proxy mutation fence", () => {
-  it("allows the fenced abort to reach Flue while keeping other terminal writes view-only", () => {
+  it("allows the fenced abort to reach the agent while keeping other terminal writes view-only", () => {
     expect(
       purchaseAgentRequestIsWritable({
         method: "POST",

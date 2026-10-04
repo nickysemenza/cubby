@@ -24,7 +24,7 @@ type AiProvider = z.infer<typeof aiProvider>;
  * `/compat/chat/completions` (the only path to Google AI Studio).
  */
 const chatRoute = z.enum(["anthropic", "openai-responses", "compat"]);
-type ChatRoute = z.infer<typeof chatRoute>;
+export type ChatRoute = z.infer<typeof chatRoute>;
 
 interface ChatAiModelConfig {
   role: "chat";

@@ -1,4 +1,3 @@
-import { runEntityId } from "@cubby/schemas/identifiers";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -6,98 +5,120 @@ import {
   REASONING_MODEL,
   VISION_BATCH_MODEL,
 } from "~/server/ai/models";
-import type { Database } from "~/server/db";
 
 import {
   AI_CACHE_TTL_SECONDS,
-  anthropicOptions,
   cachedCall,
-  chatAdapterFor,
-  compatOptions,
-  fastAdapter,
-  openaiOptions,
-  reasoningAdapter,
-  usageFor,
-  visionBatchAdapter,
+  chatCompletionOptionsFor,
+  piCallTarget,
 } from "./ai-adapters";
 
-// Constructing an adapter must never need a gateway: the shim resolves the
-// binding per request, and dev has none.
+// Constructing a call target must never need a gateway: the shim resolves
+// the binding per request, and dev has none.
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
 const opts = { metadata: { feature: "test" } };
 
-describe("tier factories resolve the registry's wire model and route", () => {
+describe("piCallTarget resolves the registry's wire model and route", () => {
   it("sends the fast tier to OpenAI's Responses API", () => {
-    const adapter = fastAdapter(opts);
-    expect(adapter.name).toBe("openai");
-    expect(adapter.model).toBe("gpt-6-luna");
+    const target = piCallTarget(FAST_MODEL, opts);
+    expect(target.model.provider).toBe("openai");
+    expect(target.model.id).toBe("gpt-6-luna");
   });
 
   it("sends the vision batch tier to the gateway's compat route", () => {
-    const adapter = visionBatchAdapter(opts);
-    expect(adapter.model).toBe("google-ai-studio/gemini-2.5-flash");
+    const target = piCallTarget(VISION_BATCH_MODEL, opts);
+    expect(target.model.provider).toBe("compat");
+    expect(target.model.id).toBe("google-ai-studio/gemini-2.5-flash");
   });
 
   it("sends the reasoning tier to OpenAI Responses", () => {
-    const adapter = reasoningAdapter(opts);
-    expect(adapter.name).toBe("openai");
-    expect(adapter.model).toBe("gpt-6-sol");
+    const target = piCallTarget(REASONING_MODEL, opts);
+    expect(target.model.provider).toBe("openai");
+    expect(target.model.id).toBe("gpt-6-sol");
   });
 
-  it("routes any registered model the same way through chatAdapterFor", () => {
-    expect(chatAdapterFor(FAST_MODEL, opts).model).toBe(
-      fastAdapter(opts).model,
+  it("routes Anthropic models to the anthropic provider", () => {
+    expect(piCallTarget("claude-haiku-4-5", opts).model.provider).toBe(
+      "anthropic",
     );
-    expect(chatAdapterFor(VISION_BATCH_MODEL, opts).model).toBe(
-      visionBatchAdapter(opts).model,
-    );
-    expect(chatAdapterFor(REASONING_MODEL, opts).model).toBe(
-      reasoningAdapter(opts).model,
-    );
-    expect(chatAdapterFor("claude-haiku-4-5", opts).name).toBe("anthropic");
   });
 });
 
-describe("provider option helpers", () => {
+describe("chatCompletionOptionsFor", () => {
   it("never emits sampling parameters for Anthropic (Sonnet 5 rejects them)", () => {
-    const options = anthropicOptions({ maxTokens: 4000, effort: "low" });
+    const options = chatCompletionOptionsFor(
+      "claude-sonnet-5",
+      { maxTokens: 4000, effort: "low" },
+      "respond",
+    );
     expect(options).toEqual({
-      max_tokens: 4000,
-      thinking: { type: "adaptive" },
-      output_config: { effort: "low" },
+      maxTokens: 4000,
+      thinkingEnabled: true,
+      effort: "low",
+      toolChoice: { type: "tool", name: "respond" },
     });
     expect(options).not.toHaveProperty("temperature");
     expect(options).not.toHaveProperty("top_p");
     expect(options).not.toHaveProperty("top_k");
-    expect(anthropicOptions({ maxTokens: 300 })).not.toHaveProperty(
-      "output_config",
-    );
+    expect(
+      chatCompletionOptionsFor(
+        "claude-sonnet-5",
+        { maxTokens: 300 },
+        "respond",
+      ),
+    ).not.toHaveProperty("effort");
   });
 
   it("drops thinking and effort for models that reject them", () => {
-    const options = anthropicOptions({
+    const options = chatCompletionOptionsFor(
+      "claude-haiku-4-5",
+      { maxTokens: 300, effort: "low" },
+      "respond",
+    );
+    expect(options).toEqual({
       maxTokens: 300,
-      effort: "low",
-      adaptiveThinking: false,
+      toolChoice: { type: "tool", name: "respond" },
     });
-    expect(options).toEqual({ max_tokens: 300 });
   });
 
-  it("caps Luna's visible plus reasoning output", () => {
-    expect(openaiOptions({ maxTokens: 500, effort: "none" })).toEqual({
-      max_output_tokens: 500,
-      reasoning: { effort: "none" },
+  it("caps Luna's visible plus reasoning output and forces the named function tool", () => {
+    expect(
+      chatCompletionOptionsFor(
+        FAST_MODEL,
+        { maxTokens: 500, effort: "none" },
+        "respond",
+      ),
+    ).toEqual({
+      maxTokens: 500,
+      reasoningEffort: "none",
+      toolChoice: { type: "function", name: "respond" },
     });
   });
 
   it("spells the compat route's chat-completions parameters", () => {
-    expect(compatOptions({ maxTokens: 800 })).toEqual({ max_tokens: 800 });
-    expect(compatOptions({ maxTokens: 800, reasoningEffort: "none" })).toEqual({
-      max_tokens: 800,
-      reasoning_effort: "none",
+    expect(
+      chatCompletionOptionsFor(
+        VISION_BATCH_MODEL,
+        { maxTokens: 800 },
+        "respond",
+      ),
+    ).toEqual({
+      maxTokens: 800,
+      toolChoice: { type: "function", function: { name: "respond" } },
+    });
+    expect(
+      chatCompletionOptionsFor(
+        VISION_BATCH_MODEL,
+        { maxTokens: 800, effort: "low" },
+        "respond",
+      ),
+    ).toEqual({
+      maxTokens: 800,
+      reasoningEffort: "low",
+      toolChoice: { type: "function", function: { name: "respond" } },
     });
   });
 });
@@ -125,24 +146,5 @@ describe("cachedCall", () => {
       metadata,
       cacheTtlSeconds: AI_CACHE_TTL_SECONDS,
     });
-  });
-});
-
-describe("usageFor", () => {
-  // SAFETY: the usage context only carries the database to the middleware,
-  // which this test never runs.
-  const db = {} as Database;
-  const runId = runEntityId.parse("00000000-0000-4000-8000-000000000001");
-
-  it("derives the provider from the registry rather than assuming Anthropic", () => {
-    expect(
-      usageFor(FAST_MODEL, { db, runId, feature: "f", operation: "o" }),
-    ).toMatchObject({ provider: "openai", model: "gpt-6-luna" });
-    expect(
-      usageFor(VISION_BATCH_MODEL, { db, runId, feature: "f", operation: "o" }),
-    ).toMatchObject({ provider: "google", model: "gemini-2.5-flash" });
-    expect(
-      usageFor(REASONING_MODEL, { db, runId, feature: "f", operation: "o" }),
-    ).toMatchObject({ provider: "openai", model: "gpt-6-sol" });
   });
 });

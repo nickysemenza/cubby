@@ -283,7 +283,7 @@ test("keeps one Run live through every Gmail page and shows saved search inputs"
   ).toContainText("example.test");
 });
 
-test("starts Flue from saved itemized email and exposes errors and the import Run", async ({
+test("starts the import-run agent from saved itemized email and exposes errors and the import Run", async ({
   page,
 }) => {
   const seed = await seedUnimportedOrderMail(

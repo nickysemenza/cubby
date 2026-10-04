@@ -1,6 +1,6 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import {
-  flueImportRunPurpose,
+  agentImportRunPurpose,
   importRunAgentManifest,
 } from "@cubby/schemas/import-run-agent";
 import type { CubbyMcpMutationAction } from "@cubby/schemas/mcp-tools";
@@ -140,9 +140,9 @@ export async function purchaseAgentRunActions(db: Database, runId: string) {
     .limit(1);
   if (!run) throw new Error("Import run was not found");
   const purpose = runPurpose.parse(run.purpose);
-  const flue = flueImportRunPurpose.safeParse(purpose);
-  const allowed: readonly string[] = flue.success
-    ? importRunAgentManifest[flue.data].mcpActions
+  const agentPurpose = agentImportRunPurpose.safeParse(purpose);
+  const allowed: readonly string[] = agentPurpose.success
+    ? importRunAgentManifest[agentPurpose.data].mcpActions
     : [];
   return { purpose, allowed };
 }

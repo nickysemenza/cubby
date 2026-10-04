@@ -9,7 +9,7 @@ import {
 
 describe("private purchase-agent route contract", () => {
   it.each(["GET", "HEAD", "POST"])(
-    "forwards %s to Flue with the mount prefix removed",
+    "forwards %s to the agent with the mount prefix removed",
     (method) => {
       const routed = internalAgentRoute(
         new Request(

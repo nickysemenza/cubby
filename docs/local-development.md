@@ -110,7 +110,7 @@ a token. Wrangler must be authenticated for those bindings. This profile runs th
 with remote AI and callbacks to the local Cubby Worker; PostgreSQL and storage
 remain local. Stop a running offline session before switching profiles.
 Integration mode supports HMR development. Built preview currently supports
-the offline profile only because Flue's auxiliary entry is served by its Vite
+the offline profile only because the agent's auxiliary entry is served by its Vite
 plugin.
 
 Scheduled work does not run automatically. Invoke the real handler when needed

@@ -55,7 +55,7 @@ import {
 } from "./purchase-agent-workerd.fixtures";
 import { approvalWakeEvent, controlRun, startOrResumeRun } from "./run-service";
 
-// Each scenario drives the production Flue agent, its tools, the MCP server,
+// Each scenario drives the production import-run agent, its tools, the MCP server,
 // queue delivery, the browser broker, and the web Worker's writers end to
 // end. Only the coordinator model and the web Worker's extractor/audit model
 // are scripted, so these prove orchestration and server fences — never model
@@ -129,7 +129,7 @@ const unreadableExtraction = (detail: string) => ({
 let scenario: ScenarioHarness | undefined;
 let scenarioRunId: string | undefined;
 
-describe("purchase-agent scripted Flue scenarios", () => {
+describe("purchase-agent scripted scenarios", () => {
   const ctx = withTestDb();
 
   afterEach(async ({ task }) => {
@@ -435,7 +435,7 @@ describe("purchase-agent scripted Flue scenarios", () => {
     expect(await scenario.violations()).toEqual([]);
 
     // Redelivery: the same start event is fenced by its acknowledged
-    // generation and the same browser result by Flue's idempotency key, so
+    // generation and the same browser result by the agent's idempotency key, so
     // neither reaches the model or writes again.
     const emittedBefore = await scenario.emitted();
     const [command] = await getDb(ctx.db)

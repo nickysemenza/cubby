@@ -13,7 +13,7 @@ import { z } from "zod";
 
 /** Character weight for one image; base64 length says nothing about tokens. */
 export const IMAGE_CHAR_WEIGHT = 4_000;
-/** Flue mounts MCP connection tools as `mcp__<server>__<tool>`. */
+/** MCP tools reach the model as `mcp__<server>__<tool>`. */
 const MCP_TOOL_PREFIX = "mcp__";
 const UNKNOWN_TOOL = "unknown";
 const MAX_CALLS_PER_SCOPE = 256;

@@ -159,10 +159,13 @@ export function gatewayFetch(
     const testGateway = getTestAiGateway();
     if (testGateway) {
       headers.set("cf-aig-metadata", JSON.stringify(metadata));
+      // Only the wire fields cross the test service binding: a provider SDK's
+      // init carries extra properties (and its own AbortSignal) that a
+      // binding cannot clone.
       return captureFailure(
         await testGateway.fetch(
           `https://ai-gateway.test/${provider}/${endpoint}`,
-          { ...init, headers, signal },
+          { method: init?.method ?? "POST", headers, body: init?.body },
         ),
         opts,
       );

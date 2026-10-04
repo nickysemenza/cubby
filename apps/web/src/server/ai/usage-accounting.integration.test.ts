@@ -7,8 +7,13 @@
  * only at the socket — so a second writer (a middleware plus a hand-written
  * record, say) shows up as a second row.
  */
-import type { ChatMiddleware } from "@tanstack/ai";
-import { fromAny, fromPartial } from "@total-typescript/shoehorn";
+import {
+  createModels,
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxToolCall,
+  type ModelsApiStreamOptions,
+} from "@earendil-works/pi-ai";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -19,9 +24,11 @@ import {
 } from "~/server/ai/features";
 import { providerFor } from "~/server/ai/models";
 import {
+  RESPOND_TOOL_NAME,
   recordApplicationCacheHit,
   recordFeatureUsage,
   runStructuredFeature,
+  type StructuredRunPorts,
 } from "~/server/ai/run-feature";
 import { aiUsage } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -90,27 +97,43 @@ describe("AiUsage accounting", () => {
 
   it("records one row for one location vision model call", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
-    // The fake `chat` fires the runner's usage middleware as the real engine
-    // does on finish, so the row count reflects every writer the runner
-    // attaches to a call: a second one would show up as a second row.
-    const fakeChat = async (args: { middleware?: ChatMiddleware[] }) => {
-      for (const middleware of args.middleware ?? []) {
-        await middleware.onFinish?.(
-          fromPartial({}),
-          fromPartial({
-            usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-            duration: 12,
-          }),
-        );
-      }
-      return { description: "Synthetic shelf of bins.", confidence: "high" };
+    // The fake `callTarget` (pi-ai's own `fauxProvider()` test double — see
+    // "Faux Provider for Tests") resolves `recordFeatureUsage` straight from
+    // the `AssistantMessage` it hands back, the same as the real transport,
+    // so the row count reflects every writer the runner attaches to a call:
+    // a second one would show up as a second row.
+    const faux = fauxProvider();
+    const fauxModels = createModels();
+    fauxModels.setProvider(faux.provider);
+    faux.setResponses([
+      fauxAssistantMessage(
+        fauxToolCall(RESPOND_TOOL_NAME, {
+          description: "Synthetic shelf of bins.",
+          confidence: "high",
+        }),
+        { stopReason: "toolUse" },
+      ),
+    ]);
+    const ports: StructuredRunPorts = {
+      callTarget: () => ({
+        model: faux.getModel(),
+        // SAFETY: the faux provider accepts any API's stream options as an
+        // untyped bag; `options` already came from `chatCompletionOptionsFor`,
+        // shaped for the real model's API.
+        complete: (context, options) =>
+          fauxModels.complete(
+            faux.getModel(),
+            context,
+            options as ModelsApiStreamOptions<string>,
+          ),
+      }),
     };
 
     await runStructuredFeature(
       LOCATION_DESCRIPTION_FEATURE,
       { systemPrompts: ["frame"], messages: [{ role: "user", content: "x" }] },
       { db: ctx.db, runId, operation: "locationDescription" },
-      { chat: fromAny(fakeChat) },
+      ports,
     );
 
     const rows = await usageRows();
@@ -118,9 +141,13 @@ describe("AiUsage accounting", () => {
     expect(rows[0]).toMatchObject({
       feature: "location-description",
       operation: "locationDescription",
-      inputTokens: 10,
-      outputTokens: 5,
     });
+    // The faux provider estimates usage from message/response length rather
+    // than taking an exact override; the invariant under test is "exactly
+    // one row, populated from the real `AssistantMessage`", not these
+    // particular counts.
+    expect(rows[0]?.inputTokens).toBeGreaterThan(0);
+    expect(rows[0]?.outputTokens).toBeGreaterThan(0);
   });
 
   it("records one row for a location analysis served from AiAnalysis", async () => {

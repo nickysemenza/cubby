@@ -16,7 +16,7 @@ import {
   type VendorId,
 } from "@cubby/schemas/identifiers";
 import {
-  flueImportRunPurpose,
+  agentImportRunPurpose,
   importRunAgentIdentity,
   importRunAgentManifest,
 } from "@cubby/schemas/import-run-agent";
@@ -147,9 +147,9 @@ import { classifyOrderCapture } from "./order-list";
 import { loadReceiptEvidenceForRun } from "./receipt-evidence";
 import { importVendorOrder } from "./writer";
 
-/** The Flue coordinator model for a run purpose; purchase-agent reads the same manifest. */
+/** The coordinator model for a run purpose; purchase-agent reads the same manifest. */
 function coordinatorModelFor(purpose: string) {
-  const parsed = flueImportRunPurpose.safeParse(purpose);
+  const parsed = agentImportRunPurpose.safeParse(purpose);
   return importRunAgentManifest[parsed.success ? parsed.data : "account_sync"]
     .model;
 }
@@ -249,7 +249,7 @@ export type StartTargetedRunInput = {
 const OFFLINE_EXPIRY_MS = 24 * 60 * 60_000;
 
 /**
- * Postgres-side replay ledger for Flue tools. A completed operation returns its
+ * Postgres-side replay ledger for agent tools. A completed operation returns its
  * original result even after the run becomes terminal. A concurrent delivery
  * sees `started` and retries later; external writers retain their own source
  * claims for the crash window between their commit and this completion write.
@@ -534,7 +534,7 @@ export async function startOrResumeRun(
           input: backfill ?? chargeHunts,
           coordinatorModel: coordinatorModelFor("account_sync"),
           skillRevision: input.skillRevision ?? "purchase-import@1",
-          runtimeRevision: input.runtimeRevision ?? "flue@1",
+          runtimeRevision: input.runtimeRevision ?? "pi-durable@1",
           agentSessionId: importRunAgentIdentity(id, "account_sync"),
           dispatchEventId: crypto.randomUUID(),
         };
@@ -658,7 +658,7 @@ export async function startTargetedRun(
       coordinatorModel: coordinatorModelFor(purpose),
       agentSessionId: importRunAgentIdentity(
         id,
-        flueImportRunPurpose.parse(purpose),
+        agentImportRunPurpose.parse(purpose),
       ),
     });
     await tx.insert(runTarget).values(
@@ -822,7 +822,7 @@ export async function startPhotoInventoryCoordinator(
 }
 
 /**
- * Consumer-side fence: only the active event generation may admit Flue.
+ * Consumer-side fence: only the active event generation may admit the agent.
  */
 export async function acknowledgeRunCoordinator(
   db: Database,
@@ -848,7 +848,7 @@ export async function acknowledgeRunCoordinator(
 }
 
 /**
- * Read-only consumer fence before Flue admission.
+ * Read-only consumer fence before agent admission.
  */
 export async function canDispatchRunCoordinator(
   db: Database,
@@ -1330,7 +1330,7 @@ async function answeredCommandSince(
 }
 
 /**
- * A run still `running` after its Flue submission settled means the
+ * A run still `running` after its agent submission settled means the
  * coordinator stopped without a terminal tool call: a `review` progress
  * report, a turn budget, or a model that simply ended its turn. The one
  * legitimate ways to settle while running are a browser command still in
@@ -3360,7 +3360,7 @@ export async function markRunFailed(
   db: Database,
   input: {
     runId: string;
-    failureCode: "flue_failed" | "flue_aborted";
+    failureCode: "agent_failed" | "agent_aborted";
     detail?: string;
     dispatchEventId?: string;
   },
@@ -3706,7 +3706,7 @@ export async function loadRunDetail(
       ? runShortcode.parse(successor[0].publicId)
       : null,
     // What `restart` writes to its successor: this run's settings and targets.
-    restartInputs: flueImportRunPurpose.safeParse(header.purpose).success
+    restartInputs: agentImportRunPurpose.safeParse(header.purpose).success
       ? {
           purpose: header.purpose,
           trigger: "manual",
@@ -4148,7 +4148,7 @@ export async function controlRun(
           throw new Error(
             `Only a finished run can be started again (${locked.status})`,
           );
-        if (!flueImportRunPurpose.safeParse(locked.purpose).success)
+        if (!agentImportRunPurpose.safeParse(locked.purpose).success)
           throw new Error("Only agent import runs can be started again");
         const sourceTargets = (
           await selectRestartTargets(tx, scope.public.runId)
@@ -4263,7 +4263,7 @@ export async function controlRun(
           dispatchEventId,
           agentSessionId: importRunAgentIdentity(
             successorId,
-            flueImportRunPurpose.parse(locked.purpose),
+            agentImportRunPurpose.parse(locked.purpose),
           ),
         });
         if (sourceTargets.length)
@@ -4541,7 +4541,7 @@ export async function controlRun(
           decisionRevision: locked.decisionRevision + 1,
           agentSessionId: importRunAgentIdentity(
             successorId,
-            flueImportRunPurpose.parse(locked.purpose),
+            agentImportRunPurpose.parse(locked.purpose),
           ),
         });
         if (locked.purpose !== "account_sync") {

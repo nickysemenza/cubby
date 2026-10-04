@@ -63,7 +63,7 @@ function kernelServer(
 }
 
 describe("MCP protocol smoke", () => {
-  // ChatGPT's modern catalog refresh failed before dispatch; Flue still uses
+  // ChatGPT's modern catalog refresh failed before dispatch; the purchase agent still uses
   // the legacy handshake. Exercise the actual HTTP client for both eras.
   it.each(["2026-07-28", "2025-11-25"] as const)(
     "serves catalog, tool calls, and authenticated telemetry over MCP %s HTTP",

@@ -1,4 +1,4 @@
-import type { FlueConversationMessage } from "@flue/sdk";
+import type { AgentConversationMessage } from "@cubby/schemas/agent-conversation";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
@@ -23,22 +23,28 @@ const call = (
   sections,
 });
 
-const message = (
-  id: string,
-  submissionId: string,
-  metadata?: FlueConversationMessage["metadata"],
-) =>
-  fromPartial<FlueConversationMessage>({
+// Fixtures intentionally include an unparseable `contextBreakdown` (wrong
+// version, non-array `calls`) to exercise the schema's rejection path, so
+// this names the fixture's own loose shape rather than the exact schema's.
+// `AgentContextPerCall` never reads `usage`, so these fixtures don't carry
+// it either.
+interface MessageFixtureMetadata {
+  contextBreakdown?: { v: number; calls: unknown };
+}
+
+const message = (id: string, metadata?: MessageFixtureMetadata) =>
+  fromPartial<AgentConversationMessage>({
     id,
     role: "assistant",
-    submissionId,
     parts: [],
-    metadata,
+    // SAFETY: fixtures deliberately send a wrong `contextBreakdown.v` (not
+    // the schema's literal `1`) to exercise the schema's own rejection path;
+    // `fromPartial`'s deep-partial type can't express "any number here".
+    metadata: metadata as AgentConversationMessage["metadata"],
   });
 
 const messages = [
-  message("m1", "s1", {
-    usage: { input: 1 },
+  message("m1", {
     contextBreakdown: {
       v: 1,
       calls: [
@@ -57,8 +63,9 @@ const messages = [
       ],
     },
   }),
-  // A second message of the same response must not double count.
-  message("m1b", "s1", {
+  // A duplicate entry for the same message id (a refetch racing the stream)
+  // must not double count.
+  message("m1", {
     contextBreakdown: {
       v: 1,
       calls: [
@@ -72,8 +79,8 @@ const messages = [
       ],
     },
   }),
-  message("m2", "s2", { contextBreakdown: { v: 2, calls: "garbage" } }),
-  message("m3", "s3", {
+  message("m2", { contextBreakdown: { v: 2, calls: "garbage" } }),
+  message("m3", {
     contextBreakdown: {
       v: 1,
       calls: [
@@ -163,7 +170,7 @@ describe("AgentContextPerCall", () => {
 
   it("renders nothing for a transcript without context metadata", () => {
     const { container } = render(
-      <AgentContextPerCall messages={[message("m1", "s1", { usage: {} })]} />,
+      <AgentContextPerCall messages={[message("m1", {})]} />,
     );
     expect(container.textContent).toBe("");
   });

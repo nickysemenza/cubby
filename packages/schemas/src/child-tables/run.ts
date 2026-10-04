@@ -326,7 +326,7 @@ export const runChildren = [
       },
     ],
   }),
-  /** Replay-safe boundary for Flue durable tools and external side effects. */
+  /** Replay-safe boundary for the agent's durable tools and external side effects. */
   defineChildTable({
     name: "RunOperation",
     exportName: "runOperation",
@@ -547,7 +547,7 @@ export const runChildren = [
       },
     ],
   }),
-  /** Durable progress events for Flue and other background Runs. */
+  /** Durable progress events for the agent and other background Runs. */
   defineChildTable({
     name: "RunProgress",
     exportName: "runProgress",

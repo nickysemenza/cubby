@@ -4,7 +4,7 @@ import type {
   VendorId,
 } from "@cubby/schemas/identifiers";
 import { runShortcode, vendorAccountId } from "@cubby/schemas/identifiers";
-import { flueImportRunPurpose } from "@cubby/schemas/import-run-agent";
+import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -93,7 +93,7 @@ export async function dispatchStartedRun(
     const event: Extract<PurchaseAgentEvent, { type: "start_or_resume" }> = {
       version: 1,
       runId: run.id,
-      purpose: flueImportRunPurpose.parse(run.purpose),
+      purpose: agentImportRunPurpose.parse(run.purpose),
       eventId: run.eventId,
       type: "start_or_resume",
     };

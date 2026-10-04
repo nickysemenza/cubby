@@ -2,7 +2,7 @@ import Foundation
 
 public enum BrowserBridgeProtocol {
     /// This value binds every websocket envelope and durable command/result. A v1 peer is
-    /// deliberately rejected during the Flue cutover so cached work cannot cross runtimes.
+    /// deliberately rejected during the coordinator cutover so cached work cannot cross runtimes.
     public static let currentProtocolVersion = 2
     public static let maximumReadableTextCharacters = 24 * 1_024
     public static let maximumCapturedLinks = 200

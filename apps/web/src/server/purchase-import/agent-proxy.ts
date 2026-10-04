@@ -18,7 +18,7 @@ const ACTIVE_STATUSES = new Set([
   "paused_approval",
 ]);
 
-const allowedSuffix = /^(?:|abort|attachments\/[A-Za-z0-9._~-]+)$/u;
+const allowedSuffix = /^(?:|abort|stream)$/u;
 
 export function purchaseAgentRequestIsWritable(input: {
   method: string;

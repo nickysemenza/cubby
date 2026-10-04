@@ -2,22 +2,23 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createCubbyGatewayFetch,
-  cubbyAiGatewayProviders,
+  withSequentialToolCalls,
 } from "./cubby-ai-provider";
 
+const runId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
+
 describe("createCubbyGatewayFetch", () => {
-  it("attributes a scoped provider request to its import run", async () => {
+  it("attributes a coordinator request to its import run", async () => {
     const run = vi.fn(
       async (
         _query: Parameters<AiGateway["run"]>[0],
         _options: Parameters<AiGateway["run"]>[1],
       ) => new Response("stream"),
     );
-    const runId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
     const gatewayFetch = createCubbyGatewayFetch(
       "openai",
       () => ({ run }),
-      () => `photo-inventory:${runId}`,
+      () => runId,
     );
     await gatewayFetch("https://ai-gateway.invalid/openai/responses", {
       method: "POST",
@@ -30,23 +31,25 @@ describe("createCubbyGatewayFetch", () => {
 
   it.each([
     {
-      provider: "openai" as const,
+      route: "openai" as const,
       url: "https://ai-gateway.invalid/openai/responses?beta=true",
       model: "gpt-6-sol",
       endpoint: "responses?beta=true",
     },
     {
-      provider: "anthropic" as const,
+      route: "anthropic" as const,
       url: "https://ai-gateway.invalid/anthropic/v1/messages",
       model: "claude-sonnet-5",
       endpoint: "v1/messages",
     },
-  ])("routes $provider through the Cubby Universal Gateway", async (test) => {
+  ])("routes $route through the Cubby Universal Gateway", async (test) => {
     const expected = new Response("stream", { status: 200 });
     const run = vi.fn(async () => expected);
-    const gatewayFetch = createCubbyGatewayFetch(test.provider, () => ({
-      run,
-    }));
+    const gatewayFetch = createCubbyGatewayFetch(
+      test.route,
+      () => ({ run }),
+      () => undefined,
+    );
 
     const response = await gatewayFetch(test.url, {
       method: "POST",
@@ -55,7 +58,6 @@ describe("createCubbyGatewayFetch", () => {
         "content-length": "42",
         "content-type": "application/json",
         "x-api-key": "placeholder",
-        "x-client-request-id": "run-1",
       },
       body: JSON.stringify({ model: test.model, stream: true }),
     });
@@ -63,12 +65,9 @@ describe("createCubbyGatewayFetch", () => {
     expect(response).toBe(expected);
     expect(run).toHaveBeenCalledWith(
       {
-        provider: test.provider,
+        provider: test.route,
         endpoint: test.endpoint,
-        headers: {
-          "content-type": "application/json",
-          "x-client-request-id": "run-1",
-        },
+        headers: { "content-type": "application/json" },
         query: { model: test.model, stream: true },
       },
       {
@@ -83,49 +82,31 @@ describe("createCubbyGatewayFetch", () => {
       },
     );
   });
+});
 
-  it("registers only the approved Gateway-backed model roster", () => {
-    const providers = cubbyAiGatewayProviders(() => ({
-      gateway: () => ({ run: vi.fn() }),
-    }));
+// pi ends a run on a terminating tool only when it is the round's sole call;
+// a batched pending browser command would otherwise keep the run going.
+describe("withSequentialToolCalls", () => {
+  const tools = [{ type: "function", name: "issue_browser_command" }];
 
+  it("disables parallel calls on Responses and Messages requests with tools", () => {
+    expect(withSequentialToolCalls("openai", { tools })).toEqual({
+      tools,
+      parallel_tool_calls: false,
+    });
     expect(
-      providers.flatMap((provider) =>
-        provider.getModels().map((model) => `${provider.id}/${model.id}`),
-      ),
-    ).toEqual([
-      "openai/gpt-6-sol",
-      "openai/gpt-6-luna",
-      "anthropic/claude-haiku-4-5",
-      "anthropic/claude-sonnet-5",
-    ]);
+      withSequentialToolCalls("anthropic", {
+        tools,
+        tool_choice: { type: "any" },
+      }),
+    ).toEqual({
+      tools,
+      tool_choice: { type: "any", disable_parallel_tool_use: true },
+    });
   });
 
-  it.each([
-    {
-      id: "gpt-6-sol",
-      name: "GPT-6 Sol",
-      cost: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
-    },
-    {
-      id: "gpt-6-luna",
-      name: "GPT-6 Luna",
-      cost: { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
-    },
-  ])("prices $id at OpenAI's published rates", ({ id, name, cost }) => {
-    const [openai] = cubbyAiGatewayProviders(() => ({
-      gateway: () => ({ run: vi.fn() }),
-    }));
-    const model = openai?.getModels().find((candidate) => candidate.id === id);
-
-    expect(model).toMatchObject({
-      id,
-      name,
-      cost,
-      api: "openai-responses",
-      baseUrl: "https://ai-gateway.invalid/openai",
-    });
-    expect(model?.contextWindow).toBeGreaterThan(0);
-    expect(model?.maxTokens).toBeGreaterThan(0);
+  it("leaves tool-less requests such as compaction summaries unchanged", () => {
+    const body = { input: [] };
+    expect(withSequentialToolCalls("openai", body)).toBe(body);
   });
 });

@@ -590,10 +590,10 @@ const handler = {
           }
 
           // Imported here, not at module scope: the consumer pulls
-          // @tanstack/ai + its provider adapters + @anthropic-ai/sdk
-          // (~553 KiB, plus a second copy of zod) and only queue deliveries
-          // need it. A static import puts all of that on the module-init
-          // path of every fetch invocation too.
+          // @earendil-works/pi-ai + its lazy provider API modules +
+          // @anthropic-ai/sdk (~553 KiB, plus a second copy of zod) and only
+          // queue deliveries need it. A static import puts all of that on
+          // the module-init path of every fetch invocation too.
           const [{ db }, { handleBackgroundQueueBatch }] = await Promise.all([
             import("./server/db"),
             import("./server/background-tasks/consume"),
@@ -825,7 +825,7 @@ const handler = {
 };
 
 /**
- * Private RPC boundary for the Flue Worker. Every method resolves authority
+ * Private RPC boundary for the purchase-agent Worker. Every method resolves authority
  * from the Run; the caller cannot supply a party, account, vendor, SQL,
  * script, or generic mutation target.
  */

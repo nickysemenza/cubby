@@ -103,7 +103,7 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
     }
   };
 
-  it("dispatches a photo run through Flue and MCP, waits for review, then commits only on approval", async () => {
+  it("dispatches a photo run through the agent and MCP, waits for review, then commits only on approval", async () => {
     await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic wardrobe member",
       kind: "member",
@@ -173,7 +173,7 @@ describe("purchase-agent coupled two-Worker workerd harness", () => {
       version: 1,
       type: "start_or_resume",
       runId: run.id,
-      // The persisted run, not a stale queue hint, selects the Flue workflow.
+      // The persisted run, not a stale queue hint, selects the agent workflow.
       purpose: "account_sync",
       eventId: started.eventId,
     });
