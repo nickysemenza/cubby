@@ -17,7 +17,11 @@ import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { listRecentAiUsage, summarizeAiUsage } from "~/server/repo/ai-usage";
+import {
+  listAiUsageFilterOptions,
+  listRecentAiUsage,
+  summarizeAiUsage,
+} from "~/server/repo/ai-usage";
 import { applyFinanceCategorySuggestion } from "~/server/repo/finance-suggestion-context";
 import {
   resolveAllOrThrow,
@@ -317,6 +321,7 @@ export const aiHandlers = implementOperationDomain(aiContract, {
       operation: "suggestExternalIdKind",
       cacheStatus: "none",
     }),
+  usageFilterOptions: (context) => listAiUsageFilterOptions(context.db),
   usageRecent: (context, input) => listRecentAiUsage(context.db, input),
   usageSummary: (context, input) => summarizeAiUsage(context.db, input.days),
 });

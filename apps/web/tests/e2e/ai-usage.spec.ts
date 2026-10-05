@@ -20,11 +20,15 @@ test("recent AI calls filter transport and status before limiting rows", async (
     INSERT INTO "AiUsage" (
       "runId", "feature", "provider", "model", "operation", "transport",
       "status", "durationMs", "estimatedCost", "createdAt"
-    ) SELECT ${runId}, 'synthetic-attribution', 'openai', 'gpt-6-luna',
+    ) SELECT ${runId},
+      CASE WHEN n = 0 THEN 'synthetic-legacy-feature' ELSE 'synthetic-attribution' END,
+      CASE WHEN n = 0 THEN 'synthetic-legacy-provider' ELSE 'openai' END,
+      CASE WHEN n = 0 THEN 'synthetic-legacy-model' ELSE 'gpt-6-luna' END,
       CASE WHEN n = 0 THEN 'synthetic.older-subscription' ELSE 'synthetic.newer-gateway' END,
       CASE WHEN n = 0 THEN 'chatgpt' ELSE 'gateway' END,
       CASE WHEN n = 0 THEN 'failed' ELSE 'succeeded' END,
-      10, 0, now() - (60 - n) * interval '1 minute'
+      10, 0, CASE WHEN n = 0 THEN now() - interval '120 days'
+        ELSE now() - (60 - n) * interval '1 minute' END
     FROM generate_series(0, 60) n
   `);
   await gotoAuthenticatedPage(page, "/ai-usage");
@@ -33,6 +37,25 @@ test("recent AI calls filter transport and status before limiting rows", async (
     recent.getByText("synthetic.newer-gateway").first(),
   ).toBeVisible();
   await expect(recent.getByText("synthetic.older-subscription")).toHaveCount(0);
+
+  // Full-history choices must remain available outside every summary window.
+  for (const [label, value] of [
+    ["Provider", "synthetic-legacy-provider"],
+    ["Model", "synthetic-legacy-model"],
+    ["Feature", "synthetic-legacy-feature"],
+  ] as const) {
+    await expect(
+      recent
+        .getByRole("combobox", { name: label })
+        .locator("option", { hasText: value }),
+    ).toHaveCount(1);
+    await recent.getByRole("combobox", { name: label }).selectOption(value);
+    await expect(
+      recent.getByText("synthetic.older-subscription"),
+    ).toBeVisible();
+    await expect(recent.getByText("synthetic.newer-gateway")).toHaveCount(0);
+    await recent.getByRole("button", { name: "Clear", exact: true }).click();
+  }
 
   const filtered = page.waitForResponse((response) =>
     dispatchesOperation(response.request(), "ai.usageRecent", ({ input }) =>
@@ -71,6 +94,24 @@ test("recent AI calls filter transport and status before limiting rows", async (
   await expect(
     recent.getByText("synthetic.newer-gateway").first(),
   ).toBeVisible();
+  await getDb(db).execute(sql`
+    INSERT INTO "AiUsage" (
+      "runId", "feature", "provider", "model", "operation", "transport",
+      "status", "durationMs", "estimatedCost"
+    ) VALUES (${runId}, 'synthetic-new-feature', 'synthetic-new-provider',
+      'synthetic-new-model', 'synthetic.after-load', 'gateway', 'succeeded', 10, 0)
+  `);
+  await recent.getByRole("button", { name: "Refresh recent calls" }).click();
+  await expect(
+    recent
+      .getByRole("combobox", { name: "Provider" })
+      .locator("option", { hasText: "synthetic-new-provider" }),
+  ).toHaveCount(1);
+  await recent
+    .getByRole("combobox", { name: "Provider" })
+    .selectOption("synthetic-new-provider");
+  await expect(recent.getByText("synthetic.after-load")).toBeVisible();
+  await recent.getByRole("button", { name: "Clear", exact: true }).click();
   await page.screenshot({
     path: testInfo.outputPath("ai-usage.png"),
     fullPage: true,

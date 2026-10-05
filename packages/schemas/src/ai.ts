@@ -337,6 +337,12 @@ export const aiUsageEntrySchema = z.object({
   createdAt: z.coerce.date(),
 });
 
+export const aiUsageFilterOptionsOut = z.object({
+  provider: z.array(z.string()),
+  model: z.array(z.string()),
+  feature: z.array(z.string()),
+});
+
 export const aiUsageRecentOut = z.array(aiUsageEntrySchema);
 export type AiUsageEntry = z.infer<typeof aiUsageEntrySchema>;
 
