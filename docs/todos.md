@@ -525,6 +525,12 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
 
 ## Dev tooling, tests & CI
 
+- 🤔 **Make Tester Army `--replay` able to hit.** Two consecutive warm web
+  runs of `product-rename` (2026-10-04) both reported `replayed 0, missed 1`
+  and used the model each time. Each run seeds fresh records, so on-screen
+  shortcodes differ; find which observed state the SDK keys the cache on and
+  either stabilize it or drop the flag. Owner: `apps/web/tooling/tester-army/`.
+
 - 🤔 **Measure the delegate-less routing change.** Around 2026-10-06,
   re-measure 30 days of Claude session transcripts against the baseline in
   [model routing](agents/model-routing.md#delegate-or-not): share of sessions
