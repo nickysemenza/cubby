@@ -57,8 +57,11 @@ watchdog, scenario and artifact boundaries outside the runtime. Their
 only `cubby_sim_<16 hex>` names on the guarded loopback admin server at port 55432. Normal close verifies the database was dropped; `retention: "retain"`
 explicitly leaves it available for debugging. Failed acquisition always drops
 the database it created, including in retain mode; a name collision never
-gives ownership of an existing database. Native scenario seeding stays in the
-runner's lease setup callback. IntegreSQL namespaces and reset policies stay
+gives ownership of an existing database. The lease's `onCreated` hook runs
+right after CREATE succeeds and before migration; runners start their detached
+database watchdog there, so a runner killed mid-migration still has its
+database dropped. Native scenario seeding stays in the runner's lease setup
+callback, which runs after migration. IntegreSQL namespaces and reset policies stay
 unchanged.
 
 A profile (`WORKERD_PROFILES` in `workerd-harness.ts`) routes each production
