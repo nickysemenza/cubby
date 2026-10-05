@@ -30,6 +30,7 @@ import {
   columnRegion,
   type ColumnRegion as Region,
   columnRegionSchema,
+  columnsByRegion,
   isLockedColumn,
   moveColumn,
   useColumnLayoutDndProps,
@@ -48,18 +49,16 @@ function dragRegion(
 
 function SortableColumn<TData extends RowData>({
   column,
-  columns,
+  regionColumns,
   table,
 }: {
   column: Column<TData>;
-  columns: Column<TData>[];
+  /** The movable columns of this column's region, in display order. */
+  regionColumns: Column<TData>[];
   table: Table<TData>;
 }) {
   const region = columnRegion(column);
   const locked = isLockedColumn(column);
-  const regionColumns = columns.filter(
-    (item) => columnRegion(item) === region && !isLockedColumn(item),
-  );
   const index = regionColumns.findIndex((item) => item.id === column.id);
   const {
     attributes,
@@ -236,15 +235,14 @@ function Zone<TData extends RowData>({
   region,
   label,
   columns,
-  allColumns,
   table,
 }: {
   region: Region;
   label: string;
   columns: Column<TData>[];
-  allColumns: Column<TData>[];
   table: Table<TData>;
 }) {
+  const movable = columns.filter((column) => !isLockedColumn(column));
   const { setNodeRef, isOver } = useDroppable({
     id: `zone:${region}`,
     data: { region },
@@ -269,7 +267,7 @@ function Zone<TData extends RowData>({
             <SortableColumn
               key={column.id}
               column={column}
-              columns={allColumns}
+              regionColumns={movable}
               table={table}
             />
           ))}
@@ -284,7 +282,7 @@ export default function TableLayoutCustomizer<TData extends RowData>({
 }: {
   table: Table<TData>;
 }) {
-  const columns = table.getAllLeafColumns();
+  const columns = columnsByRegion(table);
   const dndProps = useColumnLayoutDndProps("layout position");
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
@@ -312,24 +310,19 @@ export default function TableLayoutCustomizer<TData extends RowData>({
         <Zone
           region="start"
           label="Pinned start"
-          columns={columns.filter((column) => columnRegion(column) === "start")}
-          allColumns={columns}
+          columns={columns.start}
           table={table}
         />
         <Zone
           region="center"
           label="Unpinned"
-          columns={columns.filter(
-            (column) => columnRegion(column) === "center",
-          )}
-          allColumns={columns}
+          columns={columns.center}
           table={table}
         />
         <Zone
           region="end"
           label="Pinned end"
-          columns={columns.filter((column) => columnRegion(column) === "end")}
-          allColumns={columns}
+          columns={columns.end}
           table={table}
         />
       </DndContext>

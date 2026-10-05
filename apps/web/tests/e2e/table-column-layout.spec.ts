@@ -144,6 +144,9 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
       "Dropped: spendingProfile column, defaultSpendingCategoryId column position.",
     ),
   );
+  // dnd-kit hands focus back to the handle so the next key keeps working, and
+  // no cell editor claims those keys.
+  await expect(grip("spendingProfile")).toBeFocused();
   expected = placedAfter(
     expected,
     "spendingProfile",
@@ -208,26 +211,66 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
   expected = placedAfter(expected, "evidenceExpectation", "notes");
   await expect.poll(() => headerIds(page)).toEqual(expected);
 
+  // A reorder inside a pinned region, from the dialog's buttons.
+  const press = (name: string) =>
+    dialog.getByRole("button", { name, exact: true }).click();
+  await press("Pin Vendor to start");
+  await expect(
+    zone("Pinned start").locator('[data-column-id="name"]'),
+  ).toBeVisible();
+  expected = ["select", "image", "website", "name"].concat(
+    expected.filter(
+      (id) => !["select", "image", "website", "name"].includes(id),
+    ),
+  );
+  await expect.poll(() => headerIds(page)).toEqual(expected);
+  await press("Move Vendor earlier");
+  expected = placedAfter(expected, "website", "name");
+  await expect.poll(() => headerIds(page)).toEqual(expected);
+  // Regression: the dialog listed pins in `columnOrder`, not pinned order,
+  // and the next placement reverted the reorder.
+  const zoneIds = (label: string) =>
+    zone(label)
+      .locator("[data-column-id]")
+      .evaluateAll((rows) =>
+        rows.map((row) => row.getAttribute("data-column-id") ?? ""),
+      );
+  await expect
+    .poll(() => zoneIds("Pinned start"))
+    .toEqual(["select", "image", "name", "website"]);
+
+  // Pin then unpin round-trips an unrelated column to its own slot and
+  // leaves the pinned reorder alone.
+  await press("Pin Spend to start");
+  await expect
+    .poll(() => zoneIds("Pinned start"))
+    .toEqual(["select", "image", "name", "website", "spend"]);
+  await press("Unpin Spend");
+  await expect.poll(() => headerIds(page)).toEqual(expected);
+
   // Regression: "Pin to end" appended past the row-actions column.
   const pinNotesEnd = dialog.getByRole("button", {
     name: "Pin Notes to end",
     exact: true,
   });
-  await pinNotesEnd.focus();
-  await page.keyboard.press("Enter");
   expected = [
     ...expected.filter((id) => id !== "notes" && id !== "actions"),
     "notes",
     "actions",
   ];
-  await expect.poll(() => headerIds(page)).toEqual(expected);
+  // The dialog's focus management can reclaim focus after a row remounts, so
+  // a key may land elsewhere; the button disappears once Notes is pinned to
+  // the end, which makes a retry safe.
+  await expect(async () => {
+    if ((await pinNotesEnd.count()) > 0) await pinNotesEnd.press("Enter");
+    expect(await headerIds(page)).toEqual(expected);
+  }).toPass();
 
   const moveEarlier = dialog.getByRole("button", {
     name: "Move Purchase count earlier",
     exact: true,
   });
-  await moveEarlier.focus();
-  await page.keyboard.press("Enter");
+  await moveEarlier.press("Enter");
   const purchaseCountIndex = expected.indexOf("purchaseCount");
   const before = expected[purchaseCountIndex - 1];
   if (!before) throw new Error("purchaseCount has no earlier neighbour");

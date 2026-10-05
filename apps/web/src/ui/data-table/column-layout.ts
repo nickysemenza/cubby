@@ -116,20 +116,50 @@ export function columnRegion(column: {
  *
  * - `reorder`: move `id` onto `over`'s slot inside their shared region (header
  *   drag, move earlier/later). A cross-region pair is rejected.
- * - `place`: put `id` in `region` — onto `over`'s slot when given, else at the
- *   region's end (customizer drag, pin and unpin).
+ * - `place`: put `id` in `region` — onto `over`'s slot when given (customizer
+ *   drag), else at the end of a pinned region (pin) or back in its own
+ *   `columnOrder` slot among the unpinned columns (unpin).
  */
 export type ColumnMove =
   | { kind: "reorder"; id: string; over: string }
   | { kind: "place"; id: string; region: ColumnRegion; over?: string };
 
 /**
- * The single writer of user column-layout changes. Locked structural columns
- * are never the subject or the target of a move, and the locked-end columns
- * stay last in the `end` region. A same-region move uses `arrayMove`, which is
- * where dnd-kit's sortable preview shows the dragged column landing.
+ * Each region's columns in display order. Pinned regions follow
+ * `columnPinning`, the center follows `columnOrder` — the same sources the
+ * header renders from, so every surface lists one order.
  */
-export function moveColumn<TData extends RowData>(
+export function columnsByRegion<TData extends RowData>(
+  table: CubbyTable<TData>,
+) {
+  return {
+    start: table.getStartLeafColumns(),
+    center: table.getCenterLeafColumns(),
+    end: table.getEndLeafColumns(),
+  };
+}
+
+/**
+ * `ids` with `id` moved onto `over`'s slot: `arrayMove` within one region,
+ * otherwise inserted before `over`, or appended when there is none.
+ */
+function placed(
+  ids: readonly string[],
+  id: string,
+  over: string | undefined,
+  sameRegion: boolean,
+) {
+  if (sameRegion && over !== undefined && ids.includes(id)) {
+    return arrayMove([...ids], ids.indexOf(id), ids.indexOf(over));
+  }
+  const rest = ids.filter((item) => item !== id);
+  const index = over === undefined ? -1 : rest.indexOf(over);
+  rest.splice(index < 0 ? rest.length : index, 0, id);
+  return rest;
+}
+
+/** The move's columns and regions, or nothing when the policy rejects it. */
+function allowedMove<TData extends RowData>(
   table: CubbyTable<TData>,
   move: ColumnMove,
 ) {
@@ -138,61 +168,48 @@ export function moveColumn<TData extends RowData>(
     move.over === undefined ? undefined : table.getColumn(move.over);
   if (!column || isLockedColumn(column) || move.id === move.over) return;
   if (target && isLockedColumn(target)) return;
+  if (move.kind === "reorder" && !target) return;
   const region = columnRegion(column);
-  const targetRegion = move.kind === "place" ? move.region : region;
-
-  if (target && columnRegion(target) === region && targetRegion === region) {
-    if (region === "center") {
-      const order = table.getAllLeafColumns().map(({ id }) => id);
-      table.setColumnOrder(
-        arrayMove(order, order.indexOf(column.id), order.indexOf(target.id)),
-      );
-      return;
-    }
-    const pinning = table.state.columnPinning;
-    const ids = pinning[region] ?? [];
-    const from = ids.indexOf(column.id);
-    const to = ids.indexOf(target.id);
-    if (from >= 0 && to >= 0) {
-      table.setColumnPinning({
-        ...pinning,
-        [region]: arrayMove(ids, from, to),
-      });
-    }
-    return;
-  }
-  if (move.kind === "reorder") return;
-
-  const others = table
-    .getAllLeafColumns()
-    .filter((item) => item.id !== column.id);
-  const idsIn = (inRegion: ColumnRegion) =>
-    others
-      .filter((item) => columnRegion(item) === inRegion)
-      .map((item) => item.id);
-  const ids = {
-    start: idsIn("start"),
-    center: idsIn("center"),
-    end: idsIn("end"),
-  };
-  const landing = ids[targetRegion];
-  const index = target ? landing.indexOf(target.id) : -1;
-  landing.splice(index < 0 ? landing.length : index, 0, column.id);
-  applyColumnOrderAndPinning(table, [...ids.start, ...ids.center, ...ids.end], {
-    start: ids.start,
-    end: ids.end,
-  });
+  const landing = move.kind === "place" ? move.region : region;
+  if (target && columnRegion(target) !== landing) return;
+  return { column, target, region, landing };
 }
 
-function applyColumnOrderAndPinning<TData extends RowData>(
+/**
+ * The single writer of user column-layout changes. Locked structural columns
+ * are never the subject or the target of a move, and the locked-end columns
+ * stay last in the `end` region.
+ *
+ * A pinned region's order lives only in `columnPinning`; the center's lives in
+ * `columnOrder`, which keeps a pinned column's center slot so unpinning returns
+ * it there. Regression: a pinned reorder was once read back from
+ * `columnOrder`, so the Columns dialog disagreed with the header and the next
+ * placement reverted it. A same-region move uses `arrayMove`, which is where
+ * dnd-kit's sortable preview shows the dragged column landing.
+ */
+export function moveColumn<TData extends RowData>(
   table: CubbyTable<TData>,
-  columnOrder: ColumnOrderState,
-  columnPinning: { start: string[]; end: string[] },
+  move: ColumnMove,
 ) {
-  table.setColumnOrder(withLockedEndLast(table, columnOrder));
+  const resolved = allowedMove(table, move);
+  if (!resolved) return;
+  const { column, target, region, landing } = resolved;
+  const pinning = table.state.columnPinning;
+  const pins = { start: pinning.start ?? [], end: pinning.end ?? [] };
+  const sameRegion = region === landing;
+  if (!sameRegion && region !== "center") {
+    pins[region] = pins[region].filter((id) => id !== column.id);
+  }
+  if (landing !== "center") {
+    pins[landing] = placed(pins[landing], column.id, target?.id, sameRegion);
+  } else if (target) {
+    const order = table.getAllLeafColumns().map(({ id }) => id);
+    table.setColumnOrder(placed(order, column.id, target.id, sameRegion));
+  }
+  if (sameRegion && region === "center") return;
   table.setColumnPinning({
-    start: columnPinning.start,
-    end: withLockedEndLast(table, columnPinning.end),
+    start: pins.start,
+    end: withLockedEndLast(table, pins.end),
   });
 }
 
@@ -230,9 +247,10 @@ export function applyColumnLayout<TData extends RowData>(
   table: CubbyTable<TData>,
   layout: CubbyDefaultTableLayout,
 ) {
-  applyColumnOrderAndPinning(table, layout.columnOrder, {
+  table.setColumnOrder(withLockedEndLast(table, layout.columnOrder));
+  table.setColumnPinning({
     start: layout.columnPinning.start ?? [],
-    end: layout.columnPinning.end ?? [],
+    end: withLockedEndLast(table, layout.columnPinning.end ?? []),
   });
   table.setColumnVisibility(layout.columnVisibility);
   table.setColumnSizing(layout.columnSizing);
