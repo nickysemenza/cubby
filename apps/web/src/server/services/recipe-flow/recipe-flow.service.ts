@@ -12,7 +12,6 @@ import {
 } from "@cubby/schemas/recipe-flow";
 
 import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/features";
-import { type SupportedChatModel } from "~/server/ai/models";
 import { recordFeatureUsage } from "~/server/ai/run-feature";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
@@ -26,14 +25,9 @@ import { getRecipeByID } from "~/server/repo/recipe/crud";
 
 import { validateRecipeFlowPlan } from "./validation";
 
-const FLOW_FEATURES = [RECIPE_FLOW_PRIMARY_FEATURE] as const;
-const FLOW_MODELS: ReadonlySet<string> = new Set<SupportedChatModel>(
-  FLOW_FEATURES.map((feature) => feature.model),
-);
-
 type FlowCandidate = StoredAiAnalysis<RecipeFlowArtifact>;
 type PersistFlowArtifactInput = {
-  feature: (typeof FLOW_FEATURES)[number];
+  feature: typeof RECIPE_FLOW_PRIMARY_FEATURE;
   fingerprint: string;
   guidance: string | null;
   plan: RecipeFlowArtifact["plan"];
@@ -63,15 +57,13 @@ export interface RecipeFlowPorts {
 const productionRecipeFlowPorts: RecipeFlowPorts = {
   getRecipe: getRecipeByID,
   listCandidates: async (db, recipeId) =>
-    (
-      await listAiAnalysesForEntityFeature(db, {
-        entityKind: "recipe",
-        entityId: recipeId,
-        feature: RECIPE_FLOW_PRIMARY_FEATURE.feature,
-        promptVersion: RECIPE_FLOW_PRIMARY_FEATURE.promptVersion,
-        schema: recipeFlowArtifactSchema,
-      })
-    ).filter(isAllowedCandidate),
+    await listAiAnalysesForEntityFeature(db, {
+      entityKind: "recipe",
+      entityId: recipeId,
+      feature: RECIPE_FLOW_PRIMARY_FEATURE.feature,
+      promptVersion: RECIPE_FLOW_PRIMARY_FEATURE.promptVersion,
+      schema: recipeFlowArtifactSchema,
+    }),
   persistArtifact: async (db, recipeId, input) => {
     const artifact = recipeFlowArtifactSchema.parse({
       plan: input.plan,
@@ -211,11 +203,20 @@ async function contentFingerprint(
   return toHex(await crypto.subtle.digest("SHA-256", encoded));
 }
 
-function isAllowedCandidate(candidate: FlowCandidate): boolean {
-  return (
-    FLOW_MODELS.has(candidate.model) &&
-    candidate.result.model === candidate.model &&
-    candidate.result.promptVersion === candidate.promptVersion
+/**
+ * A stored flow stays usable for its prompt version whichever model generated
+ * it, so retiering the feature never hides flows a previous model produced;
+ * only a row whose artifact disagrees with it is ignored.
+ */
+async function listConsistentCandidates(
+  db: Database,
+  recipeId: RecipeId,
+  ports: RecipeFlowPorts,
+): Promise<FlowCandidate[]> {
+  return (await ports.listCandidates(db, recipeId)).filter(
+    (candidate) =>
+      candidate.result.model === candidate.model &&
+      candidate.result.promptVersion === candidate.promptVersion,
   );
 }
 
@@ -236,7 +237,7 @@ export async function getRecipeFlowState(
 ): Promise<RecipeFlowState> {
   const [recipe, candidates] = await Promise.all([
     recipeOrThrow(db, recipeId, ports),
-    ports.listCandidates(db, recipeId),
+    listConsistentCandidates(db, recipeId, ports),
   ]);
   const latest = candidates[0];
   const guidance = latest?.result.guidance ?? null;
@@ -270,16 +271,11 @@ export async function getRecipeFlowState(
 async function recordFlowCacheHit(
   db: Database,
   recipeId: RecipeId,
-  candidate: FlowCandidate,
   runId: RunId,
   ports: RecipeFlowPorts,
 ): Promise<void> {
-  const feature = FLOW_FEATURES.find(
-    (candidateFeature) => candidateFeature.model === candidate.model,
-  );
-  if (!feature) return;
   await ports.recordFeatureUsage(
-    feature,
+    RECIPE_FLOW_PRIMARY_FEATURE,
     {
       db,
       runId,
@@ -307,7 +303,7 @@ export async function generateRecipeFlow(
 ): Promise<RecipeFlowArtifact> {
   const [recipe, candidates] = await Promise.all([
     recipeOrThrow(db, input.id, ports),
-    ports.listCandidates(db, input.id),
+    listConsistentCandidates(db, input.id, ports),
   ]);
   const latest = candidates[0];
   const guidance =
@@ -322,7 +318,7 @@ export async function generateRecipeFlow(
       candidate.result.contentFingerprint === fingerprint,
   );
   if (current && !input.force) {
-    await recordFlowCacheHit(db, input.id, current, runId, ports);
+    await recordFlowCacheHit(db, input.id, runId, ports);
     return current.result;
   }
 

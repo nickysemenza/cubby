@@ -1,11 +1,6 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 
-import {
-  type StampedWorkerBuildName,
-  stampedBuildStaleReason,
-} from "../../../scripts/stamped-worker-build.ts";
-
 import { readWebBuildProvenance } from "./web-build-provenance";
 
 const webRoot = path.resolve(import.meta.dirname, "..");
@@ -28,20 +23,11 @@ const webWorkerBuild: WorkerBuild = {
   },
 };
 
-const stampedWorkerBuild = (
-  name: StampedWorkerBuildName,
-  app: string,
-): WorkerBuild => ({
-  name,
-  command: ["pnpm", "--dir", path.join(repoRoot, app), "run", "build"],
-  staleReason: () => stampedBuildStaleReason(repoRoot, name),
-});
-
-/** Every Worker build the coupled workerd harness loads. */
-export const COUPLED_WORKER_BUILDS: readonly WorkerBuild[] = [
-  stampedWorkerBuild("purchase-agent", "apps/purchase-agent"),
-  webWorkerBuild,
-];
+/**
+ * Every Worker build the coupled workerd harness loads. The web Worker hosts
+ * the purchase agent (#1581), so its one build covers both.
+ */
+export const COUPLED_WORKER_BUILDS: readonly WorkerBuild[] = [webWorkerBuild];
 
 const verified = new Set<string>();
 

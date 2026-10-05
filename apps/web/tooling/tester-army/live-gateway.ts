@@ -81,7 +81,7 @@ export default {
       "cf-aig-metadata",
       JSON.stringify({
         purpose: "synthetic-e2e",
-        journey: "import-agent",
+        journey: "tester-army-coupled",
         revision: env.RUN_REVISION,
       }),
     );

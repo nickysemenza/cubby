@@ -20,6 +20,12 @@ let emitted: string[] = [];
 const record = (entry: string) => {
   if (emitted.at(-1) !== entry) emitted.push(entry);
 };
+/**
+ * Gates the test has released. A held response polls this set: workerd does
+ * not run a continuation resolved from another request's context, and the
+ * agent may abandon a slow model request and ask again.
+ */
+let released = new Set<string>();
 
 function sse(event: object) {
   return `data: ${JSON.stringify(event)}\n\n`;
@@ -111,14 +117,24 @@ function toolOutput(input: InputItem[], callId: string) {
   )?.output;
 }
 
+/** The workflow instructions name the run as `(runId <uuid>)`. */
+const runIdPattern = /\(runId ([0-9a-f-]{36})\)/u;
+
 function resolveValue(
   value: ScriptValue,
   input: InputItem[],
   stepId: string,
+  requestBody = "",
 ): unknown {
   if (Array.isArray(value))
-    return value.map((item) => resolveValue(item, input, stepId));
+    return value.map((item) => resolveValue(item, input, stepId, requestBody));
   if (!value || typeof value !== "object") return value;
+  if ("$runId" in value) {
+    const runId = runIdPattern.exec(requestBody)?.[1];
+    if (runId) return runId;
+    violations.push(`${stepId}: the request named no runId`);
+    return null;
+  }
   if ("$from" in value && typeof value.$from === "string") {
     const path = typeof value.path === "string" ? value.path : "";
     for (const candidate of outputCandidates(toolOutput(input, value.$from))) {
@@ -131,9 +147,16 @@ function resolveValue(
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
       key,
-      resolveValue(item as ScriptValue, input, stepId),
+      resolveValue(item as ScriptValue, input, stepId, requestBody),
     ]),
   );
+}
+
+async function holdAt(name: string) {
+  if (released.has(name)) return;
+  record(`gate:${name}`);
+  while (!released.has(name))
+    await new Promise((resolve) => setTimeout(resolve, 25));
 }
 
 const isFinishNudge = (item: unknown) =>
@@ -185,6 +208,12 @@ export default {
       script = ((await request.json()) as { steps: ScriptStep[] }).steps;
       violations = [];
       emitted = [];
+      released = new Set();
+      return new Response(null, { status: 204 });
+    }
+    if (url.pathname === "/release" && request.method === "POST") {
+      const name = ((await request.json()) as { gate: string }).gate;
+      released.add(name);
       return new Response(null, { status: 204 });
     }
     if (url.pathname === "/violations") return Response.json(violations);
@@ -214,7 +243,9 @@ export default {
           id: step.call,
           call_id: step.call,
           name: step.tool,
-          arguments: JSON.stringify(resolveValue(step.args, input, step.call)),
+          arguments: JSON.stringify(
+            resolveValue(step.args, input, step.call, requestBody),
+          ),
         });
       }
       if ("check" in step) {
@@ -223,6 +254,10 @@ export default {
           const message = `${step.check} output lacks ${step.includes}: ${output.slice(0, 500)}`;
           if (!violations.includes(message)) violations.push(message);
         }
+        continue;
+      }
+      if ("gate" in step) {
+        await holdAt(step.gate);
         continue;
       }
       const markers = step.await.map((marker) =>

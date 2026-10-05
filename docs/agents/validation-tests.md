@@ -18,9 +18,12 @@ packages need `pnpm -r --filter '!@cubby/web' run test` after changing
 
 Target a browser spec as `pnpm test:e2e <spec>` without an extra `--`. E2E
 serves `dist/`, so build it before a standalone run; `verify:local` does. The
-coupled Workers harness rebuilds a stale web or agent Worker itself. A
+coupled Workers harness rebuilds a stale web Worker itself. A
 standalone Playwright request context inherits project storage state unless it
-sets empty cookies and origins.
+sets empty cookies and origins. workerd drops an idle keep-alive socket after 5s
+while Playwright reuses it, so the E2E fixtures retry an idempotent
+`page.request`/`request` call once on `ECONNRESET` ("socket hang up"); a POST
+or PATCH is never replayed.
 
 Playwright E2E and the coupled Workers harness share a machine-wide lock
 (`/tmp/cubby-harness.lock`, `scripts/lib/harness-lock.ts`): a second suite on
@@ -29,6 +32,17 @@ of CPU. A lock whose owner process exited is reclaimed. Processes the holder
 spawns pass straight through. `test:e2e:watch` (`--ui`) skips the lock, since
 its idle session would otherwise hold it indefinitely. RTable's placeholder transition can eat clicks;
 cell-edit tests retry opening and filling as one action.
+
+The `Purchase import agent` Playwright project
+(`tests/e2e/purchase-import-run.spec.ts`, `test.use({ purchaseAgent: true })`)
+runs the browser against the purchase-agent workerd harness with a scripted
+model and gateway; `e2eRuntime.purchaseAgent` loads each test's script. It is
+excluded from the required desktop shards and runs in CI as an optional job
+(`pnpm --dir apps/web test:e2e:ci:purchase-import`). Hold the model with a
+`{ gate }` step to observe a live Run instead of racing it; a Run the browser
+starts has no id until the click, so scripts use `currentRunId`. Prefer it over
+a UI-less scenario for anything the Run or Purchase page shows; keep scenarios
+for server fences the UI cannot observe.
 
 Every completed E2E run produces a sanitized run bundle with its revision,
 replay command, runtime versions, case results, and SHA-256 checksums. CI uploads

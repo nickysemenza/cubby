@@ -95,7 +95,18 @@ export default defineConfig({
     {
       name: "Authenticated tests",
       testMatch: /\.spec\.ts$/,
-      testIgnore: /(^|\/)(unauth\.[^/]*|field-guide-mobile)\.spec\.ts$/,
+      testIgnore:
+        /(^|\/)(unauth\.[^/]*|field-guide-mobile|purchase-import-run)\.spec\.ts$/,
+      metadata: { authenticated: true },
+      use: {
+        ...devices["Desktop Chrome"],
+      },
+    },
+    /* The purchase agent with a scripted model: an informative CI lane
+       (`test:e2e:ci:purchase-import`), outside the required desktop shards. */
+    {
+      name: "Purchase import agent",
+      testMatch: /(^|\/)purchase-import-run\.spec\.ts$/,
       metadata: { authenticated: true },
       use: {
         ...devices["Desktop Chrome"],

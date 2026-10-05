@@ -5,6 +5,7 @@ import {
   AI_FEATURES,
   buildLocationAnalysisFingerprint,
   LOCATION_INVENTORY_DETECTION_FEATURE,
+  PURCHASE_IMPORT_AUDIT_FEATURE,
 } from "./features";
 
 describe("AI feature fingerprints", () => {
@@ -91,15 +92,15 @@ describe("the AI feature table", () => {
   });
 });
 
-describe("reasoning-tier output schemas", () => {
+describe("the audit output schema", () => {
   // Anthropic structured outputs reject array bounds (`maxItems`/`minItems`)
-  // with a 400 that no retry can fix. The audit feature shipped one and
-  // every stop-for-review of an account-sync run failed on it.
-  it("carry no array bounds Anthropic rejects", () => {
-    for (const feature of AI_FEATURES) {
-      if (feature.tier !== "reasoning" || !("schema" in feature)) continue;
-      const rendered = JSON.stringify(z.toJSONSchema(feature.schema));
-      expect(rendered).not.toMatch(/"(max|min)Items"/);
-    }
+  // with a 400 that no retry can fix. The audit schema shipped one and every
+  // stop-for-review of an account-sync run failed on it. A failed audit is
+  // retried on the Anthropic recovery model (`extract.ts`).
+  it("carries no array bounds Anthropic rejects", () => {
+    const rendered = JSON.stringify(
+      z.toJSONSchema(PURCHASE_IMPORT_AUDIT_FEATURE.schema),
+    );
+    expect(rendered).not.toMatch(/"(max|min)Items"/);
   });
 });

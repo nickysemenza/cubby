@@ -38,6 +38,21 @@ export type DbCheck = {
   params?: (ids: JourneyIds) => string[];
   /** Expected rows in order, each a plain object of column -> value. */
   rows: (ids: JourneyIds) => ExpectedRow[];
+  /** Poll deadline when the rows come from background work; default `TESTER_ARMY_DB_TIMEOUT_MS`. */
+  timeoutMs?: number;
+};
+
+/**
+ * A live agent run the journey started or seeded. The wait ends when the run
+ * reaches `until`; a run that settles anywhere else fails at once with its
+ * last progress and failed operations, instead of timing out.
+ */
+export type RunWait = {
+  /** One row with column `id`: the run under test. */
+  sql: string;
+  params?: (ids: JourneyIds) => string[];
+  until: "completed" | "awaiting_approval";
+  timeoutMs: number;
 };
 
 export type StepCheck = {
@@ -48,6 +63,10 @@ export type StepCheck = {
 };
 
 export type JourneyStep = {
+  /** Holds the step until background work has written these rows. */
+  ready?: DbCheck;
+  /** Holds the step until a live run is ready for it (for example, proposals to review). */
+  awaitRun?: RunWait;
   goal: string;
   check?: StepCheck;
   /** Replaces `goal` for one engine when the labels differ. */
@@ -58,18 +77,27 @@ export type JourneyStep = {
 export type Journey = {
   id: string;
   title: string;
+  /**
+   * Runs on the coupled harness: the built Worker hosting the purchase agent,
+   * with live model peers, object storage, and a simulated Mac browser. Web only.
+   */
+  coupled?: true;
+  /** Extra agent context for this journey's steps. */
+  context?: string;
+  /** Attempt deadline when the journey waits on a live run. */
+  timeoutMs?: number;
   /** Key of the seeded entity code the journey opens first. */
   start?: string;
   /** Opens a list or screen instead of an entity: a web path and an iOS deep link. */
   open?: (ids: JourneyIds) => { web: string; ios?: string };
   steps: JourneyStep[];
+  /** Waits for a live run after the steps, then reloads before the final checks. */
+  awaitRun?: RunWait;
   /** Exact on-screen text that must be visible once the steps finish. */
   visible: (ids: JourneyIds) => string[];
   /** Exact on-screen text that must be absent (for example a rejected edit). */
   absent?: (ids: JourneyIds) => string[];
   db: DbCheck[];
-  /** Engines the journey is not applicable to, with the reason. */
-  skip?: Partial<Record<Engine, string>>;
 };
 
 export function stepGoal(step: JourneyStep, engine: Engine) {
@@ -142,7 +170,9 @@ export async function assertDatabase(
           },
           {
             label: `${journey.id}: ${check.label}`,
-            timeoutMs: Number(process.env.TESTER_ARMY_DB_TIMEOUT_MS ?? 15_000),
+            timeoutMs:
+              check.timeoutMs ??
+              Number(process.env.TESTER_ARMY_DB_TIMEOUT_MS ?? 15_000),
           },
         );
       } catch (cause) {
@@ -161,11 +191,147 @@ export async function assertDatabase(
   }
 }
 
-export function selectedJourneys<T extends { id: string }>(all: T[]) {
+const harnessName = z.enum(["standard", "coupled"]);
+export type Harness = z.infer<typeof harnessName>;
+
+export const harnessOf = (journey: Pick<Journey, "coupled">): Harness =>
+  journey.coupled ? "coupled" : "standard";
+
+/**
+ * `--journey a,b` (`TESTER_ARMY_JOURNEYS`) and `--harness`
+ * (`TESTER_ARMY_HARNESS`) narrow the catalog; coupled journeys are web only.
+ */
+export function selectedJourneys(all: Journey[], engine: Engine) {
   const wanted = process.env.TESTER_ARMY_JOURNEYS?.split(",").filter(Boolean);
-  if (!wanted?.length) return all;
-  const unknown = wanted.filter((id) => !all.some((j) => j.id === id));
+  const harness = harnessName
+    .optional()
+    .parse(process.env.TESTER_ARMY_HARNESS || undefined);
+  const unknown = wanted?.filter((id) => !all.some((j) => j.id === id)) ?? [];
   if (unknown.length)
     throw new Error(`Unknown Tester Army journey: ${unknown.join(", ")}`);
-  return all.filter((j) => wanted.includes(j.id));
+  const webOnly = all.filter(
+    (j) => j.coupled && engine === "ios" && wanted?.includes(j.id),
+  );
+  if (webOnly.length)
+    throw new Error(
+      `Web-only Tester Army journey: ${webOnly.map((j) => j.id).join(", ")}`,
+    );
+  return all.filter(
+    (j) =>
+      (!wanted?.length || wanted.includes(j.id)) &&
+      (!harness || harnessOf(j) === harness) &&
+      (engine === "web" || !j.coupled),
+  );
+}
+
+const runOutcome = z.object({
+  status: z.string(),
+  failureCode: z.string().nullable(),
+  awaitingApproval: z.boolean(),
+});
+const runEvidence = z.object({
+  progress: z.array(
+    z.object({ phase: z.string(), detail: z.string().nullable() }),
+  ),
+  // A review stop records its reason as an open finding.
+  findings: z.array(z.object({ kind: z.string(), summary: z.string() })),
+  failed: z.array(
+    z.object({
+      kind: z.string(),
+      state: z.string(),
+      error: z.string().nullable(),
+    }),
+  ),
+});
+
+/** Why a run stopped: its last progress, open findings, and failed operations. */
+async function runDiagnosis(pool: Pool, runId: string) {
+  const [progress, findings, failed] = await Promise.all([
+    pool.query(
+      'SELECT phase, detail FROM "RunProgress" WHERE "runId" = $1 ORDER BY "createdAt" DESC LIMIT 3',
+      [runId],
+    ),
+    pool.query(
+      'SELECT kind, summary FROM "RunFinding" WHERE "runId" = $1 AND status = $2 ORDER BY "createdAt"',
+      [runId, "open"],
+    ),
+    pool.query(
+      'SELECT kind, state, error FROM "RunOperation" WHERE "runId" = $1 AND state = $2 ORDER BY "startedAt"',
+      [runId, "failed"],
+    ),
+  ]);
+  return JSON.stringify(
+    runEvidence.parse({
+      progress: progress.rows,
+      findings: findings.rows,
+      failed: failed.rows,
+    }),
+    null,
+    2,
+  );
+}
+
+/** Polls a live run until it reaches `wait.until`; see {@link RunWait}. */
+export async function awaitRun(
+  journey: { id: string },
+  wait: RunWait,
+  ids: JourneyIds,
+) {
+  const pool = new Pool({
+    connectionString: z.string().min(1).parse(process.env.DATABASE_URL),
+  });
+  let runId: string | undefined;
+  try {
+    await pollUntil(
+      async () => {
+        const selected = await pool.query(wait.sql, wait.params?.(ids) ?? []);
+        runId = z
+          .object({ id: z.string() })
+          .optional()
+          .parse(selected.rows[0])?.id;
+        if (!runId) return undefined;
+        const run = runOutcome.parse(
+          (
+            await pool.query(
+              `SELECT r.status, r."failureCode",
+                      COALESCE((SELECT p."awaitingApproval" FROM "RunProgress" p
+                                WHERE p."runId" = r.id ORDER BY p."createdAt" DESC LIMIT 1), false) AS "awaitingApproval"
+                 FROM "Run" r WHERE r.id = $1`,
+              [runId],
+            )
+          ).rows[0],
+        );
+        if (wait.until === "completed" && run.status === "completed")
+          return true;
+        if (
+          wait.until === "awaiting_approval" &&
+          run.status === "running" &&
+          run.awaitingApproval
+        )
+          return true;
+        if (run.status === "running" || run.status.startsWith("paused"))
+          return undefined;
+        throw new Error(
+          `${journey.id}: run ended ${run.status}${run.failureCode ? ` (${run.failureCode})` : ""} before ${wait.until}\n${await runDiagnosis(pool, runId)}`,
+        );
+      },
+      {
+        label: `${journey.id}: run ${wait.until}`,
+        timeoutMs: wait.timeoutMs,
+        intervalMs: 2_000,
+      },
+    );
+  } catch (error) {
+    if (
+      !runId ||
+      !(error instanceof Error) ||
+      !error.message.startsWith("Timed out")
+    )
+      throw error;
+    throw new Error(`${error.message}\n${await runDiagnosis(pool, runId)}`, {
+      cause: error,
+    });
+  } finally {
+    await pool.end();
+  }
 }

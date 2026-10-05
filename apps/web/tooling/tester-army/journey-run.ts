@@ -1,5 +1,6 @@
 import {
   assertDatabase,
+  awaitRun,
   loadJourneyIds,
   stepGoal,
   type Engine,
@@ -14,6 +15,8 @@ type Fixtures = {
     ios?: string;
   }) => Promise<void>;
   agent: { act(goal: string): Promise<void | object> };
+  /** Reloads the current page so it shows what a live run wrote meanwhile. */
+  reload: () => Promise<void>;
   /** Exact-text assertions supplied by the engine's own `expect`/`screen`. */
   expectText: (text: string, visible: boolean) => Promise<void>;
 };
@@ -36,10 +39,17 @@ async function runJourneyBody(
   const entity = journey.start ? ids.get(journey.start) : undefined;
   await fixtures.open({ entity, ...journey.open?.(ids) });
   for (const step of journey.steps) {
+    if (step.ready) await assertDatabase(journey, [step.ready], ids, false);
+    if (step.awaitRun) await awaitRun(journey, step.awaitRun, ids);
+    if (step.ready || step.awaitRun) await fixtures.reload();
     await fixtures.agent.act(stepGoal(step, engine));
     await expectTexts(fixtures, step.check?.visible?.(ids) ?? [], true);
     if (step.check?.db)
       await assertDatabase(journey, step.check.db, ids, false);
+  }
+  if (journey.awaitRun) {
+    await awaitRun(journey, journey.awaitRun, ids);
+    await fixtures.reload();
   }
   await expectTexts(fixtures, journey.visible(ids), true);
   await expectTexts(fixtures, journey.absent?.(ids) ?? [], false);

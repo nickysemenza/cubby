@@ -2,8 +2,8 @@ import Foundation
 
 /// What an editor sends for one save: the keys whose value changed, and the keys the user
 /// cleared. The two are kept apart because the generated client cannot encode JSON `null`
-/// (swift-openapi-generator uses `encodeIfPresent`), so a cleared key travels through
-/// `PatchNullMiddleware` rather than through the typed body.
+/// (swift-openapi-generator uses `encodeIfPresent`), so a cleared key is restored on the wire by
+/// `JSONNullMiddleware` rather than carried by the typed body.
 public struct EntityPatch: Sendable, Hashable {
     public var values: [String: JSONValue]
     public var cleared: Set<String>

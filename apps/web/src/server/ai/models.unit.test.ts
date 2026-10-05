@@ -9,7 +9,6 @@ import {
   getChatModelConfig,
   parseSupportedEmbeddingModel,
   providerFor,
-  REASONING_MODEL,
   VISION_BATCH_MODEL,
 } from "./models";
 
@@ -29,7 +28,7 @@ describe("the crate catalog backs every registered chat model", () => {
   });
 
   it("prices each tier from the catalog", () => {
-    const tiers = [FAST_MODEL, VISION_BATCH_MODEL, REASONING_MODEL] as const;
+    const tiers = [FAST_MODEL, VISION_BATCH_MODEL] as const;
     for (const model of tiers) {
       expect(
         estimateAiUsageCostUsd(providerFor(model), model, {
@@ -52,7 +51,7 @@ describe("the crate catalog backs every registered chat model", () => {
 
   it("prices provider-specific cache reads and writes", () => {
     expect(
-      estimateAiUsageCostUsd("openai", REASONING_MODEL, {
+      estimateAiUsageCostUsd("openai", "gpt-6-sol", {
         inputTokens: 1000,
         outputTokens: 1000,
         cacheReadTokens: 10_000,
@@ -73,11 +72,6 @@ describe("the registry is the routing seam", () => {
       provider: "google",
       route: "compat",
       wireModel: "google-ai-studio/gemini-2.5-flash",
-    });
-    expect(getChatModelConfig(REASONING_MODEL)).toMatchObject({
-      provider: "openai",
-      route: "openai-responses",
-      wireModel: "gpt-6-sol",
     });
   });
 });

@@ -119,7 +119,10 @@ describe("photo coordinator model eval", () => {
         ctx.databaseUrl,
         liveEvalModelWorker(),
       );
-      const { url } = await harness.listen();
+      await harness.listen();
+      // The web Worker is the harness's primary Worker, so `listen()`'s URL
+      // serves the app; the agent queue is reached through its producer.
+      const queue = harness.getWorker("cubby-queue-producer");
       const model = harness.getWorker("cubby-test-model");
 
       // Catalog Products are created once and shared by every candidate:
@@ -194,7 +197,7 @@ describe("photo coordinator model eval", () => {
           body: JSON.stringify(choice),
         });
         const startedAt = Date.now();
-        await fetch(new URL("/dispatch", url), {
+        const dispatched = await queue.fetch("https://queue.test/dispatch", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
@@ -205,6 +208,10 @@ describe("photo coordinator model eval", () => {
             eventId: started.eventId,
           }),
         });
+        if (!dispatched.ok)
+          throw new Error(
+            `Dispatch failed (${dispatched.status}): ${await dispatched.text()}`,
+          );
         const runId = runEntityId.parse(run.id);
         const settled = await poll(async () => {
           const [row] = await getDb(ctx.db)

@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  FAST_MODEL,
-  REASONING_MODEL,
-  VISION_BATCH_MODEL,
-} from "~/server/ai/models";
+import { FAST_MODEL, VISION_BATCH_MODEL } from "~/server/ai/models";
 
 import {
   AI_CACHE_TTL_SECONDS,
@@ -32,12 +28,6 @@ describe("piCallTarget resolves the registry's wire model and route", () => {
     const target = piCallTarget(VISION_BATCH_MODEL, opts);
     expect(target.model.provider).toBe("compat");
     expect(target.model.id).toBe("google-ai-studio/gemini-2.5-flash");
-  });
-
-  it("sends the reasoning tier to OpenAI Responses", () => {
-    const target = piCallTarget(REASONING_MODEL, opts);
-    expect(target.model.provider).toBe("openai");
-    expect(target.model.id).toBe("gpt-6-sol");
   });
 
   it("routes Anthropic models to the anthropic provider", () => {

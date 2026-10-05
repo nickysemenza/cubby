@@ -51,14 +51,13 @@ import {
   DEFAULT_EMBEDDING_MODEL,
   DECISION_MODEL,
   FAST_MODEL,
-  REASONING_MODEL,
   type SupportedChatModel,
   VISION_BATCH_MODEL,
 } from "~/server/ai/models";
 import type { CompatEffort, OpenAiEffort } from "~/server/clients/ai-adapters";
 
 /** Embeddings share the catalog, while retaining their vector runner. */
-type AiTier = "fast" | "visionBatch" | "reasoning" | "decision" | "embedding";
+type AiTier = "fast" | "visionBatch" | "decision" | "embedding";
 
 /**
  * The single place a tier's model is written down. `models.ts` owns the
@@ -67,7 +66,6 @@ type AiTier = "fast" | "visionBatch" | "reasoning" | "decision" | "embedding";
 const MODEL_FOR_TIER = {
   fast: FAST_MODEL,
   visionBatch: VISION_BATCH_MODEL,
-  reasoning: REASONING_MODEL,
   decision: DECISION_MODEL,
   embedding: DEFAULT_EMBEDDING_MODEL,
 } as const satisfies Record<AiTier, AiModel | SupportedEmbeddingModel>;
@@ -89,12 +87,11 @@ interface AiFeatureShared {
 /**
  * A chat tier and its reasoning dial, typed by the provider-options helper
  * that will receive it — `effort: "none"` is valid on the fast tier and
- * rejected on the reasoning tier, at compile time.
+ * rejected on the vision batch tier, at compile time.
  */
 type AiChatFeatureTier = (
   | { tier: "fast"; effort: OpenAiEffort }
   | { tier: "visionBatch"; effort?: CompatEffort }
-  | { tier: "reasoning"; effort: OpenAiEffort }
 ) & {
   /** Output cap. Reasoning/thinking tokens count against it on every tier. */
   maxTokens: number;
@@ -237,8 +234,10 @@ export const PURCHASE_IMPORT_REVERSAL_KIND_FEATURE = defineFeature({
 }) satisfies AiDecisionFeature;
 
 // ---------------------------------------------------------------------------
-// Fast tier — GPT-6 Luna. Identification, detection, and oversized
-// selection.
+// Fast tier — GPT-6 Luna. Identification, detection, oversized selection,
+// and, at high effort, the features that left the Sol reasoning tier on
+// `eval:features` evidence: purchase-import audit, extraction repair, and
+// recipe flow.
 // ---------------------------------------------------------------------------
 
 /**
@@ -308,6 +307,58 @@ export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
   schema: orderMailMessageClassification,
 }) satisfies AiStructuredFeature<OrderMailMessageClassification>;
 
+/**
+ * Moved from Sol after `eval:features` (2026-10-04): Luna at high effort
+ * matched Sol high 12/16 with zero unsafe answers on both, at about 1/19 of
+ * the cost. Its schema still carries no array bounds: a failed call is
+ * retried on the Anthropic recovery model (`extract.ts`).
+ */
+export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
+  feature: "purchase-import-audit",
+  tier: "fast",
+  maxTokens: 8_000,
+  effort: "high",
+  cache: true,
+  promptVersion: "2026-09-19.1",
+  schema: importAuditModelOutput,
+}) satisfies AiStructuredFeature<ImportAuditModelOutput>;
+
+/**
+ * Moved from Sol after `eval:features` (2026-10-04): Luna at high effort
+ * matched Sol high 14/14 with zero unsafe repairs (no line invented, moved,
+ * or scaled to balance a total), at about 1/19 of the cost. The eval's cases
+ * are text-only; production also attaches the capture's screenshot, which
+ * that parity does not cover.
+ */
+export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
+  feature: "purchase-import-repair",
+  tier: "fast",
+  maxTokens: 4_000,
+  effort: "high",
+  cache: false,
+  promptVersion: "2026-09-19.1",
+  schema: importExtractionModelOutput,
+}) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
+
+/**
+ * Moved from Sol low after `eval:features` (2026-10-04): Luna at high effort
+ * matched it 10/10 with zero unsafe plans (no number a step's own evidence
+ * does not state), at about 1/13 of the cost and roughly twice the latency.
+ * Flows a previous model stored stay current (`recipe-flow.service.ts`).
+ */
+export const RECIPE_FLOW_PRIMARY_FEATURE = defineFeature({
+  feature: "recipe-flow",
+  tier: "fast",
+  maxTokens: 16000,
+  effort: "high",
+  cache: true,
+  promptVersion: "2026-09-11.1",
+  // The model returns a plan; the store holds the artifact built from it.
+  schema: recipeFlowAiPlanSchema,
+  analysisSchema: recipeFlowArtifactSchema,
+}) satisfies AiStructuredFeature<RecipeFlowAiPlan> &
+  AiAnalysisFeature<RecipeFlowArtifact>;
+
 // ---------------------------------------------------------------------------
 // Vision batch tier — Gemini 2.5 Flash. Cheap, accurate, ~14 s to first
 // token: backfill only. No `effort`: keep Gemini's own thinking on.
@@ -335,43 +386,6 @@ export const IMAGE_DESCRIPTION_FEATURE = defineFeature({
   analysisSchema: imageDescriptionResult,
 }) satisfies AiStructuredFeature<ImageDescriptionResult> &
   AiAnalysisFeature<ImageDescriptionResult>;
-
-// ---------------------------------------------------------------------------
-// Reasoning tier — GPT-6 Sol. The accuracy tier.
-// ---------------------------------------------------------------------------
-
-export const RECIPE_FLOW_PRIMARY_FEATURE = defineFeature({
-  feature: "recipe-flow",
-  tier: "reasoning",
-  maxTokens: 16000,
-  effort: "low",
-  cache: true,
-  promptVersion: "2026-09-11.1",
-  // The model returns a plan; the store holds the artifact built from it.
-  schema: recipeFlowAiPlanSchema,
-  analysisSchema: recipeFlowArtifactSchema,
-}) satisfies AiStructuredFeature<RecipeFlowAiPlan> &
-  AiAnalysisFeature<RecipeFlowArtifact>;
-
-export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
-  feature: "purchase-import-audit",
-  tier: "reasoning",
-  maxTokens: 8_000,
-  effort: "high",
-  cache: true,
-  promptVersion: "2026-09-19.1",
-  schema: importAuditModelOutput,
-}) satisfies AiStructuredFeature<ImportAuditModelOutput>;
-
-export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
-  feature: "purchase-import-repair",
-  tier: "reasoning",
-  maxTokens: 4_000,
-  effort: "high",
-  cache: false,
-  promptVersion: "2026-09-19.1",
-  schema: importExtractionModelOutput,
-}) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
 export const SEMANTIC_QUERY_FEATURE = defineFeature({
   feature: "semantic-query",

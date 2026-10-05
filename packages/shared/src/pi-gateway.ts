@@ -95,6 +95,9 @@ function compatModels(baseUrl: string): Model<"openai-completions">[] {
       cost: template.cost,
       contextWindow: template.contextWindow,
       maxTokens: template.maxTokens,
+      // Google's OpenAI-compatible endpoint rejects `store` (HTTP 400), and
+      // the placeholder base URL hides the Gateway from pi-ai's detection.
+      compat: { supportsStore: false },
     };
   });
 }

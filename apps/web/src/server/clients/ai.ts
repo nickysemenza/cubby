@@ -89,7 +89,7 @@ Do not list the storage crate/bin/drawer itself. Do not list vague clutter, pack
   };
 }
 
-function buildRecipeFlowRequest(
+export function buildRecipeFlowRequest(
   recipeJson: string,
   guidance: string | null,
 ): AiChatRequest {

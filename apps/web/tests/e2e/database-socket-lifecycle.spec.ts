@@ -17,7 +17,9 @@ const censusGroup = z.object({
   idleOver10Seconds: z.number(),
   idleOver30Seconds: z.number(),
   oldestBackendSeconds: z.number(),
-  oldestStateSeconds: z.number(),
+  // A backend still starting up has no state yet, so its state_change is
+  // null. It still holds a socket, so it stays in `sessions` and the totals.
+  oldestStateSeconds: z.number().nullable(),
 });
 
 // Request pools can legitimately retain young idle clients for pg-pool's ten

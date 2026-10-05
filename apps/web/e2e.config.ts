@@ -12,27 +12,12 @@ import { readBrowserCookies } from "./tooling/tester-army/scenario";
 
 process.env.E2E_TELEMETRY_DISABLED = "1";
 const target = z.enum(["web", "ios"]).parse(process.env.TESTER_ARMY_TARGET);
-const journey = z
-  .enum(["catalog", "import"])
-  .default("catalog")
-  .parse(process.env.TESTER_ARMY_JOURNEY);
-if (journey === "import" && target !== "web")
-  throw new Error("The live import journey runs on web only");
-const JOURNEY_CONTEXT = {
-  catalog:
-    "Cubby household inventory. Use only the synthetic records named in each goal. On web, the global search palette can find products by name. On iOS, Find searches the catalog. Save closes the editor. Names and amounts in quotes are exact.",
-  import:
-    "Cubby household inventory. A vendor page lists saved order confirmation emails; each importable order has an Import order button, which starts an agent run and then shows a View import link to that run's page. Use the synthetic vendor only.",
-};
 const origin = z.url().parse(process.env.TESTER_ARMY_ORIGIN);
 const cookies = target === "web" ? readBrowserCookies() : [];
 
 export default {
   projectId: "cubby-tester-army-trial",
-  tests:
-    journey === "import"
-      ? `tests/tester-army/${target}-import.e2e.ts`
-      : `tests/tester-army/${target}-journeys.e2e.ts`,
+  tests: `tests/tester-army/${target}-journeys.e2e.ts`,
   targets: [
     target === "web"
       ? {
@@ -59,8 +44,8 @@ export default {
   ],
   workers: 1,
   retries: 0,
-  // The import journey waits for a real coordinator run to finish.
-  timeout: journey === "import" ? 600_000 : 240_000,
+  // A journey that waits on a live agent run sets its own longer deadline.
+  timeout: 240_000,
   launchTimeout: 240_000,
   assertionTimeout: 15_000,
   cleanupTimeout: 60_000,
@@ -76,9 +61,10 @@ export default {
     default: {
       model: testerArmyModel(),
       providerOptions: testerArmyProviderOptions,
-      maxSteps: journey === "import" ? 20 : 40,
-      maxModelCalls: journey === "import" ? 20 : 40,
-      context: JOURNEY_CONTEXT[journey],
+      maxSteps: 40,
+      maxModelCalls: 40,
+      context:
+        "Cubby household inventory. Use only the synthetic records named in each goal. On web, the global search palette can find products by name. On iOS, Find searches the catalog. Save closes the editor. Names and amounts in quotes are exact.",
     },
   },
 } satisfies E2EConfig;

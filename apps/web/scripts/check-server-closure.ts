@@ -33,9 +33,14 @@ const MB = 1_000_000;
 // and inventory batch of 2026-10 (settlement, corrections, receiving, identity
 // proof) reached 18.01 MB total with an unchanged 6.44 MB first request; the
 // total is lazily loaded and far inside Cloudflare's compressed limit, so it
-// gets headroom while the request-path budget stays tight.
+// gets headroom while the request-path budget stays tight. Merging the
+// purchase agent into this Worker (2026-10) added its runtime (Agents SDK,
+// pi-durable, MCP client; ~1.8 MB, sharing zod, pi-ai, and Sentry with the
+// app) as one lazily loaded chunk: 19.34 MB total, first request unchanged at
+// 5.41 MB. The agent's Durable Object and queue consumer load it on their
+// first event (`server/purchase-import/agent-host.ts`), never on a page.
 const FIRST_REQUEST_BUDGET = 6.5 * MB;
-const TOTAL_BUDGET = 18.5 * MB;
+const TOTAL_BUDGET = 20 * MB;
 
 const STATIC_IMPORT =
   /(?:import|export)\s*(?:[\w*{}\s,$]*?from\s*)?["'`](\.{1,2}\/[^"'`]+\.js)["'`]/g;

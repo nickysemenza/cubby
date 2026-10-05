@@ -1426,8 +1426,15 @@ async function assertQaOutcomes(): Promise<void> {
   }
 }
 
-/** Replays every `apps/apple/e2e/qa-*.ad` journey against the seeded QA world. */
-async function runQaJourneys(common: string[]): Promise<void> {
+/**
+ * Replays every `apps/apple/e2e/qa-*.ad` journey against the seeded QA world. Each attempt starts
+ * from a relaunched app: a journey's `open` only foregrounds it, so a sheet a previous journey or
+ * failed attempt left open (an Edit Product editor) hid the next journey's first screen.
+ */
+async function runQaJourneys(
+  common: string[],
+  relaunch: () => Promise<void>,
+): Promise<void> {
   writeFileSync(
     path.join(artifacts, "qa-ids.json"),
     `${JSON.stringify({ database: simName, ids: qaIds }, null, 2)}\n`,
@@ -1448,35 +1455,54 @@ async function runQaJourneys(common: string[]): Promise<void> {
   const stopRecording = video
     ? await recordSimulatorVideo(common[3] ?? "")
     : undefined;
+  const flaky: string[] = [];
   try {
-    for (const journey of journeys)
-      await run(
-        "pnpm",
-        [
-          "exec",
-          "agent-device",
-          "test",
-          `apps/apple/e2e/${journey}`,
-          ...common,
-          // A scroll can land short while a detail page is still laying out; a journey
-          // only writes after its last scroll, so a retry replays from a clean read.
-          "--retries",
-          "1",
-          "--artifacts-dir",
-          artifacts,
-          "--reporter",
-          "default",
-          "--reporter",
-          `junit:${path.join(artifacts, `junit-${journey}.xml`)}`,
-          ...Object.entries(qaIds).flatMap(([key, value]) => [
-            "-e",
-            `${key}=${value}`,
-          ]),
-        ],
-        repoRoot,
-      );
+    for (const journey of journeys) {
+      // A scroll can land short while a detail page is still laying out; a journey only
+      // writes after its last scroll, so one retry from a relaunched app is a clean replay.
+      for (let attempt = 1; ; attempt += 1) {
+        await relaunch();
+        try {
+          await run(
+            "pnpm",
+            [
+              "exec",
+              "agent-device",
+              "test",
+              `apps/apple/e2e/${journey}`,
+              ...common,
+              "--retries",
+              "0",
+              "--artifacts-dir",
+              artifacts,
+              "--reporter",
+              "default",
+              "--reporter",
+              // Per attempt, so a retried pass keeps the failed attempt's report beside it.
+              `junit:${path.join(artifacts, `junit-${journey}-attempt-${attempt}.xml`)}`,
+              ...Object.entries(qaIds).flatMap(([key, value]) => [
+                "-e",
+                `${key}=${value}`,
+              ]),
+            ],
+            repoRoot,
+          );
+          break;
+        } catch (error) {
+          flaky.push(journey);
+          if (attempt >= 2 || interrupted) throw error;
+          console.log(
+            `[${lane}] ${journey} attempt ${attempt} failed; retrying`,
+          );
+        }
+      }
+    }
   } finally {
     await stopRecording?.();
+    if (flaky.length > 0)
+      console.log(
+        `[${lane}] Failed an attempt: ${[...new Set(flaky)].join(", ")}`,
+      );
   }
   await assertQaOutcomes();
 }
@@ -2103,7 +2129,7 @@ async function main(): Promise<void> {
             launch,
           });
         } else if (qa) {
-          await runQaJourneys(common);
+          await runQaJourneys(common, launch);
         } else {
           await runNativeJourney(
             device.udid,

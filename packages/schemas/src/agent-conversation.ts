@@ -6,7 +6,7 @@ import { contextBreakdownSchema } from "./context-breakdown";
  * The import-run agent conversation as the web app reads it. The purchase
  * agent projects its durable pi transcript (entries plus the live generation
  * and tool round) into this shape (writer:
- * apps/purchase-agent/src/conversation.ts); the run page renders it (reader:
+ * apps/web/src/server/purchase-agent/conversation.ts); the run page renders it (reader:
  * apps/web/src/app/runs/agent-observation.ts). Cubby owns this contract so the
  * web app never depends on the harness's own types.
  *

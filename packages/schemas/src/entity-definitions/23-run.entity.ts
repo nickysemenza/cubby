@@ -478,7 +478,7 @@ export default defineEntity({
       },
       {
         key: "runtimeRevision",
-        defaultValue: "flue@1",
+        defaultValue: "pi-durable@1",
       },
       { key: "decisionRevision", defaultValue: 1 },
       { key: "startedAt", defaultOverride: "now" },

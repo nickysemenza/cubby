@@ -60,6 +60,12 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   wire-breaking PR bumps that constant and `MARKETING_VERSION` in `project.yml` together (a unit
   test compares them; the TestFlight workflow takes its version from the release tag, which must
   be at least the constant).
+- The generated client encodes every optional with `encodeIfPresent`, so a typed request body
+  cannot carry `null`. A body the app composes as `JSONValue` (editor create/update, hero-action
+  and finance operations) goes through `CubbyClient.sending(_:_:)`, which decodes it into the
+  typed input and restores its `null`s on the wire (`JSONNullMiddleware`); a required nullable
+  key (`sourceId`, `externalAccountId`, a discard `date`) is otherwise rejected as absent. Use
+  `.null` only where the input takes `null`; omit a key that is optional but not nullable.
 - Always pass `serverURL` explicitly when constructing a generated `Client`. The spec's `servers`
   entry is `"/"`, which is not a usable absolute URL on its own.
 

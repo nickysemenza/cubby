@@ -72,7 +72,7 @@ export const getTelemetryQueue = (): TelemetryQueueProducer | undefined => {
   return cfEnv?.TELEMETRY_QUEUE as TelemetryQueueProducer | undefined;
 };
 
-/** Queue producer for the private per-run purchase-import agent Worker. */
+/** Queue producer for the per-run purchase-import agent's events. */
 export const getPurchaseAgentQueue = ():
   | PurchaseAgentQueueProducer
   | undefined => {
@@ -101,6 +101,10 @@ export const getCalendarFeedNamespace = (): Env["CALENDAR_FEED"] | undefined =>
 
 export const getPurchaseImportNamespace = () => cfEnv?.PURCHASE_IMPORT;
 
+/** The purchase agent's per-Run coordinators (`server/purchase-import/agent-host`). */
+export const getPurchaseImportRunAgentNamespace = () =>
+  cfEnv?.PURCHASE_IMPORT_RUN;
+
 /** Connected native image workers share this transport; job authority stays in Postgres. */
 export const getImageProcessingNamespace = () => cfEnv?.IMAGE_PROCESSING;
 
@@ -118,8 +122,8 @@ export const CF_AIG_GATEWAY_ID = process.env.AI_GATEWAY_ID || "cubby";
 export const getAiGateway = () => cfEnv?.AI?.gateway(CF_AIG_GATEWAY_ID);
 
 /**
- * The deterministic gateway peer that exists only in the coupled workerd
- * harness (`tooling/purchase-agent-workerd-harness.ts`). It is deliberately
+ * The deterministic gateway peer that exists only in the purchase-agent
+ * workerd harness (`tooling/purchase-agent-workerd-harness.ts`). It is deliberately
  * absent from wrangler.jsonc, so a deployed Worker can never resolve it and
  * keeps the mandatory `env.AI` transport above.
  */
@@ -143,7 +147,7 @@ export const getVectorIndex = (): VectorizeIndexBinding | undefined => {
   return cfEnv?.VECTORIZE as VectorizeIndexBinding | undefined;
 };
 
-type ServiceBindingName = "USDA_API" | "PURCHASE_AGENT";
+type ServiceBindingName = "USDA_API";
 
 /** Static asset fetcher exposed by the Cloudflare Worker runtime. */
 export const getAssetsFetcher = (): typeof fetch | undefined => {
@@ -165,7 +169,7 @@ export const getAssetsFetcher = (): typeof fetch | undefined => {
 export const getBindingFetcher = (
   name: ServiceBindingName,
 ): typeof fetch | undefined => {
-  const binding = name === "USDA_API" ? cfEnv?.USDA_API : cfEnv?.PURCHASE_AGENT;
+  const binding = cfEnv?.[name];
   if (!binding) return undefined;
   // Wrap in an arrow — Fetcher["fetch"] isn't directly assignable to the
   // global fetch type. SAFETY: this is the single Cloudflare Fetcher/global

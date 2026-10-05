@@ -129,17 +129,6 @@
       "vite": { "config": [] },
       "playwright": { "config": "playwright.config.ts" }
     },
-    "apps/purchase-agent": {
-      "entry": ["src/index.ts!", "src/**/*.unit.test.ts!", "vite.config.ts!"],
-      "project": ["src/**/*.ts!", "*.ts!"],
-      "ignoreDependencies": [
-        "cloudflare",
-        "ai",
-        "just-bash",
-        "@cloudflare/codemode"
-      ],
-      "vitest": { "config": "vitest.config.ts" }
-    },
     "apps/mcp-apps": {
       "entry": [
         "src/bundles.ts!",

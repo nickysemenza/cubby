@@ -315,19 +315,19 @@ public struct HeroActionRunner: Sendable {
             let body = Self.fill(operation.body, rowID: row.id, itemID: itemID, values: resolved)
             switch operation.operation {
             case "product.discard":
-                let result = try await client.discardProduct(try body.decoded())
+                let result = try await client.sending(body, client.discardProduct)
                 let removed = result.inventory?.removed == true ? "; shelf entry removed" : ""
                 return .completed(
                     "Discarded \(abs(result.storedQuantity).formatted())\(removed)",
                     changed: [entity, .expense, .inventory])
             case "inventory.bulkAdd":
-                let result = try await client.bulkAddInventory(try body.decoded())
+                let result = try await client.sending(body, client.bulkAddInventory)
                 return .completed(
                     result.mergedCount == 0
                         ? "Added to inventory" : "Added to inventory; merged into stock already there",
                     changed: [entity, .inventory, .location])
             case "ai.describeLocation":
-                let result = try await client.describeLocation(try body.decoded())
+                let result = try await client.sending(body, client.describeLocation)
                 return .review(
                     HeroActionReview(
                         label: "Analyzed contents", previous: result.previousDescription,
@@ -377,8 +377,11 @@ public struct HeroActionRunner: Sendable {
         let target = fields["targetId"]?.stringValue?.trimmingCharacters(in: .whitespaces).uppercased()
         guard let target, !target.isEmpty else { throw HeroActionError.missing("targetId") }
         fields["targetId"] = .string(target)
-        if EntityCatalog.descriptor(forShortcode: target)?.key != .product { fields["purpose"] = .null }
-        let result = try await client.attachExistingImage(try JSONValue.object(fields).decoded())
+        // `purpose` is optional, not nullable: a non-product target omits the key.
+        if EntityCatalog.descriptor(forShortcode: target)?.key != .product {
+            fields.removeValue(forKey: "purpose")
+        }
+        let result = try await client.sending(.object(fields), client.attachExistingImage)
         let reused = try JSONValue(encoding: result)["reused"]?.boolValue == true
         var touched: Set<EntityKey> = [changed]
         if let key = EntityCatalog.descriptor(forShortcode: target)?.key { touched.insert(key) }
@@ -418,7 +421,7 @@ public struct HeroActionRunner: Sendable {
     }
 
     private func startTargetedRun(_ body: JSONValue) async throws -> HeroActionOutcome {
-        let result = try JSONValue(encoding: try await client.startTargetedRun(try body.decoded()))
+        let result = try JSONValue(encoding: try await client.sending(body, client.startTargetedRun))
         let runs = result["runs"]?.arrayValue ?? []
         if let blocking = runs.compactMap({ $0["blockingRun"] }).first(where: { $0 != .null }) {
             let id = blocking["id"]?.stringValue ?? "another run"

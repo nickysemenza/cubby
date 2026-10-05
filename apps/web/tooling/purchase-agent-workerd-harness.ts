@@ -1,9 +1,12 @@
-/* eslint-disable anti-slop/no-unsafe-dictionary-type, anti-slop/require-safety-comment-for-type-assertion, anti-slop/no-known-value-widening -- The harness adapts generated Wrangler JSON whose binding dictionaries have no source-level owner type. */
+/* eslint-disable anti-slop/no-unsafe-dictionary-type, anti-slop/require-safety-comment-for-type-assertion, anti-slop/no-object-parameters, anti-slop/no-unknown-returns, anti-slop/no-known-value-widening -- The harness adapts generated Wrangler JSON whose binding dictionaries have no source-level owner type, and forwards queue events, browser outcomes, and peer fixtures unchanged as JSON. */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createTestHarness } from "wrangler";
+import { createTestHarness, type TestHarness } from "wrangler";
+import { z } from "zod";
+
+import type { ScriptStep } from "./purchase-agent-script";
 
 import { acquireHarnessLock } from "../../../scripts/lib/harness-lock.ts";
 
@@ -13,46 +16,7 @@ const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const agentConfigPath = path.join(
-  webRoot,
-  "../purchase-agent/dist/purchase_agent/wrangler.json",
-);
-
-function workerdAgentConfig() {
-  const config = JSON.parse(readFileSync(agentConfigPath, "utf8")) as {
-    ai?: Record<string, unknown>;
-    services?: Array<Record<string, unknown>>;
-    queues?: { consumers?: Array<Record<string, unknown>> };
-  };
-  // The harness supplies a deterministic model through a local service. Keep
-  // the production Workers AI binding out of this process so CI never tries to
-  // establish a remote Cloudflare proxy session.
-  delete config.ai;
-  return {
-    ...config,
-    main: "../purchase-agent/dist/purchase_agent/index.js",
-    queues: {
-      ...config.queues,
-      consumers: config.queues?.consumers?.map((consumer) => ({
-        ...consumer,
-        max_batch_timeout: 0,
-      })),
-    },
-    services: [
-      ...(config.services ?? []).map((service) =>
-        service.binding === "CUBBY_PURCHASE_SERVICE"
-          ? { ...service, service: "cubby" }
-          : service,
-      ),
-      {
-        binding: "CUBBY_PURCHASE_AGENT_TEST_MODEL",
-        service: "cubby-test-model",
-      },
-    ],
-  };
-}
-
-function workerdWebConfig(databaseUrl: string) {
+function workerdWebConfig(databaseUrl: string, backgroundQueue: boolean) {
   const config = JSON.parse(
     readFileSync(path.join(webRoot, "dist/server/wrangler.json"), "utf8"),
   ) as Record<string, unknown> & {
@@ -61,8 +25,8 @@ function workerdWebConfig(databaseUrl: string) {
     services?: Array<Record<string, unknown>>;
   };
   // Keep the current compiled Worker but remove production-only remote
-  // bindings; the harness supplies its isolated database and owns agent queue
-  // delivery, so starting it must never require Cloudflare credentials.
+  // bindings: the harness supplies its isolated database and a deterministic
+  // model, so starting it must never require Cloudflare credentials.
   delete config.ai;
   delete config.vectorize;
   config.hyperdrive = config.hyperdrive?.map((binding) => ({
@@ -74,7 +38,12 @@ function workerdWebConfig(databaseUrl: string) {
     queues.consumers = (
       (queues.consumers ?? []) as Array<Record<string, unknown>>
     )
-      .filter((consumer) => consumer.queue === "cubby-telemetry")
+      .filter(
+        (consumer) =>
+          consumer.queue === "cubby-telemetry" ||
+          consumer.queue === "cubby-purchase-agent" ||
+          (backgroundQueue && consumer.queue === "cubby-background"),
+      )
       .map((consumer) => ({ ...consumer, max_batch_timeout: 0 }));
   // `configPath` resolves this relative to dist/server; the inline config is
   // rooted at apps/web, so retain the compiled entrypoint explicitly.
@@ -82,18 +51,15 @@ function workerdWebConfig(databaseUrl: string) {
   const assets = config.assets as Record<string, unknown> | undefined;
   if (assets) assets.directory = "dist/client";
   config.services = [
-    ...(config.services ?? []).map((service) => {
-      const replacements: Record<string, string> = {
-        USDA_API: "local-offline-peers",
-        PURCHASE_AGENT: "purchase-agent",
-      };
-      const binding = String(service.binding ?? "");
-      return replacements[binding]
-        ? { ...service, service: replacements[binding] }
-        : service;
-    }),
-    // Harness-only: the web Worker's own structured AI features (extraction,
-    // the required import audit) answer from a deterministic peer.
+    ...(config.services ?? []).map((service) =>
+      service.binding === "USDA_API"
+        ? { ...service, service: "local-offline-peers" }
+        : service,
+    ),
+    // Harness-only: the purchase agent's model provider and the Worker's own
+    // structured AI features (extraction, the required import audit) answer
+    // from deterministic peers.
+    { binding: "CUBBY_PURCHASE_AGENT_TEST_MODEL", service: "cubby-test-model" },
     { binding: "CUBBY_TEST_AI_GATEWAY", service: "cubby-test-gateway" },
   ];
   return config;
@@ -135,20 +101,39 @@ export async function holdWorkerdHarness(): Promise<() => void> {
 export const HOLD_WORKERD_HARNESS_TIMEOUT_MS = 30 * 60_000;
 
 /**
- * The coupled web + purchase-agent workerd harness. Its model worker is
- * `cubby-test-model` (the agent's provider) and its gateway worker is
- * `cubby-test-gateway` (the web Worker's structured features): deterministic
- * fakes by default, or Gateway proxies for live evals and journeys.
+ * What browser runs add to the scripted scenarios: real object storage
+ * (`createE2EObjectStorage`) for pages with images and uploaded photos, and
+ * the background queue consumer that runs image processing. Scripted
+ * scenarios keep neither, so no background task reaches a deterministic
+ * model peer.
+ */
+type WorkerdHarnessServices = {
+  objectStorage?: {
+    /** S3 endpoint the Worker writes through. */
+    endpoint: string;
+    /** Origin of public object URLs the Worker itself fetches back. */
+    publicUrl: string;
+  };
+  backgroundQueue?: boolean;
+};
+
+/**
+ * The purchase-agent workerd harness: the built `cubby` Worker, which hosts
+ * the agent and consumes its queue. Its model worker is `cubby-test-model`
+ * (the agent's provider) and its gateway worker is `cubby-test-gateway` (the
+ * Worker's structured features): deterministic fakes by default, or Gateway
+ * proxies for live evals and journeys.
  */
 export async function createWorkerdHarness(
   databaseUrl: string,
   modelWorker: WorkerdModelWorker = DETERMINISTIC_MODEL,
   gatewayWorker: WorkerdModelWorker = DETERMINISTIC_GATEWAY,
+  services: WorkerdHarnessServices = {},
 ) {
   const release = await holdWorkerdHarness();
   let harness: ReturnType<typeof createTestHarness>;
   try {
-    harness = startHarness(databaseUrl, modelWorker, gatewayWorker);
+    harness = startHarness(databaseUrl, modelWorker, gatewayWorker, services);
   } catch (error) {
     release();
     throw error;
@@ -169,20 +154,29 @@ function startHarness(
   databaseUrl: string,
   modelWorker: WorkerdModelWorker,
   gatewayWorker: WorkerdModelWorker,
+  services: WorkerdHarnessServices,
 ) {
+  // Port 9 refuses connections: storage stays unreachable unless supplied.
+  const storage = services.objectStorage ?? {
+    endpoint: "http://127.0.0.1:9",
+    publicUrl: "http://127.0.0.1:9",
+  };
   return createTestHarness({
     root: webRoot,
     workers: [
       // The web Worker is primary: `listen()` serves the app a browser drives.
       {
-        config: workerdWebConfig(databaseUrl),
+        config: workerdWebConfig(
+          databaseUrl,
+          services.backgroundQueue ?? false,
+        ),
         vars: {
           ALLOW_SIGNUP: "true",
           INSECURE_AUTH_COOKIES: "true",
           E2E_AUTH_TEST_MODE: "true",
           DATABASE_URL: databaseUrl,
-          R2_ENDPOINT: "http://127.0.0.1:9",
-          R2_PUBLIC_URL: "http://127.0.0.1:9",
+          R2_ENDPOINT: storage.endpoint,
+          R2_PUBLIC_URL: storage.publicUrl,
           R2_BUCKET_NAME: "e2e-bucket",
           R2_KEY_PREFIX: "e2e",
           R2_ACCESS_KEY_ID: "dummy",
@@ -217,12 +211,6 @@ function startHarness(
         },
       },
       {
-        config: workerdAgentConfig(),
-        // "test" disables Sentry in both the agent Durable Object wrapper and
-        // the queue consumer, so the harness never reports to sentry.io.
-        vars: { SENTRY_ENVIRONMENT: "test" },
-      },
-      {
         config: {
           name: "cubby-test-model",
           main: modelWorker.main,
@@ -250,3 +238,92 @@ function startHarness(
     ],
   });
 }
+
+/** One scripted purchase-agent scenario: the coordinator's steps and the gateway's outputs. */
+export type ScriptedScenario = {
+  steps: ScriptStep[];
+  extractions?: Array<{ match: string; output: unknown }>;
+  audit?: unknown;
+};
+
+type JsonPost = {
+  method: "POST";
+  headers: Record<string, string>;
+  body: string;
+};
+type Sender = (
+  path: string,
+  init: JsonPost,
+) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>;
+
+/**
+ * Drive a listening purchase-agent harness: load a scenario into its
+ * deterministic peers, deliver queue events, and read what the agent did.
+ */
+export function scenarioControls(harness: TestHarness) {
+  const model = harness.getWorker("cubby-test-model");
+  const gateway = harness.getWorker("cubby-test-gateway");
+  const queue = harness.getWorker("cubby-queue-producer");
+  const post = async (send: Sender, path: string, body: object) => {
+    const response = await send(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok)
+      throw new Error(`${path} ${response.status}: ${await response.text()}`);
+  };
+  const toModel: Sender = (path, init) => model.fetch(path, init);
+  const toGateway: Sender = (path, init) => gateway.fetch(path, init);
+  const toQueue: Sender = (path, init) =>
+    queue.fetch(new URL(path, "https://queue.test"), init);
+  const readJson = async <T>(
+    schema: z.ZodType<T>,
+    send: () => Promise<{ json(): Promise<unknown> }>,
+  ): Promise<T> => schema.parse(await (await send()).json());
+  return {
+    /** Replace the scripted model's steps and the gateway's outputs. */
+    configure: async (scenario: ScriptedScenario) => {
+      await post(toModel, "https://model.test/configure", {
+        steps: scenario.steps,
+      });
+      const gatewayFixture: { extractions: unknown[]; audit?: unknown } = {
+        extractions: scenario.extractions ?? [],
+      };
+      if (scenario.audit) gatewayFixture.audit = scenario.audit;
+      await post(toGateway, "https://gateway.test/configure", gatewayFixture);
+    },
+    /** Let the model answer past a `{ gate }` step. */
+    release: (gate: string) =>
+      post(toModel, "https://model.test/release", { gate }),
+    /** Deliver one purchase-agent queue event, as the web Worker would. */
+    dispatch: (event: Record<string, unknown>) =>
+      post(toQueue, "/dispatch", event),
+    /** Connect a simulated Mac browser that answers commands by URL. */
+    connectBrowser: (input: {
+      vendorAccountId: string;
+      ledgerPartyId: string;
+      userId: string;
+      outcomes?: Record<string, unknown>;
+      delayMs?: number;
+    }) => post(toQueue, "/browser-connect", input),
+    violations: async () =>
+      readJson(z.array(z.string()), () =>
+        model.fetch("https://model.test/violations"),
+      ),
+    /** Each step the scripted model emitted: what the agent actually executed. */
+    emitted: async () =>
+      readJson(z.array(z.string()), () =>
+        model.fetch("https://model.test/emitted"),
+      ),
+    gatewayCalls: async () =>
+      readJson(
+        z.array(
+          z.object({ feature: z.string(), matched: z.string().nullable() }),
+        ),
+        () => gateway.fetch("https://gateway.test/calls"),
+      ),
+  };
+}
+
+export type ScenarioControls = ReturnType<typeof scenarioControls>;

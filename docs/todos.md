@@ -26,6 +26,15 @@ history is the archive. Permanent product constraints live in the
 
 ## Images & photos
 
+- 🤔 **Cloud image description fails on Gemini since the pi-ai move.**
+  Gemini 2.5 Flash answers the forced `respond` tool for
+  `IMAGE_DESCRIPTION_FEATURE` with HTTP 400 "schema produces a constraint
+  that has too many states". Decide between simplifying the schema (a new
+  prompt/schema revision) and another vision model; either obsoletes queued
+  `describe_image` jobs (`IMAGE_DESCRIPTION_PROCESSOR_REVISION`). The
+  `import-photo-inventory` Tester Army journey fails at its description wait
+  until this lands; check `LOCATION_DESCRIPTION_FEATURE` too.
+
 - 🧱 **Full capture metadata from the Photos library.** The library match path
   (`LibraryMetadataSync` → `image.recordSightings`) already backfills
   `capturedAt` and location for every strong perceptual-hash match across the
@@ -240,6 +249,15 @@ See also the image operational passes at the end of this file.
 ---
 
 ## Native app
+
+- 🤔 **Keep a focused structured-editor input clear of the keyboard.**
+  `StructuredValueControl` draws a whole array row (an external ID's source,
+  kind, id, URL) inside one Form row, so keyboard avoidance scrolls that tall
+  cell and a lower input stays under the prediction bar (measured: zero
+  clearance on the iPhone simulator; the Tester Army agent could not reach the
+  input it had focused). Give each input its own row or scroll the focused
+  input itself; verify with the external-ID journey. Owner:
+  `App/Shared/Editors/StructuredValueEditor.swift`.
 
 - 🤔 **Cluster and reproduce the native app-hang corpus before changing
   code.** Collect sanitized release, duration, foreground state, and top
@@ -516,6 +534,20 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
 
 ## Dev tooling, tests & CI
 
+- 🤔 **Stop the simulator build from dirtying the checkout.** Every
+  `test:e2e:sim` lane's Xcode build rewrites the tracked
+  `apps/apple/CubbyKit/Package.resolved` (adding the app-only Nuke pin), so
+  each native E2E bundle records `dirty: true` and is not replayable evidence.
+  Give the app project its own resolved file or build with a resolution that
+  leaves CubbyKit's untouched. Owner: `apps/apple/project.yml`,
+  `apps/web/tooling/sim-e2e.ts`.
+
+- 🤔 **Make Tester Army `--replay` able to hit.** Two consecutive warm web
+  runs of `product-rename` (2026-10-04) both reported `replayed 0, missed 1`
+  and used the model each time. Each run seeds fresh records, so on-screen
+  shortcodes differ; find which observed state the SDK keys the cache on and
+  either stabilize it or drop the flag. Owner: `apps/web/tooling/tester-army/`.
+
 - 🤔 **Measure the delegate-less routing change.** Around 2026-10-06,
   re-measure 30 days of Claude session transcripts against the baseline in
   [model routing](agents/model-routing.md#delegate-or-not): share of sessions
@@ -569,7 +601,7 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   page except a new health route and the switch), by every queue consumer
   (`background-tasks/consume.ts`, `telemetry-queue.ts`, the purchase-agent
   consumer), and by the agent's purchase-import run before each tool call (via a
-  `PurchaseImportService` RPC); toggle from Settings and MCP. Decide first how
+  Run service); toggle from Settings and MCP. Decide first how
   consumers hold messages: a normally returning handler acks them, and
   `retry()` spends `max_retries: 3` with no dead-letter queue, so either call
   the Queues pause-delivery API from the toggle or retry with long delays.
@@ -687,11 +719,6 @@ related active work can find its deferred follow-ups.
 - **Household balance sheet.** Promote when replacement planning, insurance,
   or cost-basis exports are actually needed. Generalize location valuation
   into replacement forecasts and cost-per-project analysis.
-
-- **Attribute agent provider calls to their run.** The agent provider
-  (`apps/purchase-agent/src/cubby-ai-provider.ts`) still tags gateway metadata
-  with `jobKind: "purchase_import_run"`; send the run id once the agent exposes the
-  current run to module-scope providers.
 
 - **`imports_read.vendor_coverage` per account.** Promote when two members
   hold accounts at the same vendor.

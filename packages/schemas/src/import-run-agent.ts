@@ -45,7 +45,7 @@ export function importRunIdFromAgentIdentity(
   return runEntityId.safeParse(instanceId.slice(colon + 1)).data;
 }
 
-/** The purchase agent's own tools (apps/purchase-agent/src/tools.ts). */
+/** The purchase agent's own tools (apps/web/src/server/purchase-agent/tools.ts). */
 const IMPORT_RUN_AGENT_TOOLS = [
   "claim_next_import_work",
   "extract_receipt_evidence",

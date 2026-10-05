@@ -232,7 +232,6 @@ SwiftUI app.
 | ----------------------------------------------------------------------------- | ------------------------------------------------------ |
 | [apps/web](apps/web)                                                          | The main app, HTTP API and MCP server (Worker `cubby`) |
 | [apps/apple](apps/apple)                                                      | Native iOS/macOS app, `CubbyKit`, `cubby` CLI          |
-| [apps/purchase-agent](apps/purchase-agent)                                    | Private Worker that orchestrates purchase imports      |
 | [apps/usda-api](apps/usda-api)                                                | USDA lookup Worker                                     |
 | [apps/mcp-apps](apps/mcp-apps)                                                | Interactive MCP UIs, inlined into `web`                |
 | [packages/](packages), [recipebridge/](recipebridge), [cubby-ffi/](cubby-ffi) | Shared schemas, WASM and Swift FFI                     |

@@ -27,13 +27,13 @@ public actor CubbyClient {
         let auth = CubbyAuthMiddleware(
             credentials: credentials, identity: identity, observer: requestObserver)
         // The spec's `servers` entry is "/", so the base URL must always be supplied here.
-        // `PatchNullMiddleware` is inert unless `update(_:id:patch:)` scopes cleared keys around
-        // a call, so every other request through `api` keeps its omitted-field semantics.
+        // `JSONNullMiddleware` is inert unless `sending(_:_:)` scopes a composed body around a
+        // call, so every other request through `api` keeps the typed body exactly.
         self.api = Client(
             serverURL: baseURL,
             configuration: .cubby,
             transport: transport,
-            middlewares: [auth, PatchNullMiddleware()]
+            middlewares: [auth, JSONNullMiddleware()]
         )
     }
 
@@ -201,19 +201,38 @@ public actor CubbyClient {
     /// is decoded into the typed create payload first, so an unknown key or malformed value fails
     /// before any request.
     public func create(_ descriptor: EntityDescriptor, body: [String: JSONValue]) async throws -> String {
-        try await perform { try await descriptor.create(.object(body), client: api) }
+        try await perform {
+            try await sending(.object(body)) { try await descriptor.create(.object(body), client: api) }
+        }
     }
 
-    /// `resources.<entity>.update` from an editor's patch: changed values travel in the typed
-    /// body, cleared keys as `null` through `PatchNullMiddleware` (the generated client can only
-    /// omit an optional, and an omitted field means "leave as is"). An empty patch sends nothing.
+    /// `resources.<entity>.update` from an editor's patch: changed values and the cleared keys
+    /// as `null` (the generated client can only omit an optional, and an omitted field means
+    /// "leave as is"). An empty patch sends nothing.
     public func update(_ descriptor: EntityDescriptor, id: String, patch: EntityPatch) async throws {
         guard !patch.isEmpty else { return }
+        var body = patch.values
+        for key in patch.cleared { body[key] = .null }
         try await perform {
-            try await PatchNullMiddleware.$clearedFields.withValue(patch.cleared) {
+            try await sending(.object(body)) {
                 try await descriptor.update(.object(patch.values), id: id, client: api)
             }
         }
+    }
+
+    /// Runs one generated call whose typed body was decoded from `body`, restoring on the wire
+    /// every `null` the typed body cannot encode (`JSONNullMiddleware`). Any operation the app
+    /// feeds a composed JSON body goes through here.
+    func sending<T>(_ body: JSONValue, _ call: () async throws -> T) async throws -> T {
+        try await JSONNullMiddleware.$source.withValue(body) { try await call() }
+    }
+
+    /// `sending(_:_:)` for a call that takes the decoded typed body itself.
+    func sending<Input: Decodable, T>(
+        _ body: JSONValue, _ call: (Input) async throws -> T
+    ) async throws -> T {
+        let input: Input = try body.decoded()
+        return try await sending(body) { try await call(input) }
     }
 
     /// `resources.<entity>.delete`. Destructive: only `HeroActionRunner` calls it, and only after

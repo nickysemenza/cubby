@@ -5,6 +5,7 @@ import {
   settledCalendarFeedRevision,
   expectCalendarFeedDirtied,
 } from "./e2e-helpers";
+import { retryStaleKeepAlive } from "../../tooling/stale-keep-alive";
 import { expect, test } from "./e2e-test";
 
 const createdSchema = z.object({ item: z.object({ id: z.string() }) });
@@ -337,6 +338,7 @@ test("a revoked session is rejected once its cookie cache is gone", async ({
   baseURL,
 }) => {
   const context = await browser.newContext({ baseURL });
+  retryStaleKeepAlive(context.request);
   const pool = new Pool({ connectionString: process.env.E2E_DATABASE_URL });
   try {
     const login = await context.request.post("/api/auth/sign-in/email", {

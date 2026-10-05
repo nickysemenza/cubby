@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { D1Database, R2Bucket } from "@cloudflare/workers-types";
-import { getPlatformProxy, type Unstable_RawConfig } from "wrangler";
+import { getPlatformProxy } from "wrangler";
 import { parse } from "jsonc-parser";
 import { z } from "zod";
 import type { DevProfile } from "../../../../scripts/lib/dev-profile.ts";
@@ -55,7 +55,7 @@ export async function writeLocalDevConfig(
       producers: [
         { binding: "BACKGROUND_QUEUE", queue: `${name}-background` },
         { binding: "TELEMETRY_QUEUE", queue: `${name}-telemetry` },
-        { binding: "PURCHASE_AGENT_QUEUE", queue: peers.queueName },
+        { binding: "PURCHASE_AGENT_QUEUE", queue: `${name}-purchase` },
       ],
       consumers: [
         {
@@ -70,6 +70,14 @@ export async function writeLocalDevConfig(
           max_batch_size: 100,
           max_batch_timeout: 5,
           max_concurrency: 1,
+          max_retries: 3,
+        },
+        // Offline development refuses the producer handoff (dev/worker.ts),
+        // so only the integrations profile delivers agent events.
+        {
+          queue: `${name}-purchase`,
+          max_batch_size: 10,
+          max_batch_timeout: 0,
           max_retries: 3,
         },
       ],
@@ -104,52 +112,12 @@ export async function createLocalDevPeers(profile: DevProfile) {
   const configRoot = path.join(profile.stateDir, "peers");
   await mkdir(configRoot, { recursive: true });
   const prefix = `cubby-dev-${profile.id}`;
-  const services = {
-    USDA_API: `${prefix}-usda`,
-    PURCHASE_AGENT: `${prefix}-purchase`,
-  };
-  const queueName = `${prefix}-purchase`;
+  const services = { USDA_API: `${prefix}-usda` };
   const common = {
     compatibility_date: "2026-09-19",
     compatibility_flags: ["nodejs_compat"],
     observability: { enabled: false },
   };
-  const purchaseConfig: Unstable_RawConfig = {
-    ...common,
-    name: services.PURCHASE_AGENT,
-    main: path.join(profile.webRoot, "tooling/dev/offline-purchase.ts"),
-    vars: { ...profile.vars, SENTRY_ENVIRONMENT: "test" },
-    queues: { consumers: [{ queue: queueName, max_retries: 3 }] },
-  };
-  if (profile.profile === "integrations") {
-    purchaseConfig.main = path.join(
-      profile.repoRoot,
-      "apps/purchase-agent/src/index.ts",
-    );
-    purchaseConfig.ai = { binding: "AI", remote: true };
-    purchaseConfig.services = [
-      {
-        binding: "CUBBY_PURCHASE_SERVICE",
-        service: `cubby-dev-${profile.id}`,
-        entrypoint: "PurchaseImportService",
-      },
-    ];
-    purchaseConfig.durable_objects = {
-      bindings: [
-        { name: "PURCHASE_IMPORT_RUN", class_name: "PurchaseImportRunAgent" },
-      ],
-    };
-    // Same tags as apps/purchase-agent/wrangler.jsonc, so persisted local
-    // state migrates the way production does.
-    purchaseConfig.migrations = [
-      { tag: "v1", new_sqlite_classes: ["FluePurchaseImportRunAgent"] },
-      {
-        tag: "v2",
-        deleted_classes: ["FluePurchaseImportRunAgent"],
-        new_sqlite_classes: ["PurchaseImportRunAgent"],
-      },
-    ];
-  }
   const configs = [
     {
       ...common,
@@ -165,7 +133,6 @@ export async function createLocalDevPeers(profile: DevProfile) {
       ],
       r2_buckets: [{ binding: "USDA_BUNDLES", bucket_name: `${prefix}-usda` }],
     },
-    purchaseConfig,
   ];
   const auxiliaryWorkers: Array<{ configPath: string; devOnly: true }> = [];
   for (const config of configs) {
@@ -175,7 +142,7 @@ export async function createLocalDevPeers(profile: DevProfile) {
     });
     auxiliaryWorkers.push({ configPath, devOnly: true });
   }
-  return { auxiliaryWorkers, services, queueName };
+  return { auxiliaryWorkers, services };
 }
 
 /** Prepare before Vite starts; proxy and plugin share the same persistence root. */

@@ -73,10 +73,19 @@ describe("purchase import run admission", () => {
     const { eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     const [stored] = await getDb(ctx.db)
-      .select({ coordinatorModel: runTable.coordinatorModel })
+      .select({
+        coordinatorModel: runTable.coordinatorModel,
+        skillRevision: runTable.skillRevision,
+        runtimeRevision: runTable.runtimeRevision,
+      })
       .from(runTable)
       .where(eq(runTable.id, first.id));
-    expect(stored?.coordinatorModel).toBe("gpt-6-sol");
+    // Admission omits both revisions, so the migrated column defaults stamp them.
+    expect(stored).toEqual({
+      coordinatorModel: "gpt-6-sol",
+      skillRevision: "purchase-import@1",
+      runtimeRevision: "pi-durable@1",
+    });
   });
 
   it("refuses browser import for a mail-only Vendor account", async () => {
@@ -591,6 +600,96 @@ describe("purchase import run admission", () => {
         summary: "Coordinator ended without finishing the run",
       }),
     ]);
+  });
+
+  it("keeps a settled run running until the agent has received every wake the server issued", async () => {
+    const party = await createMember();
+    const account = await createVendorAccount(party.id);
+    const run = await startOrResumeRun(ctx.db, {
+      ledgerPartyId: party.id,
+      vendorAccountId: account.id,
+      trigger: "manual",
+    });
+    const commandId = crypto.randomUUID();
+    let answered: string | null = null;
+    let awaitingMac = false;
+    const broker = {
+      enqueue: async () => undefined,
+      // SAFETY: reconcile only asks whether a result exists, not its shape.
+      result: async (id: string) =>
+        id === answered ? ({} as BrowserBridgeResult) : null,
+      cancel: async () => undefined,
+      connected: async () => true,
+      pendingCommands: async () =>
+        awaitingMac
+          ? [{ requestId: crypto.randomUUID(), createdAt: Date.now() }]
+          : [],
+      notifyRunCompleted: async () => undefined,
+      requestAuthentication: async () => undefined,
+    };
+    const namespace = { getByName: () => broker };
+    const { runApproval, runOperation } = await import("~/server/db/schema");
+    const { getDb } = await import("~/server/repo/database-helpers");
+    const [approval] = await getDb(ctx.db)
+      .insert(runApproval)
+      .values({
+        runId: run.id,
+        operationId: "note-rejected",
+        operationKind: "mcp:entity",
+        args: {},
+        argsFingerprint: "args",
+        targetFingerprint: "target",
+        evidenceFingerprint: "evidence",
+        state: "rejected",
+        decidedAt: new Date(),
+        rejectedAt: new Date(),
+      })
+      .returning({ id: runApproval.id });
+    await getDb(ctx.db).insert(runOperation).values({
+      runId: run.id,
+      operationId: "browser-1",
+      kind: "browser_command",
+      inputFingerprint: "browser-1",
+      state: "completed",
+      result: { commandId },
+    });
+    answered = commandId;
+    const settle = (
+      receivedEventIds: string[],
+      failure?: { failureCode: "agent_failed" },
+    ) =>
+      reconcileSettledRun(ctx.db, namespace, {
+        runId: run.id,
+        operationId: `submission-settled:${receivedEventIds.length}`,
+        receivedEventIds: new Set(receivedEventIds),
+        failure,
+      });
+    const kept = { reconciled: false, status: "running" };
+    const dispatch = run.dispatchEventId!;
+    const wake = `approval:${approval!.id}:rejected`;
+    const result = `browser-result:${commandId}`;
+
+    // The current dispatch generation is still queued for the agent.
+    await expect(settle([wake, result])).resolves.toEqual(kept);
+    // A member's decision woke the agent, but the wake has not arrived.
+    await expect(settle([dispatch, result])).resolves.toEqual(kept);
+    // The Mac answered, but its result event has not reached the agent.
+    await expect(settle([dispatch, wake])).resolves.toEqual(kept);
+    // An unanswered submission passes the same fence before failing the run.
+    await expect(
+      settle([wake, result], { failureCode: "agent_failed" }),
+    ).resolves.toEqual(kept);
+    // A command still awaiting the Mac will resume the conversation, so not
+    // even an unanswered submission fails the run.
+    awaitingMac = true;
+    await expect(
+      settle([dispatch, wake, result], { failureCode: "agent_failed" }),
+    ).resolves.toEqual(kept);
+    awaitingMac = false;
+    await expect(settle([dispatch, wake, result])).resolves.toEqual({
+      reconciled: true,
+      status: "needs_review",
+    });
   });
 
   it("expires only runs with no coordinator activity for two hours", async () => {

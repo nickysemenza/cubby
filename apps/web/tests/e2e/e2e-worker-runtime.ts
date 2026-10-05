@@ -10,6 +10,11 @@ import {
   createLocalWorkerdHarness,
   installDatabaseEnvironment,
 } from "../../tooling/local-workerd-harness";
+import {
+  createWorkerdHarness,
+  type ScenarioControls,
+  scenarioControls,
+} from "../../tooling/purchase-agent-workerd-harness";
 import { createE2EDatabase } from "./e2e-database";
 import { createE2EObjectStorage } from "../../tooling/local-object-storage";
 import {
@@ -29,6 +34,8 @@ export interface E2EWorkerRuntime {
   databaseUrl: string;
   objectStorageUrl: string;
   googleProvider?: LocalGoogleProvider;
+  /** The scripted coordinator and gateway, when the Worker hosts the purchase agent. */
+  purchaseAgent?: ScenarioControls;
   browserNamespace(): Promise<PurchaseImportNamespace>;
   storageState: E2EStorageState;
   /** Bindings, Durable Object, queue and R2 explorer of this live harness. */
@@ -81,10 +88,12 @@ export async function createE2EWorkerRuntime({
   authenticated,
   parallelIndex,
   gmailJourney = false,
+  purchaseAgent = false,
 }: {
   authenticated: boolean;
   parallelIndex: number;
   gmailJourney?: boolean;
+  purchaseAgent?: boolean;
 }): Promise<E2EWorkerRuntime> {
   const resources: E2EWorkerResources = {};
   let restoreEnvironment = () => {};
@@ -113,12 +122,21 @@ export async function createE2EWorkerRuntime({
       : undefined;
     resources.googleProvider = googleProvider;
 
-    harness = createLocalWorkerdHarness(
-      database.databaseUrl,
-      objectStorage.url,
-      false,
-      googleProvider?.url,
-    );
+    // The purchase-agent harness runs the Worker's agent and queue consumer
+    // against a scripted model and gateway instead of offline peers.
+    harness = purchaseAgent
+      ? await createWorkerdHarness(database.databaseUrl, undefined, undefined, {
+          objectStorage: {
+            endpoint: objectStorage.url,
+            publicUrl: objectStorage.url,
+          },
+        })
+      : createLocalWorkerdHarness(
+          database.databaseUrl,
+          objectStorage.url,
+          false,
+          googleProvider?.url,
+        );
     resources.harness = harness;
     const { url } = await harness.listen();
     const baseURL = url.origin;
@@ -139,6 +157,7 @@ export async function createE2EWorkerRuntime({
       databaseUrl: database.databaseUrl,
       objectStorageUrl: objectStorage.url,
       googleProvider,
+      purchaseAgent: purchaseAgent ? scenarioControls(harness) : undefined,
       async browserNamespace() {
         if (!harness) throw new Error("Browser harness is closed");
         return (

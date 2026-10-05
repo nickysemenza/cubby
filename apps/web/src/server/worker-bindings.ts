@@ -11,6 +11,7 @@ import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers";
 import type { CalendarFeedDurableObjectRpc } from "./calendar/rpc";
 import type { DatabaseFreshnessRpc } from "./database-freshness/rpc";
 import type { ImageProcessingCompanionRpc } from "./image-processing/contracts";
+import type { PurchaseImportRunAgentRpc } from "./purchase-agent/environment";
 import type { PurchaseImportDurableObjectRpc } from "./purchase-import/rpc";
 
 // Its implementation imports nothing from the app.
@@ -23,6 +24,8 @@ export type DatabaseFreshnessDurableObject = DatabaseFreshnessRpc &
 export type ImageProcessingDurableObject = ImageProcessingCompanionRpc &
   Rpc.DurableObjectBranded;
 export type PurchaseImportDurableObject = PurchaseImportDurableObjectRpc &
+  Rpc.DurableObjectBranded;
+export type PurchaseImportRunAgent = PurchaseImportRunAgentRpc &
   Rpc.DurableObjectBranded;
 
 export interface SearchIndexRepairWorkflowParams {

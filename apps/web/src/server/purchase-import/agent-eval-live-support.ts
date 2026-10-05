@@ -20,7 +20,7 @@ export const evalWebRoot = path.resolve(
 
 const candidate = z.object({
   model: z.enum(["gpt-6-luna", "gpt-6-sol"]),
-  effort: z.enum(["none", "low", "medium", "high"]),
+  effort: z.enum(["none", "low", "medium", "high", "xhigh"]),
 });
 export type EvalCandidate = z.infer<typeof candidate>;
 

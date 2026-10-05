@@ -14,7 +14,8 @@ and `ios-journeys.e2e.ts` are thin loops over that catalog, and
 gives every journey its own records, so destructive journeys never disturb each
 other. Both engines read the same seed through `TESTER_ARMY_IDS_FILE`.
 
-Select journeys with `-- --journey id,id` (omit it to run all). `-- --wrong`
+Select journeys with `-- --journey id,id` (omit it to run all) or one harness
+with `-- --harness standard|coupled`. `-- --wrong`
 (alias `--wrong-name`) corrupts every final database expectation, so a run must
 fail at the read-back. Every passing read-back also asserts that the same query
 does not satisfy a corrupted expectation, and `pnpm test:e2e:agent:selfcheck`
@@ -30,7 +31,8 @@ line and product tag/collection editing; purchase validation; expense split
 (cents conserved, unknown cost refused); attach expenses (move confirmation) and
 products; task board lanes and moving a card; and a Run console journey (live
 progress, resolving a finding). The Run console debug log is not cursor-paged in
-the app (it caps at 2,000 events), so paging is not asserted.
+the app (it caps at 2,000 events), so paging is not asserted. Three coupled
+import journeys follow (see below).
 
 ## Failure modes and acceptance
 
@@ -58,6 +60,16 @@ of the window width and 85% of its height. SwiftUI sheets expose that phantom To
 form content; treating it as an opaque overlay blocks semantic field editing.
 Toolbars with controls or smaller bounds still block covered targets. The iOS
 rename journey exercises this regression through real semantic agent actions.
+
+The patch also keeps text entry on the input that was tapped. The runner binds a
+coordinate-chosen or tapped input by query index; when focusing it opens the
+keyboard or scrolls the form, that index resolves to a neighboring input, and
+XCTest then typed into an unfocused field until the runner watchdog fired (a
+Product's external-ID Source resolved to URL; External id to ISBN). The runner
+now re-queries such an input by its accessibility identifier when that is unique,
+which stays bound to the same input. The runner's focused-input lookup cannot
+recover it: it returns nil on iOS. The external-ID and recipe-line journeys
+exercise it.
 
 ## Configuration and commands
 
@@ -136,8 +148,9 @@ A cold cache still requires compilation; warm-cache performance must be
 measured from the full hosted job, not just the agent test duration.
 
 Dispatch **CI** manually with `tester_army` set to `web`, `ios`, `both`, or `import` and
-`simulator_e2e` disabled. CI also runs the `import` lane weekly on `main`
-(Mondays 09:17 UTC); a scheduled run has empty inputs and skips every other job.
+`simulator_e2e` disabled. CI's `web` lane runs `--harness standard`; `import`
+runs `--harness coupled`, and CI also runs it weekly on `main` (Mondays 09:17
+UTC); a scheduled run has empty inputs and skips every other job.
 These optional jobs do not run on PRs and do not replace the required checks.
 Run each engine three times for the live acceptance sample.
 
@@ -148,18 +161,43 @@ read-write cache; normal runs disable it. Compare the resulting summaries for
 model calls, tokens, timings, replay hits and handoffs. Cache eligibility depends
 on the engine's observed state, so a warm run may still use the model.
 
-## Live import journey
+## Coupled import journeys
 
-`pnpm test:e2e:agent:import` is the one journey where nothing behind the
-browser is scripted. Tester Army opens a synthetic vendor, imports its saved
-itemized order confirmation, and follows the import run. The browser talks to
-the coupled web + purchase-agent harness (local workerd, queue, Durable
-Objects, MCP) instead of the standard E2E runtime. Its two model peers are
-replaced by `tooling/tester-army/live-gateway.ts`, so the pi coordinator and
-the web Worker's extraction and audit call real models. The driver uses the
-same `cubby-testing` gateway and token. The journey passes only when the run
-completes on its own and the committed Purchase carries the confirmation's
-order and amount. The run page must also stream the agent transcript.
+Journeys tagged `coupled` (web only) run on the purchase-agent workerd harness
+instead of the standard E2E runtime: the built `cubby` Worker with its queues,
+Durable Objects, MCP, background queue consumer, and object storage
+(`createE2EObjectStorage`). A run selecting both kinds starts each harness in
+turn and merges their summaries. Nothing behind the browser is scripted except
+the synthetic sources: the harness's two model peers are
+`tooling/tester-army/live-gateway.ts`, so the pi coordinator and the web
+Worker's extraction, audit, and image description call real models through
+the same `cubby-testing` gateway and token. `tooling/scenarios/tester-army-coupled.ts`
+seeds the sources:
+
+- `import-order-mail`: a saved itemized confirmation the member imports from
+  the vendor page.
+- `import-photo-inventory`: two synthetic photos uploaded over the native HTTP
+  API (create run, stage, PUT, finalize). The journey waits for their cloud
+  descriptions, starts grouping, waits for the agent's proposals, and
+  approves them; two Products must result.
+- `import-account-sync`: a browser-synced vendor account with one finished
+  sync and a simulated Mac browser (the queue producer's `/browser-connect`)
+  answering its order-history page and one order by URL. The member starts the
+  next sync from the finished run; the agent walks the history, captures the
+  order, and imports it.
+
+Cloud description fetches the photo back through its public object URL, and
+the external-fetch guard refuses loopback hosts by name, so the harness serves
+local storage at `storage.localtest.me` (public DNS for 127.0.0.1) through a
+Host-rewriting proxy (`tooling/tester-army/public-storage.ts`); the photos are
+JPEG because local storage serves `/cdn-cgi/image/` renditions as the original
+bytes. The seed unpauses image processing, which a fresh database starts paused.
+
+A step can wait for background rows (`ready`) or a live run state
+(`awaitRun`: `awaiting_approval` or `completed`) before acting. A run that
+settles anywhere else fails at once with its last progress and failed
+operations. Final assertions read the imported Purchase, its expense total,
+the imported order candidate, or the committed photo groups.
 
 The agent's peer swaps the coordinator model under test into its
 `/openai/responses` calls (`tooling/responses-model-swap.ts`, shared with the
@@ -167,17 +205,16 @@ live coordinator eval): `gpt-6-luna` at `high` effort by default, overridden by
 `TESTER_ARMY_AGENT_MODEL` and `TESTER_ARMY_AGENT_EFFORT` locally or as Actions
 repository variables. The web peer's calls are forwarded unchanged. The run
 manifest records `agentModel` and `agentEffort`, and the bundle adds
-`gateway-usage.json`: request counts and wire models per gateway route for each
-peer, never content. Those two files are the record of the swap: the run page's
-generation telemetry and AI spend still name and price the agent's pinned
-model. A run costs roughly $0.40–0.50 on `gpt-6-sol` at high effort. Deterministic coverage of the same orchestration stays in
-`purchase-agent-scenarios.integration.test.ts`; this lane checks that real
-models complete it.
+`gateway-usage.json`: request counts, wire models, and failed statuses per
+gateway route for each peer, never content. Those two files are the record of
+the swap: the run page's generation telemetry and AI spend still name and
+price the agent's pinned model. Deterministic coverage of the same
+orchestration stays in `purchase-agent-scenarios.integration.test.ts`; these
+journeys check that real models complete it.
 
 ## Evidence
 
-Bundles live under `artifacts/tester-army/web/<run>/`,
-`artifacts/tester-army/import/<run>/`, or
+Bundles live under `artifacts/tester-army/web/<run>/` or
 `artifacts/sim-tester-army-e2e/<run>/`. They contain `run-manifest.json`,
 `run-results.json`, `agent-summary.json` when the engine produced one, and
 `SHA256SUMS`. Verify transferred evidence from its run directory with

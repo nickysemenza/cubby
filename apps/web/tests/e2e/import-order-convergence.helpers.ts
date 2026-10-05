@@ -309,9 +309,6 @@ export async function createConvergenceHarness(
     ).toBeVisible();
     const reviewResponse = await page.request.get(
       `/api/v1/photoImport/review?runId=${run.runId}`,
-      // The pooled API socket can reset while browser approval runs. Playwright
-      // retries only ECONNRESET here; HTTP failures still reach the assertions.
-      { maxRetries: 1 },
     );
     expect(
       reviewResponse.status(),
