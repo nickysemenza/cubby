@@ -192,21 +192,30 @@ describe("server list grouping", () => {
     await location("Room two", "room");
     await location("Box one", "box");
 
-    const result = await locationList(
-      ctx.db,
-      { itemTypeFilter: ["box", "room"] },
-      [
-        { orderBy: "name", direction: "asc" },
-        { orderBy: "type", direction: "desc" },
-      ],
-      { pageIndex: 0, pageSize: 1 },
-      "type",
-    );
-    expect(result.data[0]?.name).toBe("Room one");
-    expect(groups(result)).toEqual([
+    const grouped = (pageIndex: number, readIntent?: "count") =>
+      locationList(
+        ctx.db,
+        { itemTypeFilter: ["box", "room"] },
+        [
+          { orderBy: "name", direction: "asc" },
+          { orderBy: "type", direction: "desc" },
+        ],
+        { pageIndex, pageSize: 1 },
+        "type",
+        readIntent,
+      );
+    const pages = await Promise.all([0, 1, 2].map((index) => grouped(index)));
+    expect(pages.map((result) => result.data[0]?.name)).toEqual([
+      "Room one",
+      "Room two",
+      "Box one",
+    ]);
+    expect(pages.map((result) => result.count)).toEqual([3, 3, 3]);
+    expect(groups(pages[0]!)).toEqual([
       { key: "room", label: "room", count: 2 },
       { key: "box", label: "box", count: 1 },
     ]);
+    expect(await grouped(0, "count")).toEqual({ data: [], count: 3 });
   });
 
   it("applies Ledger Party secondary sorts before its stable tie breaker", async () => {
