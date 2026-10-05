@@ -60,10 +60,29 @@ export function safeToJsonSchema(
       io,
       unrepresentable: "any",
       override: ({ jsonSchema }) => {
-        // Draft-7 requires a nonempty tuple prefix. Zod emits items: [] for
-        // empty tuples; the rest schema (or false) preserves their contract.
-        if (Array.isArray(jsonSchema.items) && jsonSchema.items.length === 0) {
-          jsonSchema.items = jsonSchema.additionalItems ?? true;
+        // Clients validate tool schemas as 2020-12, where `items` is one
+        // schema; a draft-7 tuple (`items: [...]`) made them reject the whole
+        // tool. Publish a tuple as an array of its member schemas bounded to
+        // its length (Zod's own bounds): valid in both drafts, and the response is still parsed
+        // with the exact Zod tuple.
+        if (Array.isArray(jsonSchema.items)) {
+          const prefix = jsonSchema.items;
+          const rest = jsonSchema.additionalItems;
+          const members =
+            rest === undefined || rest === true || rest === false
+              ? prefix
+              : [...prefix, rest];
+          // `anyOf` takes object schemas; `true`/`false` are `{}`/`{not: {}}`.
+          const asObject = (member: (typeof members)[number]) =>
+            member === true ? {} : member === false ? { not: {} } : member;
+          jsonSchema.items =
+            members.length === 0
+              ? (rest ?? true)
+              : members.length === 1
+                ? members[0]
+                : { anyOf: members.map(asObject) };
+          // Zod already emits the tuple's `minItems`/`maxItems` (optional
+          // members lower `minItems`), so the length bounds stay its own.
           delete jsonSchema.additionalItems;
         }
       },

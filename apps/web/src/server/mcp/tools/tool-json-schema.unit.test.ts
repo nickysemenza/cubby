@@ -37,10 +37,23 @@ function collectBareDateFormats(
 
 type ActionSchemas = { name: string; input: z.ZodType; output: z.ZodType };
 
-const actions: readonly ActionSchemas[] = compiledMcpTools(
-  MCP_TOOL_BINDINGS,
-  MCP_TOOLS,
-).flatMap((tool) =>
+const tools = compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOLS);
+
+/** Paths whose `items` is an array: a tuple in draft-7 form. */
+function collectTupleItems(node: JSONType, path: string, hits: string[]) {
+  if (Array.isArray(node)) {
+    node.forEach((child, index) =>
+      collectTupleItems(child, `${path}[${index}]`, hits),
+    );
+    return;
+  }
+  if (!isJsonObject(node)) return;
+  if (Array.isArray(node.items)) hits.push(`${path}.items`);
+  for (const [key, value] of Object.entries(node))
+    collectTupleItems(value, `${path}.${key}`, hits);
+}
+
+const actions: readonly ActionSchemas[] = tools.flatMap((tool) =>
   [...tool.actions.values()].map((action) => ({
     name: action.name,
     input: action.input,
@@ -89,6 +102,34 @@ describe("MCP tool JSON Schema — toWire parity", () => {
     if (!isJsonObject(createdAt)) throw new Error("Expected an object schema");
     expect(createdAt.type).toBe("string");
     expect(createdAt.format).toBe("date-time");
+  });
+
+  // Clients validate tool schemas as JSON Schema 2020-12, where `items` must
+  // be one schema; a draft-7 tuple (`items: [...]`) made claude.ai reject the
+  // whole `entity_read` tool ("items value must be [object, boolean]").
+  it("advertises no draft-7 tuple `items` arrays in any tool schema", () => {
+    const hits: string[] = [];
+    for (const tool of tools) {
+      collectTupleItems(tool.inputJsonSchema, `${tool.name}.input`, hits);
+      collectTupleItems(
+        advertisedJsonSchema(tool.name, tool.output, "output"),
+        `${tool.name}.output`,
+        hits,
+      );
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it("publishes a tuple as one items schema with Zod's own length bounds", () => {
+    const schema = safeToJsonSchema(
+      z.object({ pair: z.tuple([z.string(), z.number().optional()]) }),
+      "input",
+    );
+    expect(jsonAt(schema, "properties", "pair")).toMatchObject({
+      items: { anyOf: [{ type: "string" }, { type: "number" }] },
+      minItems: 1,
+      maxItems: 2,
+    });
   });
 
   it("advertises no bare `format: date` anywhere in the catalog", () => {
