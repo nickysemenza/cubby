@@ -1,49 +1,45 @@
 {
   "claim_next_import_work": {
     "type": "object",
-    "required": [
-      "operationId"
-    ],
     "properties": {
       "operationId": {
         "type": "string",
         "minLength": 1,
         "maxLength": 200
       }
-    }
+    },
+    "required": [
+      "operationId"
+    ]
   },
   "extract_receipt_evidence": {
     "type": "object",
-    "required": [
-      "operationId"
-    ],
     "properties": {
       "operationId": {
         "type": "string",
         "minLength": 1,
         "maxLength": 200
       }
-    }
+    },
+    "required": [
+      "operationId"
+    ]
   },
   "extract_run_evidence": {
     "type": "object",
-    "required": [
-      "operationId"
-    ],
     "properties": {
       "operationId": {
         "type": "string",
         "minLength": 1,
         "maxLength": 200
       }
-    }
+    },
+    "required": [
+      "operationId"
+    ]
   },
   "issue_browser_command": {
     "type": "object",
-    "required": [
-      "operationId",
-      "command"
-    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -52,57 +48,46 @@
       },
       "command": {
         "type": "object",
-        "required": [
-          "kind"
-        ],
         "properties": {
           "kind": {
-            "anyOf": [
-              {
-                "type": "string",
-                "const": "navigate_orders"
-              },
-              {
-                "type": "string",
-                "const": "capture_order"
-              },
-              {
-                "type": "string",
-                "const": "capture_pdf"
-              },
-              {
-                "type": "string",
-                "const": "capture_screenshot"
-              }
+            "type": "string",
+            "enum": [
+              "navigate_orders",
+              "capture_order",
+              "capture_pdf",
+              "capture_screenshot"
             ]
           },
           "target": {
             "type": "string",
             "maxLength": 2048
           }
-        }
+        },
+        "required": [
+          "kind"
+        ]
       }
-    }
+    },
+    "required": [
+      "operationId",
+      "command"
+    ]
   },
   "read_browser_command_result": {
     "type": "object",
-    "required": [
-      "operationId"
-    ],
     "properties": {
       "operationId": {
         "type": "string",
         "minLength": 1,
         "maxLength": 200
       }
-    }
+    },
+    "required": [
+      "operationId"
+    ]
   },
   "import_browser_order_evidence": {
     "type": "object",
-    "required": [
-      "operationId",
-      "commandId"
-    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -111,100 +96,45 @@
       },
       "commandId": {
         "type": "string",
-        "format": "uuid"
+        "format": "uuid",
+        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
       },
       "defaultTrade": {
-        "anyOf": [
-          {
-            "type": "string",
-            "const": "planning"
-          },
-          {
-            "type": "string",
-            "const": "demolition"
-          },
-          {
-            "type": "string",
-            "const": "building"
-          },
-          {
-            "type": "string",
-            "const": "drywall"
-          },
-          {
-            "type": "string",
-            "const": "electrical"
-          },
-          {
-            "type": "string",
-            "const": "plumbing"
-          },
-          {
-            "type": "string",
-            "const": "mechanical"
-          },
-          {
-            "type": "string",
-            "const": "cabinetry"
-          },
-          {
-            "type": "string",
-            "const": "countertop"
-          },
-          {
-            "type": "string",
-            "const": "flooring"
-          },
-          {
-            "type": "string",
-            "const": "millwork"
-          },
-          {
-            "type": "string",
-            "const": "finishes"
-          },
-          {
-            "type": "string",
-            "const": "appliances"
-          },
-          {
-            "type": "string",
-            "const": "landscaping"
-          },
-          {
-            "type": "string",
-            "const": "logistics"
-          },
-          {
-            "type": "string",
-            "const": "metalworking"
-          },
-          {
-            "type": "string",
-            "const": "crafts"
-          },
-          {
-            "type": "string",
-            "const": "auto"
-          },
-          {
-            "type": "string",
-            "const": "other"
-          }
+        "type": "string",
+        "enum": [
+          "planning",
+          "demolition",
+          "building",
+          "drywall",
+          "electrical",
+          "plumbing",
+          "mechanical",
+          "cabinetry",
+          "countertop",
+          "flooring",
+          "millwork",
+          "finishes",
+          "appliances",
+          "landscaping",
+          "logistics",
+          "metalworking",
+          "crafts",
+          "auto",
+          "other"
         ]
       },
       "defaultProjectId": {
         "type": "string",
         "minLength": 1
       }
-    }
+    },
+    "required": [
+      "operationId",
+      "commandId"
+    ]
   },
   "report_agent_progress": {
     "type": "object",
-    "required": [
-      "operationId",
-      "phase"
-    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -212,39 +142,20 @@
         "maxLength": 200
       },
       "phase": {
-        "anyOf": [
-          {
-            "type": "string",
-            "const": "preparing"
-          },
-          {
-            "type": "string",
-            "const": "investigating"
-          },
-          {
-            "type": "string",
-            "const": "awaiting_browser"
-          },
-          {
-            "type": "string",
-            "const": "awaiting_approval"
-          },
-          {
-            "type": "string",
-            "const": "committing"
-          },
-          {
-            "type": "string",
-            "const": "review"
-          },
-          {
-            "type": "string",
-            "const": "complete"
-          }
+        "type": "string",
+        "enum": [
+          "preparing",
+          "investigating",
+          "awaiting_browser",
+          "awaiting_approval",
+          "committing",
+          "review",
+          "complete"
         ]
       },
       "currentItem": {
         "type": "string",
+        "minLength": 1,
         "maxLength": 500
       },
       "awaitingApproval": {
@@ -252,16 +163,17 @@
       },
       "detail": {
         "type": "string",
+        "minLength": 1,
         "maxLength": 1000
       }
-    }
+    },
+    "required": [
+      "operationId",
+      "phase"
+    ]
   },
   "save_navigation_hints": {
     "type": "object",
-    "required": [
-      "operationId",
-      "hints"
-    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -269,35 +181,35 @@
         "maxLength": 200
       },
       "hints": {
+        "minItems": 1,
+        "maxItems": 25,
         "type": "array",
         "items": {
           "type": "object",
-          "required": [
-            "url"
-          ],
           "properties": {
             "url": {
               "type": "string",
-              "format": "uri",
-              "maxLength": 2048
+              "maxLength": 2048,
+              "format": "uri"
             },
             "label": {
               "type": "string",
               "maxLength": 500
             }
-          }
-        },
-        "minItems": 1,
-        "maxItems": 25
+          },
+          "required": [
+            "url"
+          ]
+        }
       }
-    }
+    },
+    "required": [
+      "operationId",
+      "hints"
+    ]
   },
   "mark_history_expired": {
     "type": "object",
-    "required": [
-      "operationId",
-      "earliestAvailableOrderAt"
-    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -306,29 +218,30 @@
       },
       "earliestAvailableOrderAt": {
         "type": "string",
-        "format": "date-time"
+        "format": "date-time",
+        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
       }
-    }
+    },
+    "required": [
+      "operationId",
+      "earliestAvailableOrderAt"
+    ]
   },
   "finish_import_run": {
     "type": "object",
-    "required": [
-      "operationId"
-    ],
     "properties": {
       "operationId": {
         "type": "string",
         "minLength": 1,
         "maxLength": 200
       }
-    }
+    },
+    "required": [
+      "operationId"
+    ]
   },
   "stop_import_run_for_review": {
     "type": "object",
-    "required": [
-      "operationId",
-      "reason"
-    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -336,23 +249,12 @@
         "maxLength": 200
       },
       "reason": {
-        "anyOf": [
-          {
-            "type": "string",
-            "const": "navigation_ambiguity"
-          },
-          {
-            "type": "string",
-            "const": "unreadable_evidence"
-          },
-          {
-            "type": "string",
-            "const": "provider_failure"
-          },
-          {
-            "type": "string",
-            "const": "other"
-          }
+        "type": "string",
+        "enum": [
+          "navigation_ambiguity",
+          "unreadable_evidence",
+          "provider_failure",
+          "other"
         ]
       },
       "detail": {
@@ -360,15 +262,14 @@
         "minLength": 1,
         "maxLength": 1000
       }
-    }
+    },
+    "required": [
+      "operationId",
+      "reason"
+    ]
   },
   "defer_order_for_review": {
     "type": "object",
-    "required": [
-      "operationId",
-      "orderId",
-      "detail"
-    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -385,16 +286,15 @@
         "minLength": 1,
         "maxLength": 1000
       }
-    }
+    },
+    "required": [
+      "operationId",
+      "orderId",
+      "detail"
+    ]
   },
   "settle_charge_hunt": {
     "type": "object",
-    "required": [
-      "operationId",
-      "huntId",
-      "outcome",
-      "detail"
-    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -403,18 +303,14 @@
       },
       "huntId": {
         "type": "string",
-        "format": "uuid"
+        "format": "uuid",
+        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
       },
       "outcome": {
-        "anyOf": [
-          {
-            "type": "string",
-            "const": "not_found"
-          },
-          {
-            "type": "string",
-            "const": "needs_review"
-          }
+        "type": "string",
+        "enum": [
+          "not_found",
+          "needs_review"
         ]
       },
       "detail": {
@@ -422,6 +318,12 @@
         "minLength": 1,
         "maxLength": 1000
       }
-    }
+    },
+    "required": [
+      "operationId",
+      "huntId",
+      "outcome",
+      "detail"
+    ]
   }
 }

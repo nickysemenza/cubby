@@ -162,7 +162,8 @@ loads the consumer when a `cubby-purchase-agent` batch arrives
 (`apps/web/scripts/check-server-closure.ts` budgets both paths).
 
 The agent supplies Cubby's typed tools (`server/purchase-agent/tools.ts`,
-replay-safe, each effect memoized per operation id), mounts the purpose's
+replay-safe, each effect memoized per operation id; their parameters are the
+host contracts narrowed in `purchaseAgentToolInputs`), mounts the purpose's
 Cubby MCP tools as `mcp__cubby__<tool>` from the same compiled catalog
 the MCP server lists to it (`server/mcp/agent-tool-catalog.ts`, so the first
 dispatch lists nothing), and adds the purpose's skill plus product enrichment

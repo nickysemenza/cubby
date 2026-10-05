@@ -86,6 +86,10 @@ existing block. Extend the generic path when it almost fits. See
   the stored rows of paused Runs replay only if each site's key order, the
   `(runId, operationId)` key, and the browser command id stay unchanged.
 - Cross-Worker RPC: one Zod contract per boundary, `z.infer` on both sides.
+- Purchase-agent typed tools: each tool's parameters are the JSON Schema of
+  its entry in `purchaseAgentToolInputs` (`@cubby/schemas/purchase-agent-services`),
+  a projection of the host service contract with explicit narrowing; never
+  restate a tool input in TypeBox.
 - GTIN and barcodes: recipebridge `scan_code_gtin14` and `@cubby/shared/upc`.
 
 ## Web UI
