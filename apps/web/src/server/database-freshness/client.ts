@@ -11,7 +11,9 @@ import type { DatabaseFreshness } from "./state";
 
 const log = createLogger("database-freshness");
 
-const DATABASE_FRESHNESS_RPC_TIMEOUT_MS = 1000;
+// The first RPC after a deploy cold-starts the Durable Object, measured at up
+// to ~2.5s; a tighter bound drops write notifications and leaves cached reads stale.
+const DATABASE_FRESHNESS_RPC_TIMEOUT_MS = 5000;
 // Only the authenticated workflow reads this internal cache. Keep the TTL short:
 // DO refreshes can publish in another data center without an edge-wide purge.
 const PROBLEM_COUNTS_EDGE_TTL_SECONDS = 10;
@@ -119,7 +121,7 @@ export async function readProblemCountsFromDurableObject(
   if (!target) return null;
   try {
     // A cold snapshot runs the detector pass, so it must not inherit the
-    // one-second latency bound used by the tiny freshness RPCs.
+    // latency bound used by the tiny freshness RPCs.
     const counts = problemsCountSchema.parse(await target.getProblemCounts());
     if (edge) {
       const write = edge.cache

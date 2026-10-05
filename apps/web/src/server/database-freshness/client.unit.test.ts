@@ -26,7 +26,7 @@ describe("freshness RPC failure policy", () => {
       recordDatabaseWrite("test.mutation", port),
     ).resolves.toBeUndefined();
   });
-  it("bounds an unresponsive RPC to one second", async () => {
+  it("bounds an unresponsive RPC to five seconds", async () => {
     vi.useFakeTimers();
     const port = {
       readFreshness: () =>
@@ -34,7 +34,7 @@ describe("freshness RPC failure policy", () => {
       recordWrite: async () => databaseFreshness(0),
     };
     const read = readDatabaseFreshness(port);
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(5000);
     expect(await read).toBeNull();
   });
 
