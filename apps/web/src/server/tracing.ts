@@ -188,15 +188,24 @@ export const getRequestId = (
   headers?: Pick<Headers, "get">,
 ): string | undefined => headers?.get("cf-ray") ?? undefined;
 
-/** Annotate a native active span when the caller has no span reference. */
+/** Annotate the native active span when the caller has no span reference. */
+export const annotateActiveSpan = (
+  attributes: Record<string, SpanAttr>,
+): AppSpan | undefined => {
+  const active = IS_CF ? cfTracing?.getActiveSpan?.() : undefined;
+  if (!active) return undefined;
+  const span = wrapCfSpan(active);
+  span.setAttributes(attributes);
+  return span;
+};
+
+/** {@link annotateActiveSpan}, additionally marking the span as failed. */
 export const annotateActiveSpanError = (
   attributes: Record<string, SpanAttr>,
   failure?: { message: string; exception?: unknown },
 ): void => {
-  const active = IS_CF ? cfTracing?.getActiveSpan?.() : undefined;
-  if (!active) return;
-  const span = wrapCfSpan(active);
-  span.setAttributes(attributes);
+  const span = annotateActiveSpan(attributes);
+  if (!span) return;
   if (failure) {
     span.setError();
     span.recordException(failure.exception);
