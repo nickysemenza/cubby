@@ -75,12 +75,14 @@ async function recreatedProbeSurvives(
       const oid = await databaseOid(databaseUrl, name);
       return oid !== undefined && oid !== oidBefore ? oid : undefined;
     },
-    { label: `IntegreSQL recreating ${name}`, timeoutMs: 8_000 },
+    // Recreation is asynchronous and queues behind every other release in a
+    // busy CI shard, so it can take far longer than one checkout.
+    { label: `IntegreSQL recreating ${name}`, timeoutMs: 45_000 },
   );
   return hasProbe(databaseUrl);
 }
 
-describe("disposable database lease", () => {
+describe("disposable database lease", { timeout: 60_000 }, () => {
   const ctx = withTestDb();
 
   it("recreates a released database from the template, once", async () => {

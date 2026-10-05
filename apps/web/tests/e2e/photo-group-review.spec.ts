@@ -9,10 +9,7 @@ import {
   seedPhotoReviewLabelText,
 } from "./fixtures-photos";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
-import { expect, test } from "./e2e-test";
-
-const recording = process.env.CUBBY_PHOTO_REVIEW_VIDEO === "1";
-test.use({ video: recording ? "on" : "off" });
+import { expect, recordingVideo, test } from "./e2e-test";
 
 test("approves two selected photo groups with one reviewed batch action", async ({
   page,
@@ -78,7 +75,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(
     page.getByRole("button", { name: "Start grouping" }),
   ).toBeVisible();
-  if (recording) await page.waitForTimeout(1_500);
+  if (recordingVideo) await page.waitForTimeout(1_500);
   const proposed = await page.request.post("/api/v1/photoImport/saveGroups", {
     data: { runId: seed.runId, groups: seed.groups },
     // API writes require a same-origin request.
@@ -128,7 +125,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
       .getByRole("navigation", { name: "Photo item groups" })
       .getByRole("button", { name: new RegExp(g2Name) }),
   ).toBeVisible();
-  if (recording) await page.waitForTimeout(1_500);
+  if (recordingVideo) await page.waitForTimeout(1_500);
 
   await g1Card
     .getByRole("combobox", { name: "category" })
@@ -145,7 +142,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
       )?.product.create.categoryId;
     })
     .toBe(seed.category.id);
-  if (recording) await page.waitForTimeout(1_500);
+  if (recordingVideo) await page.waitForTimeout(1_500);
 
   // The Photos table lists every seeded image.
   const photosCard = page.getByRole("region", { name: "Run photos" });
@@ -166,7 +163,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
       .getByRole("navigation", { name: "Photo item groups" })
       .getByText("Approved", { exact: true }),
   ).toBeVisible();
-  if (recording) await page.waitForTimeout(1_500);
+  if (recordingVideo) await page.waitForTimeout(1_500);
 
   // Discard G2: nothing is left pending and the run completes.
   await page
@@ -210,7 +207,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
       (target: { targetType: string }) => target.targetType === "image",
     ),
   ).toBe(true);
-  if (recording) await page.waitForTimeout(1_500);
+  if (recordingVideo) await page.waitForTimeout(1_500);
 });
 
 test("suggests an existing variant and previews every merge decision for a created photo product", async ({
