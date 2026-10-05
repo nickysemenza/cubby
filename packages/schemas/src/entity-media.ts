@@ -6,7 +6,8 @@ import { imageUrlSummary } from "./image-summary";
 /**
  * Keep every local display-image request bounded by the same chunk size the
  * browser uses.  Entity refs are public shortcodes, so this applies at the
- * transport boundary as well as to normal UI callers.
+ * transport boundary as well as to normal UI callers. Batched id queries pair
+ * it with es-toolkit's `chunk`; sort input first for stable cache keys.
  */
 export const ID_CHUNK_SIZE = 50;
 

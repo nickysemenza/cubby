@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useNavigate } from "@tanstack/react-router";
+import pluralize from "pluralize";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -10,7 +11,6 @@ import {
   generatedBrowserCrudEntities,
   type GeneratedBrowserCrudEntity,
 } from "~/entity/generated/entity-routes.gen";
-import { pluralWord } from "~/lib/pluralize";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 
 import { defineEntityAction } from "./entity-action-definition";
@@ -31,7 +31,7 @@ export type DeleteEntityActionCommands = Pick<
 function deleteDescription(label: string, count = 1): string {
   const noun = label.toLowerCase();
   const subject =
-    count === 1 ? `this ${noun}` : `${count} ${pluralWord(noun, count)}`;
+    count === 1 ? `this ${noun}` : `${count} ${pluralize(noun, count)}`;
   return `This will permanently remove ${subject} from your workspace. This action cannot be undone.`;
 }
 

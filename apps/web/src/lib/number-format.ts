@@ -1,7 +1,5 @@
 import { wasmFormat } from "~/lib/wasm";
 
-export { roundTo } from "~/lib/round-to";
-
 // Pure number formatters, kept free of UI dependencies so chart theme modules
 // can import them. `lib/utils` re-exports everything here.
 

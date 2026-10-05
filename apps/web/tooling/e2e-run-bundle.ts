@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { release } from "node:os";
 import path from "node:path";
 import {
+  gitRevision,
   readWebBuildProvenance,
   webBuildSourceFingerprint,
   type WebBuildProvenance,
@@ -50,18 +50,10 @@ function sha256(data: Buffer | string): string {
   return createHash("sha256").update(data).digest("hex");
 }
 
-function git(repoRoot: string, args: string[]): string {
-  return execFileSync("git", args, {
-    cwd: repoRoot,
-    encoding: "utf8",
-  }).trim();
-}
-
 export function captureE2ERunIdentity(repoRoot: string): E2ERunIdentity {
   return {
     source: {
-      commit: git(repoRoot, ["rev-parse", "HEAD"]),
-      dirty: git(repoRoot, ["status", "--porcelain"]).length > 0,
+      ...gitRevision(repoRoot),
       fingerprint: webBuildSourceFingerprint(repoRoot),
     },
     build: readWebBuildProvenance(repoRoot),
@@ -69,8 +61,6 @@ export function captureE2ERunIdentity(repoRoot: string): E2ERunIdentity {
 }
 
 function runProvenance(input: E2ERunBundleInput) {
-  const commit = git(input.repoRoot, ["rev-parse", "HEAD"]);
-  const dirty = git(input.repoRoot, ["status", "--porcelain"]).length > 0;
   const ended = input.started
     ? captureE2ERunIdentity(input.repoRoot)
     : undefined;
@@ -83,7 +73,7 @@ function runProvenance(input: E2ERunBundleInput) {
       input.started.build.fingerprint !== ended.build.fingerprint ||
       input.started.build.sourceFresh !== ended.build.sourceFresh),
   );
-  const source = input.started?.source ?? { commit, dirty };
+  const source = input.started?.source ?? gitRevision(input.repoRoot);
   const testedBuild = input.started?.build ?? input.build ?? null;
   const build =
     changedDuringRun && testedBuild
