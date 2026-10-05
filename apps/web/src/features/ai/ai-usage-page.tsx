@@ -23,6 +23,7 @@ import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/ui/data-table/table-features";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/useHydrated";
 import { Grid, Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
@@ -103,18 +104,6 @@ function usageTotals(rows: AiUsageSummaryRow[]): UsageTotals {
       durationMs: 0,
     },
   );
-}
-
-/** Distinct values of one summary dimension, plus the active choice so a
- * selection outside the summary window stays visible in its select. */
-function dimensionOptions(
-  rows: AiUsageSummaryRow[] | undefined,
-  key: "provider" | "model" | "feature",
-  selected: string | undefined,
-): string[] {
-  const values = new Set(rows?.map((row) => row[key]));
-  if (selected) values.add(selected);
-  return [...values].sort((a, b) => a.localeCompare(b));
 }
 
 function UsageMetric({
@@ -603,6 +592,7 @@ export function AiUsagePage() {
     [filters, debouncedQuery],
   );
   const filtered = Object.values(recentFilters).some(Boolean);
+  const filterOptionsQuery = useQuery(ai.usageFilterOptions.queryOptions());
   const summaryQuery = useQuery(ai.usageSummary.queryOptions({ days }));
   // Filters travel to the server so they apply before the row limit; a local
   // filter over the newest rows would hide older matches.
@@ -670,21 +660,21 @@ export function AiUsagePage() {
       <DimensionSelect
         label="Provider"
         allLabel="All providers"
-        options={dimensionOptions(summaryRows, "provider", filters.provider)}
+        options={filterOptionsQuery.data?.provider ?? []}
         value={filters.provider}
         onChange={(value) => setFilter("provider", value)}
       />
       <DimensionSelect
         label="Model"
         allLabel="All models"
-        options={dimensionOptions(summaryRows, "model", filters.model)}
+        options={filterOptionsQuery.data?.model ?? []}
         value={filters.model}
         onChange={(value) => setFilter("model", value)}
       />
       <DimensionSelect
         label="Feature"
         allLabel="All features"
-        options={dimensionOptions(summaryRows, "feature", filters.feature)}
+        options={filterOptionsQuery.data?.feature ?? []}
         value={filters.feature}
         onChange={(value) => setFilter("feature", value)}
       />
@@ -772,6 +762,14 @@ export function AiUsagePage() {
       </UsageSection>
 
       <UsageSection title="Recent calls">
+        {filterOptionsQuery.error ? (
+          <ErrorDisplay
+            error={filterOptionsQuery.error}
+            onRetry={async () => {
+              await filterOptionsQuery.refetch();
+            }}
+          />
+        ) : null}
         <RecentTable
           rows={recentQuery.error ? undefined : recentQuery.data}
           isLoading={recentQuery.isLoading}

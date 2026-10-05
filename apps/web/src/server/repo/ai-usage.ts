@@ -33,6 +33,27 @@ function recentFilterConditions(filters: AiUsageRecentFilters = {}) {
   ];
 }
 
+/** Full-history filter choices, independent of summary windows and row limits. */
+export async function listAiUsageFilterOptions(db: Database) {
+  const rows = await getDb(db)
+    .selectDistinct({
+      provider: aiUsage.provider,
+      model: aiUsage.model,
+      feature: aiUsage.feature,
+    })
+    .from(aiUsage)
+    .where(notDeleted(aiUsage));
+  const values = (key: keyof (typeof rows)[number]) =>
+    [...new Set(rows.map((row) => row[key]))].sort((a, b) =>
+      a.localeCompare(b),
+    );
+  return {
+    provider: values("provider"),
+    model: values("model"),
+    feature: values("feature"),
+  };
+}
+
 /** The newest calls matching `filters`; filters apply before `limit`. */
 export async function listRecentAiUsage(
   db: Database,

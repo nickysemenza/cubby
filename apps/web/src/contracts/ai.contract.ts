@@ -3,6 +3,7 @@ import {
   aiCacheMetadataSchema,
   aiEnrichmentProposalEventSchema,
   aiLocationIdInput,
+  aiUsageFilterOptionsOut,
   aiUsageRecentInput,
   aiUsageRecentOut,
   aiUsageSummaryInput,
@@ -136,6 +137,11 @@ export const aiContract = defineContract("ai", {
     output: suggestExternalIdKindOut,
     http: false,
     cache: { profile: "stable" },
+  }),
+  usageFilterOptions: query({
+    input: zod.undefined(),
+    output: aiUsageFilterOptionsOut,
+    cache: { tags: [["ai", "usage"]] },
   }),
   usageRecent: query({
     input: aiUsageRecentInput,
