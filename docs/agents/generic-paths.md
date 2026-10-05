@@ -18,7 +18,9 @@ existing block. Extend the generic path when it almost fits. See
   report poll (`ReportBatchModel.status`/`revision`), never a second Run poll. Specialist
   reviews are slots or owned sections of it: a photo Run's review is the `photo-batch` slot
   (`RunPhotoReviewSections` with `.photoReviewConfirmations` on the console's list), led
-  ahead of the reports; never link a Run slot back to the Run screen.
+  ahead of the reports. Successful photo commands advance `RunReviewSession.actionRevision`
+  to refresh the report batch even while stopped; ordinary session refreshes never advance it
+  or feed back into polling. Never link a Run slot back to the Run screen.
 - Edit forms: generated intents plus the typed `editHooks` map in
   `apps/web/src/entity/editing/`.
 - Saved views: `presentation.list.views` on the declaration.

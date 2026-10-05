@@ -115,6 +115,16 @@ struct RunConsoleView: View {
             guard (revision ?? 0) > 1, session.snapshot?.purpose == .photoInventory else { return }
             Task { await refresh() }
         }
+        // Ordinary session refreshes leave actionRevision unchanged, so the batch's photo
+        // refresh cannot feed back into another batch refresh. A stopped Run still redraws
+        // after approval; an action that makes it live again also resumes polling.
+        .task(id: session.actionRevision) {
+            guard session.actionRevision > 0, session.snapshot?.purpose == .photoInventory,
+                let batch
+            else { return }
+            await batch.refresh()
+            if batch.live { batch.restartPolling() }
+        }
         // A report that read another status (or an action elsewhere) re-reads the batch.
         .task(id: appModel.entityMutationRevision) {
             guard appModel.entityMutationRevision > 0, appModel.entityMutationKeys.contains(.run)

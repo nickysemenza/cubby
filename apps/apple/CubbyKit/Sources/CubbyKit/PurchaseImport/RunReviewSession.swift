@@ -32,6 +32,8 @@ public final class RunReviewSession {
     public private(set) var error: String?
     public private(set) var actionError: String?
     public private(set) var busy = false
+    /// Successful commands invalidate reports even when a stopped Run has no active poll.
+    public private(set) var actionRevision = 0
 
     @ObservationIgnored private let reportDiagnostic: @MainActor (any Error, String) -> Void
 
@@ -109,6 +111,7 @@ public final class RunReviewSession {
                     .init(reviewedFingerprint: fingerprint, id: id, action: apply ? .apply : .dismiss))
             }
             await refresh(runID: runID, client: client)
+            actionRevision += 1
             return true
         } catch {
             reportDiagnostic(error, "Update import run")
