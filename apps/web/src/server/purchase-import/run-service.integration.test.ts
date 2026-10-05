@@ -73,10 +73,19 @@ describe("purchase import run admission", () => {
     const { eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/repo/database-helpers");
     const [stored] = await getDb(ctx.db)
-      .select({ coordinatorModel: runTable.coordinatorModel })
+      .select({
+        coordinatorModel: runTable.coordinatorModel,
+        skillRevision: runTable.skillRevision,
+        runtimeRevision: runTable.runtimeRevision,
+      })
       .from(runTable)
       .where(eq(runTable.id, first.id));
-    expect(stored?.coordinatorModel).toBe("gpt-6-sol");
+    // Admission omits both revisions, so the migrated column defaults stamp them.
+    expect(stored).toEqual({
+      coordinatorModel: "gpt-6-sol",
+      skillRevision: "purchase-import@1",
+      runtimeRevision: "pi-durable@1",
+    });
   });
 
   it("refuses browser import for a mail-only Vendor account", async () => {

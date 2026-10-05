@@ -410,8 +410,6 @@ export async function startOrResumeRun(
      */
     chargeHuntIds?: readonly string[];
     predecessorRunId?: string;
-    skillRevision?: string;
-    runtimeRevision?: string;
   },
 ) {
   const trigger = runTrigger.parse(input.trigger);
@@ -533,8 +531,6 @@ export async function startOrResumeRun(
           trigger,
           input: backfill ?? chargeHunts,
           coordinatorModel: coordinatorModelFor("account_sync"),
-          skillRevision: input.skillRevision ?? "purchase-import@1",
-          runtimeRevision: input.runtimeRevision ?? "pi-durable@1",
           agentSessionId: importRunAgentIdentity(id, "account_sync"),
           dispatchEventId: crypto.randomUUID(),
         };
