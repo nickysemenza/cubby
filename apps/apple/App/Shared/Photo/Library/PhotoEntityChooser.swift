@@ -222,7 +222,7 @@ struct PhotoEntityChooser: View {
         List {
             if isRanking {
                 Section {
-                    ProgressView("Ranking likely matches…")
+                    LoadingIndicator(label: "Ranking likely matches")
                         .font(.caption)
                 }
             }

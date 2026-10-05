@@ -1,0 +1,20 @@
+context platform=ios timeout=240000
+
+# A rejected save keeps the editor and its draft, shows the server's raw message, and offers Retry.
+# The seeded Spice Drawer sits under the Pantry Shelf, so making it the shelf's parent is a cycle.
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 240000
+open "cubby://entity/${SHELF_ID}"
+wait "role=Button label=Edit" 90000
+click "role=Button label=Edit"
+wait text "Edit Location" 90000
+click "role=Button label=\"Parent, None\""
+wait text "Synthetic Spice Drawer" 90000
+click "label=\"Synthetic Spice Drawer\""
+wait "role=Button label=\"Parent, Synthetic Spice Drawer\"" 90000
+click "role=Button label=Save"
+wait text "Couldn't save" 90000
+wait text "PRECONDITION_FAILED: Cannot set parent: would create a circular reference" 90000
+wait text "Edit Location" 90000
+wait "role=Button label=\"Parent, Synthetic Spice Drawer\"" 90000
+wait "role=Button label=Retry" 90000

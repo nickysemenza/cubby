@@ -483,29 +483,18 @@ struct EntityListView: View {
     @ViewBuilder
     private func banner(_ model: GenericEntityListModel) -> some View {
         let enrichment = visibleEnrichment(model)
-        if !enrichment.errors.isEmpty || enrichment.summaryError != nil {
-            VStack(alignment: .leading) {
-                ForEach(enrichment.errors, id: \.self) { Text($0).foregroundStyle(.secondary) }
-                if let error = enrichment.summaryError { Text(error).foregroundStyle(.secondary) }
-                Button("Retry details") { enrichment.retry() }
-            }
+        let detailErrors = enrichment.errors + [enrichment.summaryError].compactMap { $0 }
+        if !detailErrors.isEmpty {
+            InlineLoadFailure(message: detailErrors.joined(separator: "\n")) { enrichment.retry() }
         }
         if enrichment.isLoadingSummary && !descriptor.presentation.listTotals.isEmpty {
-            ProgressView("Loading totals")
+            LoadingIndicator(label: "Loading totals")
         }
         if let error = model.refreshError {
-            HStack {
-                Text(error).foregroundStyle(.secondary)
-                Button("Retry refresh") { Task { await model.refresh() } }
-            }
+            InlineLoadFailure(message: error) { await model.refresh() }
         }
-        if let error = model.searchModel?.refreshError {
-            HStack {
-                Text(error).foregroundStyle(.secondary)
-                Button("Retry search refresh") {
-                    Task { await model.searchModel?.refresh() }
-                }
-            }
+        if let search = model.searchModel, let error = search.refreshError {
+            InlineLoadFailure(message: error) { await search.refresh() }
         }
     }
 
