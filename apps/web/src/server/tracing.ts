@@ -1,6 +1,7 @@
 /** Cloudflare-native custom spans; non-Worker callers run without tracing. */
 import {
   type CfTracing,
+  enterInvocationSpan,
   enterManualSpan,
   enterSpan,
   enterSynchronousManualSpan,
@@ -86,6 +87,17 @@ export const withTrace = async <T>(
   if (IS_CF) {
     return enterSpan(await getCfTracing(), name, fn, { attributes });
   }
+  return fn(NOOP_TRACE_SPAN);
+};
+
+/** Load tracing at ingress, annotating the invocation before its timing child. */
+export const withInvocationTrace = async <T>(
+  name: string,
+  fn: (span: AppSpan) => Promise<T>,
+  attributes?: Record<string, SpanAttr>,
+): Promise<T> => {
+  if (IS_CF)
+    return enterInvocationSpan(await getCfTracing(), name, fn, { attributes });
   return fn(NOOP_TRACE_SPAN);
 };
 

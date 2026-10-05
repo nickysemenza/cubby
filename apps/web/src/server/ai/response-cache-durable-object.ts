@@ -1,6 +1,8 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import { DurableObject } from "cloudflare:workers";
 
+import { withInvocationTrace } from "~/server/tracing";
+
 const LEASE_MS = 90_000;
 const DAY_MS = 86_400_000;
 
@@ -101,15 +103,21 @@ export class AiResponseCacheDurableObject extends DurableObject<Env> {
   }
 
   async alarm(): Promise<void> {
-    const now = Date.now();
-    this.ctx.storage.sql.exec(
-      "DELETE FROM responses WHERE key IN (SELECT key FROM responses WHERE (expires_at IS NOT NULL AND expires_at <= ?) OR (claim_token IS NOT NULL AND lease_expires_at <= ?) LIMIT 500)",
-      now,
-      now,
+    return withInvocationTrace(
+      "ai.response-cache.alarm",
+      async () => {
+        const now = Date.now();
+        this.ctx.storage.sql.exec(
+          "DELETE FROM responses WHERE key IN (SELECT key FROM responses WHERE (expires_at IS NOT NULL AND expires_at <= ?) OR (claim_token IS NOT NULL AND lease_expires_at <= ?) LIMIT 500)",
+          now,
+          now,
+        );
+        const remaining = this.ctx.storage.sql
+          .exec<{ count: number }>("SELECT count(*) AS count FROM responses")
+          .one().count;
+        if (remaining > 0) await this.ctx.storage.setAlarm(now + DAY_MS);
+      },
+      { "cubby.workload": "alarm" },
     );
-    const remaining = this.ctx.storage.sql
-      .exec<{ count: number }>("SELECT count(*) AS count FROM responses")
-      .one().count;
-    if (remaining > 0) await this.ctx.storage.setAlarm(now + DAY_MS);
   }
 }

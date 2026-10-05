@@ -38,6 +38,7 @@ export { CUBBY_SENTRY_DSN } from "./sentry-dsn";
 export {
   type CfSpan,
   type CfTracing,
+  enterInvocationSpan,
   enterManualSpan,
   enterSpan,
   enterSynchronousManualSpan,

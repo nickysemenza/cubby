@@ -6,6 +6,7 @@ import { DurableObject } from "cloudflare:workers";
 import { httpRouteTemplate } from "~/lib/http-route-template";
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
+import { withInvocationTrace } from "~/server/tracing";
 import { withTrace } from "~/server/tracing";
 
 import { authenticateCalendar } from "./caldav-auth";
@@ -188,16 +189,22 @@ export class CalendarFeedDurableObject
     });
   }
   async alarm() {
-    const meta = this.store.meta();
-    if (!meta.origin) return;
-    try {
-      await this.refreshNow(meta.dirtyReason ?? "reconcile", meta.origin);
-    } catch (error) {
-      await this.ctx.storage.setAlarm(Date.now() + 30_000);
-      throw error;
-    }
-    if (this.store.meta().dirtyReason)
-      await this.ctx.storage.setAlarm(Date.now() + DIRTY_DELAY_MS);
+    return withInvocationTrace(
+      "calendar.alarm",
+      async () => {
+        const meta = this.store.meta();
+        if (!meta.origin) return;
+        try {
+          await this.refreshNow(meta.dirtyReason ?? "reconcile", meta.origin);
+        } catch (error) {
+          await this.ctx.storage.setAlarm(Date.now() + 30_000);
+          throw error;
+        }
+        if (this.store.meta().dirtyReason)
+          await this.ctx.storage.setAlarm(Date.now() + DIRTY_DELAY_MS);
+      },
+      { "cubby.workload": "alarm" },
+    );
   }
   private async withDatabase<T>(
     run: (db: import("~/server/db").Database) => Promise<T>,
