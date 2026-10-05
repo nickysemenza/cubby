@@ -1,5 +1,6 @@
 import { test as base, expect } from "@playwright/test";
 
+import { retryStaleKeepAlive } from "../../tooling/stale-keep-alive";
 import {
   WORKERD_EXPLORER_ANNOTATION,
   WORKERD_LOGS_ATTACHMENT,
@@ -44,7 +45,13 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
         value: true,
       });
     });
+    // `page.request` is this context's request client.
+    retryStaleKeepAlive(context.request);
     await provide(context);
+  },
+  request: async ({ request }, provide) => {
+    retryStaleKeepAlive(request);
+    await provide(request);
   },
   e2eFailureDiagnostics: [
     async ({ e2eRuntime }, provide, testInfo) => {

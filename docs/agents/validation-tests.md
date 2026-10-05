@@ -19,7 +19,10 @@ packages need `pnpm -r --filter '!@cubby/web' run test` after changing
 Target a browser spec as `pnpm test:e2e <spec>` without an extra `--`. E2E
 serves `dist/`, so build it before a standalone run; `verify:local` does. A
 standalone Playwright request context inherits project storage state unless it
-sets empty cookies and origins. RTable's placeholder transition can eat clicks;
+sets empty cookies and origins. workerd drops an idle keep-alive socket after 5s
+while Playwright reuses it, so the E2E fixtures retry an idempotent
+`page.request`/`request` call once on `ECONNRESET` ("socket hang up"); a POST
+or PATCH is never replayed. RTable's placeholder transition can eat clicks;
 cell-edit tests retry opening and filling as one action.
 
 Every completed E2E run produces a sanitized run bundle with its revision,
