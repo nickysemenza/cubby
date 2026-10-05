@@ -35,16 +35,17 @@ import type { AiChatFeature } from "./features";
 import type { StructuredRunPorts } from "./run-feature";
 
 /**
- * Live routing eval for the structured reasoning-tier features: purchase
- * import audit, extraction repair, and recipe flow. Opt-in and billed: each
+ * Live routing eval for the structured features that left GPT-6 Sol on its
+ * evidence: purchase-import audit, extraction repair, and recipe flow. Opt-in and billed: each
  * case places the production prompt through Cubby's AI Gateway as every
  * candidate, with the production schema, validator, and one-repair policy,
  * then scores the answer against a synthetic key. Run with
  * `pnpm --dir apps/web eval:features`; never part of CI.
  *
  * `FEATURE_EVAL_FEATURES` narrows to `audit`, `repair`, or `recipe-flow`;
- * `AGENT_EVAL_CANDIDATES` replaces each feature's default pair (Sol at its
- * production effort, Luna at high); `AGENT_EVAL_REPEATS` repeats each case.
+ * `AGENT_EVAL_CANDIDATES` replaces each feature's default pair (Sol high as
+ * the reference, and the feature's production model and effort);
+ * `AGENT_EVAL_REPEATS` repeats each case.
  */
 const apiKey = localSecret(["AI_GATEWAY_API_KEY"]);
 if (!apiKey)
@@ -269,7 +270,7 @@ describe("structured feature routing eval", () => {
     );
     for (const suite of selected) {
       const candidates = evalCandidates(
-        `gpt-6-sol:${suite.feature.effort},gpt-6-luna:high`,
+        `gpt-6-sol:high,${suite.feature.model}:${suite.feature.effort}`,
       );
       const cases = suite.cases.filter(
         (entry) => !caseFilter || caseFilter.includes(entry.name),
