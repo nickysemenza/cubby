@@ -163,6 +163,13 @@ async function release(hash: string, id: number, name: string) {
 }
 
 /**
+ * What acquisition callbacks may see. They get no close handle: a callback that
+ * closed a retain-mode lease and then threw would memoize the non-dropping
+ * close and bypass the forced DROP of a failed acquisition.
+ */
+type NamedDatabaseTarget = Pick<DatabaseLease, "name" | "databaseUrl">;
+
+/**
  * Native fixtures own individually named databases on the guarded local server.
  * Retention applies only after successful setup; a failed acquisition drops the
  * database it created. A CREATE collision never makes the caller its owner.
@@ -177,9 +184,9 @@ export async function leaseNamedDatabase<T>(
     adminUrl: string;
     name: string;
     retention: "drop" | "retain";
-    onCreated?: (lease: DatabaseLease) => void | Promise<void>;
+    onCreated?: (target: NamedDatabaseTarget) => void | Promise<void>;
   },
-  setup: (lease: DatabaseLease) => Promise<T>,
+  setup: (target: NamedDatabaseTarget) => Promise<T>,
 ): Promise<{ lease: DatabaseLease; prepared: T }> {
   const adminUrl = assertSimulatorAdminUrl(options.adminUrl);
   assertSimulatorDatabaseName(options.name);
@@ -223,14 +230,15 @@ export async function leaseNamedDatabase<T>(
   try {
     await admin.query(`CREATE DATABASE "${options.name}"`);
     created = true;
-    await options.onCreated?.(lease);
+    const visible = { name: options.name, databaseUrl };
+    await options.onCreated?.(visible);
     const pool = new Pool({ connectionString: databaseUrl });
     try {
       await migrateDatabase(drizzle(pool));
     } finally {
       await pool.end();
     }
-    return { lease, prepared: await setup(lease) };
+    return { lease, prepared: await setup(visible) };
   } catch (error) {
     try {
       await (closed ??= close(true));

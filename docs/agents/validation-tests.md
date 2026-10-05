@@ -58,10 +58,16 @@ only `cubby_sim_<16 hex>` names on the guarded loopback admin server at port 554
 explicitly leaves it available for debugging. Failed acquisition always drops
 the database it created, including in retain mode; a name collision never
 gives ownership of an existing database. The lease's `onCreated` hook runs
-right after CREATE succeeds and before migration; runners start their detached
-database watchdog there, so a runner killed mid-migration still has its
-database dropped. Native scenario seeding stays in the runner's lease setup
-callback, which runs after migration. IntegreSQL namespaces and reset policies stay
+right after CREATE succeeds and before migration. The Mac import runner and
+every `sim-e2e.ts` run start their detached database watchdog there, so a
+runner killed at any point after CREATE, including mid-migration, still has
+its database dropped; only the simulator watch lane (`sim-dev`) also has the
+watchdog close its agent-device session. Native scenario seeding stays in the
+runner's lease `setup` callback, which runs after migration. Both callbacks
+receive only the name and URL, never the lease's `close`. The lease
+regressions (`named-database-lease.integration.test.ts`) need the guarded
+55432 endpoint: CI publishes it from `start-test-services`, and locally the
+suite runs `scripts/dev-db.ts up` unless `CUBBY_SIM_DB_EXTERNAL=1`. IntegreSQL namespaces and reset policies stay
 unchanged.
 
 A profile (`WORKERD_PROFILES` in `workerd-harness.ts`) routes each production

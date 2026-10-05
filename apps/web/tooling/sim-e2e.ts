@@ -820,7 +820,9 @@ function startDatabaseWatchdog(): void {
       simName,
       String(process.pid),
       path.join(artifacts, "watchdog.log"),
-      ...(headless
+      // The watchdog accepts a session to close only for the simulator watch
+      // lane (artifacts/sim-dev); every other run gets database-only cleanup.
+      ...(headless || !watch
         ? []
         : [`cubby-sim-${simName}`, path.join(artifacts, "agent-device-state")]),
     ],
@@ -1766,7 +1768,7 @@ async function main(): Promise<void> {
                 retention: "drop",
                 onCreated: () => {
                   console.log(`[${lane}] Disposable database ${simName}`);
-                  if (watch) startDatabaseWatchdog();
+                  startDatabaseWatchdog();
                 },
               },
               async () => undefined,

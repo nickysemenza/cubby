@@ -1,11 +1,11 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { expect, it } from "vitest";
+import { beforeAll, expect, it } from "vitest";
 import { leaseNamedDatabase } from "./test-database-lease";
 
 // Native cleanup must reject non-disposable targets, retain explicitly kept
@@ -13,6 +13,33 @@ import { leaseNamedDatabase } from "./test-database-lease";
 // database when acquisition collides with its name. A runner killed while
 // the lease migrates must already have handed the database to its watchdog.
 const adminUrl = "postgresql://postgres:password@localhost:55432/postgres";
+
+// The guard admits only this endpoint. CI publishes it from
+// .github/actions/start-test-services; locally it is the dev database service,
+// which this suite starts the same way the native runners do before leasing.
+beforeAll(() => {
+  if (process.env.CI || process.env.CUBBY_SIM_DB_EXTERNAL === "1") return;
+  const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
+  // `env -i`: the test environment's DATABASE_URL and service overrides
+  // would fail the dev profile's override checks; the container CLI needs
+  // only PATH and HOME.
+  const started = spawnSync(
+    "/usr/bin/env",
+    [
+      "-i",
+      `PATH=${process.env.PATH ?? ""}`,
+      `HOME=${process.env.HOME ?? ""}`,
+      process.execPath,
+      path.join(repoRoot, "scripts/dev-db.ts"),
+      "up",
+    ],
+    { cwd: repoRoot, stdio: "inherit" },
+  );
+  if (started.status !== 0)
+    throw new Error(
+      "Could not start the guarded native PostgreSQL on localhost:55432 (node scripts/dev-db.ts up)",
+    );
+}, 240_000);
 const name = () => `cubby_sim_${randomBytes(8).toString("hex")}`;
 async function exists(databaseName: string) {
   const admin = new Pool({ connectionString: adminUrl });
