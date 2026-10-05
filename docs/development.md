@@ -63,7 +63,7 @@ JSONL routes    →  cancellable workflow streams
 | `pnpm --filter @cubby/web test:e2e:watch`                          | Warm services + `vite build --watch` + Playwright `--ui`            |
 | `pnpm test:services:down`                                          | Remove warm test containers                                         |
 | `pnpm db:generate` / `pnpm db:check`                               | Generate a migration from `schema.ts` / prove migrations match it   |
-| `pnpm --filter @cubby/web db:migrate -- --target=production`       | Apply migrations; needs `PRODUCTION_DIRECT_DATABASE_URL`            |
+| `pnpm --filter @cubby/web db:migrate --target=production`          | Apply migrations; needs `PRODUCTION_DIRECT_DATABASE_URL`            |
 | `pnpm deploy:all`                                                  | Deploy web, purchase-agent, then usda-api                           |
 | `pnpm wasm`                                                        | Rebuild `@cubby/recipebridge` from Rust, uncached                   |
 | `pnpm apple <cli\|mac\|ios\|sim\|gen\|test>`                       | Native app products                                                 |
