@@ -7,21 +7,23 @@ import {
 import { canClearExpenseDate } from "@cubby/schemas/expense-fields";
 import type { MutationSideEffects } from "@cubby/schemas/mutation-side-effects";
 import type { UseMutationOptions } from "@tanstack/react-query";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
-  Controller,
   FormProvider,
   useForm,
   type FieldValues,
   type UseFormReturn,
 } from "react-hook-form";
 
-import { entityFieldPresentation } from "~/entity/editing/entity-field-presentation";
+import {
+  renderIntentField,
+  type PrimitiveFieldModel,
+  type SearchProviderFor,
+} from "~/entity/editing/entity-primitive-fields";
 import { fieldClearing } from "~/entity/editing/field-clearing";
 import { presentEntitySelectOptions } from "~/entity/editing/select-options";
 import { entityLabel } from "~/entity/entities";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import { FieldProvenance } from "~/entity/field-provenance";
 import {
   generatedBrowserCrudEntities,
   type GeneratedBrowserCrudEntity,
@@ -31,17 +33,11 @@ import {
   suggestTargetsFor,
 } from "~/features/ai/field-suggestion";
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
-import { FormFieldResolution } from "~/features/ai/form-field-resolution";
 import { countLabel } from "~/lib/pluralize";
 import { requireReferenceEntitySearch } from "~/ui/combobox/reference-entity-search";
-import type { SearchProviderProps } from "~/ui/combobox/with-search-hook";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
-import { PlainDateField, SelectField } from "~/ui/form-utils";
-import { EntityValueField } from "~/ui/form-utils/entity-value-field";
-import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Checkbox } from "~/ui/primitives/checkbox";
 
 import { useActionMutation } from "../../ui/hooks/useActionMutation";
 import { VerbMenuItem } from "./action-verb-ui";
@@ -65,8 +61,6 @@ export const bulkEditEntities: readonly GeneratedBrowserCrudEntity[] =
     (entity) => entityInspectorMetadata[entity].lifecycle.bulkUpdate !== null,
   );
 
-type BulkEditFieldModel = (typeof entityFieldModels)[Entity]["fields"][number];
-
 /**
  * What a bulk-edit form field actually produces: select and reference
  * controls write a string (a select's value, or a picker's shortcode/`""`
@@ -80,13 +74,6 @@ type BulkFieldMode = "unchanged" | "set" | "clear";
 export type BulkEditDraft = Record<string, BulkEditFieldValue>;
 type BulkEditVariables = { ids: string[]; data: BulkEditDraft };
 type BulkEditResult = { updated: number; sideEffects: MutationSideEffects };
-
-/** A reference field's search provider, keyed by its target entity — the
- * production lookup is {@link requireReferenceEntitySearch}; a test can inject a
- * fake instead of mocking the `with-search-hook` module. */
-type SearchProviderFor = (
-  referenceEntity: string,
-) => (props: SearchProviderProps<string>) => ReactNode;
 
 /**
  * A row's passthrough value — list columns (`status`, `trade`, `projectId`)
@@ -108,129 +95,9 @@ const asBulkEditRow = (row: EntityActionRow): BulkEditRow => ({
 });
 
 /**
- * Option labels for bulk-edit fields whose manifest `control` carries no
- * `options` of its own — the shared `entitySelectOptionsFor` table
- * (`entities/editing/select-options.ts`), also used by `EntityIntentFields`/
- * `EntityPrimitiveFields` and detail-page inline `select` editors. Bulk edit
- * reaches `expense.trade`/`expense.costType`, which the standard editor never
- * routes through `EntityIntentFields` for (expense has its own bespoke edit
- * form) — the shared table still covers them.
- */
-function selectOptionsFor(entity: Entity, field: BulkEditFieldModel) {
-  return presentEntitySelectOptions(
-    entity,
-    field.key,
-    field.control?.options ?? [],
-    "edit",
-  );
-}
-
-function bulkFieldDescription(
-  presentation: ReturnType<typeof entityFieldPresentation>,
-) {
-  if (!presentation.description && !presentation.provenance) return undefined;
-  return (
-    <span className="space-y-0.5">
-      {presentation.description ? (
-        <span className="block">{presentation.description}</span>
-      ) : null}
-      <FieldProvenance provenance={presentation.provenance} />
-    </span>
-  );
-}
-
-/**
- * Renders one non-reference bulk-edit field. Only the control kinds any
- * entity's `capabilities.bulkUpdate.fields` actually declares today —
- * checkbox, select, date — are handled; anything else fails loudly rather
- * than silently dropping the field, the same convention
- * `specializedRendererFor` uses in `entity-primitive-fields.tsx`.
- */
-function renderBulkEditField(
-  entity: Entity,
-  field: BulkEditFieldModel,
-  form: UseFormReturn<FieldValues>,
-  clearCost: number | null,
-) {
-  const presentation = entityFieldPresentation(entity, field.key, "edit");
-  const control = presentation.control;
-  const controlId = `bulk-edit-${entity}-${field.key}`;
-  const description = bulkFieldDescription(presentation);
-
-  if (control.kind === "checkbox") {
-    return (
-      <Controller
-        key={field.key}
-        control={form.control}
-        name={field.key}
-        render={({ field: rhfField, fieldState }) => (
-          <FormFieldGroup
-            htmlFor={controlId}
-            label={presentation.label}
-            description={description}
-            invalid={fieldState.invalid}
-            error={fieldState.error}
-          >
-            <Row gap="sm" align="start">
-              <Checkbox
-                id={controlId}
-                checked={rhfField.value === true}
-                name={rhfField.name}
-                onBlur={rhfField.onBlur}
-                ref={rhfField.ref}
-                onCheckedChange={(checked) =>
-                  rhfField.onChange(checked === true)
-                }
-                aria-invalid={fieldState.invalid}
-              />
-            </Row>
-          </FormFieldGroup>
-        )}
-      />
-    );
-  }
-  if (control.kind === "select") {
-    return (
-      <SelectField
-        key={field.key}
-        form={form}
-        name={field.key}
-        label={presentation.label}
-        options={selectOptionsFor(entity, field)}
-        nullable={field.nullable}
-        description={description}
-        suggestField={control.suggest ? field.key : undefined}
-      />
-    );
-  }
-  if (control.kind === "date") {
-    // SAFETY: the date declaration selects a plain-date string path; RHF
-    // cannot correlate a runtime-selected model key with its conditional
-    // path type.
-    return (
-      <PlainDateField
-        key={field.key}
-        form={form}
-        name={field.key as never}
-        label={presentation.label}
-        description={description}
-        {...fieldClearing(entity, field.key, field.nullable, clearCost)}
-        showClearAction={false}
-      />
-    );
-  }
-  throw new Error(
-    `Bulk edit does not support ${entity}.${field.key}'s "${control.kind}" control — no entity's bulkUpdate roster declares one today, so no renderer exists yet.`,
-  );
-}
-
-/**
- * Renders `capabilities.bulkUpdate.fields` in model order, through the same
- * per-kind switch `EntityIntentFields` uses in
- * `entities/editing/entity-primitive-fields.tsx`. A singular reference renders as a search-backed
- * picker, exactly as `EntityIntentFields` special-cases it, so a nullable
- * reference (`projectId`, `locationId`, `parentId`) gets a "Clear" affordance
- * for free.
+ * Renders `capabilities.bulkUpdate.fields` in roster order. Each field's
+ * control comes from `renderIntentField`, the record editor's own dispatcher;
+ * this wrapper adds only the unchanged/set/clear assignment modes.
  */
 function BulkEditFields({
   entity,
@@ -246,10 +113,11 @@ function BulkEditFields({
   form: UseFormReturn<FieldValues>;
   searchProviderFor?: SearchProviderFor;
   modes: Readonly<Record<string, BulkFieldMode>>;
-  onModeChange: (field: BulkEditFieldModel, mode: BulkFieldMode) => void;
+  onModeChange: (field: PrimitiveFieldModel, mode: BulkFieldMode) => void;
   clearCost: number | null;
 }) {
   const model = entityFieldModels[entity];
+  const assignment = { clearCost, searchProviderFor };
   return (
     <>
       {fieldKeys.map((key) => {
@@ -312,29 +180,16 @@ function BulkEditFields({
               </p>
             ) : null}
             <fieldset disabled={mode === "clear"}>
-              {field.reference && !field.reference.multiple ? (
-                <EntityValueField
-                  form={form}
-                  // SAFETY: this is a manifest-declared reference field.
-                  name={field.key as never}
-                  // SAFETY: reference.entity comes from the manifest reference roster.
-                  entity={field.reference.entity as never}
-                  label={field.label}
-                  clearable={field.nullable}
-                  description={
-                    <FieldProvenance provenance={field.provenance} />
-                  }
-                  SearchProvider={searchProviderFor(field.reference.entity)}
-                  suggestField={field.control?.suggest ? field.key : undefined}
-                />
-              ) : (
-                renderBulkEditField(entity, field, form, clearCost)
-              )}
-              <FormFieldResolution
-                entity={entity}
-                form={form}
-                field={field.key}
-              />
+              {renderIntentField({
+                entity,
+                field,
+                form,
+                idPrefix: `bulk-edit-${entity}`,
+                mode: "edit",
+                // No bulk-editable reference declares a dependent scope.
+                scopedValueRecord: {},
+                assignment,
+              })}
             </fieldset>
           </fieldset>
         );
@@ -353,12 +208,17 @@ const isSameValue = (a: BulkEditRowValue, b: BulkEditRowValue) =>
  */
 function formatBulkEditValue(
   entity: Entity,
-  field: BulkEditFieldModel,
+  field: PrimitiveFieldModel,
   value: BulkEditRowValue,
 ): string {
   if (value === null || value === undefined || value === "") return "—";
   if (field.kind === "boolean") return value ? "Yes" : "No";
-  const options = selectOptionsFor(entity, field);
+  const options = presentEntitySelectOptions(
+    entity,
+    field.key,
+    field.control?.options ?? [],
+    "edit",
+  );
   const match = options.find((option) => option.value === value);
   if (match) return match.label;
   return String(value);
@@ -411,7 +271,7 @@ export function BulkEditDialogBody({
   const clearCost = items.every((item) => canClearExpenseDate(item.cost))
     ? 0
     : 1;
-  const onModeChange = (field: BulkEditFieldModel, mode: BulkFieldMode) => {
+  const onModeChange = (field: PrimitiveFieldModel, mode: BulkFieldMode) => {
     form.clearErrors(field.key);
     const companions = new Set([
       field.key,

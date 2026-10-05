@@ -39,6 +39,7 @@ import {
   isReferencePickerEntity,
   requireReferenceEntitySearch,
 } from "~/ui/combobox/reference-entity-search";
+import type { SearchProviderProps } from "~/ui/combobox/with-search-hook";
 import {
   NullableNumericField,
   PlainDateField,
@@ -98,20 +99,50 @@ type PrimitiveFieldOptions = {
   description?: ReactNode;
 };
 
-function IntentFieldResolution({
-  form,
-  field,
-  enabled,
-}: {
-  form: UseFormReturn<FieldValues>;
-  field: string;
-  enabled: boolean;
-}) {
-  return enabled ? <FormFieldResolution form={form} field={field} /> : null;
-}
-
 export type PrimitiveFieldModel =
   (typeof entityFieldModels)[Entity]["fields"][number];
+
+/** A singular reference's search provider, keyed by its target entity. The
+ * production lookup is `requireReferenceEntitySearch`; a test injects a fake
+ * instead of mocking the `with-search-hook` module. */
+export type SearchProviderFor = (
+  referenceEntity: string,
+) => (props: SearchProviderProps<string>) => ReactNode;
+
+/**
+ * Set by a wrapper that owns each field's assignment — bulk edit's
+ * unchanged/set/clear modes — instead of the record editor:
+ * - clearing a date is the wrapper's mode, so the field draws no Clear action
+ *   of its own, and the expense date rule reads `clearCost` (the selection's
+ *   cost) rather than a watched `cost` field;
+ * - inheritance (resolution) controls always render, since a multi-row
+ *   selection mounts no suggestion provider to draw them.
+ */
+export type FieldAssignmentPolicy = Readonly<{
+  clearCost: number | null;
+  searchProviderFor: SearchProviderFor;
+}>;
+
+function IntentFieldResolution({
+  entity,
+  form,
+  field,
+  assignment,
+}: {
+  entity: Entity;
+  form: UseFormReturn<FieldValues>;
+  field: PrimitiveFieldModel;
+  assignment: FieldAssignmentPolicy | undefined;
+}) {
+  if (assignment)
+    return (
+      <FormFieldResolution entity={entity} form={form} field={field.key} />
+    );
+  // The record editor resolves its entity from the suggestion provider.
+  return field.resolution && !field.control?.suggest ? (
+    <FormFieldResolution form={form} field={field.key} />
+  ) : null;
+}
 
 /** `undefined` for a field with no `control.suggest` — the primitives' own
  * no-op convention (`AutoSuggestSlot`/`useAutoFieldSuggestion` treat a
@@ -131,6 +162,7 @@ function EntityDateField({
   label,
   description,
   record,
+  assignment,
 }: {
   entity: Entity;
   field: PrimitiveFieldModel;
@@ -140,20 +172,27 @@ function EntityDateField({
   label: string;
   description: ReactNode;
   record?: EntityEditRecord | undefined;
+  assignment: FieldAssignmentPolicy | undefined;
 }) {
-  const cost = useWatch({ control: form.control, name: costName });
+  const watchedCost: unknown = useWatch({
+    control: form.control,
+    name: costName,
+  });
+  // A watched null is a cleared cost, not an absent one; only `undefined`
+  // falls back to the stored record.
+  const cost = assignment
+    ? assignment.clearCost
+    : watchedCost === undefined
+      ? record?.cost
+      : watchedCost;
   return (
     <PlainDateField
       form={form}
       name={name}
       label={label}
       description={description}
-      {...fieldClearing(
-        entity,
-        field.key,
-        field.nullable,
-        cost === undefined ? record?.cost : cost,
-      )}
+      {...fieldClearing(entity, field.key, field.nullable, cost)}
+      showClearAction={assignment === undefined}
     />
   );
 }
@@ -194,6 +233,7 @@ function renderPrimitiveField({
   mode,
   record,
   costName = "cost",
+  assignment,
 }: {
   entity: Entity;
   field: PrimitiveFieldModel;
@@ -205,6 +245,7 @@ function renderPrimitiveField({
   mode: EditMode;
   record?: EntityEditRecord | undefined;
   costName?: string;
+  assignment?: FieldAssignmentPolicy | undefined;
 }) {
   const control = presentation.control;
   if (control.kind === "specialized") {
@@ -357,6 +398,7 @@ function renderPrimitiveField({
         form={form}
         label={presentation.label}
         description={description}
+        assignment={assignment}
       />
     );
   }
@@ -685,15 +727,19 @@ export function requiredFieldModel(
 /** A singular reference: the target's search picker, or a shortcode text
  * input for a target with no picker. */
 function renderSingularReference({
+  entity,
   field,
   form,
   reference,
   scopedValueRecord,
+  assignment,
 }: {
+  entity: Entity;
   field: PrimitiveFieldModel;
   form: UseFormReturn<FieldValues>;
   reference: NonNullable<PrimitiveFieldModel["reference"]>;
   scopedValueRecord: EntityEditValueBag;
+  assignment: FieldAssignmentPolicy | undefined;
 }): ReactNode {
   if (!isReferencePickerEntity(reference.entity)) {
     // A target with no picker (device-reported provenance) takes its
@@ -727,7 +773,9 @@ function renderSingularReference({
         label={field.label}
         clearable={field.nullable}
         description={<FieldProvenance provenance={field.provenance} />}
-        SearchProvider={requireReferenceEntitySearch(referenceEntity)}
+        SearchProvider={(
+          assignment?.searchProviderFor ?? requireReferenceEntitySearch
+        )(referenceEntity)}
         scope={scope}
         suggestField={suggestFieldFor(
           Boolean(field.control?.suggest),
@@ -735,9 +783,10 @@ function renderSingularReference({
         )}
       />
       <IntentFieldResolution
+        entity={entity}
         form={form}
-        field={field.key}
-        enabled={Boolean(field.resolution && !field.control?.suggest)}
+        field={field}
+        assignment={assignment}
       />
     </div>
   );
@@ -756,7 +805,8 @@ function renderSingularReference({
  * `EntityIntentFields`' whole roster — those two forms already render their
  * singular references (`accountId`, `purchaseId`) through richer,
  * entity-specific search providers `EntityIntentFields`'s generic picker
- * can't reproduce. */
+ * can't reproduce. Bulk edit renders each declared field through here too,
+ * wrapped in its own assignment modes (see {@link FieldAssignmentPolicy}). */
 export function renderIntentField({
   entity,
   field,
@@ -765,6 +815,7 @@ export function renderIntentField({
   mode,
   record,
   scopedValueRecord,
+  assignment,
 }: {
   entity: Entity;
   field: PrimitiveFieldModel;
@@ -773,13 +824,16 @@ export function renderIntentField({
   mode: EditMode;
   record?: EntityEditRecord | undefined;
   scopedValueRecord: EntityEditValueBag;
+  assignment?: FieldAssignmentPolicy | undefined;
 }): ReactNode {
   if (field.reference && !field.reference.multiple)
     return renderSingularReference({
+      entity,
       field,
       form,
       reference: field.reference,
       scopedValueRecord,
+      assignment,
     });
   const presentation = entityFieldPresentation(entity, field.key, mode);
   if (presentation.control.kind === "specialized") {
@@ -815,9 +869,10 @@ export function renderIntentField({
           </div>
         ) : null}
         <IntentFieldResolution
+          entity={entity}
           form={form}
-          field={field.key}
-          enabled={Boolean(field.resolution && !field.control?.suggest)}
+          field={field}
+          assignment={assignment}
         />
       </fieldset>
     );
@@ -840,14 +895,16 @@ export function renderIntentField({
     fieldOptions,
     name: field.key,
     mode,
+    assignment,
   });
   return (
     <div key={field.key} className="space-y-1">
       {rendered}
       <IntentFieldResolution
+        entity={entity}
         form={form}
-        field={field.key}
-        enabled={Boolean(field.resolution && !field.control?.suggest)}
+        field={field}
+        assignment={assignment}
       />
     </div>
   );
