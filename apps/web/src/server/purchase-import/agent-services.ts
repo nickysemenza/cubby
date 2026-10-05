@@ -46,13 +46,18 @@ export function runServicesFor(
     fn: (
       database: typeof import("~/server/db").db,
       service: typeof import("./run-service"),
+      operation: typeof import("~/server/runs/operation"),
     ) => Promise<T>,
   ): Promise<T> => {
     setCfEnv(env);
     return runWithExecutionCtx(ctx, async () => {
       const { db, withRequestDbClient } = await import("~/server/db");
       return withRequestDbClient(env.HYPERDRIVE.connectionString, async () =>
-        fn(db, await import("./run-service")),
+        fn(
+          db,
+          await import("./run-service"),
+          await import("~/server/runs/operation"),
+        ),
       );
     });
   };
@@ -135,8 +140,8 @@ export function runServicesFor(
 
     claimNextWork: (input) => {
       const ref = purchaseAgentOperationRef.parse(input);
-      return withDatabase((db, service) =>
-        service.runImportOperation(
+      return withDatabase((db, service, operation) =>
+        operation.executeLeasedOperation(
           db,
           {
             runId,
@@ -151,8 +156,8 @@ export function runServicesFor(
 
     extractReceiptEvidence: (input) => {
       const ref = purchaseAgentOperationRef.parse(input);
-      return withDatabase((db, service) =>
-        service.runImportOperation(
+      return withDatabase((db, _service, operation) =>
+        operation.executeLeasedOperation(
           db,
           {
             runId,
@@ -194,8 +199,8 @@ export function runServicesFor(
 
     extractRunEvidence: (input) => {
       const ref = purchaseAgentOperationRef.parse(input);
-      return withDatabase((db, service) =>
-        service.runImportOperation(
+      return withDatabase((db, _service, operation) =>
+        operation.executeLeasedOperation(
           db,
           {
             runId,
@@ -332,8 +337,8 @@ export function runServicesFor(
     importOrderEvidence: (input) => {
       const parsed = importOrderEvidenceInput.parse(input);
       const payload = { runId, ...parsed };
-      return withDatabase((db, service) =>
-        service.runImportOperation(
+      return withDatabase((db, service, operation) =>
+        operation.executeLeasedOperation(
           db,
           { ...payload, kind: "import_order_evidence", payload },
           () =>
@@ -349,8 +354,8 @@ export function runServicesFor(
     saveNavigationHints: (input) => {
       const parsed = saveNavigationHintsInput.parse(input);
       const payload = { runId, ...parsed };
-      return withDatabase((db, service) =>
-        service.runImportOperation(
+      return withDatabase((db, service, operation) =>
+        operation.executeLeasedOperation(
           db,
           { ...payload, kind: "save_navigation_hints", payload },
           () =>
@@ -370,8 +375,8 @@ export function runServicesFor(
 
     markHistoryExpired: (input) => {
       const payload = { runId, ...markHistoryExpiredInput.parse(input) };
-      return withDatabase((db, service) =>
-        service.runImportOperation(
+      return withDatabase((db, service, operation) =>
+        operation.executeLeasedOperation(
           db,
           { ...payload, kind: "mark_history_expired", payload },
           () => service.markHistoryExpired(db, payload),
@@ -381,8 +386,8 @@ export function runServicesFor(
 
     finishRun: (input) => {
       const payload = { runId, ...purchaseAgentOperationRef.parse(input) };
-      return withDatabase((db, service) =>
-        service.runImportOperation(
+      return withDatabase((db, service, operation) =>
+        operation.executeLeasedOperation(
           db,
           { ...payload, kind: "finish_run", payload },
           () => service.finishRun(db, env.PURCHASE_IMPORT, payload),
@@ -392,8 +397,8 @@ export function runServicesFor(
 
     stopForReview: (input) => {
       const payload = { runId, ...stopForReviewInput.parse(input) };
-      return withDatabase((db, service) =>
-        service.runImportOperation(
+      return withDatabase((db, service, operation) =>
+        operation.executeLeasedOperation(
           db,
           { ...payload, kind: "stop_for_review", payload },
           () =>
@@ -412,8 +417,8 @@ export function runServicesFor(
 
     deferOrderForReview: (input) => {
       const payload = { runId, ...deferOrderForReviewInput.parse(input) };
-      return withDatabase((db, service) =>
-        service.runImportOperation(
+      return withDatabase((db, service, operation) =>
+        operation.executeLeasedOperation(
           db,
           { ...payload, kind: "defer_order_for_review", payload },
           () =>
@@ -429,8 +434,8 @@ export function runServicesFor(
 
     settleChargeHunt: (input) => {
       const payload = { runId, ...settleChargeHuntInput.parse(input) };
-      return withDatabase((db, service) =>
-        service.runImportOperation(
+      return withDatabase((db, service, operation) =>
+        operation.executeLeasedOperation(
           db,
           { ...payload, kind: "settle_charge_hunt", payload },
           () =>
@@ -447,8 +452,8 @@ export function runServicesFor(
 
     markRunFailed: (input) => {
       const payload = { runId, ...markRunFailedInput.parse(input) };
-      return withDatabase((db, service) =>
-        service.runImportOperation(
+      return withDatabase((db, service, operation) =>
+        operation.executeLeasedOperation(
           db,
           { ...payload, kind: "mark_run_failed", payload },
           () => service.markRunFailed(db, payload),

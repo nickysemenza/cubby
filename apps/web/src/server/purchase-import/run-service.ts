@@ -118,6 +118,14 @@ import { persistImageProcessingSubmission } from "~/server/repo/image-processing
 import { withPhotoImportTransaction } from "~/server/repo/photo-import";
 import { getRunByShortcode } from "~/server/repo/run";
 import {
+  completeOperation,
+  failOperation,
+  failOperationsForRun,
+  insertOperation,
+  readOperation,
+  setOperationResult,
+} from "~/server/repo/run-operation";
+import {
   findOrCreateWithShortcode,
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
@@ -247,132 +255,6 @@ export type StartTargetedRunInput = {
 };
 
 const OFFLINE_EXPIRY_MS = 24 * 60 * 60_000;
-
-/**
- * Postgres-side replay ledger for agent tools. A completed operation returns its
- * original result even after the run becomes terminal. A concurrent delivery
- * sees `started` and retries later; external writers retain their own source
- * claims for the crash window between their commit and this completion write.
- */
-export async function runImportOperation<T extends object | null>(
-  db: Database,
-  input: {
-    runId: string;
-    operationId: string;
-    kind: string;
-    payload: unknown;
-    /**
-     * Only for `work` that is a single transaction: a `failed` row holds no
-     * partial side effects, so a changed payload may take the operation over.
-     */
-    retryFailedWithChangedInput?: boolean;
-  },
-  work: () => Promise<T>,
-): Promise<T> {
-  const runId = runEntityId.parse(input.runId);
-  const fingerprint = await sha256Hex(JSON.stringify(input.payload));
-  const database = getDb(db);
-  const [inserted] = await database
-    .insert(runOperation)
-    .values({
-      runId,
-      operationId: input.operationId,
-      kind: input.kind,
-      inputFingerprint: fingerprint,
-    })
-    .onConflictDoNothing()
-    .returning({ id: runOperation.id });
-  if (!inserted) {
-    const [recorded] = await database
-      .select({
-        inputFingerprint: runOperation.inputFingerprint,
-        state: runOperation.state,
-        result: runOperation.result,
-        updatedAt: runOperation.updatedAt,
-      })
-      .from(runOperation)
-      .where(
-        and(
-          eq(runOperation.runId, runId),
-          eq(runOperation.operationId, input.operationId),
-        ),
-      )
-      .limit(1);
-    const takesOverFailed =
-      input.retryFailedWithChangedInput === true &&
-      recorded?.state === "failed";
-    if (
-      !recorded ||
-      (recorded.inputFingerprint !== fingerprint && !takesOverFailed)
-    )
-      throw new Error("Operation id was replayed with different input");
-    if (recorded.state === "completed") {
-      // SAFETY: the unique operation row is written only by this generic call
-      // with the same fingerprint, so its completed JSON has work's T shape.
-      return recorded.result as T;
-    }
-    if (
-      recorded.state === "started" &&
-      Date.now() - recorded.updatedAt.getTime() < 5 * 60_000
-    )
-      throw new Error("Import operation is already in progress");
-    // Compare-and-set on the state and fingerprint just read: two deliveries
-    // that both saw the same `failed` (or stale `started`) row must not both
-    // take it over and run `work` twice.
-    const [claimed] = await database
-      .update(runOperation)
-      .set({
-        state: "started",
-        error: null,
-        inputFingerprint: fingerprint,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(runOperation.runId, runId),
-          eq(runOperation.operationId, input.operationId),
-          eq(runOperation.state, recorded.state),
-          eq(runOperation.inputFingerprint, recorded.inputFingerprint),
-        ),
-      )
-      .returning({ id: runOperation.id });
-    if (!claimed) throw new Error("Import operation is already in progress");
-  }
-  try {
-    const result = await work();
-    await database
-      .update(runOperation)
-      .set({
-        state: "completed",
-        result,
-        error: null,
-        completedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(runOperation.runId, runId),
-          eq(runOperation.operationId, input.operationId),
-        ),
-      );
-    return result;
-  } catch (error) {
-    await database
-      .update(runOperation)
-      .set({
-        state: "failed",
-        error:
-          error instanceof Error ? error.message.slice(0, 2_000) : "unknown",
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(runOperation.runId, runId),
-          eq(runOperation.operationId, input.operationId),
-        ),
-      );
-    throw error;
-  }
-}
 
 const operationUuid = async (runId: string, operationId: string) => {
   return z.uuid().parse(await sha256Uuid(`${runId}:${operationId}`));
@@ -2058,19 +1940,11 @@ export async function issueBrowserCommand(
     }),
   );
   const database = getDb(db);
-  const [recorded] = await database
-    .select({
-      inputFingerprint: runOperation.inputFingerprint,
-      result: runOperation.result,
-    })
-    .from(runOperation)
-    .where(
-      and(
-        eq(runOperation.runId, runEntityId.parse(input.runId)),
-        eq(runOperation.operationId, input.operationId),
-      ),
-    )
-    .limit(1);
+  const key = {
+    runId: runEntityId.parse(input.runId),
+    operationId: input.operationId,
+  };
+  const recorded = await readOperation(database, key);
   if (
     recorded?.inputFingerprint !== undefined &&
     recorded.inputFingerprint !== fingerprint
@@ -2092,9 +1966,8 @@ export async function issueBrowserCommand(
         operation: scopedOperation,
       });
   if (!recorded) {
-    await database.insert(runOperation).values({
-      runId: runEntityId.parse(input.runId),
-      operationId: input.operationId,
+    await insertOperation(database, {
+      ...key,
       kind: "browser_command",
       inputFingerprint: fingerprint,
       result: { command, commandId },
@@ -2120,20 +1993,7 @@ export async function issueBrowserCommand(
         ),
     ]);
   }
-  await database
-    .update(runOperation)
-    .set({
-      state: "completed",
-      result: { command, commandId },
-      completedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(runOperation.runId, runEntityId.parse(input.runId)),
-        eq(runOperation.operationId, input.operationId),
-      ),
-    );
+  await completeOperation(database, key, { command, commandId });
   return { commandId, state: connected ? "dispatched" : "paused_offline" };
 }
 
@@ -2145,16 +2005,11 @@ export async function readBrowserCommandResult(
   const scope = await loadRunScope(db, input.runId);
   if (!scope.public.vendorAccountId)
     throw new Error("This import run has no browser account");
-  const [row] = await getDb(db)
-    .select({ result: runOperation.result })
-    .from(runOperation)
-    .where(
-      and(
-        eq(runOperation.runId, runEntityId.parse(input.runId)),
-        eq(runOperation.operationId, input.operationId),
-      ),
-    )
-    .limit(1);
+  const key = {
+    runId: runEntityId.parse(input.runId),
+    operationId: input.operationId,
+  };
+  const row = await readOperation(getDb(db), key);
   const parsed = z
     .object({ commandId: z.uuid(), command: browserBridgeRequest })
     .safeParse(row?.result);
@@ -2206,22 +2061,11 @@ export async function readBrowserCommandResult(
     // upload failed) is the command's terminal outcome. The agent sees it in
     // the tool result; the operation row is where Activity and the transcript
     // read it from.
-    await getDb(db)
-      .update(runOperation)
-      .set({
-        state: "failed",
-        error: `${result.outcome.code}: ${result.outcome.message}`.slice(
-          0,
-          2_000,
-        ),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(runOperation.runId, scope.public.runId),
-          eq(runOperation.operationId, input.operationId),
-        ),
-      );
+    await failOperation(
+      getDb(db),
+      key,
+      `${result.outcome.code}: ${result.outcome.message}`,
+    );
   }
   return result
     ? { state: "completed" as const, result }
@@ -4616,21 +4460,13 @@ export async function controlRun(
               inArray(runApproval.state, ["pending", "granted"]),
             ),
           );
-        await tx
-          .update(runOperation)
-          .set({
-            state: "failed",
-            error: dispatchAbort
-              ? "Dispatch aborted by its owner"
-              : "Run cancelled by its owner",
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(runOperation.runId, scope.public.runId),
-              inArray(runOperation.state, ["started", "paused_approval"]),
-            ),
-          );
+        await failOperationsForRun(
+          tx,
+          scope.public.runId,
+          dispatchAbort
+            ? "Dispatch aborted by its owner"
+            : "Run cancelled by its owner",
+        );
         return {
           publicId: input.runPublicId,
           status: "failed" as const,
@@ -4685,22 +4521,13 @@ export async function controlRun(
 
       if (!input.operationId)
         throw new Error("Approval decision requires an operation id");
-      const [operation] = await tx
-        .select({
-          inputFingerprint: runOperation.inputFingerprint,
-          state: runOperation.state,
-          kind: runOperation.kind,
-          result: runOperation.result,
-        })
-        .from(runOperation)
-        .where(
-          and(
-            eq(runOperation.runId, scope.public.runId),
-            eq(runOperation.operationId, input.operationId),
-          ),
-        )
-        .limit(1)
-        .for("update");
+      const operationKey = {
+        runId: scope.public.runId,
+        operationId: input.operationId,
+      };
+      const operation = await readOperation(tx, operationKey, {
+        forUpdate: true,
+      });
       if (!operation || operation.state !== "paused_approval")
         throw new Error("Approval proposal is missing or no longer pending");
       const proposal = z
@@ -4776,19 +4603,11 @@ export async function controlRun(
             rejectedAt: decidedAt,
           })
           .where(eq(runApproval.id, approvalId));
-        await tx
-          .update(runOperation)
-          .set({
-            state: "failed",
-            error: "Mutation proposal rejected by a household member",
-            updatedAt: decidedAt,
-          })
-          .where(
-            and(
-              eq(runOperation.runId, scope.public.runId),
-              eq(runOperation.operationId, input.operationId),
-            ),
-          );
+        await failOperation(
+          tx,
+          operationKey,
+          "Mutation proposal rejected by a household member",
+        );
         const pending = await tx
           .select({ id: runApproval.id })
           .from(runApproval)
@@ -4830,19 +4649,11 @@ export async function controlRun(
             .update(runApproval)
             .set({ state: "invalidated", invalidatedAt: new Date() })
             .where(eq(runApproval.id, approvalId));
-          await tx
-            .update(runOperation)
-            .set({
-              state: "failed",
-              error: "Mutation target changed after proposal",
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(runOperation.runId, scope.public.runId),
-                eq(runOperation.operationId, input.operationId),
-              ),
-            );
+          await failOperation(
+            tx,
+            operationKey,
+            "Mutation target changed after proposal",
+          );
           await tx
             .update(runTable)
             .set({ status: "running", updatedAt: new Date() })
@@ -4864,21 +4675,10 @@ export async function controlRun(
           decidedAt: new Date(),
         })
         .where(eq(runApproval.id, approvalId));
-      await tx
-        .update(runOperation)
-        .set({
-          result: {
-            ...z.record(z.string(), z.unknown()).parse(operation.result),
-            approvalId,
-          },
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(runOperation.runId, scope.public.runId),
-            eq(runOperation.operationId, input.operationId),
-          ),
-        );
+      await setOperationResult(tx, operationKey, {
+        ...z.record(z.string(), z.unknown()).parse(operation.result),
+        approvalId,
+      });
       return {
         publicId: input.runPublicId,
         status: "paused_approval" as const,

@@ -54,7 +54,6 @@ import {
   purchase,
   run as runTable,
   runEvidence,
-  runOperation,
   runTarget,
 } from "~/server/db/schema";
 import {
@@ -75,6 +74,11 @@ import {
   type ProductHit,
   type ExternalIdPair,
 } from "~/server/repo/product/find-by-external-ids";
+import {
+  completeOperation,
+  insertOperation,
+  readOperation,
+} from "~/server/repo/run-operation";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { scheduleImageProcessingJobs } from "~/server/services/image-processing.service";
 import {
@@ -443,20 +447,11 @@ export async function preparePurchaseImport(
 
   return withTransactionDatabase(db, async (transactionDb) => {
     const database = getDb(transactionDb);
-    const [existing] = await database
-      .select({
-        inputFingerprint: runOperation.inputFingerprint,
-        state: runOperation.state,
-        result: runOperation.result,
-      })
-      .from(runOperation)
-      .where(
-        and(
-          eq(runOperation.runId, scope.public.runId),
-          eq(runOperation.operationId, input._runExecution.operationId),
-        ),
-      )
-      .limit(1);
+    const operationKey = {
+      runId: scope.public.runId,
+      operationId: input._runExecution.operationId,
+    };
+    const existing = await readOperation(database, operationKey);
     if (existing) {
       if (existing.inputFingerprint !== inputFingerprint)
         throw new Error("Operation id was replayed with different input");
@@ -470,9 +465,8 @@ export async function preparePurchaseImport(
       throw new Error(
         `Purchase import run is fenced in ${scope.public.status}`,
       );
-    await database.insert(runOperation).values({
-      runId: scope.public.runId,
-      operationId: input._runExecution.operationId,
+    await insertOperation(database, {
+      ...operationKey,
       kind: "prepare_purchase_import",
       inputFingerprint,
     });
@@ -600,20 +594,7 @@ export async function preparePurchaseImport(
       status: "running",
       orders: outputOrders,
     });
-    await database
-      .update(runOperation)
-      .set({
-        state: "completed",
-        result,
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(runOperation.runId, scope.public.runId),
-          eq(runOperation.operationId, input._runExecution.operationId),
-        ),
-      );
+    await completeOperation(database, operationKey, result);
     return result;
   });
 }
@@ -666,6 +647,10 @@ export async function commitPurchaseImport(
   const vendorId = scope.vendorId;
   const args = operationArgs(input);
   const argsFingerprint = await sha256Hex(JSON.stringify(args));
+  const operationKey = {
+    runId: scope.public.runId,
+    operationId: input._runExecution.operationId,
+  };
   let transactionResult: {
     result: z.infer<typeof commitPurchaseImportOut>;
     requiresReview: boolean;
@@ -676,21 +661,9 @@ export async function commitPurchaseImport(
       // eslint-disable-next-line complexity
       async (transactionDb) => {
         const database = getDb(transactionDb);
-        const [operation] = await database
-          .select({
-            state: runOperation.state,
-            inputFingerprint: runOperation.inputFingerprint,
-            result: runOperation.result,
-          })
-          .from(runOperation)
-          .where(
-            and(
-              eq(runOperation.runId, scope.public.runId),
-              eq(runOperation.operationId, input._runExecution.operationId),
-            ),
-          )
-          .limit(1)
-          .for("update");
+        const operation = await readOperation(database, operationKey, {
+          forUpdate: true,
+        });
         if (operation) {
           if (operation.inputFingerprint !== argsFingerprint)
             throw new Error("Operation id was replayed with different input");
@@ -742,12 +715,10 @@ export async function commitPurchaseImport(
             trade: input.defaultTrade ?? null,
           });
         }
-        await database.insert(runOperation).values({
-          runId: scope.public.runId,
-          operationId: input._runExecution.operationId,
+        await insertOperation(database, {
+          ...operationKey,
           kind: "commit_purchase_import",
           inputFingerprint: argsFingerprint,
-          state: "started",
         });
         for (const { order } of prepared) {
           const extraction = importExtractionOutcome.parse(order.extraction);
@@ -920,21 +891,10 @@ export async function commitPurchaseImport(
           status: requiresReview ? "needs_review" : "running",
           items,
         });
-        await database
-          .update(runOperation)
-          .set({
-            state: "completed",
-            result: { ...publicResult, requiresReview },
-            error: null,
-            completedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(runOperation.runId, scope.public.runId),
-              eq(runOperation.operationId, input._runExecution.operationId),
-            ),
-          );
+        await completeOperation(database, operationKey, {
+          ...publicResult,
+          requiresReview,
+        });
         await database
           .update(runTable)
           .set({ status: "running", failureCode: null, updatedAt: new Date() })
@@ -944,21 +904,20 @@ export async function commitPurchaseImport(
     );
   } catch (error) {
     // The rolled-back transaction takes its own operation row with it, so the
-    // failure is recorded here on a fresh connection (as `runImportOperation`
-    // does). Never an upsert: an existing row belongs to another attempt whose
-    // outcome must not be overwritten by this one.
-    await getDb(db)
-      .insert(runOperation)
-      .values({
-        runId: scope.public.runId,
-        operationId: input._runExecution.operationId,
+    // failure is recorded here on a fresh connection. Never an upsert: an
+    // existing row belongs to another attempt whose outcome must not be
+    // overwritten by this one.
+    await insertOperation(
+      getDb(db),
+      {
+        ...operationKey,
         kind: "commit_purchase_import",
         inputFingerprint: argsFingerprint,
         state: "failed",
-        error:
-          error instanceof Error ? error.message.slice(0, 2_000) : "unknown",
-      })
-      .onConflictDoNothing();
+        error: error instanceof Error ? error.message : "unknown",
+      },
+      { ifAbsent: true },
+    );
     throw error;
   }
   if (transactionResult.requiresReview) {
@@ -998,19 +957,11 @@ export async function validatePurchaseImport(
       throw new Error(
         `Import run is fenced in status ${lockedRun?.status ?? "missing"}`,
       );
-    const [existing] = await database
-      .select({
-        inputFingerprint: runOperation.inputFingerprint,
-        result: runOperation.result,
-      })
-      .from(runOperation)
-      .where(
-        and(
-          eq(runOperation.runId, scope.public.runId),
-          eq(runOperation.operationId, input._runExecution.operationId),
-        ),
-      )
-      .limit(1);
+    const operationKey = {
+      runId: scope.public.runId,
+      operationId: input._runExecution.operationId,
+    };
+    const existing = await readOperation(database, operationKey);
     if (existing) {
       if (existing.inputFingerprint !== argsFingerprint)
         throw new Error("Operation id was replayed with different input");
@@ -1150,14 +1101,12 @@ export async function validatePurchaseImport(
       status,
       targets: results,
     });
-    await database.insert(runOperation).values({
-      runId: scope.public.runId,
-      operationId: input._runExecution.operationId,
+    await insertOperation(database, {
+      ...operationKey,
       kind: "validate_purchase_import",
       inputFingerprint: argsFingerprint,
       state: "completed",
       result,
-      completedAt: new Date(),
     });
     return result;
   });
@@ -1359,19 +1308,8 @@ export async function commitProductEnrichment(
   const changes = input.changes;
   const operationId = input._runExecution.operationId;
   const fingerprint = await sha256Hex(JSON.stringify(input));
-  const [existing] = await database
-    .select({
-      inputFingerprint: runOperation.inputFingerprint,
-      result: runOperation.result,
-    })
-    .from(runOperation)
-    .where(
-      and(
-        eq(runOperation.runId, scope.public.runId),
-        eq(runOperation.operationId, operationId),
-      ),
-    )
-    .limit(1);
+  const operationKey = { runId: scope.public.runId, operationId };
+  const existing = await readOperation(database, operationKey);
   if (existing) {
     if (existing.inputFingerprint !== fingerprint)
       throw new Error("Operation id was replayed with different input");
@@ -1498,12 +1436,10 @@ export async function commitProductEnrichment(
           throw new Error(
             "Overwriting a populated Product field requires typed approval",
           );
-        await tx.insert(runOperation).values({
-          runId: scope.public.runId,
-          operationId,
+        await insertOperation(tx, {
+          ...operationKey,
           kind: "commit_product_enrichment",
           inputFingerprint: fingerprint,
-          state: "started",
         });
         await tx
           .update(product)
@@ -1633,20 +1569,7 @@ export async function commitProductEnrichment(
           changedFields: committedFields,
           skippedIdentifiers,
         });
-        await tx
-          .update(runOperation)
-          .set({
-            state: "completed",
-            result,
-            completedAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(runOperation.runId, scope.public.runId),
-              eq(runOperation.operationId, operationId),
-            ),
-          );
+        await completeOperation(tx, operationKey, result);
         return result;
       },
     );
@@ -1792,28 +1715,18 @@ export async function purchaseImportOperationStatus(
 ) {
   const input = importOperationStatusInput.parse(rawInput);
   const scope = await assertOwnedRun(db, actor, input._runExecution.runId);
-  const [operation] = await getDb(db)
-    .select({
-      kind: runOperation.kind,
-      state: runOperation.state,
-      result: runOperation.result,
-      error: runOperation.error,
-      startedAt: runOperation.startedAt,
-      completedAt: runOperation.completedAt,
-    })
-    .from(runOperation)
-    .where(
-      and(
-        eq(runOperation.runId, scope.public.runId),
-        eq(runOperation.operationId, input._runExecution.operationId),
-      ),
-    )
-    .limit(1);
+  const operation = await readOperation(getDb(db), {
+    runId: scope.public.runId,
+    operationId: input._runExecution.operationId,
+  });
   if (!operation) throw new Error("Purchase import operation was not found");
   return importOperationStatusOut.parse({
     runId: scope.public.shortcode,
     operationId: input._runExecution.operationId,
-    ...operation,
+    kind: operation.kind,
+    state: operation.state,
+    result: operation.result,
+    error: operation.error,
     startedAt: operation.startedAt.toISOString(),
     completedAt: operation.completedAt?.toISOString() ?? null,
   });

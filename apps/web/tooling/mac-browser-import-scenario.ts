@@ -15,10 +15,10 @@ import {
   issueBrowserCommand,
   readBrowserCommandResult,
   loadRunScope,
-  runImportOperation,
   startOrResumeRun,
   type PurchaseImportNamespace,
 } from "../src/server/purchase-import/run-service";
+import { executeLeasedOperation } from "../src/server/runs/operation";
 import {
   buildKernelContext,
   buildScenarioDatabase,
@@ -152,7 +152,7 @@ export async function createMacBrowserScenario(input: Input) {
         // The coordinator's decision on a retry: claim the run's next work,
         // as its `claim_next_import_work` tool does.
         const operationId = `native-resume:${retry.eventId}`;
-        await runImportOperation(
+        await executeLeasedOperation(
           db,
           {
             runId: run.id,

@@ -25,7 +25,6 @@ import {
   expense,
   product,
   purchase,
-  runOperation,
   run as runTable,
   runTarget,
 } from "~/server/db/schema";
@@ -40,6 +39,7 @@ import {
   updateExpense,
 } from "~/server/repo/expense/crud";
 import { updatePurchase } from "~/server/repo/purchase";
+import { insertOperation, readOperation } from "~/server/repo/run-operation";
 
 import { loadRunScopeByShortcode } from "./run-service";
 import {
@@ -446,19 +446,11 @@ export async function applyValidationCorrections(
     if (!target)
       throw new Error(`${input.purchaseId} is not a target of this run`);
 
-    const [existing] = await database
-      .select({
-        inputFingerprint: runOperation.inputFingerprint,
-        result: runOperation.result,
-      })
-      .from(runOperation)
-      .where(
-        and(
-          eq(runOperation.runId, scope.public.runId),
-          eq(runOperation.operationId, input.operationId),
-        ),
-      )
-      .limit(1);
+    const operationKey = {
+      runId: scope.public.runId,
+      operationId: input.operationId,
+    };
+    const existing = await readOperation(database, operationKey);
     if (existing) {
       if (existing.inputFingerprint !== fingerprint)
         throw new Error("Operation id was replayed with different input");
@@ -515,14 +507,12 @@ export async function applyValidationCorrections(
       outcome,
       remainingCorrections: remaining,
     });
-    await database.insert(runOperation).values({
-      runId: scope.public.runId,
-      operationId: input.operationId,
+    await insertOperation(database, {
+      ...operationKey,
       kind: "apply_validation_corrections",
       inputFingerprint: fingerprint,
       state: "completed",
       result,
-      completedAt: new Date(),
     });
     return { result, priceAffectedProductIds };
   });
