@@ -13,10 +13,10 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { z } from "zod";
 
 import { ActivityRunDetail } from "~/app/activity/activity-run-detail";
 import { createEntityDisplayColumns } from "~/entity/entity-display";
+import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/utils";
@@ -160,20 +160,12 @@ export function RunHistory({
     setChildren({});
     setChildErrors({});
   }, [filterKey]);
-  const pages = {
-    pageParamSchema: z.nullable(z.string()),
-    initialPageParam: null,
-    getNextPageParam: (page: { nextCursor: string | null }) =>
-      page.nextCursor ?? undefined,
-    page: (request: Partial<ActivityListInput>, cursor: string | null) =>
-      cursor ? { ...request, cursor } : request,
-  };
   const flat = useInfiniteQuery({
-    ...activity.list.infiniteQueryOptions(input, pages),
+    ...cursorQueryOptions(activity.list, input),
     enabled: !grouped,
   });
   const groups = useInfiniteQuery({
-    ...activity.groups.infiniteQueryOptions(input, pages),
+    ...cursorQueryOptions(activity.groups, input),
     enabled: grouped,
   });
   const groupRows = useMemo(

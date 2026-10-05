@@ -207,7 +207,7 @@ export const operationInvalidationTags = (
     : undefined;
 };
 
-type QueryDescriptor<
+export type QueryDescriptor<
   Input extends z.ZodTypeAny,
   Output extends z.ZodTypeAny,
 > = {

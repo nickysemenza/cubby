@@ -5,6 +5,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { z } from "zod";
 
+import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import {
   image as imageOperations,
   activity,
@@ -29,16 +30,7 @@ function ImageAnalysisHistory({
   id: ReturnType<typeof imageShortcode.parse>;
 }) {
   const analyses = useInfiniteQuery(
-    imageProcessing.analyses.infiniteQueryOptions(
-      { id, limit: 20 },
-      {
-        pageParamSchema: z.nullable(z.string()),
-        initialPageParam: null,
-        page: (input, cursor) =>
-          cursor === null ? input : { ...input, cursor },
-        getNextPageParam: (page) => page.nextCursor ?? undefined,
-      },
-    ),
+    cursorQueryOptions(imageProcessing.analyses, { id, limit: 20 }),
   );
   const pages = analyses.data?.pages ?? [];
   return (
