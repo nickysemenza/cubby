@@ -469,7 +469,12 @@ export function runServicesFor(
     },
 
     reconcileSettledRun: (input) => {
-      const payload = { runId, ...reconcileSettledRunInput.parse(input) };
+      const parsed = reconcileSettledRunInput.parse(input);
+      const payload = {
+        ...parsed,
+        runId,
+        receivedEventIds: new Set(parsed.receivedEventIds),
+      };
       return withDatabase((db, service) =>
         service.reconcileSettledRun(db, env.PURCHASE_IMPORT, payload),
       );

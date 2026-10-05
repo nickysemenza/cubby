@@ -166,9 +166,10 @@ describe("purchase-agent scripted scenarios", () => {
     runId: string,
     predicate: () => Promise<boolean>,
     message: string,
+    timeoutMs = 20_000,
   ) => {
     try {
-      await waitFor(predicate, message, 20_000);
+      await waitFor(predicate, message, timeoutMs);
     } catch (error) {
       throw new Error(
         `${error instanceof Error ? error.message : String(error)}\nemitted=${JSON.stringify(await scenario?.emitted())}\nviolations=${JSON.stringify(await scenario?.violations())}\ngateway=${JSON.stringify(await scenario?.gatewayCalls())}\n${await workerdDiagnostic(ctx.db, runId, scenario?.harness)}`,
@@ -696,6 +697,34 @@ describe("purchase-agent scripted scenarios", () => {
     ).toEqual([
       { operationId: "note-granted", state: "completed" },
       { operationId: "note-rejected", state: "failed" },
+    ]);
+    expect(await scenario.violations()).toEqual([]);
+  }, 90_000);
+
+  // Regression: the pi-durable move dropped the submission-start marker the
+  // settle report keyed on, so every settle was ignored and a coordinator
+  // that simply stopped left its run `running` until the two-hour sweep.
+  it("stall: a coordinator that stops without finishing moves the run to review once it settles", async () => {
+    const seeded = await seedAccountSync([]);
+    scenario = await startScenarioHarness(ctx.databaseUrl, {
+      steps: [
+        call("claim-1", "claim_next_import_work"),
+        { await: ["scenario-event-that-never-arrives"] },
+      ],
+    });
+    await scenario.dispatch(seeded.start);
+    await waitForRun(
+      seeded.run.id,
+      async () => (await runRow(seeded.run.id)).status === "needs_review",
+      "Run never reached needs_review",
+      // Settlement is polled every ten seconds.
+      40_000,
+    );
+    expect(await findings(seeded.run.id)).toEqual([
+      {
+        summary: "Coordinator ended without finishing the run",
+        status: "open",
+      },
     ]);
     expect(await scenario.violations()).toEqual([]);
   }, 90_000);

@@ -85,6 +85,8 @@ const STATE_KEYS = {
   identity: "identity",
   toolRounds: "tool_rounds",
   nudgedAt: "nudged_at",
+  latestSubmission: "latest_submission",
+  receivedEvents: "received_events",
 } as const;
 
 /**
@@ -114,6 +116,10 @@ export class PurchaseImportRunAgent
     () => this.services(),
     (error) => this.report(error),
     (settled) => this.recordSettlement(settled),
+    {
+      latest: () => this.readState(STATE_KEYS.latestSubmission),
+      receivedEventIds: () => this.receivedEventIds(),
+    },
   );
 
   constructor(
@@ -315,15 +321,39 @@ export class PurchaseImportRunAgent
       this.writeState(STATE_KEYS.identity, JSON.stringify(identity));
     }
     await this.ensureRunReady(identity);
+    // Record a new event, and its submission as the newest, before pi
+    // persists it: a submission that persists but fails to return is then
+    // still the newest when the queue redelivers it, and gets its watcher. A
+    // redelivered older event leaves the newest submission alone.
+    const eventId = input.signal.attributes?.eventId;
+    if (!eventId || !this.receivedEventIds().includes(eventId)) {
+      if (eventId) this.recordReceived(eventId);
+      this.writeState(STATE_KEYS.latestSubmission, input.operationId);
+    }
     const receipt = await this.harness.submit(renderSignal(input.signal), {
       operationId: input.operationId,
       whenBusy: "steer",
     });
-    if (receipt.accepted)
-      await this.settlement.watch({
-        operationId: receipt.operationId,
-      });
+    if (
+      receipt.accepted ||
+      this.readState(STATE_KEYS.latestSubmission) === receipt.operationId
+    )
+      await this.settlement.watch({ operationId: receipt.operationId });
     return { accepted: receipt.accepted };
+  }
+
+  private receivedEventIds(): string[] {
+    const raw = this.readState(STATE_KEYS.receivedEvents);
+    return raw ? z.array(z.string()).parse(JSON.parse(raw)) : [];
+  }
+
+  private recordReceived(eventId: string) {
+    const received = this.receivedEventIds();
+    if (received.includes(eventId)) return;
+    this.writeState(
+      STATE_KEYS.receivedEvents,
+      JSON.stringify([...received, eventId]),
+    );
   }
 
   private async ensureRunReady(identity: RunIdentity): Promise<void> {
@@ -370,13 +400,13 @@ export class PurchaseImportRunAgent
     if (!parsed.success)
       return Response.json({ error: parsed.error.message }, { status: 400 });
     await this.ensureRunReady(identity);
+    const operationId = `prompt:${crypto.randomUUID()}`;
+    this.writeState(STATE_KEYS.latestSubmission, operationId);
     const receipt = await this.harness.submit(parsed.data.body, {
-      operationId: `prompt:${crypto.randomUUID()}`,
+      operationId,
       whenBusy: "steer",
     });
-    await this.settlement.watch({
-      operationId: receipt.operationId,
-    });
+    await this.settlement.watch({ operationId: receipt.operationId });
     return Response.json({ operationId: receipt.operationId }, { status: 202 });
   }
 

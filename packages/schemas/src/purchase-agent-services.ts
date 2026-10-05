@@ -91,6 +91,12 @@ export const markRunFailedInput = purchaseAgentOperationRef.extend({
 
 export const reconcileSettledRunInput = purchaseAgentOperationRef.extend({
   detail: z.string().optional(),
+  /** Every queue event id the agent has received for this run. */
+  receivedEventIds: z.array(z.string().min(1)).max(10_000),
+  /** The settled submission went unanswered: fail the run, not review it. */
+  failure: markRunFailedInput
+    .pick({ failureCode: true, detail: true })
+    .optional(),
 });
 
 /** One model turn's token and cost accounting, recorded once per `eventId`. */
