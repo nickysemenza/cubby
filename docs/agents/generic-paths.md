@@ -46,9 +46,12 @@ existing block. Extend the generic path when it almost fits. See
   `purchase.checkSplit` / `purchase.checkLinkExpenses` return the body to send or the
   reason not to (`server/repo/purchase-split-draft.ts`, `purchase-link-draft.ts`).
 - Swift: generated OpenAPI client, `entity-manifest.json`, the generated manifest
-  vocabulary enums (`Generated/EntityVocabulary.swift`, from
-  `scripts/generator/entities/render/swift-catalog.ts`), and the generic list
-  and detail views; no hand-written mapping layer.
+  vocabulary enums (`Generated/EntityVocabulary.swift`) and descriptor types
+  (`Generated/EntityDescriptors.swift`, including `ValueSchema`). The typed description in
+  `packages/schemas/src/manifest-wire.ts` drives descriptor JSON validation, Swift storage,
+  and web structured-value types; `scripts/generator/entities/render/swift-catalog.ts`
+  emits the bundle and declarations. Native conveniences stay extensions. The generic list
+  and detail views consume that bundle; no hand-written mapping layer.
 
 ## Server
 

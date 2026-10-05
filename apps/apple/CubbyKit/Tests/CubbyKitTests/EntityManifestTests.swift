@@ -24,6 +24,43 @@ struct EntityManifestTests {
         #expect(old.suggestion == nil)
     }
 
+    // Associated-value labels, raw strings and absent optionals are wire contracts. A
+    // generated descriptor must keep Swift's synthesized Codable envelopes unchanged.
+    @Test func associatedValueEnvelopesAndInitializerDefaultsStayStable() throws {
+        func check<T: Codable>(_ value: T, _ json: String) throws {
+            let expected = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? NSDictionary
+            let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(value)) as? NSDictionary
+            #expect(encoded == expected)
+            let decoded = try JSONDecoder().decode(T.self, from: Data(json.utf8))
+            let roundTrip =
+                try JSONSerialization.jsonObject(with: JSONEncoder().encode(decoded)) as? NSDictionary
+            #expect(roundTrip == expected)
+        }
+        try check(FilterWire.param(name: "searchQuery"), #"{"param":{"name":"searchQuery"}}"#)
+        try check(
+            FilterWire.range(from: "start", to: "end", presence: nil),
+            #"{"range":{"from":"start","to":"end"}}"#)
+        try check(DetailSection.Kind.fields(["name"]), #"{"fields":{"_0":["name"]}}"#)
+        try check(DetailSection.Kind.timeline(mode: .lifecycles), #"{"timeline":{"mode":"lifecycles"}}"#)
+        try check(DetailSection.Kind.slot, #"{"slot":{}}"#)
+        try check(ListView.table, #"{"table":{}}"#)
+        try check(
+            ListView.slot(id: "synthetic.view", label: "Shelf", searchKeys: ["query"]),
+            #"{"slot":{"id":"synthetic.view","label":"Shelf","searchKeys":["query"]}}"#)
+        try check(ReadOnlyMatch.string("locked"), #"{"string":{"_0":"locked"}}"#)
+        try check(ReadOnlyMatch.bool(false), #"{"bool":{"_0":false}}"#)
+        try check(ValueSchema(node: .boolean), #"{"nullable":false,"node":{"boolean":{}}}"#)
+        try check(ValueSchema(node: .text(format: nil)), #"{"nullable":false,"node":{"text":{}}}"#)
+        try check(
+            ValueSchema.Field(
+                key: "name", label: "Name", required: true, schema: .init(node: .number(integer: true))),
+            #"{"key":"name","label":"Name","required":true,"schema":{"nullable":false,"node":{"number":{"integer":true}}}}"#
+        )
+        try check(
+            ListTotalDescriptor(id: "total", label: "Total", keys: ["cost"], format: .currencyRange),
+            #"{"id":"total","label":"Total","keys":["cost"],"format":"currencyRange"}"#)
+    }
+
     @Test func bundledManifestDecodesOneDescriptorPerEntityKey() {
         let keys = EntityCatalog.all.map(\.key)
         #expect(keys.count == EntityKey.allCases.count)

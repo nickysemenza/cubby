@@ -160,18 +160,16 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   `ReportFormFooterView`; `ReportChoiceAnswers` (CubbyKit) holds the answers, never preselects one,
   and assembles the `run.commitPrepared` body that `ReportSlotModel.approve` sends after the form's
   confirmation, with a new operation id per answer change.
-- `CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json`,
-  `CubbyKit/Sources/CubbyKit/Generated/EntityVocabulary.swift` and
-  `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift` — from
-  `scripts/generator/entities/render/swift-catalog.ts`. Regenerate with `pnpm generate`
-  (repo root). The manifest is a CubbyKit resource (`Package.swift`) that `EntityCatalog`
-  decodes once into the hand-written `Codable` descriptor types in `Catalog/EntityManifest.swift`
-  (synthesized encoding: `{"case":{"_0":…}}` for an unlabelled payload). The `String`
-  vocabulary enums those descriptors decode (renderer, slot, hero-action, field/filter/control
-  kinds, wayfinding domains, presentation choices and their labels) are generated into
-  `EntityVocabulary.swift` from the TS vocabulary; a new renderer or slot appears natively on
-  the next `pnpm generate`, and native conveniences on them live in hand-written extensions.
-  `EntityManifestTests` decodes the bundled manifest so a value a hand-written enum lacks fails CI.
+- `CubbyKit/Sources/CubbyKit/Generated/{entity-manifest.json,EntityDescriptors.swift,EntityVocabulary.swift}`
+  and `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift` — from
+  `scripts/generator/entities/render/swift-catalog.ts`. The typed wire description in
+  `packages/schemas/src/manifest-wire.ts` owns descriptor storage, associated-value labels,
+  raw values, conformances, and public initializer defaults, including recursive `ValueSchema`.
+  Generation validates JSON against that description and emits synthesized `Codable` declarations;
+  the catalog remains a bundled JSON resource decoded once. Native conveniences live in extensions
+  in `Catalog/EntityManifest.swift`. Vocabulary enums and labels derive from the TS vocabulary.
+  Change the shared wire description, then run `pnpm generate`; preserve Codable envelopes and
+  decode defaults, and verify `EntityManifestTests` and the structured round-trip vectors.
 - `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` — from `uniffi-bindgen`. Regenerate with
   `node scripts/ensure-apple-ffi.ts` (or `apps/apple/scripts/build-rust.sh` directly).
 - Rules that exist on both platforms but are not shared code are pinned by JSON vectors in
