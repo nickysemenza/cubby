@@ -53,12 +53,7 @@ export const productDetailFields = {
   // to the generic "Show all products with classification …" link.
   "product-category": (product) => ({
     value: product.category ? (
-      <Link
-        to="/product-categories/$shortcode"
-        params={{ shortcode: product.category.id }}
-      >
-        <CategoryLabel category={product.category} />
-      </Link>
+      <CategoryLabel category={product.category} />
     ) : undefined,
   }),
   "product-primary-gtin": (product) => ({

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { tradeOptions } from "~/app/projects/trade-options";
 import { CategoryLabel } from "~/features/products/CategoryLabel";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import { renderOptionCell } from "./columnHelpers";
@@ -19,8 +20,12 @@ function pillFor(label: string) {
 
 describe("enum pill icons", () => {
   it("shows the existing category glyph", () => {
-    render(<CategoryLabel category={categorySummaryFixture("supplies")} />);
+    const harness = createBrowserTestHarness();
+    render(<CategoryLabel category={categorySummaryFixture("supplies")} />, {
+      wrapper: harness.wrapper,
+    });
     expect(pillFor("Supplies").querySelectorAll("svg")).toHaveLength(1);
+    harness.dispose();
   });
 
   it("uses an option-roster icon for a generic trade pill", () => {
