@@ -19,6 +19,7 @@ const builtInWorkerOptions = new Set([
   "defaultBrowserType",
   "headless",
   "launchOptions",
+  "reuseContext",
   "screenshot",
   "trace",
   "video",
