@@ -28,6 +28,42 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
     }
 }
 
+/// One executed command's outcome, for a caller that logs each job (`cubby companion`). Reported
+/// after execution, before the result is recorded in the outbox and sent.
+public struct CompanionImageJobReport: Sendable, Equatable {
+    public enum Status: String, Sendable, Equatable {
+        case completed
+        /// AVIF input prepared as JPEG for the server's cloud description.
+        case normalized
+        case skipped
+        case failed
+    }
+
+    public let jobID: String
+    public let kind: String
+    public let status: Status
+    /// The skipped or failed reason, verbatim from the result.
+    public let reason: String?
+    public let retryable: Bool?
+    public let duration: Duration
+
+    init(_ result: ImageProcessingResult, kind: String, duration: Duration) {
+        jobID = result.jobId
+        self.kind = kind
+        self.duration = duration
+        let outcome = result.outcome
+        if let failure = outcome.value3 {
+            (status, reason, retryable) = (.failed, failure.reason, failure.retryable)
+        } else if let skipped = outcome.value2 {
+            (status, reason, retryable) = (.skipped, skipped.reason.rawValue, nil)
+        } else if outcome.value4 != nil {
+            (status, reason, retryable) = (.normalized, nil, nil)
+        } else {
+            (status, reason, retryable) = (.completed, nil, nil)
+        }
+    }
+}
+
 /// Whether an incoming command should be executed — `false` when the web has paused this
 /// connection (`ImageProcessingServerMessageHelloAck.remotePaused`), same as participation-off.
 /// A tiny pure decision, kept apart from the actor so it is directly unit-testable without a live
@@ -39,6 +75,7 @@ enum CompanionWorkAcceptance {
 public actor CompanionImageWorker {
     public typealias FailureObserver = @Sendable (any Error) -> Void
     public typealias ActivityObserver = @Sendable (CompanionImageWorkerActivity) -> Void
+    public typealias JobObserver = @Sendable (CompanionImageJobReport) -> Void
 
     private let baseURL: URL
     private let credentials: CredentialProvider
@@ -47,6 +84,7 @@ public actor CompanionImageWorker {
     private let outbox: CompanionResultOutbox<ImageProcessingResult>
     private let failureObserver: FailureObserver?
     private let activityObserver: ActivityObserver?
+    private let jobObserver: JobObserver?
     private let deviceID: UUID
     private let deviceName: String
     private var foreground: Bool
@@ -83,7 +121,8 @@ public actor CompanionImageWorker {
         session: URLSession = .cubbyShared,
         executor: CompanionImageCommandExecutor = CompanionImageCommandExecutor(),
         failureObserver: FailureObserver? = nil,
-        activityObserver: ActivityObserver? = nil
+        activityObserver: ActivityObserver? = nil,
+        jobObserver: JobObserver? = nil
     ) {
         self.baseURL = baseURL
         self.credentials = credentials
@@ -96,6 +135,7 @@ public actor CompanionImageWorker {
         self.executor = executor
         self.failureObserver = failureObserver
         self.activityObserver = activityObserver
+        self.jobObserver = jobObserver
         self.backgroundRunner = CompanionImageBackgroundRunner(
             outbox: outbox, execute: { command in await executor.execute(command) },
             failureObserver: failureObserver)
@@ -331,10 +371,12 @@ public actor CompanionImageWorker {
             phase: .processing, jobID: command.companionJobID, kind: command.companionKind,
             startedAt: .now)
         reportActivity()
+        let started = ContinuousClock.now
         let result = await executor.execute(command)
         running[key] = nil
         reportActivity()
         guard !Task.isCancelled else { return }
+        jobObserver?(.init(result, kind: command.companionKind, duration: started.duration(to: .now)))
         do {
             try await outbox.record(result, for: key)
             // A reconnect replays the outbox, so a result from a dropped socket is not lost.

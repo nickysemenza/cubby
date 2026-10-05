@@ -73,15 +73,26 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
     public init() {}
 
     public func availability() -> CompanionImageDescriptionAvailability {
+        unavailableReason() == nil ? .available : .unavailable
+    }
+
+    /// Why this process cannot describe images, or `nil` when it can — the diagnostic behind
+    /// `availability()`, which the hello reports as `actualImageDescription.available`.
+    public func unavailableReason() -> String? {
         #if compiler(>=6.4)
-            guard #available(iOS 27.0, macOS 27.0, *) else { return .unavailable }
-            let model = SystemLanguageModel.default
-            guard model.availability == .available, model.capabilities.contains(.vision) else {
-                return .unavailable
+            guard #available(iOS 27.0, macOS 27.0, *) else {
+                return "OS \(ProcessInfo.processInfo.operatingSystemVersionString) is older than iOS/macOS 27"
             }
-            return .available
+            let model = SystemLanguageModel.default
+            if case .unavailable(let reason) = model.availability {
+                return "SystemLanguageModel.default.availability is unavailable(\(reason))"
+            }
+            guard model.capabilities.contains(.vision) else {
+                return "SystemLanguageModel.default.capabilities lacks .vision"
+            }
+            return nil
         #else
-            return .unavailable
+            return "built with a Swift compiler older than 6.4 (no Foundation Models image input)"
         #endif
     }
 
