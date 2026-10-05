@@ -66,19 +66,40 @@ function connectionUrl(config: {
 export async function prepareTemplate(
   namespace: TemplateNamespace,
 ): Promise<void> {
-  await integreSQL().initializeTemplate(
-    templateHash(namespace),
-    async (config) => {
-      console.log(`[test database] Migrating the ${namespace} template`);
-      const pool = new Pool({ connectionString: connectionUrl(config) });
-      try {
-        await migrateDatabase(drizzle(pool));
-      } finally {
-        await pool.end();
-      }
-      console.log(`[test database] Migrated the ${namespace} template`);
-    },
-  );
+  // The client discards the template after a failed migration and rethrows,
+  // but a failed discard replaces the migration error; keep both.
+  let migrationError: unknown;
+  try {
+    await integreSQL().initializeTemplate(
+      templateHash(namespace),
+      async (config) => {
+        console.log(`[test database] Migrating the ${namespace} template`);
+        const pool = new Pool({ connectionString: connectionUrl(config) });
+        try {
+          await migrateDatabase(drizzle(pool));
+        } catch (error) {
+          migrationError = error;
+          console.error(
+            `[test database] Migrating the ${namespace} template failed`,
+            error,
+          );
+          throw error;
+        } finally {
+          await pool.end();
+        }
+        console.log(`[test database] Migrated the ${namespace} template`);
+      },
+    );
+  } catch (error) {
+    if (migrationError !== undefined && error !== migrationError) {
+      throw new AggregateError(
+        [migrationError, error],
+        `Migrating the ${namespace} template failed, then discarding it failed`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
 }
 
 /**
