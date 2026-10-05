@@ -14,7 +14,7 @@ import { validateToolArguments } from "@earendil-works/pi-ai";
 import type { JsonObject, ToolExecutionApi } from "@earendil-works/pi-durable";
 import { fromAny, fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
-import type { z } from "zod";
+import { z } from "zod";
 
 import type { RunServices } from "./environment";
 import { purchaseImportTools } from "./tools";
@@ -359,6 +359,60 @@ describe("purchase-import agent tool authority", () => {
       },
     ]);
     expect(readBrowserCommandResult).toHaveBeenCalledTimes(2);
+  });
+
+  // pi converts a call's arguments with TypeBox before validating them, so a
+  // model's `"TRUE"` or `"0"` for a boolean has always reached the host as a
+  // boolean. A plain JSON Schema parameter fell back to pi's narrower
+  // coercion and refused those calls.
+  it("converts loosely typed scalars as TypeBox always has", () => {
+    const converted = {
+      boolean: [
+        ["TRUE", true],
+        ["False", false],
+        ["true", true],
+        ["1", true],
+        ["0", false],
+        [1, true],
+        [0, false],
+      ],
+      number: [
+        ["1", 1],
+        ["2.5", 2.5],
+        ["TRUE", 1],
+        ["False", 0],
+        [true, 1],
+      ],
+      integer: [
+        ["1", 1],
+        ["0", 0],
+        ["TRUE", 1],
+        [false, 0],
+      ],
+    } as const;
+    const fields: string[] = [];
+    for (const [name, args] of Object.entries(widestArguments("op-1"))) {
+      const properties = z
+        .record(z.string(), z.looseObject({ type: z.string().optional() }))
+        .parse(
+          JSON.parse(JSON.stringify(toolNamed(name).parameters)).properties,
+        );
+      for (const [field, { type }] of Object.entries(properties)) {
+        if (type !== "boolean" && type !== "number" && type !== "integer")
+          continue;
+        fields.push(`${name}.${field}`);
+        for (const [sent, expected] of converted[type])
+          expect(
+            validated(name, { ...args, [field]: sent })[field],
+            `${name}.${field} = ${JSON.stringify(sent)}`,
+          ).toBe(expected);
+        expect(() => validated(name, { ...args, [field]: "maybe" })).toThrow(
+          new RegExp(field),
+        );
+      }
+    }
+    // The matrix must reach every scalar field the tools publish.
+    expect(fields).toEqual(["report_agent_progress.awaitingApproval"]);
   });
 
   it("rejects arbitrary browser actions and unbounded text", () => {

@@ -1,6 +1,6 @@
 import { purchaseAgentToolInputs } from "@cubby/schemas/purchase-agent-services";
 import type { Context, JsonValue } from "@earendil-works/chord";
-import { Type } from "@earendil-works/pi-ai";
+import { Type, type TSchema } from "@earendil-works/pi-ai";
 import {
   defineTool,
   type ToolExecutionApi,
@@ -55,6 +55,57 @@ function result(output: JsonValue, terminate = false): ToolExecutionResult {
   return { content, control: { terminate: true } };
 }
 
+type JsonSchema = z.core.JSONSchema._JSONSchema;
+
+/**
+ * A contract's JSON Schema rebuilt from TypeBox builders, every other keyword
+ * kept as is. pi converts a call's arguments with TypeBox `Value.Convert`
+ * before validating, and that sees only TypeBox-built nodes: behind
+ * `Type.Unsafe` pi's narrower coercion refused a model's `"TRUE"` or `"0"`
+ * for a boolean. A shape this does not know fails when the tools are built.
+ */
+function typeboxSchema(node: JsonSchema): TSchema {
+  if (node === true || node === false)
+    throw new Error("Unsupported boolean schema");
+  const { type, properties, required, items, ...options } = node;
+  switch (type) {
+    case "object":
+      return Type.Object(
+        Object.fromEntries(
+          Object.entries(properties ?? {}).map(([key, value]) => {
+            const property = typeboxSchema(value);
+            return [
+              key,
+              required?.includes(key) ? property : Type.Optional(property),
+            ];
+          }),
+        ),
+        options,
+      );
+    case "array":
+      if (items === undefined || Array.isArray(items))
+        throw new Error("Unsupported array schema");
+      return Type.Array(typeboxSchema(items), options);
+    case "string":
+      return Type.String(options);
+    case "boolean":
+      return Type.Boolean(options);
+    case "number":
+    case "integer": {
+      // Draft-7 exclusive bounds are numbers; only draft-04's are booleans.
+      const { exclusiveMinimum: min, exclusiveMaximum: max, ...rest } = options;
+      const bounds = {
+        ...rest,
+        ...(min !== undefined && { exclusiveMinimum: z.number().parse(min) }),
+        ...(max !== undefined && { exclusiveMaximum: z.number().parse(max) }),
+      };
+      return type === "number" ? Type.Number(bounds) : Type.Integer(bounds);
+    }
+    default:
+      throw new Error(`Unsupported tool schema ${JSON.stringify(node)}`);
+  }
+}
+
 /**
  * One typed tool: its contract's JSON Schema is what the model sees and what
  * pi validates the call against before `execute`.
@@ -74,12 +125,11 @@ function tool<N extends ToolName>(
     purchaseAgentToolInputs[name],
     { target: "draft-7", io: "input" },
   );
-  return defineTool({
+  return defineTool<TSchema>({
     name,
-    // Plain JSON Schema behind `Type.Unsafe`, as `cubby-mcp.ts` mounts the MCP
-    // tools. That is safe only while these tools stay non-strict: pi-ai
+    // Non-strict, like the MCP tools in `cubby-mcp.ts`: pi-ai
     // `structuredClone`s strict tool parameters (see `ai/run-feature.ts`).
-    parameters: Type.Unsafe<z.input<ToolInputs[N]>>(schema),
+    parameters: typeboxSchema(schema),
     // Every typed tool is replay-safe: its effects are memoized steps keyed
     // by the model's operation id.
     replay: "safe",

@@ -1,45 +1,49 @@
 {
   "claim_next_import_work": {
     "type": "object",
+    "required": [
+      "operationId"
+    ],
     "properties": {
       "operationId": {
         "type": "string",
         "minLength": 1,
         "maxLength": 200
       }
-    },
-    "required": [
-      "operationId"
-    ]
+    }
   },
   "extract_receipt_evidence": {
     "type": "object",
+    "required": [
+      "operationId"
+    ],
     "properties": {
       "operationId": {
         "type": "string",
         "minLength": 1,
         "maxLength": 200
       }
-    },
-    "required": [
-      "operationId"
-    ]
+    }
   },
   "extract_run_evidence": {
     "type": "object",
+    "required": [
+      "operationId"
+    ],
     "properties": {
       "operationId": {
         "type": "string",
         "minLength": 1,
         "maxLength": 200
       }
-    },
-    "required": [
-      "operationId"
-    ]
+    }
   },
   "issue_browser_command": {
     "type": "object",
+    "required": [
+      "operationId",
+      "command"
+    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -48,6 +52,9 @@
       },
       "command": {
         "type": "object",
+        "required": [
+          "kind"
+        ],
         "properties": {
           "kind": {
             "type": "string",
@@ -62,32 +69,29 @@
             "type": "string",
             "maxLength": 2048
           }
-        },
-        "required": [
-          "kind"
-        ]
+        }
       }
-    },
-    "required": [
-      "operationId",
-      "command"
-    ]
+    }
   },
   "read_browser_command_result": {
     "type": "object",
+    "required": [
+      "operationId"
+    ],
     "properties": {
       "operationId": {
         "type": "string",
         "minLength": 1,
         "maxLength": 200
       }
-    },
-    "required": [
-      "operationId"
-    ]
+    }
   },
   "import_browser_order_evidence": {
     "type": "object",
+    "required": [
+      "operationId",
+      "commandId"
+    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -127,14 +131,14 @@
         "type": "string",
         "minLength": 1
       }
-    },
-    "required": [
-      "operationId",
-      "commandId"
-    ]
+    }
   },
   "report_agent_progress": {
     "type": "object",
+    "required": [
+      "operationId",
+      "phase"
+    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -166,14 +170,14 @@
         "minLength": 1,
         "maxLength": 1000
       }
-    },
-    "required": [
-      "operationId",
-      "phase"
-    ]
+    }
   },
   "save_navigation_hints": {
     "type": "object",
+    "required": [
+      "operationId",
+      "hints"
+    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -181,11 +185,12 @@
         "maxLength": 200
       },
       "hints": {
-        "minItems": 1,
-        "maxItems": 25,
         "type": "array",
         "items": {
           "type": "object",
+          "required": [
+            "url"
+          ],
           "properties": {
             "url": {
               "type": "string",
@@ -196,20 +201,19 @@
               "type": "string",
               "maxLength": 500
             }
-          },
-          "required": [
-            "url"
-          ]
-        }
+          }
+        },
+        "minItems": 1,
+        "maxItems": 25
       }
-    },
-    "required": [
-      "operationId",
-      "hints"
-    ]
+    }
   },
   "mark_history_expired": {
     "type": "object",
+    "required": [
+      "operationId",
+      "earliestAvailableOrderAt"
+    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -221,27 +225,27 @@
         "format": "date-time",
         "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
       }
-    },
-    "required": [
-      "operationId",
-      "earliestAvailableOrderAt"
-    ]
+    }
   },
   "finish_import_run": {
     "type": "object",
+    "required": [
+      "operationId"
+    ],
     "properties": {
       "operationId": {
         "type": "string",
         "minLength": 1,
         "maxLength": 200
       }
-    },
-    "required": [
-      "operationId"
-    ]
+    }
   },
   "stop_import_run_for_review": {
     "type": "object",
+    "required": [
+      "operationId",
+      "reason"
+    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -262,14 +266,15 @@
         "minLength": 1,
         "maxLength": 1000
       }
-    },
-    "required": [
-      "operationId",
-      "reason"
-    ]
+    }
   },
   "defer_order_for_review": {
     "type": "object",
+    "required": [
+      "operationId",
+      "orderId",
+      "detail"
+    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -286,15 +291,16 @@
         "minLength": 1,
         "maxLength": 1000
       }
-    },
-    "required": [
-      "operationId",
-      "orderId",
-      "detail"
-    ]
+    }
   },
   "settle_charge_hunt": {
     "type": "object",
+    "required": [
+      "operationId",
+      "huntId",
+      "outcome",
+      "detail"
+    ],
     "properties": {
       "operationId": {
         "type": "string",
@@ -318,12 +324,6 @@
         "minLength": 1,
         "maxLength": 1000
       }
-    },
-    "required": [
-      "operationId",
-      "huntId",
-      "outcome",
-      "detail"
-    ]
+    }
   }
 }
