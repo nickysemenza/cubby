@@ -8,7 +8,7 @@ import {
   createProductFixture as createProduct,
   makeProductInput,
   seedSearchDocumentsFixtureRaw,
-  updateProductNameFixtureRaw,
+  renameFixtureRaw,
 } from "~/server/repo/repo.fixtures";
 import {
   getSearchDocumentEmbeddingText,
@@ -57,7 +57,7 @@ describe("search index repair stream", () => {
       ctx.actor,
     );
     await refreshSearchDocument(ctx.db, "product", stale.entityId);
-    await updateProductNameFixtureRaw(ctx.db, stale.entityId, "Renamed raw");
+    await renameFixtureRaw(ctx.db, "product", stale.entityId, "Renamed raw");
     const published = recordingQueue();
 
     const events = [];
