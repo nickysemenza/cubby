@@ -8,6 +8,7 @@ import {
   MAX_SORTS,
   sortPaginationFields,
 } from "@cubby/schemas/pagination";
+import { capitalize } from "@cubby/shared/text-case";
 import { z } from "zod";
 
 import {
@@ -174,8 +175,7 @@ const unwrapOptional = (schema: z.ZodType): z.ZodType => {
   return inner instanceof z.ZodType ? unwrapOptional(inner) : schema;
 };
 
-const flatName = (field: string, key: string) =>
-  `${field}${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+const flatName = (field: string, key: string) => `${field}${capitalize(key)}`;
 
 /**
  * The wire schema of a resource list: the entity's filter fields as flat

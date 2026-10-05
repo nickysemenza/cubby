@@ -1,3 +1,4 @@
+import { capitalize } from "../../../../packages/shared/src/text-case.ts";
 import { readFileSync } from "node:fs";
 import {
   entityFieldControlKinds,
@@ -99,7 +100,7 @@ const swiftIdentifier = (raw: string): string =>
     .map((segment, index) =>
       index === 0
         ? segment.charAt(0).toLowerCase() + segment.slice(1)
-        : segment.charAt(0).toUpperCase() + segment.slice(1),
+        : capitalize(segment),
     )
     .join("");
 

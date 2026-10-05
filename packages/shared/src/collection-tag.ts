@@ -1,3 +1,4 @@
+import { capitalize } from "./text-case";
 export const COLLECTION_TAG_PREFIX = "collection:";
 
 export const collectionSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
@@ -20,11 +21,7 @@ export const normalizeCollectionSlug = (value: string): string =>
     .replace(/^-+|-+$/gu, "");
 
 export const formatCollectionLabel = (slug: string): string =>
-  slug
-    .split("-")
-    .filter(Boolean)
-    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
-    .join(" ");
+  slug.split("-").filter(Boolean).map(capitalize).join(" ");
 
 export const collectionSlugsFromTags = (tags: readonly string[]): string[] =>
   [...new Set(tags.flatMap((tag) => collectionSlugFromTag(tag) ?? []))].sort();
