@@ -1,9 +1,51 @@
 import Observation
 
-/// Drives a generic Browse list screen for one `EntityDescriptor`. The model owns the complete
+/// An injected page source for `GenericEntityListModel`, for surfaces whose rows come from
+/// something other than the descriptor's declared list (scoped pickers, photo destination lanes,
+/// relationship cursors, the wardrobe shelf). The model keeps one paginator — request generation,
+/// cancellation, ID de-duplication, retry and error state — and the source only answers "page N".
+///
+/// Contract for `loadPage` / `searchPage`:
+/// - `page` is 1-based. Return `ListPage.meta` with the page's `pageSize` and the source's total so
+///   `hasMore` (`page * pageSize < totalCount`) is right. A cursor source (relationship pages)
+///   maps page N to its offset and reports a total that keeps `hasMore` true until its cursor ends.
+/// - Items already shown are dropped by `id`; a page that adds nothing still advances `page`, so a
+///   lane policy above the model (photo recents skipping same-day rows) can call `loadNextPage()`
+///   again while `hasMore` holds.
+/// - A loader may ignore cancellation; a superseded result is discarded by generation.
+/// - Eligibility, ranking and lane exclusion stay in the source or its owner, never the model.
+///
+/// `id` is the scope identity: `setSource(_:)` with an equal `id` is a no-op, so SwiftUI may
+/// re-run a `.task` freely; a new `id` drops the old scope's rows and replays an active query.
+/// `enrichesRows` opts into the declared deferred enrichment and descriptor projection; leave it
+/// off when the source builds its rows itself (a collection projection) rather than the list route.
+public struct EntityListPageSource: Sendable {
+    public typealias PageLoader = @Sendable (_ page: Int) async throws -> ListPage<EntityRow>
+
+    public let id: any Hashable & Sendable
+    public let enrichesRows: Bool
+    public let loadPage: PageLoader
+    /// Server-side search inside the same scope; nil when the surface has no query field.
+    public let searchPage: EntityListSearchModel.PageLoader?
+
+    public init(
+        id: some Hashable & Sendable,
+        enrichesRows: Bool = false,
+        loadPage: @escaping PageLoader,
+        searchPage: EntityListSearchModel.PageLoader? = nil
+    ) {
+        self.id = id
+        self.enrichesRows = enrichesRows
+        self.loadPage = loadPage
+        self.searchPage = searchPage
+    }
+}
+
+/// Drives a generic entity list for one `EntityDescriptor`. The model owns the complete
 /// accumulated result so pagination cannot be lost when a view is recreated or adapted, the
 /// active filters (keyed by wire name), the selected declared view, and — when that view is the
-/// timeline — the timeline payload for the same filters.
+/// timeline — the timeline payload for the same filters. Pages come from the descriptor's
+/// declared list route unless the host injects an `EntityListPageSource`.
 @MainActor
 @Observable
 public final class GenericEntityListModel {
@@ -24,7 +66,7 @@ public final class GenericEntityListModel {
 
     public let descriptor: EntityDescriptor
     private var coreRows: [EntityRow] = []
-    public var rows: [EntityRow] { enrichment.project(coreRows) }
+    public var rows: [EntityRow] { enrichesRows ? enrichment.project(coreRows) : coreRows }
     public let enrichment: EntityListEnrichmentModel
     public private(set) var meta: ListPageMeta?
     public private(set) var phase: Phase = .idle
@@ -44,7 +86,7 @@ public final class GenericEntityListModel {
     /// Optional rich search state supplied by the host when the entity declares a primary search
     /// wire. Keeping it separate from the base list preserves loaded pages, selection, and the
     /// selected cards/timeline view while a query is active.
-    public let searchModel: EntityListSearchModel?
+    public private(set) var searchModel: EntityListSearchModel?
 
     public var isSearching: Bool { !(searchModel?.query.isEmpty ?? true) }
 
@@ -72,6 +114,9 @@ public final class GenericEntityListModel {
     private let pageSize: Int
     private let sort: String?
     private let progressive: Bool
+    private let searchDebounceNanoseconds: UInt64
+    private var source: EntityListPageSource?
+    private var enrichesRows: Bool { source?.enrichesRows ?? true }
     private var requestGeneration = 0
     private var requestTask: Task<ListPage<EntityRow>, Error>?
     private var hasLoaded = false
@@ -93,6 +138,7 @@ public final class GenericEntityListModel {
         self.pageSize = pageSize
         self.sort = sort
         self.progressive = progressive
+        self.searchDebounceNanoseconds = 250_000_000
         self.filters = filters
         let selectedView = view ?? descriptor.presentation.listViews.first ?? .table
         self.view = selectedView
@@ -106,6 +152,66 @@ public final class GenericEntityListModel {
                         pageSize: pageSize, sort: sort,
                         progressive: progressive && Self.supportsProgressiveSearch(selectedView)))
             }
+    }
+
+    /// A list whose pages come from `source`; see `EntityListPageSource` for the contract. The
+    /// declared filters, sort, page size and timeline do not apply to an injected source.
+    public init(
+        descriptor: EntityDescriptor,
+        client: CubbyClient,
+        source: EntityListPageSource,
+        view: ListView = .table,
+        searchDebounceNanoseconds: UInt64 = 250_000_000
+    ) {
+        self.descriptor = descriptor
+        self.enrichment = EntityListEnrichmentModel(descriptor: descriptor)
+        self.client = client
+        self.pageSize = 50
+        self.sort = nil
+        self.progressive = false
+        self.searchDebounceNanoseconds = searchDebounceNanoseconds
+        self.filters = EntityFilterState()
+        self.view = view
+        self.source = source
+        self.searchModel = source.searchPage.map {
+            EntityListSearchModel(
+                descriptor: source.enrichesRows ? descriptor : nil,
+                debounceNanoseconds: searchDebounceNanoseconds, loader: $0)
+        }
+    }
+
+    /// Replaces the injected source when its scope identity changes. The old scope's rows,
+    /// totals and in-flight pages are discarded (a chooser tap must never land on a row from the
+    /// previous scope); an active query is kept and replayed against the new source.
+    public func setSource(_ newSource: EntityListPageSource) async {
+        guard source.map({ AnyHashable($0.id) != AnyHashable(newSource.id) }) ?? true else { return }
+        let enrichmentChanged = newSource.enrichesRows != enrichesRows
+        source = newSource
+        cancelRequest()
+        coreRows = []
+        meta = nil
+        page = 1
+        hasLoaded = false
+        enrichment.invalidate()
+        // A timeline describes the declared filters, never an injected scope: drop a loaded one
+        // and let a pending response fail its generation check.
+        timelineGeneration += 1
+        timeline = nil
+        timelineError = nil
+        isLoadingTimeline = false
+        if let searchPage = newSource.searchPage, let searchModel, !enrichmentChanged {
+            searchModel.setLoader(searchPage, discardingRows: true)
+        } else {
+            let query = searchModel?.query ?? ""
+            searchModel?.clear()
+            searchModel = newSource.searchPage.map {
+                EntityListSearchModel(
+                    descriptor: newSource.enrichesRows ? descriptor : nil,
+                    debounceNanoseconds: searchDebounceNanoseconds, loader: $0)
+            }
+            searchModel?.setQuery(query)
+        }
+        await loadFirstPage(as: .loadingInitial)
     }
 
     /// Loads the first page once. A failed initial request can be retried, while a successfully
@@ -130,11 +236,13 @@ public final class GenericEntityListModel {
         meta = nil
         coreRows = rows
         enrichment.invalidate()
-        searchModel?.setLoader(
-            Self.searchLoader(
-                descriptor: descriptor, client: client, filters: newFilters,
-                pageSize: pageSize, sort: sort,
-                progressive: progressive && Self.supportsProgressiveSearch(view)))
+        if source == nil {
+            searchModel?.setLoader(
+                Self.searchLoader(
+                    descriptor: descriptor, client: client, filters: newFilters,
+                    pageSize: pageSize, sort: sort,
+                    progressive: progressive && Self.supportsProgressiveSearch(view)))
+        }
         await refresh()
     }
 
@@ -153,7 +261,7 @@ public final class GenericEntityListModel {
         let searchModeChanged =
             Self.supportsProgressiveSearch(view) != Self.supportsProgressiveSearch(newView)
         view = newView
-        if searchModeChanged {
+        if searchModeChanged, source == nil {
             searchModel?.setLoader(
                 Self.searchLoader(
                     descriptor: descriptor, client: client, filters: filters, pageSize: pageSize,
@@ -162,9 +270,10 @@ public final class GenericEntityListModel {
         if newView == .timeline, timeline == nil, !isLoadingTimeline { await loadTimeline() }
     }
 
-    /// `resources.<entity>.timeline` for the active filters. No-op for an entity without one.
+    /// `resources.<entity>.timeline` for the active filters. No-op for an entity without one or
+    /// a list fed by an injected source, whose scope the declared filters do not describe.
     public func loadTimeline() async {
-        guard descriptor.key.nativeActions.contains(.timeline) else {
+        guard source == nil, descriptor.key.nativeActions.contains(.timeline) else {
             timelineError = "No timeline for \(descriptor.plural)"
             return
         }
@@ -199,7 +308,7 @@ public final class GenericEntityListModel {
             coreRows.append(contentsOf: result.items.filter { ids.insert($0.id).inserted })
             page = nextPage
             meta = result.meta
-            enrichment.accept(result, replacing: false)
+            if enrichesRows { enrichment.accept(result, replacing: false) }
             phase = .loaded
         } catch is CancellationError {
             // A refresh or newer request owns the state now.
@@ -225,7 +334,7 @@ public final class GenericEntityListModel {
     }
 
     private func loadFirstPage(as requestedActivity: Activity) async {
-        guard descriptor.key.nativeActions.contains(.list) else {
+        guard source != nil || descriptor.key.nativeActions.contains(.list) else {
             cancelRequest()
             let message = "No list route for \(descriptor.plural)"
             initialError = message
@@ -249,7 +358,7 @@ public final class GenericEntityListModel {
             page = 1
             meta = result.meta
             hasLoaded = true
-            enrichment.accept(result, replacing: true)
+            if enrichesRows { enrichment.accept(result, replacing: true) }
             phase = .loaded
         } catch is CancellationError {
             // A newer request owns the state now.
@@ -271,14 +380,23 @@ public final class GenericEntityListModel {
         requestTask?.cancel()
         requestGeneration += 1
         let generation = requestGeneration
+        let loadPage = source?.loadPage ?? declaredListLoader()
+        requestTask = Task {
+            try Task.checkCancellation()
+            return try await loadPage(page)
+        }
+        return generation
+    }
+
+    /// The descriptor's list route for the current filters, sort and view.
+    private func declaredListLoader() -> EntityListPageSource.PageLoader {
         let client = client
         let descriptor = descriptor
         let pageSize = pageSize
         let sort = sort
         let filters = filters
         let standard = progressive && (view == .table || view == .shelf)
-        requestTask = Task {
-            try Task.checkCancellation()
+        return { page in
             if standard {
                 return try await client.progressiveList(
                     descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
@@ -286,7 +404,6 @@ public final class GenericEntityListModel {
             return try await client.list(
                 descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
         }
-        return generation
     }
 
     private func finishRequest(_ generation: Int) {
