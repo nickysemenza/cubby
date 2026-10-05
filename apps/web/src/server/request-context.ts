@@ -29,6 +29,7 @@ import type { AvailabilityService } from "~/server/services/availability.service
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import { createUpcLookupService } from "~/server/services/upc";
 import type { USDAService } from "~/server/services/usda.service";
+import { annotateActiveSpan } from "~/server/tracing";
 import type { RequestOrigin } from "~/server/workload";
 
 const deferredRecipeCosting = (
@@ -160,6 +161,14 @@ export const createRequestContext = async (opts: {
   if (opts.actor) {
     const { userId, sessionId, channel, oauthClientId, runId } = opts.actor;
     const requestOrigin: RequestOrigin = channel === "mcp" ? "mcp" : "api";
+    annotateActiveSpan({
+      "user.id": userId,
+      "session.id": sessionId ?? undefined,
+      "cubby.auth.channel": channel,
+      "cubby.auth.oauth_client_id": oauthClientId ?? undefined,
+      "cubby.run.id": runId ?? undefined,
+      "cubby.device.id": deviceId ?? undefined,
+    });
     return {
       ...crudServices,
       readConsistency,
@@ -183,6 +192,12 @@ export const createRequestContext = async (opts: {
     : null;
 
   const requestOrigin: RequestOrigin = "ui";
+  annotateActiveSpan({
+    "user.id": authenticatedUserId ?? undefined,
+    "session.id": betterSession?.session?.id,
+    "cubby.auth.channel": authenticatedUserId ? "web" : undefined,
+    "cubby.device.id": deviceId ?? undefined,
+  });
   return {
     ...crudServices,
     readConsistency,
