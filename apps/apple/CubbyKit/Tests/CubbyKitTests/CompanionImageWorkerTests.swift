@@ -90,6 +90,134 @@ struct CompanionImageWorkerTests {
         let notPaused = CompanionImageWorkerActivity(phase: .idle)
         #expect(!notPaused.remotePaused)
     }
+
+    // MARK: - Drain state
+
+    /// Regression: the worker reports idle before it records the result, so `cubby companion`
+    /// stopped on a stale "nothing pending" while a finished result was still unrecorded. Every
+    /// drain-state read must count a finished command as outstanding, pending, or both until the server
+    /// acknowledges it.
+    @Test func drainStateCountsACommandUntilItsResultIsDurablyRecorded() async throws {
+        let gate = ExecutionGate()
+        let worker = CompanionImageWorker(
+            baseURL: URL(string: "http://localhost:3000")!,
+            credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true, isParticipating: false,
+            outbox: try outbox(), execute: { await gate.run($0) })
+        await worker.startCommand(try describeCommand(), socket: nil)
+        while !(await gate.started) { try await Task.sleep(for: .milliseconds(2)) }
+        #expect(
+            try await worker.drainState()
+                == .init(connected: false, outstandingCommands: 1, pendingResults: 0))
+
+        await gate.release()
+        for _ in 0..<500 {
+            let state = try await worker.drainState()
+            #expect(state.outstandingCommands + state.pendingResults >= 1)
+            if state.outstandingCommands == 0 { break }
+            await Task.yield()
+        }
+        #expect(
+            try await worker.drainState()
+                == .init(connected: false, outstandingCommands: 0, pendingResults: 1))
+    }
+
+    /// Regression: `drainState()` read the command count before awaiting the outbox, so a command
+    /// accepted during that await ran uncounted and shutdown cancelled it. A settled answer must
+    /// also close acceptance, so nothing can start between "settled" and the caller's `stop()`.
+    @Test func aSettledAnswerMeansNoCommandRunsUntilAcceptanceResumes() async throws {
+        for _ in 0..<100 {
+            let executions = ExecutionCounter()
+            let worker = CompanionImageWorker(
+                baseURL: URL(string: "http://localhost:3000")!,
+                credentials: try credentials(bearer: "tok"),
+                deviceID: UUID(), deviceName: "Test phone", foreground: true, isParticipating: false,
+                outbox: try outbox(), execute: { await executions.run($0) })
+            let command = try describeCommand()
+            async let settled = worker.pauseAcceptingIfSettled()
+            async let started: Void = worker.startCommand(command, socket: nil)
+            let wasSettled = try await settled
+            await started
+            for _ in 0..<20 { await Task.yield() }
+            if wasSettled {
+                #expect(await executions.count == 0)
+                #expect(try await worker.drainState().outstandingCommands == 0)
+            }
+        }
+    }
+
+    @Test func anUnsettledAnswerKeepsAcceptingAndRunsDeferredCommands() async throws {
+        let gate = ExecutionGate()
+        let worker = CompanionImageWorker(
+            baseURL: URL(string: "http://localhost:3000")!,
+            credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true, isParticipating: false,
+            outbox: try outbox(), execute: { await gate.run($0) })
+        await worker.startCommand(try describeCommand(), socket: nil)
+        while !(await gate.started) { try await Task.sleep(for: .milliseconds(2)) }
+        #expect(try await worker.pauseAcceptingIfSettled() == false)
+        await gate.release()
+        while try await worker.drainState().outstandingCommands > 0 {
+            try await Task.sleep(for: .milliseconds(2))
+        }
+        // A pending (unacknowledged) result still means not settled.
+        #expect(try await worker.pauseAcceptingIfSettled() == false)
+    }
+
+    @Test func stoppingAcceptanceDefersNewCommandsForGood() async throws {
+        let executions = ExecutionCounter()
+        let worker = CompanionImageWorker(
+            baseURL: URL(string: "http://localhost:3000")!,
+            credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true, isParticipating: false,
+            outbox: try outbox(), execute: { await executions.run($0) })
+        await worker.stopAccepting()
+        await worker.startCommand(try describeCommand(), socket: nil)
+        #expect(try await worker.pauseAcceptingIfSettled())
+        for _ in 0..<20 { await Task.yield() }
+        #expect(await executions.count == 0)
+    }
+
+    private func describeCommand() throws -> ImageProcessingCommand {
+        let value = """
+            {"kind":"describe_image","jobId":"00000000-0000-4000-8000-000000000001","attemptId":"00000000-0000-4000-8000-000000000002","deadline":"2099-01-01T00:00:00Z","source":{"url":"https://example.test/panel.jpg","sha256":"\(String(repeating: "a", count: 64))","contentType":"image/jpeg"},"promptRevision":1,"resultSchemaRevision":1}
+            """
+        return try JSONDecoder.companionImageProcessing.decode(
+            ImageProcessingCommand.self, from: Data(value.utf8))
+    }
+}
+
+private actor ExecutionCounter {
+    private(set) var count = 0
+
+    func run(_ command: ImageProcessingCommand) -> ImageProcessingResult {
+        count += 1
+        return .init(
+            jobId: command.companionJobID, attemptId: command.companionAttemptID, completedAt: .now,
+            outcome: .init(
+                value3: .init(
+                    kind: .describeImage, status: .failed, retryable: true, reason: "Synthetic failure")))
+    }
+}
+
+private actor ExecutionGate {
+    private(set) var started = false
+    private var waiter: CheckedContinuation<Void, Never>?
+
+    func run(_ command: ImageProcessingCommand) async -> ImageProcessingResult {
+        started = true
+        await withCheckedContinuation { waiter = $0 }
+        return .init(
+            jobId: command.companionJobID, attemptId: command.companionAttemptID, completedAt: .now,
+            outcome: .init(
+                value3: .init(
+                    kind: .describeImage, status: .failed, retryable: true, reason: "Synthetic failure")))
+    }
+
+    func release() {
+        waiter?.resume()
+        waiter = nil
+    }
 }
 
 private actor FailureBox {

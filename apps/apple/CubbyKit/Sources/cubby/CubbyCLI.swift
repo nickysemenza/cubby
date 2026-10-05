@@ -12,7 +12,7 @@ struct CubbyCLI: AsyncParsableCommand {
             HeadlessStatementCsvImport.self,
             HeadlessFinancialBooking.self,
             HeadlessSpendingClassification.self,
-            RunReviewCommand.self,
+            RunReviewCommand.self, CompanionCommand.self,
         ] + platformCommands
     )
 

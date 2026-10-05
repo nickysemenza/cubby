@@ -28,6 +28,42 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
     }
 }
 
+/// One executed command's outcome, for a caller that logs each job (`cubby companion`). Reported
+/// after execution, before the result is recorded in the outbox and sent.
+public struct CompanionImageJobReport: Sendable, Equatable {
+    public enum Status: String, Sendable, Equatable {
+        case completed
+        /// AVIF input prepared as JPEG for the server's cloud description.
+        case normalized
+        case skipped
+        case failed
+    }
+
+    public let jobID: String
+    public let kind: String
+    public let status: Status
+    /// The skipped or failed reason, verbatim from the result.
+    public let reason: String?
+    public let retryable: Bool?
+    public let duration: Duration
+
+    init(_ result: ImageProcessingResult, kind: String, duration: Duration) {
+        jobID = result.jobId
+        self.kind = kind
+        self.duration = duration
+        let outcome = result.outcome
+        if let failure = outcome.value3 {
+            (status, reason, retryable) = (.failed, failure.reason, failure.retryable)
+        } else if let skipped = outcome.value2 {
+            (status, reason, retryable) = (.skipped, skipped.reason.rawValue, nil)
+        } else if outcome.value4 != nil {
+            (status, reason, retryable) = (.normalized, nil, nil)
+        } else {
+            (status, reason, retryable) = (.completed, nil, nil)
+        }
+    }
+}
+
 /// Whether an incoming command should be executed — `false` when the web has paused this
 /// connection (`ImageProcessingServerMessageHelloAck.remotePaused`), same as participation-off.
 /// A tiny pure decision, kept apart from the actor so it is directly unit-testable without a live
@@ -39,14 +75,16 @@ enum CompanionWorkAcceptance {
 public actor CompanionImageWorker {
     public typealias FailureObserver = @Sendable (any Error) -> Void
     public typealias ActivityObserver = @Sendable (CompanionImageWorkerActivity) -> Void
+    public typealias JobObserver = @Sendable (CompanionImageJobReport) -> Void
 
     private let baseURL: URL
     private let credentials: CredentialProvider
     private let session: URLSession
-    private let executor: CompanionImageCommandExecutor
+    private let execute: @Sendable (ImageProcessingCommand) async -> ImageProcessingResult
     private let outbox: CompanionResultOutbox<ImageProcessingResult>
     private let failureObserver: FailureObserver?
     private let activityObserver: ActivityObserver?
+    private let jobObserver: JobObserver?
     private let deviceID: UUID
     private let deviceName: String
     private var foreground: Bool
@@ -61,6 +99,8 @@ public actor CompanionImageWorker {
     private var connectionGeneration = 0
     private var connectionTask: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
+    /// The socket whose hello has been sent; `drainState()` is connected only while it is `socket`.
+    private var greetedSocket: URLSessionWebSocketTask?
     private var backgroundTask: Task<Bool, Never>?
     private let backgroundRunner: CompanionImageBackgroundRunner
     /// The server dispatches every queued job at once; executing each inline in the receive loop
@@ -68,6 +108,9 @@ public actor CompanionImageWorker {
     /// concurrently up to this bound, and each command's own deadline still applies while queued.
     static let maximumConcurrentCommands = 4
     private var commandTasks: [String: Task<Void, Never>] = [:]
+    private enum Acceptance { case open, paused, stopped }
+    private var acceptance = Acceptance.open
+    private var deferredCommands: [(ImageProcessingCommand, URLSessionWebSocketTask?)] = []
     private var running: [String: CompanionImageWorkerActivity] = [:]
     private var runningCount = 0
     private var slotWaiters: [CheckedContinuation<Void, Never>] = []
@@ -83,7 +126,29 @@ public actor CompanionImageWorker {
         session: URLSession = .cubbyShared,
         executor: CompanionImageCommandExecutor = CompanionImageCommandExecutor(),
         failureObserver: FailureObserver? = nil,
-        activityObserver: ActivityObserver? = nil
+        activityObserver: ActivityObserver? = nil,
+        jobObserver: JobObserver? = nil
+    ) {
+        self.init(
+            baseURL: baseURL, credentials: credentials, deviceID: deviceID, deviceName: deviceName,
+            foreground: foreground, isParticipating: isParticipating, outbox: outbox,
+            session: session, failureObserver: failureObserver, activityObserver: activityObserver,
+            jobObserver: jobObserver, execute: { command in await executor.execute(command) })
+    }
+
+    init(
+        baseURL: URL,
+        credentials: CredentialProvider,
+        deviceID: UUID,
+        deviceName: String,
+        foreground: Bool,
+        isParticipating: Bool = true,
+        outbox: CompanionResultOutbox<ImageProcessingResult>,
+        session: URLSession = .cubbyShared,
+        failureObserver: FailureObserver? = nil,
+        activityObserver: ActivityObserver? = nil,
+        jobObserver: JobObserver? = nil,
+        execute: @escaping @Sendable (ImageProcessingCommand) async -> ImageProcessingResult
     ) {
         self.baseURL = baseURL
         self.credentials = credentials
@@ -93,12 +158,12 @@ public actor CompanionImageWorker {
         self.isParticipating = isParticipating
         self.outbox = outbox
         self.session = session
-        self.executor = executor
+        self.execute = execute
         self.failureObserver = failureObserver
         self.activityObserver = activityObserver
+        self.jobObserver = jobObserver
         self.backgroundRunner = CompanionImageBackgroundRunner(
-            outbox: outbox, execute: { command in await executor.execute(command) },
-            failureObserver: failureObserver)
+            outbox: outbox, execute: execute, failureObserver: failureObserver)
     }
 
     deinit {
@@ -120,6 +185,7 @@ public actor CompanionImageWorker {
         connectionTask?.cancel()
         connectionTask = nil
         cancelCommands()
+        deferredCommands.removeAll()
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
         activityObserver?(.init(phase: .stopped))
@@ -273,6 +339,7 @@ public actor CompanionImageWorker {
                 deviceID: deviceID, deviceName: deviceName, foreground: advertisedForeground,
                 imageDescriptionAvailable: descriptionAvailable, automaticWork: isParticipating),
             on: socket)
+        greetedSocket = socket
         activityObserver?(.init(phase: .idle))
         for pending in try await outbox.pending() {
             try await send(.companionResult(pending.result), on: socket)
@@ -311,15 +378,76 @@ public actor CompanionImageWorker {
                 try await send(.companionResult(completed), on: socket)
                 return
             }
-            guard commandTasks[key] == nil else { return }
-            commandTasks[key] = Task { [weak self] in
-                await self?.run(command, key: key, socket: socket)
-            }
+            startCommand(command, socket: socket)
         }
     }
 
+    /// Tracks the command in `commandTasks` from acceptance until its result is durably recorded,
+    /// which is what `drainState()` counts as outstanding. A `nil` socket (tests) records the
+    /// result without sending it, exactly like a socket that dropped mid-command.
+    func startCommand(_ command: ImageProcessingCommand, socket: URLSessionWebSocketTask?) {
+        guard acceptance == .open else {
+            // Held, not started: a paused check resumes it; a stopped worker drops it and the
+            // server's lease expiry re-offers the job.
+            if acceptance == .paused { deferredCommands.append((command, socket)) }
+            return
+        }
+        let key = CompanionImageProcessingProtocol.attemptKey(
+            jobID: command.companionJobID, attemptID: command.companionAttemptID)
+        guard commandTasks[key] == nil else { return }
+        commandTasks[key] = Task { [weak self] in
+            await self?.run(command, key: key, socket: socket)
+        }
+    }
+
+    /// Stops starting newly delivered commands for the rest of this worker's life (a standalone
+    /// companion's shutdown); accepted ones keep running, recording, and delivering.
+    public func stopAccepting() {
+        acceptance = .stopped
+        deferredCommands.removeAll()
+    }
+
+    /// The only safe "settled → stop" check. It closes acceptance first, so no command can start
+    /// while it awaits the outbox (an actor suspension that let one start uncounted before), then
+    /// answers whether nothing is outstanding or unacknowledged. `true` leaves acceptance closed
+    /// for the caller to `stop()`; `false` reopens it (unless `stopAccepting()` was called) and
+    /// starts any command that arrived meanwhile.
+    public func pauseAcceptingIfSettled() async throws -> Bool {
+        if acceptance == .open { acceptance = .paused }
+        // Acceptance is closed, so `commandTasks` can only shrink across this suspension; a
+        // command still in it was counted, and one that finished recorded its result first.
+        var settled = commandTasks.isEmpty
+        if settled {
+            do {
+                settled = try await outbox.pending().isEmpty && commandTasks.isEmpty
+            } catch {
+                reopenIfPaused()
+                throw error
+            }
+        }
+        if !settled { reopenIfPaused() }
+        return settled
+    }
+
+    private func reopenIfPaused() {
+        guard acceptance == .paused else { return }
+        acceptance = .open
+        let deferred = deferredCommands
+        deferredCommands.removeAll()
+        for (command, socket) in deferred { startCommand(command, socket: socket) }
+    }
+
+    /// Advisory counts for logging and the `--once` quiet window. It can over-count a finishing
+    /// command but is not atomic with acceptance; stop on `pauseAcceptingIfSettled()`, not this.
+    public func drainState() async throws -> CompanionDrainState {
+        let connected = socket != nil && socket === greetedSocket
+        let outstanding = commandTasks.count
+        let pending = try await outbox.pending().count
+        return .init(connected: connected, outstandingCommands: outstanding, pendingResults: pending)
+    }
+
     private func run(
-        _ command: ImageProcessingCommand, key: String, socket: URLSessionWebSocketTask
+        _ command: ImageProcessingCommand, key: String, socket: URLSessionWebSocketTask?
     ) async {
         await acquireSlot()
         defer {
@@ -331,14 +459,16 @@ public actor CompanionImageWorker {
             phase: .processing, jobID: command.companionJobID, kind: command.companionKind,
             startedAt: .now)
         reportActivity()
-        let result = await executor.execute(command)
+        let started = ContinuousClock.now
+        let result = await execute(command)
         running[key] = nil
         reportActivity()
         guard !Task.isCancelled else { return }
+        jobObserver?(.init(result, kind: command.companionKind, duration: started.duration(to: .now)))
         do {
             try await outbox.record(result, for: key)
             // A reconnect replays the outbox, so a result from a dropped socket is not lost.
-            guard self.socket === socket else { return }
+            guard let socket, self.socket === socket else { return }
             try await send(.companionResult(result), on: socket)
         } catch {
             failureObserver?(error)
