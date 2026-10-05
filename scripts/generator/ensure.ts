@@ -24,9 +24,8 @@ import { digestFiles } from "../lib/tree-digest.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // Every root the generator reads: its own code, the packages the declarations
-// and contracts import, the web app (contracts, routes, list sources), the
-// preview-fixture builder it loads from apps/web/scripts, and the hand-written
-// Swift vocabulary the entity manifest is checked against.
+// and contracts import, the web app (contracts, routes, list sources), and the
+// preview-fixture builder it loads from apps/web/scripts.
 const INPUTS = [
   "scripts/generator",
   "packages",
@@ -35,7 +34,6 @@ const INPUTS = [
   // The R2 public origin generated into `SharedConstants.swift`.
   "apps/web/wrangler.jsonc",
   "apps/web/tooling/wrangler-public-config.ts",
-  "apps/apple/CubbyKit/Sources/CubbyKit/Catalog/EntityManifest.swift",
   "apps/web/tsconfig.json",
   "package.json",
   "pnpm-lock.yaml",

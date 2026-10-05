@@ -160,15 +160,18 @@ CubbyAPI plugin's OpenAPI inputs) → `xcodegen generate --spec apps/apple/proje
   `ReportFormFooterView`; `ReportChoiceAnswers` (CubbyKit) holds the answers, never preselects one,
   and assembles the `run.commitPrepared` body that `ReportSlotModel.approve` sends after the form's
   confirmation, with a new operation id per answer change.
-- `CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json` and
+- `CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json`,
+  `CubbyKit/Sources/CubbyKit/Generated/EntityVocabulary.swift` and
   `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift` — from
   `scripts/generator/entities/render/swift-catalog.ts`. Regenerate with `pnpm generate`
   (repo root). The manifest is a CubbyKit resource (`Package.swift`) that `EntityCatalog`
-  decodes once into the hand-written `Codable` types in `Catalog/EntityManifest.swift`
-  (synthesized encoding: `{"case":{"_0":…}}` for an unlabelled payload). Those types'
-  `String` enums (renderer, slot, hero-action, field/filter/control kinds, …) are hand-written
-  and `pnpm generate` fails until their cases match the TS vocabulary exactly — add the case
-  it names. `EntityManifestTests` decodes the bundled manifest so a mismatch fails CI.
+  decodes once into the hand-written `Codable` descriptor types in `Catalog/EntityManifest.swift`
+  (synthesized encoding: `{"case":{"_0":…}}` for an unlabelled payload). The `String`
+  vocabulary enums those descriptors decode (renderer, slot, hero-action, field/filter/control
+  kinds, wayfinding domains, presentation choices and their labels) are generated into
+  `EntityVocabulary.swift` from the TS vocabulary; a new renderer or slot appears natively on
+  the next `pnpm generate`, and native conveniences on them live in hand-written extensions.
+  `EntityManifestTests` decodes the bundled manifest so a value a hand-written enum lacks fails CI.
 - `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` — from `uniffi-bindgen`. Regenerate with
   `node scripts/ensure-apple-ffi.ts` (or `apps/apple/scripts/build-rust.sh` directly).
 - Rules that exist on both platforms but are not shared code are pinned by JSON vectors in
