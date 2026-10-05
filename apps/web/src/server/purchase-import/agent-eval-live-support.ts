@@ -1,9 +1,13 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  CUBBY_AI_GATEWAY_ID,
+  testAiGatewayEnvironment,
+} from "@cubby/shared/ai-gateway-metadata";
 import { z } from "zod";
 
-import { CF_ACCOUNT_ID, CF_AIG_GATEWAY_ID } from "~/server/cf-env";
+import { CF_ACCOUNT_ID } from "~/server/cf-env";
 
 import { localSecret } from "../../../tooling/local-secret";
 
@@ -74,7 +78,9 @@ function gatewayApiKey() {
 export const liveEvalModelWorker = () => ({
   main: "tooling/agent-eval-model.ts",
   vars: {
-    GATEWAY_OPENAI_URL: `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CF_AIG_GATEWAY_ID}/openai`,
+    GATEWAY_OPENAI_URL: `https://gateway.ai.cloudflare.com/v1/${CF_ACCOUNT_ID}/${CUBBY_AI_GATEWAY_ID}/openai`,
+    // A paid eval is never production traffic.
+    GATEWAY_ENVIRONMENT: testAiGatewayEnvironment(process.env.CI),
   },
   secrets: { AI_GATEWAY_API_KEY: gatewayApiKey() },
 });

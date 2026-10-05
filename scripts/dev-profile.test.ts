@@ -59,18 +59,37 @@ test("explicit database selection stays local and rejects a conflicting override
   );
 });
 
-test("integrations require development gateway and checkout-isolated vector index", () => {
+test("integrations require a checkout-isolated vector index", () => {
   assert.throws(
     () =>
       resolveDevProfile("/tmp/cubby", { CUBBY_DEV_PROFILE: "integrations" }),
     /integrations/u,
   );
   const offline = resolveDevProfile("/tmp/cubby", {});
+  assert.throws(
+    () =>
+      resolveDevProfile("/tmp/cubby", {
+        CUBBY_DEV_PROFILE: "integrations",
+        CUBBY_DEV_VECTORIZE_INDEX: "cubby-openai-text-embedding-3-small-1536",
+      }),
+    /integrations/u,
+  );
   const live = resolveDevProfile("/tmp/cubby", {
     CUBBY_DEV_PROFILE: "integrations",
-    CUBBY_DEV_AI_GATEWAY_ID: "cubby-development",
     CUBBY_DEV_VECTORIZE_INDEX: `cubby-dev-${offline.id}`,
+    CUBBY_DEV_AI_GATEWAY_API_KEY: "synthetic-key",
   });
   assert.equal(live.profile, "integrations");
   assert.equal(live.integration?.vectorizeIndex, `cubby-dev-${offline.id}`);
+  assert.equal(live.vars.AI_GATEWAY_API_KEY, "synthetic-key");
+});
+
+// Billed AI traffic shares the `cubby` gateway, labelled `development` at
+// runtime; offline dev stays unable to bill because it carries no key.
+test("dev profiles never redirect the gateway, and offline dev carries no key", () => {
+  const offline = resolveDevProfile("/tmp/cubby", {
+    CUBBY_DEV_AI_GATEWAY_API_KEY: "synthetic-key",
+  });
+  assert.equal(offline.vars.AI_GATEWAY_API_KEY, "");
+  assert.equal("AI_GATEWAY_ID" in offline.vars, false);
 });

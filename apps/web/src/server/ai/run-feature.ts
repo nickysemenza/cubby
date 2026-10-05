@@ -237,10 +237,8 @@ export function planStructuredRun<T = unknown>(
     feature: spec.feature,
     operation: ctx.operation,
   };
-  if (ctx.entity) {
-    metadata.entityKind = ctx.entity.entityKind;
-    metadata.entityId = ctx.entity.entityId;
-  }
+  // The entity id stays in the usage ledger, never a gateway label.
+  if (ctx.entity) metadata.entityKind = ctx.entity.entityKind;
 
   return {
     model: spec.model,

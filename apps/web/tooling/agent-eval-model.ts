@@ -1,3 +1,7 @@
+import {
+  type AiGatewayEnvironment,
+  proxiedAiGatewayMetadata,
+} from "@cubby/shared/ai-gateway-metadata";
 import { z } from "zod";
 import {
   type ModelSwap,
@@ -9,9 +13,15 @@ import {
  * The purchase agent's model peer for a live coordinator eval. The agent pins
  * `openai/gpt-6-sol`; this Worker forwards its Responses calls to Cubby's AI
  * Gateway with the candidate model and reasoning effort swapped in, and
- * totals the usage each streamed response reports.
+ * totals the usage each streamed response reports. Its metadata keeps the
+ * agent's feature and operation under the launcher's `ci` or `development`
+ * environment, so a paid eval is never attributed to production.
  */
-type Env = { GATEWAY_OPENAI_URL: string; AI_GATEWAY_API_KEY: string };
+type Env = {
+  GATEWAY_OPENAI_URL: string;
+  AI_GATEWAY_API_KEY: string;
+  GATEWAY_ENVIRONMENT: AiGatewayEnvironment;
+};
 
 const responseUsage = z.object({
   input_tokens: z.number(),
@@ -101,6 +111,16 @@ export default {
       headers.delete(name);
     headers.set("content-type", "application/json");
     headers.set("cf-aig-authorization", `Bearer ${env.AI_GATEWAY_API_KEY}`);
+    headers.set(
+      "cf-aig-metadata",
+      JSON.stringify(
+        proxiedAiGatewayMetadata(
+          request.headers.get("cf-aig-metadata"),
+          env.GATEWAY_ENVIRONMENT,
+          { feature: "purchase_import_agent", operation: "agent.eval" },
+        ),
+      ),
+    );
     const started = Date.now();
     const upstream = await fetch(
       `${env.GATEWAY_OPENAI_URL}/${endpoint}${url.search}`,

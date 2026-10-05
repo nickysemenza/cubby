@@ -96,6 +96,17 @@ export type JevChoiceResponse = z.infer<typeof jevChoiceResponseSchema>;
  * Keep both wire shapes validated against the same choice contract.
  */
 const jevGatewayEnvelopeSchema = z.object({ result: jevChoiceResponseSchema });
+/**
+ * The gateway-scoped run route (`AI.run` with `gateway.id`, REST `/ai/run`)
+ * adds a run layer around Jev's answer: `{result: {state, result}, success,
+ * errors}`. Only a `Completed` run carries an answer.
+ */
+const jevRunEnvelopeSchema = z.object({
+  result: z.object({
+    state: z.literal("Completed"),
+    result: jevChoiceResponseSchema,
+  }),
+});
 
 export interface JevChoiceResult {
   selectedIndex: number | null;
@@ -130,12 +141,25 @@ export function decisionConfidence(probability: number): Confidence {
   return "low";
 }
 
-function parseJevResponse(response: unknown): JevChoiceResponse {
-  const enveloped = jevGatewayEnvelopeSchema.safeParse(response);
+/** The answer in a successful response body, whichever wire shape carries it. */
+function parseJevResponse(body: string): JevChoiceResponse {
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(body);
+  } catch {
+    // SILENT: a non-JSON body fails every shape below and is quoted there.
+    decoded = undefined;
+  }
+  const run = jevRunEnvelopeSchema.safeParse(decoded);
+  if (run.success) return run.data.result.result;
+  const enveloped = jevGatewayEnvelopeSchema.safeParse(decoded);
   if (enveloped.success) return enveloped.data.result;
-  const direct = jevChoiceResponseSchema.safeParse(response);
+  const direct = jevChoiceResponseSchema.safeParse(decoded);
   if (direct.success) return direct.data;
-  throw new Error("Decision model returned an invalid choice response.");
+  // The raw body carries an unfinished run's state and the API's `errors`.
+  throw new Error(
+    `Decision model returned an invalid choice response. Body: ${body}`,
+  );
 }
 
 async function requestJev(
@@ -213,7 +237,7 @@ async function requestJev(
         { status: response.status },
       );
     }
-    parsed = parseJevResponse(await response.json().catch(() => undefined));
+    parsed = parseJevResponse(await response.text().catch(() => ""));
     return parsed;
   } catch (error) {
     throw wrapAiGatewayError(error, {

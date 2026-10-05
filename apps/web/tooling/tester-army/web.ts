@@ -1,5 +1,6 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { testAiGatewayEnvironment } from "@cubby/shared/ai-gateway-metadata";
 import { Pool } from "pg";
 import { z } from "zod";
 import { runOrThrow } from "../../../../scripts/lib/run.ts";
@@ -140,8 +141,8 @@ const routeUsage = z.record(
 function liveGatewayWorker(swap?: typeof agentModel): WorkerdModelWorker {
   const config = modelConfiguration();
   const vars: NonNullable<WorkerdModelWorker["vars"]> = {
-    GATEWAY_BASE_URL: `https://gateway.ai.cloudflare.com/v1/${config.TESTER_ARMY_CF_ACCOUNT_ID}/${config.TESTER_ARMY_CF_GATEWAY_ID}`,
-    RUN_REVISION: process.env.GITHUB_SHA ?? "local",
+    ACCOUNT_ID: config.TESTER_ARMY_CF_ACCOUNT_ID,
+    GATEWAY_ENVIRONMENT: testAiGatewayEnvironment(process.env.CI),
   };
   if (swap) {
     vars.RESPONSES_MODEL = swap.model;

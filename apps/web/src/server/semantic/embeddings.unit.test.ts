@@ -31,6 +31,7 @@ interface OpenAiEmbeddingsResponse {
 
 async function embedTextsOverFakeGateway(response: OpenAiEmbeddingsResponse) {
   vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");
+  vi.stubEnv("CI", "");
   vi.resetModules();
   const sent: Array<{ url: string; init: RequestInit | undefined }> = [];
   vi.stubGlobal("fetch", (url: string | URL, init?: RequestInit) => {
@@ -104,7 +105,7 @@ describe("embedTexts over the AI Gateway", () => {
     expect(JSON.parse(headers.get("cf-aig-metadata") ?? "{}")).toEqual({
       feature: "entity-embedding",
       operation: "entityEmbeddingRefreshBatch",
-      inputCount: 3,
+      environment: "development",
     });
   });
 

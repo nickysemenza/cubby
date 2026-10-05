@@ -81,8 +81,12 @@ worktree (`apps/web/tooling/local-secret.ts`); `TESTER_ARMY_ENV_FILE` names a
 different `.env`. Only the inference token is read from that file, so app
 database and storage settings do not enter the synthetic harness. The account
 defaults to Cubby's configured Cloudflare account; `TESTER_ARMY_CF_ACCOUNT_ID`
-overrides it locally or as an Actions repository variable. The gateway defaults to `cubby-testing`; override it with
-`TESTER_ARMY_CF_GATEWAY_ID` locally. Do not reuse a deployment token.
+overrides it locally or as an Actions repository variable. All billed traffic
+uses gateway `cubby`; the tester driver and coupled application peers use the
+same gateway. Do not reuse a deployment token. Gateway metadata records
+`environment=ci` in Actions and `environment=development` for local runs,
+plus stable `feature` and `operation` dimensions. Revisions stay in the
+sanitized E2E run bundle rather than gateway metadata.
 
 The default is `openai/gpt-6-luna` through the Responses API, medium reasoning,
 with gateway caching disabled. `TESTER_ARMY_MODEL` explicitly overrides the
@@ -171,7 +175,8 @@ turn and merges their summaries. Nothing behind the browser is scripted except
 the synthetic sources: the harness's two model peers are
 `tooling/tester-army/live-gateway.ts`, so the pi coordinator and the web
 Worker's extraction, audit, and image description call real models through
-the same `cubby-testing` gateway and token. `tooling/scenarios/tester-army-coupled.ts`
+the same `cubby` gateway and token. The forwarding peers preserve application
+feature/operation metadata and bypass gateway caching. `tooling/scenarios/tester-army-coupled.ts`
 seeds the sources:
 
 - `import-order-mail`: a saved itemized confirmation the member imports from

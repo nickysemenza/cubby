@@ -1,4 +1,5 @@
 import { importRunIdFromAgentIdentity } from "@cubby/schemas/import-run-agent";
+import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai-gateway-metadata";
 /**
  * The purchase agent's host: the exported Durable Object and the narrowed
  * environment that is the agent's only view of this Worker.
@@ -25,7 +26,7 @@ import type {
 import { withInvocationTrace } from "~/server/tracing";
 
 import { connectedChatGptInference } from "../ai/chatgpt/client";
-import { CF_AIG_GATEWAY_ID } from "../cf-env";
+import { gatewayEnvironment } from "../clients/ai-gateway";
 import { workerSentryOptions } from "../worker-sentry";
 import { purchaseAgentMcpTools, runServicesFor } from "./agent-services";
 
@@ -53,9 +54,10 @@ function purchaseAgentEnvironment(
         options,
       ),
     gateway: () => {
-      const gateway = env.AI.gateway(CF_AIG_GATEWAY_ID);
+      const gateway = env.AI.gateway(CUBBY_AI_GATEWAY_ID);
       return {
-        id: CF_AIG_GATEWAY_ID,
+        id: CUBBY_AI_GATEWAY_ID,
+        environment: gatewayEnvironment(),
         run: (data, options) => gateway.run(data, options),
       };
     },

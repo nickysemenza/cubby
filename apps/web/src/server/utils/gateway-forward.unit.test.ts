@@ -105,12 +105,12 @@ describe("forwardGatewayRequest", () => {
     expect(call?.url).toBe("https://ai-gateway.invalid/anthropic/v1/messages");
     // The crate decides its own caching; the forwarder never forces a skip.
     expect(call?.opts.skipCache).toBeUndefined();
+    // Regression: the crate's cookbook, chunk, contract, and model tags once
+    // went to the gateway verbatim (a log filter and spend bucket per chunk);
+    // `model` and `purpose` are still read below for the usage row.
     expect(call?.opts.metadata).toEqual({
-      cookbook: "Zuni",
-      model: "claude-haiku-4-5",
-      chunk: "k004",
-      contract: "cookbook-indexed-v1",
       feature: "cookbook-epub-parsing",
+      operation: "cookbook.extract",
     });
     const headers = new Headers(call?.init.headers);
     expect(headers.get("authorization")).toBeNull();

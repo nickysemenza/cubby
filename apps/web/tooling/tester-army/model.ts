@@ -1,3 +1,7 @@
+import {
+  CUBBY_AI_GATEWAY_ID,
+  testAiGatewayEnvironment,
+} from "@cubby/shared/ai-gateway-metadata";
 import { CF_ACCOUNT_ID } from "../../src/server/cf-env";
 import { localSecret } from "../local-secret";
 import { createOpenAI } from "@ai-sdk/openai";
@@ -10,10 +14,6 @@ const configuration = z.object({
     .string()
     .regex(/^[a-f0-9]{32}$/)
     .default(CF_ACCOUNT_ID),
-  TESTER_ARMY_CF_GATEWAY_ID: z
-    .string()
-    .regex(/^[a-z0-9-]+$/)
-    .default("cubby-testing"),
   TESTER_ARMY_MODEL: z
     .string()
     .regex(/^openai\/gpt-[a-z0-9.-]+$/)
@@ -35,19 +35,25 @@ export function modelConfiguration() {
   return result.data;
 }
 
+/** The driver's gateway scoping: Cubby's gateway, never production-labelled. */
+export function testerArmyGatewayHeaders(ci: string | undefined) {
+  return {
+    "cf-aig-gateway-id": CUBBY_AI_GATEWAY_ID,
+    "cf-aig-skip-cache": "true",
+    "cf-aig-metadata": JSON.stringify({
+      environment: testAiGatewayEnvironment(ci),
+      feature: "tester-army",
+      operation: "driver",
+    }),
+  };
+}
+
 export function testerArmyModel() {
   const config = modelConfiguration();
   const provider = createOpenAI({
     apiKey: config.TESTER_ARMY_CF_API_TOKEN,
     baseURL: `https://api.cloudflare.com/client/v4/accounts/${config.TESTER_ARMY_CF_ACCOUNT_ID}/ai/v1`,
-    headers: {
-      "cf-aig-gateway-id": config.TESTER_ARMY_CF_GATEWAY_ID,
-      "cf-aig-skip-cache": "true",
-      "cf-aig-metadata": JSON.stringify({
-        purpose: "synthetic-e2e",
-        revision: process.env.GITHUB_SHA ?? "local",
-      }),
-    },
+    headers: testerArmyGatewayHeaders(process.env.CI),
   });
   return provider.responses(config.TESTER_ARMY_MODEL);
 }
