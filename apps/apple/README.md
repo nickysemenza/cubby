@@ -65,6 +65,8 @@ time, and then:
 - `pnpm apple cli <args…>` — incremental `swift build` of the `cubby` CLI and run it
 - `pnpm apple cli photo analyze <file> --json` — on-device Vision/routing debug dump for a local
   image, no network or auth
+- `pnpm apple cli companion [--once] [--verbose]` — run the app's image-processing companion
+  worker headless (see below)
 - `pnpm apple mac` — build `Cubby-macOS` into `apps/apple/DerivedData` and `open` the `.app`
 - `pnpm apple ios [--device <name>]` — build `Cubby-iOS`, install and launch on the paired
   iPhone via `devicectl` (phone must be unlocked)
@@ -84,6 +86,58 @@ indexing stays enabled. Regenerating the project applies the location setting
 while preserving other workspace preferences.
 
 None of these attach a debugger; for breakpoints use the Xcode schemes below.
+
+### Headless companion (`cubby companion`)
+
+`cubby companion` runs the same `CompanionImageWorker`, executor, and durable outbox as the app,
+using the session from `cubby auth login` (an API key cannot open the socket). It registers as
+its own device: the id lives in `~/Library/Application Support/Cubby/companion-device-id`,
+because the app's id is a data-protection Keychain item the ad-hoc-signed CLI cannot read, and
+sharing one id would merge two sockets into one device. Concurrent first starts all get the same
+id, the id file is owner-only (0600), and a damaged id file is an error, not a new device. Its
+outbox is namespaced `cubby-cli-<host>`, apart from the app's. Only one `cubby companion` process
+can use an outbox file at a time, because two processes rewriting one outbox could erase each
+other's unacknowledged results. This is enforced with a `flock` on `<outbox file>.lock`. The lock
+is derived from the outbox's own sanitized, truncated path, so two hosts that map to one outbox
+also share its lock. A second invocation exits with a message.
+
+At startup it prints whether Foundation Models can describe images in this process and, if not,
+the exact reason (`SystemLanguageModel.default.availability` or a missing `.vision` capability).
+That value is what the hello advertises as `actualImageDescription.available`. After that it
+prints each worker phase change and one line per job: kind, job id, outcome, reason, duration.
+`--once` exits after the worker has been connected for `--idle-seconds` (default 10) with no
+outstanding job and no unacknowledged result. A job counts as outstanding while it is queued,
+running, or being recorded, and it stays outstanding across a reconnect. It exits 1 if any job
+failed or if it stays disconnected for `--connect-timeout` (default 30), even while a job runs.
+Without `--once` it runs until SIGINT/SIGTERM, then gives outstanding jobs and acknowledgements up
+to 10s before it stops. On a signal the worker stops starting new commands. Either exit happens
+only after a check that first closes command acceptance, so no job can start between "settled"
+and stop. Results that are
+still unacknowledged stay in the outbox and replay on the next connection.
+
+When waiting jobs get dispatched depends on the server. Older servers re-offer a
+`waiting_for_device` job only when it wakes up: on creation or retry, or when the web shell or
+the daily cron runs the `maintenance.recover` catch-up. A companion that connects in between gets
+nothing until then. A server that wakes waiting work on hello dispatches it as soon as the
+companion connects. Either way, a quiet `--once` run does not prove the queue is empty.
+
+To keep it resident, build a copy outside the worktree's `.build` and load a user agent. For
+example, save `~/Library/LaunchAgents/com.example.cubby-companion.plist` with:
+
+```xml
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.example.cubby-companion</string>
+  <key>ProgramArguments</key>
+  <array><string>/usr/local/bin/cubby</string><string>companion</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/tmp/cubby-companion.log</string>
+  <key>StandardErrorPath</key><string>/tmp/cubby-companion.log</string>
+</dict></plist>
+```
+
+Then run `launchctl bootstrap gui/$(id -u) <plist>`. Use `launchctl bootout` to stop it.
+launchd's SIGTERM-to-SIGKILL window (20s by default) is longer than the 10s stop grace.
 
 ## Verification
 

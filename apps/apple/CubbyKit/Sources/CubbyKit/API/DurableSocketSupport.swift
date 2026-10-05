@@ -106,11 +106,13 @@ enum AuthenticatedSocketSupport {
 
 enum AtomicCodableReplayFile {
     static func applicationSupportURL(
-        directory: String, namespace: String, fileName: String
+        directory: String, namespace: String, fileName: String, supportDirectory: URL? = nil
     ) throws -> URL {
-        let support = try FileManager.default.url(
-            for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil,
-            create: true)
+        let support =
+            try supportDirectory
+            ?? FileManager.default.url(
+                for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil,
+                create: true)
         let safeNamespace = namespace.map { character in
             character.isLetter || character.isNumber || character == "-" ? character : "_"
         }
