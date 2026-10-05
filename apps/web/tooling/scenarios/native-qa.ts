@@ -3,6 +3,8 @@ import type { Pool } from "pg";
 
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { startOrResumeRun } from "~/server/purchase-import/run-service";
+import { getDb } from "~/server/repo/database-helpers";
+import { insertOperation } from "~/server/repo/run-operation";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import { seedBaseWorld } from "../factories/base-world";
@@ -220,22 +222,21 @@ export async function seedPendingApprovalRun(
   const fingerprint = "a".repeat(64);
   // The decision command reads the paused operation's proposal; the approval row is what the
   // Run console lists while it waits.
-  await pool.query(
-    `INSERT INTO "RunOperation" ("runId", "operationId", kind, "inputFingerprint", state, result)
-     VALUES ($1, 'synthetic-approval-1', 'synthetic.apply', $2, 'paused_approval', $3)`,
-    [
-      runRow.rows[0]?.id,
-      fingerprint,
-      JSON.stringify({
-        approvalProposal: {
-          operationKind: "synthetic.apply",
-          args: { note: "synthetic" },
-          targetFingerprint: fingerprint,
-          evidenceFingerprint: fingerprint,
-        },
-      }),
-    ],
-  );
+  await insertOperation(getDb(db), {
+    runId: run.id,
+    operationId: "synthetic-approval-1",
+    kind: "synthetic.apply",
+    inputFingerprint: fingerprint,
+    state: "paused_approval",
+    result: {
+      approvalProposal: {
+        operationKind: "synthetic.apply",
+        args: { note: "synthetic" },
+        targetFingerprint: fingerprint,
+        evidenceFingerprint: fingerprint,
+      },
+    },
+  });
   const approval = await pool.query<{ id: string }>(
     `INSERT INTO "RunApproval" ("runId", "operationId", "operationKind", args, "argsFingerprint", "targetFingerprint", "evidenceFingerprint")
      VALUES ($1, 'synthetic-approval-1', 'synthetic.apply', '{"note":"synthetic"}', $2, $2, $2) RETURNING id`,

@@ -70,6 +70,16 @@ existing block. Extend the generic path when it almost fits. See
   (`@cubby/shared/base64`); `capitalize`, `pascalCase`, `humanize`,
   `screamingSnake` (`@cubby/shared/text-case`). Never hand-roll
   `crypto.subtle.digest` + hex or `btoa` alphabet swaps.
+- Run operation replay: every `RunOperation` read by key and every write goes
+  through `server/repo/run-operation.ts` (`readOperation`, `insertOperation`
+  (one row or a batch; `ifAbsent` is `ON CONFLICT DO NOTHING`),
+  `insertDebugEventOperations`,
+  `reclaimOperation`, `completeOperation`, `setOperationResult`,
+  `failOperation`, `failOperationsForRun`); agent tools whose work runs outside
+  the ledger transaction use the leased policy `executeLeasedOperation`
+  (`server/runs/operation.ts`). Callers keep computing their own fingerprint:
+  the stored rows of paused Runs replay only if each site's key order, the
+  `(runId, operationId)` key, and the browser command id stay unchanged.
 - Cross-Worker RPC: one Zod contract per boundary, `z.infer` on both sides.
 - GTIN and barcodes: recipebridge `scan_code_gtin14` and `@cubby/shared/upc`.
 

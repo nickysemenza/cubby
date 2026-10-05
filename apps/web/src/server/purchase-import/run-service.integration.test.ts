@@ -6,6 +6,8 @@ import type {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { executeLeasedOperation } from "~/server/runs/operation";
+
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
 import {
   controlRun,
@@ -15,7 +17,6 @@ import {
   readBrowserCommandResult,
   reconcileSettledRun,
   resumeAuthorizedRuns,
-  runImportOperation,
   startOrResumeRun,
   startTargetedRun,
 } from "./run-service";
@@ -350,11 +351,11 @@ describe("purchase import run admission", () => {
       kind: "test",
       payload: { value: 7 },
     };
-    const first = await runImportOperation(ctx.db, input, async () => {
+    const first = await executeLeasedOperation(ctx.db, input, async () => {
       calls += 1;
       return { value: 7 };
     });
-    const replay = await runImportOperation(ctx.db, input, async () => {
+    const replay = await executeLeasedOperation(ctx.db, input, async () => {
       calls += 1;
       return { value: 9 };
     });
@@ -363,7 +364,7 @@ describe("purchase import run admission", () => {
     expect(replay).toEqual(first);
     expect(calls).toBe(1);
     await expect(
-      runImportOperation(
+      executeLeasedOperation(
         ctx.db,
         { ...input, payload: { value: 8 } },
         async () => ({ value: 8 }),
@@ -386,7 +387,7 @@ describe("purchase import run admission", () => {
       payload: { value: 1 },
     };
     await expect(
-      runImportOperation(ctx.db, input, async () => {
+      executeLeasedOperation(ctx.db, input, async () => {
         throw new Error("injected crash");
       }),
     ).rejects.toThrow("injected crash");
@@ -401,7 +402,7 @@ describe("purchase import run admission", () => {
       .where(eq(runOperation.operationId, input.operationId));
 
     await expect(
-      runImportOperation(ctx.db, input, async () => ({ recovered: true })),
+      executeLeasedOperation(ctx.db, input, async () => ({ recovered: true })),
     ).resolves.toEqual({ recovered: true });
   });
 
@@ -717,7 +718,7 @@ describe("purchase import run admission", () => {
       .where(inArray(runTable.id, [stale.id, live.id]));
     // A progress report inside the window is activity even when the run row
     // itself was not touched.
-    await runImportOperation(
+    await executeLeasedOperation(
       ctx.db,
       {
         runId: live.id,
