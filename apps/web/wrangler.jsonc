@@ -99,6 +99,10 @@
         "name": "AI_RESPONSE_CACHE",
         "class_name": "AiResponseCacheDurableObject"
       },
+      {
+        "name": "CHATGPT_PLAN",
+        "class_name": "ChatGptPlanDurableObject"
+      },
       // The purchase agent: one import Run's coordinator per object, named by
       // `importRunAgentIdentity`; pi-durable keeps its transcript in the
       // object's SQLite (src/server/purchase-import/agent-host.ts).
@@ -126,6 +130,10 @@
       "storage": "sqlite"
     },
     "AiResponseCacheDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "ChatGptPlanDurableObject": {
       "type": "durable-object",
       "storage": "sqlite"
     },

@@ -37,6 +37,11 @@ JSONL routes    →  cancellable workflow streams
   agent's and the browser bridge's Durable Objects, and in a Mac browser. The
   map of queue events, Run services and owning files is
   [`apps/web/src/server/purchase-import/README.md`](../apps/web/src/server/purchase-import/README.md).
+- OpenAI Responses calls use the household's ChatGPT plan when connected in
+  Settings, retaining the declared Luna/Sol choices. `CHATGPT_PLAN` owns OAuth
+  credentials and serializes rotating refreshes. Other providers and embeddings
+  use the existing AI Gateway. [ChatGPT setup](runbooks/chatgpt-plan.md) explains
+  local authorization, the read-only account model catalog, and limitations.
 
 ## Commands
 

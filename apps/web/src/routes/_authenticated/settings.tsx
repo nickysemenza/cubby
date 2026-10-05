@@ -9,6 +9,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { ChatGptPlanCard } from "~/app/account/chatgpt-plan-card";
 import { PurchaseImportAgentConnection } from "~/app/activity/purchase-import-agent-connection";
 import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
 import { AwaitingWorkCard } from "~/app/problems/components/awaiting-work-card";
@@ -69,6 +70,7 @@ function SettingsPage() {
       <Stack gap="md" className="max-w-2xl pb-6 md:gap-6">
         {/* User-facing settings — the everyday prefs, kept above the fold. */}
         <CalendarAccessCard />
+        <ChatGptPlanCard />
         <GmailAccessCard />
         <PurchaseImportAgentConnection feedback={purchaseAgent} />
         <MemberLoginsCard />

@@ -45,6 +45,11 @@ export function createCubbyGatewayFetch(
   route: GatewayRoute,
   gatewayForRequest: () => AgentGateway,
   runId: () => string | undefined,
+  subscription?: (
+    body: Awaited<ReturnType<typeof gatewayQuery>>,
+    options?: { signal?: AbortSignal; requestTimeoutMs?: number },
+  ) => Promise<Response | null>,
+  onUnbilledResponse?: () => void,
 ): typeof fetch {
   return async (input, init) => {
     const headers = strippedHeaders(init);
@@ -54,13 +59,23 @@ export function createCubbyGatewayFetch(
     };
     const run = runId();
     const metadata = run ? { ...base, runId: run } : base;
+    const body = withSequentialToolCalls(route, await gatewayQuery(init?.body));
+    if (route === "openai" && subscription) {
+      const response = await subscription(body, {
+        signal: init?.signal ?? undefined,
+      });
+      if (response) {
+        onUnbilledResponse?.();
+        return response;
+      }
+    }
     const gateway = gatewayForRequest();
     return gateway.run(
       {
         provider: route,
         endpoint: endpointFor(route, requestUrl(input)),
         headers: Object.fromEntries(headers.entries()),
-        query: withSequentialToolCalls(route, await gatewayQuery(init?.body)),
+        query: body,
       },
       {
         gateway: { id: gateway.id, metadata },
@@ -101,12 +116,22 @@ export function cubbyAgentProviders(input: {
   runId: () => string | undefined;
   recorder: ContextRecorder;
   testModel?: TestModel;
+  subscription?: (
+    body: Awaited<ReturnType<typeof gatewayQuery>>,
+    options?: { signal?: AbortSignal; requestTimeoutMs?: number },
+  ) => Promise<Response | null>;
 }): Provider[] {
-  return cubbyPiProviders((route) =>
+  return cubbyPiProviders((route, onUnbilledResponse) =>
     withContextCapture(
       input.testModel
         ? testModelFetch(route, input.testModel)
-        : createCubbyGatewayFetch(route, input.gateway, input.runId),
+        : createCubbyGatewayFetch(
+            route,
+            input.gateway,
+            input.runId,
+            input.subscription,
+            onUnbilledResponse,
+          ),
       { recorder: input.recorder, scope: () => CONTEXT_SCOPE },
     ),
   );

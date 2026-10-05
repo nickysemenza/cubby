@@ -182,3 +182,4 @@ export const getBindingFetcher = (
 export const getDatabaseFreshnessNamespace = () => cfEnv?.DB_FRESHNESS;
 
 export const getAiResponseCacheNamespace = () => cfEnv?.AI_RESPONSE_CACHE;
+export const getChatGptPlanNamespace = () => cfEnv?.CHATGPT_PLAN;

@@ -822,6 +822,7 @@ const handler = {
 
 // Named exports: `wrangler types` finds Durable Object classes by reading them.
 export { AiResponseCacheDurableObject } from "./server/ai/response-cache-durable-object";
+export { ChatGptPlanDurableObject } from "./server/ai/chatgpt/durable-object";
 export { CalendarFeedDurableObject } from "./server/calendar/durable-object";
 export { DatabaseFreshnessDurableObject } from "./server/database-freshness/durable-object";
 export { ImageProcessingDurableObject } from "./server/image-processing/durable-object";

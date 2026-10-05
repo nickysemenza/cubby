@@ -23,6 +23,7 @@ import type {
   settleChargeHuntInput,
   stopForReviewInput,
 } from "@cubby/schemas/purchase-agent-services";
+import type { gatewayQuery } from "@cubby/shared/ai-gateway-request";
 import type { JSONType, z } from "zod";
 
 import type { AgentSignal } from "./signals";
@@ -130,6 +131,11 @@ export interface AgentGateway {
 export interface PurchaseAgentEnvironment {
   /** Cubby's AI Gateway through the Worker's AI binding. */
   gateway(): AgentGateway;
+  /** Returns null only when the household has no ChatGPT plan connection. */
+  chatGptInference?(
+    body: Awaited<ReturnType<typeof gatewayQuery>>,
+    options?: { signal?: AbortSignal; requestTimeoutMs?: number },
+  ): Promise<Response | null>;
   /** The services of this object's Run. */
   readonly services: RunServices;
   /**
@@ -152,7 +158,7 @@ export interface PurchaseAgentQueueEnvironment {
 /** One `cubby-purchase-agent` delivery. */
 export interface PurchaseAgentQueueDeliveredMessage {
   /** Whatever JSON was on the wire; the consumer parses it. */
-  readonly body: unknown;
+  readonly body: Awaited<ReturnType<typeof gatewayQuery>>;
   /** Delivery attempts, starting at 1. */
   readonly attempts: number;
   ack(): void;
