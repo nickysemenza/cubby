@@ -17,7 +17,7 @@ import { testServiceConfig } from "./test-service-config";
  * process's template initialization cannot invalidate a database the other
  * has checked out.
  */
-export type TemplateNamespace = "vitest" | "browser";
+type TemplateNamespace = "vitest" | "browser";
 
 export interface DatabaseLease {
   /** The IntegreSQL pool database name, `integresql_test_<hash>_<id>`. */
@@ -58,8 +58,10 @@ function connectionUrl(config: {
 
 /**
  * Create and migrate the namespace's template unless IntegreSQL already holds
- * one for the current schema. Call once per process before
- * {@link leaseDatabase}; a failed migration discards the template.
+ * one for the current schema. A run's global setup calls it before any
+ * {@link leaseDatabase}; a failed migration discards the template. When another
+ * process is already initializing the same template this returns at once, and
+ * IntegreSQL holds each checkout until that template is finalized.
  */
 export async function prepareTemplate(
   namespace: TemplateNamespace,
