@@ -490,6 +490,20 @@ starts a new trace in the consumer;
 `run.id` on the consumer's job span is the join key back to the producer's job
 spans. Trace context never propagates to services outside Cloudflare.
 
+`withInvocationTrace` loads the native tracing runtime before looking up the
+active invocation span, then annotates that span and creates a timing child.
+Fetch handlers, queue batches (including the purchase-agent consumer), scheduled maintenance,
+Durable Object alarms, purchase-agent dispatch RPCs, and search-index repair
+workflow runs use this entry helper, so a fresh isolate needs no preceding fetch.
+Batch spans carry queue name and size; individual messages retain their own run
+context instead of assigning one actor or run to an entire batch. Cron spans
+include the trigger and scheduled time, including maintenance-mode skips.
+Alarm and workflow spans identify their workload; purchase-agent alarm/RPC
+spans also identify the Run. Entry annotation never ends the platform-owned
+span. Other code uses `withTrace` for child operations and
+`annotateActiveSpan` for an already initialized active span. Outside the Worker
+build these helpers run work without tracing.
+
 Authenticated Start, workflow-stream, HTTP API, and MCP failures carry bounded
 message/cause diagnostics with operation, optional entity, execution stage, and
 request references. Credentials and Drizzle SQL/parameter wrappers are scrubbed;

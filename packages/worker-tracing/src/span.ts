@@ -108,6 +108,21 @@ export const enterSpan = <T>(
     }
   });
 
+/** Entry metadata belongs on the platform invocation and its timing child. */
+export const enterInvocationSpan = <T>(
+  tracing: CfTracing,
+  name: string,
+  fn: (span: TraceSpan) => Promise<T>,
+  options?: EnterSpanOptions,
+): Promise<T> => {
+  // Resolve before entering the child and on every invocation; a cached span
+  // would leak queue, cron, or Durable Object context across deliveries.
+  const active = tracing.getActiveSpan?.();
+  if (active && options?.attributes)
+    wrapCfSpan(active).setAttributes(options.attributes);
+  return enterSpan(tracing, name, fn, options);
+};
+
 /** A span whose lifetime the caller ends explicitly (a stream, a long job). */
 export const enterManualSpan = <T>(
   tracing: CfTracing,

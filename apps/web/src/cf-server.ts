@@ -57,7 +57,13 @@ import type { PurchaseAgentQueueBatch } from "./server/purchase-agent/environmen
 import { purchaseAgentQueueEnvironment } from "./server/purchase-import/agent-host";
 import type { SearchDocumentCursor } from "./server/repo/search-document";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
-import { getRequestId, withManualTrace, withTrace } from "./server/tracing";
+import {
+  type AppSpan,
+  getRequestId,
+  withInvocationTrace,
+  withManualTrace,
+  withTrace,
+} from "./server/tracing";
 import { workerSentryOptions } from "./server/worker-sentry";
 import { classifyHttpWorkload } from "./server/workload";
 
@@ -174,21 +180,8 @@ const handler = {
   ) {
     const startedAt = performance.now();
     const invocationOrdinal = ++fetchInvocationOrdinal;
-    return withTrace("cf.app.entry", (entrySpan) =>
+    const runFetch = (entrySpan: AppSpan) =>
       withDatabaseRequestMetrics(entrySpan, async () => {
-        entrySpan.setAttributes({
-          "http.request.method": request.method,
-          "http.route": httpRouteTemplate(new URL(request.url).pathname),
-          "cubby.worker.invocation_ordinal": invocationOrdinal,
-          "cubby.worker.first_invocation": invocationOrdinal === 1,
-          "cloudflare.ray_id": request.headers.get("cf-ray") ?? undefined,
-          "service.version": env.CF_VERSION_METADATA.id,
-          "cubby.telemetry.schema_version": TELEMETRY_SCHEMA_VERSION,
-          "cubby.workload": classifyHttpWorkload(
-            new URL(request.url).pathname,
-            request.headers,
-          ),
-        });
         await withTrace("cf.setup", async () => {
           // Bridge CF secrets → process.env for libraries that read from it
           // (better-auth reads BETTER_AUTH_SECRET from process.env at init time)
@@ -548,8 +541,20 @@ const handler = {
           ),
         });
         return readyResponse;
-      }),
-    );
+      });
+    return withInvocationTrace("cf.app.entry", runFetch, {
+      "http.request.method": request.method,
+      "http.route": httpRouteTemplate(new URL(request.url).pathname),
+      "cubby.worker.invocation_ordinal": invocationOrdinal,
+      "cubby.worker.first_invocation": invocationOrdinal === 1,
+      "cloudflare.ray_id": request.headers.get("cf-ray") ?? undefined,
+      "service.version": env.CF_VERSION_METADATA.id,
+      "cubby.telemetry.schema_version": TELEMETRY_SCHEMA_VERSION,
+      "cubby.workload": classifyHttpWorkload(
+        new URL(request.url).pathname,
+        request.headers,
+      ),
+    });
   },
 
   // Background queue consumer. Each message is a complete task; there is no
@@ -561,20 +566,21 @@ const handler = {
     ctx: { waitUntil(promise: Promise<unknown>): void },
   ) {
     setCfEnv(env);
-    if (batch.queue === "cubby-purchase-agent") {
-      // The agent's consumer holds no database client: each Run service it
-      // calls opens its own (`server/purchase-import/agent-services`).
-      const { consumePurchaseAgentQueue } =
-        await import("./server/purchase-agent/queue");
-      await consumePurchaseAgentQueue(
-        batch,
-        purchaseAgentQueueEnvironment(env, ctx),
-      );
-      return;
-    }
-    await withTrace(
+    await withInvocationTrace(
       "cf.queue",
       async () => {
+        if (batch.queue === "cubby-purchase-agent") {
+          // The agent's consumer holds no database client: each Run service it
+          // calls opens its own (`server/purchase-import/agent-services`).
+          const { consumePurchaseAgentQueue } =
+            await import("./server/purchase-agent/queue");
+          await consumePurchaseAgentQueue(
+            batch,
+            purchaseAgentQueueEnvironment(env, ctx),
+          );
+          return;
+        }
+
         // Serial queue work does not need a local pg.Pool. Use one Worker-side
         // client for the whole invocation; Hyperdrive still owns the origin DB pool.
         await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
@@ -614,6 +620,8 @@ const handler = {
         "cubby.workload": "queue",
         "messaging.destination.name": batch.queue,
         "messaging.batch.message_count": batch.messages.length,
+        "service.version": env.CF_VERSION_METADATA.id,
+        "cubby.telemetry.schema_version": TELEMETRY_SCHEMA_VERSION,
       },
     );
   },
@@ -623,17 +631,17 @@ const handler = {
     env: Env,
   ) {
     setCfEnv(env);
-    if (isMaintenanceMode(env)) {
-      cronLog.warn("skipped: maintenance mode");
-      return;
-    }
-    if (controller.cron !== "0 12 * * *")
-      throw new Error(`Unexpected cron trigger: ${controller.cron}`);
-    await Sentry.withMonitor(
-      "daily-maintenance",
+    return withInvocationTrace(
+      "cf.scheduled",
       async () => {
-        await withTrace(
-          "cf.scheduled",
+        if (isMaintenanceMode(env)) {
+          cronLog.warn("skipped: maintenance mode");
+          return;
+        }
+        if (controller.cron !== "0 12 * * *")
+          throw new Error(`Unexpected cron trigger: ${controller.cron}`);
+        await Sentry.withMonitor(
+          "daily-maintenance",
           async () => {
             try {
               await withRequestDbClient(
@@ -802,21 +810,21 @@ const handler = {
             }
           },
           {
-            "cubby.workload": "scheduled",
-            // The trigger's identity lives in attributes rather than the span name:
-            // a hardcoded `cf.scheduled.problem-counts` would silently mislabel the
-            // trigger on the worker.
-            "cloudflare.cron": controller.cron,
+            schedule: { type: "crontab", value: "0 12 * * *" },
+            checkinMargin: 10,
+            maxRuntime: 30,
+            timezone: "Etc/UTC",
+            failureIssueThreshold: 1,
+            recoveryThreshold: 1,
           },
         );
       },
       {
-        schedule: { type: "crontab", value: "0 12 * * *" },
-        checkinMargin: 10,
-        maxRuntime: 30,
-        timezone: "Etc/UTC",
-        failureIssueThreshold: 1,
-        recoveryThreshold: 1,
+        "cubby.workload": "scheduled",
+        "cloudflare.cron": controller.cron,
+        "cloudflare.scheduled_time": controller.scheduledTime,
+        "service.version": env.CF_VERSION_METADATA.id,
+        "cubby.telemetry.schema_version": TELEMETRY_SCHEMA_VERSION,
       },
     );
   },

@@ -9,6 +9,7 @@ import { DurableObject } from "cloudflare:workers";
 
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
 import type { findProblemCounts } from "~/server/services/problems.service";
+import { withInvocationTrace } from "~/server/tracing";
 
 import { databaseFreshness, type DatabaseFreshnessRpc } from "./state";
 
@@ -105,22 +106,28 @@ export class DatabaseFreshnessDurableObject
   }
 
   async alarm(): Promise<void> {
-    if (this.readRefreshState().refresh_due_at === null) return;
-    try {
-      await this.serializeRefresh(() => this.refresh());
-    } catch (error) {
-      await this.scheduleRefresh(Date.now() + REFRESH_DELAY_MS);
-      const retryAt = this.readRefreshState().refresh_due_at;
-      if (retryAt !== null) await this.ctx.storage.setAlarm(retryAt);
-      log.error("refresh failed", { error });
-      // Not rethrown deliberately: the retry above is already scheduled at a
-      // known delay, so letting the alarm also throw would invite the
-      // platform's own backoff retry to race it. Sentry still gets the event.
-      Sentry.captureException(error);
-      return;
-    }
-    const { refresh_due_at: dueAt } = this.readRefreshState();
-    if (dueAt !== null) await this.ctx.storage.setAlarm(dueAt);
+    return withInvocationTrace(
+      "problems.counts.alarm",
+      async () => {
+        if (this.readRefreshState().refresh_due_at === null) return;
+        try {
+          await this.serializeRefresh(() => this.refresh());
+        } catch (error) {
+          await this.scheduleRefresh(Date.now() + REFRESH_DELAY_MS);
+          const retryAt = this.readRefreshState().refresh_due_at;
+          if (retryAt !== null) await this.ctx.storage.setAlarm(retryAt);
+          log.error("refresh failed", { error });
+          // Not rethrown deliberately: the retry above is already scheduled at a
+          // known delay, so letting the alarm also throw would invite the
+          // platform's own backoff retry to race it. Sentry still gets the event.
+          Sentry.captureException(error);
+          return;
+        }
+        const { refresh_due_at: dueAt } = this.readRefreshState();
+        if (dueAt !== null) await this.ctx.storage.setAlarm(dueAt);
+      },
+      { "cubby.workload": "alarm" },
+    );
   }
 
   private serializeRefresh(run: () => Promise<void>): Promise<void> {

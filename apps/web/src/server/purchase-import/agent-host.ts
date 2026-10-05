@@ -22,6 +22,7 @@ import type {
   PurchaseAgentQueueEnvironment,
   PurchaseImportRunAgentRpc,
 } from "~/server/purchase-agent/environment";
+import { withInvocationTrace } from "~/server/tracing";
 
 import { inferChatGptPlan } from "../ai/chatgpt/client";
 import { CF_AIG_GATEWAY_ID } from "../cf-env";
@@ -115,13 +116,33 @@ class PurchaseImportRunAgentHost
   }
 
   async alarm(): Promise<void> {
-    await (await this.loaded()).alarm();
+    return withInvocationTrace(
+      "purchase-agent.alarm",
+      async () => {
+        await (await this.loaded()).alarm();
+      },
+      {
+        "cubby.workload": "alarm",
+        "cubby.run.id":
+          importRunIdFromAgentIdentity(this.ctx.id.name) ?? undefined,
+      },
+    );
   }
 
   async dispatch(input: DispatchInput): Promise<{ accepted: boolean }> {
-    const agent = await this.loaded();
-    await agent.__unsafe_ensureInitialized();
-    return agent.dispatch(input);
+    return withInvocationTrace(
+      "purchase-agent.dispatch",
+      async () => {
+        const agent = await this.loaded();
+        await agent.__unsafe_ensureInitialized();
+        return agent.dispatch(input);
+      },
+      {
+        "cubby.workload": "rpc",
+        "cubby.run.id":
+          importRunIdFromAgentIdentity(this.ctx.id.name) ?? undefined,
+      },
+    );
   }
 }
 
