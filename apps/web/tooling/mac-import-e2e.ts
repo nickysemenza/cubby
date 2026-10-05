@@ -1,4 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
+import { withKitPackageResolution } from "../../../scripts/apple-package-resolution.ts";
 import { createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -32,7 +33,8 @@ import {
   type MacProcessExpectation,
   type OwnedMacProcess,
 } from "./mac-owned-process";
-import { assertSimulatorAdminUrl } from "./sim-db-guard";
+import { openWorkerdRuntime, type WorkerdRuntime } from "./workerd-runtime";
+import { leaseNamedDatabase } from "./test-database-lease";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
 import {
   rustFingerprint,
@@ -77,7 +79,6 @@ const fixtureVersion = order ? 2 : 1;
 const nonce = randomBytes(8).toString("hex");
 const databaseName = `cubby_sim_${nonce}`;
 const adminURL = "postgresql://postgres:password@localhost:55432/postgres";
-assertSimulatorAdminUrl(adminURL);
 const databaseURL = adminURL.replace(/\/postgres$/u, `/${databaseName}`);
 const artifacts = path.join(repoRoot, "artifacts/mac-import-e2e", databaseName);
 mkdirSync(artifacts, { recursive: true });
@@ -520,28 +521,11 @@ async function cleanupResources(input: {
     | Awaited<ReturnType<typeof createMacBrowserScenario>>
     | undefined;
   retailer: Awaited<ReturnType<typeof createMacRetailerFixture>> | undefined;
-  harness: import("./workerd-harness").WorkerdHarness | undefined;
-  storage:
-    | Awaited<
-        ReturnType<
-          (typeof import("./local-object-storage"))["createE2EObjectStorage"]
-        >
-      >
-    | undefined;
+  runtime: WorkerdRuntime | undefined;
   restoreEnvironment: () => void;
-  created: boolean;
-  admin: Pool;
 }): Promise<void> {
-  const {
-    opened,
-    browserScenario,
-    retailer,
-    harness,
-    storage,
-    restoreEnvironment,
-    created,
-    admin,
-  } = input;
+  const { opened, browserScenario, retailer, runtime, restoreEnvironment } =
+    input;
   if (opened)
     await driver.close().catch((error) => {
       retainCleanupFailure(error, "native adapter cleanup");
@@ -561,20 +545,10 @@ async function cleanupResources(input: {
       path.join(artifacts, "retailer/requests.json"),
     );
   }
-  await harness?.close().catch((error) => {
-    retainCleanupFailure(error, "Worker cleanup");
-  });
-  await storage?.close().catch((error) => {
-    retainCleanupFailure(error, "object storage cleanup");
+  await runtime?.close().catch((error) => {
+    retainCleanupFailure(error, "Worker runtime cleanup");
   });
   restoreEnvironment();
-  if (created)
-    await admin
-      .query(`DROP DATABASE "${databaseName}" WITH (FORCE)`)
-      .catch((error) => {
-        retainCleanupFailure(error, "database cleanup");
-      });
-  await admin.end();
 }
 
 function retainCleanupFailure(
@@ -679,8 +653,6 @@ async function main(): Promise<void> {
   const bootstrapEnvironment = { ...process.env };
   process.env.DATABASE_URL = databaseURL;
   process.env.BETTER_AUTH_SECRET = "cubby-sim-local-secret";
-  const admin = new Pool({ connectionString: adminURL });
-  let created = false;
   let opened = false;
   let fixtureUIReady = false;
   let fixtureUserId = "";
@@ -695,14 +667,7 @@ async function main(): Promise<void> {
     | Awaited<ReturnType<typeof createMacComposedScenario>>
     | undefined;
   let restoreEnvironment = () => {};
-  let harness: import("./workerd-harness").WorkerdHarness | undefined;
-  let storage:
-    | Awaited<
-        ReturnType<
-          (typeof import("./local-object-storage"))["createE2EObjectStorage"]
-        >
-      >
-    | undefined;
+  let runtime: WorkerdRuntime | undefined;
   let fixtureLease: ReturnType<typeof acquireMacFixtureLease> | undefined;
   try {
     phase = "fixture-identity-preflight";
@@ -751,42 +716,51 @@ async function main(): Promise<void> {
     if (process.env.CUBBY_SIM_DB_EXTERNAL !== "1") {
       await run("node", ["scripts/dev-db.ts", "up"], bootstrapEnvironment);
     }
-    await admin.query(`CREATE DATABASE "${databaseName}"`);
-    created = true;
-    const watchdog = spawn(
-      process.execPath,
-      [
-        path.join(webRoot, "tooling/e2e-db-watchdog.mjs"),
-        adminURL,
-        databaseName,
-        String(process.pid),
-        path.join(artifacts, "watchdog.log"),
-      ],
-      { cwd: webRoot, detached: true, stdio: "ignore" },
-    );
-    if (!watchdog.pid)
-      throw new Error("Could not start disposable database watchdog");
-    watchdog.unref();
-    const pool = new Pool({ connectionString: databaseURL });
-    try {
-      const { migrateDatabase } = await import("./db-migrate");
-      await migrateDatabase(drizzle(pool));
-      // A freshly migrated database needs the same base world as the web E2E lane.
-      await seedBaseWorld(drizzle(pool));
-    } finally {
-      await pool.end();
-    }
-    phase = "worker-startup";
-    const { startWorkerdHarness } = await import("./workerd-harness");
-    const { createE2EObjectStorage } = await import("./local-object-storage");
-    storage = await createE2EObjectStorage();
-    restoreEnvironment = installScenarioEnvironment(storage.url);
-    harness = await startWorkerdHarness({
-      profile: "native-import",
-      databaseUrl: databaseURL,
-      objectStorage: { endpoint: storage.url, publicUrl: storage.url },
-    });
-    const { url } = await harness.listen();
+    ({ runtime } = await openWorkerdRuntime(
+      {
+        profile: "native-import",
+        database: {
+          lease: async () => {
+            const { lease } = await leaseNamedDatabase(
+              { adminUrl: adminURL, name: databaseName, retention: "drop" },
+              async ({ databaseUrl }) => {
+                const watchdog = spawn(
+                  process.execPath,
+                  [
+                    path.join(webRoot, "tooling/e2e-db-watchdog.mjs"),
+                    adminURL,
+                    databaseName,
+                    String(process.pid),
+                    path.join(artifacts, "watchdog.log"),
+                  ],
+                  { cwd: webRoot, detached: true, stdio: "ignore" },
+                );
+                if (!watchdog.pid)
+                  throw new Error(
+                    "Could not start disposable database watchdog",
+                  );
+                watchdog.unref();
+                const pool = new Pool({ connectionString: databaseUrl });
+                try {
+                  await seedBaseWorld(drizzle(pool));
+                } finally {
+                  await pool.end();
+                }
+              },
+            );
+            phase = "worker-startup";
+            return lease;
+          },
+        },
+        objectStorage: {},
+      },
+      async () => undefined,
+    ));
+    const storageUrl = runtime.objectStorageUrl;
+    if (!storageUrl)
+      throw new Error("Native runtime is missing object storage");
+    restoreEnvironment = installScenarioEnvironment(storageUrl);
+    const url = new URL(runtime.origin);
     const context = await request.newContext({
       baseURL: url.origin,
       extraHTTPHeaders: { Origin: url.origin },
@@ -835,12 +809,11 @@ async function main(): Promise<void> {
       const { createMacBrowserScenario } =
         await import("./mac-browser-import-scenario");
       browserScenario = await createMacBrowserScenario({
-        databaseURL,
+        runtime,
         userId: fixtureUserId,
         artifacts,
         repoRoot,
         nonce,
-        harness,
         retailer,
       });
       if (order) {
@@ -872,24 +845,26 @@ async function main(): Promise<void> {
     } else {
       await run("pnpm", ["apple", "gen"]);
       sourceFingerprint = nativeSourceFingerprint();
-      await run("xcodebuild", [
-        "-project",
-        "apps/apple/Cubby.xcodeproj",
-        "-scheme",
-        "Cubby-macOS",
-        "-configuration",
-        "Debug",
-        "-destination",
-        "platform=macOS",
-        "-derivedDataPath",
-        derivedData,
-        "-skipPackagePluginValidation",
-        "COMPILER_INDEX_STORE_ENABLE=NO",
-        "CODE_SIGNING_ALLOWED=NO",
-        "ENABLE_DEBUG_DYLIB=NO",
-        `PRODUCT_BUNDLE_IDENTIFIER=${bundleID}`,
-        "build",
-      ]);
+      await withKitPackageResolution(repoRoot, async () => {
+        await run("xcodebuild", [
+          "-project",
+          "apps/apple/Cubby.xcodeproj",
+          "-scheme",
+          "Cubby-macOS",
+          "-configuration",
+          "Debug",
+          "-destination",
+          "platform=macOS",
+          "-derivedDataPath",
+          derivedData,
+          "-skipPackagePluginValidation",
+          "COMPILER_INDEX_STORE_ENABLE=NO",
+          "CODE_SIGNING_ALLOWED=NO",
+          "ENABLE_DEBUG_DYLIB=NO",
+          `PRODUCT_BUNDLE_IDENTIFIER=${bundleID}`,
+          "build",
+        ]);
+      });
     }
     milestones.built = true;
     const entitlements = path.join(artifacts, "Cubby-e2e.entitlements");
@@ -1075,11 +1050,8 @@ async function main(): Promise<void> {
         opened,
         browserScenario,
         retailer,
-        harness,
-        storage,
+        runtime,
         restoreEnvironment,
-        created,
-        admin,
       });
       cleanupSucceeded = true;
     } catch (error) {

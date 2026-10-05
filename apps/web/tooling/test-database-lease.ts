@@ -4,11 +4,16 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { migrateDatabase } from "./db-migrate";
 import { hashSchemaTemplateInputs } from "./schema-template-inputs";
+import {
+  assertSimulatorAdminUrl,
+  assertSimulatorDatabaseName,
+} from "./sim-db-guard";
 import { testServiceConfig } from "./test-service-config";
 
 /**
- * Disposable IntegreSQL databases for the Vitest integration tier and browser
- * E2E workers. The adapters (`tooling/test-setup.ts`,
+ * Disposable databases for Vitest, browser E2E and native runners.
+ * IntegreSQL serves the Vitest integration tier and browser E2E workers;
+ * guarded named databases serve native fixtures. The adapters (`tooling/test-setup.ts`,
  * `tests/e2e/e2e-database.ts`) keep their own seeding and reset policies;
  * this module owns template preparation, checkout, and release.
  *
@@ -20,12 +25,12 @@ import { testServiceConfig } from "./test-service-config";
 type TemplateNamespace = "vitest" | "browser";
 
 export interface DatabaseLease {
-  /** The IntegreSQL pool database name, `integresql_test_<hash>_<id>`. */
+  /** The disposable database name (pooled or named native fixture). */
   name: string;
   databaseUrl: string;
   /**
-   * Hand the database back so IntegreSQL drops and recreates it from the
-   * template. Idempotent: every call shares the first release.
+   * Release the database according to its backend and retention policy.
+   * Idempotent: every call shares the first release.
    */
   close(): Promise<void>;
 }
@@ -154,5 +159,78 @@ async function release(hash: string, id: number, name: string) {
       `Failed to release IntegreSQL database ${name}; it may be re-handed to another test while still dirty. ${error instanceof Error ? error.message : String(error)}`,
       { cause: error },
     );
+  }
+}
+
+/**
+ * Native fixtures own individually named databases on the guarded local server.
+ * Retention applies only after successful setup; a failed acquisition drops the
+ * database it created. A CREATE collision never makes the caller its owner.
+ * Watchdogs and scenario seed/reset policies stay with their native runner.
+ */
+export async function leaseNamedDatabase<T>(
+  options: { adminUrl: string; name: string; retention: "drop" | "retain" },
+  setup: (lease: DatabaseLease) => Promise<T>,
+): Promise<{ lease: DatabaseLease; prepared: T }> {
+  const adminUrl = assertSimulatorAdminUrl(options.adminUrl);
+  assertSimulatorDatabaseName(options.name);
+  const target = new URL(adminUrl);
+  target.pathname = `/${options.name}`;
+  const databaseUrl = target.toString();
+  const admin = new Pool({ connectionString: adminUrl.toString() });
+  let created = false;
+  let closed: Promise<void> | undefined;
+  const close = async (drop: boolean) => {
+    const errors: unknown[] = [];
+    try {
+      if (created && drop) {
+        await admin.query(`DROP DATABASE "${options.name}" WITH (FORCE)`);
+        const remaining = await admin.query(
+          "SELECT 1 FROM pg_database WHERE datname = $1",
+          [options.name],
+        );
+        if (remaining.rowCount !== 0)
+          throw new Error(`Cleanup failed for ${options.name}`);
+      }
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      await admin.end();
+    } catch (error) {
+      errors.push(error);
+    }
+    if (errors.length)
+      throw new AggregateError(
+        errors,
+        `Named database cleanup failed for ${options.name}`,
+      );
+  };
+  const lease: DatabaseLease = {
+    name: options.name,
+    databaseUrl,
+    close: () => (closed ??= close(options.retention === "drop")),
+  };
+  try {
+    await admin.query(`CREATE DATABASE "${options.name}"`);
+    created = true;
+    const pool = new Pool({ connectionString: databaseUrl });
+    try {
+      await migrateDatabase(drizzle(pool));
+    } finally {
+      await pool.end();
+    }
+    return { lease, prepared: await setup(lease) };
+  } catch (error) {
+    try {
+      await (closed ??= close(true));
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        `Acquisition of ${options.name} failed and its cleanup failed`,
+        { cause: cleanupError },
+      );
+    }
+    throw error;
   }
 }

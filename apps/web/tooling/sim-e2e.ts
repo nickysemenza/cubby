@@ -12,6 +12,7 @@ import {
   simulatorBuildFingerprint,
   stampSimulatorBuild,
 } from "../../../scripts/apple-simulator-build-cache.ts";
+import { withKitPackageResolution } from "../../../scripts/apple-package-resolution.ts";
 import { createHash, randomBytes } from "node:crypto";
 import {
   appendFileSync,
@@ -27,7 +28,6 @@ import { homedir } from "node:os";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { request } from "@playwright/test";
-import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { z } from "zod";
 
@@ -42,7 +42,8 @@ import {
   selectIOSSimulator,
 } from "../../../scripts/apple-simulator-selection.ts";
 import { scrubErrorMessage } from "../src/lib/error-diagnostics";
-import { assertSimulatorAdminUrl } from "./sim-db-guard";
+import { openWorkerdRuntime, type WorkerdRuntime } from "./workerd-runtime";
+import { leaseNamedDatabase } from "./test-database-lease";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
 
 const webRoot = path.resolve(
@@ -1630,17 +1631,7 @@ async function runNativeJourney(
 
 // eslint-disable-next-line complexity -- All disposable native lanes share one exception, artifact and cleanup boundary.
 async function main(): Promise<void> {
-  assertSimulatorAdminUrl(adminURL);
-  const admin = new Pool({ connectionString: adminURL });
-  let created = false;
-  let harness: import("./workerd-harness").WorkerdHarness | undefined;
-  let objectStorage:
-    | Awaited<
-        ReturnType<
-          (typeof import("./local-object-storage"))["createE2EObjectStorage"]
-        >
-      >
-    | undefined;
+  let runtime: WorkerdRuntime | undefined;
   let suggestionPeer:
     | Awaited<
         ReturnType<
@@ -1690,12 +1681,7 @@ async function main(): Promise<void> {
       errors.push(error instanceof Error ? error : new Error(String(error)));
     }
     try {
-      await harness?.close();
-    } catch (error) {
-      errors.push(error instanceof Error ? error : new Error(String(error)));
-    }
-    try {
-      await objectStorage?.close();
+      await runtime?.close();
     } catch (error) {
       errors.push(error instanceof Error ? error : new Error(String(error)));
     }
@@ -1718,25 +1704,6 @@ async function main(): Promise<void> {
       } catch (error) {
         errors.push(error instanceof Error ? error : new Error(String(error)));
       }
-    }
-    if (created) {
-      try {
-        await admin.query(`DROP DATABASE "${simName}" WITH (FORCE)`);
-        const remaining = await admin.query<{ exists: boolean }>(
-          "SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1) AS exists",
-          [simName],
-        );
-        if (remaining.rows[0]?.exists)
-          errors.push(new Error(`Cleanup failed for ${simName}`));
-        else console.log(`[${lane}] Dropped ${simName}`);
-      } catch (error) {
-        errors.push(error instanceof Error ? error : new Error(String(error)));
-      }
-    }
-    try {
-      await admin.end();
-    } catch (error) {
-      errors.push(error instanceof Error ? error : new Error(String(error)));
     }
     return errors;
   };
@@ -1777,6 +1744,7 @@ async function main(): Promise<void> {
     console.log(`[${lane}] Web build ${buildAction}`);
     phase = "database";
     const databaseStarted = performance.now();
+    let workerStarted = databaseStarted;
     if (process.env.CUBBY_SIM_DB_EXTERNAL !== "1")
       await run(
         "node",
@@ -1786,36 +1754,35 @@ async function main(): Promise<void> {
         false,
         bootstrapEnvironment,
       );
-    await admin.query(`CREATE DATABASE "${simName}"`);
-    created = true;
-    console.log(`[${lane}] Disposable database ${simName}`);
-    if (watch) startDatabaseWatchdog();
-    const pool = new Pool({ connectionString: databaseURL });
-    try {
-      const { migrateDatabase } = await import("./db-migrate");
-      await migrateDatabase(drizzle(pool));
-    } finally {
-      await pool.end();
-    }
-
-    phase = "worker-startup";
-    phases.push({
-      name: "database",
-      durationMs: Math.round(performance.now() - databaseStarted),
-    });
-    const workerStarted = performance.now();
-    const { startWorkerdHarness } = await import("./workerd-harness");
-    const { createE2EObjectStorage } = await import("./local-object-storage");
-    objectStorage = await createE2EObjectStorage();
-    harness = await startWorkerdHarness({
-      profile: "offline",
-      databaseUrl: databaseURL,
-      objectStorage: {
-        endpoint: objectStorage.url,
-        publicUrl: objectStorage.url,
+    ({ runtime } = await openWorkerdRuntime(
+      {
+        profile: "offline",
+        database: {
+          lease: async () => {
+            const { lease } = await leaseNamedDatabase(
+              { adminUrl: adminURL, name: simName, retention: "drop" },
+              async () => {
+                console.log(`[${lane}] Disposable database ${simName}`);
+                if (watch) startDatabaseWatchdog();
+              },
+            );
+            phases.push({
+              name: "database",
+              durationMs: Math.round(performance.now() - databaseStarted),
+            });
+            phase = "worker-startup";
+            workerStarted = performance.now();
+            return lease;
+          },
+        },
+        objectStorage: {},
       },
-    });
-    const { url } = await harness.listen();
+      async () => undefined,
+    ));
+    const url = new URL(runtime.origin);
+    const objectStorageUrl = runtime.objectStorageUrl;
+    if (!objectStorageUrl)
+      throw new Error("Native runtime is missing object storage");
     if (testerArmy) process.env.TESTER_ARMY_ORIGIN = url.origin;
     const context = await request.newContext({
       baseURL: url.origin,
@@ -1863,7 +1830,7 @@ async function main(): Promise<void> {
       if (statementCsv) {
         await runHeadlessStatementCsvScenario(url, userId);
       } else if (photo) {
-        await runHeadlessPhotoScenario(url, objectStorage.url, userId);
+        await runHeadlessPhotoScenario(url, objectStorageUrl, userId);
         if (purchase) {
           const { runWardrobeConvergenceScenario } =
             await import("./scenarios/wardrobe-convergence");
@@ -1960,10 +1927,9 @@ async function main(): Promise<void> {
           hosted &&
           hasMatchingSimulatorBuild(repoRoot, nativeToolchain, buildArgs);
         if (hosted && !reuseCertifiedApp) {
-          await run("xcodebuild", [
-            ...buildArgs,
-            "-resolvePackageDependencies",
-          ]);
+          await withKitPackageResolution(repoRoot, () =>
+            run("xcodebuild", [...buildArgs, "-resolvePackageDependencies"]),
+          );
           try {
             certifiedInput = simulatorBuildFingerprint(
               repoRoot,
@@ -1984,7 +1950,9 @@ async function main(): Promise<void> {
         if (reuseCertifiedApp) {
           console.log(`[${lane}] Reusing the verified simulator app bundle`);
         } else {
-          await run("xcodebuild", [...buildArgs, "build"]);
+          await withKitPackageResolution(repoRoot, () =>
+            run("xcodebuild", [...buildArgs, "build"]),
+          );
           if (certifiedInput)
             stampSimulatorBuild(
               repoRoot,
