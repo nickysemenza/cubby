@@ -168,8 +168,9 @@ live coordinator eval): `gpt-6-luna` at `high` effort by default, overridden by
 repository variables. The web peer's calls are forwarded unchanged. The run
 manifest records `agentModel` and `agentEffort`, and the bundle adds
 `gateway-usage.json`: request counts and wire models per gateway route for each
-peer, never content. A run costs roughly $0.40–0.50 on `gpt-6-sol` at high
-effort. Deterministic coverage of the same orchestration stays in
+peer, never content. Those two files are the record of the swap: the run page's
+generation telemetry and AI spend still name and price the agent's pinned
+model. A run costs roughly $0.40–0.50 on `gpt-6-sol` at high effort. Deterministic coverage of the same orchestration stays in
 `purchase-agent-scenarios.integration.test.ts`; this lane checks that real
 models complete it.
 
