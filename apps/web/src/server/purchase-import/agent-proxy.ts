@@ -70,25 +70,9 @@ export async function proxyPurchaseAgentRequest(input: {
     );
   }
 
-  // The agent routes on the suffix alone; the member's credentials stay here.
-  const internal = new URL(`/${suffix}`, "https://purchase-agent.internal");
-  internal.search = new URL(input.request.url).search;
-  const headers = new Headers(input.request.headers);
-  headers.delete("authorization");
-  headers.delete("cookie");
-  headers.delete("host");
-
-  const response = await agents.getByName(scope.public.agentId).fetch(
-    new Request(internal, {
-      method: input.request.method,
-      headers,
-      body:
-        input.request.method === "GET" || input.request.method === "HEAD"
-          ? undefined
-          : input.request.body,
-      redirect: "manual",
-    }),
-  );
+  const response = await agents
+    .getByName(scope.public.agentId)
+    .fetch(createPurchaseAgentRequest(input.request, suffix));
   if (response.ok && input.request.method === "POST") {
     await recordRunControlEvent(input.context.db, input.context.actorContext, {
       runPublicId: publicId,
@@ -96,6 +80,29 @@ export async function proxyPurchaseAgentRequest(input: {
     });
   }
   return await redactJsonAgentResponse(response);
+}
+
+/** Keep the caller's transport lifecycle and credentials at the Worker boundary. */
+export function createPurchaseAgentRequest(
+  request: Request,
+  suffix: string,
+): Request {
+  const internal = new URL(`/${suffix}`, "https://purchase-agent.internal");
+  internal.search = new URL(request.url).search;
+  const headers = new Headers(request.headers);
+  headers.delete("authorization");
+  headers.delete("cookie");
+  headers.delete("host");
+  return new Request(internal, {
+    method: request.method,
+    headers,
+    body:
+      request.method === "GET" || request.method === "HEAD"
+        ? undefined
+        : request.body,
+    redirect: "manual",
+    signal: request.signal,
+  });
 }
 
 async function redactJsonAgentResponse(response: Response) {

@@ -191,9 +191,7 @@ async function requestJev(
     );
     if (!response.ok) {
       throw Object.assign(
-        new Error(
-          `Jev request failed (${response.status}): ${body.slice(0, 200)}`,
-        ),
+        new Error(`Jev request failed (${response.status}): ${body}`),
         { status: response.status },
       );
     }
@@ -239,12 +237,55 @@ function validateProbabilities(
   }
 }
 
+interface JevChoicePrompt {
+  subject: string;
+  rules: string;
+  choices: readonly string[];
+  allowNone?: boolean;
+}
+
+function buildChoiceInput(args: JevChoicePrompt): JevChoiceInput {
+  const allowNone = args.allowNone ?? true;
+  const criteria = Object.fromEntries(
+    args.choices.map((label, index) => [`c${index}`, label]),
+  );
+  if (allowNone) criteria[NONE_KEY] = "No listed choice is a suitable match.";
+  return {
+    state: args.subject,
+    questions: {
+      selection: {
+        type: "choice",
+        instructions: allowNone
+          ? `${args.rules}\nChoose exactly one option. Use none when no option fits.`
+          : `${args.rules}\nChoose exactly one option.`,
+        criteria,
+      },
+    },
+  };
+}
+
+function inputFitsContext(input: JevChoiceInput): boolean {
+  // UTF-8 bytes include JSON escaping and the complete request envelope.
+  return (
+    new TextEncoder().encode(JSON.stringify(input)).byteLength <=
+    JEV_CONTEXT_BYTE_LIMIT
+  );
+}
+
+/** Decide overflow before requesting Jev, using the same envelope as the transport. */
+export function jevChoiceFitsContext(args: JevChoicePrompt): boolean {
+  return (
+    args.choices.length <= JEV_MAX_CANDIDATES &&
+    inputFitsContext(buildChoiceInput(args))
+  );
+}
+
 /**
  * One closed-set choice: Jev picks over `c0…cn` (plus `none` unless the
  * vocabulary is exhaustive), and the winner's index maps back to the
  * caller's roster. An oversized roster or input throws rather than being
- * silently truncated here; `runAiSelection` routes a roster beyond
- * {@link JEV_MAX_CANDIDATES} to its overflow feature before ever calling in.
+ * silently truncated here; `runAiSelection` routes choices exceeding either
+ * the candidate count or serialized byte budget to its overflow feature.
  */
 export async function runJevChoice(args: {
   feature: AiDecisionFeature;
@@ -260,32 +301,14 @@ export async function runJevChoice(args: {
   allowNone?: boolean;
   port?: JevPort;
 }): Promise<JevChoiceResult> {
-  const allowNone = args.allowNone ?? true;
   if (args.choices.length > JEV_MAX_CANDIDATES) {
     throw new Error(
       `Jev supports at most ${JEV_MAX_CANDIDATES} choices, got ${args.choices.length}.`,
     );
   }
 
-  const criteria = Object.fromEntries(
-    args.choices.map((label, index) => [`c${index}`, label]),
-  );
-  if (allowNone) criteria[NONE_KEY] = "No listed choice is a suitable match.";
-  const input: JevChoiceInput = {
-    state: args.subject,
-    questions: {
-      selection: {
-        type: "choice",
-        instructions: allowNone
-          ? `${args.rules}\nChoose exactly one option. Use none when no option fits.`
-          : `${args.rules}\nChoose exactly one option.`,
-        criteria,
-      },
-    },
-  };
-  // UTF-8 bytes are a conservative, Unicode-safe upper bound on tokens.
-  const bytes = new TextEncoder().encode(JSON.stringify(input)).byteLength;
-  if (bytes > JEV_CONTEXT_BYTE_LIMIT) {
+  const input = buildChoiceInput(args);
+  if (!inputFitsContext(input)) {
     throw new Error(
       `Jev choice input exceeds the ${JEV_CONTEXT_BYTE_LIMIT}-byte bound.`,
     );
@@ -335,7 +358,7 @@ export async function runJevChoice(args: {
       const answer = response.answers.selection;
       validateProbabilities(
         answer.probabilities,
-        new Set(Object.keys(criteria)),
+        new Set(Object.keys(input.questions.selection.criteria)),
       );
       const selectedProbability = answer.probabilities[answer.choice];
       if (selectedProbability === undefined) {

@@ -5,9 +5,14 @@
  * client states `logger.warn("lookup failed", { upc, status })` once instead
  * of hand-formatting `[Scope] ...` strings at every site.
  *
- * Not a logging framework: no sinks, no formatting, no sampling. Fields are
- * logged as given; callers keep credential-shaped values out of them.
+ * Native Error diagnostics are made JSON-visible and credential-shaped values
+ * are scrubbed before they reach the sink.
  */
+
+import { serializeLogFields } from "./log-diagnostics";
+import { scrubCredentialValues } from "./scrub-error-message";
+
+export { originalLoggedError } from "./log-diagnostics";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -33,9 +38,9 @@ const emit = (
   fields: LogFields | undefined,
 ) => {
   const merged = { ...bound, ...fields };
-  const text = `[${scope}] ${message}`;
+  const text = scrubCredentialValues(`[${scope}] ${message}`);
   if (Object.keys(merged).length === 0) sink[level](text);
-  else sink[level](text, merged);
+  else sink[level](text, serializeLogFields(merged));
 };
 
 /** `sink` defaults to the global `console`, read at call time so tests can spy. */
