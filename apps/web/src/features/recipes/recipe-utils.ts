@@ -4,7 +4,6 @@ import {
   recipeServingsForRead,
   type RecipeServingBasis,
 } from "@cubby/schemas/recipe-shared";
-import { match } from "ts-pattern";
 
 import { scaleTotals } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
@@ -15,7 +14,6 @@ import { roundTo, formatCurrency } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
 import { tryFormatAmount } from "../inventory/format-amount";
-import type { RecipeTreeRow } from "./recipe-tree";
 import { formatYield } from "./recipe-yield";
 
 /** Format a gram weight as a display amount, e.g. 184.2 → "184 g". The single
@@ -174,41 +172,6 @@ interface RecipeMacroSegmentList {
 }
 
 export const getIngredientName = getRecipeIngredientName;
-
-/**
- * The entity a tree row links to: ingredient leaves → their ingredient,
- * sub-recipe rows → their child recipe. Stub rows (cycle/missing) have no
- * target and render as plain text. Drives the link + hover-preview in the prep,
- * matrix, and nested-spec views.
- */
-export const entityRefForRow = (
-  row: RecipeTreeRow,
-): {
-  entity: "recipe" | "ingredient";
-  id: string;
-  shortcode: string;
-} | null =>
-  match(row)
-    .with({ kind: "subrecipe" }, (r) => ({
-      entity: "recipe" as const,
-      id: r.child.recipe.id,
-      shortcode: r.child.recipe.id,
-    }))
-    .with({ kind: "ingredient" }, (r) =>
-      r.row.type === "ingredient"
-        ? {
-            entity: "ingredient" as const,
-            id: r.row.ingredient.id,
-            shortcode: r.row.ingredient.id,
-          }
-        : null,
-    )
-    .with({ kind: "stub" }, () => null)
-    .exhaustive();
-
-// Re-exported so the ~18 existing `formatYield` imports from recipe-utils
-// keep working; the implementation lives in the wasm-free module.
-export { formatYield };
 
 /** The recipe's times as ordered display rows, skipping the ones the source
  * never printed. Total leads: it is the axis the list sorts on. */

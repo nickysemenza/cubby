@@ -4,7 +4,6 @@ import type {
   BlockedTaskOut,
   TaskFilters,
 } from "@cubby/schemas/project";
-import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { match } from "ts-pattern";
@@ -18,20 +17,11 @@ import {
 import { fieldEnumOptions } from "~/entity/enum-field-display";
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatDateSpan } from "~/lib/date-span";
-import { getErrorMessage } from "~/lib/error-utils";
 import { renderOptionCell } from "~/ui/data-table/columnHelpers";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
-import { Button } from "~/ui/primitives/button";
-import {
-  Empty,
-  EmptyActions,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyIcon,
-  EmptyTitle,
-} from "~/ui/primitives/empty";
 import {
   Table,
   TableBody,
@@ -192,18 +182,11 @@ export function NextTasks({ filters }: { filters: TaskFilters }) {
 
   if (isError) {
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyIcon icon={ListChecksIcon} />
-          <EmptyTitle>Couldn't load tasks</EmptyTitle>
-          <EmptyDescription>{getErrorMessage(error)}</EmptyDescription>
-        </EmptyHeader>
-        <EmptyActions>
-          <Button type="button" variant="outline" onClick={() => refetch()}>
-            Retry
-          </Button>
-        </EmptyActions>
-      </Empty>
+      <ErrorDisplay
+        error={error}
+        title="tasks"
+        onRetry={() => void refetch()}
+      />
     );
   }
 

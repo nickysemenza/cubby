@@ -23,7 +23,8 @@ import { ChoiceSwitcher } from "~/ui/primitives/view-switcher";
 
 import { compactRound } from "../recipe-scaling-pct";
 import { RecipeSourceLink, sourceLabel } from "../recipe-source";
-import { formatYield, getServingBasis, perUnitSuffix } from "../recipe-utils";
+import { getServingBasis, perUnitSuffix } from "../recipe-utils";
+import { formatYield } from "../recipe-yield";
 import {
   buildCompareRows,
   type CompareBasis,
