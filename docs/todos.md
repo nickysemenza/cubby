@@ -642,6 +642,28 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
 - ⏳ **Production query-cost repair.** Promote the specific offender a fresh
   production trace confirms; remeasure before restructuring counters.
 
+- 🟢 **Pre-render the docs Mermaid diagrams.** Three diagrams pull ~108 client
+  chunks (~4.9 MB raw, ~1.4 MB gzip, including the only >500 kB chunk, `elk`)
+  through `app/docs/_components/MermaidDiagram.tsx`. Render them to SVG in
+  `pnpm generate` (with a drift check) and delete the runtime dependency. Pick a
+  renderer that runs without a browser first.
+
+- 🤔 **Move `recipebridge` WASM out of the web Worker.** The 3.4 MB module is
+  ~23% of every deploy's gzip upload but changes only with Rust edits. Callers:
+  `server/utils/scraper.ts`, `repo/import-recipe-convert.ts`,
+  `services/availability.service.ts`, `repo/problems/reparse.ts`. A
+  service-bound Worker deployed only on Rust changes removes it, at the cost of
+  an RPC hop and a second deploy unit. First measure whether workerd compiles
+  it at startup (part of the 179 ms) or lazily.
+
+- 🤔 **Trim duplicate and unused Worker dependencies (~0.4 MB gzip).**
+  `agents` pins `@modelcontextprotocol/server`/`client` at exactly 2.0.0 next
+  to the app's 2.2.0 (~210 kB duplicate; dedupe via override if the agent's API
+  still matches); better-auth's kysely adapter bundles introspectors for every
+  dialect (~211 kB); `agents`' email feature pulls `mimetext` (~156 kB, stub it
+  like `cfZodLocalesStub`); `vendor-identity` ships the full `tldts` suffix list
+  (~259 kB). Check each with a `dist/server` size diff.
+
 ---
 
 ## Compatibility removal

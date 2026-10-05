@@ -425,3 +425,28 @@ test("native handoff exchanges PKCE once for a signed API session", async ({
     await native.dispose();
   }
 });
+
+test("the OpenAPI document is served as a static asset", async ({ page }) => {
+  // Cloudflare serves the emitted client file without running the Worker; a
+  // missing client emit 404s here rather than at build time.
+  const response = await page.request.get("/api/v1/openapi.json");
+  expect(response.status()).toBe(200);
+  const document = z
+    .object({
+      openapi: z.string(),
+      paths: z.record(z.string(), z.unknown()),
+      servers: z.array(z.object({ url: z.string() })),
+      components: z.object({
+        securitySchemes: z.object({
+          sessionCookie: z.object({
+            in: z.literal("cookie"),
+            name: z.literal("__Secure-better-auth.session_token"),
+          }),
+        }),
+      }),
+    })
+    .parse(await response.json());
+  expect(response.headers()["content-type"]).toContain("application/json");
+  expect(document.servers).toEqual([{ url: "/" }]);
+  expect(Object.keys(document.paths).length).toBeGreaterThan(0);
+});

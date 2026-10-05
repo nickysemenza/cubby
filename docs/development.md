@@ -162,7 +162,7 @@ Better-Auth (`better-auth/tanstack-start`), with config in
 - **Operations.** Other operations use `GET` (flat input) or `POST` (structured
   input or mutation) on `/api/v1/{domain}/{op}`. Success bodies are the output
   itself; errors are `ApiError`.
-- **Docs.** `/api/v1/docs` (Scalar) and `/api/v1/openapi.json` (OpenAPI 3.1).
+- **Docs.** `/api/v1/docs` (Scalar) and `/api/v1/openapi.json` (OpenAPI 3.1, the generated document emitted as a static asset by `tooling/worker-static-assets.ts`; no Worker code runs).
   The Apple app generates its client from the committed document.
 - **Opting out.** `http: false` on a contract member excludes it from HTTP
   (streams and the generic entity union operations).

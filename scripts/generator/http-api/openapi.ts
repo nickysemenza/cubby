@@ -45,11 +45,11 @@ const webModule = (path: string) =>
   import(pathToFileURL(join(WEB_SRC.pathname, path)).href);
 
 /**
- * better-auth's default session cookie name. The served document
- * (`routes/api/v1/openapi[.]json.ts`) overwrites this with the configured
- * name at request time; the committed document only needs a stable default.
+ * Production's session cookie: Secure cookies get better-auth's `__Secure-`
+ * prefix. The document is served as a static asset, so nothing rewrites this
+ * at request time.
  */
-const SESSION_COOKIE_NAME = "better-auth.session_token";
+const SESSION_COOKIE_NAME = "__Secure-better-auth.session_token";
 
 export type OpenApiDocument = ReturnType<typeof generateOpenApi>;
 

@@ -13,7 +13,7 @@ import {
   type PluginOption,
 } from "vite";
 import wasm from "vite-plugin-wasm";
-import { mcpAppAsset } from "./tooling/mcp-app-asset.ts";
+import { workerStaticAssets } from "./tooling/worker-static-assets.ts";
 import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
 import { resolveDevProfile } from "../../scripts/lib/dev-profile.ts";
 import { writeLocalDevConfig } from "./tooling/dev/config.ts";
@@ -229,9 +229,15 @@ function phosphorWeights(): Plugin {
     name: "phosphor-weights",
     transform(code, id) {
       if (!iconDefinition.test(id.replaceAll("\\", "/"))) return null;
-      return code.replace(entry, (whole, weight: string) =>
-        PHOSPHOR_WEIGHTS.has(weight) ? whole : "",
-      );
+      // Blank dropped entries but keep their newlines: every surviving line
+      // stays on its original line, so the identity map (`map: null`) is
+      // exact. Deleting lines breaks the Sentry maps and warns per icon.
+      return {
+        code: code.replace(entry, (whole, weight: string) =>
+          PHOSPHOR_WEIGHTS.has(weight) ? whole : whole.replace(/[^\n]/g, ""),
+        ),
+        map: null,
+      };
     },
   };
 }
@@ -370,7 +376,7 @@ export default defineConfig(async ({ command }) => {
       } satisfies Plugin,
       // Deploy plugin must come first (Cloudflare plugin needs early hook)
       ...deployPlugin,
-      mcpAppAsset(),
+      workerStaticAssets(),
       // CF Workers WASM instantiation plugin must run before vite-plugin-wasm
       cfPgNativeStub(),
       cfWasmPlugin(),
@@ -438,7 +444,11 @@ export default defineConfig(async ({ command }) => {
               autoInstrumentMiddleware: false,
               buildTimeInstrumentation: false,
               release: {
-                name: `cubby@${gitCommit}`, // must equal the runtime `release` in router.tsx and cf-server.ts
+                name: `cubby@${gitCommit}`, // must equal the runtime `release` in router.tsx and worker-sentry.ts
+                // Both runtimes set `release` explicitly. Injecting it would
+                // stamp the commit into every chunk, so every client asset
+                // changes content (and re-uploads) on every deploy.
+                inject: false,
                 setCommits: {
                   repo: "nickysemenza/cubby",
                   commit: process.env.CUBBY_SOURCE_COMMIT ?? fullSha,

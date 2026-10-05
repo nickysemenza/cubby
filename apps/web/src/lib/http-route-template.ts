@@ -45,7 +45,6 @@ const STATIC_TRACE_ROUTES = new Set([
   "/api/import/agent/sync",
   "/api/mcp",
   "/api/v1/docs",
-  "/api/v1/openapi.json",
   "/auth/native",
   "/calendar",
   "/collections",
