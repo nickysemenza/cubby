@@ -6,6 +6,7 @@ import type {
 import { runShortcode, vendorAccountId } from "@cubby/schemas/identifiers";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -34,7 +35,6 @@ import { productEnrichmentTarget } from "~/server/purchase-import/product-enrich
 import { startTargetedRun } from "~/server/purchase-import/run-service";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
-import { sha256Hex } from "~/server/semantic/hash";
 
 type SourceClaim = {
   id: string;

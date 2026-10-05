@@ -24,6 +24,7 @@ import type {
   setCookbookProductInput,
   upsertCookbookInput,
 } from "@cubby/schemas/import-recipe";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
 import { uniq } from "es-toolkit";
 import type { z } from "zod";
@@ -75,7 +76,6 @@ import {
   cookbookRunInput,
   ensureRun,
 } from "~/server/runs/ensure-run";
-import { sha256Hex } from "~/server/semantic/hash";
 import {
   type ImageUrlImportPort,
   importRecipeImageFromUrl,

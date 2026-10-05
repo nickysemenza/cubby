@@ -1,3 +1,4 @@
+import { pascalCase } from "../../../../packages/shared/src/text-case.ts";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -71,8 +72,6 @@ const RELATED_VIEW = resolve(
 
 const camel = (key: string): string =>
   key.replaceAll(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
-const pascal = (key: string): string =>
-  `${camel(key)[0]?.toUpperCase() ?? ""}${camel(key).slice(1)}`;
 
 /**
  * `related-view.ts` hand-lists one `<key>RelatedFilterFields` block per source
@@ -154,7 +153,7 @@ const objectWrappers = (
     return [
       `export const ${exportName} = ${expression};\n` +
         (wanted.get(kind) === true
-          ? `export type ${pascal(exportName)} = z.infer<typeof ${exportName}>;\n`
+          ? `export type ${pascalCase(exportName)} = z.infer<typeof ${exportName}>;\n`
           : ""),
     ];
   });
@@ -177,7 +176,7 @@ const filterWrapper = (
   return [
     `export const ${name}FilterFields = { ${spread} };\n` +
       `export const ${schemaName} = z.object(${name}FilterFields);\n` +
-      `export type ${pascal(name)}Filters = z.infer<typeof ${schemaName}>;\n`,
+      `export type ${pascalCase(name)}Filters = z.infer<typeof ${schemaName}>;\n`,
   ];
 };
 

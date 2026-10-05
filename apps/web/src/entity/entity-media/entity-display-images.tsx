@@ -1,12 +1,14 @@
 import { entityRefKey, type EntityRef } from "@cubby/schemas/entity";
-import type { EntityDisplayImagesOutput } from "@cubby/schemas/entity-media";
+import {
+  ID_CHUNK_SIZE,
+  type EntityDisplayImagesOutput,
+} from "@cubby/schemas/entity-media";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { useQueries } from "@tanstack/react-query";
 import { chunk } from "es-toolkit";
 import { createContext, type ReactNode, useContext, useMemo } from "react";
 
 import { entityMedia } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { ID_CHUNK_SIZE } from "~/lib/array-helpers";
 
 export type EntityDisplayImageMap = EntityDisplayImagesOutput;
 export type EntityDisplayImagesQueryOptions =

@@ -51,6 +51,14 @@ function git(repoRoot: string, args: string[]): string {
   }).trim();
 }
 
+/** HEAD and whether the worktree has any change, tracked or untracked. */
+export function gitRevision(repoRoot: string) {
+  return {
+    commit: git(repoRoot, ["rev-parse", "HEAD"]),
+    dirty: git(repoRoot, ["status", "--porcelain"]).length > 0,
+  };
+}
+
 // upload-artifact omits hidden files from the bundle consumed by E2E.
 const filesUnder = (target: string): string[] =>
   walkFiles(target, { skip: (name) => name.startsWith(".") });
@@ -137,10 +145,11 @@ export function writeWebBuildProvenance(
       "Source changed during the web build; refusing to stamp potentially stale output. Rebuild with stable source inputs.",
     );
   const build = buildFingerprint(repoRoot);
+  const revision = gitRevision(repoRoot);
   const stamp: BuildStamp = {
     schemaVersion: 2,
-    sourceCommit: git(repoRoot, ["rev-parse", "HEAD"]),
-    sourceDirty: git(repoRoot, ["status", "--porcelain"]).length > 0,
+    sourceCommit: revision.commit,
+    sourceDirty: revision.dirty,
     sourceFingerprint: fingerprint,
     previewBuild: process.env.CUBBY_DEV_PREVIEW_BUILD === "true",
     ...build,
@@ -190,11 +199,11 @@ export function readWebBuildProvenance(repoRoot: string): WebBuildProvenance {
       },
     };
   }
+  const revision = gitRevision(repoRoot);
   const sourceMatches =
-    stamp.sourceCommit === git(repoRoot, ["rev-parse", "HEAD"]) &&
+    stamp.sourceCommit === revision.commit &&
     stamp.sourceFingerprint === webBuildSourceFingerprint(repoRoot);
-  const clean =
-    !stamp.sourceDirty && git(repoRoot, ["status", "--porcelain"]).length === 0;
+  const clean = !stamp.sourceDirty && !revision.dirty;
   return {
     fingerprint: stamp.fingerprint,
     sourceFresh: sourceMatches && buildMatches,

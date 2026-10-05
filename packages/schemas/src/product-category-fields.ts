@@ -1,3 +1,4 @@
+import { capitalize } from "@cubby/shared/text-case";
 import { z } from "zod";
 
 import { productCategoryShortcode } from "./identifier-fields";
@@ -67,7 +68,7 @@ export const isProjectResourceFeature = (
 
 /** "tool-accessories" -> "Tool accessories" — sentence-case display label. */
 const featureLabel = (feature: ProductCategoryFeature): string =>
-  feature.charAt(0).toUpperCase() + feature.slice(1).replace(/-/g, " ");
+  capitalize(feature.replace(/-/g, " "));
 
 /** User-facing list of the categories that grant the project-resource
  * capability, e.g. "Tools, Tool accessories, Software" — derived so error

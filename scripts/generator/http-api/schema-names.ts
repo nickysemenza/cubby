@@ -1,3 +1,4 @@
+import { pascalCase } from "../../../packages/shared/src/text-case.ts";
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 
@@ -39,12 +40,7 @@ const packageExports = z.object({
 
 /** `ledger-party` -> `LedgerParty`, `productTopLevelOut` -> `ProductTopLevelOut`. */
 export const pascal = (name: string): string =>
-  name
-    .replace(/Schema$/u, "")
-    .split(/[-_./]/u)
-    .filter((part) => part.length > 0)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join("");
+  pascalCase(name.replace(/Schema$/u, ""));
 
 interface SchemaModule {
   specifier: string;

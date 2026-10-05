@@ -1,3 +1,4 @@
+import { ID_CHUNK_SIZE } from "@cubby/schemas/entity-media";
 import {
   type QueryKey,
   type UseQueryOptions,
@@ -5,8 +6,6 @@ import {
 } from "@tanstack/react-query";
 import { chunk, uniq } from "es-toolkit";
 import { useMemo } from "react";
-
-import { ID_CHUNK_SIZE } from "~/lib/array-helpers";
 
 const uniqueSortedIds = (ids: readonly string[]) =>
   uniq(ids.filter(Boolean)).sort();

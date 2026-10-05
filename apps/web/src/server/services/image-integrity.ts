@@ -1,8 +1,8 @@
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { imageDimensionsFromData } from "image-dimensions";
 
 import { createAppError } from "~/server/errors/app-error";
-import { sha256Hex } from "~/server/semantic/hash";
 
 const dimensionMimeType = (dimensionType: string): string | undefined => {
   switch (dimensionType) {

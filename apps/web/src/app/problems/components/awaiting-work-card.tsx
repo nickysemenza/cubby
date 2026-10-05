@@ -1,9 +1,9 @@
 import type { AwaitingWork } from "@cubby/schemas/maintenance";
 import { useQuery } from "@tanstack/react-query";
+import pluralize from "pluralize";
 import type { ReactNode } from "react";
 
 import { maintenance } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { pluralWord } from "~/lib/pluralize";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
@@ -92,16 +92,16 @@ export function AwaitingWorkCard({
     success: (result) => {
       const parts = [
         result.publishedRecipeTasks > 0
-          ? `${result.publishedRecipeTasks} recipe ${pluralWord("recompute", result.publishedRecipeTasks)}`
+          ? `${result.publishedRecipeTasks} recipe ${pluralize("recompute", result.publishedRecipeTasks)}`
           : null,
         result.publishedEmbeddingTasks > 0
-          ? `${result.publishedEmbeddingTasks} embedding ${pluralWord("refresh", result.publishedEmbeddingTasks)}`
+          ? `${result.publishedEmbeddingTasks} embedding ${pluralize("refresh", result.publishedEmbeddingTasks)}`
           : null,
         result.culledUploads > 0
-          ? `${result.culledUploads} abandoned ${pluralWord("upload", result.culledUploads)} removed`
+          ? `${result.culledUploads} abandoned ${pluralize("upload", result.culledUploads)} removed`
           : null,
         result.publishedImageMetadataTasks > 0
-          ? `${result.publishedImageMetadataTasks} image metadata ${pluralWord("extraction", result.publishedImageMetadataTasks)}`
+          ? `${result.publishedImageMetadataTasks} image metadata ${pluralize("extraction", result.publishedImageMetadataTasks)}`
           : null,
       ].filter((part): part is string => part !== null);
       if (parts.length === 0) return "Nothing was waiting.";
@@ -138,7 +138,7 @@ export function AwaitingWorkCard({
         {LINES.filter((line) => data[line.key] > 0).map((line) => (
           <span key={line.key} className="text-sm">
             <span className="font-mono tabular-nums">{data[line.key]}</span>{" "}
-            {pluralWord(line.noun, data[line.key])} {line.detail}
+            {pluralize(line.noun, data[line.key])} {line.detail}
           </span>
         ))}
       </Stack>

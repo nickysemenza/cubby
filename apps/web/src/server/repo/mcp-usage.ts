@@ -6,6 +6,7 @@ import type {
   McpUsageActivityOut,
   McpUsageWindow,
 } from "@cubby/schemas/telemetry";
+import { encodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
 import {
   and,
   asc,
@@ -189,24 +190,16 @@ const mcpUsageCursorPayload = z.object({
 });
 
 function encodeCursor(row: McpUsageCursor): string {
-  const encoded = btoa(
+  return `${CURSOR_PREFIX}${encodeBase64Url(
     JSON.stringify({ occurredAt: row.occurredAt.toISOString(), id: row.id }),
-  )
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replace(/=+$/u, "");
-  return `${CURSOR_PREFIX}${encoded}`;
+  )}`;
 }
 
 function decodeCursor(cursor: string): McpUsageCursor {
   try {
     if (!cursor.startsWith(CURSOR_PREFIX)) throw new Error("bad prefix");
-    const raw = cursor
-      .slice(CURSOR_PREFIX.length)
-      .replaceAll("-", "+")
-      .replaceAll("_", "/");
     const parsed = mcpUsageCursorPayload.parse(
-      JSON.parse(atob(raw.padEnd(Math.ceil(raw.length / 4) * 4, "="))),
+      JSON.parse(decodeBase64UrlText(cursor.slice(CURSOR_PREFIX.length))),
     );
     const occurredAt = new Date(parsed.occurredAt);
     if (Number.isNaN(occurredAt.getTime())) throw new Error("bad date");

@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./ai-gateway-request": "./src/ai-gateway-request.ts",
+    "./base64": "./src/base64.ts",
     "./client-constants": "./src/client-constants.ts",
     "./collection-tag": "./src/collection-tag.ts",
     "./constants": "./src/constants.ts",
@@ -17,6 +18,7 @@
     "./location-type-theme": "./src/location-type-theme.ts",
     "./redundant-tokens": "./src/redundant-tokens.ts",
     "./retry": "./src/retry.ts",
+    "./sha256": "./src/sha256.ts",
     "./text-case": "./src/text-case.ts",
     "./upc": "./src/upc.ts",
     "./pi-gateway": "./src/pi-gateway.ts"

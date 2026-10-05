@@ -1,3 +1,4 @@
+import { pascalCase } from "../../../../packages/shared/src/text-case.ts";
 import { generatedHeader, yamlGeneratedHeader } from "../../artifacts.ts";
 import type {
   CompiledEntity,
@@ -6,13 +7,6 @@ import type {
 } from "../declarations.ts";
 import { entityProjectionMaps } from "./index.ts";
 import { browserRoutes } from "./routes.ts";
-
-const pascalCase = (value: string) =>
-  value
-    .split(/[^A-Za-z0-9]+/)
-    .filter((part) => part.length > 0)
-    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
-    .join("");
 
 const importLine = (ref: SourceRef) =>
   `import { ${ref.export} } from ${JSON.stringify(ref.module)};`;

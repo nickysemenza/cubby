@@ -1,3 +1,4 @@
+import { capitalize } from "../../../packages/shared/src/text-case.ts";
 import { z } from "zod";
 import { entityListInputSchema } from "../../../apps/web/src/entity/generated/entity-lists.gen.ts";
 import { generatedEntityFieldModels } from "../../../packages/schemas/src/generated/entity-field-model.gen.ts";
@@ -252,10 +253,7 @@ const progressiveFilterPaths = (
       inner = inner.unwrap();
     if (inner instanceof z.ZodObject) {
       for (const key of Object.keys(inner.shape))
-        result.set(`${field}${key.charAt(0).toUpperCase()}${key.slice(1)}`, [
-          field,
-          key,
-        ]);
+        result.set(`${field}${capitalize(key)}`, [field, key]);
     } else result.set(field, [field]);
   }
   return result;

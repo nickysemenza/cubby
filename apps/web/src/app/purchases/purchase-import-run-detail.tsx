@@ -11,6 +11,7 @@ import {
   validationDiff,
 } from "@cubby/schemas/purchase-import";
 import type { RunOut } from "@cubby/schemas/run";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { CircleIcon } from "@phosphor-icons/react/dist/csr/Circle";
@@ -292,10 +293,7 @@ function ManualEvidenceUpload({ run }: { run: RunDetail }) {
     mutationFn: async (file: File) => {
       if (!target) throw new Error("This run has no evidence target.");
       const bytes = await file.arrayBuffer();
-      const digest = await crypto.subtle.digest("SHA-256", bytes);
-      const checksum = [...new Uint8Array(digest)]
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
+      const checksum = await sha256Hex(bytes);
       const contentType =
         initiateRunEvidenceUploadInput.shape.contentType.parse(file.type);
       const staged = await purchaseImport.initiateRunEvidenceUpload.call({

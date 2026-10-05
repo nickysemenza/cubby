@@ -5,8 +5,7 @@ import type {
   ValidationNote,
   ValidationPlanLine,
 } from "@cubby/schemas/purchase-import";
-
-import { sha256Hex } from "~/server/semantic/hash";
+import { sha256Hex } from "@cubby/shared/sha256";
 
 /**
  * Purchases carry no currency column: the import writer only ever writes USD

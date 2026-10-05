@@ -1,3 +1,4 @@
+import { capitalize } from "../../../packages/shared/src/text-case.ts";
 import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseSync, type Expression, type ObjectExpression } from "oxc-parser";
@@ -85,7 +86,7 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
     .map(
       (type) =>
         `export const ${type}Shortcode = SHORTCODE_SCHEMA.${type};\n` +
-        `export type ${type[0]?.toUpperCase()}${type.slice(1)}Shortcode = ShortcodeFor<"${type}">;\n`,
+        `export type ${capitalize(type)}Shortcode = ShortcodeFor<"${type}">;\n`,
     )
     .join("");
   return [

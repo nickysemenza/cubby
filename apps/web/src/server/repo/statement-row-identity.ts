@@ -1,4 +1,4 @@
-import { sha256Hex } from "~/server/semantic/hash";
+import { sha256Hex } from "@cubby/shared/sha256";
 
 import { cents } from "./money";
 

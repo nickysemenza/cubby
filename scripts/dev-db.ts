@@ -1,7 +1,7 @@
-import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveDevProfile } from "./lib/dev-profile.ts";
+import { spawnToExit } from "./lib/run.ts";
 
 import {
   containerCli,
@@ -145,19 +145,15 @@ function runInWebWorkspace(
   script: string,
   args: string[] = [],
 ): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(
-      "pnpm",
-      ["exec", "tsx", path.join("tooling", script), ...args],
-      {
-        cwd: webRoot,
-        stdio: "inherit",
-        env: { ...process.env, DATABASE_URL: DEV_DATABASE_URL },
-      },
-    );
-    child.once("error", reject);
-    child.once("close", (code) => resolve(code ?? 1));
-  });
+  return spawnToExit(
+    "pnpm",
+    ["exec", "tsx", path.join("tooling", script), ...args],
+    {
+      cwd: webRoot,
+      stdio: "inherit",
+      env: { ...process.env, DATABASE_URL: DEV_DATABASE_URL },
+    },
+  );
 }
 
 function psql(sql: string): Promise<string> {

@@ -1,7 +1,7 @@
 import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import { describe, expect, it } from "vitest";
 
-import { bytesToBase64, heroPhoto, selectedPhotoItemIds } from "./photos";
+import { heroPhoto, selectedPhotoItemIds } from "./photos";
 
 const recipe = (
   id: string,
@@ -39,10 +39,5 @@ describe("cookbook archive photos", () => {
     expect(heroPhoto(item)?.path).toBe("images/hero.jpg");
     expect(heroPhoto(recipe("r2"))).toBeUndefined();
     expect(heroPhoto(undefined)).toBeUndefined();
-  });
-
-  it("encodes photo bytes without an argument-limit overflow", () => {
-    const bytes = new Uint8Array(0x8001).fill(255);
-    expect(bytesToBase64(bytes)).toBe(btoa(String.fromCharCode(...bytes)));
   });
 });

@@ -14,8 +14,8 @@ export {
   formatCurrency,
   formatPercent,
   formatSmallCurrency,
-  roundTo,
 } from "~/lib/number-format";
+export { roundTo } from "~/lib/round-to";
 
 // timeZone: "UTC" is load-bearing. __BUILD_DATE__ is a UTC ISO string; without
 // pinning the zone, the CF edge (UTC) and the client (local tz) format it in

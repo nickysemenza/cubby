@@ -10,6 +10,7 @@ import {
   type RecordStatementRowsInput,
   type StatementRowInput,
 } from "@cubby/schemas/statement-row";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { parse } from "csv-parse/browser/esm/sync";
 import { z } from "zod";
 
@@ -554,11 +555,5 @@ export function recordStatementBatch(
 }
 
 export async function fingerprintStatementCsv(file: File): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(await file.text()),
-  );
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
+  return sha256Hex(await file.text());
 }

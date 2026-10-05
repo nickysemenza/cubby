@@ -1,3 +1,4 @@
+import { capitalize } from "../../../../packages/shared/src/text-case.ts";
 import { z } from "zod";
 
 import type {
@@ -67,7 +68,7 @@ const humanize = (raw: string) => {
     .replaceAll(/([a-z]{2})(\d)/gu, "$1 $2")
     .replaceAll(/[_-]+/gu, " ")
     .toLowerCase();
-  return words.charAt(0).toUpperCase() + words.slice(1);
+  return capitalize(words);
 };
 
 const options = (values: readonly z.core.util.JSONType[] = []): OptionJSON[] =>

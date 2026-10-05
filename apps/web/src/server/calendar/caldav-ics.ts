@@ -6,6 +6,7 @@ import {
   type MealType,
 } from "@cubby/schemas/meal-classification";
 import { tradeSchema } from "@cubby/schemas/task-fields";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { TZDate } from "@date-fns/tz";
 import ICAL from "ical.js";
 import { z } from "zod";
@@ -16,7 +17,6 @@ import {
   householdLocalDate,
 } from "~/lib/household-date";
 import { shiftPlainDate } from "~/lib/plain-date";
-import { sha256Hex } from "~/server/semantic/hash";
 
 import type {
   CalDavCollection,

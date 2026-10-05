@@ -6,6 +6,7 @@ import {
   replacementLineAttribution,
   type ExtractedPurchaseLine,
 } from "@cubby/schemas/purchase-import";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -21,7 +22,6 @@ import {
   loadExpenseAllocations,
   type ExpenseAllocationRow,
 } from "~/server/repo/household-contribution/allocation";
-import { sha256Hex } from "~/server/semantic/hash";
 
 /** Split the two signed line totals into party margins, then intersect their
  * cumulative cent intervals. Both the per-line and per-party margins are exact;
