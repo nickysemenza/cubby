@@ -52,7 +52,6 @@ const PRODUCT_IDENTIFICATION_FIXTURE = {
   confidence: "high",
   reasoning: "r",
 };
-const LOCATION_DESCRIPTION_FIXTURE = { description: "d", confidence: "high" };
 const RECIPE_FLOW_FIXTURE = {
   schemaVersion: 1,
   setup: [],
@@ -234,25 +233,6 @@ describe("runStructuredFeature", () => {
     expect(() => structuredClone(parameters)).not.toThrow();
   });
 
-  it("maps the vision batch tier to compat options with no forced reasoning effort", async () => {
-    const { calls, ports } = fakePorts([
-      respondWith(LOCATION_DESCRIPTION_FIXTURE),
-    ]);
-
-    await runStructuredFeature(
-      LOCATION_DESCRIPTION_FEATURE,
-      request,
-      { db, runId, operation: "locationDescription" },
-      ports,
-    );
-
-    // No `reasoningEffort`: Gemini's own thinking stays on for batch work.
-    expect(calls[0]!.options).toEqual({
-      maxTokens: 1500,
-      toolChoice: { type: "function", function: { name: RESPOND_TOOL_NAME } },
-    });
-  });
-
   it("maps a high-effort fast feature to OpenAI Responses options", async () => {
     const { calls, ports } = fakePorts([respondWith(RECIPE_FLOW_FIXTURE)]);
 
@@ -432,11 +412,6 @@ describe("modelOptionsFor", () => {
       thinkingEnabled: true,
       effort: "low",
       toolChoice: { type: "tool", name: RESPOND_TOOL_NAME },
-    });
-    expect(modelOptionsFor("gemini-2.5-flash", { maxTokens: 100 })).toEqual({
-      maxTokens: 100,
-      reasoningEffort: "low",
-      toolChoice: { type: "function", function: { name: RESPOND_TOOL_NAME } },
     });
   });
 

@@ -57,7 +57,6 @@ import {
   cachedCall,
   piCallTarget,
   type AnthropicEffort,
-  type CompatEffort,
   type OpenAiEffort,
   type PiCallTarget,
   type SharedEffort,
@@ -579,7 +578,7 @@ async function placeStructuredCall<T>(args: {
   request: AiChatRequest;
   schema: z.ZodType<T>;
   maxTokens: number;
-  effort?: OpenAiEffort | AnthropicEffort | CompatEffort;
+  effort?: OpenAiEffort | AnthropicEffort;
 }): Promise<{ value: T; message: AssistantMessage }> {
   const { tool, optionalPaths } = respondToolFor(args.schema);
   const target = args.ports.callTarget(args.model, args.call);

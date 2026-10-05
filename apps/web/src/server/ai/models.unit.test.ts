@@ -9,7 +9,6 @@ import {
   getChatModelConfig,
   parseSupportedEmbeddingModel,
   providerFor,
-  VISION_BATCH_MODEL,
 } from "./models";
 
 // Real WASM: the crate catalog is the app's only chat price source, so these
@@ -27,17 +26,13 @@ describe("the crate catalog backs every registered chat model", () => {
     }
   });
 
-  it("prices each tier from the catalog", () => {
-    const tiers = [FAST_MODEL, VISION_BATCH_MODEL] as const;
-    for (const model of tiers) {
-      expect(
-        estimateAiUsageCostUsd(providerFor(model), model, {
-          inputTokens: 1000,
-          outputTokens: 1000,
-        }),
-        `${model} priced null`,
-      ).toBeGreaterThan(0);
-    }
+  it("prices the fast tier from the catalog", () => {
+    expect(
+      estimateAiUsageCostUsd(providerFor(FAST_MODEL), FAST_MODEL, {
+        inputTokens: 1000,
+        outputTokens: 1000,
+      }),
+    ).toBeGreaterThan(0);
   });
 
   it("prices the decision tier's free output at zero, not as unknown", () => {
@@ -67,11 +62,6 @@ describe("the registry is the routing seam", () => {
       provider: "openai",
       route: "openai-responses",
       wireModel: "gpt-6-luna",
-    });
-    expect(getChatModelConfig(VISION_BATCH_MODEL)).toMatchObject({
-      provider: "google",
-      route: "compat",
-      wireModel: "google-ai-studio/gemini-2.5-flash",
     });
   });
 });
