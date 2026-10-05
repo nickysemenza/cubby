@@ -12,6 +12,14 @@ test("settings explains local authorization and exposes no model selectors", asy
     email: null,
     needsReauthorization: false,
   });
+  const host = await request.get("/api/v1/chatgpt/authorizationHost");
+  expect(host.ok()).toBe(true);
+  expect(await host.json()).toMatchObject({ clientId: null });
+  const rejectedConnect = await request.post("/api/v1/chatgpt/connect", {
+    headers: { Authorization: "Bearer invalid-example" },
+    data: {},
+  });
+  expect(rejectedConnect.status()).toBe(401);
   const rejectedBearer = await request.get("/api/ai/chatgpt", {
     headers: { Authorization: "Bearer invalid-example" },
   });
@@ -26,7 +34,7 @@ test("settings explains local authorization and exposes no model selectors", asy
     card.getByRole("heading", { name: "ChatGPT plan" }),
   ).toBeVisible();
   await card.getByRole("button", { name: "Continue with ChatGPT" }).click();
-  await expect(card.getByText(/pnpm chatgpt:connect/)).toBeVisible();
+  await expect(card.getByText(/pnpm chatgpt:connect --base-url/)).toBeVisible();
   await expect(card.getByRole("combobox")).toHaveCount(0);
 });
 

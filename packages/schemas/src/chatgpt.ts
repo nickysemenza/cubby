@@ -34,3 +34,8 @@ export type ChatGptStatus = z.infer<typeof chatGptStatus>;
 export type ChatGptAuthorization = z.infer<typeof chatGptAuthorization>;
 
 export const CHATGPT_USAGE_URL = "https://chatgpt.com/settings/usage";
+
+export const chatGptAuthorizationHost = z.object({
+  hostId: z.string(),
+  clientId: z.string().nullable(),
+});

@@ -11,27 +11,33 @@ diagnostics; a connected account never silently falls back to paid API billing.
 ## Connect
 
 1. Open Settings → ChatGPT plan → Continue with ChatGPT.
-2. Create a Cubby HTTP API key in Account → API keys.
-3. From a local checkout, run the command shown in Settings:
+2. From a local checkout on your Mac, sign in to Cubby once if the CLI is not already signed in:
 
    ```sh
-   pnpm chatgpt:connect --url https://cubby.example.com
+   pnpm apple cli auth login --base-url https://cubby.example.com
    ```
 
-4. Paste the Cubby key into the helper's hidden prompt, or supply it through
-   `CUBBY_API_KEY` in your environment. The helper opens the system browser.
-   Choose the ChatGPT account/workspace and allow plan usage.
-5. Return to Settings and choose Check connection. Refresh models retrieves the
+3. Run the command shown in Settings:
+
+   ```sh
+   pnpm chatgpt:connect --base-url https://cubby.example.com
+   ```
+
+   This thin launcher runs `cubby chatgpt connect`, reusing the CLI's stored Cubby
+   credential. CubbyKit opens the system browser. Choose the ChatGPT
+   account/workspace and allow plan usage.
+
+4. Return to Settings and choose Check connection. Refresh models retrieves the
    live account catalog; Manage usage opens ChatGPT's usage controls.
 
-The helper runs an HTTP callback on `127.0.0.1` with state, nonce, and PKCE.
+The shared macOS CubbyKit flow runs an HTTP callback on `127.0.0.1` with state, nonce, and PKCE.
 It obtains the deployment's persistent, opaque host ID before authorization.
 First registration uses `dynamic_agent_client`; later authorization reuses the
 issued client ID. It securely sends the authorization code and original verifier
-to Cubby's authenticated endpoint. Workers exchanges the code, verifies the
+through the generated `chatgpt.connect` operation. Workers exchanges the code, verifies the
 signed ID token's issuer, audience, expiration, nonce and the originally registered account identity, checks the granted
 plan scope, and confirms model-catalog access before storing credentials.
-No ChatGPT token is returned to the browser or saved by the helper.
+No ChatGPT token is returned to the browser or saved by the CLI.
 The Mac can close after setup; Workers owns refreshes.
 
 The shared household connection lives in the `CHATGPT_PLAN` SQLite Durable
@@ -39,6 +45,10 @@ Object named `household`. Its RPC surface returns account status, models and
 inference responses, never access or refresh tokens. Concurrent refreshes are
 serialized; the replacement access/refresh pair is persisted together before
 use. No PostgreSQL schema change or new environment secret is required.
+
+The existing ChatGPT Cubby MCP plugin authorizes ChatGPT to call Cubby. Its
+Cubby-issued connector credential does not grant Cubby access to a ChatGPT plan;
+this separate OpenAI authorization is still required.
 
 ## Requests, errors, and disconnect
 

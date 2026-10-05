@@ -1,11 +1,10 @@
-import type { gatewayQuery } from "@cubby/shared/ai-gateway-request";
-import { z } from "zod";
-
 import type {
   ChatGptAuthorization,
   ChatGptModel,
   ChatGptStatus,
-} from "../../../lib/chatgpt-plan";
+} from "@cubby/schemas/chatgpt";
+import type { gatewayQuery } from "@cubby/shared/ai-gateway-request";
+import { z } from "zod";
 
 const MAX_INFERENCE_MS = 5 * 60_000;
 export const chatGptInferenceOptions = z.object({

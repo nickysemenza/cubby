@@ -1,13 +1,13 @@
-import type { gatewayQuery } from "@cubby/shared/ai-gateway-request";
-import { createRemoteJWKSet, jwtVerify } from "jose";
-import { z } from "zod";
-
 import {
   chatGptAuthorization,
   chatGptModels,
   type ChatGptAuthorization,
   type ChatGptStatus,
-} from "../../../lib/chatgpt-plan";
+} from "@cubby/schemas/chatgpt";
+import type { gatewayQuery } from "@cubby/shared/ai-gateway-request";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+import { z } from "zod";
+
 import { chatGptRequest } from "./transport";
 
 const AUTH = "https://auth.openai.com";

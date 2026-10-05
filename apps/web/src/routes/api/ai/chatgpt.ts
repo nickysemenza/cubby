@@ -1,13 +1,9 @@
+import { chatGptStatus, chatGptModel } from "@cubby/schemas/chatgpt";
 import { userId } from "@cubby/schemas/identifiers";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { auth } from "~/lib/auth";
-import {
-  chatGptAuthorization,
-  chatGptStatus,
-  chatGptModel,
-} from "~/lib/chatgpt-plan";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { getErrorMessage } from "~/lib/error-utils";
 import { requireChatGptPlan } from "~/server/ai/chatgpt/client";
@@ -21,7 +17,6 @@ async function handle(
   action: () => Promise<
     | z.infer<typeof chatGptStatus>
     | z.infer<typeof chatGptModel>[]
-    | { hostId: string; clientId: string | null }
     | { disconnected: boolean }
   >,
 ) {
@@ -84,15 +79,8 @@ export const Route = createFileRoute("/api/ai/chatgpt")({
         handle(request, () => {
           const params = new URL(request.url).searchParams;
           const plan = requireChatGptPlan();
-          if (params.has("authorization")) return plan.authorizationHost();
           return params.has("models") ? plan.models() : plan.status();
         }),
-      POST: ({ request }) =>
-        handle(request, async () =>
-          requireChatGptPlan().connect(
-            chatGptAuthorization.parse(await request.json()),
-          ),
-        ),
       DELETE: ({ request }) =>
         handle(request, async () => {
           await requireChatGptPlan().disconnect();

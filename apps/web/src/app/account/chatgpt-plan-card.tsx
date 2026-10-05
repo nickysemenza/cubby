@@ -1,12 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { z } from "zod";
-
 import {
   CHATGPT_USAGE_URL,
   chatGptModel,
   chatGptStatus,
-} from "~/lib/chatgpt-plan";
+} from "@cubby/schemas/chatgpt";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { z } from "zod";
+
 import { copyTextWithToast } from "~/lib/clipboard";
 import { getErrorMessage } from "~/lib/error-utils";
 import { useHydrated } from "~/ui/hooks/useHydrated";
@@ -75,7 +75,7 @@ export function ChatGptPlanCard() {
     },
   });
   const command = hydrated
-    ? `pnpm chatgpt:connect --url ${window.location.origin}`
+    ? `pnpm chatgpt:connect --base-url ${window.location.origin}`
     : "";
 
   return (
@@ -171,10 +171,18 @@ export function ChatGptPlanCard() {
           {setup ? (
             <Stack gap="sm">
               <p className="text-sm">
-                From your local Cubby checkout, run the command below. It asks
-                for a Cubby API key from Account → API keys, then opens ChatGPT
+                From your local Cubby checkout on your Mac, run the command
+                below. It uses your stored Cubby CLI login, then opens ChatGPT
                 sign-in in your browser. Credentials stay on Workers after
                 setup; your Mac can close.
+              </p>
+              <p className="text-sm">
+                If the CLI is signed out, first run:
+                <code className="break-all">
+                  pnpm apple cli auth login --base-url{" "}
+                  {hydrated ? window.location.origin : ""}
+                </code>
+                .
               </p>
               <code className="rounded-md bg-muted p-3 text-xs break-all">
                 {command}

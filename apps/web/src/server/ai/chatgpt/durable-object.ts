@@ -1,8 +1,8 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
+import type { ChatGptAuthorization } from "@cubby/schemas/chatgpt";
 import type { gatewayQuery } from "@cubby/shared/ai-gateway-request";
 import { DurableObject } from "cloudflare:workers";
 
-import type { ChatGptAuthorization } from "../../../lib/chatgpt-plan";
 import { ChatGptInferenceRequests, type ChatGptInferenceOptions } from "./rpc";
 import { ChatGptSession } from "./session";
 
