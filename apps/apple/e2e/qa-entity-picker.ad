@@ -1,0 +1,33 @@
+context platform=ios timeout=240000
+
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 240000
+open "cubby://entity/${GARDEN_ENTRY_ID}"
+wait "role=Button label=Edit" 90000
+click "role=Button label=Edit"
+wait text "Edit Garden Entry" 90000
+click "label=\"Planting IDs, None\""
+wait text "Synthetic Pea" 90000
+fill "label=\"Search Plantings\"" "Bean"
+click "role=Button label=close"
+click "role=Button label=Cancel"
+click "label=\"Location, Synthetic Bed North\""
+wait text "Synthetic Bed South" 90000
+fill "label=\"Search Locations\"" "Bed South"
+wait "role=Button label=\"Synthetic Bed South, ${SOUTH_BED_ID}\"" 90000
+click "role=Button label=\"Synthetic Bed South, ${SOUTH_BED_ID}\""
+wait "label=\"Location, Synthetic Bed South\"" 90000
+click "label=\"Planting IDs, None\""
+wait "label=\"${PAGE_ONE_PLANTING}, ${PAGE_ONE_PLANTING_ID}\"" 90000
+is absent "text=\"Synthetic Pea\""
+scroll bottom
+click "label=\"Load more\""
+wait "label=\"${PAGE_TWO_PLANTING}, ${PAGE_TWO_PLANTING_ID}\"" 90000
+scroll bottom
+click "label=\"${PAGE_TWO_PLANTING}, ${PAGE_TWO_PLANTING_ID}\""
+scroll top
+click "label=\"${PAGE_ONE_PLANTING}, ${PAGE_ONE_PLANTING_ID}\""
+click "role=Button label=Done"
+wait "label=\"Planting IDs, 2 selected\"" 90000
+click "role=Button label=Save"
+wait "role=Button label=Edit" 90000

@@ -1452,6 +1452,30 @@ async function assertQaOutcomes(): Promise<void> {
       throw new Error(
         `Approving the selection must commit only the selected ready group: ${JSON.stringify({ groups, photoProducts })}`,
       );
+    const entryLocations = await rows<{ shortcode: string }>(
+      `SELECT l.shortcode FROM "GardenEntry" e JOIN "Location" l ON l.id = e."locationId"
+       WHERE e.shortcode = $1`,
+      [qaIds.GARDEN_ENTRY_ID],
+    );
+    const entryPlantings = await rows<{ shortcode: string }>(
+      `SELECT p.shortcode FROM "GardenEntry" e
+       JOIN "EntityLink" link ON link."fromEntityId" = e.id
+         AND link.kind = 'gardenEntryPlanting' AND link."deletedAt" IS NULL
+       JOIN "Planting" p ON p.id = link."toEntityId"
+       WHERE e.shortcode = $1`,
+      [qaIds.GARDEN_ENTRY_ID],
+    );
+    if (
+      entryLocations[0]?.shortcode !== qaIds.SOUTH_BED_ID ||
+      entryPlantings
+        .map((row) => row.shortcode)
+        .sort()
+        .join() !==
+        [qaIds.PAGE_ONE_PLANTING_ID, qaIds.PAGE_TWO_PLANTING_ID].sort().join()
+    )
+      throw new Error(
+        `The scoped planting picker must save the south bed and its two picked plantings: ${JSON.stringify({ entryLocations, entryPlantings })}`,
+      );
     console.log(`[${lane}] Native QA writes verified in ${simName}`);
   } finally {
     await checkPool.end();
