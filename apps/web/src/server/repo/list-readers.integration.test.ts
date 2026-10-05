@@ -1,7 +1,8 @@
 /**
  * Order, paging and totals of the list readers with their own row query,
  * ordering or hydration (Ingredient's alias-sensitive count sorts, the
- * Location and Product pickers, and Project's full-filter sums). Each reader
+ * Location and Product pickers, Inventory's joined row query, and the
+ * Inventory and Project full-filter sums). Each reader
  * builds its ordering before pagination, so a page boundary must continue
  * the same sequence and the total must count the whole filtered set.
  */
@@ -9,11 +10,13 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { ingredientList } from "./ingredient/search";
+import { inventoryentryList } from "./inventory/crud";
 import { locationSearch } from "./location/crud";
 import { productSearch } from "./product/crud";
 import { projectListRead } from "./project/lookup";
 import {
   createIngredientFixture,
+  createInventoryFixture,
   createLocationFixture,
   createProductFixture,
   makeLocationInput,
@@ -140,6 +143,63 @@ describe("custom list readers", () => {
       ["Picker alpha"],
     ]);
     expect(pages.map((result) => result.count)).toEqual([3, 3]);
+  });
+
+  it("pages Inventory by a joined-product sort and totals the whole filtered set", async () => {
+    for (const [name, price] of [
+      ["Stockcase gamma", 30],
+      ["Stockcase alpha", 10],
+      ["Stockcase beta", 20],
+      ["Elsewhere stock", 1000],
+    ] as const) {
+      const sku = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name, price }),
+        ctx.actor,
+      );
+      const shelf = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name: `${name} shelf`, type: "box" }),
+        ctx.actor,
+      );
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: sku.id,
+          locationId: shelf.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+    }
+
+    const read = (pageIndex: number, readIntent?: "count") =>
+      inventoryentryList(
+        ctx.db,
+        { productNameFilter: "Stockcase" },
+        [{ orderBy: "product", direction: "asc" }],
+        page(pageIndex),
+        readIntent,
+      );
+    const pages = await Promise.all([read(0), read(1)]);
+    expect(
+      pages.map((result) => result.data.map((row) => row.displayName)),
+    ).toEqual([
+      [
+        expect.stringContaining("Stockcase alpha"),
+        expect.stringContaining("Stockcase beta"),
+      ],
+      [expect.stringContaining("Stockcase gamma")],
+    ]);
+    expect(pages).toMatchObject([
+      { count: 3, sums: { valuation: 60 } },
+      { count: 3, sums: { valuation: 60 } },
+    ]);
+    expect(await read(0, "count")).toEqual({
+      data: [],
+      count: 3,
+      sums: undefined,
+    });
   });
 
   it("pages Projects and sums the cost estimate over the whole filtered set", async () => {
