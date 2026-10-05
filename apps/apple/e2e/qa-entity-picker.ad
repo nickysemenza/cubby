@@ -11,7 +11,7 @@ wait text "Synthetic Pea" 90000
 fill "label=\"Search Plantings\"" "Bean"
 click "role=Button label=close"
 click "role=Button label=Cancel"
-click "label=\"Location, Synthetic Bed North\""
+click "role=Button label=\"Location, Synthetic Bed North\""
 wait text "Synthetic Bed South" 90000
 fill "label=\"Search Locations\"" "Bed South"
 wait "role=Button label=\"Synthetic Bed South, ${SOUTH_BED_ID}\"" 90000
