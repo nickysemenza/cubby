@@ -525,6 +525,14 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
 
 ## Dev tooling, tests & CI
 
+- 🤔 **Stop the simulator build from dirtying the checkout.** Every
+  `test:e2e:sim` lane's Xcode build rewrites the tracked
+  `apps/apple/CubbyKit/Package.resolved` (adding the app-only Nuke pin), so
+  each native E2E bundle records `dirty: true` and is not replayable evidence.
+  Give the app project its own resolved file or build with a resolution that
+  leaves CubbyKit's untouched. Owner: `apps/apple/project.yml`,
+  `apps/web/tooling/sim-e2e.ts`.
+
 - 🤔 **Make Tester Army `--replay` able to hit.** Two consecutive warm web
   runs of `product-rename` (2026-10-04) both reported `replayed 0, missed 1`
   and used the model each time. Each run seeds fresh records, so on-screen
