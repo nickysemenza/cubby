@@ -193,6 +193,12 @@ public final class GenericEntityListModel {
         page = 1
         hasLoaded = false
         enrichment.invalidate()
+        // A timeline describes the declared filters, never an injected scope: drop a loaded one
+        // and let a pending response fail its generation check.
+        timelineGeneration += 1
+        timeline = nil
+        timelineError = nil
+        isLoadingTimeline = false
         if let searchPage = newSource.searchPage, let searchModel, !enrichmentChanged {
             searchModel.setLoader(searchPage, discardingRows: true)
         } else {
@@ -302,7 +308,7 @@ public final class GenericEntityListModel {
             coreRows.append(contentsOf: result.items.filter { ids.insert($0.id).inserted })
             page = nextPage
             meta = result.meta
-            enrichment.accept(result, replacing: false)
+            if enrichesRows { enrichment.accept(result, replacing: false) }
             phase = .loaded
         } catch is CancellationError {
             // A refresh or newer request owns the state now.
@@ -352,7 +358,7 @@ public final class GenericEntityListModel {
             page = 1
             meta = result.meta
             hasLoaded = true
-            enrichment.accept(result, replacing: true)
+            if enrichesRows { enrichment.accept(result, replacing: true) }
             phase = .loaded
         } catch is CancellationError {
             // A newer request owns the state now.
