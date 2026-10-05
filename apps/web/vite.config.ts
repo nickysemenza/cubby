@@ -13,7 +13,7 @@ import {
   type PluginOption,
 } from "vite";
 import wasm from "vite-plugin-wasm";
-import { mcpAppAsset } from "./tooling/mcp-app-asset.ts";
+import { workerStaticAssets } from "./tooling/worker-static-assets.ts";
 import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
 import { resolveDevProfile } from "../../scripts/lib/dev-profile.ts";
 import { writeLocalDevConfig } from "./tooling/dev/config.ts";
@@ -376,7 +376,7 @@ export default defineConfig(async ({ command }) => {
       } satisfies Plugin,
       // Deploy plugin must come first (Cloudflare plugin needs early hook)
       ...deployPlugin,
-      mcpAppAsset(),
+      workerStaticAssets(),
       // CF Workers WASM instantiation plugin must run before vite-plugin-wasm
       cfPgNativeStub(),
       cfWasmPlugin(),

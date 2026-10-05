@@ -425,3 +425,30 @@ test("native handoff exchanges PKCE once for a signed API session", async ({
     await native.dispose();
   }
 });
+
+test("the OpenAPI document is served from its static asset", async ({
+  page,
+  baseURL,
+}) => {
+  // The document is a hashed ASSETS file, not a Worker module; a missing
+  // client emit 404s here rather than at build time.
+  const response = await page.request.get("/api/v1/openapi.json");
+  expect(response.status()).toBe(200);
+  const document = z
+    .object({
+      openapi: z.string(),
+      paths: z.record(z.string(), z.unknown()),
+      servers: z.array(z.object({ url: z.string() })),
+      components: z.object({
+        securitySchemes: z.object({
+          sessionCookie: z.object({
+            in: z.literal("cookie"),
+            name: z.string(),
+          }),
+        }),
+      }),
+    })
+    .parse(await response.json());
+  expect(document.servers).toEqual([{ url: new URL(baseURL!).origin }]);
+  expect(Object.keys(document.paths).length).toBeGreaterThan(0);
+});
