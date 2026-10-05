@@ -81,7 +81,9 @@ export class ChatGptSession {
 
   constructor(
     private readonly store: CredentialStore,
-    private readonly upstream: typeof fetch = fetch,
+    // Workers native fetch requires its global receiver, not this session.
+    private readonly upstream: typeof fetch = (input, init) =>
+      fetch(input, init),
   ) {}
 
   /** Serialize mutations across HTTP awaits; rotating refresh tokens are single-use. */

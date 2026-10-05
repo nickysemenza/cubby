@@ -24,6 +24,11 @@ order is not dependency order; Nx supplies generation and build prerequisites.
 disable the Nx daemon. Stop only processes this task started; use `pnpm exec nx
 reset` after interrupting its own interactive Nx work.
 
+When adding a Workers suite, update the `workers-tests` target's explicit Nx
+inputs in `apps/web/project.json` to include its production sources, shared
+contracts, and Worker entrypoint/configuration. A test discovered by Vitest but
+missing from those inputs can silently reuse a cached pass after a regression.
+
 Oxlint's project rules protect unsafe identifier boundaries and soft-delete
 filters. Keep constraint-focused one-line local exceptions. Oxfmt owns
 maintained source, CSS, Markdown, MDX, YAML, and TOML; generated files,

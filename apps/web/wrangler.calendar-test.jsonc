@@ -21,6 +21,10 @@
         "name": "AI_RESPONSE_CACHE",
         "class_name": "AiResponseCacheDurableObject",
       },
+      {
+        "name": "CHATGPT_PLAN",
+        "class_name": "ChatGptPlanDurableObject",
+      },
     ],
   },
   "exports": {
@@ -37,6 +41,10 @@
       "storage": "sqlite",
     },
     "AiResponseCacheDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite",
+    },
+    "ChatGptPlanDurableObject": {
       "type": "durable-object",
       "storage": "sqlite",
     },
