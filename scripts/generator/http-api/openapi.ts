@@ -49,7 +49,9 @@ const webModule = (path: string) =>
  * (`routes/api/v1/openapi[.]json.ts`) overwrites this with the configured
  * name at request time; the committed document only needs a stable default.
  */
-const SESSION_COOKIE_NAME = "better-auth.session_token";
+// Production serves Secure cookies, so better-auth adds the `__Secure-`
+// prefix. The document is a static asset and cannot read the live name.
+const SESSION_COOKIE_NAME = "__Secure-better-auth.session_token";
 
 export type OpenApiDocument = ReturnType<typeof generateOpenApi>;
 

@@ -132,9 +132,7 @@ const getBrowserOperation = () => {
 
 const isHttpOperationPath = (pathname: string) =>
   pathname.startsWith("/api/v1/") &&
-  !["/api/v1/docs", "/api/v1/openapi.json"].includes(
-    pathname.replace(/\/+$/u, ""),
-  );
+  pathname.replace(/\/+$/u, "") !== "/api/v1/docs";
 
 // Per-request holder for the console.error-intercepted error, scoped via
 // AsyncLocalStorage — mirrors withRequestDb's per-request pool store in

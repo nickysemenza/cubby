@@ -3,42 +3,41 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Plugin } from "vite";
 
+const hashed = (name: string, extension: string) => (source: Buffer) =>
+  `assets/${name}-${createHash("sha256").update(source).digest("hex").slice(0, 12)}.${extension}`;
+
 /**
- * Files the Worker serves through its ASSETS binding instead of embedding: an
- * unchanged file costs no Worker upload bytes on deploy.
+ * Generated files emitted into the client output. Cloudflare serves a static
+ * asset before invoking the Worker (no `run_worker_first`), so a fixed-path
+ * file never runs Worker code, and an unchanged file costs no upload bytes.
  */
 const STATIC_ASSETS = [
   {
+    // Hashed: the Worker imports its URL (`?url`) and reads it via ASSETS.
     path: resolve(import.meta.dirname, "../../mcp-apps/dist/app.html"),
-    name: "mcp-usda-picker",
-    extension: "html",
+    fileName: hashed("mcp-usda-picker", "html"),
     contentType: "text/html; charset=utf-8",
   },
   {
+    // Served as-is; `checkHttpRoutes` reserves the path from operations.
     path: resolve(
       import.meta.dirname,
       "../src/lib/generated/http-openapi.gen.json",
     ),
-    name: "http-openapi",
-    extension: "json",
+    fileName: () => "api/v1/openapi.json",
     contentType: "application/json",
   },
 ];
 
 /**
- * Turn each `STATIC_ASSETS` file into one hashed client asset. The server graph
- * imports the `?url` module too, but only the client environment emits the
- * file; this keeps the Worker holding a URL and lets ASSETS serve the bytes.
+ * Emit each `STATIC_ASSETS` file into the client output only: the server graph
+ * may import a hashed file's `?url` module, but only the client output is
+ * attached to the Worker's ASSETS binding. Dev serves the same paths.
  */
 export function workerStaticAssets(): Plugin {
   let building = false;
-  const fileName = (asset: (typeof STATIC_ASSETS)[number]) => {
-    const hash = createHash("sha256")
-      .update(readFileSync(asset.path))
-      .digest("hex")
-      .slice(0, 12);
-    return `${asset.name}-${hash}.${asset.extension}`;
-  };
+  const fileName = (asset: (typeof STATIC_ASSETS)[number]) =>
+    asset.fileName(readFileSync(asset.path));
   const byPath = new Map(STATIC_ASSETS.map((asset) => [asset.path, asset]));
 
   return {
@@ -50,14 +49,10 @@ export function workerStaticAssets(): Plugin {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
-        const asset = STATIC_ASSETS.find((candidate) =>
-          pathname.startsWith(`/assets/${candidate.name}-`),
+        const asset = STATIC_ASSETS.find(
+          (candidate) => pathname === `/${fileName(candidate)}`,
         );
         if (!asset) return next();
-        if (pathname !== `/assets/${fileName(asset)}`) {
-          res.statusCode = 404;
-          return res.end();
-        }
         res.setHeader("Content-Type", asset.contentType);
         res.setHeader("Cache-Control", "no-cache");
         res.end(req.method === "HEAD" ? undefined : readFileSync(asset.path));
@@ -75,16 +70,14 @@ export function workerStaticAssets(): Plugin {
     load(id) {
       const asset = id.endsWith("?url") && byPath.get(id.slice(0, -4));
       if (!asset) return undefined;
-      return `export default ${JSON.stringify(`/assets/${fileName(asset)}`)};`;
+      return `export default ${JSON.stringify(`/${fileName(asset)}`)};`;
     },
     buildStart() {
-      // Vite builds client and SSR as separate environments. Only the static
-      // client output is attached to the Worker's ASSETS binding.
       if (!building || this.environment.name !== "client") return;
       for (const asset of STATIC_ASSETS) {
         this.emitFile({
           type: "asset",
-          fileName: `assets/${fileName(asset)}`,
+          fileName: fileName(asset),
           source: readFileSync(asset.path),
         });
       }
