@@ -132,7 +132,7 @@ export async function workerdDiagnostic(
 export type ScenarioHarness = Awaited<ReturnType<typeof startScenarioHarness>>;
 
 /**
- * Start the coupled web + purchase-agent workerd harness and load one
+ * Start the purchase-agent workerd harness and load one
  * scenario: the scripted model's steps and the web Worker's extractor/audit
  * outputs. Call `close()` in `afterEach`.
  */
@@ -185,14 +185,11 @@ export async function startScenarioHarness(
     const queue = harness.getWorker("cubby-queue-producer");
     const toQueue: Sender = (path, init) =>
       queue.fetch(new URL(path, "https://queue.test"), init);
-    const toAgent: Sender = (path, init) =>
-      harness.getWorker("purchase-agent").fetch(path, {
-        ...init,
-        headers: {
-          ...init.headers,
-          "x-cubby-agent-service": "purchase-import-proxy-v1",
-        },
-      });
+    const agentUrl = (agentId: string, suffix = "") =>
+      new URL(
+        `/agent/${encodeURIComponent(agentId)}${suffix}`,
+        "https://queue.test",
+      );
     const readJson = async <T>(
       schema: z.ZodType<T>,
       send: () => Promise<{ json(): Promise<unknown> }>,
@@ -220,21 +217,14 @@ export async function startScenarioHarness(
       }) => post(toQueue, "/browser-connect", input),
       /** Deliver a member's chat turn to the run's agent conversation. */
       prompt: (agentId: string, body: string) =>
-        post(
-          toAgent,
-          `https://purchase-agent.internal/internal/agents/purchase-import-run/${encodeURIComponent(agentId)}`,
-          { kind: "user", body },
-        ),
+        post(toQueue, agentUrl(agentId).pathname, { kind: "user", body }),
       /**
        * The run page's two reads of the agent conversation: the snapshot and
        * the first SSE frame of the live stream, each as the agent answered.
        */
       conversation: async (agentId: string) => {
-        const base = `https://purchase-agent.internal/internal/agents/purchase-import-run/${encodeURIComponent(agentId)}`;
-        const headers = { "x-cubby-agent-service": "purchase-import-proxy-v1" };
-        const agent = harness.getWorker("purchase-agent");
-        const snapshot = await agent.fetch(base, { headers });
-        const stream = await agent.fetch(`${base}/stream`, { headers });
+        const snapshot = await queue.fetch(agentUrl(agentId));
+        const stream = await queue.fetch(agentUrl(agentId, "/stream"));
         // A whole-snapshot frame can span several chunks; read to its end.
         const decoder = new TextDecoder();
         let firstFrame = "";

@@ -32,7 +32,6 @@ dependency.
 The checked-in provider configurations are:
 
 - [`apps/web/wrangler.jsonc`](../apps/web/wrangler.jsonc)
-- [`apps/purchase-agent/wrangler.jsonc`](../apps/purchase-agent/wrangler.jsonc)
 - [`apps/usda-api/wrangler.jsonc`](../apps/usda-api/wrangler.jsonc)
 - [`.github/workflows/deploy.yaml`](../.github/workflows/deploy.yaml)
 
@@ -47,15 +46,15 @@ Account ID: `9f10f078d35d86c78dedece2300a6b88`.
 - Custom domain `cubby.nickysemenza.com`; `workers.dev` production routing is
   disabled and preview URLs are enabled.
 - Smart Placement and static assets.
-- Service bindings `USDA_API` -> `usda-api` and
-  `PURCHASE_AGENT` -> the private `purchase-agent` Worker. The reverse named
-  `CUBBY_PURCHASE_SERVICE` binding carries database-authoritative MCP and import
-  operations; neither direction uses a public Worker URL.
+- Service binding `USDA_API` -> `usda-api`.
 - SQLite Durable Objects `DatabaseFreshnessDurableObject`,
-  `CalendarFeedDurableObject`, and `PurchaseImportDurableObject`.
+  `CalendarFeedDurableObject`, `PurchaseImportDurableObject`,
+  `ImageProcessingDurableObject`, `AiResponseCacheDurableObject`, and the
+  purchase agent's `PurchaseImportRunAgent` (below).
 - Workflow `cubby-search-index-repair`.
-- Queues `cubby-background` and `cubby-telemetry`, plus producer-only
-  `cubby-purchase-agent`, with settings in the Wrangler files.
+- Queues `cubby-background`, `cubby-telemetry`, and `cubby-purchase-agent`,
+  each produced and consumed by this Worker, with settings in the Wrangler
+  file.
 - One daily cron trigger at 12:00 UTC; authenticated app openings enqueue
   catch-up work with a household-wide one-hour cooldown.
 - Workers AI binding `AI` and AI Gateway `cubby`.
@@ -82,40 +81,89 @@ pnpm --dir apps/web exec wrangler vectorize create-metadata-index \
 The Workflow, Durable Object namespaces, bindings, consumers, crons, and route
 are created or updated by `wrangler deploy` from the checked-in configuration.
 
-### Private purchase-agent Worker
+### Purchase agent
 
-`apps/purchase-agent` is the private coordinator runtime for import runs: an
-Agents SDK `Agent` hosting a pi-durable conversation through `PiHarness`. It has
-no route, preview URL, database credential, document binding, or browser
-authority. Its checked-in Wrangler configuration declares:
+The purchase agent coordinates import runs inside Worker `cubby`: an Agents
+SDK `Agent` hosting a pi-durable conversation through `PiHarness`. Its
+checked-in configuration is part of `apps/web/wrangler.jsonc`:
 
-- queue consumer `cubby-purchase-agent`;
 - SQLite Durable Object class `PurchaseImportRunAgent` (binding
   `PURCHASE_IMPORT_RUN`), one instance named `import-run:<Run.id>` or
-  `photo-inventory:<Run.id>` per run; pi keeps the transcript, inbox, and
-  tasks in the object's SQLite and Lifecycle jobs wake it after eviction;
-- direct named service binding `CUBBY_PURCHASE_SERVICE` to the web Worker's
-  `PurchaseImportService` entrypoint, including run-bound MCP token issuance
-  and private MCP request forwarding;
-- Workers AI binding `AI`, with every orchestration call routed through AI
-  Gateway `cubby` by the shared pi-ai providers (`@cubby/shared/pi-gateway`);
-- var `SENTRY_ENVIRONMENT` (`test` disables Sentry entirely, which is what the
-  workerd harness sets).
+  `photo-inventory:<Run.id>` per run (`importRunAgentIdentity`); pi keeps the
+  transcript, inbox, and tasks in the object's SQLite, and Lifecycle jobs wake
+  it through its alarm after eviction;
+- the `cubby-purchase-agent` queue consumer (`server/purchase-agent/queue.ts`),
+  which fences duplicate and late `start_or_resume` deliveries with the Run's
+  dispatch generation (`canDispatchCoordinator` / `acknowledgeCoordinator`),
+  retries a transient failure, and fails the Run after three attempts;
+- every model call through AI Gateway `cubby` on the Worker's `AI` binding,
+  by the shared pi-ai providers (`@cubby/shared/pi-gateway`). The gateway
+  shim disables parallel tool calls: pi ends a run on a terminating tool only
+  when it is the round's sole call, so a pending browser command can never
+  share a round with a non-terminating call.
 
-Native Workers Traces carry the platform spans and the consumer's
-`job.purchase_agent_event` span (`run.id`, `event.type`, `dispatch.outcome`) in
-Cloudflare. Sentry (`src/sentry.ts`) receives the agent's operational errors as
-issues; it does not receive traces. Model and tool content is never recorded in
-either destination. Each model response's usage reaches `AiUsage` through
-`recordAgentUsage`, and a Lifecycle job per submission reports its settlement
-(`reconcileSettledRun`, or `markRunFailed` with `agent_failed` /
-`agent_aborted`).
+**The trust boundary.** The agent reads untrusted vendor pages, mail, and
+photos, so prompt injection must not reach anything beyond the run it serves.
+It was a separate Worker with no database credential for that reason; it now
+runs in this Worker behind an in-process boundary enforced by construction:
 
-The web Worker has the reverse `PURCHASE_AGENT` service binding solely to proxy
-authenticated conversation history, live updates, prompts, and aborts. This is
-a bounded circular service topology, not a recursive request loop: queue events
-start agent work, agent MCP calls return through `PurchaseImportService`, and
-browser users reach the agent only through an authenticated web route.
+- The agent's code (`apps/web/src/server/purchase-agent/`) receives no `env`.
+  Its host (`server/purchase-import/agent-host.ts`) builds a narrowed
+  environment (`server/purchase-agent/environment.ts`): the AI Gateway, the
+  scripted test model in the workerd harness, the purpose's MCP tool
+  definitions, the coordinator stub for the queue consumer, and the services
+  of one Run. The Agents SDK base class gets an empty environment.
+- Every Cubby effect is a Run service (`server/purchase-import/agent-services.ts`):
+  bound to one Run when created, it parses its input
+  (`@cubby/schemas/purchase-agent-services`), opens its own database scope,
+  and resolves every target from that Run. No input names a Run, party,
+  account, vendor, SQL, script, or generic mutation target.
+- MCP calls run Cubby's MCP handler in process. For each request the host
+  mints a fresh five-minute delegation bearer bound to the Run and the
+  member's live Purchase Agent grant; the MCP handler verifies it, the grant,
+  and LedgerParty ownership exactly as for any external client, and narrows
+  every tool to the purpose's manifest actions
+  (`importRunAgentManifest[purpose].mcpActions`). The agent never holds the
+  token.
+- Oxlint rule `cubby/purchase-agent-boundary` (`tools/oxlint/cubby/`) fails
+  any import from that directory outside its runtime packages, pure Cubby
+  contracts (`@cubby/schemas`, `@cubby/shared`, `@cubby/worker-tracing`), its
+  own files, and the bundled skill Markdown, and any read of `process.env` or
+  `this.env`. A new agent capability is a new Run service, never an import.
+
+One Worker removes the circular service bindings, the internal agent route
+and its header marker, and the `PurchaseImportService` RPC entrypoint whose
+binding was cast rather than checked; the boundary is now type-checked and
+linted instead of a deployment topology.
+
+The agent runtime (Agents SDK, pi-durable, MCP client) stays off every page
+request: the exported Durable Object is a shell that loads
+`server/purchase-agent/run-agent.ts` on its first event, and the queue handler
+loads the consumer when a `cubby-purchase-agent` batch arrives
+(`apps/web/scripts/check-server-closure.ts` budgets both paths).
+
+The agent supplies Cubby's typed tools (`server/purchase-agent/tools.ts`,
+replay-safe, each effect memoized per operation id), mounts the purpose's
+Cubby MCP tools as `mcp__cubby__<tool>` from the same compiled catalog
+the MCP server lists to it (`server/mcp/agent-tool-catalog.ts`, so the first
+dispatch lists nothing), and adds the purpose's skill plus product enrichment
+from `.claude/skills/`. Queue events and the finish nudge reach the model as
+`<signal type="…">` user text (`signals.ts`); the nudge
+(`<signal type="run_not_finished">`) is sent once per stretch of new tool
+rounds when the model stops without a terminal tool. A Lifecycle job per
+submission reports its settlement: `done` goes to `reconcileSettledRun`, an
+unanswered submission to `markRunFailed` (`agent_failed` / `agent_aborted`).
+The run page reads the conversation through `agent-proxy.ts` as the
+`AgentConversation` contract (`packages/schemas/src/agent-conversation.ts`),
+which the agent projects from pi's entries and live generation.
+
+Native Workers Traces carry the consumer's `job.purchase_agent_event` span
+(`run.id`, `event.type`, `dispatch.outcome`). Sentry receives the agent's
+errors through the Worker's own configuration (`server/worker-sentry.ts`;
+the Durable Object's issues carry tag `service: purchase-agent`); it receives
+no traces, and model and tool content is never recorded in either
+destination. Each model response's usage reaches `AiUsage` through
+`recordAgentUsage`.
 
 Account syncs and explicit Purchase validation/Product enrichment runs share
 the same queue. Each admitted run records a stable start-event id and the
@@ -134,23 +182,13 @@ copied to the agent. The web Worker mints five-minute, run-bound delegation toke
 for MCP calls and rechecks the live grant and LedgerParty ownership on every
 request.
 
-Create and verify the non-route resource before the first deploy:
-
-```bash
-pnpm --dir apps/web exec wrangler queues create cubby-purchase-agent
-pnpm --dir apps/web exec wrangler queues list
-pnpm --dir apps/purchase-agent run build
-pnpm --dir apps/purchase-agent exec wrangler deploy --dry-run
-```
-
-Deploy `cubby` first whenever `PurchaseImportService` changes, then deploy
-`purchase-agent`. The GitHub workflow preserves that order; agent-only changes
-skip the web deploy. Verify the private Worker and bindings with:
-
-```bash
-pnpm --dir apps/purchase-agent exec wrangler deployments list
-pnpm --dir apps/purchase-agent exec wrangler tail
-```
+Pi-durable conversations live in the coordinator's Durable Object, so moving
+the class between Workers or replacing it does not carry them over: terminate
+the Runs whose coordinator is active (`running` and `paused_*`) before such a
+deploy. A queue has one consumer; to move `cubby-purchase-agent` to another
+Worker, remove the old consumer first
+(`wrangler queues consumer remove cubby-purchase-agent <worker>`); events wait
+in the queue until the new consumer deploys.
 
 After deployment, authorize each member once from Settings and verify the
 client/grant without printing token values:
@@ -164,7 +202,9 @@ WHERE c.client_id = 'cubby-purchase-agent'
 GROUP BY c.client_id, c.public, c.require_pkce;
 ```
 
-Two local suites exercise the real agent in the coupled workerd harness.
+Two local suites exercise the real agent in the workerd harness
+(`apps/web/tooling/purchase-agent-workerd-harness.ts`, the built `cubby`
+Worker with a scripted model and gateway).
 `apps/web/src/server/purchase-import/purchase-agent-scenarios.integration.test.ts`
 (PostgreSQL tier) scripts only the coordinator model and the web Worker's
 extractor/audit model, and asserts the database graph, run status, findings,
@@ -183,9 +223,11 @@ pnpm --dir apps/web eval:purchase-decisions
 
 Neither uses an authenticated household session or production data.
 
-Rollback is additive: pause the `cubby-purchase-agent` consumer and deploy the
-previous web and Apple versions. Postgres import rows and the retained
-`PurchaseImportDurableObject` namespace remain compatible.
+Rollback: pause the `cubby-purchase-agent` consumer and deploy the previous
+web and Apple versions. Postgres import rows and the retained
+`PurchaseImportDurableObject` namespace remain compatible; a rollback past the
+2026-10 merge of the agent into `cubby` also needs the separate
+`purchase-agent` Worker and its consumer back.
 
 ### PostgreSQL and Hyperdrive
 
@@ -385,9 +427,9 @@ native app uses a separate `cubby-apple` Sentry project. Authentication and
 ownership for both projects remain provider-side state.
 
 Cloudflare joins service-binding, JS RPC, and Durable Object subrequests into
-one trace, so the web Worker's proxy into the purchase agent and the agent's
-`CUBBY_PURCHASE_SERVICE` calls back appear in a single trace in the Cloudflare
-dashboard. A queue delivery starts a new trace in the consumer;
+one trace, so the run page's proxy into the purchase agent's Durable Object
+appears in the request's trace in the Cloudflare dashboard. A queue delivery
+starts a new trace in the consumer;
 `run.id` on the consumer's job span is the join key back to the producer's job
 spans. Trace context never propagates to services outside Cloudflare.
 

@@ -153,8 +153,8 @@ buildinfo's files after each completed run and deletes the buildinfo when more
 than 100 changed (a rebase or pull) or no record exists; `.worktreeinclude` no
 longer copies it into new worktrees.
 
-`apps/purchase-agent/src/service.ts` typed one parameter with the agent's
-`CloudflareContext`, pulling pi-ai, a second OpenAI and Anthropic SDK, and
+The purchase agent's service binding module once typed one parameter with the
+agent's `CloudflareContext`, pulling pi-ai, a second OpenAI and Anthropic SDK, and
 typebox (about 1,000 declaration files) into the web program through one
 tooling import. Unused declarations cost parse and bind only: dropping them
 saved about 110 MB and no check time.

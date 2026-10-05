@@ -79,7 +79,7 @@ Verified on `main` at `537d853c6`. Do not rebuild any of this.
   `apps/web/src/entity/actions/bulk-edit-entity-action.tsx`.
 - **Import pipeline.** The import-run agent imports only
   `.claude/skills/purchase-import/SKILL.md`
-  (`apps/purchase-agent/src/purchase-import-run.ts`), **not** its `references/`.
+  (`apps/web/src/server/purchase-agent/import-run-workflows.ts`), **not** its `references/`.
   Gmail sync targets are vendor order senders only; nothing ingests
   person-to-person payments, and the only negative-Expense write path is the
   `create_refund` fix for vendor-order refunds.

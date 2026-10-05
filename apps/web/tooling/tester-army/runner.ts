@@ -80,8 +80,6 @@ export async function runTesterArmyLane(input: {
   output: string;
   rawOutput: string;
   tracker: ReturnType<typeof childTracker>;
-  /** Extra build steps after the web Worker, such as the agent Worker. */
-  build?: () => Promise<void>;
   /** Additional sanitized evidence files the services phase may write. */
   evidence?: string[];
   /** Lane-specific runtime facts for the run manifest, such as the agent model. */
@@ -105,7 +103,6 @@ export async function runTesterArmyLane(input: {
       },
       false,
     );
-    await input.build?.();
     started = captureE2ERunIdentity(repoRoot);
     phase = "journey";
     const exit = await spawnToExit(

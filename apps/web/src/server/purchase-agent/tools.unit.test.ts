@@ -4,10 +4,9 @@ import type { JsonObject, ToolExecutionApi } from "@earendil-works/pi-durable";
 import { fromAny, fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
-import type { PurchaseImportService } from "./service";
+import type { RunServices } from "./environment";
 import { purchaseImportTools } from "./tools";
 
-const runId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 const unusedService = () => {
   throw new Error("tools only call their service when pi invokes them");
 };
@@ -28,9 +27,9 @@ function fakeApi(): ToolExecutionApi {
 
 const toolNamed = (
   name: string,
-  service: () => PurchaseImportService = unusedService,
+  services: () => RunServices = unusedService,
 ) => {
-  const tool = purchaseImportTools(runId, service).find(
+  const tool = purchaseImportTools(services).find(
     (candidate) => candidate.name === name,
   );
   if (!tool) throw new Error(`Missing tool ${name}`);
@@ -39,7 +38,7 @@ const toolNamed = (
 
 describe("purchase-import agent tool authority", () => {
   it("keeps model-facing RPC limited to bounded browser and run lifecycle operations", () => {
-    const tools = purchaseImportTools(runId, unusedService);
+    const tools = purchaseImportTools(unusedService);
     expect(tools.map((tool) => tool.name)).toEqual([
       "claim_next_import_work",
       "extract_receipt_evidence",
@@ -64,7 +63,7 @@ describe("purchase-import agent tool authority", () => {
     const issueBrowserCommand = vi.fn(async () => ({ state: "dispatched" }));
     // The browser tool calls only these two service methods.
     const service = () =>
-      fromPartial<PurchaseImportService>({
+      fromPartial<RunServices>({
         updateAgentProgress: async () => ({ recorded: true }),
         issueBrowserCommand,
       });

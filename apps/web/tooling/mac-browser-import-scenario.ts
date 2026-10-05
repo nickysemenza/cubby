@@ -11,9 +11,11 @@ import {
 } from "../src/server/repo/member-login";
 import { resolveOrThrow } from "../src/server/repo/shortcode-resolver";
 import {
+  claimNextImportWork,
   issueBrowserCommand,
   readBrowserCommandResult,
   loadRunScope,
+  runImportOperation,
   startOrResumeRun,
   type PurchaseImportNamespace,
 } from "../src/server/purchase-import/run-service";
@@ -131,25 +133,43 @@ export async function createMacBrowserScenario(input: Input) {
         "native-import-continuation",
       );
       const deliveries = z.object({
-        resumedEvents: z.array(
+        retryEvents: z.array(
           z.object({ runId: z.string(), eventId: z.string() }),
         ),
       });
       try {
-        return await pollUntil(
+        const retry = await pollUntil(
           async () => {
-            const { resumedEvents } = deliveries.parse(
+            const { retryEvents } = deliveries.parse(
               await (
                 await continuation.fetch("https://continuation.test/")
               ).json(),
             );
-            return resumedEvents.some((event) => event.runId === run.id) &&
-              (await loadRunScope(db, run.id)).public.status === "running"
-              ? resumedEvents
-              : undefined;
+            return retryEvents.find((event) => event.runId === run.id);
           },
+          { label: "Native Sync retry delivery", timeoutMs: 30_000 },
+        );
+        // The coordinator's decision on a retry: claim the run's next work,
+        // as its `claim_next_import_work` tool does.
+        const operationId = `native-resume:${retry.eventId}`;
+        await runImportOperation(
+          db,
+          {
+            runId: run.id,
+            operationId,
+            kind: "claim_next_work",
+            payload: { runId: run.id, operationId },
+          },
+          () => claimNextImportWork(db, namespace, run.id),
+        );
+        await pollUntil(
+          async () =>
+            (await loadRunScope(db, run.id)).public.status === "running"
+              ? true
+              : undefined,
           { label: "Native Sync resume", timeoutMs: 30_000 },
         );
+        return [retry];
       } catch (error) {
         await appDriver.snapshot();
         throw new Error(

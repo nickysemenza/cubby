@@ -9,14 +9,12 @@ import {
 } from "@earendil-works/pi-durable";
 import { z } from "zod";
 
-import type { PurchaseImportService } from "./service";
+import type { RunServices } from "./environment";
 
 const operationId = Type.String({ minLength: 1, maxLength: 200 });
 const boundedUrl = Type.String({ format: "uri", maxLength: 2_048 });
 const picklist = <const T extends readonly string[]>(values: T) =>
   Type.Union(values.map((value) => Type.Literal(value)));
-
-export type PurchaseImportServiceResolver = () => PurchaseImportService;
 
 /** The lifecycle fields of a browser command result. */
 const browserCommandState = z.looseObject({
@@ -37,7 +35,7 @@ function pendingResult(result: JsonValue): boolean {
 }
 
 /**
- * One RPC effect per step key. The first completion is memoized on the tool
+ * One service effect per step key. The first completion is memoized on the tool
  * task, so a call replayed after an eviction returns the stored result instead
  * of repeating the effect; the server is idempotent by operation id as well.
  */
@@ -65,17 +63,16 @@ const tool = <P extends TSchema>(definition: ToolRegistration<P>) =>
   defineTool({ replay: "safe", ...definition });
 
 /**
- * Typed RPC is deliberately limited to seams that cannot travel through MCP:
- * browser commands must end the run while the user's browser works, progress
- * must be visible before another model turn completes, and lifecycle
- * transitions stay behind the web Worker's crash-safe guards.
+ * Typed run services are deliberately limited to seams that cannot travel
+ * through MCP: browser commands must end the run while the user's browser
+ * works, progress must be visible before another model turn completes, and
+ * lifecycle transitions stay behind the host's crash-safe guards.
  *
  * A terminating tool ends the run only when it is the round's sole call; the
  * agent's transport disables parallel tool calls so that always holds.
  */
 export function purchaseImportTools(
-  runId: string,
-  serviceForRun: PurchaseImportServiceResolver,
+  services: () => RunServices,
 ): ToolRegistration[] {
   const op = Type.Object({ operationId });
   return [
@@ -87,7 +84,7 @@ export function purchaseImportTools(
       execute: async (args, api, context) =>
         result(
           await step(api, context, `claim-work:${args.operationId}`, () =>
-            serviceForRun().claimNextWork({ runId, ...args }),
+            services().claimNextWork(args),
           ),
         ),
     }),
@@ -99,7 +96,7 @@ export function purchaseImportTools(
       execute: async (args, api, context) =>
         result(
           await step(api, context, `extract-receipt:${args.operationId}`, () =>
-            serviceForRun().extractReceiptEvidence({ runId, ...args }),
+            services().extractReceiptEvidence(args),
           ),
         ),
     }),
@@ -114,7 +111,7 @@ export function purchaseImportTools(
             api,
             context,
             `extract-run-evidence:${args.operationId}`,
-            () => serviceForRun().extractRunEvidence({ runId, ...args }),
+            () => services().extractRunEvidence(args),
           ),
         ),
     }),
@@ -136,8 +133,7 @@ export function purchaseImportTools(
       }),
       execute: async (args, api, context) => {
         await step(api, context, `browser-progress:${args.operationId}`, () =>
-          serviceForRun().updateAgentProgress({
-            runId,
+          services().updateAgentProgress({
             eventId: `browser-progress:${args.operationId}`,
             phase: "awaiting_browser",
             currentItem: args.command.target,
@@ -149,8 +145,7 @@ export function purchaseImportTools(
           context,
           `browser-command:${args.operationId}`,
           () =>
-            serviceForRun().issueBrowserCommand({
-              runId,
+            services().issueBrowserCommand({
               operationId: `browser-command:${args.operationId}`,
               command: args.command,
             }),
@@ -165,8 +160,7 @@ export function purchaseImportTools(
       parameters: op,
       execute: async (args) => {
         const output = z.json().parse(
-          (await serviceForRun().readBrowserCommandResult({
-            runId,
+          (await services().readBrowserCommandResult({
             operationId: `browser-command:${args.operationId}`,
           })) ?? null,
         );
@@ -189,7 +183,7 @@ export function purchaseImportTools(
             api,
             context,
             `import-browser-evidence:${args.operationId}`,
-            () => serviceForRun().importOrderEvidence({ runId, ...args }),
+            () => services().importOrderEvidence(args),
           ),
         ),
     }),
@@ -214,8 +208,7 @@ export function purchaseImportTools(
       }),
       execute: async (args, api, context) => {
         await step(api, context, `agent-progress:${args.operationId}`, () =>
-          serviceForRun().updateAgentProgress({
-            runId,
+          services().updateAgentProgress({
             eventId: `agent-progress:${args.operationId}`,
             phase: args.phase,
             currentItem: args.currentItem,
@@ -232,8 +225,7 @@ export function purchaseImportTools(
             context,
             `agent-progress-review:${args.operationId}`,
             () =>
-              serviceForRun().stopForReview({
-                runId,
+              services().stopForReview({
                 operationId: `agent-progress-review:${args.operationId}`,
                 reason: "other",
                 detail: args.detail,
@@ -262,7 +254,7 @@ export function purchaseImportTools(
       execute: async (args, api, context) =>
         result(
           await step(api, context, `navigation-hints:${args.operationId}`, () =>
-            serviceForRun().saveNavigationHints({ runId, ...args }),
+            services().saveNavigationHints(args),
           ),
         ),
     }),
@@ -277,7 +269,7 @@ export function purchaseImportTools(
       execute: async (args, api, context) =>
         result(
           await step(api, context, `history-expired:${args.operationId}`, () =>
-            serviceForRun().markHistoryExpired({ runId, ...args }),
+            services().markHistoryExpired(args),
           ),
         ),
     }),
@@ -289,7 +281,7 @@ export function purchaseImportTools(
       execute: async (args, api, context) =>
         result(
           await step(api, context, `finish-run:${args.operationId}`, () =>
-            serviceForRun().finishRun({ runId, ...args }),
+            services().finishRun(args),
           ),
           true,
         ),
@@ -311,7 +303,7 @@ export function purchaseImportTools(
       execute: async (args, api, context) =>
         result(
           await step(api, context, `stop-review:${args.operationId}`, () =>
-            serviceForRun().stopForReview({ runId, ...args }),
+            services().stopForReview(args),
           ),
           true,
         ),
@@ -328,7 +320,7 @@ export function purchaseImportTools(
       execute: async (args, api, context) =>
         result(
           await step(api, context, `defer-order:${args.operationId}`, () =>
-            serviceForRun().deferOrderForReview({ runId, ...args }),
+            services().deferOrderForReview(args),
           ),
         ),
     }),
@@ -348,7 +340,7 @@ export function purchaseImportTools(
             api,
             context,
             `settle-charge-hunt:${args.operationId}`,
-            () => serviceForRun().settleChargeHunt({ runId, ...args }),
+            () => services().settleChargeHunt(args),
           ),
         ),
     }),

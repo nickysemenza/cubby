@@ -104,10 +104,7 @@ const affectedByPath = (path: string): Partial<CiChangeScope> | null => {
         apple: true,
       }),
     };
-  if (
-    path.startsWith("apps/mcp-apps/") ||
-    path.startsWith("apps/purchase-agent/")
-  )
+  if (path.startsWith("apps/mcp-apps/"))
     return { validation: true, web: true, auxiliary: true };
   if (path.startsWith("apps/usda-api/"))
     return { validation: true, auxiliary: true };

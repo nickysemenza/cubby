@@ -153,8 +153,8 @@ on the engine's observed state, so a warm run may still use the model.
 `pnpm test:e2e:agent:import` is the one journey where nothing behind the
 browser is scripted. Tester Army opens a synthetic vendor, imports its saved
 itemized order confirmation, and follows the import run. The browser talks to
-the coupled web + purchase-agent harness (local workerd, queue, Durable
-Objects, MCP) instead of the standard E2E runtime. Its two model peers are
+the purchase-agent workerd harness (the built `cubby` Worker with its queue,
+Durable Objects, and MCP) instead of the standard E2E runtime. Its two model peers are
 replaced by `tooling/tester-army/live-gateway.ts`, so the pi coordinator and
 the web Worker's extraction and audit call real models. The driver uses the
 same `cubby-testing` gateway and token. The journey passes only when the run

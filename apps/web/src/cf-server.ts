@@ -2,36 +2,15 @@
  * The web Worker entry. Sections, in file order:
  * - `handler.fetch`: env bridging, maintenance mode, direct sockets, then
  *   TanStack Start.
- * - `handler.queue`: `cubby-telemetry`, then background tasks
+ * - `handler.queue`: `cubby-purchase-agent` (the purchase agent's consumer,
+ *   `server/purchase-agent/queue`), `cubby-telemetry`, then background tasks
  *   (`server/background-tasks/consume`).
  * - `handler.scheduled`: the one daily maintenance cron.
- * - `PurchaseImportService`: the purchase agent's service binding; each method
- *   wraps a `server/purchase-import/run-service` function (flow:
- *   `server/purchase-import/README.md`).
  * - Durable Object and Workflow re-exports, then the Sentry-wrapped default.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import type {
-  AgentProgressEvent,
-  AgentUsageEvent,
-  auditBatchInput,
-  deferOrderForReviewInput,
-  importOrderEvidenceInput,
-  issueBrowserCommandInput,
-  markHistoryExpiredInput,
-  markRunFailedInput,
-  purchaseAgentEventRef,
-  purchaseAgentOperationRef,
-  purchaseAgentRunRef,
-  reconcileSettledRunInput,
-  saveNavigationHintsInput,
-  settleChargeHuntInput,
-  stopForReviewInput,
-} from "@cubby/schemas/purchase-agent-rpc";
 import { createLogger } from "@cubby/worker-tracing";
-import { SENTRY_DATA_COLLECTION } from "@cubby/worker-tracing/sentry-data-collection";
-import { CUBBY_SENTRY_DSN } from "@cubby/worker-tracing/sentry-dsn";
 import * as Sentry from "@sentry/cloudflare";
 // CF Workers production entry point.
 //
@@ -41,8 +20,6 @@ import * as Sentry from "@sentry/cloudflare";
 //    request's query fan-out runs in parallel instead of serializing.
 // 3. Intercepts console.error to capture real error details for `wrangler tail`.
 import type * as ServerEntry from "@tanstack/react-start/server-entry";
-import { WorkerEntrypoint } from "cloudflare:workers";
-import type { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "./lib/browser-operation-path";
 import {
@@ -52,12 +29,6 @@ import {
 } from "./lib/http-cache";
 import { httpRouteTemplate } from "./lib/http-route-template";
 import { observeResponseBody } from "./lib/response-body-observer";
-import {
-  resolveWorkerSentryEnvironment,
-  workerSentryEnabled,
-} from "./lib/sentry-environment";
-import { SENTRY_IGNORED_ERRORS } from "./lib/sentry-noise";
-import { scrubSentryEvent } from "./lib/sentry-scrub";
 import {
   readStartOperationTraceContext,
   startOperationTraceAttributes,
@@ -82,10 +53,12 @@ import {
 } from "./server/errors/report-error";
 import { withUnhandledErrorBody } from "./server/errors/unhandled-error-body";
 import { isMaintenanceMode, maintenanceResponse } from "./server/maintenance";
-import { resolvePurchaseAgentBrowserOperation } from "./server/purchase-import/agent-browser-command";
+import type { PurchaseAgentQueueBatch } from "./server/purchase-agent/environment";
+import { purchaseAgentEnvironment } from "./server/purchase-import/agent-host";
 import type { SearchDocumentCursor } from "./server/repo/search-document";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
 import { getRequestId, withManualTrace, withTrace } from "./server/tracing";
+import { workerSentryOptions } from "./server/worker-sentry";
 import { classifyHttpWorkload } from "./server/workload";
 
 // Cache the handler module promise so the dynamic import only runs once (on
@@ -581,11 +554,22 @@ const handler = {
   // execution row behind it. Per-message ack/retry so one failing task never
   // replays its siblings, and the queue's own retry budget is the only retry.
   async queue(
-    batch: BackgroundQueueBatch | TelemetryQueueBatch,
+    batch: BackgroundQueueBatch | TelemetryQueueBatch | PurchaseAgentQueueBatch,
     env: Env,
-    _ctx: { waitUntil(promise: Promise<unknown>): void },
+    ctx: { waitUntil(promise: Promise<unknown>): void },
   ) {
     setCfEnv(env);
+    if (batch.queue === "cubby-purchase-agent") {
+      // The agent's consumer holds no database client: each Run service it
+      // calls opens its own (`server/purchase-import/agent-services`).
+      const { consumePurchaseAgentQueue } =
+        await import("./server/purchase-agent/queue");
+      await consumePurchaseAgentQueue(
+        batch,
+        purchaseAgentEnvironment(env, ctx),
+      );
+      return;
+    }
     await withTrace(
       "cf.queue",
       async () => {
@@ -836,436 +820,13 @@ const handler = {
   },
 };
 
-/**
- * Private RPC boundary for the purchase-agent Worker. Every method resolves authority
- * from the Run; the caller cannot supply a party, account, vendor, SQL,
- * script, or generic mutation target.
- */
-export class PurchaseImportService extends WorkerEntrypoint<Env> {
-  private withDatabase<T>(
-    fn: (
-      database: typeof import("./server/db").db,
-      service: typeof import("./server/purchase-import/run-service"),
-    ) => Promise<T>,
-  ): Promise<T> {
-    setCfEnv(this.env);
-    return runWithExecutionCtx(this.ctx, () =>
-      withRequestDbClient(this.env.HYPERDRIVE.connectionString, async () => {
-        const [{ db }, service] = await Promise.all([
-          import("./server/db"),
-          import("./server/purchase-import/run-service"),
-        ]);
-        return fn(db, service);
-      }),
-    );
-  }
-
-  loadRunScope(input: z.infer<typeof purchaseAgentRunRef>) {
-    return this.withDatabase((db, service) =>
-      service.loadRunScope(db, input.runId),
-    );
-  }
-
-  canDispatchCoordinator(input: z.infer<typeof purchaseAgentEventRef>) {
-    return this.withDatabase((db, service) =>
-      service.canDispatchRunCoordinator(db, input),
-    );
-  }
-
-  acknowledgeCoordinator(input: z.infer<typeof purchaseAgentEventRef>) {
-    return this.withDatabase((db, service) =>
-      service.acknowledgeRunCoordinator(db, input),
-    );
-  }
-
-  acquireMcpAccess(input: z.infer<typeof purchaseAgentRunRef>) {
-    return this.withDatabase(async (db, service) => {
-      const scope = await service.loadRunScope(db, input.runId);
-      const { findActivePurchaseAgentGrant, issuePurchaseAgentDelegation } =
-        await import("./server/purchase-import/agent-auth");
-      const grant = await findActivePurchaseAgentGrant(db, scope.actorUserId);
-      if (!grant) {
-        await service.pauseRunForAuthorization(db, input.runId);
-        throw new Error("Purchase Agent authorization is required");
-      }
-      const token = await issuePurchaseAgentDelegation({
-        runId: input.runId,
-        userId: scope.actorUserId,
-        grantId: grant.id,
-        secret: this.env.BETTER_AUTH_SECRET,
-      });
-      return {
-        token,
-        expiresAt: new Date(Date.now() + 5 * 60 * 1_000).toISOString(),
-        mcpUrl: "https://cubby.internal/api/mcp",
-      };
-    });
-  }
-
-  mcpFetch(request: Request) {
-    return this.withDatabase(async () => {
-      const { handleMcpHttpRequest } =
-        await import("./server/mcp/http-handler");
-      return await handleMcpHttpRequest(request);
-    });
-  }
-
-  claimNextWork(input: z.infer<typeof purchaseAgentOperationRef>) {
-    return this.withDatabase((db, service) =>
-      service.runImportOperation(
-        db,
-        { ...input, kind: "claim_next_work", payload: input },
-        () =>
-          service.claimNextImportWork(
-            db,
-            this.env.PURCHASE_IMPORT,
-            input.runId,
-          ),
-      ),
-    );
-  }
-
-  extractReceiptEvidence(input: z.infer<typeof purchaseAgentOperationRef>) {
-    return this.withDatabase((db, service) =>
-      service.runImportOperation(
-        db,
-        { ...input, kind: "extract_receipt_evidence", payload: input },
-        async () => {
-          const [{ extractPurchaseReceipt }, { loadReceiptEvidenceForRun }] =
-            await Promise.all([
-              import("./server/agents/purchase-import/extract"),
-              import("./server/purchase-import/receipt-evidence"),
-            ]);
-          const evidence = await loadReceiptEvidenceForRun(db, input.runId);
-          if (!evidence)
-            throw new Error("This run has no pending receipt evidence");
-          const extraction = await extractPurchaseReceipt({
-            db,
-            runId: input.runId,
-            imageUrl: evidence.imageUrl,
-          });
-          return {
-            stableOrderId: `receipt:${evidence.huntId}`,
-            itemOperationId: `receipt:${evidence.huntId}`,
-            source: evidence.source,
-            evidenceChecksum: evidence.evidenceChecksum,
-            extractionRevision: "receipt@1",
-            extraction,
-            lineIds: (extraction.candidate?.lines ?? []).map(
-              (_line, index) => `receipt:${evidence.huntId}:line:${index}`,
-            ),
-            primaryDocumentImageId: evidence.imageId,
-            screenshotImageId: null,
-          };
-        },
-      ),
-    );
-  }
-
-  extractRunEvidence(input: z.infer<typeof purchaseAgentOperationRef>) {
-    return this.withDatabase((db, service) =>
-      service.runImportOperation(
-        db,
-        { ...input, kind: "extract_run_evidence", payload: input },
-        async () => {
-          const { loadOrderMailImportEvidence } =
-            await import("./server/purchase-import/gmail/import");
-          const mail = await loadOrderMailImportEvidence(db, input.runId);
-          if (mail) {
-            const { extractPurchaseOrderMail } =
-              await import("./server/agents/purchase-import/extract");
-            const extraction = await extractPurchaseOrderMail({
-              db,
-              runId: input.runId,
-              mail: mail.mail,
-              orderId: mail.orderId,
-            });
-            const stableOrderId = `mail:${mail.eventId}`;
-            return {
-              stableOrderId,
-              itemOperationId: stableOrderId,
-              source: mail.source,
-              evidenceChecksum: mail.evidenceChecksum,
-              extractionRevision: "order-mail@1",
-              extraction,
-              lineIds: (extraction.candidate?.lines ?? []).map(
-                (_line, index) => `${stableOrderId}:line:${index}`,
-              ),
-              primaryDocumentImageId: null,
-              screenshotImageId: null,
-            };
-          }
-          const [
-            { extractPurchaseEvidence },
-            { loadRunEvidenceForExtraction },
-          ] = await Promise.all([
-            import("./server/agents/purchase-import/extract"),
-            import("./server/purchase-import/run-evidence"),
-          ]);
-          const evidence = await loadRunEvidenceForExtraction(db, input.runId);
-          if (!evidence)
-            throw new Error("This validation run has no uploaded evidence");
-          const extraction = await extractPurchaseEvidence({
-            db,
-            runId: input.runId,
-            evidenceUrl: evidence.evidenceUrl,
-            mediaType: evidence.mediaType,
-          });
-          return {
-            stableOrderId: `run-evidence:${evidence.id}`,
-            itemOperationId: `run-evidence:${evidence.id}`,
-            source: {
-              kind: evidence.sourceKind ?? "receipt_photo",
-              externalKey: evidence.sourceExternalKey ?? evidence.id,
-              checksum: evidence.checksum,
-            },
-            evidenceChecksum: evidence.checksum,
-            extractionRevision: "run-evidence@1",
-            extraction,
-            lineIds: (extraction.candidate?.lines ?? []).map(
-              (_line, index) => `run-evidence:${evidence.id}:line:${index}`,
-            ),
-            primaryDocumentImageId: null,
-            screenshotImageId: null,
-          };
-        },
-      ),
-    );
-  }
-
-  issueBrowserCommand(input: z.infer<typeof issueBrowserCommandInput>) {
-    return this.withDatabase(async (db, service) => {
-      const scope = await service.loadRunScope(db, input.runId);
-      if (!scope.public.vendorAccountId)
-        throw new Error("This import run has no browser account");
-      const claimed = await service.claimNextImportWork(
-        db,
-        this.env.PURCHASE_IMPORT,
-        input.runId,
-      );
-      const claimedTarget = "startUrl" in claimed ? claimed.startUrl : null;
-      const operation = resolvePurchaseAgentBrowserOperation(
-        input.command,
-        claimedTarget,
-        scope.public.allowedHosts,
-      );
-      return service.issueBrowserCommand(db, this.env.PURCHASE_IMPORT, {
-        runId: input.runId,
-        operationId: input.operationId,
-        operation,
-      });
-    });
-  }
-
-  readBrowserCommandResult(input: z.infer<typeof purchaseAgentOperationRef>) {
-    return this.withDatabase((db, service) =>
-      service.readBrowserCommandResult(db, this.env.PURCHASE_IMPORT, input),
-    );
-  }
-
-  recordAgentUsage(input: AgentUsageEvent) {
-    return this.withDatabase(async (db) => {
-      const { recordAiUsage } = await import("./server/ai-usage");
-      const digest = new Uint8Array(
-        await crypto.subtle.digest(
-          "SHA-256",
-          new TextEncoder().encode(
-            `purchase-agent:${input.runId}:${input.eventId}`,
-          ),
-        ),
-      );
-      digest[6] = ((digest[6] ?? 0) & 0x0f) | 0x50;
-      digest[8] = ((digest[8] ?? 0) & 0x3f) | 0x80;
-      const hex = Array.from(digest.slice(0, 16), (byte) =>
-        byte.toString(16).padStart(2, "0"),
-      ).join("");
-      const eventId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-      const { runId, ...rest } = input;
-      const { runEntityId } = await import("@cubby/schemas/identifiers");
-      await recordAiUsage(db, {
-        ...rest,
-        eventId,
-        runId: runEntityId.parse(runId),
-        cacheStatus:
-          input.cacheReadTokens > 0 || input.cacheWriteTokens > 0
-            ? "hit"
-            : "none",
-      });
-    });
-  }
-
-  updateAgentProgress(input: AgentProgressEvent) {
-    return this.withDatabase((db, service) =>
-      service.updateAgentProgress(db, input),
-    );
-  }
-
-  importOrderEvidence(input: z.infer<typeof importOrderEvidenceInput>) {
-    return this.withDatabase((db, service) =>
-      service.runImportOperation(
-        db,
-        { ...input, kind: "import_order_evidence", payload: input },
-        () =>
-          service.importBrowserOrderEvidence(
-            db,
-            this.env.PURCHASE_IMPORT,
-            input,
-          ),
-      ),
-    );
-  }
-
-  saveNavigationHints(input: z.infer<typeof saveNavigationHintsInput>) {
-    return this.withDatabase((db, service) =>
-      service.runImportOperation(
-        db,
-        { ...input, kind: "save_navigation_hints", payload: input },
-        () =>
-          service.saveNavigationHints(db, {
-            runId: input.runId,
-            operationId: input.operationId,
-            patch: {
-              ordersListUrl: input.hints[0]?.url,
-              notes: input.hints
-                .map((hint) => hint.label)
-                .filter((label): label is string => Boolean(label)),
-            },
-          }),
-      ),
-    );
-  }
-
-  markHistoryExpired(input: z.infer<typeof markHistoryExpiredInput>) {
-    return this.withDatabase((db, service) =>
-      service.runImportOperation(
-        db,
-        { ...input, kind: "mark_history_expired", payload: input },
-        () => service.markHistoryExpired(db, input),
-      ),
-    );
-  }
-
-  auditBatch(input: z.infer<typeof auditBatchInput>) {
-    return this.withDatabase((db, service) =>
-      service.runImportOperation(
-        db,
-        { ...input, kind: "audit_batch", payload: input },
-        () => service.auditImportBatch(db, input),
-      ),
-    );
-  }
-
-  finishRun(input: z.infer<typeof purchaseAgentOperationRef>) {
-    return this.withDatabase((db, service) =>
-      service.runImportOperation(
-        db,
-        { ...input, kind: "finish_run", payload: input },
-        () => service.finishRun(db, this.env.PURCHASE_IMPORT, input),
-      ),
-    );
-  }
-
-  stopForReview(input: z.infer<typeof stopForReviewInput>) {
-    const kind =
-      input.reason === "navigation_ambiguity"
-        ? "expected_order_not_found"
-        : "other";
-    return this.withDatabase((db, service) =>
-      service.runImportOperation(
-        db,
-        { ...input, kind: "stop_for_review", payload: input },
-        () =>
-          service.stopRunForReview(db, {
-            runId: input.runId,
-            operationId: input.operationId,
-            kind,
-            summary: input.detail ?? input.reason.replaceAll("_", " "),
-          }),
-      ),
-    );
-  }
-
-  deferOrderForReview(input: z.infer<typeof deferOrderForReviewInput>) {
-    return this.withDatabase((db, service) =>
-      service.runImportOperation(
-        db,
-        { ...input, kind: "defer_order_for_review", payload: input },
-        () =>
-          service.deferOrderForReview(db, {
-            runId: input.runId,
-            operationId: input.operationId,
-            orderId: input.orderId,
-            summary: input.detail,
-          }),
-      ),
-    );
-  }
-
-  settleChargeHunt(input: z.infer<typeof settleChargeHuntInput>) {
-    return this.withDatabase((db, service) =>
-      service.runImportOperation(
-        db,
-        { ...input, kind: "settle_charge_hunt", payload: input },
-        () =>
-          service.settleChargeHunt(db, {
-            runId: input.runId,
-            operationId: input.operationId,
-            huntId: input.huntId,
-            outcome: input.outcome,
-            summary: input.detail,
-          }),
-      ),
-    );
-  }
-
-  markRunFailed(input: z.infer<typeof markRunFailedInput>) {
-    return this.withDatabase((db, service) =>
-      service.runImportOperation(
-        db,
-        { ...input, kind: "mark_run_failed", payload: input },
-        () => service.markRunFailed(db, input),
-      ),
-    );
-  }
-
-  reconcileSettledRun(input: z.infer<typeof reconcileSettledRunInput>) {
-    return this.withDatabase((db, service) =>
-      service.reconcileSettledRun(db, this.env.PURCHASE_IMPORT, input),
-    );
-  }
-}
-
 // Named exports: `wrangler types` finds Durable Object classes by reading them.
 export { AiResponseCacheDurableObject } from "./server/ai/response-cache-durable-object";
 export { CalendarFeedDurableObject } from "./server/calendar/durable-object";
 export { DatabaseFreshnessDurableObject } from "./server/database-freshness/durable-object";
 export { ImageProcessingDurableObject } from "./server/image-processing/durable-object";
+export { PurchaseImportRunAgent } from "./server/purchase-import/agent-host";
 export { PurchaseImportDurableObject } from "./server/purchase-import/durable-object";
 export { SearchIndexRepairWorkflow } from "./server/search-index-repair-workflow";
 
-export default Sentry.withSentry(
-  (env: Env) => ({
-    dsn: CUBBY_SENTRY_DSN,
-    // The e2e harness identity (see `tests/e2e/e2e-worker-runtime.ts`) must
-    // never ship envelopes to the real DSN.
-    enabled: workerSentryEnabled(env),
-    dataCollection: SENTRY_DATA_COLLECTION,
-    release: `cubby@${__GIT_COMMIT__}`,
-    // Covers queue/cron events without request URLs. Deployed previews retain
-    // production reporting (NODE_ENV stays "production" there;
-    // only `preview:cf`'s local `wrangler dev` overrides it to "development")
-    // because they access the production database.
-    environment: resolveWorkerSentryEnvironment(env),
-    // Keep the scrubber as defense in depth for manually attached request data,
-    // even though the SDK no longer sends default PII.
-    beforeSend: scrubSentryEvent,
-    // Drop known-noise messages before send — free-plan quota hygiene.
-    ignoreErrors: SENTRY_IGNORED_ERRORS,
-    // Cloudflare native tracing already exports server spans. A sampled
-    // browser `sentry-trace` header overrides `tracesSampleRate: 0` in Sentry,
-    // so use a sampler to decline even inherited performance traces. Error
-    // capture remains enabled.
-    tracesSampler: () => 0,
-  }),
-  handler,
-);
+export default Sentry.withSentry(workerSentryOptions, handler);
