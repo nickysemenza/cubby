@@ -38,6 +38,13 @@ workers (`tooling/e2e-worker-pool.unit.test.ts`). Record video for a
 run with `CUBBY_E2E_VIDEO=1`. RTable's placeholder transition can eat clicks;
 cell-edit tests retry opening and filling as one action.
 
+Responsive table toolbars mount both desktop and phone branches during SSR.
+After navigation, use a retrying `toHaveCount(1)` assertion on the role locator
+and `toBeEnabled()` before a strict search action. Playwright resolves strict
+locators before waiting for hydration-disabled controls to become enabled;
+the assertion preserves uniqueness while the responsive branches settle.
+Do not select `.first()` or add a sleep to bypass duplicate controls.
+
 ### Workerd test runtime and profiles
 
 Browser workers, Tester Army, the purchase-agent Vitest scenarios and the
