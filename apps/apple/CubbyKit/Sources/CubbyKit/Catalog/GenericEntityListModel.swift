@@ -217,9 +217,10 @@ public final class GenericEntityListModel {
     }
 
     /// Loads the first page once. A failed initial request can be retried, while a successfully
-    /// loaded model remains stable when SwiftUI starts the same task again.
+    /// loaded model remains stable when SwiftUI starts the same task again. An in-flight refresh
+    /// is joined before returning, so callers evaluate its replacement rows rather than the cache.
     public func loadInitial() async {
-        if activity == .loadingInitial, let requestTask {
+        if activity == .loadingInitial || activity == .refreshing, let requestTask {
             await requestTask.value
             return
         }

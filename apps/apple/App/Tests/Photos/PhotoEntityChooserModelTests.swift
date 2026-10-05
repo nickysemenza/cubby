@@ -322,6 +322,46 @@ struct PhotoEntityChooserModelTests {
         #expect(!model.isLoading)
     }
 
+    /// A surviving refresh replaces cached visible rows with capture-day rows. Reappearance
+    /// must join that replacement before deciding whether its visible-row target is satisfied.
+    @Test func reappearanceJoinsTheRefreshBeforeEvaluatingCachedRecents() async throws {
+        let calls = Mutex<[Int]>([])
+        let recentRefresh = Gate()
+        let returningFinished = Mutex(false)
+        let model = PhotoEntityChooserModel(
+            descriptor: EntityCatalog[.meal], client: try makeClient(),
+            captureDates: [Self.day("2026-09-10")], calendar: Self.utcCalendar,
+            loader: { filters, _, page, _ in
+                if filters["from"] != nil { return Self.page([], page: page, total: 0) }
+                let attempt = calls.withLock {
+                    $0.append(page); return $0.filter { $0 == page }.count
+                }
+                if page == 1, attempt == 2 { await recentRefresh.wait() }
+                let date = page == 1 && attempt == 2 ? "2026-09-10" : "2026-09-01"
+                return Self.page(
+                    [Self.row("MEA-recent-\(page)-\(attempt)", date: date)], page: page, total: 2)
+            })
+
+        await model.loadInitial()
+        #expect(model.recentRows.map(\.id) == ["MEA-recent-1-1"])
+        let refreshing = Task { await model.refresh() }
+        #expect(await waitUntil { calls.withLock { $0 } == [1, 1] })
+        model.stopPaging()
+        let returning = Task {
+            await model.loadInitial()
+            returningFinished.withLock { $0 = true }
+        }
+
+        #expect(await waitUntil { returningFinished.withLock { $0 } } == false)
+        recentRefresh.open()
+        await refreshing.value
+        await returning.value
+
+        #expect(calls.withLock { $0 } == [1, 1, 2])
+        #expect(model.recentRows.map(\.id) == ["MEA-recent-2-1"])
+        #expect(!model.isLoading)
+    }
+
     /// SwiftUI replaces its capture-date task even for a timestamp change within the same day.
     /// Cancelling that caller cannot cancel the unscoped recent page still needed by the new scope.
     @Test func sameDayScopeTaskReplacementKeepsTheRetargetedDrainAlive() async throws {

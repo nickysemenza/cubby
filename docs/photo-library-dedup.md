@@ -162,7 +162,8 @@ visible destination is available or the source ends. Selection changes retarget
 that model-owned drain; replacing a SwiftUI scope task does not cancel a recent
 request still wanted by the new selection. Dismissal stops further paging and
 invalidates pending refresh continuations. Reappearance waits for a surviving
-page to land before continuing, while refresh supersedes obsolete pages without
+initial or refresh page to land before evaluating its visible recents, even when
+cached rows are already available. Refresh supersedes obsolete pages without
 waiting for their loaders to honor cancellation.
 
 Garden review enforces 20 photos per entry before uploading. Saves are sequential;
