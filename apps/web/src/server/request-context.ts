@@ -1,10 +1,15 @@
-import { type AuditChannel, buildActorContext } from "@cubby/schemas/context";
+import {
+  type ActorContext,
+  type AuditChannel,
+  buildActorContext,
+} from "@cubby/schemas/context";
 import {
   type DeviceId,
   type RunId,
   type UserId,
   userId,
 } from "@cubby/schemas/identifiers";
+import type { SpanAttr } from "@cubby/worker-tracing";
 import { and, eq } from "drizzle-orm";
 
 import { env } from "~/env";
@@ -29,6 +34,7 @@ import type { AvailabilityService } from "~/server/services/availability.service
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import { createUpcLookupService } from "~/server/services/upc";
 import type { USDAService } from "~/server/services/usda.service";
+import { annotateActiveSpan } from "~/server/tracing";
 import type { RequestOrigin } from "~/server/workload";
 
 const deferredRecipeCosting = (
@@ -146,6 +152,24 @@ export type { CurrentParty } from "~/server/repo/current-member-party";
 export const currentParty = (database: Database, authenticatedUserId: UserId) =>
   currentMemberLedgerParty(database, { userId: authenticatedUserId });
 
+/**
+ * Trace attributes naming the actor. The active span when the context is built
+ * may be a short authentication span, so operation spans that reuse a context
+ * apply these again themselves.
+ */
+export const actorSpanAttributes = (
+  sessionId: string | null,
+  actor: ActorContext,
+) =>
+  ({
+    "user.id": actor.userId,
+    "session.id": sessionId ?? undefined,
+    "cubby.auth.channel": actor.channel,
+    "cubby.auth.oauth_client_id": actor.oauthClientId ?? undefined,
+    "cubby.run.id": actor.runId ?? undefined,
+    "cubby.device.id": actor.deviceId ?? undefined,
+  }) satisfies Record<string, SpanAttr>;
+
 export const createRequestContext = async (opts: {
   headers: Headers;
   actor?: RequestActor;
@@ -160,16 +184,18 @@ export const createRequestContext = async (opts: {
   if (opts.actor) {
     const { userId, sessionId, channel, oauthClientId, runId } = opts.actor;
     const requestOrigin: RequestOrigin = channel === "mcp" ? "mcp" : "api";
+    const actorContext = buildActorContext(userId, channel, {
+      oauthClientId,
+      deviceId,
+      runId,
+    });
+    annotateActiveSpan(actorSpanAttributes(sessionId, actorContext));
     return {
       ...crudServices,
       readConsistency,
       auth: { userId, sessionId },
       currentParty: async () => await currentParty(crudServices.db, userId),
-      actorContext: buildActorContext(userId, channel, {
-        oauthClientId,
-        deviceId,
-        runId,
-      }),
+      actorContext,
       requestOrigin,
       ...opts,
     };
@@ -183,19 +209,20 @@ export const createRequestContext = async (opts: {
     : null;
 
   const requestOrigin: RequestOrigin = "ui";
+  const sessionId = betterSession?.session?.id ?? null;
+  const actorContext = authenticatedUserId
+    ? buildActorContext(authenticatedUserId, "web", { deviceId })
+    : null;
+  if (actorContext)
+    annotateActiveSpan(actorSpanAttributes(sessionId, actorContext));
   return {
     ...crudServices,
     readConsistency,
-    auth: {
-      userId: authenticatedUserId,
-      sessionId: betterSession?.session?.id ?? null,
-    },
+    auth: { userId: authenticatedUserId, sessionId },
     currentParty: authenticatedUserId
       ? async () => await currentParty(crudServices.db, authenticatedUserId)
       : null,
-    actorContext: authenticatedUserId
-      ? buildActorContext(authenticatedUserId, "web", { deviceId })
-      : null,
+    actorContext,
     requestOrigin,
     ...opts,
   };

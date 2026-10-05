@@ -7,6 +7,7 @@ import { startOperationDefinition } from "~/lib/start-operation-observability";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { withErrorReporting } from "~/server/errors/report-error";
 import { observeOperation } from "~/server/observed-request";
+import { actorSpanAttributes } from "~/server/request-context";
 import type { PublicStartOperationError } from "~/server/start-operation.contract";
 import {
   type AuthenticatedStartOperationContext,
@@ -113,6 +114,12 @@ export async function workflowStreamResponse<
               const context = await runtime.authenticate(
                 options.request.headers,
                 span,
+              );
+              span.setAttributes(
+                actorSpanAttributes(
+                  context.auth.sessionId,
+                  context.actorContext,
+                ),
               );
 
               actorVerified = true;
