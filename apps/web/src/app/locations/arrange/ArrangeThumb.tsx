@@ -43,9 +43,9 @@ interface ArrangeThumbProps {
  * callers symmetric.
  *
  * Rendering the bare `Image` primitive rather than one of its wrappers is
- * deliberate: `CardThumbnail` returns null when empty (which would break name
- * alignment down a column), and `ImageThumbnail` is a 64px table cell carrying
- * a `+N` badge. `ImageWithPreview` doesn't fit either — it owns its trigger
+ * deliberate: `EntityCover` with `placeholder="none"` renders nothing when
+ * empty (which would break name alignment down a column), and
+ * `ImageThumbnail` is a table cell. `ImageWithPreview` doesn't fit either — it owns its trigger
  * element, and this tile's three drag-safety attributes below are exactly what
  * a generic trigger would drop. Only its popup (`ImagePreviewPopup`) is shared.
  *

@@ -168,7 +168,7 @@ function cfWasmPlugin(): Plugin {
  * @sentry/node-core, @sentry/opentelemetry, seven @opentelemetry/* packages and
  * require/import-in-the-middle into the worker — ~600 KiB of Node-only code
  * that cannot run on workerd, welded into the eager root chunk because
- * router.tsx and components/route-error.tsx are isomorphic.
+ * router.tsx and ui/route-error.tsx are isomorphic.
  *
  * SSR-only: the client build keeps the real package (browser tracing needs it).
  * See src/lib/sentry-cf-shim.ts for the exports it has to cover.

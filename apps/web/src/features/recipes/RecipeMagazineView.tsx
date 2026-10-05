@@ -10,10 +10,8 @@ import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { sumBy } from "es-toolkit";
 import { type ReactNode, useMemo, useState } from "react";
 
-import {
-  EntityRefLink,
-  dottedEntityLink,
-} from "~/entity/components/entity-ref-link";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { scaleEstimate } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { costPerNutrient, proteinPer100Kcal } from "~/lib/nutrition-intel";

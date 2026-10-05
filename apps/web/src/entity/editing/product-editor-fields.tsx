@@ -13,7 +13,7 @@ import { redundantTokens } from "@cubby/shared/redundant-tokens";
 import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { type MutableRefObject, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   type FieldValues,
   type UseFormReturn,
@@ -57,6 +57,7 @@ import type {
   EntityEditorMediaOutput,
 } from "./editor-presentations";
 import type { SpecializedIntentRendererProps } from "./entity-primitive-fields";
+import { mergeOwnedIds } from "./shared-id-field";
 import type { EntityEditRecord } from "./types";
 
 /**
@@ -664,35 +665,21 @@ function ProductManualsField({
   }, [record]);
   const ownPendingDocumentIds = useRef<readonly string[]>([]);
   const ownRemovedDocumentIds = useRef<readonly string[]>([]);
-  const merge = (
-    fieldKey: "pendingImageIds" | "removeImageIds",
-    owned: MutableRefObject<readonly string[]>,
-    nextOwnIds: readonly string[],
-  ) => {
-    const current = z
-      .array(z.string())
-      .catch([])
-      .parse(form.getValues(fieldKey));
-    const foreign = current.filter((id) => !owned.current.includes(id));
-    owned.current = nextOwnIds;
-    form.setValue(fieldKey, [...new Set([...foreign, ...nextOwnIds])], {
-      shouldDirty: true,
-    });
-  };
   return (
     <PendingDocumentUpload
       entityKind="PRODUCT"
       folder={documentFolder}
       existingDocuments={existingDocuments}
       onDocumentsChange={(documents) =>
-        merge(
+        mergeOwnedIds(
+          form,
           "pendingImageIds",
           ownPendingDocumentIds,
           documents.map((document) => document.id),
         )
       }
       onExistingDocumentsRemove={(removedIds) =>
-        merge("removeImageIds", ownRemovedDocumentIds, removedIds)
+        mergeOwnedIds(form, "removeImageIds", ownRemovedDocumentIds, removedIds)
       }
     />
   );

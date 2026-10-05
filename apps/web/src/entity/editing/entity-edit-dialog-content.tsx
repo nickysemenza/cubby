@@ -2,14 +2,7 @@ import { entityImageOf, type ImageEntity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { getErrorMessage } from "@cubby/shared";
 import { isEqual } from "es-toolkit";
-import {
-  type RefObject,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -34,6 +27,7 @@ import {
 } from "./editor-presentations";
 import type { EntityEditDialogProps } from "./entity-edit-dialog";
 import { isResolvedEntityEdit, resolveEntityEdit } from "./kernel";
+import { mergeOwnedIds } from "./shared-id-field";
 import type {
   EditableEntity,
   EntityEditRecord,
@@ -140,36 +134,15 @@ export function EntityEditorImages<E extends EditableEntity>({
   const [existingPurposes, setExistingPurposes] =
     useState<ImagePurposes>(NO_PURPOSES);
   const form = session.form;
-  // This block owns `pendingImageIds`/`removeImageIds` primarily, but a
-  // presentation's `media` extension (product's manuals dropzone) may also
-  // contribute ids to the same shared fields (documents ride the same
-  // gallery-attachment wire shape). Each writer reads the field's current
-  // value and replaces only the slice it previously wrote — tracked in
-  // `ownIds` — so the two writers merge instead of clobbering each other.
+  // A presentation's `media` extension (product's manuals dropzone) also
+  // writes the shared image id fields; see `mergeOwnedIds`.
   const ownPendingImageIds = useRef<readonly string[]>([]);
   const ownRemovedImageIds = useRef<readonly string[]>([]);
-  const mergeIntoSharedIdField = useCallback(
-    (
-      fieldKey: "pendingImageIds" | "removeImageIds",
-      owned: RefObject<readonly string[]>,
-      nextOwnIds: readonly string[],
-    ) => {
-      const current = z
-        .array(z.string())
-        .catch([])
-        .parse(form.getValues(fieldKey));
-      const foreign = current.filter((id) => !owned.current.includes(id));
-      owned.current = nextOwnIds;
-      form.setValue(fieldKey, [...new Set([...foreign, ...nextOwnIds])], {
-        shouldDirty: true,
-      });
-    },
-    [form],
-  );
   const sync = useCallback(
     (images: readonly PendingImage[], purposes: ImagePurposes) => {
       const values = imageFieldValues(images, purposes, withPurposes);
-      mergeIntoSharedIdField(
+      mergeOwnedIds(
+        form,
         "pendingImageIds",
         ownPendingImageIds,
         values.pendingImageIds,
@@ -180,7 +153,7 @@ export function EntityEditorImages<E extends EditableEntity>({
         });
       }
     },
-    [form, withPurposes, mergeIntoSharedIdField],
+    [form, withPurposes],
   );
   // The record's own gallery only matters for an update; a create has none.
   const recordImages = useStableValue(
@@ -222,7 +195,8 @@ export function EntityEditorImages<E extends EditableEntity>({
         onExistingImagesRemove={
           withRemoval
             ? (removedImageIds) =>
-                mergeIntoSharedIdField(
+                mergeOwnedIds(
+                  form,
                   "removeImageIds",
                   ownRemovedImageIds,
                   removedImageIds,

@@ -7,15 +7,13 @@ import { render, renderHook, screen } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { EntityActionDefinition } from "~/entity/actions/entity-action-definition";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import type { CubbyRow as Row } from "../../ui/data-table/table-features";
 import type { ActionVerbId } from "./action-verbs";
 import { defineEntityAction } from "./entity-action-definition";
-import type {
-  EntityActionDefinition,
-  EntityActionHandles,
-} from "./entity-actions";
+import type { EntityActionHandles } from "./entity-actions";
 import {
   EntityActionButtons,
   entityActionCatalogDescriptors,

@@ -2,10 +2,8 @@ import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
 import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
 import { memo, useMemo, useState } from "react";
 
-import {
-  EntityRefLink,
-  dottedEntityLink,
-} from "~/entity/components/entity-ref-link";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { formatCurrencyRange } from "~/lib/format-range";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
 import { formatCurrency } from "~/lib/utils";

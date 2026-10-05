@@ -1,8 +1,8 @@
+import { humanize } from "@cubby/shared";
 import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
 import type { RowData } from "@tanstack/react-table";
 import { useState } from "react";
 
-import { humanize } from "~/entity/filters";
 import { useIsMobile } from "~/ui/hooks/useMobile";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -52,12 +52,7 @@ export function DataTableViewOptions<TData extends RowData>({
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
   const isCustomized = isTableLayoutCustomized(
-    {
-      columnOrder: table.state.columnOrder,
-      columnPinning: table.state.columnPinning,
-      columnVisibility: table.state.columnVisibility,
-      columnSizing: table.state.columnSizing,
-    },
+    table.state,
     table.options.meta?.defaultLayout,
   );
 

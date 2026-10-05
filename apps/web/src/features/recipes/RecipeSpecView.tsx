@@ -1,10 +1,8 @@
 import { uniq } from "es-toolkit";
 import { Fragment, memo, useMemo, useState } from "react";
 
-import {
-  EntityRefLink,
-  dottedEntityLink,
-} from "~/entity/components/entity-ref-link";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { tryFormatAmount } from "~/features/inventory/format-amount";
 import { renderValueOrMissing } from "~/lib/result";
 import { blockReasonText } from "~/lib/sub-recipe-reason";

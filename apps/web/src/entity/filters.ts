@@ -5,6 +5,8 @@ import { partition } from "es-toolkit";
 import { match } from "ts-pattern";
 import { z } from "zod";
 
+import { countLabel } from "~/lib/pluralize";
+
 /**
  * text: substring match. select: one enum value. multiselect: any-of a set of
  * enum values. presence: "has" | "none". boolean: "true" | "false". id: one
@@ -541,12 +543,6 @@ export function paramToSort<TValue>(value: TValue): SortTerm[] | undefined {
 // counted ("2 locations"), never named. Everything self-describing (text,
 // static picklists, presence predicates) renders in full.
 
-export { humanize } from "@cubby/shared";
-
-/** Naive plural, sufficient for the entity nouns column ids are built from. */
-const pluralize = (noun: string, count: number): string =>
-  count === 1 || noun.endsWith("s") ? noun : `${noun}s`;
-
 /** Beyond this many values a picklist collapses to `first, second +N`. */
 const MAX_VALUES_PER_FILTER = 2;
 
@@ -647,7 +643,7 @@ function describeFilter(
           : [];
         if (rest.length) {
           const noun = humanize(spec.columnId).toLowerCase();
-          parts.unshift(`${rest.length} ${pluralize(noun, rest.length)}`);
+          parts.unshift(countLabel(rest.length, noun));
         }
         return parts.length ? parts.join(", ") : undefined;
       })

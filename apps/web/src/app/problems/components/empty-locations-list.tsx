@@ -2,7 +2,7 @@ import { ProblemItem } from "@cubby/schemas/problems";
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import { type ReactNode, useState } from "react";
 
-import { CardThumbnail } from "~/entity/components/card-thumbnail";
+import { EntityCover } from "~/entity/components/entity-cover";
 import { entityDetailLink } from "~/entity/entities";
 import { formatRelative } from "~/lib/date-format";
 import { Row } from "~/ui/layout";
@@ -77,11 +77,15 @@ export function EmptyLocationsList({
           return {
             title: location.name,
             imageSlot: (
-              <CardThumbnail
+              <EntityCover
                 images={images}
                 alt={location.name}
+                size={40}
                 to="/locations/$shortcode"
                 params={{ shortcode: location.id }}
+                preview
+                lazyPreview
+                placeholder="none"
               />
             ),
             badges: [

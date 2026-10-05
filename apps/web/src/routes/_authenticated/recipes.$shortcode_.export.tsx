@@ -36,13 +36,13 @@ import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useDetailTitle } from "~/ui/hooks/useDocumentTitle";
 import { useRecipeCostingData } from "~/ui/hooks/useRecipeCostingData";
 import { Row } from "~/ui/layout";
-import { RouteErrorComponent } from "~/ui/lazy-route-error";
 import { Page } from "~/ui/page/Page";
 import { Button } from "~/ui/primitives/button";
 import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/ui/primitives/view-switcher";
+import { RouteErrorComponent } from "~/ui/route-error";
 import { DetailPagePending } from "~/ui/route-pending";
 
 import { recipeExportSearchSchema } from "./-recipe-export-search";
