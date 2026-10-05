@@ -43,7 +43,7 @@ iteration (`--targets sim`).
 
 ## Generated files (read-only here)
 
-- `CubbyKit/Sources/CubbyKit/Generated/{OperationRoutes,EntityOperations,ClientOperations,APITypes,PhotoImportCatalog}.swift`,
+- `CubbyKit/Sources/CubbyKit/Generated/{OperationRoutes,EntityOperations,ClientOperations,APITypes,PhotoImportCatalog,EntityVocabulary}.swift`,
   `CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json` (the entity catalog, a CubbyKit
   resource decoded by `Catalog/EntityManifest.swift`),
   `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift`, the `CubbyAPI` target's

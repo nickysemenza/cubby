@@ -1,5 +1,4 @@
 import { capitalize } from "../../../../packages/shared/src/text-case.ts";
-import { readFileSync } from "node:fs";
 import {
   entityFieldControlKinds,
   entityFieldKinds,
@@ -29,12 +28,8 @@ import {
 } from "./structured-value-schemas.ts";
 import type { EntityForPrefix } from "./value-schema.ts";
 
-/** The hand-written Swift types the manifest JSON decodes into. */
-const SWIFT_MANIFEST_TYPES =
-  "apps/apple/CubbyKit/Sources/CubbyKit/Catalog/EntityManifest.swift";
-
 // Swift keywords that collide with values we mint case names from. The
-// checked vocabulary only currently hits "enum" (an EntityFieldKind); a set so
+// generated vocabulary only currently hits "enum" (an EntityFieldKind); a set so
 // a future kind named after another keyword is expected with the backticks
 // Swift requires.
 const SWIFT_RESERVED_WORDS = new Set([
@@ -147,101 +142,41 @@ const swiftPresentationChoices = LIST_PRESENTATION_CHOICES.map((choice) => ({
         ? "cards"
         : choice.id,
 }));
-const presentationLabel = (
-  id: (typeof LIST_PRESENTATION_CHOICES)[number]["id"],
-) => LIST_PRESENTATION_CHOICES.find((choice) => choice.id === id)!.label;
 
-type SwiftEnum = Readonly<{
-  body: string;
-  /** `case name = "raw"` declarations, in order. */
-  cases: readonly Readonly<{ name: string; raw: string }>[];
+/** One generated `String` vocabulary enum: cases in declaration order, each
+ * `case camelCased = "raw"`, with an optional `label` switch. */
+type VocabularyEnum = Readonly<{
+  name: string;
+  doc?: string;
+  cases: readonly Readonly<{ name: string; raw: string; label?: string }>[];
 }>;
 
-/**
- * Every `enum` declared in a hand-written Swift file, by name, with its
- * brace-matched body and its `case name = "raw"` declarations. The vocabulary
- * enums spell every raw value explicitly so this stays a line match.
- */
-const parseSwiftEnums = (source: string): Map<string, SwiftEnum> => {
-  const enums = new Map<string, SwiftEnum>();
-  for (const match of source.matchAll(
-    /^[ \t]*(?:public[ \t]+)?enum[ \t]+(\w+)\b[^{\n]*\{/gmu,
-  )) {
-    const start = match.index + match[0].length;
-    let depth = 1;
-    let index = start;
-    while (depth > 0 && index < source.length) {
-      if (source[index] === "{") depth += 1;
-      else if (source[index] === "}") depth -= 1;
-      index += 1;
-    }
-    const body = source.slice(start, index - 1);
-    enums.set(match[1]!, {
-      body,
-      cases: [
-        ...body.matchAll(/^\s*case\s+(`?\w+`?)\s*=\s*"([^"\\]*)"\s*$/gmu),
-      ].map((found) => ({ name: found[1]!, raw: found[2]! })),
-    });
+const vocabularyCases = (rawValues: readonly string[]) =>
+  rawValues.map((raw) => ({ name: swiftCaseName(raw), raw }));
+
+const renderVocabularyEnum = ({ name, doc, cases }: VocabularyEnum) => {
+  const lines = [
+    ...(doc === undefined ? [] : doc.split("\n").map((line) => `/// ${line}`)),
+    `public enum ${name}: String, CaseIterable, Codable, Sendable {`,
+    ...cases.map(
+      (entry) => `    case ${entry.name} = ${swiftString(entry.raw)}`,
+    ),
+  ];
+  if (cases.some((entry) => entry.label !== undefined)) {
+    lines.push(
+      "",
+      "    public var label: String {",
+      "        switch self {",
+      ...cases.map(
+        (entry) =>
+          `        case .${entry.name.replaceAll("`", "")}: ${swiftString(entry.label ?? entry.raw)}`,
+      ),
+      "        }",
+      "    }",
+    );
   }
-  return enums;
+  return `${lines.join("\n")}\n}\n`;
 };
-
-/**
- * The hand-written Swift vocabulary, checked against the TS vocabulary it
- * mirrors. `exactly` fails generation unless the Swift enum declares these raw
- * values, in order, under the camelCased case names; `member` fails it when
- * the manifest would carry a value the Swift enum cannot decode.
- */
-const swiftVocabulary = (source: string) => {
-  const enums = parseSwiftEnums(source);
-  const lookup = (name: string) => {
-    const found = enums.get(name);
-    if (found === undefined)
-      throw new Error(`${SWIFT_MANIFEST_TYPES} declares no enum ${name}.`);
-    return found;
-  };
-  const exactly = (name: string, rawValues: readonly string[]) => {
-    const expected = rawValues.map(
-      (raw) => `case ${swiftCaseName(raw)} = ${swiftString(raw)}`,
-    );
-    const actual = lookup(name).cases.map(
-      ({ name: caseName, raw }) => `case ${caseName} = ${swiftString(raw)}`,
-    );
-    if (expected.join("\n") !== actual.join("\n"))
-      throw new Error(
-        `${SWIFT_MANIFEST_TYPES}: enum ${name} must declare exactly these cases, in this order, to match the TS vocabulary:\n${expected.map((line) => `    ${line}`).join("\n")}`,
-      );
-  };
-  // The `label` switch arms (`case .list: "List"`) of an enum's `var label`.
-  const labels = (name: string, expected: Readonly<Record<string, string>>) => {
-    const labelSwitch = lookup(name).body.split("var label")[1] ?? "";
-    const actual = Object.fromEntries(
-      [...labelSwitch.matchAll(/case \.(\w+): "([^"\\]*)"/gu)].map((found) => [
-        found[1]!,
-        found[2]!,
-      ]),
-    );
-    for (const [caseName, label] of Object.entries(expected))
-      if (actual[caseName] !== label)
-        throw new Error(
-          `${SWIFT_MANIFEST_TYPES}: ${name}.${caseName} must be labelled ${swiftString(label)} to match LIST_PRESENTATION_CHOICES.`,
-        );
-  };
-  const member = <Value extends string>(
-    name: string,
-    value: Value,
-    context: string,
-  ): Value => {
-    if (!lookup(name).cases.some(({ raw }) => raw === value))
-      throw new Error(
-        `${context} is ${swiftString(value)}, which ${name} in ${SWIFT_MANIFEST_TYPES} does not declare.`,
-      );
-    return value;
-  };
-  return { exactly, labels, member };
-};
-
-type Vocabulary = ReturnType<typeof swiftVocabulary>;
 
 /** The entity keys the catalog declares, for cross-references (relations,
  * filter brands, field references) that must land on a Swift `EntityKey` case. */
@@ -259,16 +194,11 @@ const options = (values: readonly { value: string; label: string }[] | null) =>
 const filterJSON = (
   filter: CompiledEntity["filterDescriptors"][number],
   entityKey: EntityKeyLookup,
-  vocabulary: Vocabulary,
   context: string,
 ) => ({
   columnId: filter.columnId,
   urlKey: filter.urlKey,
-  kind: vocabulary.member(
-    "EntityFilterKind",
-    filter.kind,
-    `${context}.filters.${filter.columnId}.kind`,
-  ),
+  kind: filter.kind,
   placeholder: filter.placeholder,
   label: filter.label ?? null,
   options: options(filter.options),
@@ -310,16 +240,6 @@ const explanationJSON = (explanation: Field["explanation"]) =>
         actions: [...(explanation.actions ?? [])],
       };
 
-const optionalMember = <Value extends string>(
-  vocabulary: Vocabulary,
-  name: string,
-  value: Value | null | undefined,
-  context: string,
-) =>
-  value === null || value === undefined
-    ? null
-    : vocabulary.member(name, value, context);
-
 const referenceJSON = (
   reference: Field["reference"],
   entityKey: EntityKeyLookup,
@@ -340,26 +260,15 @@ const referenceJSON = (
         })),
       };
 
-const fieldControlJSON = (
-  control: Field["control"],
-  vocabulary: Vocabulary,
-  where: string,
-) => ({
-  controlKind: optionalMember(
-    vocabulary,
-    "EntityControlKind",
-    control?.kind,
-    `${where}.control.kind`,
-  ),
-  controlRenderer: optionalMember(
-    vocabulary,
-    "ControlRendererID",
-    control?.renderer,
-    `${where}.control.renderer`,
-  ),
+const fieldControlJSON = (control: Field["control"]) => ({
+  controlKind: control?.kind ?? null,
+  controlRenderer: control?.renderer ?? null,
   controlSection: control?.section ?? null,
   controlWidth: control?.width ?? null,
   controlOptions: options(control?.options ?? null),
+});
+
+const fieldControlInputJSON = (control: Field["control"]) => ({
   suggestion: control?.suggest ?? null,
   placeholder: control?.placeholder ?? null,
   initial: control?.initial === "today" ? "today" : null,
@@ -370,11 +279,7 @@ const fieldControlJSON = (
   controlRequired: control?.required ?? null,
 });
 
-const fieldDisplayJSON = (
-  display: Field["display"],
-  vocabulary: Vocabulary,
-  where: string,
-) => ({
+const fieldDisplayJSON = (display: Field["display"]) => ({
   showInList: display.list,
   showInDetail: display.detail,
   detailOrder: display.detailOrder ?? null,
@@ -387,18 +292,8 @@ const fieldDisplayJSON = (
   labelPath: display.labelPath ?? null,
   detailLabelPath: display.detailLabelPath ?? null,
   itemsPath: display.itemsPath ?? null,
-  listRenderer: optionalMember(
-    vocabulary,
-    "ListRendererID",
-    display.renderer?.list,
-    `${where}.display.renderer.list`,
-  ),
-  detailRenderer: optionalMember(
-    vocabulary,
-    "DetailRendererID",
-    display.renderer?.detail,
-    `${where}.display.renderer.detail`,
-  ),
+  listRenderer: display.renderer?.list ?? null,
+  detailRenderer: display.renderer?.detail ?? null,
   mobileSlot: display.mobile?.slot ?? null,
   mobilePriority: display.mobile?.priority ?? null,
   mobileInteractive: display.mobile?.interactive ?? false,
@@ -409,7 +304,6 @@ const fieldJSON = (
   fieldModel: CompiledEntity["fieldModel"],
   entityKey: EntityKeyLookup,
   entityForPrefix: EntityForPrefix,
-  vocabulary: Vocabulary,
   context: string,
 ) => {
   const where = `${context}.fields.${field.key}`;
@@ -419,12 +313,13 @@ const fieldJSON = (
     readKey: field.readKey,
     valueOptions: field.display.valueOptions ?? null,
     label: field.label,
-    kind: vocabulary.member("EntityFieldKind", field.kind, `${where}.kind`),
+    kind: field.kind,
     nullable: field.nullable,
     reference: referenceJSON(field.reference, entityKey, where),
     explanation: explanationJSON(field.explanation),
     resolution: field.resolution,
-    ...fieldControlJSON(field.control, vocabulary, where),
+    ...fieldControlJSON(field.control),
+    ...fieldControlInputJSON(field.control),
     valueSchema: valueSchemaForField(context, field, where, entityForPrefix),
     inCreate: fieldModel.create.includes(field.key),
     // Required when the create schema rejects `undefined` (the same rule as
@@ -433,18 +328,13 @@ const fieldJSON = (
       field.validation.create !== null &&
       !field.validation.create.safeParse(undefined).success,
     inUpdate: fieldModel.update.includes(field.key),
-    ...fieldDisplayJSON(field.display, vocabulary, where),
+    ...fieldDisplayJSON(field.display),
   };
 };
 
 type DetailSection = CompiledEntity["inspector"]["detail"]["sections"][number];
 
-const detailSectionJSON = (
-  entity: string,
-  section: DetailSection,
-  vocabulary: Vocabulary,
-) => {
-  const where = `${entity}.presentation.detail.sections.${section.id}`;
+const detailSectionJSON = (entity: string, section: DetailSection) => {
   const kind = () => {
     switch (section.kind) {
       case "fields":
@@ -465,11 +355,7 @@ const detailSectionJSON = (
                   ? null
                   : {
                       field: section.sort.field,
-                      direction: vocabulary.member(
-                        "Direction",
-                        section.sort.direction,
-                        `${where}.sort.direction`,
-                      ),
+                      direction: section.sort.direction,
                     },
               limit: section.limit ?? null,
               empty: section.empty ?? null,
@@ -481,11 +367,7 @@ const detailSectionJSON = (
       case "timeline":
         return {
           timeline: {
-            mode: vocabulary.member(
-              "TimelineSectionMode",
-              section.mode,
-              `${where}.mode`,
-            ),
+            mode: section.mode,
           },
         };
       case "slot":
@@ -493,20 +375,9 @@ const detailSectionJSON = (
     }
   };
   return {
-    id:
-      section.kind === "slot"
-        ? vocabulary.member(
-            "EntityDetailSlotID",
-            `${entity}.${section.id}`,
-            `${where}.id`,
-          )
-        : section.id,
+    id: section.kind === "slot" ? `${entity}.${section.id}` : section.id,
     title: section.title ?? null,
-    placement: vocabulary.member(
-      "SectionPlacement",
-      section.placement,
-      `${where}.placement`,
-    ),
+    placement: section.placement,
     collapsed: section.collapsed,
     overview: section.overview,
     explanationField:
@@ -517,19 +388,11 @@ const detailSectionJSON = (
 
 type ListView = CompiledEntity["inspector"]["list"]["views"][number];
 
-const listViewJSON = (
-  entity: string,
-  view: ListView,
-  vocabulary: Vocabulary,
-) =>
+const listViewJSON = (entity: string, view: ListView) =>
   isSlotListView(view)
     ? {
         slot: {
-          id: vocabulary.member(
-            "EntityListSlotID",
-            `${entity}.${view.id}`,
-            `${entity}.presentation.list.views.${view.id}`,
-          ),
+          id: `${entity}.${view.id}`,
           label: view.label,
           searchKeys: [...view.searchKeys],
         },
@@ -539,39 +402,27 @@ const listViewJSON = (
 const presentationJSON = (
   entity: string,
   presentation: CompiledEntity["inspector"],
-  vocabulary: Vocabulary,
 ) => {
   const { detail, list, edit } = presentation;
-  const where = `${entity}.presentation`;
   // SAFETY: entity is a compiled declaration key, and the exhaustive connected-view roster covers every declaration key.
   const entityConnectedViews =
     connectedViews[entity as keyof typeof connectedViews];
   return {
-    detailVariant: vocabulary.member(
-      "DetailVariant",
-      detail.variant,
-      `${where}.detail.variant`,
-    ),
+    detailVariant: detail.variant,
     heroChip: detail.hero.chip ?? null,
     heroStats: [...detail.hero.stats],
     heroBreadcrumb: detail.hero.breadcrumb ?? null,
     heroImages: detail.hero.images,
-    heroActions: detail.hero.actions.map((action) =>
-      vocabulary.member(
-        "EntityHeroActionID",
-        action,
-        `${where}.detail.hero.actions`,
-      ),
-    ),
+    heroActions: [...detail.hero.actions],
     detailSections: detail.sections.map((section) =>
-      detailSectionJSON(entity, section, vocabulary),
+      detailSectionJSON(entity, section),
     ),
     connectedViews: entityConnectedViews.map((view) => ({
       key: view.key,
       title: view.title,
       target: view.target,
     })),
-    listViews: list.views.map((view) => listViewJSON(entity, view, vocabulary)),
+    listViews: list.views.map((view) => listViewJSON(entity, view)),
     listTotals: list.totals.map((total) => ({
       id: total.id,
       label: total.label,
@@ -637,7 +488,6 @@ const entityJSON = (
   entity: CompiledEntity,
   entityKey: EntityKeyLookup,
   entityForPrefix: EntityForPrefix,
-  vocabulary: Vocabulary,
 ) => {
   if (entity.route === null) {
     throw new Error(
@@ -669,39 +519,18 @@ const entityJSON = (
     basePath: entity.route.basePath,
     shortcodePrefix: entity.shortcode ?? null,
     titleField: entity.inspector.titleField,
-    domain:
-      entity.inspector.domain === null
-        ? null
-        : vocabulary.member(
-            "WayfindingDomain",
-            entity.inspector.domain,
-            `${context}.presentation.domain`,
-          ),
+    domain: entity.inspector.domain,
     sfSymbol: entity.inspector.icons.sfSymbol,
     emoji: entity.inspector.icons.emoji,
     recordEmojiField: entity.inspector.recordEmojiField,
     searchable,
     primarySearch,
-    timeline:
-      entity.timeline === null
-        ? null
-        : vocabulary.member(
-            "EntityTimelineMode",
-            entity.timeline,
-            `${context}.capabilities.timeline`,
-          ),
+    timeline: entity.timeline,
     fields: entity.fieldModel.fields.map((field) =>
-      fieldJSON(
-        field,
-        entity.fieldModel,
-        entityKey,
-        entityForPrefix,
-        vocabulary,
-        context,
-      ),
+      fieldJSON(field, entity.fieldModel, entityKey, entityForPrefix, context),
     ),
     filters: entity.filterDescriptors.map((filter) =>
-      filterJSON(filter, entityKey, vocabulary, context),
+      filterJSON(filter, entityKey, context),
     ),
     relations: entity.relations.map((relation) => ({
       key: relation.key,
@@ -710,13 +539,9 @@ const entityJSON = (
         relation.target,
         `${context}.relations.${relation.key}`,
       ),
-      cardinality: vocabulary.member(
-        "RelationCardinality",
-        relation.cardinality,
-        `${context}.relations.${relation.key}.cardinality`,
-      ),
+      cardinality: relation.cardinality,
     })),
-    presentation: presentationJSON(entity.key, entity.inspector, vocabulary),
+    presentation: presentationJSON(entity.key, entity.inspector),
   };
 };
 
@@ -750,18 +575,14 @@ const checkCatalogKeys = (entities: readonly CompiledEntity[]) => {
  * `CubbyAPISupport` target, where the generated client's `Entity` schema is
  * overridden to it so the wire enum and the catalog key are one type) and
  * `entity-manifest.json`, one `EntityDescriptor` per declared entity carrying
- * the declaration's `presentation` block, decoded by the hand-written types in
- * `EntityManifest.swift`. Those types' vocabulary enums are checked here
- * against the TS vocabulary, so the two cannot drift.
+ * the declaration's `presentation` block, decoded by the hand-written
+ * descriptor types in `Catalog/EntityManifest.swift`, and
+ * `EntityVocabulary.swift`, the `String` enums those descriptors decode, minted
+ * here from the TS vocabulary so the two cannot drift.
  */
 export const renderSwiftEntityCatalog = (
   entities: readonly CompiledEntity[],
-  swiftTypesSource: string = readFileSync(
-    new URL(`../../../../${SWIFT_MANIFEST_TYPES}`, import.meta.url),
-    "utf8",
-  ),
 ): EntityArtifacts[] => {
-  const vocabulary = swiftVocabulary(swiftTypesSource);
   const used = (values: readonly string[]) => [...new Set(values)].sort();
   const rendererIds = (surface: "control" | "list" | "detail") =>
     used(
@@ -775,11 +596,7 @@ export const renderSwiftEntityCatalog = (
         }),
       ),
     );
-  vocabulary.exactly("EntityAction", ACTION_ORDER);
-  vocabulary.exactly("EntityFieldKind", entityFieldKinds);
-  vocabulary.exactly("EntityControlKind", entityFieldControlKinds);
-  vocabulary.exactly("EntityFilterKind", FILTER_KINDS);
-  // Each Swift id enum must match the ids the declarations use, and the same ids must be
+  // Each Swift id enum lists the ids the declarations use, and the same ids must be
   // classified in `packages/schemas/src/native-coverage.ts` (the generated native-coverage.json).
   const coverageVocabulary = {
     control: rendererIds("control"),
@@ -804,14 +621,6 @@ export const renderSwiftEntityCatalog = (
     ),
     sectionAction: used(SECTION_ACTION_IDS),
   } as const;
-  vocabulary.exactly("ControlRendererID", coverageVocabulary.control);
-  vocabulary.exactly("ListRendererID", coverageVocabulary.list);
-  vocabulary.exactly("DetailRendererID", coverageVocabulary.detail);
-  vocabulary.exactly("EntityHeroActionID", coverageVocabulary.heroAction);
-  vocabulary.exactly("EntityDetailSlotID", coverageVocabulary.detailSlot);
-  vocabulary.exactly("EntityListSlotID", coverageVocabulary.listSlot);
-  vocabulary.exactly("CollectionActionID", COLLECTION_ACTIONS);
-  vocabulary.exactly("SectionActionID", coverageVocabulary.sectionAction);
   const classified = (
     kind: keyof typeof nativeCoverage,
     ids: readonly string[],
@@ -872,24 +681,6 @@ export const renderSwiftEntityCatalog = (
     collectionActionPlan: nativeCollectionActionPlans,
     collectionActionScope: COLLECTION_ACTION_SCOPES,
   };
-  vocabulary.exactly("WayfindingDomain", WAYFINDING_DOMAINS);
-  vocabulary.exactly(
-    "ListPresentationChoice",
-    swiftPresentationChoices.map((choice) => choice.swiftCase),
-  );
-  vocabulary.labels(
-    "ListPresentationChoice",
-    Object.fromEntries(
-      swiftPresentationChoices.map((choice) => [
-        choice.swiftCase,
-        choice.label,
-      ]),
-    ),
-  );
-  vocabulary.labels("ListView", {
-    table: presentationLabel("table"),
-    shelf: presentationLabel("shelf"),
-  });
   checkCatalogKeys(entities);
 
   const declaredKeys = new Set(entities.map(({ key }) => key));
@@ -901,9 +692,60 @@ export const renderSwiftEntityCatalog = (
     return raw;
   };
   const entityForPrefix = entityPrefixLookup(entities);
-  const entityKeyCases = entities
-    .map(({ key }) => `  case ${swiftCaseName(key)} = ${swiftString(key)}`)
-    .join("\n");
+  const vocabularyEnums: readonly VocabularyEnum[] = [
+    { name: "EntityAction", cases: vocabularyCases(ACTION_ORDER) },
+    { name: "EntityFieldKind", cases: vocabularyCases(entityFieldKinds) },
+    {
+      name: "EntityControlKind",
+      cases: vocabularyCases(entityFieldControlKinds),
+    },
+    { name: "EntityFilterKind", cases: vocabularyCases(FILTER_KINDS) },
+    {
+      name: "ControlRendererID",
+      cases: vocabularyCases(coverageVocabulary.control),
+    },
+    { name: "ListRendererID", cases: vocabularyCases(coverageVocabulary.list) },
+    {
+      name: "DetailRendererID",
+      cases: vocabularyCases(coverageVocabulary.detail),
+    },
+    {
+      name: "EntityHeroActionID",
+      cases: vocabularyCases(coverageVocabulary.heroAction),
+    },
+    {
+      name: "EntityDetailSlotID",
+      cases: vocabularyCases(coverageVocabulary.detailSlot),
+    },
+    {
+      name: "CollectionActionID",
+      doc: "The verbs a report `records` block offers; each has a plan in `native-coverage.json`'s\n`collectionActionPlan` that `HeroActionRunner` executes.",
+      cases: vocabularyCases(COLLECTION_ACTIONS),
+    },
+    {
+      name: "SectionActionID",
+      doc: "Finance verbs a report's `records` block may offer; `packages/schemas/src/entity-section-actions.ts`.",
+      cases: vocabularyCases(coverageVocabulary.sectionAction),
+    },
+    {
+      name: "EntityListSlotID",
+      cases: vocabularyCases(coverageVocabulary.listSlot),
+    },
+    {
+      name: "WayfindingDomain",
+      doc: "The wayfinding lines, from `WAYFINDING_DOMAINS` in the entity definitions.",
+      cases: vocabularyCases(WAYFINDING_DOMAINS),
+    },
+    {
+      name: "ListPresentationChoice",
+      doc: "The shared List / Cards / Compact control. Compact keeps the Cards URL view.",
+      cases: swiftPresentationChoices.map((choice) => ({
+        name: swiftCaseName(choice.swiftCase),
+        raw: choice.swiftCase,
+        label: choice.label,
+      })),
+    },
+  ];
   return [
     {
       relativePath:
@@ -911,16 +753,26 @@ export const renderSwiftEntityCatalog = (
       source:
         generatedHeader +
         "// swift-format-ignore-file\n\n" +
-        "/// Every declared entity, keyed as the manifest spells it. The generated client's\n" +
-        "/// `Entity` schema is this enum (`typeOverrides` in openapi-generator-config.yaml).\n" +
-        `public enum EntityKey: String, CaseIterable, Codable, Sendable {\n${entityKeyCases}\n}\n`,
+        renderVocabularyEnum({
+          name: "EntityKey",
+          doc: "Every declared entity, keyed as the manifest spells it. The generated client's\n`Entity` schema is this enum (`typeOverrides` in openapi-generator-config.yaml).",
+          cases: vocabularyCases(entities.map(({ key }) => key)),
+        }),
+    },
+    {
+      relativePath:
+        "apps/apple/CubbyKit/Sources/CubbyKit/Generated/EntityVocabulary.swift",
+      source:
+        generatedHeader +
+        "// swift-format-ignore-file\n\n" +
+        vocabularyEnums.map(renderVocabularyEnum).join("\n"),
     },
     {
       relativePath:
         "apps/apple/CubbyKit/Sources/CubbyKit/Generated/entity-manifest.json",
       source: `${JSON.stringify(
         entities.map((entity) =>
-          entityJSON(entity, entityKey, entityForPrefix, vocabulary),
+          entityJSON(entity, entityKey, entityForPrefix),
         ),
         null,
         2,
