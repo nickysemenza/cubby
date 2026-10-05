@@ -32,6 +32,8 @@ final class PhotoEntityChooserModel {
     private var isDrainingRecents: Bool { drainTask != nil }
     /// Bumped by every `setScope`; a continuation from an older scope stops at its next await.
     private var scopeGeneration = 0
+    /// Dismissal invalidates pending lane continuations, including unstructured refresh tasks.
+    private var lifecycleGeneration = 0
 
     private let loader: Loader
     private let calendar: Calendar
@@ -91,8 +93,11 @@ final class PhotoEntityChooserModel {
     }
 
     func loadInitial() async {
+        let lifecycle = lifecycleGeneration
         await dateLane.loadInitial()
+        guard lifecycle == lifecycleGeneration else { return }
         await recentLane.loadInitial()
+        guard lifecycle == lifecycleGeneration else { return }
         await drainRecents(toVisible: 1, .join)
     }
 
@@ -100,15 +105,20 @@ final class PhotoEntityChooserModel {
     /// owner may still be suspended on that obsolete page and must not hold recents hostage.
     func refresh() async {
         stopPaging()
+        let lifecycle = lifecycleGeneration
         await dateLane.refresh()
+        guard lifecycle == lifecycleGeneration else { return }
         await recentLane.refresh()
+        guard lifecycle == lifecycleGeneration else { return }
         await drainRecents(toVisible: 1, .restart)
     }
 
     /// Stops recent draining (the chooser was dismissed). A page already in flight still
     /// completes inside the list model, whose request task does not observe this cancellation;
-    /// its rows land in a model nobody is reading, and no further page is requested.
+    /// its rows land in the cached model, and no further page is requested. Reappearance joins
+    /// that surviving page before its replacement drain decides whether to request another.
     func stopPaging() {
+        lifecycleGeneration += 1
         drainTask?.cancel()
         drainTask = nil
         drainGeneration += 1
@@ -124,11 +134,12 @@ final class PhotoEntityChooserModel {
         captureDate = newDate
         scopeGeneration += 1
         let generation = scopeGeneration
+        let lifecycle = lifecycleGeneration
         await dateLane.setSource(
             Self.dateSource(
                 descriptor: descriptor, key: semanticDateKey, captureDate: newDate,
                 calendar: calendar, loader: loader))
-        guard generation == scopeGeneration else { return }
+        guard generation == scopeGeneration, lifecycle == lifecycleGeneration else { return }
         await drainRecents(toVisible: 1, .retarget)
     }
 
@@ -151,24 +162,20 @@ final class PhotoEntityChooserModel {
         /// Replace a running drain's target and return; its in-flight page is still wanted
         /// because recents are unscoped (scope change). Starts a drain when none runs.
         case retarget
-        /// Cancel any running drain and start a new one (refresh).
+        /// A load-more may start while refresh awaits either lane. Replace that owner as well.
         case restart
     }
 
     /// Pages recents until `target` rows are visible, advancing over pages that add nothing
     /// visible (capture-day-only pages); the server's total stays authoritative, so records
     /// beyond a photo's capture day remain reachable. Exactly one `drainTask` issues recent
-    /// next-page requests. A waiting caller's cancellation (a dismissed view's `.task`) cancels
-    /// the drain.
+    /// next-page requests. Scope-task cancellation never cancels this model-owned work; only
+    /// dismissal or refresh stops it through `stopPaging`.
     private func drainRecents(toVisible target: Int, _ start: DrainStart) async {
         if let running = drainTask, start != .restart {
             recentTarget = start == .retarget ? target : max(recentTarget, target)
             if start == .retarget { return }
-            await withTaskCancellationHandler {
-                await running.value
-            } onCancel: {
-                running.cancel()
-            }
+            await running.value
             return
         }
         drainTask?.cancel()
@@ -177,11 +184,7 @@ final class PhotoEntityChooserModel {
         recentTarget = target
         let task = Task { await self.drain(generation: generation) }
         drainTask = task
-        await withTaskCancellationHandler {
-            await task.value
-        } onCancel: {
-            task.cancel()
-        }
+        await task.value
     }
 
     private func drain(generation: Int) async {

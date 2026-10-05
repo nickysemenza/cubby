@@ -118,7 +118,9 @@ public final class GenericEntityListModel {
     private var source: EntityListPageSource?
     private var enrichesRows: Bool { source?.enrichesRows ?? true }
     private var requestGeneration = 0
-    private var requestTask: Task<ListPage<EntityRow>, Error>?
+    /// Owns both the load and response application, so joiners resume only after rows and page
+    /// state have advanced. A caller's cancellation never cancels a still-wanted page.
+    private var requestTask: Task<Void, Never>?
     private var hasLoaded = false
     private var timelineGeneration = 0
 
@@ -217,7 +219,11 @@ public final class GenericEntityListModel {
     /// Loads the first page once. A failed initial request can be retried, while a successfully
     /// loaded model remains stable when SwiftUI starts the same task again.
     public func loadInitial() async {
-        guard !hasLoaded, activity != .loadingInitial else { return }
+        if activity == .loadingInitial, let requestTask {
+            await requestTask.value
+            return
+        }
+        guard !hasLoaded else { return }
         await loadFirstPage(as: .loadingInitial)
         if view == .timeline { await loadTimeline() }
     }
@@ -292,31 +298,18 @@ public final class GenericEntityListModel {
         isLoadingTimeline = false
     }
 
-    /// Appends the next page. Duplicate triggers collapse into the one in-flight request, and a
-    /// failed request leaves both the accumulated rows and page number unchanged for Retry.
+    /// Appends the next page. Duplicate triggers wait for the same in-flight request to apply its
+    /// rows; a failed request leaves the accumulated rows and page number unchanged for Retry.
     public func loadNextPage() async {
+        if activity == .loadingNextPage, let requestTask {
+            await requestTask.value
+            return
+        }
         guard hasLoaded, hasMore, activity == .idle else { return }
         let nextPage = page + 1
         nextPageError = nil
         activity = .loadingNextPage
-        let generation = beginRequest(page: nextPage)
-
-        do {
-            let result = try await requestTask!.value
-            guard generation == requestGeneration else { return }
-            var ids = Set(rows.map(\.id))
-            coreRows.append(contentsOf: result.items.filter { ids.insert($0.id).inserted })
-            page = nextPage
-            meta = result.meta
-            if enrichesRows { enrichment.accept(result, replacing: false) }
-            phase = .loaded
-        } catch is CancellationError {
-            // A refresh or newer request owns the state now.
-        } catch {
-            guard generation == requestGeneration else { return }
-            nextPageError = error.userMessage
-        }
-        finishRequest(generation)
+        await beginRequest(page: nextPage, as: .loadingNextPage).value
     }
 
     /// Compatibility for callers migrating from page-driven ownership. New code should use the
@@ -349,43 +342,50 @@ public final class GenericEntityListModel {
         if requestedActivity == .loadingInitial { phase = .loading }
         coreRows = rows
         enrichment.invalidate()
-        let generation = beginRequest(page: 1)
-
-        do {
-            let result = try await requestTask!.value
-            guard generation == requestGeneration else { return }
-            coreRows = result.items
-            page = 1
-            meta = result.meta
-            hasLoaded = true
-            if enrichesRows { enrichment.accept(result, replacing: true) }
-            phase = .loaded
-        } catch is CancellationError {
-            // A newer request owns the state now.
-        } catch {
-            guard generation == requestGeneration else { return }
-            let message = error.userMessage
-            if rows.isEmpty && !hasLoaded {
-                initialError = message
-                phase = .failed(message)
-            } else {
-                refreshError = message
-                phase = .loaded
-            }
-        }
-        finishRequest(generation)
+        await beginRequest(page: 1, as: requestedActivity).value
     }
 
-    private func beginRequest(page: Int) -> Int {
+    private func beginRequest(page requestedPage: Int, as requestedActivity: Activity) -> Task<Void, Never> {
         requestTask?.cancel()
         requestGeneration += 1
         let generation = requestGeneration
         let loadPage = source?.loadPage ?? declaredListLoader()
-        requestTask = Task {
-            try Task.checkCancellation()
-            return try await loadPage(page)
+        let task = Task {
+            do {
+                try Task.checkCancellation()
+                let result = try await loadPage(requestedPage)
+                guard generation == requestGeneration else { return }
+                let replacing = requestedActivity != .loadingNextPage
+                if replacing {
+                    coreRows = result.items
+                    hasLoaded = true
+                } else {
+                    var ids = Set(rows.map(\.id))
+                    coreRows.append(contentsOf: result.items.filter { ids.insert($0.id).inserted })
+                }
+                page = requestedPage
+                meta = result.meta
+                if enrichesRows { enrichment.accept(result, replacing: replacing) }
+                phase = .loaded
+            } catch is CancellationError {
+                // A refresh or newer request owns the state now.
+            } catch {
+                guard generation == requestGeneration else { return }
+                let message = error.userMessage
+                if requestedActivity == .loadingNextPage {
+                    nextPageError = message
+                } else if rows.isEmpty && !hasLoaded {
+                    initialError = message
+                    phase = .failed(message)
+                } else {
+                    refreshError = message
+                    phase = .loaded
+                }
+            }
+            finishRequest(generation)
         }
-        return generation
+        requestTask = task
+        return task
     }
 
     /// The descriptor's list route for the current filters, sort and view.
