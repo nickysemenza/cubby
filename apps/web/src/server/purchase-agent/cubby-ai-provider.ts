@@ -9,12 +9,9 @@ import type { Provider } from "@earendil-works/pi-ai";
 import { z } from "zod";
 
 import { type ContextRecorder, withContextCapture } from "./context-breakdown";
+import type { AgentGateway, PurchaseAgentEnvironment } from "./environment";
 
-const CUBBY_GATEWAY_ID = process.env.AI_GATEWAY_ID || "cubby";
-
-type Gateway = Pick<AiGateway, "run">;
-type GatewayHost = { gateway(id: string): Gateway };
-export type PurchaseAgentTestModelBinding = Pick<Fetcher, "fetch">;
+type TestModel = NonNullable<PurchaseAgentEnvironment["testModel"]>;
 type JsonBody = Awaited<ReturnType<typeof gatewayQuery>>;
 
 /**
@@ -46,7 +43,7 @@ export function withSequentialToolCalls(
 /** Provider fetch through Cubby's binding-authenticated Universal Gateway. */
 export function createCubbyGatewayFetch(
   route: GatewayRoute,
-  gatewayForRequest: () => Gateway,
+  gatewayForRequest: () => AgentGateway,
   runId: () => string | undefined,
 ): typeof fetch {
   return async (input, init) => {
@@ -57,7 +54,8 @@ export function createCubbyGatewayFetch(
     };
     const run = runId();
     const metadata = run ? { ...base, runId: run } : base;
-    return gatewayForRequest().run(
+    const gateway = gatewayForRequest();
+    return gateway.run(
       {
         provider: route,
         endpoint: endpointFor(route, requestUrl(input)),
@@ -65,7 +63,7 @@ export function createCubbyGatewayFetch(
         query: withSequentialToolCalls(route, await gatewayQuery(init?.body)),
       },
       {
-        gateway: { id: CUBBY_GATEWAY_ID, metadata },
+        gateway: { id: gateway.id, metadata },
         signal: init?.signal ?? undefined,
       },
     );
@@ -79,7 +77,7 @@ export function createCubbyGatewayFetch(
  */
 function testModelFetch(
   route: GatewayRoute,
-  testModel: PurchaseAgentTestModelBinding,
+  testModel: TestModel,
 ): typeof fetch {
   return async (input, init) => {
     const body = withSequentialToolCalls(route, await gatewayQuery(init?.body));
@@ -99,17 +97,16 @@ function testModelFetch(
  * breakdown (sizes only; see context-breakdown.ts).
  */
 export function cubbyAgentProviders(input: {
-  ai: () => GatewayHost;
+  gateway: () => AgentGateway;
   runId: () => string | undefined;
   recorder: ContextRecorder;
-  testModel?: PurchaseAgentTestModelBinding;
+  testModel?: TestModel;
 }): Provider[] {
-  const gateway = () => input.ai().gateway(CUBBY_GATEWAY_ID);
   return cubbyPiProviders((route) =>
     withContextCapture(
       input.testModel
         ? testModelFetch(route, input.testModel)
-        : createCubbyGatewayFetch(route, gateway, input.runId),
+        : createCubbyGatewayFetch(route, input.gateway, input.runId),
       { recorder: input.recorder, scope: () => CONTEXT_SCOPE },
     ),
   );

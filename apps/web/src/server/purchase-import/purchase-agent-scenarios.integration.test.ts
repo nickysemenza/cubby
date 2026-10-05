@@ -31,6 +31,7 @@ import {
   importSourceClaim,
   inventoryEntry,
   merchantVendorRule,
+  oauthRefreshToken,
   orderMail,
   orderMailEvent,
   photoGroupProposal,
@@ -1045,6 +1046,32 @@ describe("purchase-agent scripted scenarios", () => {
     expect(open).toHaveLength(1);
     expect(open[0]?.summary).toContain("SCN50001");
     expect(await scenario.violations()).toEqual([]);
+  }, 90_000);
+
+  // A new coordinator once checked the member's grant by listing MCP tools
+  // before its first turn; it now mounts tools without listing, so the
+  // preflight is an explicit `authorize` and must still run first.
+  it("authorization: a new coordinator without a live grant pauses the run before any model turn or effect", async () => {
+    const seeded = await seedOrderMail(
+      "SCN50002",
+      "Thanks for your order SCN50002! Rolled oats 1 kg, $6.50.",
+    );
+    await getDb(ctx.db)
+      .delete(oauthRefreshToken)
+      .where(eq(oauthRefreshToken.userId, ctx.actor.userId));
+    scenario = await startScenarioHarness(ctx.databaseUrl, {
+      steps: [call("claim-1", "claim_next_import_work")],
+    });
+    await scenario.dispatch(seeded.start);
+    await waitForStatus(seeded.runId, "paused_auth");
+
+    expect(await scenario.emitted()).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select({ kind: runOperation.kind })
+        .from(runOperation)
+        .where(eq(runOperation.runId, seeded.runId)),
+    ).toEqual([]);
   }, 90_000);
 
   it("browser evidence: an unreadable single-order capture stops the run for review with no speculative writes", async () => {

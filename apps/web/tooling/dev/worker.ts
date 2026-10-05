@@ -1,5 +1,5 @@
 import { Client } from "pg";
-import type { ExecutionContext } from "@cloudflare/workers-types";
+import type { ExecutionContext, MessageBatch } from "@cloudflare/workers-types";
 import { z } from "zod";
 
 import worker from "../../src/cf-server";
@@ -129,7 +129,7 @@ async function readiness(env: LocalDevEnv, fixturesRequired: boolean) {
 export default {
   ...worker,
   async queue(
-    batch: Parameters<typeof worker.queue>[0],
+    batch: MessageBatch<unknown>,
     env: LocalDevEnv,
     ctx: ExecutionContext,
   ) {
@@ -144,6 +144,12 @@ export default {
     if (batch.queue === `cubby-dev-${env.CUBBY_DEV_ID}-background`)
       return worker.queue(
         { queue: "cubby-background", messages: batch.messages },
+        env,
+        ctx,
+      );
+    if (batch.queue === `cubby-dev-${env.CUBBY_DEV_ID}-purchase`)
+      return worker.queue(
+        { queue: "cubby-purchase-agent", messages: batch.messages },
         env,
         ctx,
       );

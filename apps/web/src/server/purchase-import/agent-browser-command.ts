@@ -1,4 +1,4 @@
-import type { PurchaseAgentCommand } from "@cubby/schemas/purchase-agent-rpc";
+import type { PurchaseAgentCommand } from "@cubby/schemas/purchase-agent-services";
 import type { BrowserBridgeOperation } from "@cubby/schemas/purchase-import";
 
 /**

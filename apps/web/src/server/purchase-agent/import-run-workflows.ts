@@ -5,24 +5,24 @@ import {
   type SkillManifestEntry,
 } from "agents/skills";
 
-import photoInventorySkill from "../../../.claude/skills/photo-inventory-import/SKILL.md?raw";
-import photoWorkflow from "../../../.claude/skills/photo-inventory-import/references/run-workflow.md?raw";
-import productEnrichmentSkill from "../../../.claude/skills/product-enrichment/SKILL.md?raw";
-import purchaseImportSkill from "../../../.claude/skills/purchase-import/SKILL.md?raw";
-import purchaseFinishNudge from "../../../.claude/skills/purchase-import/references/finish-nudge.md?raw";
-import purchaseWorkflow from "../../../.claude/skills/purchase-import/references/run-workflow.md?raw";
+import photoWorkflow from "../../../../../.claude/skills/photo-inventory-import/references/run-workflow.md?raw";
+import photoInventorySkill from "../../../../../.claude/skills/photo-inventory-import/SKILL.md?raw";
+import productEnrichmentSkill from "../../../../../.claude/skills/product-enrichment/SKILL.md?raw";
+import purchaseFinishNudge from "../../../../../.claude/skills/purchase-import/references/finish-nudge.md?raw";
+import purchaseWorkflow from "../../../../../.claude/skills/purchase-import/references/run-workflow.md?raw";
+import purchaseImportSkill from "../../../../../.claude/skills/purchase-import/SKILL.md?raw";
 
 const references = {
   "photo-inventory-import": import.meta.glob<string>(
-    "../../../.claude/skills/photo-inventory-import/references/*.md",
+    "../../../../../.claude/skills/photo-inventory-import/references/*.md",
     { query: "?raw", import: "default", eager: true },
   ),
   "purchase-import": import.meta.glob<string>(
-    "../../../.claude/skills/purchase-import/references/*.md",
+    "../../../../../.claude/skills/purchase-import/references/*.md",
     { query: "?raw", import: "default", eager: true },
   ),
   "product-enrichment": import.meta.glob<string>(
-    "../../../.claude/skills/product-enrichment/references/*.md",
+    "../../../../../.claude/skills/product-enrichment/references/*.md",
     { query: "?raw", import: "default", eager: true },
   ),
 };

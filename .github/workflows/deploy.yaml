@@ -61,29 +61,3 @@ jobs:
           deploy-command: "pnpm --filter @cubby/${{ matrix.pkg }} run deploy"
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
-
-  deploy-purchase-agent:
-    name: Build and deploy purchase agent
-    needs: deploy-web
-    if: >-
-      always() &&
-      (needs.deploy-web.result == 'success' || needs.deploy-web.result == 'skipped')
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    concurrency:
-      group: deploy-purchase-agent-production
-      cancel-in-progress: false
-    environment:
-      name: cloudflare
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/deploy-worker
-        with:
-          package: "@cubby/purchase-agent"
-          # `@cubby/web...` too: the Worker imports generated modules, and
-          # `pnpm generate` (its build's first step) runs the web app's code.
-          workspace-filter: "@cubby/purchase-agent... @cubby/web..."
-          wasm: "false"
-          deploy-command: "pnpm --filter @cubby/purchase-agent run deploy"
-          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          cloudflare-account-id: ${{ env.CLOUDFLARE_ACCOUNT_ID }}

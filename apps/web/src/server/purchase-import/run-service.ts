@@ -23,7 +23,7 @@ import {
 import {
   type AgentProgressEvent,
   agentProgressEvent,
-} from "@cubby/schemas/purchase-agent-rpc";
+} from "@cubby/schemas/purchase-agent-services";
 import {
   proposedImportFix,
   extractedPurchaseLine,

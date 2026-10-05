@@ -569,7 +569,7 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   page except a new health route and the switch), by every queue consumer
   (`background-tasks/consume.ts`, `telemetry-queue.ts`, the purchase-agent
   consumer), and by the agent's purchase-import run before each tool call (via a
-  `PurchaseImportService` RPC); toggle from Settings and MCP. Decide first how
+  Run service); toggle from Settings and MCP. Decide first how
   consumers hold messages: a normally returning handler acks them, and
   `retry()` spends `max_retries: 3` with no dead-letter queue, so either call
   the Queues pause-delivery API from the toggle or retry with long delays.
@@ -687,11 +687,6 @@ related active work can find its deferred follow-ups.
 - **Household balance sheet.** Promote when replacement planning, insurance,
   or cost-basis exports are actually needed. Generalize location valuation
   into replacement forecasts and cost-per-project analysis.
-
-- **Attribute agent provider calls to their run.** The agent provider
-  (`apps/purchase-agent/src/cubby-ai-provider.ts`) still tags gateway metadata
-  with `jobKind: "purchase_import_run"`; send the run id once the agent exposes the
-  current run to module-scope providers.
 
 - **`imports_read.vendor_coverage` per account.** Promote when two members
   hold accounts at the same vendor.

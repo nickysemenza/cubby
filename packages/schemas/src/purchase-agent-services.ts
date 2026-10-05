@@ -1,23 +1,21 @@
 /**
- * The input contract of the web Worker's private `PurchaseImportService` RPC
- * (`apps/web/src/cf-server.ts`), as called by the purchase-agent Worker
- * (`apps/purchase-agent`). Both sides take their types from these schemas
- * (`z.infer`), so a field added on one side cannot be forgotten on the other.
- * Every method resolves authority from the Run; none accepts a party, account,
- * vendor, SQL, script, or generic mutation target.
+ * The input contract of the run-scoped services the purchase agent calls
+ * (`apps/web/src/server/purchase-import/agent-services.ts`). The agent reads
+ * untrusted vendor pages, mail, and photos, so the host parses every input
+ * with these schemas before it reaches the database. No input names a Run:
+ * each service is bound to one Run when the host creates it, and none accepts
+ * a party, account, vendor, SQL, script, or generic mutation target.
  */
 import { z } from "zod";
 
 import { tradeSchema } from "./task-fields";
 
-export const purchaseAgentRunRef = z.object({ runId: z.string() });
-
-export const purchaseAgentOperationRef = purchaseAgentRunRef.extend({
-  operationId: z.string(),
+export const purchaseAgentOperationRef = z.object({
+  operationId: z.string().min(1).max(256),
 });
 
-export const purchaseAgentEventRef = purchaseAgentRunRef.extend({
-  eventId: z.string(),
+export const purchaseAgentEventRef = z.object({
+  eventId: z.string().min(1).max(256),
 });
 
 /** The model's semantic browser request, before the server selects the URL. */
@@ -28,7 +26,7 @@ export const purchaseAgentCommand = z.object({
     "capture_pdf",
     "capture_screenshot",
   ]),
-  target: z.string().optional(),
+  target: z.string().max(2_048).optional(),
 });
 export type PurchaseAgentCommand = z.infer<typeof purchaseAgentCommand>;
 
@@ -37,23 +35,27 @@ export const issueBrowserCommandInput = purchaseAgentOperationRef.extend({
 });
 
 export const importOrderEvidenceInput = purchaseAgentOperationRef.extend({
-  commandId: z.string(),
+  commandId: z.uuid(),
   /** As for `purchase_import.commit`: a principal line needs a trade. */
   defaultTrade: tradeSchema.optional(),
-  /** A Project shortcode, resolved and authorized by the web Worker. */
-  defaultProjectId: z.string().optional(),
+  /** A Project shortcode, resolved and authorized by the host. */
+  defaultProjectId: z.string().min(1).optional(),
 });
 
 export const saveNavigationHintsInput = purchaseAgentOperationRef.extend({
-  hints: z.array(z.object({ url: z.string(), label: z.string().optional() })),
+  hints: z
+    .array(
+      z.object({
+        url: z.url().max(2_048),
+        label: z.string().max(500).optional(),
+      }),
+    )
+    .min(1)
+    .max(25),
 });
 
 export const markHistoryExpiredInput = purchaseAgentOperationRef.extend({
-  earliestAvailableOrderAt: z.string(),
-});
-
-export const auditBatchInput = purchaseAgentOperationRef.extend({
-  offset: z.number(),
+  earliestAvailableOrderAt: z.iso.datetime({ offset: true }),
 });
 
 export const stopForReviewInput = purchaseAgentOperationRef.extend({
@@ -63,12 +65,12 @@ export const stopForReviewInput = purchaseAgentOperationRef.extend({
     "provider_failure",
     "other",
   ]),
-  detail: z.string().optional(),
+  detail: z.string().min(1).max(1_000).optional(),
 });
 
 export const deferOrderForReviewInput = purchaseAgentOperationRef.extend({
-  orderId: z.string(),
-  detail: z.string(),
+  orderId: z.string().min(1).max(200),
+  detail: z.string().min(1).max(1_000),
 });
 
 /**
@@ -78,7 +80,7 @@ export const deferOrderForReviewInput = purchaseAgentOperationRef.extend({
 export const settleChargeHuntInput = purchaseAgentOperationRef.extend({
   huntId: z.uuid(),
   outcome: z.enum(["not_found", "needs_review"]),
-  detail: z.string(),
+  detail: z.string().min(1).max(1_000),
 });
 
 export const markRunFailedInput = purchaseAgentOperationRef.extend({
@@ -119,3 +121,6 @@ export const agentProgressEvent = z.object({
   detail: z.string().trim().min(1).max(2_000).optional(),
 });
 export type AgentProgressEvent = z.infer<typeof agentProgressEvent>;
+
+/** The run-scoped form the agent reports; the host supplies the Run. */
+export const agentProgressReport = agentProgressEvent.omit({ runId: true });

@@ -35,23 +35,19 @@ import {
 } from "agents/harness/pi";
 import { z } from "zod";
 
-import { projectConversation } from "./conversation";
-import {
-  CONTEXT_SCOPE,
-  cubbyAgentProviders,
-  type PurchaseAgentTestModelBinding,
-} from "./cubby-ai-provider";
 import { createContextRecorder } from "./context-breakdown";
-import {
-  cachedMcpToolSchema,
-  cubbyMcpExtension,
-  listCubbyMcpTools,
-  type CachedMcpTool,
-} from "./cubby-mcp";
+import { projectConversation } from "./conversation";
+import { CONTEXT_SCOPE, cubbyAgentProviders } from "./cubby-ai-provider";
+import { cubbyMcpExtension } from "./cubby-mcp";
+import type {
+  DispatchInput,
+  PurchaseAgentEnvironment,
+  PurchaseImportRunAgentRpc,
+  RunServices,
+} from "./environment";
 import { workflowForRun } from "./import-run-workflows";
 import { RunSettlement } from "./run-settlement";
-import { purchaseImportService, type PurchaseImportService } from "./service";
-import { renderSignal, type AgentSignal } from "./signals";
+import { renderSignal } from "./signals";
 import { purchaseImportTools } from "./tools";
 
 const log = createLogger("purchase-agent");
@@ -61,7 +57,7 @@ const runIdentity = z.object({
   runId: z.uuid(),
   purpose: agentImportRunPurpose,
 });
-export type RunIdentity = z.infer<typeof runIdentity>;
+type RunIdentity = z.infer<typeof runIdentity>;
 
 /** The fields the projection reads from pi's committed assistant partial. */
 const assistantPartialFields = z.looseObject({
@@ -75,31 +71,36 @@ const assistantPartial = z.custom<AssistantMessage>(
   (value) => assistantPartialFields.safeParse(value).success,
 );
 
-export type DispatchInput = {
-  identity: RunIdentity;
-  operationId: string;
-  signal: AgentSignal;
-};
+/**
+ * The Agents SDK base reads its `env` only to find Durable Object, Workflow,
+ * and MCP bindings this agent never uses, so it gets none: the agent's
+ * environment is the narrowed one its host passes in.
+ */
+// SAFETY: an empty environment; the SDK finds no binding in it, which is
+// the intent, and nothing in this module reads `this.env`.
+const NO_BINDINGS = Object.freeze({}) as Cloudflare.Env;
 
 /** Mutable per-run facts kept in this object's SQLite, beside pi's tables. */
 const STATE_KEYS = {
   identity: "identity",
-  mcpTools: "mcp_tools",
   toolRounds: "tool_rounds",
   nudgedAt: "nudged_at",
 } as const;
-
-type Env = CloudflareBindings & {
-  CUBBY_PURCHASE_AGENT_TEST_MODEL?: PurchaseAgentTestModelBinding;
-};
 
 /**
  * One import Run's coordinator: a pi-durable conversation hosted on this
  * Durable Object's SQLite by `PiHarness`. pi owns the transcript, retries,
  * and crash recovery; this class supplies Cubby's tools, the run's identity,
  * the conversation projection the run page reads, and settlement reports.
+ *
+ * The exported Durable Object (`server/purchase-import/agent-host.ts`) loads
+ * this module on first use and constructs it with the narrowed environment;
+ * nothing here reads the Worker's `env`.
  */
-export class PurchaseImportRunAgent extends Agent<Env> {
+export class PurchaseImportRunAgent
+  extends Agent
+  implements PurchaseImportRunAgentRpc
+{
   private readonly registry = createRegistry();
   private readonly recorder = createContextRecorder();
   private installed: string | undefined;
@@ -110,13 +111,16 @@ export class PurchaseImportRunAgent extends Agent<Env> {
   });
   private readonly settlement = new RunSettlement(
     this.harness,
-    () => this.service(),
+    () => this.services(),
     (error) => this.report(error),
     (settled) => this.recordSettlement(settled),
   );
 
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
+  constructor(
+    ctx: ConstructorParameters<typeof Agent>[0],
+    private readonly agentEnv: PurchaseAgentEnvironment,
+  ) {
+    super(ctx, NO_BINDINGS);
     this.ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS cubby_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     );
@@ -159,8 +163,8 @@ export class PurchaseImportRunAgent extends Agent<Env> {
     return raw === undefined ? fallback : Number(raw);
   }
 
-  private service(): PurchaseImportService {
-    return purchaseImportService(this.env);
+  private services(): RunServices {
+    return this.agentEnv.services;
   }
 
   private report<TError>(error: TError): void {
@@ -173,21 +177,16 @@ export class PurchaseImportRunAgent extends Agent<Env> {
   private async openPi({ storage, context: open }: PiHarnessContext) {
     const models = createModels();
     for (const provider of cubbyAgentProviders({
-      ai: () => this.env.AI,
+      gateway: () => this.agentEnv.gateway(),
       runId: () => this.identity()?.runId,
       recorder: this.recorder,
-      testModel: this.env.CUBBY_PURCHASE_AGENT_TEST_MODEL,
+      testModel: this.agentEnv.testModel,
     }))
       models.setProvider(provider);
     // A cold start reinstalls the run's tools before pi resumes any task, so
     // a recovered tool call never finds its tool missing.
     const identity = this.identity();
-    const cached = this.readState(STATE_KEYS.mcpTools);
-    if (identity && cached)
-      await this.installRunExtensions(
-        identity,
-        z.array(cachedMcpToolSchema).parse(JSON.parse(cached)),
-      );
+    if (identity) await this.installRunExtensions(identity);
     return Harness.open(
       storage,
       {
@@ -204,19 +203,17 @@ export class PurchaseImportRunAgent extends Agent<Env> {
     );
   }
 
-  private async installRunExtensions(
-    identity: RunIdentity,
-    mcpTools: readonly CachedMcpTool[],
-  ): Promise<void> {
+  private async installRunExtensions(identity: RunIdentity): Promise<void> {
     if (this.installed === identity.runId) return;
     const { runId, purpose } = identity;
+    const mcpTools = await this.agentEnv.mcpTools(purpose);
     const manifest = importRunAgentManifest[purpose];
     const workflow = workflowForRun(purpose, runId);
     const agentTools = new Set<string>(manifest.agentTools);
     this.registry.install(
       defineExtension({
         name: "cubby.run",
-        tools: purchaseImportTools(runId, () => this.service()).filter((tool) =>
+        tools: purchaseImportTools(() => this.services()).filter((tool) =>
           agentTools.has(tool.name),
         ),
         hooks: [
@@ -225,7 +222,7 @@ export class PurchaseImportRunAgent extends Agent<Env> {
               this.requestStartedAt = Date.now();
               return undefined;
             },
-            afterResponse: (message) => this.afterResponse(runId, message),
+            afterResponse: (message) => this.afterResponse(message),
             afterTools: () => {
               this.writeState(
                 STATE_KEYS.toolRounds,
@@ -237,9 +234,7 @@ export class PurchaseImportRunAgent extends Agent<Env> {
         ],
       }),
     );
-    this.registry.install(
-      cubbyMcpExtension(runId, mcpTools, () => this.service()),
-    );
+    this.registry.install(cubbyMcpExtension(mcpTools, () => this.services()));
     this.registry.install(await piSkills([workflow.skills]));
     this.installed = runId;
   }
@@ -259,7 +254,7 @@ export class PurchaseImportRunAgent extends Agent<Env> {
     return { continue: renderSignal({ type: "run_not_finished", body }) };
   }
 
-  private async afterResponse(runId: string, message: AssistantMessage) {
+  private async afterResponse(message: AssistantMessage) {
     await this.recorder.settled();
     const breakdown = this.recorder.take(CONTEXT_SCOPE);
     const responseKey = message.responseId ?? `t:${message.timestamp}`;
@@ -270,8 +265,7 @@ export class PurchaseImportRunAgent extends Agent<Env> {
         JSON.stringify(breakdown),
       );
     try {
-      await this.service().recordAgentUsage({
-        runId,
+      await this.services().recordAgentUsage({
         eventId: `model-turn:${responseKey}`,
         provider: message.provider,
         model: message.model,
@@ -314,7 +308,12 @@ export class PurchaseImportRunAgent extends Agent<Env> {
       (stored.runId !== identity.runId || stored.purpose !== identity.purpose)
     )
       throw new Error("Import run agent is bound to another Run");
-    if (!stored) this.writeState(STATE_KEYS.identity, JSON.stringify(identity));
+    if (!stored) {
+      // A new coordinator starts only for a member who still authorizes the
+      // agent; the host pauses the Run for authorization otherwise.
+      await this.services().authorize();
+      this.writeState(STATE_KEYS.identity, JSON.stringify(identity));
+    }
     await this.ensureRunReady(identity);
     const receipt = await this.harness.submit(renderSignal(input.signal), {
       operationId: input.operationId,
@@ -323,22 +322,12 @@ export class PurchaseImportRunAgent extends Agent<Env> {
     if (receipt.accepted)
       await this.settlement.watch({
         operationId: receipt.operationId,
-        runId: identity.runId,
       });
     return { accepted: receipt.accepted };
   }
 
   private async ensureRunReady(identity: RunIdentity): Promise<void> {
-    let tools: CachedMcpTool[];
-    const cached = this.readState(STATE_KEYS.mcpTools);
-    if (cached) tools = z.array(cachedMcpToolSchema).parse(JSON.parse(cached));
-    else {
-      tools = await listCubbyMcpTools(identity.runId, identity.purpose, () =>
-        this.service(),
-      );
-      this.writeState(STATE_KEYS.mcpTools, JSON.stringify(tools));
-    }
-    await this.installRunExtensions(identity, tools);
+    await this.installRunExtensions(identity);
     const manifest = importRunAgentManifest[identity.purpose];
     const root = await (await this.harness.pi()).root(context);
     await root.configure(
@@ -387,7 +376,6 @@ export class PurchaseImportRunAgent extends Agent<Env> {
     });
     await this.settlement.watch({
       operationId: receipt.operationId,
-      runId: identity.runId,
     });
     return Response.json({ operationId: receipt.operationId }, { status: 202 });
   }

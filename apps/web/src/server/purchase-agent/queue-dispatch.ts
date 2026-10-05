@@ -1,8 +1,8 @@
-import type { DispatchInput } from "./run-agent";
 import {
   purchaseAgentEventIdempotencyKey,
   type PurchaseAgentEvent,
 } from "./contracts";
+import type { DispatchInput } from "./environment";
 
 /**
  * One queue event as the coordinator reads it. The Durable Object needs the

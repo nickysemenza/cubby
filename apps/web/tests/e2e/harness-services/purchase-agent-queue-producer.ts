@@ -13,9 +13,26 @@ export default {
     env: {
       PURCHASE_AGENT_QUEUE: { send(message: unknown): Promise<void> };
       PURCHASE_IMPORT_CLIENT: DurableObjectNamespace;
+      PURCHASE_IMPORT_RUN: DurableObjectNamespace;
     },
   ) {
     const url = new URL(request.url);
+    // `/agent/<agentId>/<suffix>`: the run page's conversation requests, as
+    // the authenticated web route forwards them to the run's agent.
+    const agent = /^\/agent\/([^/]+)(\/.*)?$/u.exec(url.pathname);
+    if (agent?.[1]) {
+      const target = new URL(
+        agent[2] ?? "/",
+        "https://purchase-agent.internal",
+      );
+      return env.PURCHASE_IMPORT_RUN.getByName(
+        decodeURIComponent(agent[1]),
+      ).fetch(target.toString(), {
+        method: request.method,
+        headers: request.headers,
+        body: request.method === "GET" ? undefined : await request.text(),
+      });
+    }
     if (request.method !== "POST")
       return new Response("Not found", { status: 404 });
     if (url.pathname === "/dispatch") {

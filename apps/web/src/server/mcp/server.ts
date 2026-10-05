@@ -15,14 +15,13 @@ import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
 import { purchaseAgentRunActions } from "~/server/purchase-import/capabilities";
 
+import { purchaseAgentTools } from "./agent-tool-catalog";
 import { registerMcpApps } from "./apps";
 import { trustedPurchaseAgent } from "./purchase-agent-protocol";
 import { installToolCallTelemetryHandler } from "./tools/tool-call-telemetry";
 import { installMockStrippedListToolsHandler } from "./tools/tool-catalog";
 import type { ToolCatalogView } from "./tools/tool-catalog";
 import {
-  compiledMcpTools,
-  narrowedToolSchema,
   operationContextFromExtra,
   registerMcpTools,
   type ToolExtra,
@@ -136,24 +135,10 @@ async function purchaseAgentCatalogView(
     prepared.entityKernel.db,
     trusted.runId,
   );
-  const allowedSet = new Set(allowed);
   const tools = new Map(
-    compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOLS).map((tool) => [
-      tool.name,
-      tool,
-    ]),
+    purchaseAgentTools(new Set(allowed)).map((tool) => [tool.name, tool]),
   );
-  return (name) => {
-    const tool = tools.get(name);
-    if (!tool) return null;
-    const narrowed = narrowedToolSchema(tool, allowedSet);
-    return narrowed
-      ? {
-          description: narrowed.description,
-          inputSchema: narrowed.inputJsonSchema,
-        }
-      : null;
-  };
+  return (name) => tools.get(name) ?? null;
 }
 
 export function createMcpServer() {

@@ -1,4 +1,4 @@
-/* eslint-disable anti-slop/no-unsafe-dictionary-type, anti-slop/require-safety-comment-for-type-assertion, anti-slop/no-known-value-widening -- The harness adapts generated Wrangler JSON whose binding dictionaries have no source-level owner type. */
+/* eslint-disable anti-slop/no-unsafe-dictionary-type, anti-slop/require-safety-comment-for-type-assertion -- The harness adapts generated Wrangler JSON whose binding dictionaries have no source-level owner type. */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,45 +9,6 @@ const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const agentConfigPath = path.join(
-  webRoot,
-  "../purchase-agent/dist/purchase_agent/wrangler.json",
-);
-
-function workerdAgentConfig() {
-  const config = JSON.parse(readFileSync(agentConfigPath, "utf8")) as {
-    ai?: Record<string, unknown>;
-    services?: Array<Record<string, unknown>>;
-    queues?: { consumers?: Array<Record<string, unknown>> };
-  };
-  // The harness supplies a deterministic model through a local service. Keep
-  // the production Workers AI binding out of this process so CI never tries to
-  // establish a remote Cloudflare proxy session.
-  delete config.ai;
-  return {
-    ...config,
-    main: "../purchase-agent/dist/purchase_agent/index.js",
-    queues: {
-      ...config.queues,
-      consumers: config.queues?.consumers?.map((consumer) => ({
-        ...consumer,
-        max_batch_timeout: 0,
-      })),
-    },
-    services: [
-      ...(config.services ?? []).map((service) =>
-        service.binding === "CUBBY_PURCHASE_SERVICE"
-          ? { ...service, service: "cubby" }
-          : service,
-      ),
-      {
-        binding: "CUBBY_PURCHASE_AGENT_TEST_MODEL",
-        service: "cubby-test-model",
-      },
-    ],
-  };
-}
-
 function workerdWebConfig(databaseUrl: string) {
   const config = JSON.parse(
     readFileSync(path.join(webRoot, "dist/server/wrangler.json"), "utf8"),
@@ -57,8 +18,8 @@ function workerdWebConfig(databaseUrl: string) {
     services?: Array<Record<string, unknown>>;
   };
   // Keep the current compiled Worker but remove production-only remote
-  // bindings; the harness supplies its isolated database and owns agent queue
-  // delivery, so starting it must never require Cloudflare credentials.
+  // bindings: the harness supplies its isolated database and a deterministic
+  // model, so starting it must never require Cloudflare credentials.
   delete config.ai;
   delete config.vectorize;
   config.hyperdrive = config.hyperdrive?.map((binding) => ({
@@ -70,7 +31,11 @@ function workerdWebConfig(databaseUrl: string) {
     queues.consumers = (
       (queues.consumers ?? []) as Array<Record<string, unknown>>
     )
-      .filter((consumer) => consumer.queue === "cubby-telemetry")
+      .filter(
+        (consumer) =>
+          consumer.queue === "cubby-telemetry" ||
+          consumer.queue === "cubby-purchase-agent",
+      )
       .map((consumer) => ({ ...consumer, max_batch_timeout: 0 }));
   // `configPath` resolves this relative to dist/server; the inline config is
   // rooted at apps/web, so retain the compiled entrypoint explicitly.
@@ -78,18 +43,15 @@ function workerdWebConfig(databaseUrl: string) {
   const assets = config.assets as Record<string, unknown> | undefined;
   if (assets) assets.directory = "dist/client";
   config.services = [
-    ...(config.services ?? []).map((service) => {
-      const replacements: Record<string, string> = {
-        USDA_API: "local-offline-peers",
-        PURCHASE_AGENT: "purchase-agent",
-      };
-      const binding = String(service.binding ?? "");
-      return replacements[binding]
-        ? { ...service, service: replacements[binding] }
-        : service;
-    }),
-    // Harness-only: the web Worker's own structured AI features (extraction,
-    // the required import audit) answer from a deterministic peer.
+    ...(config.services ?? []).map((service) =>
+      service.binding === "USDA_API"
+        ? { ...service, service: "local-offline-peers" }
+        : service,
+    ),
+    // Harness-only: the purchase agent's model provider and the Worker's own
+    // structured AI features (extraction, the required import audit) answer
+    // from deterministic peers.
+    { binding: "CUBBY_PURCHASE_AGENT_TEST_MODEL", service: "cubby-test-model" },
     { binding: "CUBBY_TEST_AI_GATEWAY", service: "cubby-test-gateway" },
   ];
   return config;
@@ -111,10 +73,11 @@ const DETERMINISTIC_GATEWAY: WorkerdModelWorker = {
 };
 
 /**
- * The coupled web + purchase-agent workerd harness. Its model worker is
- * `cubby-test-model` (the agent's provider) and its gateway worker is
- * `cubby-test-gateway` (the web Worker's structured features): deterministic
- * fakes by default, or Gateway proxies for live evals and journeys.
+ * The purchase-agent workerd harness: the built `cubby` Worker, which hosts
+ * the agent and consumes its queue. Its model worker is `cubby-test-model`
+ * (the agent's provider) and its gateway worker is `cubby-test-gateway` (the
+ * Worker's structured features): deterministic fakes by default, or Gateway
+ * proxies for live evals and journeys.
  */
 export function createWorkerdHarness(
   databaseUrl: string,
@@ -163,15 +126,14 @@ export function createWorkerdHarness(
                 class_name: "PurchaseImportDurableObject",
                 script_name: "cubby",
               },
+              {
+                name: "PURCHASE_IMPORT_RUN",
+                class_name: "PurchaseImportRunAgent",
+                script_name: "cubby",
+              },
             ],
           },
         },
-      },
-      {
-        config: workerdAgentConfig(),
-        // "test" disables Sentry in both the agent Durable Object wrapper and
-        // the queue consumer, so the harness never reports to sentry.io.
-        vars: { SENTRY_ENVIRONMENT: "test" },
       },
       {
         config: {

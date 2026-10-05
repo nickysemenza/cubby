@@ -121,10 +121,7 @@ export function createLocalWorkerdHarness(
           BETTER_AUTH_SECRET:
             process.env.BETTER_AUTH_SECRET || "e2e-test-secret",
         },
-        bindingOverrides: {
-          USDA_API: "local-offline-peers",
-          PURCHASE_AGENT: "local-offline-peers",
-        },
+        bindingOverrides: { USDA_API: "local-offline-peers" },
       },
       {
         config: {
@@ -148,13 +145,6 @@ export function createLocalWorkerdHarness(
                 name: "native-import-continuation",
                 main: "tooling/mac-import-continuation-peer.ts",
                 compatibility_date: compatibilityDate,
-                services: [
-                  {
-                    binding: "CUBBY_PURCHASE_SERVICE",
-                    service: "cubby",
-                    entrypoint: "PurchaseImportService",
-                  },
-                ],
                 queues: {
                   consumers: [
                     { queue: "cubby-purchase-agent", max_batch_timeout: 0 },

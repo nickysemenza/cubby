@@ -1,6 +1,7 @@
 import { importRunAgentManifest } from "@cubby/schemas/import-run-agent";
 import { describe, expect, it } from "vitest";
 
+import { purchaseAgentToolCatalog } from "./agent-tool-catalog";
 import { listMcpToolCatalog } from "./server";
 
 // The purchase agent mounts only its manifest's MCP tools. A renamed or removed
@@ -18,5 +19,22 @@ describe("import run agent manifest", () => {
           .map((name) => `${purpose}: ${name}`),
     );
     expect(missing).toEqual([]);
+  });
+
+  // The agent mounts this catalog without listing tools; each mounted tool
+  // advertises only the purpose's actions.
+  it("mounts each purpose's tools narrowed to its actions", () => {
+    const { mcpActions, mcpTools } = importRunAgentManifest.photo_inventory;
+    const catalog = purchaseAgentToolCatalog("photo_inventory");
+    expect(catalog.map((tool) => tool.name).sort()).toEqual(
+      [...mcpTools].sort(),
+    );
+    const imports = catalog.find((tool) => tool.name === "imports_read");
+    const allowed = mcpActions.flatMap((action) =>
+      action.startsWith("imports_read.") ? [action.slice(13)] : [],
+    );
+    for (const action of allowed)
+      expect(imports?.description).toContain(`- ${action}:`);
+    expect(imports?.description).not.toContain("- purchase_status:");
   });
 });

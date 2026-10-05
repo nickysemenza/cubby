@@ -203,6 +203,15 @@
       }
     },
     {
+      // The purchase agent reads untrusted content; it reaches Cubby only
+      // through its narrowed environment (docs/infrastructure.md#purchase-agent).
+      "files": ["apps/web/src/server/purchase-agent/**/*.ts"],
+      "excludeFiles": ["**/*.test.ts"],
+      "rules": {
+        "cubby/purchase-agent-boundary": "error"
+      }
+    },
+    {
       "files": ["apps/web/src/**/*.ts", "apps/web/src/**/*.tsx"],
       "excludeFiles": [
         "**/*.test.ts",
@@ -313,7 +322,6 @@
         "apps/web/src/server/**/*.ts",
         "apps/web/src/cf-server.ts",
         "apps/usda-api/src/**/*.ts",
-        "apps/purchase-agent/src/**/*.ts",
         "packages/*/src/**/*.ts"
       ],
       "excludeFiles": [

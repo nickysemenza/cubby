@@ -1,7 +1,7 @@
 import { runShortcode } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
-import { getBindingFetcher } from "~/server/cf-env";
+import { getPurchaseImportRunAgentNamespace } from "~/server/cf-env";
 import {
   loadRunScopeByShortcode,
   recordRunControlEvent,
@@ -62,29 +62,23 @@ export async function proxyPurchaseAgentRequest(input: {
     );
   }
 
-  const fetcher = getBindingFetcher("PURCHASE_AGENT");
-  if (!fetcher) {
+  const agents = getPurchaseImportRunAgentNamespace();
+  if (!agents) {
     return Response.json(
       { error: "Purchase Agent conversation service is unavailable" },
       { status: 503 },
     );
   }
 
-  const inbound = new URL(input.request.url);
-  const internal = new URL(
-    `/internal/agents/purchase-import-run/${encodeURIComponent(scope.public.agentId)}${suffix ? `/${suffix}` : ""}`,
-    "https://purchase-agent.internal",
-  );
-  internal.search = inbound.search;
+  // The agent routes on the suffix alone; the member's credentials stay here.
+  const internal = new URL(`/${suffix}`, "https://purchase-agent.internal");
+  internal.search = new URL(input.request.url).search;
   const headers = new Headers(input.request.headers);
   headers.delete("authorization");
   headers.delete("cookie");
   headers.delete("host");
-  headers.set("x-cubby-agent-service", "purchase-import-proxy-v1");
-  headers.set("x-cubby-controlling-user", input.context.auth.userId);
-  headers.set("x-cubby-controlling-party", input.party.shortcode);
 
-  const response = await fetcher(
+  const response = await agents.getByName(scope.public.agentId).fetch(
     new Request(internal, {
       method: input.request.method,
       headers,

@@ -4,6 +4,7 @@ import {
   createCubbyGatewayFetch,
   withSequentialToolCalls,
 } from "./cubby-ai-provider";
+import type { AgentGateway } from "./environment";
 
 const runId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 
@@ -11,13 +12,13 @@ describe("createCubbyGatewayFetch", () => {
   it("attributes a coordinator request to its import run", async () => {
     const run = vi.fn(
       async (
-        _query: Parameters<AiGateway["run"]>[0],
-        _options: Parameters<AiGateway["run"]>[1],
+        _query: Parameters<AgentGateway["run"]>[0],
+        _options: Parameters<AgentGateway["run"]>[1],
       ) => new Response("stream"),
     );
     const gatewayFetch = createCubbyGatewayFetch(
       "openai",
-      () => ({ run }),
+      () => ({ id: "cubby", run }),
       () => runId,
     );
     await gatewayFetch("https://ai-gateway.invalid/openai/responses", {
@@ -47,7 +48,7 @@ describe("createCubbyGatewayFetch", () => {
     const run = vi.fn(async () => expected);
     const gatewayFetch = createCubbyGatewayFetch(
       test.route,
-      () => ({ run }),
+      () => ({ id: "cubby", run }),
       () => undefined,
     );
 
