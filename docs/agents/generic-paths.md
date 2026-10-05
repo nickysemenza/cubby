@@ -48,6 +48,12 @@ existing block. Extend the generic path when it almost fits. See
   `updateAndReturn`, `withTransaction`, `formatSearchTerm`, `notDeleted`,
   `buildSearchConditions`, the shortcode resolver, `finalizeMerge`,
   policy-driven removal (`server/repo/removal/`).
+- Search fan-out: a record whose search text embeds another entity is one
+  `searchDependents` entry (`server/services/mutation-side-effects.ts`) naming
+  an explicit query in `server/repo/entity-embedding-cleanup.ts`; it drives
+  both the projection refresh and the embedding wave. Writers call
+  `runMutationSideEffects(ForEntities)`, or `refreshDerivedSearchRefs` for
+  refs captured before an edge is removed.
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
 - Money: `cents`, `dollars`, `round2` (`server/repo/money.ts`); expense
   rollups select `expenseAggregateFields` (`server/repo/expense-aggregate-sql.ts`);

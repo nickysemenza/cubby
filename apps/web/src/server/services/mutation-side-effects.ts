@@ -1,12 +1,8 @@
 import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
-import {
-  type EntityId,
-  type EntityRef,
-  type RunId,
-  parseEntityId,
-} from "@cubby/schemas/identifiers";
+import type { EntityId, EntityRef, RunId } from "@cubby/schemas/identifiers";
 import {
   isEmbeddableEntity,
+  searchableEntities,
   type SearchableEntity,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
@@ -18,8 +14,9 @@ import {
 } from "~/server/background-tasks/publish";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
-  findCommercialEmbeddingRefsForExpenses,
   findChildTaskEmbeddingRefs,
+  findCommercialEmbeddingRefsForExpenses,
+  findEmbeddingRefsForCategories,
   findEmbeddingRefsForPurchases,
   findEmbeddingRefsForVendors,
   findGardenEntryEmbeddingRefsForLocations,
@@ -27,9 +24,8 @@ import {
   findInventoryEmbeddingRefsForLocations,
   findInventoryEmbeddingRefsForProducts,
   findMealEmbeddingRefsForRecipes,
-  findPlantingEmbeddingRefsForPlants,
   findPlantingEmbeddingRefsForLocations,
-  findProductEmbeddingRefsForCategories,
+  findPlantingEmbeddingRefsForPlants,
   findRecipeEmbeddingRefsForIngredients,
   findTaskEmbeddingRefsForProducts,
   findTrackerEmbeddingRefsForProjects,
@@ -79,6 +75,8 @@ export type MutationSideEffectEvent = {
   runId?: RunId;
 };
 
+type MutationAction = MutationSideEffectEvent["action"];
+
 const mutationSideEffectEntitySet = new Set<string>(mutationSideEffectEntities);
 
 export const isMutationSideEffectRef = (
@@ -93,160 +91,178 @@ export interface MutationSideEffectPorts {
     tasks: readonly BackgroundTaskInput[],
     options: PublishOptions,
   ) => Promise<void>;
-  readonly findChildTaskEmbeddingRefs: typeof findChildTaskEmbeddingRefs;
-  readonly findInventoryEmbeddingRefsForProducts: typeof findInventoryEmbeddingRefsForProducts;
-  readonly findProductEmbeddingRefsForCategories?: typeof findProductEmbeddingRefsForCategories;
-  readonly findInventoryEmbeddingRefsForLocations: typeof findInventoryEmbeddingRefsForLocations;
-  readonly findRecipeEmbeddingRefsForIngredients: typeof findRecipeEmbeddingRefsForIngredients;
-  readonly findTaskEmbeddingRefsForProducts: typeof findTaskEmbeddingRefsForProducts;
-  readonly findWishEmbeddingRefsForProducts: typeof findWishEmbeddingRefsForProducts;
-  readonly findMealEmbeddingRefsForRecipes: typeof findMealEmbeddingRefsForRecipes;
-  readonly findPlantingEmbeddingRefsForPlants: typeof findPlantingEmbeddingRefsForPlants;
-  readonly findPlantingEmbeddingRefsForLocations: typeof findPlantingEmbeddingRefsForLocations;
-  readonly findGardenEntryEmbeddingRefsForLocations: typeof findGardenEntryEmbeddingRefsForLocations;
-  readonly findGardenEntryEmbeddingRefsForPlantings: typeof findGardenEntryEmbeddingRefsForPlantings;
-  readonly findTrackerEmbeddingRefsForProjects: typeof findTrackerEmbeddingRefsForProjects;
-  readonly findEmbeddingRefsForVendors: typeof findEmbeddingRefsForVendors;
-  readonly findEmbeddingRefsForPurchases: typeof findEmbeddingRefsForPurchases;
-  readonly findTransactionEmbeddingRefsForAccounts: typeof findTransactionEmbeddingRefsForAccounts;
-  readonly findCommercialEmbeddingRefsForExpenses: typeof findCommercialEmbeddingRefsForExpenses;
-  readonly findDirectImageSearchOwnerRefs: typeof findDirectImageSearchOwnerRefs;
-  readonly refreshSearchDocuments: (
-    db: Database | DrizzleTransaction,
-    refs: SearchableEntityRef[],
-  ) => Promise<void>;
 }
 
 const productionMutationSideEffectPorts: MutationSideEffectPorts = {
   publishTasks: publishInBackground,
-  findInventoryEmbeddingRefsForProducts,
-  findProductEmbeddingRefsForCategories,
-  findInventoryEmbeddingRefsForLocations,
-  findRecipeEmbeddingRefsForIngredients,
-  findTaskEmbeddingRefsForProducts,
-  findWishEmbeddingRefsForProducts,
-  findMealEmbeddingRefsForRecipes,
-  findPlantingEmbeddingRefsForPlants,
-  findPlantingEmbeddingRefsForLocations,
-  findGardenEntryEmbeddingRefsForLocations,
-  findGardenEntryEmbeddingRefsForPlantings,
-  findTrackerEmbeddingRefsForProjects,
-  findEmbeddingRefsForVendors,
-  findEmbeddingRefsForPurchases,
-  findTransactionEmbeddingRefsForAccounts,
-  findCommercialEmbeddingRefsForExpenses,
-  findChildTaskEmbeddingRefs,
-  findDirectImageSearchOwnerRefs,
-  refreshSearchDocuments: async (...args) => {
-    await refreshSearchDocuments(...args);
+};
+
+/** The search documents that embed text from a batch of one entity's rows. */
+type SearchDependent<E extends MutationSideEffectEntity> = (
+  db: Database | DrizzleTransaction,
+  ids: EntityId<E>[],
+) => Promise<SearchableEntityRef[]>;
+
+type SearchDependents = {
+  [E in MutationSideEffectEntity]: Partial<
+    Record<"created" | "updated", readonly SearchDependent<E>[]>
+  >;
+};
+
+const findImageSearchOwnerRefs: SearchDependent<"image"> = async (db, ids) => {
+  const refs: SearchableEntityRef[] = [];
+  for (const id of ids)
+    refs.push(...(await findDirectImageSearchOwnerRefs(db, id)));
+  return refs;
+};
+
+/**
+ * The one roster of search dependencies. Each entry names the other search
+ * documents whose text embeds the changed entity, so the same declaration
+ * drives the synchronous projection refresh and the post-commit embedding
+ * wave. A searchable entity's own document is implicit on create and update.
+ *
+ * Triggers are deliberately coarse — any create or update, never changed-field
+ * detection — and each dependency is an explicit query rather than one
+ * inferred from relation edges: Cubby data is low-volume and refresh tasks
+ * skip unchanged text by hash, so obvious coverage beats fragile precision.
+ * Deletes have no entry: `cascadeRemoval` retires search artifacts inside
+ * every delete transaction, including direct repo deletes that skip this path.
+ */
+const searchDependents: SearchDependents = {
+  product: {
+    created: [findInventoryEmbeddingRefsForProducts],
+    updated: [
+      findInventoryEmbeddingRefsForProducts,
+      findTaskEmbeddingRefsForProducts,
+      findWishEmbeddingRefsForProducts,
+    ],
+  },
+  productCategory: { updated: [findEmbeddingRefsForCategories] },
+  location: {
+    updated: [
+      findInventoryEmbeddingRefsForLocations,
+      findPlantingEmbeddingRefsForLocations,
+      findGardenEntryEmbeddingRefsForLocations,
+    ],
+  },
+  ingredient: { updated: [findRecipeEmbeddingRefsForIngredients] },
+  recipe: { updated: [findMealEmbeddingRefsForRecipes] },
+  cookbook: {},
+  inventory: {},
+  meal: {},
+  project: { updated: [findTrackerEmbeddingRefsForProjects] },
+  task: { updated: [findChildTaskEmbeddingRefs] },
+  vendor: { updated: [findEmbeddingRefsForVendors] },
+  purchase: { updated: [(db, ids) => findEmbeddingRefsForPurchases(db, ids)] },
+  financialAccount: { updated: [findTransactionEmbeddingRefsForAccounts] },
+  financialTransaction: {},
+  // Expense writes can resolve Purchase/Vendor rows implicitly.
+  expense: {
+    created: [findCommercialEmbeddingRefsForExpenses],
+    updated: [findCommercialEmbeddingRefsForExpenses],
+  },
+  wish: {},
+  plant: { updated: [findPlantingEmbeddingRefsForPlants] },
+  planting: { updated: [findGardenEntryEmbeddingRefsForPlantings] },
+  gardenEntry: {},
+  image: {
+    created: [findImageSearchOwnerRefs],
+    updated: [findImageSearchOwnerRefs],
   },
 };
 
-export { productionMutationSideEffectPorts };
-type MutationEntityKind = MutationSideEffectEvent["entity"]["entity"];
-type MutationAction = MutationSideEffectEvent["action"];
+const searchDependentsFor = <E extends MutationSideEffectEntity>(
+  entity: E,
+  action: "created" | "updated",
+): readonly SearchDependent<E>[] => searchDependents[entity][action] ?? [];
 
-/** Post-commit handlers publish, so they always hold the request Database. */
-interface HandlerContext {
-  db: Database;
-  event: MutationSideEffectEvent;
-  ports: MutationSideEffectPorts;
-}
+const searchableEntitySet = new Set<string>(searchableEntities);
+const isSearchable = (
+  entity: MutationSideEffectEntity,
+): entity is MutationSideEffectEntity & SearchableEntity =>
+  searchableEntitySet.has(entity);
 
-/** Ref collectors also run inside the write transaction. */
-interface CollectorContext {
-  db: Database | DrizzleTransaction;
-  event: MutationSideEffectEvent;
-  ports: MutationSideEffectPorts;
-}
-
-type MutationSideEffectHandler = (ctx: HandlerContext) => Promise<void>;
-type MutationSideEffectManifest = Record<
-  MutationEntityKind,
-  {
-    onCreate: MutationSideEffectHandler[];
-    onUpdate: MutationSideEffectHandler[];
-    onDelete: MutationSideEffectHandler[];
-  }
->;
-
-const isSearchableEntity = (
-  entityKind: MutationEntityKind,
-): entityKind is SearchableEntity => entityKind !== "image";
-
-const ownEmbeddingRef = (
-  event: MutationSideEffectEvent,
-): SearchableEntityRef | null =>
-  isSearchableEntity(event.entity.entity)
-    ? {
-        entityKind: event.entity.entity,
-        entityId: event.entity.id,
-      }
-    : null;
+const uniqueRefs = (refs: SearchableEntityRef[]) =>
+  uniqBy(refs, (ref) => `${ref.entityKind}:${ref.entityId}`);
 
 /**
- * Every search document this event changes: the entity's own projection plus
- * the projections that embed its text (a product rename rewrites its
- * inventory, task, and wish documents). The entity kernel refreshes these
- * inside the write transaction; other writers refresh them synchronously
- * before responding. Either way a projection failure is a visible error, not
- * a swallowed log — the projection is a SQL view of the row being written and
- * has no reason to fail independently.
+ * Every search document a wave of events changes: each entity's own
+ * projection plus its declared dependents (a product rename rewrites its
+ * inventory, task, and wish documents). Events are batched per entity and
+ * action, so a bulk wave runs each dependency query once.
  */
-async function collectProjectionRefs(
+async function collectSearchRefs(
   db: Database | DrizzleTransaction,
-  event: MutationSideEffectEvent,
-  ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
+  events: readonly MutationSideEffectEvent[],
 ): Promise<SearchableEntityRef[]> {
-  if (event.action === "deleted") return [];
-  const refs: SearchableEntityRef[] = [];
-  for (const handler of handlersFor(event)) {
-    const collector = embeddingRefCollectorByHandler.get(handler);
-    if (collector) refs.push(...(await collector({ db, event, ports })));
+  const batches = new Map<
+    string,
+    {
+      entity: MutationSideEffectEntity;
+      action: "created" | "updated";
+      ids: EntityId<MutationSideEffectEntity>[];
+    }
+  >();
+  for (const { action, entity } of events) {
+    if (action === "deleted") continue;
+    const key = `${entity.entity}:${action}`;
+    const batch = batches.get(key) ?? {
+      entity: entity.entity,
+      action,
+      ids: [],
+    };
+    batch.ids.push(entity.id);
+    batches.set(key, batch);
   }
-  return uniqBy(refs, (ref) => `${ref.entityKind}:${ref.entityId}`);
+  const refs: SearchableEntityRef[] = [];
+  for (const { entity, action, ids } of batches.values()) {
+    if (isSearchable(entity))
+      refs.push(...ids.map((entityId) => ({ entityKind: entity, entityId })));
+    for (const collect of searchDependentsFor(entity, action))
+      refs.push(...(await collect(db, ids)));
+  }
+  return uniqueRefs(refs);
 }
 
-/** Refresh every projection {@link collectProjectionRefs} names, on `db`. */
+/**
+ * Refresh every projection one event changes, on `db`. The entity kernel
+ * calls this inside the write transaction; other writers get it from
+ * {@link runMutationSideEffects}. Either way a projection failure is a visible
+ * error, not a swallowed log — the projection is a SQL view of the row being
+ * written and has no reason to fail independently.
+ */
 export async function refreshProjectionsForEvent(
   db: Database | DrizzleTransaction,
   event: MutationSideEffectEvent,
-  ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
 ): Promise<void> {
-  const refs = await collectProjectionRefs(db, event, ports);
-  if (refs.length > 0) await ports.refreshSearchDocuments(db, refs);
+  const refs = await collectSearchRefs(db, [event]);
+  if (refs.length > 0) await refreshSearchDocuments(db, refs);
 }
 
 async function publishEmbeddingRefreshes(
   db: Database,
   refs: SearchableEntityRef[],
-  cause: Pick<MutationSideEffectEvent, "source"> &
-    Partial<Pick<MutationSideEffectEvent, "action">>,
+  source: string,
   ports: MutationSideEffectPorts,
 ): Promise<void> {
   // Purchase/financialTransaction/expense are searchable but not embeddable
   // (see `entity-manifest.ts` `embeddableEntities`): never queue a vector
   // refresh for them, even though they can appear in a collected ref set.
-  const embeddableRefs = refs.filter((ref) =>
-    isEmbeddableEntity(ref.entityKind),
+  const embeddable = uniqueRefs(
+    refs.filter((ref) => isEmbeddableEntity(ref.entityKind)),
   );
-  const uniqueRefs = uniqBy(
-    embeddableRefs,
-    (ref) => `${ref.entityKind}:${ref.entityId}`,
-  );
-  if (uniqueRefs.length === 0) return;
+  if (embeddable.length === 0) return;
   const requestedAt = new Date().toISOString();
   await ports.publishTasks(
     db,
-    uniqueRefs.map((ref) => ({
+    embeddable.map((ref) => ({
       kind: "entity-embedding.refresh" as const,
       requestedAt,
       entityKind: ref.entityKind,
       entityId: ref.entityId,
     })),
-    {
-      source: cause.action ? `${cause.source}:${cause.action}` : cause.source,
-    },
+    { source },
   );
 }
 
@@ -261,561 +277,46 @@ export async function refreshDerivedSearchRefs(
   source: string,
   ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
 ): Promise<void> {
-  const uniqueRefs = uniqBy(refs, (ref) => `${ref.entityKind}:${ref.entityId}`);
-  if (uniqueRefs.length === 0) return;
-  await ports.refreshSearchDocuments(db, uniqueRefs);
-  await publishEmbeddingRefreshes(db, uniqueRefs, { source }, ports);
+  const unique = uniqueRefs(refs);
+  if (unique.length === 0) return;
+  await refreshSearchDocuments(db, unique);
+  await publishEmbeddingRefreshes(db, unique, source, ports);
 }
 
-// Ref-only variant of each embedding-refresh handler below, factored out so
-// runMutationSideEffectsForEntities can collect refs across an entire bulk
-// wave and issue ONE publishEmbeddingRefreshes call (one transaction)
-// instead of one dispatch per entity — see embeddingRefCollectorByHandler.
-type EmbeddingRefCollector = (
-  ctx: CollectorContext,
-) => Promise<SearchableEntityRef[]>;
-
-const collectOwnEmbeddingRef: EmbeddingRefCollector = async (ctx) => {
-  const ref = ownEmbeddingRef(ctx.event);
-  return ref ? [ref] : [];
-};
-
-const collectInventoryEmbeddingRefsForProduct: EmbeddingRefCollector = async (
-  ctx,
-) => {
-  if (ctx.event.entity.entity !== "product") return [];
-  return await ctx.ports.findInventoryEmbeddingRefsForProducts(ctx.db, [
-    ctx.event.entity.id,
-  ]);
-};
-
-const collectProductCategoryEmbeddingRefs: EmbeddingRefCollector = async (
-  ctx,
-) => {
-  if (ctx.event.entity.entity !== "productCategory") return [];
-  const products = await (
-    ctx.ports.findProductEmbeddingRefsForCategories ??
-    findProductEmbeddingRefsForCategories
-  )(ctx.db, [ctx.event.entity.id]);
-  const inventory = await ctx.ports.findInventoryEmbeddingRefsForProducts(
-    ctx.db,
-    products.map((ref) => parseEntityId("product", ref.entityId)),
-  );
-  return [...products, ...inventory];
-};
-
-const collectTaskEmbeddingRefsForProduct: EmbeddingRefCollector = async (
-  ctx,
-) => {
-  if (ctx.event.entity.entity !== "product") return [];
-  return await ctx.ports.findTaskEmbeddingRefsForProducts(ctx.db, [
-    ctx.event.entity.id,
-  ]);
-};
-
-const collectWishEmbeddingRefsForProduct: EmbeddingRefCollector = async (
-  ctx,
-) => {
-  if (ctx.event.entity.entity !== "product") return [];
-  return await ctx.ports.findWishEmbeddingRefsForProducts(ctx.db, [
-    ctx.event.entity.id,
-  ]);
-};
-
-const collectInventoryEmbeddingRefsForLocation: EmbeddingRefCollector = async (
-  ctx,
-) => {
-  if (ctx.event.entity.entity !== "location") return [];
-  return await ctx.ports.findInventoryEmbeddingRefsForLocations(ctx.db, [
-    ctx.event.entity.id,
-  ]);
-};
-
-const collectRecipeEmbeddingRefsForIngredient: EmbeddingRefCollector = async (
-  ctx,
-) => {
-  if (ctx.event.entity.entity !== "ingredient") return [];
-  return await ctx.ports.findRecipeEmbeddingRefsForIngredients(ctx.db, [
-    ctx.event.entity.id,
-  ]);
-};
-
-const collectMealEmbeddingRefsForRecipe: EmbeddingRefCollector = async (
-  ctx,
-) => {
-  if (ctx.event.entity.entity !== "recipe") return [];
-  return await ctx.ports.findMealEmbeddingRefsForRecipes(ctx.db, [
-    ctx.event.entity.id,
-  ]);
-};
-
-const collectPlantingEmbeddingRefsForPlant: EmbeddingRefCollector = async (
-  ctx,
-) => {
-  if (ctx.event.entity.entity !== "plant") return [];
-  return await ctx.ports.findPlantingEmbeddingRefsForPlants(ctx.db, [
-    ctx.event.entity.id,
-  ]);
-};
-
-const collectPlantingEmbeddingRefsForLocation: EmbeddingRefCollector = async (
-  ctx,
-) => {
-  if (ctx.event.entity.entity !== "location") return [];
-  return await ctx.ports.findPlantingEmbeddingRefsForLocations(ctx.db, [
-    ctx.event.entity.id,
-  ]);
-};
-
-const collectGardenEntryEmbeddingRefsForLocation: EmbeddingRefCollector =
-  async (ctx) => {
-    if (ctx.event.entity.entity !== "location") return [];
-    return await ctx.ports.findGardenEntryEmbeddingRefsForLocations(ctx.db, [
-      ctx.event.entity.id,
-    ]);
-  };
-
-const collectGardenEntryEmbeddingRefsForPlanting: EmbeddingRefCollector =
-  async (ctx) => {
-    if (ctx.event.entity.entity !== "planting") return [];
-    return await ctx.ports.findGardenEntryEmbeddingRefsForPlantings(ctx.db, [
-      ctx.event.entity.id,
-    ]);
-  };
-
-const collectTrackerEmbeddingRefsForProject: EmbeddingRefCollector = async (
-  ctx,
-) => {
-  if (ctx.event.entity.entity !== "project") return [];
-  return await ctx.ports.findTrackerEmbeddingRefsForProjects(ctx.db, [
-    ctx.event.entity.id,
-  ]);
-};
-
-const collectChildTaskRefs: EmbeddingRefCollector = async (ctx) =>
-  ctx.event.entity.entity === "task"
-    ? ctx.ports.findChildTaskEmbeddingRefs(ctx.db, [ctx.event.entity.id])
-    : [];
-async function refreshChildTaskEmbeddings(ctx: HandlerContext): Promise<void> {
-  return publishEmbeddingRefreshes(
-    ctx.db,
-    await collectChildTaskRefs(ctx),
-    ctx.event,
-    ctx.ports,
-  );
-}
-
-const collectEmbeddingRefsForVendor: EmbeddingRefCollector = async (ctx) => {
-  if (ctx.event.entity.entity !== "vendor") return [];
-  return ctx.ports.findEmbeddingRefsForVendors(ctx.db, [ctx.event.entity.id]);
-};
-
-const collectEmbeddingRefsForPurchase: EmbeddingRefCollector = async (ctx) => {
-  if (ctx.event.entity.entity !== "purchase") return [];
-  return ctx.ports.findEmbeddingRefsForPurchases(ctx.db, [ctx.event.entity.id]);
-};
-
-const collectTransactionEmbeddingRefsForAccount: EmbeddingRefCollector = async (
-  ctx,
-) => {
-  if (ctx.event.entity.entity !== "financialAccount") return [];
-  return ctx.ports.findTransactionEmbeddingRefsForAccounts(ctx.db, [
-    ctx.event.entity.id,
-  ]);
-};
-
-const collectCommercialEmbeddingRefsForExpense: EmbeddingRefCollector = async (
-  ctx,
-) => {
-  if (ctx.event.entity.entity !== "expense") return [];
-  return ctx.ports.findCommercialEmbeddingRefsForExpenses(ctx.db, [
-    ctx.event.entity.id,
-  ]);
-};
-
-/** Image metadata and derived text affect only its direct owners. */
-const collectDirectImageSearchOwnerRefs: EmbeddingRefCollector = async (
-  ctx,
-) => {
-  if (ctx.event.entity.entity !== "image") return [];
-  return await ctx.ports.findDirectImageSearchOwnerRefs(
-    ctx.db,
-    ctx.event.entity.id,
-  );
-};
-
-async function refreshOwnEmbedding(ctx: HandlerContext): Promise<void> {
-  const refs = await collectOwnEmbeddingRef(ctx);
-  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-// NOTE: there is no onDelete embedding handler. Embedding soft-delete is
-// cascaded at the repo delete layer (`cascadeRemoval` inside each entity's
-// deleteXxx transaction), so it covers ALL delete callers — including
-// direct repo deletes that skip this side-effect pipeline (e.g.
-// problems.service.deleteUnusedIngredients). Re-adding it here would be a
-// redundant higher-layer duplicate.
-
-async function refreshInventoryEmbeddingsForProduct(
-  ctx: HandlerContext,
+/** Independent of search: Location vision analysis, gated on image changes. */
+async function enqueueLocationAiRefresh(
+  db: Database,
+  event: MutationSideEffectEvent,
+  ports: MutationSideEffectPorts,
 ): Promise<void> {
-  const refs = await collectInventoryEmbeddingRefsForProduct(ctx);
-  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-/** A category rename or move rewrites descendant Product and Inventory text. */
-async function refreshProductCategoryEmbeddings(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectProductCategoryEmbeddingRefs(ctx);
-  await refreshDerivedSearchRefs(
-    ctx.db,
-    refs,
-    `${ctx.event.source}:${ctx.event.action}`,
-    ctx.ports,
-  );
-}
-
-async function refreshTaskEmbeddingsForProduct(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectTaskEmbeddingRefsForProduct(ctx);
-  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-async function refreshWishEmbeddingsForProduct(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectWishEmbeddingRefsForProduct(ctx);
-  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-async function refreshInventoryEmbeddingsForLocation(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectInventoryEmbeddingRefsForLocation(ctx);
-  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-async function refreshRecipeEmbeddingsForIngredient(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectRecipeEmbeddingRefsForIngredient(ctx);
-  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-// Meals embed their planned recipes' names, so a recipe update fans out.
-async function refreshMealEmbeddingsForRecipe(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectMealEmbeddingRefsForRecipe(ctx);
-  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-// Plantings embed their plant's name, so a plant rename fans out.
-async function refreshPlantingEmbeddingsForPlant(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectPlantingEmbeddingRefsForPlant(ctx);
-  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-// Plantings embed their current location's name (the title's subtitle), and
-// garden entries embed their location's name IN the title, so a location
-// rename fans out to both.
-async function refreshPlantingEmbeddingsForLocation(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectPlantingEmbeddingRefsForLocation(ctx);
-  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-async function refreshGardenEntryEmbeddingsForLocation(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectGardenEntryEmbeddingRefsForLocation(ctx);
-  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-async function refreshGardenEntryEmbeddingsForPlanting(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectGardenEntryEmbeddingRefsForPlanting(ctx);
-  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-// Tasks/expenses embed their project's name, so a project update fans out.
-async function refreshTrackerEmbeddingsForProject(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectTrackerEmbeddingRefsForProject(ctx);
-  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-async function refreshEmbeddingsForVendor(ctx: HandlerContext): Promise<void> {
-  const refs = await collectEmbeddingRefsForVendor(ctx);
-  return publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-async function refreshEmbeddingsForPurchase(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectEmbeddingRefsForPurchase(ctx);
-  return publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-async function refreshTransactionEmbeddingsForAccount(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectTransactionEmbeddingRefsForAccount(ctx);
-  return publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-async function refreshCommercialEmbeddingsForExpense(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectCommercialEmbeddingRefsForExpense(ctx);
-  return publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-async function refreshDirectImageOwnerEmbeddings(
-  ctx: HandlerContext,
-): Promise<void> {
-  const refs = await collectDirectImageSearchOwnerRefs(ctx);
-  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
-}
-
-// Maps each embedding-refresh handler to its ref-only collector, so the bulk
-// path (runMutationSideEffectsForEntities) can bypass the handler's own
-// per-event dispatch and instead accumulate refs for one wave-wide dispatch.
-const embeddingRefCollectorByHandler = new Map<
-  MutationSideEffectHandler,
-  EmbeddingRefCollector
->([
-  [refreshOwnEmbedding, collectOwnEmbeddingRef],
-  [refreshChildTaskEmbeddings, collectChildTaskRefs],
-  [
-    refreshInventoryEmbeddingsForProduct,
-    collectInventoryEmbeddingRefsForProduct,
-  ],
-  [refreshTaskEmbeddingsForProduct, collectTaskEmbeddingRefsForProduct],
-  [refreshWishEmbeddingsForProduct, collectWishEmbeddingRefsForProduct],
-  [
-    refreshInventoryEmbeddingsForLocation,
-    collectInventoryEmbeddingRefsForLocation,
-  ],
-  [
-    refreshRecipeEmbeddingsForIngredient,
-    collectRecipeEmbeddingRefsForIngredient,
-  ],
-  [refreshMealEmbeddingsForRecipe, collectMealEmbeddingRefsForRecipe],
-  [refreshPlantingEmbeddingsForPlant, collectPlantingEmbeddingRefsForPlant],
-  [
-    refreshPlantingEmbeddingsForLocation,
-    collectPlantingEmbeddingRefsForLocation,
-  ],
-  [
-    refreshGardenEntryEmbeddingsForLocation,
-    collectGardenEntryEmbeddingRefsForLocation,
-  ],
-  [
-    refreshGardenEntryEmbeddingsForPlanting,
-    collectGardenEntryEmbeddingRefsForPlanting,
-  ],
-  [refreshTrackerEmbeddingsForProject, collectTrackerEmbeddingRefsForProject],
-  [refreshEmbeddingsForVendor, collectEmbeddingRefsForVendor],
-  [refreshEmbeddingsForPurchase, collectEmbeddingRefsForPurchase],
-  [
-    refreshTransactionEmbeddingsForAccount,
-    collectTransactionEmbeddingRefsForAccount,
-  ],
-  [
-    refreshCommercialEmbeddingsForExpense,
-    collectCommercialEmbeddingRefsForExpense,
-  ],
-  [refreshDirectImageOwnerEmbeddings, collectDirectImageSearchOwnerRefs],
-]);
-
-async function enqueueLocationAiRefresh(ctx: HandlerContext): Promise<void> {
-  if (ctx.event.entity.entity !== "location") return;
-  if (ctx.event.source.startsWith("location-ai.")) return;
+  if (event.action === "deleted" || event.entity.entity !== "location") return;
+  if (event.source.startsWith("location-ai.")) return;
   // The analysis fingerprint includes the location name, so a rename would force
   // a cache miss and fire two Anthropic vision calls (description + inventory
-  // detection) for no benefit. Only refresh when images actually changed.
-  if (!ctx.event.locationImagesChanged) return;
-  const locationId = ctx.event.entity.id;
+  // detection) for no benefit. Only refresh when images actually changed. A
+  // location created WITH photos passes this gate too, so it is not born with
+  // a NULL aiDescription.
+  if (!event.locationImagesChanged) return;
+  const locationId = event.entity.id;
   const requestedAt = new Date().toISOString();
-  await ctx.ports.publishTasks(
-    ctx.db,
+  await ports.publishTasks(
+    db,
     [
       {
         kind: "location-ai.description.refresh",
         requestedAt,
         locationId,
-        runId: ctx.event.runId,
+        runId: event.runId,
       },
       {
         kind: "location-ai.inventory.refresh",
         requestedAt,
         locationId,
-        runId: ctx.event.runId,
+        runId: event.runId,
       },
     ],
-    { source: `${ctx.event.source}:${ctx.event.action}` },
+    { source: `${event.source}:${event.action}` },
   );
-}
-
-// These side effects are intentionally coarse. Cubby data changes are low-volume,
-// and background tasks are idempotent: embeddings skip unchanged text by hash and
-// AI analyses skip unchanged fingerprints. Prefer obvious coverage over fragile
-// changed-field detection.
-//
-// Location valuation has no side effect: it is computed on read from inventory.
-const mutationSideEffectManifest = {
-  product: {
-    onCreate: [refreshOwnEmbedding, refreshInventoryEmbeddingsForProduct],
-    onUpdate: [
-      refreshOwnEmbedding,
-      refreshInventoryEmbeddingsForProduct,
-      refreshTaskEmbeddingsForProduct,
-      refreshWishEmbeddingsForProduct,
-    ],
-    onDelete: [],
-  },
-  productCategory: {
-    onCreate: [],
-    onUpdate: [refreshProductCategoryEmbeddings],
-    onDelete: [],
-  },
-  location: {
-    // enqueueLocationAiRefresh also runs onCreate: a location created WITH
-    // photos must generate its description/inventory analysis (gated by
-    // locationImagesChanged), else it's born with a NULL aiDescription.
-    onCreate: [refreshOwnEmbedding, enqueueLocationAiRefresh],
-    onUpdate: [
-      refreshOwnEmbedding,
-      refreshInventoryEmbeddingsForLocation,
-      // Rename fan-out: planting subtitles and garden-entry titles embed the
-      // current location's name.
-      refreshPlantingEmbeddingsForLocation,
-      refreshGardenEntryEmbeddingsForLocation,
-      enqueueLocationAiRefresh,
-    ],
-    onDelete: [],
-  },
-  ingredient: {
-    onCreate: [refreshOwnEmbedding],
-    // Rename fan-out: recipe embeddings embed the ingredient's name.
-    onUpdate: [refreshOwnEmbedding, refreshRecipeEmbeddingsForIngredient],
-    onDelete: [],
-  },
-  plant: {
-    onCreate: [refreshOwnEmbedding],
-    // Rename fan-out: planting titles embed the plant's name.
-    onUpdate: [refreshOwnEmbedding, refreshPlantingEmbeddingsForPlant],
-    onDelete: [],
-  },
-  recipe: {
-    onCreate: [refreshOwnEmbedding],
-    // Rename fan-out: meal embeddings include their planned recipes' names.
-    onUpdate: [refreshOwnEmbedding, refreshMealEmbeddingsForRecipe],
-    onDelete: [],
-  },
-  cookbook: {
-    onCreate: [refreshOwnEmbedding],
-    onUpdate: [refreshOwnEmbedding],
-    onDelete: [],
-  },
-  inventory: {
-    onCreate: [refreshOwnEmbedding],
-    onUpdate: [refreshOwnEmbedding],
-    onDelete: [],
-  },
-  meal: {
-    onCreate: [refreshOwnEmbedding],
-    onUpdate: [refreshOwnEmbedding],
-    onDelete: [],
-  },
-  project: {
-    onCreate: [refreshOwnEmbedding],
-    // Rename fan-out: task/expense embeddings include the project name.
-    onUpdate: [refreshOwnEmbedding, refreshTrackerEmbeddingsForProject],
-    onDelete: [],
-  },
-  task: {
-    onCreate: [refreshOwnEmbedding],
-    onUpdate: [refreshOwnEmbedding, refreshChildTaskEmbeddings],
-    onDelete: [],
-  },
-  vendor: {
-    onCreate: [refreshOwnEmbedding],
-    onUpdate: [refreshOwnEmbedding, refreshEmbeddingsForVendor],
-    onDelete: [],
-  },
-  purchase: {
-    onCreate: [refreshOwnEmbedding],
-    onUpdate: [refreshOwnEmbedding, refreshEmbeddingsForPurchase],
-    onDelete: [],
-  },
-  financialAccount: {
-    onCreate: [refreshOwnEmbedding],
-    onUpdate: [refreshOwnEmbedding, refreshTransactionEmbeddingsForAccount],
-    onDelete: [],
-  },
-  financialTransaction: {
-    onCreate: [refreshOwnEmbedding],
-    onUpdate: [refreshOwnEmbedding],
-    onDelete: [],
-  },
-  expense: {
-    onCreate: [refreshOwnEmbedding, refreshCommercialEmbeddingsForExpense],
-    onUpdate: [refreshOwnEmbedding, refreshCommercialEmbeddingsForExpense],
-    onDelete: [],
-  },
-  wish: {
-    onCreate: [refreshOwnEmbedding],
-    onUpdate: [refreshOwnEmbedding],
-    onDelete: [],
-  },
-  planting: {
-    onCreate: [refreshOwnEmbedding],
-    onUpdate: [refreshOwnEmbedding, refreshGardenEntryEmbeddingsForPlanting],
-    onDelete: [],
-  },
-  gardenEntry: {
-    onCreate: [refreshOwnEmbedding],
-    onUpdate: [refreshOwnEmbedding],
-    onDelete: [],
-  },
-  image: {
-    onCreate: [refreshDirectImageOwnerEmbeddings],
-    onUpdate: [refreshDirectImageOwnerEmbeddings],
-    onDelete: [],
-  },
-} satisfies MutationSideEffectManifest;
-
-const handlersFor = (
-  event: MutationSideEffectEvent,
-): MutationSideEffectHandler[] => {
-  const manifest = mutationSideEffectManifest[event.entity.entity];
-  const key = (
-    {
-      created: "onCreate",
-      updated: "onUpdate",
-      deleted: "onDelete",
-    } satisfies Record<MutationAction, keyof typeof manifest>
-  )[event.action];
-  return manifest[key];
-};
-
-async function runManifestHandlers(
-  db: Database,
-  event: MutationSideEffectEvent,
-  ports: MutationSideEffectPorts,
-): Promise<void> {
-  for (const handler of handlersFor(event)) {
-    await handler({ db, event, ports });
-  }
 }
 
 export interface RunMutationSideEffectsOptions {
@@ -834,48 +335,32 @@ export async function runMutationSideEffects(
   ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
   options: RunMutationSideEffectsOptions = {},
 ): Promise<void> {
-  if (options.projection !== "skip") {
-    await refreshProjectionsForEvent(db, event, ports);
-  }
-  await runManifestHandlers(db, event, ports);
+  await runMutationSideEffectsForEntities(db, [event], ports, options);
 }
 
+/**
+ * One wave of mutations: refresh the projections it changes (unless the
+ * caller already did, in its transaction), then publish one deduplicated
+ * embedding-refresh task list for the whole wave.
+ */
 export async function runMutationSideEffectsForEntities(
   db: Database,
   events: MutationSideEffectEvent[],
   ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
   options: RunMutationSideEffectsOptions = {},
 ): Promise<void> {
-  if (events.length === 0) return;
-  if (options.projection !== "skip") {
-    const refs = uniqBy(
-      (
-        await Promise.all(
-          events.map((event) => collectProjectionRefs(db, event, ports)),
-        )
-      ).flat(),
-      (ref) => `${ref.entityKind}:${ref.entityId}`,
-    );
-    if (refs.length > 0) await ports.refreshSearchDocuments(db, refs);
-  }
-  // Embedding-refresh handlers all funnel into the same task kind, so their
-  // refs are collected across the whole wave and published once instead of
-  // once per entity.
-  const waveEmbeddingRefs: SearchableEntityRef[] = [];
-  for (const event of events) {
-    for (const handler of handlersFor(event)) {
-      const collector = embeddingRefCollectorByHandler.get(handler);
-      if (collector) {
-        waveEmbeddingRefs.push(...(await collector({ db, event, ports })));
-        continue;
-      }
-      await handler({ db, event, ports });
-    }
-  }
-  const firstEvent = events[0];
-  if (waveEmbeddingRefs.length > 0 && firstEvent) {
-    await publishEmbeddingRefreshes(db, waveEmbeddingRefs, firstEvent, ports);
-  }
+  const [firstEvent] = events;
+  if (!firstEvent) return;
+  const refs = await collectSearchRefs(db, events);
+  if (options.projection !== "skip" && refs.length > 0)
+    await refreshSearchDocuments(db, refs);
+  await publishEmbeddingRefreshes(
+    db,
+    refs,
+    `${firstEvent.source}:${firstEvent.action}`,
+    ports,
+  );
+  for (const event of events) await enqueueLocationAiRefresh(db, event, ports);
 }
 
 /**

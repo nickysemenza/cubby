@@ -1,5 +1,5 @@
 import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
-import type { ShortcodeEntity } from "@cubby/schemas/identifiers";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   expenseCreateInput,
   projectCreateInput,
@@ -40,24 +40,18 @@ import { createTask } from "~/server/repo/task/crud";
 
 import { getSemanticEmbeddingConfig } from "../semantic/config";
 import {
-  productionMutationSideEffectPorts,
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
   type MutationSideEffectEvent,
   type MutationSideEffectPorts,
 } from "./mutation-side-effects";
 
-/**
- * Real find-embedding-refs and refreshSearchDocuments ports (so embedding
- * fan-out still reads the actual DB), while publishTasks is captured in-memory
- * instead of hitting the queue.
- */
+/** Fan-out and projections run against the real database; publication is captured. */
 function capturingPorts(): MutationSideEffectPorts & {
   published: BackgroundTaskInput[][];
 } {
   const published: BackgroundTaskInput[][] = [];
   return {
-    ...productionMutationSideEffectPorts,
     published,
     publishTasks: async (_db, tasks) => {
       published.push([...tasks]);
@@ -193,7 +187,7 @@ describe("mutation side effects integration", () => {
     );
 
     // Tasks/expenses embed their project's name, so a rename must fan out
-    // (see refreshTrackerEmbeddingsForProject / findTrackerEmbeddingRefsForProjects).
+    // (see findTrackerEmbeddingRefsForProjects).
     // Expense is searchable but not embeddable (financial entity), so its
     // SearchDocument still refreshes but no `entity-embedding.refresh` task is
     // published for it — see `publishEmbeddingRefreshes`.
@@ -264,8 +258,8 @@ describe("mutation side effects integration", () => {
       ports,
     );
 
-    // Three entities whose only handler is refreshOwnEmbedding must collapse
-    // into a single publishTasks call (one wave-wide dispatch), not one per entity.
+    // Three entities with no dependents must collapse into a single
+    // publishTasks call (one wave-wide dispatch), not one per entity.
     expect(ports.published).toHaveLength(1);
     const refs = embeddingRefreshRefs(ports.published[0] ?? []);
     expect(refs).toEqual(

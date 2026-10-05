@@ -826,8 +826,12 @@ with a comment saying why.
 Searchable entities use persisted `SearchDocument` rows for lexical and
 embedding input. The spec generates search capability gates, while projection
 SQL and embedding loaders remain explicit because several entities need joins,
-aggregates, and workflow-specific text. The kernel refreshes an entity's own
-projection and its fan-out projections inside the write transaction; a change
+aggregates, and workflow-specific text. Fan-out is declared once per
+dependency in `searchDependents` (`server/services/mutation-side-effects.ts`):
+any create or update of the source entity refreshes its dependents, never a
+field-sensitive subset and never one inferred from relation edges. The kernel
+refreshes an entity's own projection and its fan-out projections inside the
+write transaction, then publishes one embedding wave after commit; a change
 to projection SQL itself does not rewrite persisted rows — run the streaming
 "Repair index" maintenance action after such a change.
 
