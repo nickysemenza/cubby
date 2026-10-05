@@ -472,6 +472,12 @@ peerDependencyRules:
 
 # Reuse completed dependency graphs across fresh worktrees.
 virtualStoreType: global
+# An incremental install has dropped a direct dependency's node_modules link
+# (apps/web lost content-type). The optimistic fast path then answered every
+# later `pnpm install` with "Already up to date" without looking at
+# node_modules, so the link stayed missing. Verifying costs ~1s per no-op
+# install and relinks anything absent.
+optimisticRepeatInstall: false
 
 configDependencies:
   "@pnpm/plugin-types-fixer": 0.1.0
