@@ -519,7 +519,7 @@ name is null. Page ordering, search, and selected-value hydration use that same
 label, without loading full entity records.
 
 `control.suggest: { basis, mode }` marks a field whose value the decision tier
-(Jev) infers from named sibling fields, so the browser editor can auto-fill it
+(Jev/Clef trial) infers from named sibling fields, so the browser editor can auto-fill it
 while untouched and offer a one-tap apply once a value already exists. `basis`
 names model field keys on the same entity only — never an `intents.editorFields`
 pseudo field, since detail/table/bulk surfaces have no editor-field data to

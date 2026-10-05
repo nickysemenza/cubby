@@ -17,14 +17,14 @@ const isIgnored = (message: string) =>
 describe("SENTRY_IGNORED_ERRORS", () => {
   it.each([
     "The client has disconnected",
-    "Jev request failed (429): Wholesale Rate limited",
+    "Decision request failed (429): Wholesale Rate limited",
     "VECTOR_UPSERT_ERROR (code = 40041): rate limited",
   ])("ignores known-noise message %s", (message) => {
     expect(isIgnored(message)).toBe(true);
   });
 
   it.each([
-    "Jev request failed (500): x",
+    "Decision request failed (500): x",
     "Failed query: select 1",
     "out of memory",
   ])("does not ignore unrelated message %s", (message) => {

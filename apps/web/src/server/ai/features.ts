@@ -141,8 +141,8 @@ function defineFeature<
 }
 
 // ---------------------------------------------------------------------------
-// Decision tier — TypeSafe Jev on Workers AI. Closed-set classification and
-// selection: the feature hands Jev a roster of choices and gets back one
+// Decision tier — Jev/Clef trial on Workers AI. Closed-set classification and
+// selection: the feature hands the model a roster of choices and gets back one
 // index plus a calibrated probability, so there is no id to echo and no
 // prose to parse. A selection whose roster exceeds Jev's limit runs on
 // `SELECTION_OVERFLOW_FEATURE` instead (`ai/selection.ts`).
