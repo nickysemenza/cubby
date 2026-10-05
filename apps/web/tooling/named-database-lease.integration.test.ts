@@ -196,13 +196,14 @@ it("hands the database to its watchdog before migration, so a runner killed mid-
       expect(await exited).toBe("SIGKILL");
       await lock.query("ROLLBACK");
     } finally {
-      lock.release();
+      // The watchdog may force-drop next; never return this socket to idle.
+      lock.release(true);
     }
-    await holder.end();
     expect(stdout).not.toContain("setup reached");
     await expect
       .poll(() => exists(databaseName), { timeout: 30_000, interval: 500 })
       .toBe(false);
+    await holder.end();
     expect(readFileSync(log, "utf8")).toContain(`Dropped ${databaseName}`);
   } finally {
     child.kill("SIGKILL");

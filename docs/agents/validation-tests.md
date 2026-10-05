@@ -74,8 +74,11 @@ runner's lease `setup` callback, which runs after migration. Both callbacks
 receive only the name and URL, never the lease's `close`. The lease
 regressions (`named-database-lease.integration.test.ts`) need the guarded
 55432 endpoint: CI publishes it from `start-test-services`, and locally the
-suite runs `scripts/dev-db.ts up` unless `CUBBY_SIM_DB_EXTERNAL=1`. IntegreSQL namespaces and reset policies stay
-unchanged.
+suite runs `scripts/dev-db.ts up` unless `CUBBY_SIM_DB_EXTERNAL=1`. A watchdog
+regression that holds a migration-blocking connection destroys that connection
+on release before waiting for the forced DROP; returning it to the idle pool
+races cleanup and emits an unhandled PostgreSQL `57P01` error. IntegreSQL
+namespaces and reset policies stay unchanged.
 
 A profile (`WORKERD_PROFILES` in `workerd-harness.ts`) routes each production
 queue consumer to one of:
