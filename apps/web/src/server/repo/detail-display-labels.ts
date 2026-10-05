@@ -1,4 +1,5 @@
 import type { DisplayItem } from "@cubby/schemas/entity-definitions/label-field";
+import type { ExternalIdOut } from "@cubby/schemas/external-id";
 import type {
   FinancialAccountCardNumber,
   FinancialAccountSourceAlias,
@@ -39,6 +40,18 @@ export const sourceAliasesLabel = (
 ): string | null =>
   joined(
     aliases.map((alias) => `${alias.source}: ${alias.alias}`),
+    ", ",
+  );
+
+/** Each id as web's product cell words it: `source (kind): id`. */
+export const externalIdsLabel = (
+  ids: readonly Pick<ExternalIdOut, "source" | "kind" | "externalId">[],
+): string | null =>
+  joined(
+    ids.map(
+      (id) =>
+        `${id.source} (${id.kind.replaceAll("_", " ")}): ${id.externalId}`,
+    ),
     ", ",
   );
 

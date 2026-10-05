@@ -9,6 +9,7 @@ import { product } from "~/server/db/schema";
 import { observeOperationPhase } from "~/server/observed-request";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
+import { externalIdsLabel } from "~/server/repo/detail-display-labels";
 import { loadImageAnalysisSummaries } from "~/server/repo/image-analysis-summary";
 import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient/search";
 import { enrichProductRowsWithInventoryValuations } from "~/server/repo/inventory/valuation";
@@ -196,5 +197,6 @@ export async function readProductDetail(
     }),
     food,
     recipeUsages: recipe.recipeUsages,
+    externalIdsLabel: externalIdsLabel(mapped.externalIds),
   };
 }

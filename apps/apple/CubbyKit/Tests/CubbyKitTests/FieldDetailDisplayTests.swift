@@ -31,6 +31,21 @@ struct FieldDetailDisplayTests {
         }
     }
 
+    /// A structured value on a detail page needs something native can print: server text, rows,
+    /// a nested value, or a display format (an amount). Product external
+    /// IDs declared none, so the row read "1 item" while web showed the identifiers.
+    @Test func everyStructuredDetailFieldDeclaresWhatToPrint() {
+        let silent = EntityCatalog.all.flatMap { descriptor in
+            descriptor.fields
+                .filter {
+                    $0.showInDetail && $0.valueSchema != nil && $0.detailLabelPath == nil
+                        && $0.itemsPath == nil && $0.readPath == nil && $0.format == nil
+                }
+                .map { "\(descriptor.key.rawValue).\($0.key)" }
+        }
+        #expect(silent == [], "\(silent)")
+    }
+
     @Test func aDetailLabelIsTheTextTheRecordCarriesLineBreaksKept() throws {
         let cards = try field(.financialAccount, "cardNumbers")
         let raw: JSONValue = [
