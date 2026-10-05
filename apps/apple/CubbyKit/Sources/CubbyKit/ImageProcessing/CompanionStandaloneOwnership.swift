@@ -26,7 +26,12 @@ public final class CompanionOwnerLock: Sendable {
 
     deinit { close(descriptor) }
 
-    public static func acquire(at url: URL) throws -> CompanionOwnerLock {
+    /// Locks `<outbox file>.lock`. Pass the outbox's own canonical URL
+    /// (`CompanionResultOutbox.applicationSupportFileURL`), never a path built from the raw
+    /// namespace: the outbox sanitizes and truncates it, so distinct namespaces can share a file.
+    /// Acquire before the outbox is first read.
+    public static func acquire(guarding outboxURL: URL) throws -> CompanionOwnerLock {
+        let url = outboxURL.appendingPathExtension("lock")
         let path = url.path(percentEncoded: false)
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -44,9 +49,10 @@ public final class CompanionOwnerLock: Sendable {
 }
 
 /// A standalone companion's stable device id, minted once per file. Creation is exclusive: the
-/// complete id is written to a private temporary file and hard-linked into place, which fails if
-/// another process won, so every starter reads the same id. A file that exists but is unreadable
-/// or not a UUID is an error, never silently replaced (that would register a new device).
+/// complete id is written to an owner-only (0600) temporary file and hard-linked into place, which
+/// fails if another process won, so every starter reads the same id. A file that exists but is
+/// unreadable or not a UUID is an error, never silently replaced (that would register a new
+/// device).
 public enum CompanionDeviceIdentity {
     public static func loadOrCreate(at url: URL) throws -> UUID {
         if let existing = try load(url) { return existing }
@@ -55,8 +61,16 @@ public enum CompanionDeviceIdentity {
         let candidate = UUID()
         let staging = url.deletingLastPathComponent().appendingPathComponent(
             ".\(url.lastPathComponent).\(UUID().uuidString)")
-        try Data(candidate.uuidString.lowercased().utf8).write(to: staging, options: .withoutOverwriting)
+        let stagingPath = staging.path(percentEncoded: false)
+        // Explicit mode: O_EXCL on a unique name, 0600 regardless of the umask (the hard link
+        // shares this inode, so the final file keeps it).
+        let descriptor = open(stagingPath, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o600)
+        guard descriptor >= 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
         defer { try? FileManager.default.removeItem(at: staging) }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        try handle.write(contentsOf: Data(candidate.uuidString.lowercased().utf8))
+        try handle.synchronize()
+        try handle.close()
         if link(staging.path(percentEncoded: false), url.path(percentEncoded: false)) == 0 {
             return candidate
         }

@@ -108,6 +108,9 @@ public actor CompanionImageWorker {
     /// concurrently up to this bound, and each command's own deadline still applies while queued.
     static let maximumConcurrentCommands = 4
     private var commandTasks: [String: Task<Void, Never>] = [:]
+    private enum Acceptance { case open, paused, stopped }
+    private var acceptance = Acceptance.open
+    private var deferredCommands: [(ImageProcessingCommand, URLSessionWebSocketTask?)] = []
     private var running: [String: CompanionImageWorkerActivity] = [:]
     private var runningCount = 0
     private var slotWaiters: [CheckedContinuation<Void, Never>] = []
@@ -182,6 +185,7 @@ public actor CompanionImageWorker {
         connectionTask?.cancel()
         connectionTask = nil
         cancelCommands()
+        deferredCommands.removeAll()
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
         activityObserver?(.init(phase: .stopped))
@@ -382,6 +386,12 @@ public actor CompanionImageWorker {
     /// which is what `drainState()` counts as outstanding. A `nil` socket (tests) records the
     /// result without sending it, exactly like a socket that dropped mid-command.
     func startCommand(_ command: ImageProcessingCommand, socket: URLSessionWebSocketTask?) {
+        guard acceptance == .open else {
+            // Held, not started: a paused check resumes it; a stopped worker drops it and the
+            // server's lease expiry re-offers the job.
+            if acceptance == .paused { deferredCommands.append((command, socket)) }
+            return
+        }
         let key = CompanionImageProcessingProtocol.attemptKey(
             jobID: command.companionJobID, attemptID: command.companionAttemptID)
         guard commandTasks[key] == nil else { return }
@@ -390,8 +400,45 @@ public actor CompanionImageWorker {
         }
     }
 
-    /// Read commands before the outbox: a command leaves `commandTasks` only after its result is
-    /// recorded, so this order can over-count a finishing command but never miss it.
+    /// Stops starting newly delivered commands for the rest of this worker's life (a standalone
+    /// companion's shutdown); accepted ones keep running, recording, and delivering.
+    public func stopAccepting() {
+        acceptance = .stopped
+        deferredCommands.removeAll()
+    }
+
+    /// The only safe "settled → stop" check. It closes acceptance first, so no command can start
+    /// while it awaits the outbox (an actor suspension that let one start uncounted before), then
+    /// answers whether nothing is outstanding or unacknowledged. `true` leaves acceptance closed
+    /// for the caller to `stop()`; `false` reopens it (unless `stopAccepting()` was called) and
+    /// starts any command that arrived meanwhile.
+    public func pauseAcceptingIfSettled() async throws -> Bool {
+        if acceptance == .open { acceptance = .paused }
+        // Acceptance is closed, so `commandTasks` can only shrink across this suspension; a
+        // command still in it was counted, and one that finished recorded its result first.
+        var settled = commandTasks.isEmpty
+        if settled {
+            do {
+                settled = try await outbox.pending().isEmpty && commandTasks.isEmpty
+            } catch {
+                reopenIfPaused()
+                throw error
+            }
+        }
+        if !settled { reopenIfPaused() }
+        return settled
+    }
+
+    private func reopenIfPaused() {
+        guard acceptance == .paused else { return }
+        acceptance = .open
+        let deferred = deferredCommands
+        deferredCommands.removeAll()
+        for (command, socket) in deferred { startCommand(command, socket: socket) }
+    }
+
+    /// Advisory counts for logging and the `--once` quiet window. It can over-count a finishing
+    /// command but is not atomic with acceptance; stop on `pauseAcceptingIfSettled()`, not this.
     public func drainState() async throws -> CompanionDrainState {
         let connected = socket != nil && socket === greetedSocket
         let outstanding = commandTasks.count

@@ -94,11 +94,12 @@ using the session from `cubby auth login` (an API key cannot open the socket). I
 its own device: the id lives in `~/Library/Application Support/Cubby/companion-device-id`,
 because the app's id is a data-protection Keychain item the ad-hoc-signed CLI cannot read, and
 sharing one id would merge two sockets into one device. Concurrent first starts all get the same
-id, and a damaged id file is an error, not a new device. Its outbox is namespaced
-`cubby-cli-<host>`, apart from the app's. Only one `cubby companion` process can serve a host at
-a time (a `flock` on `Cubby/ImageProcessing/cubby-cli-<host>.lock`), because two processes
-rewriting one outbox could erase each other's unacknowledged results. A second invocation exits
-with a message.
+id, the id file is owner-only (0600), and a damaged id file is an error, not a new device. Its
+outbox is namespaced `cubby-cli-<host>`, apart from the app's. Only one `cubby companion` process
+can use an outbox file at a time, because two processes rewriting one outbox could erase each
+other's unacknowledged results. This is enforced with a `flock` on `<outbox file>.lock`. The lock
+is derived from the outbox's own sanitized, truncated path, so two hosts that map to one outbox
+also share its lock. A second invocation exits with a message.
 
 At startup it prints whether Foundation Models can describe images in this process and, if not,
 the exact reason (`SystemLanguageModel.default.availability` or a missing `.vision` capability).
@@ -109,7 +110,9 @@ outstanding job and no unacknowledged result. A job counts as outstanding while 
 running, or being recorded, and it stays outstanding across a reconnect. It exits 1 if any job
 failed or if it stays disconnected for `--connect-timeout` (default 30), even while a job runs.
 Without `--once` it runs until SIGINT/SIGTERM, then gives outstanding jobs and acknowledgements up
-to 10s before it stops. Both exits are judged on the worker's current state. Results that are
+to 10s before it stops. On a signal the worker stops starting new commands. Either exit happens
+only after a check that first closes command acceptance, so no job can start between "settled"
+and stop. Results that are
 still unacknowledged stay in the outbox and replay on the next connection.
 
 When waiting jobs get dispatched depends on the server. Older servers re-offer a

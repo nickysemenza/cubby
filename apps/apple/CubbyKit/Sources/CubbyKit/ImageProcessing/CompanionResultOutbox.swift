@@ -11,9 +11,18 @@ public actor CompanionResultOutbox<Result: Codable & Sendable> {
         self.fileURL = fileURL
     }
 
+    /// The canonical file for `namespace` (sanitized and truncated), so anything that guards an
+    /// outbox — `CompanionOwnerLock` — keys on the same file two namespaces may share.
+    public static func applicationSupportFileURL(
+        namespace: String, supportDirectory: URL? = nil
+    ) throws -> URL {
+        try AtomicCodableReplayFile.applicationSupportURL(
+            directory: "ImageProcessing", namespace: namespace, fileName: "result-outbox.json",
+            supportDirectory: supportDirectory)
+    }
+
     public static func applicationSupport(namespace: String) throws -> Self {
-        let fileURL = try AtomicCodableReplayFile.applicationSupportURL(
-            directory: "ImageProcessing", namespace: namespace, fileName: "result-outbox.json")
+        let fileURL = try applicationSupportFileURL(namespace: namespace)
         #if os(iOS)
             if FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) {
                 // Upgrade existing foreground-only outboxes before a charging window runs locked.

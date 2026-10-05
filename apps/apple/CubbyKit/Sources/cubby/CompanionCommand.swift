@@ -70,19 +70,18 @@ struct CompanionCommand: AsyncParsableCommand {
     private func work(_ context: CLIContext) async throws {
         // Namespaced apart from the app's outbox so neither replays the other device's results, and
         // owned by one CLI process per host so overlapping runs cannot overwrite each other's.
-        let namespace = "cubby-cli-\(context.host)"
+        // The lock keys on the outbox's canonical file, which sanitizes and truncates the namespace.
+        let outboxURL = try CompanionResultOutbox<ImageProcessingResult>.applicationSupportFileURL(
+            namespace: "cubby-cli-\(context.host)")
         let lock: CompanionOwnerLock
         do {
-            lock = try CompanionOwnerLock.acquire(
-                at: URL.applicationSupportDirectory.appending(
-                    path: "Cubby/ImageProcessing/\(namespace).lock"))
+            lock = try CompanionOwnerLock.acquire(guarding: outboxURL)
         } catch let failure as CompanionOwnerLock.Failure {
             throw CLIError.message(
                 "Another `cubby companion` already serves \(context.host) (\(failure)); stop it first.")
         }
         defer { lock.release() }
-        let outbox = try CompanionResultOutbox<ImageProcessingResult>.applicationSupport(
-            namespace: namespace)
+        let outbox = CompanionResultOutbox<ImageProcessingResult>(fileURL: outboxURL)
         // The CLI is its own device: the app keeps its id in a data-protection Keychain item under
         // its signed team identity, which the ad-hoc-signed CLI cannot read, and sharing one id
         // would make the server treat the app's and the CLI's sockets as one device.
@@ -154,10 +153,11 @@ struct CompanionCommand: AsyncParsableCommand {
                 }
                 log("signal \(number): finishing outstanding jobs (up to \(Self.stopGrace))")
                 stopDeadline = .now + Self.stopGrace
+                await worker.stopAccepting()
             }
 
-            // Decide on the worker's current state, never on the activity phase or an earlier
-            // read: the phase turns idle before a finished result is recorded.
+            // Advisory state for the quiet window and logs; the exit itself is gated below on
+            // `pauseAcceptingIfSettled()`, which closes acceptance before it checks.
             let state = try await worker.drainState()
             let now = ContinuousClock.now
             if verbose, state != lastState {
@@ -169,11 +169,15 @@ struct CompanionCommand: AsyncParsableCommand {
             policy.observe(state, at: now)
 
             if let stopDeadline {
-                if state.isSettled || now >= stopDeadline { break loop }
+                if now >= stopDeadline { break loop }
+                if state.isSettled, try await worker.pauseAcceptingIfSettled() { break loop }
             } else if once {
                 switch policy.decision(at: now) {
                 case .keepRunning: continue
                 case .drained:
+                    // `false`: something started or is unacknowledged; acceptance reopened and the
+                    // next state read restarts the quiet window.
+                    guard try await worker.pauseAcceptingIfSettled() else { continue }
                     outcome = .drained
                     break loop
                 case .unreachable:
