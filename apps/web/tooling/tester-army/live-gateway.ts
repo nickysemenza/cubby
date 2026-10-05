@@ -1,24 +1,35 @@
+import { z } from "zod";
+import { modelSwapSchema, swapResponsesModel } from "../responses-model-swap";
+
 /**
  * The coupled harness's model peer for live Tester Army journeys. The purchase
  * agent (as `cubby-test-model`) and the web Worker's structured features (as
  * `cubby-test-gateway`) both address their provider routes at a placeholder
- * host; this Worker forwards each request unchanged to the synthetic testing
- * AI Gateway with the Tester Army Unified Billing token. Nothing is scripted:
- * every model answer is real. `/usage` reports request counts per route and
- * the HTTP status of each failed call, never content.
+ * host; this Worker forwards each request to the synthetic testing AI Gateway
+ * with the Tester Army Unified Billing token. A peer configured with
+ * `RESPONSES_MODEL`/`RESPONSES_EFFORT` swaps them into its `/openai/responses`
+ * calls; every other request is forwarded unchanged. Nothing is scripted:
+ * every model answer is real. `/usage` reports request counts and wire models
+ * per route and the HTTP status of each failed call, never content.
  */
 type Env = {
   GATEWAY_BASE_URL: string;
   GATEWAY_TOKEN: string;
   RUN_REVISION: string;
+  RESPONSES_MODEL?: string;
+  RESPONSES_EFFORT?: string;
 };
 
 type RouteUsage = {
   requests: number;
   failed: number;
   failedStatuses: number[];
+  /** Requests per wire model named in a JSON body. */
+  models: Record<string, number>;
 };
 let usage: Record<string, RouteUsage> = {};
+
+const bodyModel = z.looseObject({ model: z.string() });
 
 const DROPPED_HEADERS = [
   "authorization",
@@ -37,6 +48,25 @@ export default {
     }
     // `/openai/responses`, `/anthropic/v1/messages`, `/workers-ai/...`
     const route = url.pathname.split("/")[1] ?? "unknown";
+    let body =
+      request.method === "GET" || request.method === "HEAD"
+        ? undefined
+        : await request.arrayBuffer();
+    let model: string | undefined;
+    if (body && request.headers.get("content-type")?.includes("json")) {
+      let json: unknown = JSON.parse(new TextDecoder().decode(body));
+      if (env.RESPONSES_MODEL && url.pathname === "/openai/responses") {
+        json = swapResponsesModel(
+          json,
+          modelSwapSchema.parse({
+            model: env.RESPONSES_MODEL,
+            effort: env.RESPONSES_EFFORT,
+          }),
+        );
+        body = new TextEncoder().encode(JSON.stringify(json)).buffer;
+      }
+      model = bodyModel.safeParse(json).data?.model;
+    }
     const headers = new Headers(request.headers);
     for (const name of DROPPED_HEADERS) headers.delete(name);
     headers.set("cf-aig-authorization", `Bearer ${env.GATEWAY_TOKEN}`);
@@ -54,18 +84,17 @@ export default {
       {
         method: request.method,
         headers,
-        body:
-          request.method === "GET" || request.method === "HEAD"
-            ? undefined
-            : await request.arrayBuffer(),
+        body,
       },
     );
     const entry = (usage[route] ??= {
       requests: 0,
       failed: 0,
       failedStatuses: [],
+      models: {},
     });
     entry.requests += 1;
+    if (model) entry.models[model] = (entry.models[model] ?? 0) + 1;
     if (!upstream.ok) {
       entry.failed += 1;
       entry.failedStatuses.push(upstream.status);

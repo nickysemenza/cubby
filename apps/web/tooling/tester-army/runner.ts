@@ -84,6 +84,8 @@ export async function runTesterArmyLane(input: {
   build?: () => Promise<void>;
   /** Additional sanitized evidence files the services phase may write. */
   evidence?: string[];
+  /** Lane-specific runtime facts for the run manifest, such as the agent model. */
+  runtime?: Record<string, string>;
 }) {
   const startedAt = performance.now();
   let phase = "model-preflight";
@@ -167,6 +169,7 @@ export async function runTesterArmyLane(input: {
         testerArmy: "0.16.0",
         model: configuredModel(),
         effort: "medium",
+        ...input.runtime,
       },
     });
     console.log(`[tester-army] Run bundle: ${input.output}`);

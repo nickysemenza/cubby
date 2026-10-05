@@ -5,6 +5,9 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # Weekly live Tester Army import run; never a merge gate.
+  schedule:
+    - cron: "17 9 * * 1"
   workflow_dispatch:
     inputs:
       simulator_e2e:
@@ -34,7 +37,7 @@ permissions:
 jobs:
   scope:
     name: Scope
-    if: github.event_name != 'workflow_dispatch' || (!inputs.simulator_e2e && inputs.tester_army == 'none')
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -353,7 +356,7 @@ jobs:
   web-checks:
     name: Web checks
     needs: [scope, build-worker, test-web, test-postgres, db-check, test-e2e]
-    if: always() && !(github.event_name == 'workflow_dispatch' && (inputs.simulator_e2e || inputs.tester_army != 'none'))
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'push' || (!inputs.simulator_e2e && inputs.tester_army == 'none'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -611,8 +614,11 @@ jobs:
 
   tester-army-inputs:
     name: Tester Army dispatch inputs
-    if: github.event_name == 'workflow_dispatch' && inputs.tester_army != 'none'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.tester_army != 'none')
     runs-on: ubuntu-latest
+    # Inputs are empty on `schedule`, which runs the import lane.
+    outputs:
+      lane: ${{ github.event_name == 'schedule' && 'import' || inputs.tester_army }}
     steps:
       - name: Reject conflicting manual lanes
         env:
@@ -622,7 +628,7 @@ jobs:
   tester-army-web:
     name: Tester Army web (manual)
     needs: tester-army-inputs
-    if: github.event_name == 'workflow_dispatch' && (inputs.tester_army == 'web' || inputs.tester_army == 'both')
+    if: needs.tester-army-inputs.outputs.lane == 'web' || needs.tester-army-inputs.outputs.lane == 'both'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -655,9 +661,9 @@ jobs:
             artifacts/tester-army/web/*/SHA256SUMS
 
   tester-army-import:
-    name: Tester Army import (manual, live models)
+    name: Tester Army import (manual or weekly, live models)
     needs: tester-army-inputs
-    if: github.event_name == 'workflow_dispatch' && inputs.tester_army == 'import'
+    if: needs.tester-army-inputs.outputs.lane == 'import'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -665,6 +671,8 @@ jobs:
       TESTER_ARMY_CF_ACCOUNT_ID: ${{ vars.TESTER_ARMY_CF_ACCOUNT_ID }}
       TESTER_ARMY_CF_GATEWAY_ID: cubby-testing
       TESTER_ARMY_MODEL: ${{ vars.TESTER_ARMY_MODEL || 'openai/gpt-6-luna' }}
+      TESTER_ARMY_AGENT_MODEL: ${{ vars.TESTER_ARMY_AGENT_MODEL }}
+      TESTER_ARMY_AGENT_EFFORT: ${{ vars.TESTER_ARMY_AGENT_EFFORT }}
       E2E_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -693,7 +701,7 @@ jobs:
   tester-army-ios:
     name: Tester Army iOS (manual)
     needs: tester-army-inputs
-    if: github.event_name == 'workflow_dispatch' && (inputs.tester_army == 'ios' || inputs.tester_army == 'both')
+    if: needs.tester-army-inputs.outputs.lane == 'ios' || needs.tester-army-inputs.outputs.lane == 'both'
     runs-on: macos-26
     timeout-minutes: 40
     env:

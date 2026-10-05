@@ -3,6 +3,7 @@ import path from "node:path";
 import { Pool } from "pg";
 import { z } from "zod";
 import { runOrThrow } from "../../../../scripts/lib/run.ts";
+import { modelSwapSchema } from "../responses-model-swap";
 import { modelConfiguration } from "./model";
 import {
   applyServiceDefaults,
@@ -19,7 +20,9 @@ import {
  * purchase agent coordinates the import. The coupled web + agent harness
  * replaces both deterministic model peers with `live-gateway.ts`, so the
  * driver, the pi coordinator, and the web Worker's extraction and audit all
- * call real models through the synthetic testing AI Gateway.
+ * call real models through the synthetic testing AI Gateway. The agent's peer
+ * swaps in the coordinator model under test (`TESTER_ARMY_AGENT_MODEL`,
+ * `TESTER_ARMY_AGENT_EFFORT`) in place of the agent's pinned production model.
  */
 const flags = process.argv.slice(2).filter((argument) => argument !== "--");
 if (flags.some((flag) => flag !== "--services-ready"))
@@ -28,6 +31,10 @@ process.env.E2E_TELEMETRY_DISABLED = "1";
 const { output, rawOutput } = laneOutput("import");
 const tracker = childTracker();
 const usageFile = path.join(output, "gateway-usage.json");
+const agentModel = modelSwapSchema.parse({
+  model: process.env.TESTER_ARMY_AGENT_MODEL || "gpt-6-luna",
+  effort: process.env.TESTER_ARMY_AGENT_EFFORT || "high",
+});
 
 const routeUsage = z.record(
   z.string(),
@@ -35,6 +42,7 @@ const routeUsage = z.record(
     requests: z.number(),
     failed: z.number(),
     failedStatuses: z.array(z.number()),
+    models: z.record(z.string(), z.number()),
   }),
 );
 
@@ -67,7 +75,18 @@ async function runWithServices() {
   ])
     process.env[key] = database.databaseUrl;
   const live = liveGatewayWorker();
-  const harness = createWorkerdHarness(database.databaseUrl, live, live);
+  const harness = createWorkerdHarness(
+    database.databaseUrl,
+    {
+      ...live,
+      vars: {
+        ...live.vars,
+        RESPONSES_MODEL: agentModel.model,
+        RESPONSES_EFFORT: agentModel.effort,
+      },
+    },
+    live,
+  );
   const pool = new Pool({ connectionString: database.databaseUrl });
   try {
     const { url } = await harness.listen();
@@ -134,6 +153,7 @@ else
     rawOutput,
     tracker,
     evidence: [usageFile],
+    runtime: { agentModel: agentModel.model, agentEffort: agentModel.effort },
     build: () =>
       runOrThrow("pnpm", ["--dir", "apps/purchase-agent", "run", "build"], {
         ...tracker,
