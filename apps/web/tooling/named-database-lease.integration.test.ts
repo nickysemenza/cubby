@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Pool } from "pg";
+import { Client, Pool } from "pg";
 import { beforeAll, expect, it } from "vitest";
 import { leaseNamedDatabase } from "./test-database-lease";
 
@@ -70,11 +70,12 @@ it("retains writes and preserves the holder's database on a colliding acquisitio
   const { lease } = await leaseNamedDatabase(
     { adminUrl, name: databaseName, retention: "retain" },
     async ({ databaseUrl }) => {
-      const pool = new Pool({ connectionString: databaseUrl });
+      const client = new Client({ connectionString: databaseUrl });
+      await client.connect();
       try {
-        await pool.query("CREATE TABLE named_lease_probe (id integer)");
+        await client.query("CREATE TABLE named_lease_probe (id integer)");
       } finally {
-        await pool.end();
+        await client.end();
       }
     },
   );
@@ -86,14 +87,16 @@ it("retains writes and preserves the holder's database on a colliding acquisitio
         async () => undefined,
       ),
     ).rejects.toThrow(/already exists/u);
-    const pool = new Pool({ connectionString: lease.databaseUrl });
+    // Clients, not Pools, before a forced DROP: see leaseNamedDatabase.
+    const client = new Client({ connectionString: lease.databaseUrl });
+    await client.connect();
     try {
       expect(
-        (await pool.query("SELECT to_regclass('named_lease_probe') AS probe"))
+        (await client.query("SELECT to_regclass('named_lease_probe') AS probe"))
           .rows[0]?.probe,
       ).toBe("named_lease_probe");
     } finally {
-      await pool.end();
+      await client.end();
     }
   } finally {
     const admin = new Pool({ connectionString: adminUrl });

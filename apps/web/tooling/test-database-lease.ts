@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { IntegreSQLClient } from "@devoxa/integresql-client";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { Client, Pool } from "pg";
 import { migrateDatabase } from "./db-migrate";
 import { hashSchemaTemplateInputs } from "./schema-template-inputs";
 import {
@@ -232,11 +232,15 @@ export async function leaseNamedDatabase<T>(
     created = true;
     const visible = { name: options.name, databaseUrl };
     await options.onCreated?.(visible);
-    const pool = new Pool({ connectionString: databaseUrl });
+    // One Client, not a Pool: Client.end() resolves only once the socket has
+    // closed, while Pool.end() can return with a backend still connected, which
+    // a later DROP ... WITH (FORCE) then terminates as an unhandled 57P01.
+    const client = new Client({ connectionString: databaseUrl });
+    await client.connect();
     try {
-      await migrateDatabase(drizzle(pool));
+      await migrateDatabase(drizzle(client));
     } finally {
-      await pool.end();
+      await client.end();
     }
     return { lease, prepared: await setup(visible) };
   } catch (error) {
