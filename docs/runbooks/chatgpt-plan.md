@@ -106,7 +106,8 @@ text. Filters apply to the full history before taking the newest requested
 number of calls; changing the summary's date window does not restrict recent
 calls. Provider, model, and feature choices come from all non-deleted call
 history, independently of summary windows and recent-call limits. Search
-matches feature, model, or operation.
+matches feature, model, or operation. Refresh recent calls reloads both calls
+and their filter choices.
 
 OpenAI eligibility, region, revoked-session and usage-limit errors are surfaced
 with credential-shaped values scrubbed. Temporary refresh errors preserve credentials. Terminal refresh errors clear

@@ -94,6 +94,24 @@ test("recent AI calls filter transport and status before limiting rows", async (
   await expect(
     recent.getByText("synthetic.newer-gateway").first(),
   ).toBeVisible();
+  await getDb(db).execute(sql`
+    INSERT INTO "AiUsage" (
+      "runId", "feature", "provider", "model", "operation", "transport",
+      "status", "durationMs", "estimatedCost"
+    ) VALUES (${runId}, 'synthetic-new-feature', 'synthetic-new-provider',
+      'synthetic-new-model', 'synthetic.after-load', 'gateway', 'succeeded', 10, 0)
+  `);
+  await recent.getByRole("button", { name: "Refresh recent calls" }).click();
+  await expect(
+    recent
+      .getByRole("combobox", { name: "Provider" })
+      .locator("option", { hasText: "synthetic-new-provider" }),
+  ).toHaveCount(1);
+  await recent
+    .getByRole("combobox", { name: "Provider" })
+    .selectOption("synthetic-new-provider");
+  await expect(recent.getByText("synthetic.after-load")).toBeVisible();
+  await recent.getByRole("button", { name: "Clear", exact: true }).click();
   await page.screenshot({
     path: testInfo.outputPath("ai-usage.png"),
     fullPage: true,

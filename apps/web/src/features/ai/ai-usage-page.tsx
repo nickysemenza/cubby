@@ -603,6 +603,9 @@ export function AiUsagePage() {
     }),
     placeholderData: keepPreviousData,
   });
+  const refreshRecent = async () => {
+    await Promise.all([recentQuery.refetch(), filterOptionsQuery.refetch()]);
+  };
   // Hydration-stable. Whether a query's data has landed differs between the SSR
   // render and the first client render — TanStack Start's query stream races
   // React's hydration and can win in either direction. RTable gates its rows on
@@ -678,6 +681,14 @@ export function AiUsagePage() {
         value={filters.feature}
         onChange={(value) => setFilter("feature", value)}
       />
+      <Button
+        type="button"
+        variant="outline"
+        onClick={refreshRecent}
+        disabled={recentQuery.isFetching || filterOptionsQuery.isFetching}
+      >
+        Refresh recent calls
+      </Button>
       {filtered ? (
         <Button
           type="button"
@@ -774,9 +785,7 @@ export function AiUsagePage() {
           rows={recentQuery.error ? undefined : recentQuery.data}
           isLoading={recentQuery.isLoading}
           error={recentQuery.error}
-          onRetry={async () => {
-            await recentQuery.refetch();
-          }}
+          onRetry={refreshRecent}
           filtered={filtered}
           toolbar={recentToolbar}
         />
