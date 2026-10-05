@@ -1,8 +1,8 @@
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
-import { z } from "zod";
 
+import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { activity } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { copyText } from "~/lib/clipboard";
 import { formatInstant } from "~/lib/date-format";
@@ -29,34 +29,14 @@ export function ActivityRunDetail({
   variant?: "page" | "inspector";
 }) {
   const detail = useInfiniteQuery(
-    activity.detail.infiniteQueryOptions(
+    cursorQueryOptions(
+      activity.detail,
       { id, limit: 20 },
-      {
-        pageParamSchema: z.nullable(z.string()),
-        initialPageParam: null,
-        page: (input, cursor) => {
-          const next = { ...input };
-          if (cursor !== null) next.cursor = cursor;
-          return next;
-        },
-        getNextPageParam: (page) => page.nextAttemptCursor ?? undefined,
-      },
+      (page) => page.nextAttemptCursor,
     ),
   );
   const events = useInfiniteQuery(
-    activity.events.infiniteQueryOptions(
-      { id, limit: 20 },
-      {
-        pageParamSchema: z.nullable(z.string()),
-        initialPageParam: null,
-        page: (input, cursor) => {
-          const next = { ...input };
-          if (cursor !== null) next.cursor = cursor;
-          return next;
-        },
-        getNextPageParam: (page) => page.nextCursor ?? undefined,
-      },
-    ),
+    cursorQueryOptions(activity.events, { id, limit: 20 }),
   );
   const attempts = useMemo(
     () => detail.data?.pages.flatMap((page) => page.attempts) ?? [],

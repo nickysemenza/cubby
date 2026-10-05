@@ -5,7 +5,8 @@ import { z } from "zod";
 
 import { ActivityChanges } from "~/app/activity/activity-changes";
 import { listChromePage } from "~/entity/routing/entity-routes";
-import { auditLogListOptions } from "~/lib/audit-log-list";
+import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
+import { auditLog } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
 
 const searchSchema = z.object({
@@ -27,10 +28,11 @@ export const Route = createFileRoute("/_authenticated/activity")({
   }),
   loader: async ({ context, deps }) => {
     void context.queryClient.prefetchInfiniteQuery(
-      auditLogListOptions(
-        { limit: 20, entityKind: deps.entityKind, channel: deps.channel },
-        { getNextPageParam: (lastPage) => lastPage.nextCursor },
-      ),
+      cursorQueryOptions(auditLog.list, {
+        limit: 20,
+        entityKind: deps.entityKind,
+        channel: deps.channel,
+      }),
     );
   },
   head: () => ({ meta: [{ title: pageTitle("Activity") }] }),

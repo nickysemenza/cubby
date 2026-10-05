@@ -83,6 +83,9 @@ existing block. Extend the generic path when it almost fits. See
 - Errors and clipboard: `showErrorToast`, `ErrorDisplay`, `copyTextWithToast`.
 - Data: generated query catalog operations, `useActionMutation`,
   `useUpdateMutation`, `useDeletableConfig`, `useAllEntityRecords`.
+  Cursor-paged operations use `cursorQueryOptions`
+  (`integrations/tanstack-query/cursor-query-options.ts`); numeric
+  page/offset paging stays on `infiniteQueryOptions`.
 - Use `es-toolkit` collection helpers and exhaustive `ts-pattern` matches.
 
 ## Tests and tooling

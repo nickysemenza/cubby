@@ -15,8 +15,8 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { z } from "zod";
 
+import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { mcp } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatInstant } from "~/lib/date-format";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
@@ -521,16 +521,7 @@ function ActivityTable({
     [entity, toolName, window],
   );
   const query = useInfiniteQuery(
-    mcp.usageActivity.infiniteQueryOptions(activityScope, {
-      pageParamSchema: z.nullable(z.string()),
-      initialPageParam: null,
-      page: (input, cursor) => {
-        const next = { ...input };
-        if (cursor !== null) next.cursor = cursor;
-        return next;
-      },
-      getNextPageParam: (page) => page.nextCursor ?? undefined,
-    }),
+    cursorQueryOptions(mcp.usageActivity, activityScope),
   );
   const entries = useMemo(
     () => query.data?.pages.flatMap((page) => page.entries) ?? [],

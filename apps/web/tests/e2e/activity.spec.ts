@@ -1,6 +1,67 @@
-import { seedActivityHistory } from "./fixtures-photos";
-import { expectViewportBounded, gotoAuthenticatedPage } from "./e2e-helpers";
+import {
+  seedActivityHistory,
+  seedPagedActivityHistory,
+} from "./fixtures-photos";
+import {
+  expectViewportBounded,
+  gotoAuthenticatedPage,
+  uniqueName,
+} from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
+
+/**
+ * Every Runs cursor crosses its first page: the history list in both sort
+ * scopes, then one job's attempts (`nextAttemptCursor`) and events. A
+ * repeated first page, a page kept from the other scope, or a lost cursor
+ * leaves the second-page rows unreachable.
+ */
+test("Runs pages history, attempts, and events past one cursor page", async ({
+  page,
+}) => {
+  const name = uniqueName(test.info(), "Paged history");
+  const sample = await seedPagedActivityHistory(name, 22);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const table = page.getByRole("table", { name: "Runs and image jobs" });
+  const scrollUntil = async (filename: string) => {
+    await expect
+      .poll(async () => {
+        await table.hover();
+        await page.mouse.wheel(0, 4000);
+        return (await table.textContent())?.includes(filename) ?? false;
+      })
+      .toBe(true);
+  };
+  const history = `/runs?submissionId=${sample.submissionId}`;
+
+  await gotoAuthenticatedPage(page, history);
+  await expect(table).toContainText(`${name} 01.png`);
+  await expect(table).not.toContainText(`${name} 22.png`);
+  await scrollUntil(`${name} 22.png`);
+
+  await gotoAuthenticatedPage(page, `${history}&sort=oldest`);
+  await expect(table).toContainText(`${name} 22.png`);
+  await expect(table).not.toContainText(`${name} 01.png`);
+  await scrollUntil(`${name} 01.png`);
+
+  await gotoAuthenticatedPage(page, `/runs/jobs/${sample.newestJobId}`);
+  const attempt = (number: number) =>
+    page.getByText(new RegExp(`^#${number} · failed · `));
+  await expect(attempt(22)).toBeVisible();
+  await expect(attempt(1)).toHaveCount(0);
+  await page.getByRole("button", { name: "Load more attempts" }).click();
+  await expect(attempt(1)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Load more attempts" }),
+  ).toHaveCount(0);
+
+  const events = page.getByText(/synthetic\.step\.\d{2}/);
+  await expect(events).toHaveCount(20);
+  await page.getByRole("button", { name: "Load more events" }).click();
+  await expect(events).toHaveCount(22);
+  await expect(
+    page.getByRole("button", { name: "Load more events" }),
+  ).toHaveCount(0);
+});
 
 test("Runs browse flat and grouped work with a responsive inspector, while Activity shows changes", async ({
   page,

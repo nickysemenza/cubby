@@ -6,8 +6,8 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { uniqBy } from "es-toolkit";
 import { useMemo } from "react";
 
+import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { auditLog } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { auditLogListOptions } from "~/lib/audit-log-list";
 import { authClient } from "~/lib/auth-client";
 import { getErrorMessage } from "~/lib/error-utils";
 import { useHydrated } from "~/ui/hooks/useHydrated";
@@ -86,19 +86,13 @@ export function AuditLogList({
     isLoading,
     refetch,
   } = useInfiniteQuery({
-    ...auditLogListOptions(
-      {
-        entityKind,
-        entityId,
-        runId,
-        channel,
-        limit,
-      },
-      {
-        getNextPageParam: (lastPage) => lastPage.nextCursor,
-      },
-      operations.list,
-    ),
+    ...cursorQueryOptions(operations.list, {
+      entityKind,
+      entityId,
+      runId,
+      channel,
+      limit,
+    }),
     enabled: session.isAuthenticated,
   });
 

@@ -1,4 +1,4 @@
-import type { AuditJsonValue } from "@cubby/schemas/audit";
+import type { AuditJsonValue, AuditLogListOut } from "@cubby/schemas/audit";
 import { parseShortcode } from "@cubby/shared";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
@@ -8,7 +8,6 @@ import { useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { EntityIcon, entityLabel } from "~/entity/entities";
-import type { AuditLogEntry } from "~/lib/audit-log-list";
 import { countLabel } from "~/lib/pluralize";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCount } from "~/lib/utils";
@@ -31,6 +30,7 @@ import {
 
 import { HoverableTimestamp } from "../../ui/HoverableTimestamp";
 
+type AuditLogEntry = AuditLogListOut["entries"][number];
 type AuditChanges = NonNullable<AuditLogEntry["changes"]>;
 type AuditJsonObject = { [key: string]: AuditJsonValue };
 
