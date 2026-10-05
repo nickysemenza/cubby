@@ -12,6 +12,8 @@ export interface BuildSource {
   globs: readonly string[];
   /** Directories also walked on disk for Git-ignored generated inputs. */
   generatedRoots: readonly string[];
+  /** Markdown the build bundles (`?raw`, `import.meta.glob`); other docs never count. */
+  bundledMarkdown?: readonly string[];
   /** A non-file input (a build flag) that must also change the fingerprint. */
   seed?: string;
 }
@@ -80,7 +82,12 @@ export function sourceFingerprint(
   ]
     .filter((file) => !excludedSource(file))
     .filter(
-      (file) => !/\.(?:test|spec)\.[^.]+$/u.test(file) && !file.endsWith(".md"),
+      (file) =>
+        !/\.(?:test|spec)\.[^.]+$/u.test(file) &&
+        (!file.endsWith(".md") ||
+          (source.bundledMarkdown ?? []).some((glob) =>
+            path.matchesGlob(file, glob),
+          )),
     );
   return digestFiles(
     repoRoot,

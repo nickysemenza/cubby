@@ -98,9 +98,12 @@ const WEB_BUILD_SOURCE = {
     "packages/**",
     "recipebridge/**",
     "scripts/**",
+    "docs/**/*.md",
     "*.{json,jsonc,yaml,yml,toml,lock}",
     ".npmrc",
   ],
+  // The in-app docs route bundles docs/**/*.md (docs-registry.tsx).
+  bundledMarkdown: ["docs/**/*.md"],
   generatedRoots: [
     "apps/web/src",
     "apps/web/public",

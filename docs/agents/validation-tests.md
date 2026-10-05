@@ -26,7 +26,8 @@ Playwright E2E and the coupled Workers harness share a machine-wide lock
 (`/tmp/cubby-harness.lock`, `scripts/lib/harness-lock.ts`): a second suite on
 the same machine queues and logs who holds the lock instead of starving both
 of CPU. A lock whose owner process exited is reclaimed. Processes the holder
-spawns pass straight through. RTable's placeholder transition can eat clicks;
+spawns pass straight through. `test:e2e:watch` (`--ui`) skips the lock, since
+its idle session would otherwise hold it indefinitely. RTable's placeholder transition can eat clicks;
 cell-edit tests retry opening and filling as one action.
 
 Every completed E2E run produces a sanitized run bundle with its revision,

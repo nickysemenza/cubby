@@ -1,8 +1,8 @@
 import {
   mkdirSync,
   readFileSync,
-  renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -31,6 +31,8 @@ const errorCode = (error: unknown) =>
   z.object({ code: z.string() }).safeParse(error).data?.code;
 
 let held = 0;
+let acquiring: Promise<void> | undefined;
+let exitHookInstalled = false;
 
 function readOwner(dir: string): Owner | undefined {
   try {
@@ -59,26 +61,32 @@ function releaseNow(dir: string) {
     delete process.env[OWNER_ENV];
 }
 
-/** Move a dead owner's lock aside; restore it if a live owner won the race. */
+/**
+ * Remove a dead owner's lock. Only one waiter reclaims at a time, and it
+ * re-reads the owner under that mutex, so a waiter that saw the same dead
+ * owner never removes the lock a faster waiter has since taken.
+ */
 function reclaim(dir: string, dead: Owner, log: (line: string) => void) {
-  const tomb = `${dir}.stale-${process.pid}-${Date.now()}`;
+  const mutex = `${dir}.reclaim`;
   try {
-    renameSync(dir, tomb);
-  } catch {
+    mkdirSync(mutex);
+  } catch (error) {
+    if (errorCode(error) !== "EEXIST") throw error;
+    // A reclaimer that died mid-reclaim would otherwise block every waiter.
+    const stat = statSync(mutex, { throwIfNoEntry: false });
+    if (stat && Date.now() - stat.mtimeMs > 10_000)
+      rmSync(mutex, { recursive: true, force: true });
     return;
   }
-  if (readOwner(tomb)?.pid !== dead.pid) {
-    try {
-      renameSync(tomb, dir);
-    } catch {
-      // The new owner's directory is gone either way; it will notice no lock.
-    }
-    return;
+  try {
+    if (readOwner(dir)?.pid !== dead.pid || alive(dead.pid)) return;
+    rmSync(dir, { recursive: true, force: true });
+    log(
+      `[harness-lock] reclaimed ${dir} from exited pid ${dead.pid} (${dead.label})`,
+    );
+  } finally {
+    rmSync(mutex, { recursive: true, force: true });
   }
-  rmSync(tomb, { recursive: true, force: true });
-  log(
-    `[harness-lock] reclaimed ${dir} from exited pid ${dead.pid} (${dead.label})`,
-  );
 }
 
 /**
@@ -109,11 +117,44 @@ export async function acquireHarnessLock(
     readOwner(dir)?.pid === Number(inherited)
   )
     return () => {};
-  if (held > 0) {
-    held += 1;
-    return releaseOnce();
+  for (;;) {
+    if (held > 0) {
+      held += 1;
+      return releaseOnce();
+    }
+    // Another call in this process is already queued: share its hold rather
+    // than queueing behind this process's own lock.
+    if (!acquiring) {
+      acquiring = waitForLock(dir, label, pollMs, logEveryMs, log);
+      try {
+        await acquiring;
+      } finally {
+        acquiring = undefined;
+      }
+      return releaseOnce();
+    }
+    await acquiring.catch(() => {});
   }
 
+  function releaseOnce() {
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      held -= 1;
+      if (held === 0) releaseNow(dir);
+    };
+  }
+}
+
+/** Poll until this process owns the lock directory; leaves `held` at 1. */
+async function waitForLock(
+  dir: string,
+  label: string,
+  pollMs: number,
+  logEveryMs: number,
+  log: (line: string) => void,
+): Promise<void> {
   const waitingSince = Date.now();
   let lastLog = -Infinity;
   for (;;) {
@@ -128,14 +169,17 @@ export async function acquireHarnessLock(
       writeFileSync(path.join(dir, "owner.json"), JSON.stringify(owner));
       held = 1;
       process.env[OWNER_ENV] = String(process.pid);
-      process.once("exit", () => {
-        if (held > 0) releaseNow(dir);
-      });
+      if (!exitHookInstalled) {
+        exitHookInstalled = true;
+        process.once("exit", () => {
+          if (held > 0) releaseNow(dir);
+        });
+      }
       if (lastLog > -Infinity)
         log(
           `[harness-lock] acquired ${dir} for ${label} after ${Math.round((Date.now() - waitingSince) / 1000)}s`,
         );
-      return releaseOnce();
+      return;
     } catch (error) {
       if (errorCode(error) !== "EEXIST") throw error;
     }
@@ -153,15 +197,5 @@ export async function acquireHarnessLock(
       );
     }
     await pause(pollMs);
-  }
-
-  function releaseOnce() {
-    let released = false;
-    return () => {
-      if (released) return;
-      released = true;
-      held -= 1;
-      if (held === 0) releaseNow(dir);
-    };
   }
 }

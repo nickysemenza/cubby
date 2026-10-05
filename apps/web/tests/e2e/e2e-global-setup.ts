@@ -11,11 +11,15 @@ const __dirname = path.dirname(__filename);
 
 /**
  * Prepare immutable inputs before Playwright starts isolated worker runtimes.
- * The run holds the machine-wide harness lock until it ends (the returned
- * teardown), so it never shares the CPU with another workerd suite.
+ * A run holds the machine-wide harness lock until it ends (the returned
+ * teardown), so it never shares the CPU with another workerd suite. A
+ * persistent `--ui` session keeps global setup alive while idle, so it would
+ * hold the lock indefinitely; it skips the lock instead.
  */
 async function globalSetup(): Promise<() => void> {
-  const release = await acquireHarnessLock("Playwright E2E");
+  const release = process.argv.includes("--ui")
+    ? () => {}
+    : await acquireHarnessLock("Playwright E2E");
   const webRoot = path.join(__dirname, "../..");
   writeLocalWorkerdConfig(webRoot);
 

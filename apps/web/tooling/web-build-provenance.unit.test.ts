@@ -181,10 +181,16 @@ describe("web build freshness", () => {
     put(".env.local", "TOKEN=synthetic");
     put("apps/web/.dev.vars", "TOKEN=synthetic");
     put("artifacts/synthetic.json");
-    put("docs/synthetic.md");
+    put("apps/web/src/synthetic.md");
     expect(readWebBuildProvenance(root)).toMatchObject({
       sourceFresh: true,
       matchesSource: false,
     });
+  });
+  it("treats docs the in-app docs route bundles as source", () => {
+    const { root, put } = fixture();
+    writeWebBuildProvenance(root);
+    put("docs/synthetic.md");
+    expect(readWebBuildProvenance(root).details.reason).toBe("source-changed");
   });
 });

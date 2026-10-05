@@ -14,7 +14,7 @@ import {
   type BuildSource,
   sourceFingerprint,
 } from "./lib/source-fingerprint.ts";
-import { digestTree } from "./lib/tree-digest.ts";
+import { digestFiles, walkFiles } from "./lib/tree-digest.ts";
 
 interface StampedWorkerBuild {
   /** Repository-relative directory the build writes. */
@@ -34,18 +34,32 @@ export const STAMPED_WORKER_BUILDS = {
         "packages/**",
         "scripts/generator/**",
         "scripts/lib/**",
+        ".claude/skills/**",
         "*.{json,jsonc,yaml,yml,toml,lock}",
         ".npmrc",
       ],
       generatedRoots: ["apps/purchase-agent", "packages"],
+      // import-run-workflows.ts bundles these skills and their references.
+      bundledMarkdown: [
+        ".claude/skills/photo-inventory-import/**/*.md",
+        ".claude/skills/purchase-import/**/*.md",
+        ".claude/skills/product-enrichment/**/*.md",
+      ],
     },
   },
 } satisfies Record<string, StampedWorkerBuild>;
 
 export type StampedWorkerBuildName = keyof typeof STAMPED_WORKER_BUILDS;
 
+// upload-artifact omits hidden files (Vite's .vite/manifest.json) from the
+// Worker artifact CI tests consume, so they stay out of the digest too.
 const outputDigest = (repoRoot: string, build: StampedWorkerBuild) =>
-  digestTree(path.join(repoRoot, build.output));
+  digestFiles(
+    repoRoot,
+    walkFiles(path.join(repoRoot, build.output), {
+      skip: (name) => name.startsWith("."),
+    }),
+  );
 
 /** Why the build's output does not match its current source, or `undefined`. */
 export function stampedBuildStaleReason(

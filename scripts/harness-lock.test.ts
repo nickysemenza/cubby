@@ -133,3 +133,67 @@ test("a hand-made lock directory without an owner is waited on, not stolen", asy
   await waiter.saw("RELEASED");
   assert.equal(await waiter.exited, 0);
 });
+
+test("waiters racing to reclaim one dead owner never hold the lock together", async () => {
+  const lockDir = freshLockDir();
+  const crashed = holder(lockDir, 60_000);
+  await crashed.saw("ACQUIRED");
+  crashed.child.kill("SIGKILL");
+  await crashed.exited;
+  const waiters = [
+    holder(lockDir, 300),
+    holder(lockDir, 300),
+    holder(lockDir, 300),
+  ];
+  const spans = await Promise.all(
+    waiters.map(async (waiter) => [
+      await waiter.saw("ACQUIRED"),
+      await waiter.saw("RELEASED"),
+    ]),
+  );
+  spans.sort(([a = 0], [b = 0]) => a - b);
+  for (const [index, [acquired = 0]] of spans.entries()) {
+    const previousRelease = spans[index - 1]?.[1] ?? 0;
+    assert.ok(
+      acquired >= previousRelease,
+      `overlapping holds: ${JSON.stringify(spans)}`,
+    );
+  }
+  assert.equal(existsSync(lockDir), false);
+});
+
+test("two pending acquisitions in one process share the hold", async () => {
+  const lockDir = freshLockDir();
+  const first = holder(lockDir, -1);
+  await first.saw("ACQUIRED");
+  const nested = spawn(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      `import { acquireHarnessLock } from ${JSON.stringify(lockModule)};
+const [a, b] = await Promise.all([
+  acquireHarnessLock("synthetic a", { pollMs: 50 }),
+  acquireHarnessLock("synthetic b", { pollMs: 50 }),
+]);
+a(); b();
+console.log("BOTH");`,
+    ],
+    { env: { ...process.env, CUBBY_HARNESS_LOCK_DIR: lockDir } },
+  );
+  let output = "";
+  nested.stdout.on("data", (chunk) => (output += chunk));
+  nested.stderr.on("data", (chunk) => (output += chunk));
+  const exited = new Promise((resolve) => nested.on("exit", resolve));
+  while (!output.includes("waiting for")) {
+    assert.equal(nested.exitCode, null, output);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  first.child.stdin.write("release\n");
+  await first.exited;
+  const timeout = setTimeout(() => nested.kill("SIGKILL"), 10_000);
+  assert.equal(await exited, 0, output);
+  clearTimeout(timeout);
+  assert.match(output, /BOTH/);
+  assert.equal(existsSync(lockDir), false);
+});
