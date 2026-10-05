@@ -432,14 +432,21 @@ function CommandMenuInput({
       onPaste={onPaste}
       onKeyDown={(event) => {
         const input = event.currentTarget;
-        // ArrowRight expands only from the end of the text, where it would
-        // not move the caret; ArrowLeft collapses an open family first.
+        // Disclosure owns the arrows only where they would not edit text: an
+        // unmodified key, no IME composition (cmdk's own composition guard
+        // runs after this handler), and a collapsed caret at the end.
         const atEnd =
           input.selectionStart === input.value.length &&
           input.selectionEnd === input.value.length;
+        const modified =
+          event.shiftKey || event.altKey || event.metaKey || event.ctrlKey;
+        const composing =
+          event.nativeEvent.isComposing || event.keyCode === 229;
         if (
-          (event.key === "ArrowLeft" ||
-            (event.key === "ArrowRight" && atEnd)) &&
+          (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
+          atEnd &&
+          !modified &&
+          !composing &&
           onDisclose(selectedValue, event.key === "ArrowRight")
         ) {
           event.preventDefault();
@@ -704,7 +711,8 @@ function SearchGroupItem({
           {children.map((child) => (
             <CommandItem
               key={child.key}
-              value={child.key}
+              // Two open families can share a kit component's placement.
+              value={`${familyItemValue(group)}:${child.key}`}
               onSelect={() => onSelect(child.destination)}
               className="min-h-11 gap-2 pl-8 sm:min-h-9"
             >

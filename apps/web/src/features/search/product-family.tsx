@@ -31,7 +31,7 @@ export type ProductSearchGroup = Extract<
 >;
 
 interface ProductFamilyChild {
-  /** Stable and unique within the family; also the command menu's item value. */
+  /** Stable and unique within the family; the menu prefixes it with the family's. */
   key: string;
   /** Inventory children open the placement record, kit contents included. */
   destination: SearchDestination;
@@ -75,9 +75,9 @@ export function productFamilySummary(group: ProductSearchGroup) {
     );
   else if (componentPlacements === 0) parts.push("0 placements");
   if (componentPlacements > 0) parts.push("Kit contents placed");
-  // Paths join with commas: they already contain "›", and they are one fact
-  // among the "·"-separated facts.
-  if (locationPaths.length > 0) parts.push(locationPaths.join(", "));
+  // Paths join with semicolons: they already contain "›", they are one fact
+  // among the "·"-separated facts, and a location name may contain a comma.
+  if (locationPaths.length > 0) parts.push(locationPaths.join("; "));
   if (activity > 0)
     parts.push(`${activity} matching ${activity === 1 ? "record" : "records"}`);
   return parts.join(" · ");

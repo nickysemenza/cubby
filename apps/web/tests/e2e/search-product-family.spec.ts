@@ -76,7 +76,7 @@ test("the search page and command menu open the same Product family", async ({
   );
   await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
   const summary =
-    /1 direct placement · Kit contents placed · .+, .+ · 3 matching records$/;
+    /1 direct placement · Kit contents placed · .+; .+ · 3 matching records$/;
   const pageSummary = await page.getByText(summary).textContent();
   await page.getByRole("button", { name: toggleName }).click();
   const pageFamily = page.getByRole("group", { name: regionName });
@@ -116,11 +116,36 @@ test("the search page and command menu open the same Product family", async ({
   await expect(parent).toHaveAttribute("aria-selected", "true");
   // Both surfaces word the family identically (one shared formatter).
   await expect(palette.getByText(summary)).toHaveText(pageSummary!);
-  // Focus stays in the input: the arrows disclose the selected family.
+  // Focus stays in the input: the arrows disclose the selected family, but
+  // only from a collapsed caret at the end of the text.
   await input.press("ArrowRight");
   await expect(parent).toHaveAttribute("aria-expanded", "true");
+  const caret = () =>
+    input.evaluate((element: HTMLInputElement) => [
+      element.selectionStart,
+      element.selectionEnd,
+    ]);
+  await input.evaluate((element: HTMLInputElement) =>
+    element.setSelectionRange(3, 3),
+  );
+  await input.press("ArrowLeft");
+  expect(await caret()).toEqual([2, 2]);
+  await input.press("Shift+ArrowLeft");
+  expect(await caret()).toEqual([1, 2]);
+  await expect(parent).toHaveAttribute("aria-expanded", "true");
+  await input.evaluate((element: HTMLInputElement) =>
+    element.setSelectionRange(element.value.length, element.value.length),
+  );
+  await input.press("Shift+ArrowLeft");
+  await expect(parent).toHaveAttribute("aria-expanded", "true");
+  await input.evaluate((element: HTMLInputElement) =>
+    element.setSelectionRange(element.value.length, element.value.length),
+  );
   await input.press("ArrowLeft");
   await expect(parent).toHaveAttribute("aria-expanded", "false");
+  await input.evaluate((element: HTMLInputElement) =>
+    element.setSelectionRange(element.value.length, element.value.length),
+  );
   await input.press("ArrowRight");
   const menuFamily = palette.getByRole("group", { name: regionName });
   await expect(menuFamily).toBeVisible();
@@ -140,6 +165,23 @@ test("the search page and command menu open the same Product family", async ({
   await input.press("ArrowDown");
   await input.press("Enter");
   await expect(page).toHaveURL(new RegExp(`/inventory/${direct.id}$`));
+
+  // Pointer disclosure, and a kit content opens its own placement record.
+  const pointer = await openCommandPalette(page);
+  await pointer.getByPlaceholder("Search or jump to a page…").fill(name);
+  await pointer.getByRole("button", { name: toggleName }).click();
+  const collapse = pointer.getByRole("button", {
+    name: new RegExp(`^Collapse ${escapeRegExp(regionName)}$`),
+  });
+  await expect(collapse).toHaveAttribute("aria-expanded", "true");
+  await collapse.click();
+  await expect(pointer.getByRole("group", { name: regionName })).toHaveCount(0);
+  await pointer.getByRole("button", { name: toggleName }).click();
+  await pointer
+    .getByRole("group", { name: regionName })
+    .getByRole("option", { name: new RegExp(escapeRegExp(kitContent.id)) })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/inventory/${kitContent.id}$`));
 
   // The menu's overflow row hands off to the full page for the same query.
   const again = await openCommandPalette(page);
