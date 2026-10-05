@@ -116,6 +116,19 @@ See also the image operational passes at the end of this file.
 
 ### Import and resume orders reliably
 
+- 🤔 **High priority: bound Gmail discovery memory and resume progress.**
+  `purchase-import/gmail/sync.ts` retains every message and attachment before
+  `hourly.ts` persists results and advances the cursor; a page-size limit does
+  not bound the whole sync. A synthetic 32-message scan with 4 MiB attachments
+  retains 170.7 MiB of encoded payloads, beyond a Worker's 128 MB memory limit.
+  Persist bounded batches and attachment references so an interrupted scan
+  resumes without downloading the whole backlog again. Evaluate Cloudflare
+  Workflows with the [durable-background-work proposal](#infra--deploy):
+  durable steps and retry waits can help, but each step still needs bounded
+  memory and small results (store attachment bytes in R2). Prove interruption,
+  duplicate delivery, expired Gmail history, and cursor correctness before
+  replacing the current path.
+
 - ⏳ **Conditional purchase-import browser extension.** Promote only if the
   Apple-event browser bridge repeatedly fails to background its window, cannot
   avoid Chrome's JavaScript-from-Apple-Events setting, or cannot provide
@@ -618,8 +631,10 @@ spanner"` → `adjustable wrench` (product); `"wet dry vac"` → `shop vacuum`
   the Queues pause-delivery API from the toggle or retry with long delays.
 
 - 🤔 **Evaluate Cloudflare Workflows across durable background work.** Start
-  with vendor Gmail discovery: one instance per Run, bounded pages, a
-  persisted cursor, and timed waits on AI Gateway 429s. Define how a Run
+  with the high-priority Gmail discovery memory repair above and vendor mail
+  search: decide instance identity for mailbox discovery; one instance per Run
+  for vendor search, bounded pages, a persisted cursor, and timed waits on AI
+  Gateway 429s. Define how a Run
   exposes instance, step, retry time, attempts, and failure chain through the
   generic detail view. Test version changes, cancellation, duplicate delivery,
   and exhaustion before migrating; keep the queue path until a Workflow can

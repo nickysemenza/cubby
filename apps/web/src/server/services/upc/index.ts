@@ -116,7 +116,7 @@ export class UpcLookupService {
         if (outcome.status === "found") {
           result.set(upc, toResponse(upc, outcome));
         } else if (outcome.status === "error") {
-          failure = new Error("UPC provider is unavailable");
+          failure = outcome.error;
           failedUpcs.push(upc);
         }
       }

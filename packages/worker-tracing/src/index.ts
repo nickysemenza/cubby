@@ -47,7 +47,12 @@ export {
   type TraceSpan,
   wrapCfSpan,
 } from "./span";
-export { createLogger, type Logger, type LogLevel } from "./log";
+export {
+  createLogger,
+  type Logger,
+  type LogLevel,
+  originalLoggedError,
+} from "./log";
 
 /** The span surface `withSpan` callers use. */
 export type WorkerSpan = TraceSpan;

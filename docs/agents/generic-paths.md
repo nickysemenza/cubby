@@ -64,8 +64,23 @@ existing block. Extend the generic path when it almost fits. See
   (`server/errors/db-errors.ts`) walk Drizzle's `cause` chain.
 - Logging and tracing: `createLogger`, `withSpan`/span core
   (`@cubby/worker-tracing`); no raw `console.*` in server or Worker code.
+  The logger serializes native Error messages, stacks, causes, and diagnostic
+  fields into structured logs, with structural bounds and cycle/getter markers.
+  Credential-shaped values are scrubbed; SQL and upstream response diagnostics
+  remain visible. `scrubErrorMessage` comes from
+  `@cubby/worker-tracing/scrub-error-message`; the web helper re-exports it.
+  At the console sink, regression checks assert serialized diagnostic values,
+  not native Error instances. When changing this boundary, search every consumer
+  assertion across unit and integration tests; capture/callback boundaries still
+  receive native errors.
 - Retries and waiting: `sleep`, `retryWithBackoff`, `pollUntil`
   (`@cubby/shared/retry`).
+  Provider failures retain HTTP status, full upstream response bodies, and
+  original causes after bounded retries. UPC partial failures preserve successful
+  lookups while carrying the failed provider diagnostic through the batch error.
+- Purchase-agent proxy: `server/purchase-import/agent-proxy.ts` forwards the
+  caller's abort signal to its Durable Object request. Internal disconnects still
+  propagate as failures; cancellation does not replace the Run's abort command.
 - Digests, encodings, and casing (browser, Worker, and scripts alike):
   `sha256Hex`, the stable row-id `sha256Uuid` (`@cubby/shared/sha256`);
   `encodeBase64`, `encodeBase64Url`, `decodeBase64Url`, `decodeBase64UrlText`

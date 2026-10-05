@@ -1,3 +1,4 @@
+import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { z } from "zod";
 
 const errorCauseSchema = z.object({
@@ -41,27 +42,7 @@ export const savedSentryEventId = (message: string): string | null =>
 export const CLOUDFLARE_OBSERVABILITY_URL =
   "https://dash.cloudflare.com/?to=/:account/workers-and-pages/observability";
 
-/** The only audience is the trusted household, so SQL text and parameters (including
- * Drizzle's `Failed query:` wrapper) are surfaced verbatim, bounded to 2000 chars.
- * Only credential-shaped values are redacted below. */
-export function scrubErrorMessage(message: string): string {
-  return message
-    .replace(
-      /\b(authorization|cookie|set-cookie)\s*:\s*[^\r\n]+/giu,
-      "$1: [REDACTED]",
-    )
-    .replace(/\b([a-z][a-z\d+.-]*:\/\/)[^\s/@]+:[^\s/@]+@/giu, "$1[REDACTED]@")
-    .replace(/\b(Bearer|Basic)\s+[\w.+/=-]+/giu, "$1 [REDACTED]")
-    .replace(
-      /([?&](?:key|api_?key|token|access_token|refresh_token|password|secret|signature|x-amz-signature)=)[^\s&#]*/giu,
-      "$1[REDACTED]",
-    )
-    .replace(
-      /\b((?:password|passwd|secret|api_?key|token|access_token|refresh_token|authorization|cookie|set-cookie)["']?\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}]+)/giu,
-      "$1[REDACTED]",
-    )
-    .slice(0, 2000);
-}
+export { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 
 const errorNodeSchema = z.object({
   name: z.string().optional().catch(undefined),

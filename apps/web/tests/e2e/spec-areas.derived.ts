@@ -340,6 +340,12 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/locations.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/settings.tsx",
   ],
+  "route-status.spec.ts": [
+    "apps/web/src/app/recommendations/**",
+    "apps/web/src/routes/_authenticated/$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/connections.tsx",
+    "apps/web/src/routes/_authenticated/recommendations.workbench.tsx",
+  ],
   "shelf-triage.spec.ts": [
     "apps/web/src/routes/_authenticated/inventory.triage.tsx",
     "apps/web/src/routes/_authenticated/products.index.tsx",
