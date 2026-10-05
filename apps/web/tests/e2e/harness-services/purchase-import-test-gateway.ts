@@ -126,7 +126,10 @@ export default {
       request.headers.get("cf-aig-metadata") ?? "{}",
     ) as { feature?: string };
     const feature = metadata.feature ?? "unknown";
-    if (url.pathname === "/workers-ai/run/typesafe/jev") {
+    if (
+      url.pathname === "/workers-ai/run/typesafe/jev" ||
+      url.pathname === "/workers-ai/run/@cf/cloudflare/clef"
+    ) {
       const choice = jevChoice(feature, await request.json());
       calls.push({ feature, matched: choice.label });
       return Response.json({ result: choice.response });

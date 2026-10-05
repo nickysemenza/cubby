@@ -512,7 +512,7 @@ not stored values: existing selections remain visible and can be removed even
 when another field changes and they no longer match the candidate query.
 
 `control.suggest: { basis, mode }` marks a field whose value the decision tier
-(Jev) infers from named sibling fields, so the browser editor can auto-fill it
+(Jev/Clef trial) infers from named sibling fields, so the browser editor can auto-fill it
 while untouched and offer a one-tap apply once a value already exists. `basis`
 names model field keys on the same entity only — never an `intents.editorFields`
 pseudo field, since detail/table/bulk surfaces have no editor-field data to

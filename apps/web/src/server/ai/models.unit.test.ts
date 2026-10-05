@@ -67,6 +67,19 @@ describe("the registry is the routing seam", () => {
 });
 
 describe("AI model pricing", () => {
+  it("prices Clef input and free output under the actual Cloudflare provider", () => {
+    expect(
+      estimateAiUsageCostUsd("cloudflare", "@cf/cloudflare/clef", {
+        inputTokens: 1_000_000,
+        outputTokens: 50,
+      }),
+    ).toBeCloseTo(0.24, 6);
+    expect(
+      estimateAiUsageCostUsd("typesafe", "@cf/cloudflare/clef", {
+        inputTokens: 1_000_000,
+      }),
+    ).toBeNull();
+  });
   it("estimates text-embedding-3-small usage from input tokens", () => {
     expect(
       estimateAiUsageCostUsd("openai", "text-embedding-3-small", {

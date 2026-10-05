@@ -12,7 +12,7 @@ export const SENTRY_IGNORED_ERRORS: (string | RegExp)[] = [
   // AI Gateway "Wholesale Rate limited" (HTTP 429) after `src/server/ai/jev.ts`
   // exhausts its retries. Fired 1k+ times in 30 days; expected backpressure —
   // the client already treats suggestion failures as silent.
-  /^Jev request failed \(429\)/,
+  /^Decision request failed \(429\)/,
   // Vectorize rate limit surfaced inside the embedding background task.
   // Fired 1k+ times in 30 days; a dedicated backoff is a separate follow-up.
   /VECTOR_UPSERT_ERROR \(code = 40041\)/,

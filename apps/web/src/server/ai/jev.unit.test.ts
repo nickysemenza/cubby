@@ -1,5 +1,5 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FIELD_SUGGESTION_FEATURE } from "./features";
 import {
@@ -36,7 +36,12 @@ function jevFor(choice: string, probabilities: Record<string, number>) {
   return port;
 }
 
+beforeEach(() => {
+  vi.spyOn(Math, "random").mockReturnValue(0.25);
+});
+
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -275,51 +280,114 @@ describe("runJevChoice", () => {
     ).rejects.toThrow("do not normalize");
   });
 
-  it("posts the input to the gateway's Workers AI run route and unwraps its envelope", async () => {
-    // The route is `workers-ai/run/<model>`, not `workers-ai/<model>` (which
-    // the gateway rejects with "no route"), and the answer comes back under
-    // `result` — both verified against the live gateway on 2026-09-18.
-    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
-    const { runJevChoice: devRunJevChoice } = await import("./jev");
-    const sent: { url: string; init: RequestInit | undefined }[] = [];
-    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
-      sent.push({ url: String(url), init });
-      return Promise.resolve(
-        new Response(
-          JSON.stringify({
-            state: "Completed",
-            result: answerFor("c0", { c0: 0.9, c1: 0.05, none: 0.05 }),
-            gatewayMetadata: { keySource: "Unified" },
-          }),
-        ),
+  it.each([
+    { random: 0.25, model: "typesafe/jev", selector: undefined },
+    { random: 0.75, model: "@cf/cloudflare/clef", selector: "clef" },
+  ])(
+    "posts the selected $model to its Workers AI run route",
+    async ({ random, model, selector }) => {
+      // The route is `workers-ai/run/<model>`, not `workers-ai/<model>` (which
+      // the gateway rejects with "no route"), and the answer comes back under
+      // `result` — both verified against the live gateway on 2026-09-18.
+      vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+      vi.spyOn(Math, "random").mockReturnValue(random);
+      vi.resetModules();
+      const { runJevChoice: devRunJevChoice } = await import("./jev");
+      const sent: { url: string; init: RequestInit | undefined }[] = [];
+      vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+        sent.push({ url: String(url), init });
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              state: "Completed",
+              result: answerFor("c0", { c0: 0.9, c1: 0.05, none: 0.05 }),
+              gatewayMetadata: { keySource: "Unified" },
+            }),
+          ),
+        );
+      });
+
+      const result = await devRunJevChoice({
+        ...base,
+        subject: "pick red",
+        choices: ["red", "blue"],
+      });
+
+      expect(result).toEqual({
+        selectedIndex: 0,
+        confidence: "high",
+        probability: 0.9,
+        ranked: [
+          { index: 0, probability: 0.9 },
+          { index: 1, probability: 0.05 },
+        ],
+      });
+      const [call] = sent;
+      expect(call?.url).toMatch(new RegExp(`/workers-ai/run/${model}$`));
+      expect(new Headers(call?.init?.headers).get("cf-aig-authorization")).toBe(
+        "Bearer dev-token",
       );
-    });
+      expect(JSON.parse(String(call?.init?.body))).toMatchObject({
+        state: "pick red",
+      });
+      expect(JSON.parse(String(call?.init?.body)).model).toBe(selector);
+    },
+  );
 
-    const result = await devRunJevChoice({
+  it("keeps Clef selected through a throttled retry even when the next coin flip changes", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.75);
+    vi.resetModules();
+    const { runJevChoice: request } = await import("./jev");
+    const sent: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      sent.push(String(url));
+      random.mockReturnValue(0.25);
+      return sent.length === 1
+        ? new Response("Rate limited", { status: 429 })
+        : Response.json({ result: answerFor("c0", { c0: 0.9, none: 0.1 }) });
+    });
+    await Promise.all([
+      expect(request({ ...base, choices: ["one"] })).resolves.toMatchObject({
+        selectedIndex: 0,
+      }),
+      vi.runAllTimersAsync(),
+    ]);
+    expect(sent).toHaveLength(2);
+    expect(sent.every((url) => url.endsWith("/run/@cf/cloudflare/clef"))).toBe(
+      true,
+    );
+  });
+
+  it("isolates and reuses each model's cached choice for the same input", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.25);
+    vi.resetModules();
+    const { runJevChoice: request } = await import("./jev");
+    const sent: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      sent.push(String(url));
+      const clef = String(url).endsWith("/run/@cf/cloudflare/clef");
+      return Response.json({
+        result: clef
+          ? answerFor("c1", { c0: 0.05, c1: 0.9, none: 0.05 })
+          : answerFor("c0", { c0: 0.9, c1: 0.05, none: 0.05 }),
+      });
+    });
+    const input = {
       ...base,
-      subject: "pick red",
+      feature: FIELD_SUGGESTION_FEATURE,
+      subject: `synthetic cache trial ${crypto.randomUUID()}`,
       choices: ["red", "blue"],
-    });
-
-    expect(result).toEqual({
-      selectedIndex: 0,
-      confidence: "high",
-      probability: 0.9,
-      ranked: [
-        { index: 0, probability: 0.9 },
-        { index: 1, probability: 0.05 },
-      ],
-    });
-    const [call] = sent;
-    expect(call?.url).toBe(
-      "https://gateway.ai.cloudflare.com/v1/9f10f078d35d86c78dedece2300a6b88/cubby/workers-ai/run/typesafe/jev",
-    );
-    expect(new Headers(call?.init?.headers).get("cf-aig-authorization")).toBe(
-      "Bearer dev-token",
-    );
-    expect(JSON.parse(String(call?.init?.body))).toMatchObject({
-      state: "pick red",
-    });
+    };
+    expect((await request(input)).selectedIndex).toBe(0);
+    random.mockReturnValue(0.75);
+    expect((await request(input)).selectedIndex).toBe(1);
+    random.mockReturnValue(0.25);
+    expect((await request(input)).selectedIndex).toBe(0);
+    random.mockReturnValue(0.75);
+    expect((await request(input)).selectedIndex).toBe(1);
+    expect(sent).toHaveLength(2);
   });
 });

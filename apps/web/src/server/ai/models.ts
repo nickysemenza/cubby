@@ -14,7 +14,7 @@ interface AiTokenUsage {
   cacheWriteTokens?: number | null;
 }
 
-const aiProvider = z.enum(["anthropic", "openai", "typesafe"]);
+const aiProvider = z.enum(["anthropic", "openai", "typesafe", "cloudflare"]);
 type AiProvider = z.infer<typeof aiProvider>;
 
 /**
@@ -51,11 +51,15 @@ interface EmbeddingAiModelConfig {
 
 /**
  * A closed-set decision model on the gateway's native Workers AI route
- * (`ai/jev.ts`); priced from the crate catalog like a chat model.
+ * (`ai/jev.ts`); priced from the crate catalog or an explicit registry rate.
  */
 interface DecisionAiModelConfig {
   role: "decision";
-  provider: "typesafe";
+  provider: "typesafe" | "cloudflare";
+  /** Clef requires this selector in addition to its route model id. */
+  selector?: string;
+  /** Workers AI models absent from the pinned Rust catalog are priced here. */
+  pricing?: EmbeddingAiModelConfig["pricing"];
 }
 
 type AiModelConfig =
@@ -75,7 +79,7 @@ export type SupportedChatModel = z.infer<typeof supportedChatModel>;
 const supportedEmbeddingModel = z.enum(["text-embedding-3-small"]);
 export type SupportedEmbeddingModel = z.infer<typeof supportedEmbeddingModel>;
 
-const supportedDecisionModel = z.enum(["typesafe/jev"]);
+const supportedDecisionModel = z.enum(["typesafe/jev", "@cf/cloudflare/clef"]);
 export type SupportedDecisionModel = z.infer<typeof supportedDecisionModel>;
 
 const supportedAiModel = z.enum([
@@ -90,11 +94,19 @@ export const FAST_MODEL = "gpt-6-luna" satisfies SupportedChatModel;
 export const AUDIT_RECOVERY_MODEL =
   "claude-opus-5-5" satisfies SupportedChatModel;
 /**
- * The decision tier's model: TypeSafe's Jev, a closed-set decision model
+ * The decision tier's baseline model: TypeSafe's Jev, a closed-set decision model
  * served by Workers AI over its native route rather than a chat one, so it
  * is not a {@link SupportedChatModel} and takes no chat adapter.
  */
 export const DECISION_MODEL = "typesafe/jev" satisfies SupportedDecisionModel;
+export const CLEF_MODEL =
+  "@cf/cloudflare/clef" satisfies SupportedDecisionModel;
+/** Set to 0 to return all decisions to Jev, or 1 to send all to Clef. */
+const CLEF_TRAFFIC_SHARE = 0.5;
+
+export function selectDecisionModel(): SupportedDecisionModel {
+  return Math.random() < 1 - CLEF_TRAFFIC_SHARE ? DECISION_MODEL : CLEF_MODEL;
+}
 /** Every model a feature record can name. */
 export type AiModel = SupportedChatModel | SupportedDecisionModel;
 
@@ -155,6 +167,13 @@ const AI_MODEL_REGISTRY = {
   "typesafe/jev": {
     role: "decision",
     provider: "typesafe",
+  },
+  "@cf/cloudflare/clef": {
+    role: "decision",
+    provider: "cloudflare",
+    selector: "clef",
+    // https://developers.cloudflare.com/workers-ai/models/clef/ (2026-10-05).
+    pricing: { inputUsdPerMillion: 0.24, outputUsdPerMillion: 0 },
   },
 } as const satisfies Record<SupportedAiModel, AiModelConfig>;
 
@@ -245,6 +264,12 @@ export function getEmbeddingModelConfig(
   return AI_MODEL_REGISTRY[model];
 }
 
+export function getDecisionModelConfig(
+  model: SupportedDecisionModel,
+): DecisionAiModelConfig {
+  return AI_MODEL_REGISTRY[model];
+}
+
 export function parseSupportedEmbeddingModel(
   model: string,
 ): SupportedEmbeddingModel {
@@ -261,7 +286,8 @@ export function parseSupportedEmbeddingModel(
  * What one recorded call cost, or `null` when the model is unknown to the
  * registry, the recorded provider disagrees with it, no token counts were
  * reported, or the catalog cannot price the exact token classes. Chat and
- * decision base prices come from the catalog. Chat cache tokens use the
+ * decision base prices come from the catalog unless a Workers AI rate is
+ * declared in the registry. Chat cache tokens use the
  * provider-specific rates in the registry; an adapter-reported exact total
  * still wins when the usage row is recorded. The embedding row is priced here.
  */
@@ -277,7 +303,7 @@ export function estimateAiUsageCostUsd(
 
   const inputTokens = finiteTokenCount(usage.inputTokens);
   const outputTokens = finiteTokenCount(usage.outputTokens);
-  if (config.role === "embedding") {
+  if ("pricing" in config) {
     return (
       (inputTokens / 1_000_000) * config.pricing.inputUsdPerMillion +
       (outputTokens / 1_000_000) * config.pricing.outputUsdPerMillion
@@ -301,5 +327,10 @@ export function estimateAiUsageCostUsd(
 
 /** Ids the crate catalog is expected to price — the membership guard. */
 export function catalogedModels(): AiModel[] {
-  return [...supportedChatModel.options, ...supportedDecisionModel.options];
+  return [
+    ...supportedChatModel.options,
+    ...supportedDecisionModel.options.filter(
+      (model) => !getDecisionModelConfig(model).pricing,
+    ),
+  ];
 }
