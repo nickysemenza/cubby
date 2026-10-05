@@ -62,21 +62,22 @@ describe("AiUsage accounting", () => {
       vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");
       vi.spyOn(Math, "random").mockReturnValue(random);
       vi.resetModules();
-      vi.stubGlobal("fetch", async () =>
-        Response.json({
-          result: {
-            answers: {
-              selection: {
-                type: "choice",
-                choice: "c0",
-                confidence: 0.9,
-                probabilities: { c0: 0.9, none: 0.1 },
-              },
+      vi.stubGlobal("fetch", async () => {
+        const answer = {
+          answers: {
+            selection: {
+              type: "choice",
+              choice: "c0",
+              confidence: 0.9,
+              probabilities: { c0: 0.9, none: 0.1 },
             },
-            usage: { input_tokens: 100, output_tokens: 0 },
           },
-        }),
-      );
+          usage: { input_tokens: 100, output_tokens: 0 },
+        };
+        return Response.json(
+          provider === "cloudflare" ? answer : { result: answer },
+        );
+      });
       const { runJevChoice } = await import("./jev");
       const runId = await ensureRun(ctx.db, ctx.actor, {
         purpose: "ai_suggest",

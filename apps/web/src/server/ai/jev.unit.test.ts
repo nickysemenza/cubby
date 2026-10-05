@@ -295,9 +295,8 @@ describe("runJevChoice", () => {
   ])(
     "posts the selected $model to its Workers AI run route",
     async ({ random, model, selector }) => {
-      // The route is `workers-ai/run/<model>`, not `workers-ai/<model>` (which
-      // the gateway rejects with "no route"), and the answer comes back under
-      // `result` — both verified against the live gateway on 2026-09-18.
+      // Jev wraps its answer in `result`; Clef returns the answer directly.
+      // Both shapes were verified against the live gateway on 2026-10-05.
       vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
       vi.spyOn(Math, "random").mockReturnValue(random);
       vi.resetModules();
@@ -307,11 +306,14 @@ describe("runJevChoice", () => {
         sent.push({ url: String(url), init });
         return Promise.resolve(
           new Response(
-            JSON.stringify({
-              state: "Completed",
-              result: answerFor("c0", { c0: 0.9, c1: 0.05, none: 0.05 }),
-              gatewayMetadata: { keySource: "Unified" },
-            }),
+            JSON.stringify(
+              selector
+                ? answerFor("c0", { c0: 0.9, c1: 0.05, none: 0.05 })
+                : {
+                    state: "Completed",
+                    result: answerFor("c0", { c0: 0.9, c1: 0.05, none: 0.05 }),
+                  },
+            ),
           ),
         );
       });
@@ -343,6 +345,20 @@ describe("runJevChoice", () => {
     },
   );
 
+  it.each([{ answers: {} }, answerFor("c0", { c0: 1.1, none: -0.1 })])(
+    "rejects malformed flat Clef answers: %j",
+    async (response) => {
+      vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+      vi.spyOn(Math, "random").mockReturnValue(0.75);
+      vi.resetModules();
+      const { runJevChoice: request } = await import("./jev");
+      vi.stubGlobal("fetch", async () => Response.json(response));
+      await expect(request({ ...base, choices: ["one"] })).rejects.toThrow(
+        "Decision model returned an invalid choice response.",
+      );
+    },
+  );
+
   it("keeps Clef selected through a throttled retry even when the next coin flip changes", async () => {
     vi.useFakeTimers();
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
@@ -355,7 +371,7 @@ describe("runJevChoice", () => {
       random.mockReturnValue(0.25);
       return sent.length === 1
         ? new Response("Rate limited", { status: 429 })
-        : Response.json({ result: answerFor("c0", { c0: 0.9, none: 0.1 }) });
+        : Response.json(answerFor("c0", { c0: 0.9, none: 0.1 }));
     });
     await Promise.all([
       expect(request({ ...base, choices: ["one"] })).resolves.toMatchObject({
@@ -378,11 +394,11 @@ describe("runJevChoice", () => {
     vi.stubGlobal("fetch", async (url: string) => {
       sent.push(String(url));
       const clef = String(url).endsWith("/run/@cf/cloudflare/clef");
-      return Response.json({
-        result: clef
+      return Response.json(
+        clef
           ? answerFor("c1", { c0: 0.05, c1: 0.9, none: 0.05 })
-          : answerFor("c0", { c0: 0.9, c1: 0.05, none: 0.05 }),
-      });
+          : { result: answerFor("c0", { c0: 0.9, c1: 0.05, none: 0.05 }) },
+      );
     });
     const input = {
       ...base,
