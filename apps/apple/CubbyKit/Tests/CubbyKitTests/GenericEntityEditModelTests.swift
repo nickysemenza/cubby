@@ -247,6 +247,35 @@ struct GenericEntityEditModelTests {
         #expect(requests.first?.body == ["name": "Bin 9", "type": "area"])
     }
 
+    /// A failed read leaves no original to save; retrying the read must clear its error so the
+    /// editor doesn't present the stale read failure as a refused save.
+    @Test func retriedLoadClearsTheEarlierReadFailure() async throws {
+        defer { EditStub.handler.withLock { $0 = nil } }
+        let productRead = try Fixtures.data(named: "product-get.json")
+        let attempts = Mutex(0)
+        // Reads carry no body, so this stub skips `capture`'s body recording.
+        EditStub.handler.withLock { handler in
+            handler = { _ in
+                let attempt = attempts.withLock { count in
+                    count += 1
+                    return count
+                }
+                return attempt == 1
+                    ? (500, Data(#"{"code":"INTERNAL","message":"upstream unavailable"}"#.utf8))
+                    : (200, productRead)
+            }
+        }
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.product], mode: .update(id: "PRD-2345"), client: try makeClient())
+        await model.load()
+        #expect(model.original == nil)
+        #expect(model.bannerError != nil)
+        #expect(!model.canSave)
+        await model.load()
+        #expect(model.original != nil)
+        #expect(model.bannerError == nil)
+    }
+
     @Test func validationRejectionLandsOnTheFieldAndKeepsTheDraft() async throws {
         defer { EditStub.handler.withLock { $0 = nil } }
         _ = capture { _ in

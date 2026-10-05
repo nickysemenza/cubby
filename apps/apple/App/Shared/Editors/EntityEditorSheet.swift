@@ -73,7 +73,12 @@ struct EntityEditorSheet: View {
     var body: some View {
         NavigationStack {
             Group {
-                if let model {
+                if let model, let failure = loadFailure(model) {
+                    // A failed update read is not a refused save: offer a load retry.
+                    LoadFailureView(title: "Couldn't load \(descriptor.singular)", message: failure) {
+                        await model.load()
+                    }
+                } else if let model {
                     form(model)
                 } else {
                     LoadingIndicator.screen()
@@ -111,6 +116,12 @@ struct EntityEditorSheet: View {
         .task(id: editorIdentity) { await setup() }
     }
 
+    /// The update editor's read failed: there is no loaded record to edit or save.
+    private func loadFailure(_ model: GenericEntityEditModel) -> String? {
+        guard !model.isCreate, model.original == nil, !model.isLoading else { return nil }
+        return model.bannerError
+    }
+
     private var title: String {
         if let context { return context.title }
         switch mode {
@@ -143,7 +154,7 @@ struct EntityEditorSheet: View {
                     .foregroundStyle(.secondary)
                 }
             }
-            if let banner = model.bannerError {
+            if let banner = model.bannerError, loadFailure(model) == nil {
                 Section {
                     ActionFailureNotice(message: banner, canRetry: model.canSave && !isSaving) {
                         startSave()

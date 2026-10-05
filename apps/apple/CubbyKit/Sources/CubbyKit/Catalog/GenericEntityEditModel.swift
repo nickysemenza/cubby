@@ -77,6 +77,7 @@ public final class GenericEntityEditModel {
     public func load() async {
         guard case .update(let id) = mode, !isLoading else { return }
         isLoading = true
+        bannerError = nil
         defer { isLoading = false }
         do {
             guard let row = try await client.row(descriptor, id: id) else {
