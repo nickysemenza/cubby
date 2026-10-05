@@ -1,10 +1,14 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobKind } from "@cubby/schemas/image-processing";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { entityAttachment } from "~/server/db/schema";
-import { getDb, withTransactionDatabase } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  notDeleted,
+  withTransactionDatabase,
+} from "~/server/repo/database-helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 
 import {
@@ -55,7 +59,7 @@ export async function persistImageProcessingSubmission(
       .where(
         and(
           eq(entityAttachment.imageId, imageId),
-          isNull(entityAttachment.deletedAt),
+          notDeleted(entityAttachment),
         ),
       );
     const labelOnly =

@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -7,7 +7,11 @@ import {
   imageProcessingOrphan,
 } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
-import { getDb, withTransaction } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  notDeleted,
+  withTransaction,
+} from "~/server/repo/database-helpers";
 
 export async function recordImageDescriptionInput(
   db: Database,
@@ -63,7 +67,7 @@ export async function reserveImageAnalysisInput(
           gt(imageProcessingJob.leaseExpiresAt, sql`now()`),
           eq(image.status, "UPLOADED"),
           eq(image.sha256, imageProcessingJob.sourceContentHash),
-          isNull(image.deletedAt),
+          notDeleted(image),
         ),
       )
       .for("update");
@@ -103,7 +107,7 @@ export async function retainImageAnalysisInput(
           gt(imageProcessingJob.leaseExpiresAt, sql`now()`),
           eq(image.status, "UPLOADED"),
           eq(image.sha256, imageProcessingJob.sourceContentHash),
-          isNull(image.deletedAt),
+          notDeleted(image),
         ),
       )
       .for("update");

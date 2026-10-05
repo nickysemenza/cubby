@@ -4,11 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { suggestionDismissal } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-
-const toHex = (buffer: ArrayBuffer) =>
-  [...new Uint8Array(buffer)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+import { sha256Hex } from "~/server/semantic/hash";
 
 /**
  * Versioned positional input deliberately avoids free-form JSON key ordering.
@@ -22,7 +18,7 @@ export async function suggestionCandidateKey(
   const tuple = [kind, ...values]
     .map((value) => String(value ?? ""))
     .join("\u001f");
-  return `v1:${toHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(tuple)))}`;
+  return `v1:${await sha256Hex(tuple)}`;
 }
 
 export async function dismissSuggestion(

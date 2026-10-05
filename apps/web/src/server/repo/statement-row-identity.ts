@@ -1,3 +1,5 @@
+import { sha256Hex } from "~/server/semantic/hash";
+
 import { cents } from "./money";
 
 /**
@@ -29,11 +31,6 @@ const canonical = (value: string) =>
  * different row. Written as an escape so the source file stays plain ASCII.
  */
 const SEPARATOR = "\u0000";
-
-const toHex = (value: ArrayBuffer) =>
-  [...new Uint8Array(value)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 
 export type StatementRowIdentityInput = {
   /** Provider slug. Namespaces the hash — see the note on collisions below. */
@@ -75,11 +72,7 @@ export async function statementRowExternalId(
     String(cents(row.amount)),
     canonical(row.originalStatement),
   ].join(SEPARATOR);
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(payload),
-  );
-  return `v1:${toHex(digest)}`;
+  return `v1:${await sha256Hex(payload)}`;
 }
 
 /** Immutable observation identity. Provider IDs and content are reconciliation
@@ -90,9 +83,5 @@ export async function statementRowOccurrenceId(
   rowPosition: number,
 ): Promise<string> {
   const payload = JSON.stringify([source, "v2", fingerprint, rowPosition]);
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(payload),
-  );
-  return `v2:${toHex(digest)}`;
+  return `v2:${await sha256Hex(payload)}`;
 }

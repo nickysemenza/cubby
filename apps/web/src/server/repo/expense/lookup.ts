@@ -1,4 +1,3 @@
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { expenseListItemOut } from "@cubby/schemas/project";
@@ -64,15 +63,6 @@ import { completeListReader } from "../list-read-adapters";
 import { dbExpenseToAPI } from "./helpers";
 
 const effectiveTrade = effectiveExpenseTradeSql('"Expense"');
-
-// Drop malformed, missing, soft-deleted, and wrong-prefix references.
-const toUuids = async (
-  db: Database,
-  codes: readonly string[],
-  entity: ShortcodeEntity,
-): Promise<string[]> => {
-  return resolveAllPresent(db, entity, codes);
-};
 
 /**
  * Lift a predicate on the CHARGE into a predicate on the expense.
@@ -167,7 +157,7 @@ export const resolveExpenseProjectAllocationScope = async (
   filters: ExpenseFilters,
 ): Promise<ExpenseAllocationProjectScope | undefined> => {
   const codes = filters.projectId ? [filters.projectId].flat() : [];
-  const ids = await toUuids(db, codes, "project");
+  const ids = await resolveAllPresent(db, "project", codes);
   let selectedIds = ids;
   if (ids.length > 0 && filters.includeSubProjects) {
     const { childrenByParent } = await loadProjectTree(db);
@@ -188,7 +178,11 @@ export const resolveExpenseProjectAllocationScope = async (
   const categoryCodes = filters.spendingCategoryId
     ? [filters.spendingCategoryId].flat()
     : [];
-  const categoryIds = await toUuids(db, categoryCodes, "spendingCategory");
+  const categoryIds = await resolveAllPresent(
+    db,
+    "spendingCategory",
+    categoryCodes,
+  );
   if (
     projectIds.length === 0 &&
     !filters.projectPresenceFilter &&
@@ -284,20 +278,20 @@ const loadExpenseFilterReferences = async (
   filters: ExpenseFilters,
 ) => {
   // Keep these sequential: callers may supply a transaction-backed Database.
-  const vendorIds = await toUuids(
+  const vendorIds = await resolveAllPresent(
     db,
-    filters.vendorId ? [filters.vendorId].flat() : [],
     "vendor",
+    filters.vendorId ? [filters.vendorId].flat() : [],
   );
-  const purchaseIds = await toUuids(
+  const purchaseIds = await resolveAllPresent(
     db,
-    filters.purchaseId ? [filters.purchaseId].flat() : [],
     "purchase",
+    filters.purchaseId ? [filters.purchaseId].flat() : [],
   );
-  const productIds = await toUuids(
+  const productIds = await resolveAllPresent(
     db,
-    filters.productId ? [filters.productId] : [],
     "product",
+    filters.productId ? [filters.productId] : [],
   );
   return { vendorIds, purchaseIds, productIds };
 };

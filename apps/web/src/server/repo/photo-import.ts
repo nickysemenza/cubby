@@ -266,7 +266,7 @@ export async function persistLocalImageAnalysis(
     eq(aiAnalysis.inputFingerprint, inputFingerprint),
     isNull(aiAnalysis.provider),
     isNull(aiAnalysis.resultSchemaRevision),
-    isNull(aiAnalysis.deletedAt),
+    notDeleted(aiAnalysis),
   );
   const updated = await store
     .update(aiAnalysis)
@@ -317,7 +317,7 @@ export async function getLocalImageAnalysis(
         eq(aiAnalysis.entityKind, "image"),
         eq(aiAnalysis.entityId, imageId),
         eq(aiAnalysis.feature, "photo-local-analysis"),
-        isNull(aiAnalysis.deletedAt),
+        notDeleted(aiAnalysis),
       ),
     )
     .orderBy(desc(aiAnalysis.promptVersion), desc(aiAnalysis.updatedAt))

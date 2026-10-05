@@ -1187,24 +1187,26 @@ const locationRosterPage = async (
   ]);
   const { take, skip } = buildTakeSkip(pagination);
 
-  const { data: results, count: totalCount } = await executeListQueryWithCount(
+  const { data: results, count: totalCount } = await executeListQueryWithCount({
+    kind: "page",
     // No `...relations.location.list` — scalar columns only.
-    getDb(db).query.location.findMany({
-      where: whereClause,
-      columns: {
-        id: true,
-        shortcode: true,
-        name: true,
-        type: true,
-        aliases: true,
-        productId: true,
-      },
-      orderBy: orderByClause,
-      limit: take,
-      offset: skip,
-    }),
-    countWhere(db, location, whereClause),
-  );
+    rows: () =>
+      getDb(db).query.location.findMany({
+        where: whereClause,
+        columns: {
+          id: true,
+          shortcode: true,
+          name: true,
+          type: true,
+          aliases: true,
+          productId: true,
+        },
+        orderBy: orderByClause,
+        limit: take,
+        offset: skip,
+      }),
+    count: () => countWhere(db, location, whereClause),
+  });
 
   const ids = results.map((row) => row.id);
   const ancestorsById = await loadLocationAncestors(db, ids);

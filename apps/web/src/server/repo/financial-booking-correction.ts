@@ -13,6 +13,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { financialTransaction, purchase } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { cents } from "~/server/repo/money";
 
 import {
   getDb,
@@ -58,19 +59,16 @@ async function reimbursementDestination(
   const categoryId = target.spendingCategoryId;
   const category = categoryId
     ? await getDb(db).query.spendingCategory.findFirst({
-        where: (category, { eq, isNull }) =>
-          and(eq(category.id, categoryId), isNull(category.deletedAt)),
+        where: (category, { eq }) =>
+          and(eq(category.id, categoryId), notDeleted(category)),
       })
     : null;
   const categoryName = category?.name ?? null;
   let trade = target.defaultTrade;
   if (target.defaultProjectId) {
     const project = await getDb(db).query.project.findFirst({
-      where: (project, { eq, isNull }) =>
-        and(
-          eq(project.id, target!.defaultProjectId!),
-          isNull(project.deletedAt),
-        ),
+      where: (project, { eq }) =>
+        and(eq(project.id, target!.defaultProjectId!), notDeleted(project)),
     });
     projectName = project?.name ?? null;
     trade ??= project?.defaultTrade ?? null;
@@ -115,10 +113,8 @@ export async function previewFinancialBookingCorrection(
       "Only reviewed aggregate bookings can be corrected here. Review edited or itemized Expenses individually.",
     );
   if (
-    lineage.lines.reduce(
-      (sum, line) => sum + Math.round((line.cost ?? 0) * 100),
-      0,
-    ) !== Math.round(row.amount * 100)
+    lineage.lines.reduce((sum, line) => sum + cents(line.cost ?? 0), 0) !==
+    cents(row.amount)
   )
     return fail("The booked Expense amount no longer matches its transaction.");
   const originalFingerprint = await digestValue(lineage);
@@ -132,8 +128,8 @@ export async function previewFinancialBookingCorrection(
   const allocations = await getDb(
     db,
   ).query.financialTransactionAllocation.findMany({
-    where: (allocation, { eq, isNull }) =>
-      and(eq(allocation.transactionId, id), isNull(allocation.deletedAt)),
+    where: (allocation, { eq }) =>
+      and(eq(allocation.transactionId, id), notDeleted(allocation)),
   });
   if (
     allocations.length !== 1 ||
@@ -156,9 +152,7 @@ export async function previewFinancialBookingCorrection(
   } else {
     target = await getLedgerTransferByShortcode(db, input.action.transferId);
     if (!target) return fail("The selected transfer is no longer live.");
-    if (
-      Math.round(target.amount * 100) !== Math.round(Math.abs(row.amount) * 100)
-    )
+    if (cents(target.amount) !== cents(Math.abs(row.amount)))
       return fail("The transfer amount must match the transaction.");
     targetName = `${target.fromPartyName} → ${target.toPartyName}`;
   }

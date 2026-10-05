@@ -278,29 +278,10 @@ type ListQueryPlan<T> = {
   count: () => Promise<number>;
 };
 
-export function executeListQueryWithCount<T>(
-  plan: ListQueryPlan<T>,
-): Promise<{ data: T[]; count: number }>;
-export function executeListQueryWithCount<T>(
-  rows: Promise<T[]>,
-  count: Promise<number>,
-): Promise<{ data: T[]; count: number }>;
 export async function executeListQueryWithCount<T>(
-  planOrRows: ListQueryPlan<T> | Promise<T[]>,
-  legacyCount?: Promise<number>,
+  plan: ListQueryPlan<T>,
 ): Promise<{ data: T[]; count: number }> {
   return withTrace(TraceNames.db("listQueryWithCount"), async (span) => {
-    const plan: ListQueryPlan<T> =
-      "kind" in planOrRows
-        ? planOrRows
-        : {
-            kind: "page",
-            rows: () => planOrRows,
-            count: () => {
-              if (!legacyCount) throw new Error("Missing list count query");
-              return legacyCount;
-            },
-          };
     const [data, count] =
       plan.kind === "count"
         ? [[], await traceListCount(plan.count)]

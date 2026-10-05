@@ -884,7 +884,7 @@ export async function loadAnalysisCapturedAtForImages(
         eq(aiAnalysis.entityKind, "image"),
         inArray(aiAnalysis.entityId, imageIds),
         eq(aiAnalysis.feature, "photo-local-analysis"),
-        isNull(aiAnalysis.deletedAt),
+        notDeleted(aiAnalysis),
       ),
     )
     .orderBy(desc(aiAnalysis.updatedAt));

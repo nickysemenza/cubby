@@ -18,18 +18,7 @@ import type {
   ImageProcessingTerminalResult as ImageProcessingResult,
 } from "@cubby/schemas/image-processing";
 import type { ImageRepresentations } from "@cubby/schemas/image-summary";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gt,
-  inArray,
-  isNull,
-  lte,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -213,7 +202,7 @@ export async function findCachedImageDescriptionAnalysis(
       eq(aiAnalysis.promptVersion, input.promptVersion),
       eq(aiAnalysis.resultSchemaRevision, input.resultSchemaRevision),
       eq(aiAnalysis.inputFingerprint, input.inputFingerprint),
-      isNull(aiAnalysis.deletedAt),
+      notDeleted(aiAnalysis),
     ),
     columns: { result: true },
   });
@@ -312,7 +301,7 @@ export async function createTransparentDerivativeAndJob(
           imageDerivative.processorRevision,
           IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
         ),
-        isNull(imageDerivative.deletedAt),
+        notDeleted(imageDerivative),
       ),
       columns: { id: true, status: true, failureReason: true },
     });
@@ -476,7 +465,7 @@ export async function claimImageProcessingJob(
         imageDerivative,
         and(
           eq(imageDerivative.id, imageProcessingJob.derivativeId),
-          isNull(imageDerivative.deletedAt),
+          notDeleted(imageDerivative),
         ),
       )
       .where(
@@ -617,7 +606,7 @@ export async function getLeasedImageProcessingOutputKey(
       imageDerivative,
       and(
         eq(imageDerivative.id, imageProcessingJob.derivativeId),
-        isNull(imageDerivative.deletedAt),
+        notDeleted(imageDerivative),
       ),
     )
     .where(
@@ -1093,7 +1082,7 @@ async function adoptSuccessfulCompletion(
         and(
           eq(imageDerivative.id, job.derivativeId),
           eq(imageDerivative.sourceContentHash, job.sourceContentHash),
-          isNull(imageDerivative.deletedAt),
+          notDeleted(imageDerivative),
         ),
       );
   }
@@ -1162,7 +1151,7 @@ export async function completeImageProcessingJob(
         imageDerivative,
         and(
           eq(imageDerivative.id, imageProcessingJob.derivativeId),
-          isNull(imageDerivative.deletedAt),
+          notDeleted(imageDerivative),
         ),
       )
       .where(eq(imageProcessingJob.id, input.result.jobId))
@@ -1300,7 +1289,7 @@ export async function saveImageDescriptionCorrection(
       .where(
         and(
           eq(imageDescriptionCorrection.imageId, input.imageId),
-          isNull(imageDescriptionCorrection.deletedAt),
+          notDeleted(imageDescriptionCorrection),
         ),
       );
     await tx.insert(imageDescriptionCorrection).values(input);
@@ -1425,7 +1414,7 @@ export async function getImageProcessingReadProjection(
         eq(aiAnalysis.entityKind, "image"),
         eq(aiAnalysis.entityId, imageId),
         eq(aiAnalysis.feature, "image-description"),
-        isNull(aiAnalysis.deletedAt),
+        notDeleted(aiAnalysis),
       ),
     )
     .orderBy(desc(aiAnalysis.createdAt))
@@ -1499,7 +1488,7 @@ export async function getImageProcessingReadProjection(
           aiAnalysis.resultSchemaRevision,
           preferredImageDescriptionPolicy.resultSchemaRevision,
         ),
-        isNull(aiAnalysis.deletedAt),
+        notDeleted(aiAnalysis),
       ),
     )
     .orderBy(desc(aiAnalysis.createdAt));
@@ -1523,7 +1512,7 @@ export async function getImageProcessingReadProjection(
     {
       where: and(
         eq(imageDescriptionCorrection.imageId, imageId),
-        isNull(imageDescriptionCorrection.deletedAt),
+        notDeleted(imageDescriptionCorrection),
       ),
       columns: { description: true, confirmedAt: true },
     },

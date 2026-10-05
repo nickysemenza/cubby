@@ -33,7 +33,10 @@ import {
   notDeleted,
   uuidArrayParam,
 } from "~/server/repo/database-helpers";
-import { EXPENSE_MONTH_BUCKET } from "~/server/repo/expense-aggregate-sql";
+import {
+  EXPENSE_MONTH_BUCKET,
+  expenseAggregateFields,
+} from "~/server/repo/expense-aggregate-sql";
 import { effectiveExpenseTradeSql } from "~/server/repo/expense-inheritance";
 import {
   expenseAllocatedCostSql,
@@ -54,16 +57,6 @@ const EMPTY_OUT: ProjectPortfolioAnalyticsOut = {
   adjustments: { actual: 0, committed: 0, credits: 0, net: 0, count: 0 },
   taskHeatmap: [],
 };
-
-const aggregateForCost = (
-  cost: ReturnType<typeof expenseAllocatedCostSql>,
-) => ({
-  actual: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = false), 0)::float`,
-  committed: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = true), 0)::float`,
-  credits: sql<number>`coalesce(-sum(${cost}) filter (where ${cost} < 0), 0)::float`,
-  net: sql<number>`coalesce(sum(${cost}), 0)::float`,
-  count: sql<number>`count(*)::int`,
-});
 
 export async function projectPortfolioAnalytics(
   db: Database,
@@ -162,7 +155,7 @@ export async function projectPortfolioAnalytics(
     getDb(db)
       .select({
         month: sql<string>`${EXPENSE_MONTH_BUCKET}`,
-        ...aggregateForCost(attributedCost),
+        ...expenseAggregateFields(attributedCost),
       })
       .from(expense)
       .where(expenseScopeWithDate)
@@ -181,13 +174,13 @@ export async function projectPortfolioAnalytics(
     getDb(db)
       .select({
         trade: effectiveExpenseTradeSql(),
-        ...aggregateForCost(attributedCost),
+        ...expenseAggregateFields(attributedCost),
       })
       .from(expense)
       .where(and(expenseScope, eq(expense.lineKind, "principal")))
       .groupBy(effectiveExpenseTradeSql()),
     getDb(db)
-      .select(aggregateForCost(attributedCost))
+      .select(expenseAggregateFields(attributedCost))
       .from(expense)
       .where(and(expenseScope, ne(expense.lineKind, "principal"))),
     getDb(db)

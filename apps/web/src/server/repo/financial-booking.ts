@@ -20,6 +20,7 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { cents } from "~/server/repo/money";
 import { refreshDerivedSearchRefs } from "~/server/services/mutation-side-effects";
 
 import {
@@ -117,8 +118,8 @@ async function bookingCategory(
     : inheritedCategoryId;
   if (!categoryId) return null;
   const category = await getDb(db).query.spendingCategory.findFirst({
-    where: (category, { eq, isNull }) =>
-      and(eq(category.id, categoryId), isNull(category.deletedAt)),
+    where: (category, { eq }) =>
+      and(eq(category.id, categoryId), notDeleted(category)),
   });
   if (!category && input.spendingCategoryId)
     return fail("The spending category is no longer live.");
@@ -148,7 +149,7 @@ async function bookingAction(
       : line.cost! >= 0 || line.lineKind !== "principal",
   );
   const bookedCents = matchingLines.reduce(
-    (sum, line) => sum + Math.round(line.cost! * 100),
+    (sum, line) => sum + cents(line.cost!),
     0,
   );
   const previous = graph.target
@@ -163,12 +164,12 @@ async function bookingAction(
           sql`a."purchaseId" = ${graph.target.id} AND a."deletedAt" IS NULL AND f."deletedAt" IS NULL AND f.status <> 'void' AND f."ledgerTransferId" IS NULL AND f.kind <> 'income' AND f.id <> ${row.id} AND SIGN(a.amount) = SIGN(${row.amount}::numeric) AND NOT EXISTS (SELECT 1 FROM "Expense" e WHERE e."bookingTransactionCode" = f.shortcode AND e."deletedAt" IS NULL AND e."economicRole" = 'reimbursement')`,
         )
     : [];
-  const settledCents = Math.round((previous[0]?.amount ?? 0) * 100);
+  const settledCents = cents(previous[0]?.amount ?? 0);
   const remainingCents = negative
     ? Math.min(0, bookedCents - settledCents)
     : Math.max(0, bookedCents - settledCents);
   const remaining = Math.abs(remainingCents);
-  const amount = Math.abs(Math.round(row.amount * 100));
+  const amount = Math.abs(cents(row.amount));
   if (input.economicRole === "vendor" && remaining > 0 && remaining < amount)
     return fail(
       "Existing Expenses cover only part of this transaction. Review the remaining amount and individual lines before booking.",
@@ -205,8 +206,8 @@ export async function previewFinancialBooking(
   const allocations = await getDb(
     db,
   ).query.financialTransactionAllocation.findMany({
-    where: (allocation, { eq, isNull }) =>
-      and(eq(allocation.transactionId, row.id), isNull(allocation.deletedAt)),
+    where: (allocation, { eq }) =>
+      and(eq(allocation.transactionId, row.id), notDeleted(allocation)),
     orderBy: (allocation, { asc }) => asc(allocation.purchaseId),
   });
   if (
@@ -264,14 +265,14 @@ async function replayBooking(db: Database, review: FinancialBookingPreview) {
   const allocations = await getDb(
     db,
   ).query.financialTransactionAllocation.findMany({
-    where: (allocation, { eq, isNull }) =>
-      and(eq(allocation.transactionId, row.id), isNull(allocation.deletedAt)),
+    where: (allocation, { eq }) =>
+      and(eq(allocation.transactionId, row.id), notDeleted(allocation)),
   });
   const allocation = allocations[0];
   if (
     allocations.length !== 1 ||
     !allocation ||
-    Math.round(allocation.amount * 100) !== Math.round(row.amount * 100)
+    cents(allocation.amount) !== cents(row.amount)
   )
     return fail("The approved booking allocation changed.");
   const graph = await bookingGraph(db, allocation.purchaseId);
@@ -292,10 +293,8 @@ async function replayBooking(db: Database, review: FinancialBookingPreview) {
         (line) =>
           line.cost === null || line.economicRole !== review.economicRole,
       ) ||
-      lineage.reduce(
-        (sum, line) => sum + Math.round((line.cost ?? 0) * 100),
-        0,
-      ) !== Math.round(row.amount * 100))
+      lineage.reduce((sum, line) => sum + cents(line.cost ?? 0), 0) !==
+        cents(row.amount))
   )
     return fail("The approved booking lineage changed.");
   return {
