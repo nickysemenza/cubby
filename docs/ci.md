@@ -106,7 +106,11 @@ simulator — restoring/saving an exact-key cache of
 `Package.resolved` (SPM fetch+resolve was 53s of that job otherwise). It then
 runs `apps/apple/scripts/check-openapi-warnings.sh`, which fails on any
 swift-openapi-generator warning (a schema the `CubbyAPI` build plugin would
-silently drop). `Apple
+silently drop). A successful warning check records its content key inside
+the cached `.build` directory; unchanged document, config, generator pin,
+toolchain, and check script reuse that pass without rebuilding or regenerating.
+Changed inputs run the full check, and warnings or generator failures never
+record a pass. `Apple
 checks` runs `sh scripts/apple-check.sh ci`, a generic-simulator
 `xcodebuild build` with no tests. Both were previously one merged job that
 also ran `xcodebuild test` on a concrete simulator; that was reverted after

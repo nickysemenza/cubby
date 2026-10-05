@@ -490,7 +490,8 @@ jobs:
       - name: Run CubbyKit Swift tests
         run: swift test --package-path apps/apple/CubbyKit --force-resolved-versions --disable-index-store
       # The build plugin lets a generator warning (a silently dropped schema)
-      # through; this gate fails on one, reusing the build above.
+      # through; this gate fails on one, reusing a recorded pass only when
+      # the document, config, generator pin, toolchain and gate are unchanged.
       - name: Check OpenAPI generator warnings
         run: apps/apple/scripts/check-openapi-warnings.sh
       # Saved here rather than by actions/cache's post step so a red test run
