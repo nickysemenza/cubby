@@ -5,9 +5,9 @@ import { USDAFoodDetail } from "~/features/usda/USDAFoodDetail";
 import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { pageTitle } from "~/lib/page-title";
 import { useDocumentTitle } from "~/ui/hooks/useDocumentTitle";
-import { RouteErrorComponent } from "~/ui/lazy-route-error";
 import { Page } from "~/ui/page/Page";
 import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
+import { RouteErrorComponent } from "~/ui/route-error";
 import { DetailPagePending } from "~/ui/route-pending";
 
 export const Route = createFileRoute("/_authenticated/usda/$id")({

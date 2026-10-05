@@ -90,6 +90,27 @@ type ProviderProps = {
   children: ReactNode;
 };
 
+function MovementEvidenceProvider({
+  rows,
+  query,
+  children,
+}: {
+  rows: Map<string, MovementEvidence>;
+  query: { isPending: boolean; isError: boolean; error: unknown };
+  children: ReactNode;
+}) {
+  return (
+    <MovementContext.Provider value={{ rows, pending: query.isPending }}>
+      {children}
+      {query.isError ? (
+        <p role="alert" className="text-xs text-destructive">
+          Could not load movement evidence: {String(query.error)}
+        </p>
+      ) : null}
+    </MovementContext.Provider>
+  );
+}
+
 function PurchaseMovementProvider({
   recordId,
   operations,
@@ -101,19 +122,12 @@ function PurchaseMovementProvider({
     }),
   );
   return (
-    <MovementContext.Provider
-      value={{
-        rows: new Map(query.data?.map((row) => [row.productId, row])),
-        pending: query.isPending,
-      }}
+    <MovementEvidenceProvider
+      rows={new Map(query.data?.map((row) => [row.productId, row]))}
+      query={query}
     >
       {children}
-      {query.isError ? (
-        <p role="alert" className="text-xs text-destructive">
-          Could not load movement evidence: {String(query.error)}
-        </p>
-      ) : null}
-    </MovementContext.Provider>
+    </MovementEvidenceProvider>
   );
 }
 
@@ -128,19 +142,12 @@ function ProductMovementProvider({
     }),
   );
   return (
-    <MovementContext.Provider
-      value={{
-        rows: new Map(query.data?.map((row) => [row.purchaseId, row])),
-        pending: query.isPending,
-      }}
+    <MovementEvidenceProvider
+      rows={new Map(query.data?.map((row) => [row.purchaseId, row]))}
+      query={query}
     >
       {children}
-      {query.isError ? (
-        <p role="alert" className="text-xs text-destructive">
-          Could not load movement evidence: {String(query.error)}
-        </p>
-      ) : null}
-    </MovementContext.Provider>
+    </MovementEvidenceProvider>
   );
 }
 

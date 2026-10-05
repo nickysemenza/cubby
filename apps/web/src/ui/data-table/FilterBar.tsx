@@ -350,48 +350,24 @@ function FilterSearchField({
   );
 }
 
-/**
- * Compact, manifest-backed expression of the table's active query: a search
- * input for the entity's declared primary search, one chip per every other declared
- * field (capped, with the rest behind `More`), and a `Clear N` link.
- *
- * This intentionally supports only the three filter shapes emitted by
- * `barFieldFromConfig`. The old copy-owned ReUI component advertised async
- * loaders, custom renderers, nested groups, arbitrary operators and shortcut
- * handling, none of which Cubby's two production filter bars supplied.
- */
-export function FilterBar({
+/** Filter-list edits shared by the desktop bar and the phone filter tier. */
+function useFilterEdits({
   filters,
   fields,
   onChange,
-  className,
   searchKey,
-  searchPlaceholder,
 }: {
   filters: Filter[];
   fields: FilterBarField[];
   onChange: (filters: Filter[]) => void;
-  className?: string;
-  /** The declared broad search field rendered as an input instead of a chip. */
-  searchKey?: string;
-  searchPlaceholder?: string;
+  searchKey: string | undefined;
 }) {
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [moreOpen, setMoreOpen] = useState(false);
   const filtersByField = useMemo(
     () => new Map(filters.map((filter) => [filter.field, filter])),
     [filters],
   );
-  useEffect(() => {
-    for (const field of fields) {
-      const filter = filtersByField.get(field.key);
-      if (filter && isFieldActive(filter)) field.onActivate?.(filter.values);
-    }
-  }, [fields, filtersByField]);
   const searchField = fields.find((field) => field.key === searchKey);
   const chipFields = fields.filter((field) => field.key !== searchKey);
-  const visibleChipFields = chipFields.slice(0, CHIP_CAP);
-  const overflowChipFields = chipFields.slice(CHIP_CAP);
   const activeCount = filters.filter(hasFilterValue).length;
 
   const setValues = (field: FilterBarField, values: string[]) => {
@@ -422,6 +398,63 @@ export function FilterBar({
     ? filtersByField.get(searchField.key)
     : undefined;
   const searchValue = searchFilter?.values[0] ?? "";
+
+  return {
+    filtersByField,
+    searchField,
+    chipFields,
+    activeCount,
+    setValues,
+    clear,
+    searchValue,
+  };
+}
+
+/**
+ * Compact, manifest-backed expression of the table's active query: a search
+ * input for the entity's declared primary search, one chip per every other declared
+ * field (capped, with the rest behind `More`), and a `Clear N` link.
+ *
+ * This intentionally supports only the three filter shapes emitted by
+ * `barFieldFromConfig`. The old copy-owned ReUI component advertised async
+ * loaders, custom renderers, nested groups, arbitrary operators and shortcut
+ * handling, none of which Cubby's two production filter bars supplied.
+ */
+export function FilterBar({
+  filters,
+  fields,
+  onChange,
+  className,
+  searchKey,
+  searchPlaceholder,
+}: {
+  filters: Filter[];
+  fields: FilterBarField[];
+  onChange: (filters: Filter[]) => void;
+  className?: string;
+  /** The declared broad search field rendered as an input instead of a chip. */
+  searchKey?: string;
+  searchPlaceholder?: string;
+}) {
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const {
+    filtersByField,
+    searchField,
+    chipFields,
+    activeCount,
+    setValues,
+    clear,
+    searchValue,
+  } = useFilterEdits({ filters, fields, onChange, searchKey });
+  useEffect(() => {
+    for (const field of fields) {
+      const filter = filtersByField.get(field.key);
+      if (filter && isFieldActive(filter)) field.onActivate?.(filter.values);
+    }
+  }, [fields, filtersByField]);
+  const visibleChipFields = chipFields.slice(0, CHIP_CAP);
+  const overflowChipFields = chipFields.slice(CHIP_CAP);
 
   return (
     <div
@@ -606,51 +639,24 @@ export function MobileFilterTier<TData extends RowData>({
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [view, setView] = useState<"fields" | "columns" | string>("fields");
-  const filtersByField = useMemo(
-    () => new Map(filters.map((filter) => [filter.field, filter])),
-    [filters],
-  );
-  const searchField = fields.find((field) => field.key === searchKey);
-  const chipFields = fields.filter((field) => field.key !== searchKey);
+  const {
+    filtersByField,
+    searchField,
+    chipFields,
+    activeCount,
+    setValues,
+    clear,
+    searchValue,
+  } = useFilterEdits({ filters, fields, onChange, searchKey });
   const activeChipFields = chipFields.filter((field) =>
     isFieldActive(filtersByField.get(field.key)),
   );
-  const activeCount = filters.filter(hasFilterValue).length;
   const editingField = chipFields.find((field) => field.key === view);
   // The `Filter` sheet is also where phone sort lives — surface the trigger
   // for a sortable-only table even when it declares no filterable fields.
   const hasSort = sortableColumns(table).length > 0;
   const showFilterTrigger =
     chipFields.length > 0 || hasSort || grouping !== undefined;
-
-  const setValues = (field: FilterBarField, values: string[]) => {
-    const existing = filtersByField.get(field.key);
-    if (existing) {
-      onChange(
-        filters.map((filter) =>
-          filter.field === field.key ? { ...filter, values } : filter,
-        ),
-      );
-    } else {
-      field.onActivate?.();
-      onChange([
-        ...filters,
-        {
-          id: `filter-${field.key}`,
-          field: field.key,
-          operator: operatorFor(field),
-          values,
-        },
-      ]);
-    }
-  };
-  const clear = (field: FilterBarField) =>
-    onChange(filters.filter((filter) => filter.field !== field.key));
-
-  const searchFilter = searchField
-    ? filtersByField.get(searchField.key)
-    : undefined;
-  const searchValue = searchFilter?.values[0] ?? "";
 
   const openSheet = (nextView: typeof view) => {
     setView(nextView);

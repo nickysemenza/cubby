@@ -1,9 +1,8 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
 
 import { colorizeSelectOptions } from "~/lib/select-options";
+import type { FilterConfig } from "~/ui/data-table/table-meta";
 import type { FilterableComboboxItem } from "~/ui/primitives/combobox";
-
-import type { FilterConfig } from "./columnHelpers";
 
 type FilterOption = FilterableComboboxItem;
 

@@ -1,10 +1,8 @@
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 
-import {
-  EntityRefLink,
-  dottedEntityLink,
-} from "~/entity/components/entity-ref-link";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { formatCurrencyRange } from "~/lib/format-range";
 import {
   type CrossTabFooterRow,

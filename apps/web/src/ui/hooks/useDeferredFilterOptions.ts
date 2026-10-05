@@ -1,4 +1,3 @@
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { FilterOptionKind } from "@cubby/schemas/filter-options";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
@@ -20,14 +19,6 @@ const sameIds = (left: readonly string[], right: readonly string[]) =>
 export function useDeferredFilterOptions(
   kind: FilterOptionKind,
 ): DeferredFilterOptionSource {
-  return useDeferredFilterOptionSource({ kind });
-}
-
-function useDeferredFilterOptionSource(
-  source:
-    | { kind: FilterOptionKind }
-    | { source: "entity"; entity: ShortcodeEntity },
-): DeferredFilterOptionSource {
   const [active, setActive] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
@@ -35,7 +26,7 @@ function useDeferredFilterOptionSource(
 
   const query = useQuery({
     ...entityFilterOptions.filterOptions.queryOptions({
-      ...source,
+      kind,
       search,
       selectedIds: [...selectedIds],
       limit: 25,

@@ -98,8 +98,6 @@ import {
   type MobileColumnMeta,
 } from "./table-meta";
 
-export type { FilterConfig, MobileColumnMeta, MobileSlot } from "./table-meta";
-
 type UnitMapping = Parameters<typeof UnitMappingDisplay>[0]["mappings"][number];
 
 export { multiSelectFilterFn };
@@ -396,12 +394,15 @@ export function createNameColumn<T extends BaseRow>(
     : columnHelper.accessor(nameValue, { ...config, header });
 }
 
-export function createCreatedAtColumn<T extends BaseRow>(
+const TIMESTAMP_HEADERS = { createdAt: "Created", updatedAt: "Updated" };
+
+export function createTimestampColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
+  id: keyof typeof TIMESTAMP_HEADERS,
 ) {
-  return columnHelper.accessor((row) => row.createdAt, {
-    id: "createdAt",
-    header: "Created",
+  return columnHelper.accessor((row) => row[id], {
+    id,
+    header: TIMESTAMP_HEADERS[id],
     meta: attachCubbyColumnMeta({
       entityColumnRole: "fact",
       // Relative timestamps are short ("5 months ago"); without a cap the
@@ -410,30 +411,7 @@ export function createCreatedAtColumn<T extends BaseRow>(
       mobile: { slot: "hidden" },
       // Copy-only: the display is relative ("5 months ago") but the copy
       // payload is the ISO date-time, which pastes usefully into a spreadsheet.
-      cellData: timestampCellData<T>((row) => row.createdAt),
-    }),
-    cell: (info) => {
-      const value = info.getValue();
-      return renderScalarValue(
-        value
-          ? { kind: "timestamp", raw: value }
-          : { kind: "empty", raw: null },
-      );
-    },
-  });
-}
-
-export function createUpdatedAtColumn<T extends BaseRow>(
-  columnHelper: ColumnHelper<T>,
-) {
-  return columnHelper.accessor((row) => row.updatedAt, {
-    id: "updatedAt",
-    header: "Updated",
-    meta: attachCubbyColumnMeta({
-      entityColumnRole: "fact",
-      className: "w-32",
-      mobile: { slot: "hidden" },
-      cellData: timestampCellData<T>((row) => row.updatedAt),
+      cellData: timestampCellData<T>((row) => row[id]),
     }),
     cell: (info) => {
       const value = info.getValue();

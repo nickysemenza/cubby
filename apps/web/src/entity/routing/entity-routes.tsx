@@ -19,10 +19,8 @@ import type { ComponentType, ReactNode } from "react";
 import { z } from "zod";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
-import {
-  GenericEntityDetail,
-  type GenericDetailEntity,
-} from "~/entity/entity-detail/generic-entity-detail";
+import { type GenericDetailEntity } from "~/entity/entity-detail/detail-record";
+import { GenericEntityDetail } from "~/entity/entity-detail/generic-entity-detail";
 import {
   EntityListCardDensityProvider,
   GenericEntityList,

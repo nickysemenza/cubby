@@ -92,8 +92,6 @@ import {
   RelationSectionActions,
 } from "./entity-relation-table";
 
-export type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
-
 /** What every detail read carries that the generic page reads by name. */
 const detailRecordSchema = z.looseObject({
   id: z.string(),

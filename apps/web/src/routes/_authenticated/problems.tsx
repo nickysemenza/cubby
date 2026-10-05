@@ -13,9 +13,9 @@ import { pageTitle } from "~/lib/page-title";
 import { urlStringParam } from "~/lib/search-params";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Stack } from "~/ui/layout";
-import { RouteErrorComponent } from "~/ui/lazy-route-error";
 import { Page } from "~/ui/page/Page";
 import { Button } from "~/ui/primitives/button";
+import { RouteErrorComponent } from "~/ui/route-error";
 import { RoutePending } from "~/ui/route-pending";
 
 // The overview pulls in all five independently loaded Problems lanes plus the

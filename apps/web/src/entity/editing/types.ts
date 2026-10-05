@@ -84,7 +84,6 @@ export interface EntityEditIssue {
 }
 
 /** Concrete runtime values accepted by semantic editor fields. */
-export type { EntityEditValue, EntityEditValueBag } from "./value-schema";
 export type EntityEditDraftData<E extends EditableEntity> = Readonly<
   Partial<EntityEditDraft<E>>
 >;

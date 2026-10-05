@@ -134,7 +134,7 @@ const renderDetailRoute = (
     importLine(GENERIC_DETAIL),
     'import { ensureDetailRecord } from "~/entity/routing/detail-loader";',
     'import { detailPage, notFoundPage } from "~/entity/routing/entity-routes";',
-    'import { RouteErrorComponent } from "~/ui/lazy-route-error";',
+    'import { RouteErrorComponent } from "~/ui/route-error";',
     'import { DetailPagePending } from "~/ui/route-pending";',
     queryRef === undefined
       ? 'import { entityDetailFor } from "~/entity/entity-detail";'

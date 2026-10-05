@@ -2,7 +2,7 @@ import { financialAccountOut } from "@cubby/schemas/financial-account";
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { EntityMutationTransport } from "~/entity/entity-contracts";
+import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";

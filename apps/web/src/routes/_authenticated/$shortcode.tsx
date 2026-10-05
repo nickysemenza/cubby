@@ -24,7 +24,6 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { shortcodeHead } from "~/lib/page-title";
-import { RouteErrorComponent } from "~/ui/lazy-route-error";
 import { Page } from "~/ui/page/Page";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -33,6 +32,7 @@ import {
   EmptyDescription,
   EmptyTitle,
 } from "~/ui/primitives/empty";
+import { RouteErrorComponent } from "~/ui/route-error";
 import { DetailPagePending } from "~/ui/route-pending";
 
 export const Route = createFileRoute("/_authenticated/$shortcode")({

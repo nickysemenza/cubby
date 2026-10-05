@@ -65,7 +65,7 @@ existing block. Extend the generic path when it almost fits. See
 ## Web UI
 
 - Dialogs: `WorkflowDialog`, `ResponsiveDialog` + `DialogFormActions`,
-  `DeleteEntityDialog` + `useStagedRow`, `LocationMoveDialog`.
+  `DeleteEntityDialog` + `useStagedDialogAction`, `LocationMoveDialog`.
 - Pickers: `EntityPicker` / `EntityReferencePicker`, `referenceEntitySearch`;
   no direct `ui/combobox` use outside picker builders.
 - Tables: `RTable` and the generic relation table; raw `<table>` only for

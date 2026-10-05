@@ -8,7 +8,7 @@ import {
 } from "@cubby/schemas/field-explanation";
 import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import { inventoryShortcode } from "@cubby/schemas/identifiers";
-import { parseShortcode } from "@cubby/shared";
+import { humanize, parseShortcode } from "@cubby/shared";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -48,12 +48,6 @@ export type ExplanationValue = ExplanationSource["value"];
 const explanationScalar = z.union([z.string(), z.number(), z.boolean()]);
 const explanationRecord = z.record(z.string(), z.json());
 
-const humanizeKey = (key: string) =>
-  key
-    .replaceAll(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replaceAll("_", " ")
-    .replace(/^./, (letter) => letter.toUpperCase());
-
 export function ReadableExplanationValue({
   value,
   depth = 0,
@@ -85,7 +79,7 @@ export function ReadableExplanationValue({
         ? "Yes"
         : "No"
       : textValue.success && /^[a-z]+(?:_[a-z]+)+$/.test(textValue.data)
-        ? humanizeKey(textValue.data)
+        ? humanize(textValue.data)
         : scalar.data;
     return <span className="break-words">{display}</span>;
   }
@@ -147,7 +141,7 @@ function ReadableExplanationRecord({
     <dl className="grid gap-x-3 gap-y-1 text-xs sm:grid-cols-[auto_1fr]">
       {Object.entries(record.data).map(([key, item]) => (
         <div key={key} className="contents">
-          <dt className="text-muted-foreground">{humanizeKey(key)}</dt>
+          <dt className="text-muted-foreground">{humanize(key)}</dt>
           <dd className="min-w-0">
             <ReadableExplanationValue
               value={item}
@@ -303,7 +297,7 @@ function QualityCalculation({
             {check.state === "gap" ? <p>{check.description}</p> : null}
             <ExceptionControls entityId={entityId} check={check} />
             <p className="text-xs text-muted-foreground">
-              {humanizeKey(check.facet)} ·{" "}
+              {humanize(check.facet)} ·{" "}
               <span className="font-mono break-all">{check.check}</span>
             </p>
           </li>

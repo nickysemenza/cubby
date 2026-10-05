@@ -91,8 +91,6 @@ const isEntityActionRow = (row: {
   id: string | number;
 }): row is EntityActionRow => typeof row.id === "string";
 
-export type { EntityActionDefinition } from "./entity-action-definition";
-
 type EntityActionAvailability = BulkActionAvailability;
 
 export interface EntityActionResolutionContext {

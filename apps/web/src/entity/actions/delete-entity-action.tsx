@@ -19,7 +19,7 @@ import {
   DeleteImpactPreviewList,
   type ImpactPreviewOperations,
 } from "./entity-operation-impact-preview";
-import { useStagedRow } from "./use-staged-row";
+import { useStagedDialogAction } from "./use-staged-dialog-action";
 
 /** The delete dialog depends on this small command surface, not the form kernel. */
 export type DeleteEntityActionCommands = Pick<
@@ -135,7 +135,11 @@ export function useDeleteEntityAction(
   const navigate = useNavigate();
   const [failures, setFailures] = useState<readonly string[]>([]);
   const label = entityLabel(generatedEntity);
-  const { staged, stage, finish } = useStagedRow(
+  const {
+    items: [staged],
+    stage,
+    finish,
+  } = useStagedDialogAction(
     (row) => row,
     () => setFailures([]),
   );

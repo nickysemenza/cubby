@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { compileListReadSchema } from "~/entity/list-read-fields";
+
 import { entityListEnrichmentOutputSchema } from "./generated/entity-lists.gen";
-import { compileListReadSchema } from "./list-read-schema";
 
 describe("list field ownership", () => {
   const schema = z.object({

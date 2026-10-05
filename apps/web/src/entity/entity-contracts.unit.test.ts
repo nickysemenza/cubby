@@ -4,6 +4,7 @@ import { MutationObserver, QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
 import { entityListFor } from "~/entity/entity-list";
+import { type EntityMutationTransport } from "~/entity/entity-mutation-command";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { mock } from "~/lib/test/mock-schema";
 import {
@@ -11,10 +12,7 @@ import {
   type EntityBrowserMutationInput,
 } from "~/server/entity-kernel/contracts";
 
-import {
-  entityMutationOptionsFactory,
-  type EntityMutationTransport,
-} from "./entity-contracts";
+import { entityMutationOptionsFactory } from "./entity-contracts";
 
 function inMemoryMutationTransport(
   result: ReturnType<typeof entityBrowserMutationResultSchema.parse>,
