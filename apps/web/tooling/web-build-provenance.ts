@@ -87,6 +87,9 @@ function stampPath(repoRoot: string): string {
   return path.join(repoRoot, "apps/web/dist/web-build-provenance.json");
 }
 
+const AGENT_SKILLS =
+  ".claude/skills/{purchase-import,photo-inventory-import,product-enrichment}/**/*.md";
+
 const WEB_BUILD_SOURCE = {
   globs: [
     "apps/web/src/**",
@@ -99,11 +102,13 @@ const WEB_BUILD_SOURCE = {
     "recipebridge/**",
     "scripts/**",
     "docs/**/*.md",
+    AGENT_SKILLS,
     "*.{json,jsonc,yaml,yml,toml,lock}",
     ".npmrc",
   ],
-  // The in-app docs route bundles docs/**/*.md (docs-registry.tsx).
-  bundledMarkdown: ["docs/**/*.md"],
+  // The in-app docs route bundles docs/**/*.md (docs-registry.tsx); the
+  // purchase agent bundles its skills (purchase-agent/import-run-workflows.ts).
+  bundledMarkdown: ["docs/**/*.md", AGENT_SKILLS],
   generatedRoots: [
     "apps/web/src",
     "apps/web/public",
