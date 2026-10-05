@@ -6,11 +6,11 @@ import {
   type ProviderStreams,
 } from "@earendil-works/pi-ai";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
-import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
-import { googleProvider } from "@earendil-works/pi-ai/providers/google";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
+
+import { z } from "zod";
 
 import { gatewayBaseURL } from "./ai-gateway-request";
 
@@ -22,7 +22,7 @@ import { gatewayBaseURL } from "./ai-gateway-request";
  * its `gatewayFetch`. Every request therefore rides the Gateway; the base URLs
  * are the unroutable placeholders only those shims resolve.
  */
-export type GatewayRoute = "openai" | "anthropic" | "compat";
+export type GatewayRoute = "openai" | "anthropic";
 export type GatewayFetchFor = (route: GatewayRoute) => typeof fetch;
 
 export const OPENAI_MODELS = ["gpt-6-sol", "gpt-6-luna"] as const;
@@ -31,17 +31,6 @@ export const ANTHROPIC_MODELS = [
   "claude-opus-5-5",
   "claude-haiku-4-5",
 ] as const;
-/**
- * Gemini through the Gateway's OpenAI-compatible `/compat` route. Pi's
- * catalog lists these under its native Google API; the compat wire id is the
- * Gateway's `<provider>/<model>` spelling of the same model.
- */
-const COMPAT_MODELS = {
-  "google-ai-studio/gemini-2.5-flash": "gemini-2.5-flash",
-  "google-ai-studio/gemini-2.5-flash-lite": "gemini-2.5-flash-lite",
-} as const;
-export type CompatModel = keyof typeof COMPAT_MODELS;
-
 /** Providers SDKs refuse to run without some key; the shims strip it. */
 function gatewayAuth(route: GatewayRoute) {
   return {
@@ -67,6 +56,57 @@ function throughFetch(
   };
 }
 
+const PDF_DATA_URL = "data:application/pdf;base64,";
+
+const responsesContentPart = z.looseObject({
+  type: z.string(),
+  image_url: z.string().optional(),
+});
+/** The part of a Responses request this rewrite touches; the rest passes through. */
+const responsesRequest = z.looseObject({
+  input: z.array(
+    z.looseObject({
+      content: z.union([z.string(), z.array(responsesContentPart)]).optional(),
+    }),
+  ),
+});
+type ResponsesContentPart = z.infer<typeof responsesContentPart>;
+
+/**
+ * pi-ai's only binary content type is an image, so a PDF (a receipt) leaves
+ * it as an `input_image` carrying a PDF data URL, which the Responses API
+ * rejects. A PDF must be an `input_file`.
+ */
+function pdfAsInputFile(part: ResponsesContentPart) {
+  return part.type === "input_image" && part.image_url?.startsWith(PDF_DATA_URL)
+    ? {
+        type: "input_file",
+        filename: "evidence.pdf",
+        file_data: part.image_url,
+      }
+    : part;
+}
+
+function withPdfInputFiles(fetchFn: typeof fetch): typeof fetch {
+  return (input, init) => {
+    const body = init?.body;
+    if (!body || !String(body).includes(PDF_DATA_URL))
+      return fetchFn(input, init);
+    const request = responsesRequest.parse(JSON.parse(String(body)));
+    return fetchFn(input, {
+      ...init,
+      body: JSON.stringify({
+        ...request,
+        input: request.input.map((item) =>
+          Array.isArray(item.content)
+            ? { ...item, content: item.content.map(pdfAsInputFile) }
+            : item,
+        ),
+      }),
+    });
+  };
+}
+
 function catalogModels<TApi extends Api>(
   provider: Provider<TApi>,
   ids: readonly string[],
@@ -76,29 +116,6 @@ function catalogModels<TApi extends Api>(
     const model = provider.getModels().find((candidate) => candidate.id === id);
     if (!model) throw new Error(`pi-ai does not declare ${id}`);
     return { ...model, baseUrl };
-  });
-}
-
-function compatModels(baseUrl: string): Model<"openai-completions">[] {
-  const google = googleProvider().getModels();
-  return Object.entries(COMPAT_MODELS).map(([wireId, catalogId]) => {
-    const template = google.find((candidate) => candidate.id === catalogId);
-    if (!template) throw new Error(`pi-ai does not declare ${catalogId}`);
-    return {
-      id: wireId,
-      name: template.name,
-      api: "openai-completions",
-      provider: "compat",
-      baseUrl,
-      reasoning: template.reasoning,
-      input: template.input,
-      cost: template.cost,
-      contextWindow: template.contextWindow,
-      maxTokens: template.maxTokens,
-      // Google's OpenAI-compatible endpoint rejects `store` (HTTP 400), and
-      // the placeholder base URL hides the Gateway from pi-ai's detection.
-      compat: { supportsStore: false },
-    };
   });
 }
 
@@ -113,7 +130,10 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
         OPENAI_MODELS,
         gatewayBaseURL("openai"),
       ),
-      api: throughFetch(openAIResponsesApi(), fetchFor("openai")),
+      api: throughFetch(
+        openAIResponsesApi(),
+        withPdfInputFiles(fetchFor("openai")),
+      ),
     }),
     createProvider({
       id: "anthropic",
@@ -125,13 +145,6 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
         gatewayBaseURL("anthropic"),
       ),
       api: throughFetch(anthropicMessagesApi(), fetchFor("anthropic")),
-    }),
-    createProvider({
-      id: "compat",
-      name: "Gemini through Cubby AI Gateway",
-      auth: gatewayAuth("compat"),
-      models: compatModels(gatewayBaseURL("compat")),
-      api: throughFetch(openAICompletionsApi(), fetchFor("compat")),
     }),
   ];
 }

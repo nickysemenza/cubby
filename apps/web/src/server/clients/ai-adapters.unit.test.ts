@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { FAST_MODEL, VISION_BATCH_MODEL } from "~/server/ai/models";
+import { FAST_MODEL } from "~/server/ai/models";
 
 import {
   AI_CACHE_TTL_SECONDS,
@@ -22,12 +22,6 @@ describe("piCallTarget resolves the registry's wire model and route", () => {
     const target = piCallTarget(FAST_MODEL, opts);
     expect(target.model.provider).toBe("openai");
     expect(target.model.id).toBe("gpt-6-luna");
-  });
-
-  it("sends the vision batch tier to the gateway's compat route", () => {
-    const target = piCallTarget(VISION_BATCH_MODEL, opts);
-    expect(target.model.provider).toBe("compat");
-    expect(target.model.id).toBe("google-ai-studio/gemini-2.5-flash");
   });
 
   it("routes Anthropic models to the anthropic provider", () => {
@@ -85,30 +79,6 @@ describe("chatCompletionOptionsFor", () => {
       maxTokens: 500,
       reasoningEffort: "none",
       toolChoice: { type: "function", name: "respond" },
-    });
-  });
-
-  it("spells the compat route's chat-completions parameters", () => {
-    expect(
-      chatCompletionOptionsFor(
-        VISION_BATCH_MODEL,
-        { maxTokens: 800 },
-        "respond",
-      ),
-    ).toEqual({
-      maxTokens: 800,
-      toolChoice: { type: "function", function: { name: "respond" } },
-    });
-    expect(
-      chatCompletionOptionsFor(
-        VISION_BATCH_MODEL,
-        { maxTokens: 800, effort: "low" },
-        "respond",
-      ),
-    ).toEqual({
-      maxTokens: 800,
-      reasoningEffort: "low",
-      toolChoice: { type: "function", function: { name: "respond" } },
     });
   });
 });

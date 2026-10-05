@@ -7,7 +7,6 @@ import {
   type Context,
   type Model,
   type ModelsApiStreamOptions,
-  type OpenAICompletionsOptions,
   type OpenAIResponsesOptions,
 } from "@earendil-works/pi-ai";
 
@@ -55,8 +54,6 @@ function gatewayRouteFor(route: ChatRoute): GatewayRoute {
       return "openai";
     case "anthropic":
       return "anthropic";
-    case "compat":
-      return "compat";
   }
 }
 
@@ -118,18 +115,15 @@ export type OpenAiEffort =
   | "max";
 
 export type AnthropicEffort = NonNullable<AnthropicOptions["effort"]>;
-export type CompatEffort = NonNullable<
-  OpenAICompletionsOptions["reasoningEffort"]
->;
 
 /**
- * The reasoning dial every route accepts — the intersection of the three
+ * The reasoning dial every route accepts — the intersection of the two
  * provider vocabularies, so a value typed this way is valid whichever tier a
  * caller (the eval harness) happens to route it to. OpenAI's `none`/`minimal`
  * and Anthropic's `max` are tier-specific and live on a feature record
  * instead.
  */
-export type SharedEffort = OpenAiEffort & AnthropicEffort & CompatEffort;
+export type SharedEffort = OpenAiEffort & AnthropicEffort;
 
 /**
  * pi-ai's per-API stream options for a forced tool call named `toolName`,
@@ -137,7 +131,7 @@ export type SharedEffort = OpenAiEffort & AnthropicEffort & CompatEffort;
  * own fields. Mirrors the effective parameters the old TanStack adapters
  * sent: OpenAI reasoning effort + an output cap, Anthropic adaptive
  * thinking/effort with no temperature (Haiku 4.5 rejects both — see
- * `adaptiveThinkingFor`), and compat's `reasoning_effort` + token cap.
+ * `adaptiveThinkingFor`).
  */
 export function chatCompletionOptionsFor(
   model: SupportedChatModel,
@@ -145,12 +139,12 @@ export function chatCompletionOptionsFor(
     maxTokens: number;
     /** Whichever provider vocabulary `model`'s route takes — the caller's
      * feature record is already tiered to the matching route, so this
-     * accepts any of the three rather than only their (narrower) shared
+     * accepts either rather than only their (narrower) shared
      * intersection. */
-    effort?: OpenAiEffort | AnthropicEffort | CompatEffort;
+    effort?: OpenAiEffort | AnthropicEffort;
   },
   toolName: string,
-): OpenAIResponsesOptions | AnthropicOptions | OpenAICompletionsOptions {
+): OpenAIResponsesOptions | AnthropicOptions {
   const config = getChatModelConfig(model);
   switch (config.route) {
     case "openai-responses": {
@@ -174,25 +168,12 @@ export function chatCompletionOptionsFor(
       if (adaptiveThinkingFor(model)) {
         options.thinkingEnabled = true;
         if (args.effort) {
-          // SAFETY: `args.effort` is `OpenAiEffort | AnthropicEffort |
-          // CompatEffort` (see this function's own comment) because the
+          // SAFETY: `args.effort` is `OpenAiEffort | AnthropicEffort` (see
+          // this function's own comment) because the
           // caller's feature record is already tiered to this route; on the
           // Anthropic route it is always an `AnthropicEffort` value.
           options.effort = args.effort as AnthropicEffort;
         }
-      }
-      return options;
-    }
-    case "compat": {
-      const options: OpenAICompletionsOptions = {
-        maxTokens: args.maxTokens,
-        toolChoice: { type: "function", function: { name: toolName } },
-      };
-      if (args.effort) {
-        // SAFETY: as above — on the compat route `args.effort` is always a
-        // `CompatEffort` value, since the caller's feature record is already
-        // tiered to this route.
-        options.reasoningEffort = args.effort as CompatEffort;
       }
       return options;
     }
