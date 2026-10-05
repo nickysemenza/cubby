@@ -2,9 +2,10 @@ import CubbyKit
 import Foundation
 import Observation
 
-/// Photo-destination policy around the generic entity-list search state. Date matches and recent
-/// records intentionally have independent pages and errors; one unavailable lane must not hide
-/// the other lane or turn photo selection into a second search implementation.
+/// Photo-destination policy around two generic entity lists. Date matches and recent records are
+/// independent `GenericEntityListModel` lanes with their own pages and errors, so one unavailable
+/// lane never hides the other; this owner keeps only the policy between them: the capture-date
+/// scope, recents skipping capture-day rows, and the photo search on the recent lane.
 @MainActor
 @Observable
 final class PhotoEntityChooserModel {
@@ -13,57 +14,55 @@ final class PhotoEntityChooserModel {
             _ filters: EntityFilterState, _ query: String?, _ page: Int, _ sort: String?
         ) async throws -> ListPage<EntityRow>
 
+    /// A lane's scope identity: a new capture date re-scopes both lanes (recents exclude the
+    /// capture day) through `setSource`, which drops the old scope's rows.
+    private nonisolated struct LaneScope: Hashable, Sendable {
+        let lane: String
+        let captureDate: Date?
+    }
+
     let descriptor: EntityDescriptor
-    let captureDate: Date?
+    private(set) var captureDate: Date?
     /// The current device Gregorian day used by callers that need the photo workflow's day
     /// boundary; keeping it on the policy model makes timezone behavior injectable in tests.
     let currentGregorianDay: Date
-    let search: EntityListSearchModel?
-
-    private(set) var dateMatches: [EntityRow] = []
-    private(set) var recentRows: [EntityRow] = []
-    private(set) var dateMeta: ListPageMeta?
-    private(set) var recentMeta: ListPageMeta?
-    private(set) var datePage = 1
-    private(set) var recentPage = 1
-    private(set) var dateError: String?
-    private(set) var recentError: String?
-    private(set) var isLoading = false
-    private(set) var isLoadingDateNextPage = false
-    private(set) var isLoadingRecentNextPage = false
+    private let dateLane: GenericEntityListModel
+    private let recentLane: GenericEntityListModel
+    private var isAdvancingRecents = false
 
     private let loader: Loader
     private let calendar: Calendar
     private let semanticDateKey: String?
-    private let pageSize: Int
-    private var didLoad = false
 
-    var hasSemanticDate: Bool { semanticDateKey != nil }
-    var hasDateMatches: Bool { captureDate != nil && hasSemanticDate }
-    var isSearching: Bool { !(search?.query.isEmpty ?? true) }
+    var hasDateMatches: Bool { captureDate != nil && semanticDateKey != nil }
+    var search: EntityListSearchModel? { recentLane.searchModel }
+    var isSearching: Bool { recentLane.isSearching }
     var searchRows: [EntityRow] { search?.rows ?? [] }
-
-    var hasMoreDateMatches: Bool {
-        guard let dateMeta else { return false }
-        return datePage * dateMeta.pageSize < dateMeta.totalCount
-    }
-
-    var hasMoreRecents: Bool {
-        guard let recentMeta else { return false }
-        return recentPage * recentMeta.pageSize < recentMeta.totalCount
+    var dateMatches: [EntityRow] { hasDateMatches ? dateLane.rows : [] }
+    var recentRows: [EntityRow] { recentLane.rows }
+    var hasMoreDateMatches: Bool { hasDateMatches && dateLane.hasMore }
+    var hasMoreRecents: Bool { recentLane.hasMore }
+    var dateError: String? { hasDateMatches ? Self.error(in: dateLane) : nil }
+    var recentError: String? { Self.error(in: recentLane) }
+    var isLoadingDateNextPage: Bool { dateLane.activity == .loadingNextPage }
+    var isLoadingRecentNextPage: Bool { recentLane.activity == .loadingNextPage || isAdvancingRecents }
+    var isLoading: Bool {
+        recentLane.phase == .idle || isAdvancingRecents
+            || [dateLane, recentLane].contains { $0.activity == .loadingInitial }
     }
 
     init(
         descriptor: EntityDescriptor,
+        client: CubbyClient,
         captureDates: [Date?],
-        pageSize: Int = 25,
         calendar: Calendar = Calendar(identifier: .gregorian),
         now: Date = .now,
+        searchDebounceNanoseconds: UInt64 = 250_000_000,
         loader: @escaping Loader
     ) {
         self.descriptor = descriptor
-        self.captureDate = captureDates.compactMap { $0 }.min()
-        self.pageSize = pageSize
+        let captureDate = captureDates.compactMap { $0 }.min()
+        self.captureDate = captureDate
         var calendar = calendar
         calendar.locale = .current
         // Keep the caller's timezone: tests and device-local photo boundaries both depend on
@@ -71,118 +70,128 @@ final class PhotoEntityChooserModel {
         self.calendar = calendar
         self.currentGregorianDay = calendar.startOfDay(for: now)
         self.loader = loader
-        self.semanticDateKey = Self.semanticDateKey(for: descriptor)
-        self.search = descriptor.primarySearch.map { _ in
-            EntityListSearchModel { query, page in
-                try await loader(EntityFilterState(), query, page, nil)
-            }
-        }
+        let semanticDateKey = Self.semanticDateKey(for: descriptor)
+        self.semanticDateKey = semanticDateKey
+        self.dateLane = GenericEntityListModel(
+            descriptor: descriptor, client: client,
+            source: Self.dateSource(
+                descriptor: descriptor, key: semanticDateKey, captureDate: captureDate,
+                calendar: calendar, loader: loader))
+        self.recentLane = GenericEntityListModel(
+            descriptor: descriptor, client: client,
+            source: Self.recentSource(
+                descriptor: descriptor, key: semanticDateKey, captureDate: captureDate,
+                calendar: calendar, loader: loader),
+            searchDebounceNanoseconds: searchDebounceNanoseconds)
     }
 
     func loadInitial() async {
-        guard !didLoad, !isLoading else { return }
-        didLoad = true
-        isLoading = true
-        dateError = nil
-        recentError = nil
-        if hasDateMatches {
-            do { try await loadDatePage(1, replace: true) } catch { dateError = error.userMessage }
-        }
-        do { try await loadRecentPage(1, replace: true) } catch { recentError = error.userMessage }
-        isLoading = false
+        await dateLane.loadInitial()
+        await recentLane.loadInitial()
+        await advanceRecents(whileCountIs: 0)
     }
 
     func refresh() async {
-        didLoad = true
-        dateMatches = []
-        recentRows = []
-        dateMeta = nil
-        recentMeta = nil
-        datePage = 1
-        recentPage = 1
-        isLoading = true
-        dateError = nil
-        recentError = nil
-        if hasDateMatches {
-            do { try await loadDatePage(1, replace: true) } catch { dateError = error.userMessage }
-        }
-        do { try await loadRecentPage(1, replace: true) } catch { recentError = error.userMessage }
-        isLoading = false
+        await dateLane.refresh()
+        await recentLane.refresh()
+        await advanceRecents(whileCountIs: 0)
+    }
+
+    /// Re-scopes both lanes to a changed photo selection. An active query is replayed against
+    /// the new scope, and no row from the old capture date stays tappable.
+    func setScope(captureDates: [Date?]) async {
+        let newDate = captureDates.compactMap { $0 }.min()
+        guard newDate != captureDate else { return }
+        captureDate = newDate
+        await dateLane.setSource(
+            Self.dateSource(
+                descriptor: descriptor, key: semanticDateKey, captureDate: newDate,
+                calendar: calendar, loader: loader))
+        await recentLane.setSource(
+            Self.recentSource(
+                descriptor: descriptor, key: semanticDateKey, captureDate: newDate,
+                calendar: calendar, loader: loader))
+        await advanceRecents(whileCountIs: 0)
     }
 
     func setSearchQuery(_ query: String) {
-        search?.setQuery(query)
-    }
-
-    func clearSearch() {
-        search?.clear()
+        recentLane.setSearchQuery(query)
     }
 
     func loadMoreDateMatches() async {
-        guard hasDateMatches, hasMoreDateMatches, !isLoadingDateNextPage else { return }
-        isLoadingDateNextPage = true
-        defer { isLoadingDateNextPage = false }
-        do { try await loadDatePage(datePage + 1, replace: false) } catch { dateError = error.userMessage }
+        guard hasMoreDateMatches else { return }
+        await dateLane.loadNextPage()
     }
 
     func loadMoreRecents() async {
-        guard hasMoreRecents, !isLoadingRecentNextPage else { return }
-        isLoadingRecentNextPage = true
-        defer { isLoadingRecentNextPage = false }
-        do { try await loadRecentPage(recentPage + 1, replace: false) } catch {
-            recentError = error.userMessage
+        let count = recentLane.rows.count
+        await recentLane.loadNextPage()
+        await advanceRecents(whileCountIs: count)
+    }
+
+    /// Recent pages advance over pages that add nothing (capture-day-only pages). The server's
+    /// total remains authoritative, so a caller can still reach records beyond a photo's
+    /// capture day.
+    private func advanceRecents(whileCountIs count: Int) async {
+        isAdvancingRecents = true
+        defer { isAdvancingRecents = false }
+        while recentLane.rows.count == count, recentLane.hasMore {
+            let page = recentLane.page
+            await recentLane.loadNextPage()
+            // A failed, superseded or already-running page does not advance: stop, never spin.
+            guard recentLane.page > page else { return }
         }
     }
 
-    private func loadDatePage(_ page: Int, replace: Bool) async throws {
-        let filters =
-            captureDate.map {
-                Self.captureDateFilters(
-                    descriptor: descriptor, key: semanticDateKey, captureDate: $0, calendar: calendar)
-            } ?? EntityFilterState()
-        let result = try await loader(filters, nil, page, "-updatedAt")
-        if replace { dateMatches = result.items } else { appendUnique(result.items, to: &dateMatches) }
-        dateMeta = result.meta
-        datePage = page
-        dateError = nil
+    private static func error(in lane: GenericEntityListModel) -> String? {
+        lane.initialError ?? lane.refreshError ?? lane.nextPageError
     }
 
-    /// Recent pages are advanced over duplicate-only same-day pages. The server's total remains
-    /// authoritative, so a caller can still reach records beyond a photo's capture day.
-    private func loadRecentPage(_ page: Int, replace: Bool) async throws {
-        var requestedPage = page
-        var first = replace
-        repeat {
-            let result = try await loader(EntityFilterState(), nil, requestedPage, "-updatedAt")
-            let eligible = result.items.filter { !isSameSemanticDayAsCapture($0) }
-            if first {
-                recentRows = eligible
-                first = false
-            } else {
-                appendUnique(eligible, to: &recentRows)
+    private static func dateSource(
+        descriptor: EntityDescriptor, key: String?, captureDate: Date?, calendar: Calendar,
+        loader: @escaping Loader
+    ) -> EntityListPageSource {
+        let filters = captureDate.map {
+            captureDateFilters(descriptor: descriptor, key: key, captureDate: $0, calendar: calendar)
+        }
+        return EntityListPageSource(id: LaneScope(lane: "date", captureDate: captureDate)) { page in
+            guard let filters, key != nil else {
+                return ListPage(items: [], meta: ListPageMeta(pageIndex: page, pageSize: 25, totalCount: 0))
             }
-            recentMeta = result.meta
-            recentPage = requestedPage
-            recentError = nil
-            let canAdvance = eligible.isEmpty && requestedPage * result.meta.pageSize < result.meta.totalCount
-            if !canAdvance { return }
-            requestedPage += 1
-        } while true
+            return try await loader(filters, nil, page, "-updatedAt")
+        }
     }
 
-    private func isSameSemanticDayAsCapture(_ row: EntityRow) -> Bool {
-        guard let captureDate else { return false }
-        guard let semanticDateKey, let raw = row.raw[semanticDateKey]?.stringValue else { return false }
+    /// Recently edited records minus the capture day's, which belong to the date lane. The photo
+    /// search sits on this lane's source, so a scope change replays a pending query.
+    private static func recentSource(
+        descriptor: EntityDescriptor, key: String?, captureDate: Date?, calendar: Calendar,
+        loader: @escaping Loader
+    ) -> EntityListPageSource {
+        let loadPage: EntityListPageSource.PageLoader = { page in
+            let result = try await loader(EntityFilterState(), nil, page, "-updatedAt")
+            let eligible = result.items.filter { row in
+                !isSameSemanticDay(row, key: key, captureDate: captureDate, calendar: calendar)
+            }
+            return ListPage(items: eligible, meta: result.meta)
+        }
+        let searchPage: EntityListSearchModel.PageLoader = { query, page in
+            try await loader(EntityFilterState(), query, page, nil)
+        }
+        return EntityListPageSource(
+            id: LaneScope(lane: "recent", captureDate: captureDate), loadPage: loadPage,
+            searchPage: descriptor.primarySearch == nil ? nil : searchPage)
+    }
+
+    private nonisolated static func isSameSemanticDay(
+        _ row: EntityRow, key: String?, captureDate: Date?, calendar: Calendar
+    ) -> Bool {
+        guard let captureDate, let key, let raw = row.raw[key]?.stringValue else { return false }
         if raw.count >= 10 {
-            return String(raw.prefix(10)) == Self.plainDate(captureDate, calendar: calendar)
+            return String(raw.prefix(10)) == plainDate(captureDate, calendar: calendar)
         }
         guard let parsed = ISO8601DateFormatter().date(from: raw) else { return false }
         return calendar.isDate(parsed, inSameDayAs: captureDate)
-    }
-
-    private func appendUnique(_ newRows: [EntityRow], to rows: inout [EntityRow]) {
-        var ids = Set(rows.map(\.id))
-        rows.append(contentsOf: newRows.filter { ids.insert($0.id).inserted })
     }
 
     /// The routing policy's first temporal field the descriptor can actually filter by (a
@@ -224,7 +233,7 @@ final class PhotoEntityChooserModel {
 
     /// `yyyy-MM-dd` in the supplied calendar's time zone. `PlainDate` always uses the device zone,
     /// which is wrong whenever a caller (or a test) evaluates capture days in another zone.
-    private static func plainDate(_ date: Date, calendar: Calendar) -> String {
+    private nonisolated static func plainDate(_ date: Date, calendar: Calendar) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }

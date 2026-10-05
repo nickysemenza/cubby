@@ -3,12 +3,13 @@ import SwiftUI
 
 /// A person-scoped smart collection. The server owns both eligibility rules: effective ownership
 /// and the apparel category; native renders its product projection as the existing product shelf.
+/// Paging and search are the shared `GenericEntityListModel` over a collection page source.
 struct WardrobeView: View {
     let ownerID: String
     let ownerName: String
 
     @Environment(AppModel.self) private var appModel
-    @State private var model: WardrobeModel?
+    @State private var model: GenericEntityListModel?
     @State private var searchText = ""
 
     var body: some View {
@@ -22,110 +23,114 @@ struct WardrobeView: View {
         .fieldGuideScreen()
         .navigationTitle("\(ownerName)’s Wardrobe")
         .searchable(text: $searchText, prompt: "Search wardrobe")
+        .onChange(of: searchText) { _, value in model?.setSearchQuery(value) }
         .task(id: ownerID) {
-            if model == nil { model = WardrobeModel(client: appModel.client, ownerID: ownerID) }
-            await model?.load(search: searchText)
+            let source = Self.source(client: appModel.client, ownerID: ownerID)
+            if let model {
+                await model.setSource(source)
+            } else {
+                let model = GenericEntityListModel(
+                    descriptor: EntityCatalog[.product], client: appModel.client, source: source)
+                self.model = model
+                await model.loadInitial()
+            }
         }
-        .onSubmit(of: .search) { Task { await model?.load(search: searchText) } }
-        .refreshControl { await model?.load(search: searchText) }
+        .refreshControl { await refresh() }
+    }
+
+    private func refresh() async {
+        guard let model else { return }
+        if let search = model.searchModel, model.isSearching {
+            await search.refresh()
+        } else {
+            await model.refresh()
+        }
     }
 
     @ViewBuilder
-    private func content(_ model: WardrobeModel) -> some View {
-        switch model.phase {
-        case .idle, .loading:
-            LoadingIndicator.screen(label: "Loading wardrobe")
-        case .failed(let message):
-            LoadFailureView(title: "Couldn’t load wardrobe", message: message) {
-                await model.load(search: searchText)
-            }
-        case .loaded:
-            if model.rows.isEmpty {
-                ContentUnavailableView(
-                    searchText.isEmpty ? "No apparel yet" : "No matching apparel",
-                    systemImage: "tshirt")
+    private func content(_ model: GenericEntityListModel) -> some View {
+        if let search = model.searchModel, model.isSearching {
+            if !search.rows.isEmpty {
+                shelf(
+                    rows: search.rows, totalCount: search.meta?.totalCount, hasMore: search.hasMore,
+                    isLoadingMore: search.phase == .loading, error: search.nextPageError
+                ) { await search.loadNextPage() }
+            } else if case .failed(let message) = search.phase {
+                LoadFailureView(title: "Couldn’t load wardrobe", message: message) { search.retry() }
+            } else if search.phase == .loaded {
+                ContentUnavailableView("No matching apparel", systemImage: "tshirt")
             } else {
-                ScrollView {
-                    Text("\(model.totalCount.formatted()) items")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, FieldGuideTokens.Space.md)
-                    EntityShelfView(
-                        descriptor: EntityCatalog[.product], rows: model.rows,
-                        subtitleOverride: { $0.subtitle })
-                    if model.hasMore {
-                        Button("Load more") { Task { await model.loadNextPage() } }
-                            .disabled(model.loadingNextPage)
-                            .padding()
-                    }
-                }
+                LoadingIndicator.screen(label: "Loading wardrobe")
+            }
+        } else if !model.rows.isEmpty {
+            shelf(
+                rows: model.rows, totalCount: model.meta?.totalCount, hasMore: model.hasMore,
+                isLoadingMore: model.activity != .idle, error: model.nextPageError
+            ) { await model.loadNextPage() }
+        } else if case .failed(let message) = model.phase {
+            LoadFailureView(title: "Couldn’t load wardrobe", message: message) { await model.refresh() }
+        } else if model.phase == .loaded {
+            ContentUnavailableView("No apparel yet", systemImage: "tshirt")
+        } else {
+            LoadingIndicator.screen(label: "Loading wardrobe")
+        }
+    }
+
+    private func shelf(
+        rows: [EntityRow], totalCount: Int?, hasMore: Bool, isLoadingMore: Bool, error: String?,
+        loadMore: @escaping () async -> Void
+    ) -> some View {
+        ScrollView {
+            if let totalCount {
+                Text("\(totalCount.formatted()) items")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, FieldGuideTokens.Space.md)
+            }
+            EntityShelfView(
+                descriptor: EntityCatalog[.product], rows: rows, subtitleOverride: { $0.subtitle })
+            if let error {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, FieldGuideTokens.Space.md)
+            }
+            if hasMore {
+                Button("Load more") { Task { await loadMore() } }
+                    .disabled(isLoadingMore)
+                    .padding()
             }
         }
     }
-}
 
-@MainActor @Observable
-final class WardrobeModel {
-    enum Phase: Equatable { case idle, loading, loaded, failed(String) }
-
-    private let client: CubbyClient
-    private let ownerID: String
-    private let pageSize = 50
-    private var pageIndex = 0
-    private var generation = 0
-    private var loadedSearch = ""
-    private(set) var phase: Phase = .idle
-    private(set) var rows: [EntityRow] = []
-    private(set) var totalCount = 0
-    private(set) var loadingNextPage = false
-
-    var hasMore: Bool { rows.count < totalCount }
-
-    init(client: CubbyClient, ownerID: String) {
-        self.client = client
-        self.ownerID = ownerID
+    /// The wardrobe collection query as a page source. Its rows are the collection's product
+    /// projection, not the product list route, so declared enrichment stays off.
+    private static func source(client: CubbyClient, ownerID: String) -> EntityListPageSource {
+        EntityListPageSource(
+            id: ownerID,
+            loadPage: { @MainActor page in
+                try await wardrobePage(client: client, ownerID: ownerID, search: nil, page: page)
+            },
+            searchPage: { @MainActor query, page in
+                try await wardrobePage(client: client, ownerID: ownerID, search: query, page: page)
+            })
     }
 
-    func load(search: String) async {
-        generation += 1
-        let requestGeneration = generation
-        loadedSearch = search
-        loadingNextPage = false
-        phase = .loading
-        pageIndex = 0
+    /// `collection.referenceDetail` pages from 0; the shared paginator counts pages from 1.
+    private static func wardrobePage(
+        client: CubbyClient, ownerID: String, search: String?, page: Int
+    ) async throws -> ListPage<EntityRow> {
+        let pageSize = 50
         do {
-            let page = try await client.wardrobe(
-                ownerID: ownerID, search: search, pageIndex: 0, pageSize: pageSize)
-            guard requestGeneration == generation else { return }
-            rows = page.products.map(Self.row)
-            totalCount = page.totalCount
-            phase = .loaded
+            let out = try await client.wardrobe(
+                ownerID: ownerID, search: search, pageIndex: page - 1, pageSize: pageSize)
+            return ListPage(
+                items: out.products.map(row),
+                meta: ListPageMeta(pageIndex: page, pageSize: pageSize, totalCount: out.totalCount))
         } catch {
-            guard requestGeneration == generation else { return }
-            phase = .failed(error.userMessage)
-            Diagnostics.report(error, context: "wardrobe.load")
-        }
-    }
-
-    func loadNextPage() async {
-        guard hasMore, !loadingNextPage else { return }
-        loadingNextPage = true
-        let requestGeneration = generation
-        defer {
-            if requestGeneration == generation { loadingNextPage = false }
-        }
-        do {
-            let next = pageIndex + 1
-            let page = try await client.wardrobe(
-                ownerID: ownerID, search: loadedSearch, pageIndex: next, pageSize: pageSize)
-            guard requestGeneration == generation else { return }
-            let existingIDs = Set(rows.map(\.id))
-            rows.append(contentsOf: page.products.map(Self.row).filter { !existingIDs.contains($0.id) })
-            totalCount = page.totalCount
-            pageIndex = next
-        } catch {
-            Diagnostics.report(error, context: "wardrobe.loadNextPage")
+            if !(error is CancellationError) { Diagnostics.report(error, context: "wardrobe.load") }
+            throw error
         }
     }
 
