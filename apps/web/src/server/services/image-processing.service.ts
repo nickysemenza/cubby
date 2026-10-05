@@ -46,7 +46,7 @@ import {
 } from "~/server/repo/image-processing";
 import {
   assignImageProcessingExecutor,
-  isAssignedImageProcessingDevice,
+  findImageProcessingDeviceAssignment,
 } from "~/server/repo/image-processing-history";
 import {
   recordImageProcessingEvent,
@@ -563,7 +563,7 @@ export async function completeAssignedCompanionImageProcessing(
   userId: string,
 ) {
   if (
-    !(await isAssignedImageProcessingDevice(db, {
+    !(await findImageProcessingDeviceAssignment(db, {
       jobId: input.result.jobId,
       attemptId: input.result.attemptId,
       deviceId: input.deviceId,

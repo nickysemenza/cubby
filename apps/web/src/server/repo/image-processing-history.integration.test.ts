@@ -40,7 +40,7 @@ import {
 import {
   assignImageProcessingExecutor,
   createImageProcessingSubmission,
-  isAssignedImageProcessingDevice,
+  findImageProcessingDeviceAssignment,
 } from "./image-processing-history";
 import { updateImageProcessingSettings } from "./image-processing-maintenance";
 
@@ -241,13 +241,13 @@ describe("image execution history conservation", () => {
     expect(await assignImageProcessingExecutor(ctx.db, assignment)).toBe(true);
     expect(await assignImageProcessingExecutor(ctx.db, assignment)).toBe(false);
     expect(
-      await isAssignedImageProcessingDevice(ctx.db, {
+      await findImageProcessingDeviceAssignment(ctx.db, {
         jobId,
         attemptId: lease.attemptId,
         userId: "another-user",
         deviceId,
       }),
-    ).toBe(false);
+    ).toBeNull();
     await reclaimExpiredImageProcessingLeases(
       ctx.db,
       new Date(Date.now() + 120_000),

@@ -44,6 +44,14 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
   "companion-analysis.spec.ts": [
     "apps/web/src/routes/api/v1/$resource/$operation.ts",
   ],
+  "companion-socket.spec.ts": [
+    "apps/web/src/app/collections/**",
+    "apps/web/src/app/meals/**",
+    "apps/web/src/routes/__root.tsx",
+    "apps/web/src/routes/_authenticated.tsx",
+    "apps/web/src/routes/_authenticated/-recipe-export-search.ts",
+    "apps/web/src/routes/index.tsx",
+  ],
   "connected-records.spec.ts": [
     "apps/web/src/routes/_authenticated/plantings.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/plants.$shortcode.tsx",

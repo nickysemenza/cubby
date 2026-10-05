@@ -226,19 +226,19 @@ export class ImageProcessingDurableObject
         new Error(result.outcome.reason),
       );
     const deviceId = connection.deviceId;
-    const { isAssignedImageProcessingDevice } =
+    const { findImageProcessingDeviceAssignment } =
       await import("~/server/repo/image-processing-history");
-    if (
-      !deviceId ||
-      !(await withRequestDbClient(this.env.HYPERDRIVE.connectionString, () =>
-        isAssignedImageProcessingDevice(db, {
-          jobId: result.jobId,
-          attemptId: result.attemptId,
-          deviceId,
-          userId: connection.userId,
-        }),
-      ))
-    ) {
+    const assignment = deviceId
+      ? await withRequestDbClient(this.env.HYPERDRIVE.connectionString, () =>
+          findImageProcessingDeviceAssignment(db, {
+            jobId: result.jobId,
+            attemptId: result.attemptId,
+            deviceId,
+            userId: connection.userId,
+          }),
+        )
+      : null;
+    if (!assignment) {
       // A deleted/legacy attempt can remain in an older companion outbox. Drop
       // it without adopting anything, but acknowledge so it cannot replay forever.
       socket.send(
@@ -274,7 +274,11 @@ export class ImageProcessingDurableObject
         }),
       ),
     );
-    await this.offerNextCommand(socket);
+    // A reconnect replays the outbox right after hello; refilling for those
+    // results too would hand one job per replayed result to a device that
+    // runs four at a time, and the extras would wait out their leases.
+    if (assignment.connectionId === connection.connectionId)
+      await this.offerNextCommand(socket);
   }
 
   /**
