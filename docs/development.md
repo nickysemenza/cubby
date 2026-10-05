@@ -77,7 +77,9 @@ them.
 
 - Fresh worktrees run `pnpm agent:setup`: a frozen install, then a WASM build
   restored from the shared Nx cache. Gitignored env comes from
-  [.worktreeinclude](../.worktreeinclude).
+  [.worktreeinclude](../.worktreeinclude). Every `pnpm install` re-verifies
+  `node_modules` (`optimisticRepeatInstall: false`), so rerunning it relinks a
+  missing dependency instead of reporting "Already up to date".
 - Rust builds share `~/.cache/cubby/cargo-target`.
   [scripts/ensure-wasm.ts](../scripts/ensure-wasm.ts) keys the WASM artifact on
   Cargo's resolved graph and file contents, so it never drifts silently.
