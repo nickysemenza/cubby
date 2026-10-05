@@ -12,7 +12,10 @@ import { z } from "zod";
 
 import { db, withRequestDbClient } from "~/server/db";
 
-import type { ImageProcessingCompanionRpc } from "./contracts";
+import {
+  COMPANION_LEASE_MS,
+  type ImageProcessingCompanionRpc,
+} from "./contracts";
 import { safeImageProcessingError } from "./safe-error";
 
 const log = createLogger("image-processing");
@@ -23,6 +26,7 @@ const socketAttachment = z.object({
   protocolVersion: z.literal(1),
   userId: z.string().min(1),
   deviceId: z.uuid().optional(),
+  deviceName: z.string().optional(),
   connectionId: z.uuid().optional(),
   appVersion: z.string().optional(),
   osVersion: z.string().optional(),
@@ -196,6 +200,7 @@ export class ImageProcessingDurableObject
         userId: previous.userId,
         connectionId: previous.connectionId ?? crypto.randomUUID(),
         deviceId: hello.deviceId,
+        deviceName: hello.deviceName,
         appVersion: hello.appVersion,
         osVersion: hello.osVersion,
         platform: hello.platform,
@@ -211,6 +216,7 @@ export class ImageProcessingDurableObject
           }),
         ),
       );
+      await this.offerNextCommand(socket);
       return;
     }
     const connection = socketAttachment.parse(socket.deserializeAttachment());
@@ -265,6 +271,47 @@ export class ImageProcessingDurableObject
           type: "acknowledge",
           jobId: parsed.data.result.jobId,
           attemptId: parsed.data.result.attemptId,
+        }),
+      ),
+    );
+    await this.offerNextCommand(socket);
+  }
+
+  /**
+   * A wakeup offers a job once, when it is queued; one queued while no capable
+   * device was connected waits. A device that connects or finishes a job claims
+   * the next one it can run, so waiting work drains without an unrelated
+   * retry, web catch-up, or the daily cron.
+   */
+  private async offerNextCommand(socket: CfWebSocket) {
+    const connection = socketAttachment.parse(socket.deserializeAttachment());
+    const { deviceId, appVersion } = connection;
+    if (
+      !deviceId ||
+      !appVersion ||
+      !connection.capabilities.foreground ||
+      !isParticipating(connection)
+    )
+      return;
+    const { claimCompanionImageCommand } =
+      await import("~/server/services/image-processing.service");
+    const command = await withRequestDbClient(
+      this.env.HYPERDRIVE.connectionString,
+      () =>
+        claimCompanionImageCommand(db, {
+          device: { ...connection, deviceId, appVersion },
+          userId: connection.userId,
+          leaseMs: COMPANION_LEASE_MS,
+          connectionId: connection.connectionId,
+        }),
+    );
+    if (!command) return;
+    socket.send(
+      JSON.stringify(
+        imageProcessingServerMessage.parse({
+          protocolVersion: 1,
+          type: "command",
+          command,
         }),
       ),
     );

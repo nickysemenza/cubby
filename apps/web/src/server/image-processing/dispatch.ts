@@ -27,10 +27,12 @@ import {
 } from "~/server/utils/s3";
 
 import { completeCloudImageDescription } from "./cloud-description";
-import type { ImageProcessingCompanionRpc } from "./contracts";
+import {
+  COMPANION_LEASE_MS,
+  type ImageProcessingCompanionRpc,
+} from "./contracts";
 import { safeImageProcessingError } from "./safe-error";
 
-const LEASE_MS = 5 * 60_000;
 type ImageProcessingStub = ReturnType<
   NonNullable<ReturnType<typeof getImageProcessingNamespace>>["getByName"]
 >;
@@ -52,7 +54,7 @@ export async function dispatchImageProcessingWakeup(
   const claimed = await claimImageProcessingJob(db, {
     jobId,
     kinds: ["describe_image", "subject_lift"],
-    leaseMs: LEASE_MS,
+    leaseMs: COMPANION_LEASE_MS,
   });
   if (!claimed) return "skipped";
   try {
