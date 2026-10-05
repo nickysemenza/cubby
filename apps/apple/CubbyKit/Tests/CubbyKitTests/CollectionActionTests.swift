@@ -368,7 +368,8 @@ struct CollectionActionTests {
         model.submit(confirmed: false) { _ in }
         while model.isRunning { await Task.yield() }
         let start = try #require(recorder.requests.last { $0.path.hasSuffix("startTargeted") })
-        #expect(start.body["sourceId"] == nil || start.body["sourceId"] == .null)
+        // `sourceId` is required and nullable: an absent key is rejected as invalid input.
+        #expect(start.body.keys.contains("sourceId") && start.body["sourceId"] == .null)
         #expect(start.body["purchaseId"] == "PUR-4K7M")
     }
 
