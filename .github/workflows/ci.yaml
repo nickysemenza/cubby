@@ -479,7 +479,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: apps/apple/CubbyKit/.build
-          key: spm-build-v1-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/CubbyKit/**') }}
+          key: spm-build-v1-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/CubbyKit/**') }}-${{ hashFiles('apps/apple/scripts/check-openapi-warnings.sh') }}
           restore-keys: |
             spm-build-v1-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-
             spm-build-v1-${{ runner.os }}-${{ steps.swift-version.outputs.hash }}-
