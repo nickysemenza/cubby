@@ -13,7 +13,7 @@ const importLine = (ref: SourceRef) =>
 
 // The router plugin's splitter re-parses an inlined call expression with a
 // JSX-less babel config, so page bodies are bound to consts and only the
-// identifier reaches the literal options object (see `entity-routes.tsx`).
+// identifier reaches the literal options object (see `list-page.tsx`).
 const splitterNote =
   "// Bound to a const, not inlined into the options object: the router plugin's\n" +
   "// splitter re-parses an inlined call expression with a JSX-less babel config,\n" +
@@ -57,7 +57,7 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
           'import { CreateDialogAction } from "~/ui/forms/create-dialog-action";',
         ]
       : []),
-    'import { listPage } from "~/entity/routing/entity-routes";',
+    'import { listPage } from "~/entity/routing/list-page";',
     ...(entity.route.create === "page"
       ? ['import { Button } from "~/ui/primitives/button";']
       : []),
@@ -127,7 +127,7 @@ const renderDetailRoute = (
     "",
     importLine(GENERIC_DETAIL),
     'import { ensureDetailRecord } from "~/entity/routing/detail-loader";',
-    'import { detailPage, notFoundPage } from "~/entity/routing/entity-routes";',
+    'import { detailPage, notFoundPage } from "~/entity/routing/detail-page";',
     'import { RouteErrorComponent } from "~/ui/route-error";',
     'import { DetailPagePending } from "~/ui/route-pending";',
     queryRef === undefined
