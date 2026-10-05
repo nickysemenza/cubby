@@ -99,12 +99,11 @@ async function runJourneys(harness: Harness, runtime: Runtime) {
 
 async function runStandard() {
   const { writeLocalWorkerdConfig } = await import("../e2e-worker-config");
-  const { prepareE2EDatabaseTemplate } =
-    await import("../../tests/e2e/e2e-database");
+  const { prepareTemplate } = await import("../test-database-lease");
   const { createE2EWorkerRuntime } =
     await import("../../tests/e2e/e2e-worker-runtime");
   writeLocalWorkerdConfig(webRoot);
-  await prepareE2EDatabaseTemplate();
+  await prepareTemplate("browser");
   const runtime = await createE2EWorkerRuntime({
     authenticated: true,
     parallelIndex: 0,
@@ -160,8 +159,8 @@ function liveGatewayWorker(swap?: typeof agentModel): WorkerdModelWorker {
 }
 
 async function runCoupled() {
-  const { prepareE2EDatabaseTemplate, createE2EDatabase } =
-    await import("../../tests/e2e/e2e-database");
+  const { prepareTemplate } = await import("../test-database-lease");
+  const { createE2EDatabase } = await import("../../tests/e2e/e2e-database");
   const { authenticate } = await import("../../tests/e2e/e2e-worker-runtime");
   const { createWorkerdHarness } =
     await import("../purchase-agent-workerd-harness");
@@ -173,7 +172,7 @@ async function runCoupled() {
   const closers: Array<() => Promise<void>> = [];
   const failures: unknown[] = [];
   try {
-    await prepareE2EDatabaseTemplate();
+    await prepareTemplate("browser");
     const database = await createE2EDatabase();
     closers.push(() => database.close());
     const storage = await createE2EObjectStorage();

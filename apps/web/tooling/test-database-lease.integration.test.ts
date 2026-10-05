@@ -1,17 +1,16 @@
 import { pollUntil } from "@cubby/shared/retry";
 import { Pool } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
-import {
-  createE2EDatabase,
-  prepareE2EDatabaseTemplate,
-} from "../tests/e2e/e2e-database";
+import { createE2EDatabase } from "../tests/e2e/e2e-database";
+import { leaseDatabase, prepareTemplate } from "./test-database-lease";
 import { TEST_USER_ID, withTestDb } from "./test-setup";
 
 // Failure modes this file pins at the real IntegreSQL/PostgreSQL boundary:
 // a released database returns to the pool still dirty (reuse instead of
 // recreate, or no release at all); a second close re-releases a slot another
 // lease may already hold; preparing one namespace's template invalidates a
-// database the other namespace has checked out.
+// database the other namespace has checked out; a checkout whose setup fails
+// (seeding, opening the holder's pool) leaks a dirty database.
 
 const maintenance = new Map<string, Pool>();
 afterAll(async () => {
@@ -76,7 +75,7 @@ async function recreatedProbeSurvives(
       const oid = await databaseOid(databaseUrl, name);
       return oid !== undefined && oid !== oidBefore ? oid : undefined;
     },
-    { label: `IntegreSQL recreating ${name}`, timeoutMs: 15_000 },
+    { label: `IntegreSQL recreating ${name}`, timeoutMs: 8_000 },
   );
   return hasProbe(databaseUrl);
 }
@@ -85,7 +84,7 @@ describe("disposable database lease", () => {
   const ctx = withTestDb();
 
   it("recreates a released database from the template, once", async () => {
-    await prepareE2EDatabaseTemplate();
+    await prepareTemplate("browser");
     const lease = await createE2EDatabase();
     await writeProbe(lease.databaseUrl);
     const oid = await databaseOid(lease.databaseUrl, lease.name);
@@ -99,11 +98,36 @@ describe("disposable database lease", () => {
     ).toBe(false);
   });
 
+  it("releases a checkout whose setup fails", async () => {
+    await prepareTemplate("browser");
+    let leased: { name: string; databaseUrl: string; oid?: string } | undefined;
+    await expect(
+      leaseDatabase("browser", async ({ name, databaseUrl }) => {
+        await writeProbe(databaseUrl);
+        leased = {
+          name,
+          databaseUrl,
+          oid: await databaseOid(databaseUrl, name),
+        };
+        throw new Error("synthetic seed failure");
+      }),
+    ).rejects.toThrow("synthetic seed failure");
+
+    expect(leased?.oid).toBeDefined();
+    expect(
+      await recreatedProbeSurvives(
+        leased?.databaseUrl ?? "",
+        leased?.name ?? "",
+        leased?.oid ?? "",
+      ),
+    ).toBe(false);
+  });
+
   it("keeps the Vitest and browser templates apart while both are leased", async () => {
     const vitest = new Pool({ connectionString: ctx.databaseUrl, max: 1 });
     try {
       const [browser, current] = await Promise.all([
-        prepareE2EDatabaseTemplate().then(() => createE2EDatabase()),
+        prepareTemplate("browser").then(() => createE2EDatabase()),
         vitest.query<{ name: string }>("SELECT current_database() AS name"),
       ]);
       try {
