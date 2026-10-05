@@ -3,8 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { acquireHarnessLock } from "../../../../scripts/lib/harness-lock.ts";
 import { writeLocalWorkerdConfig } from "../../tooling/e2e-worker-config";
-
-import { prepareE2EDatabaseTemplate } from "./e2e-database";
+import { prepareTemplate } from "../../tooling/test-database-lease";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,7 +24,7 @@ async function globalSetup(): Promise<() => void> {
 
   console.log("[E2E Setup] Preparing shared PostgreSQL template...");
   const templateStart = performance.now();
-  await prepareE2EDatabaseTemplate();
+  await prepareTemplate("browser");
   console.log(
     `[E2E Setup] Shared PostgreSQL template is ready ${Math.round(performance.now() - templateStart)}ms`,
   );

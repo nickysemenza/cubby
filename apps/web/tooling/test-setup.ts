@@ -1,6 +1,9 @@
 import { pollUntil } from "@cubby/shared/retry";
-import { testServiceConfig } from "./test-service-config";
-import { hashSchemaTemplateInputs } from "./schema-template-inputs";
+import {
+  type DatabaseLease,
+  leaseDatabase,
+  prepareTemplate,
+} from "./test-database-lease";
 import {
   BASE_HOME_ID,
   BASE_HOME_SHORTCODE,
@@ -13,10 +16,6 @@ import {
   buildActorContext,
 } from "@cubby/schemas/context";
 import { testUserId } from "@cubby/schemas/testing";
-import {
-  IntegreSQLClient,
-  type IntegreSQLDatabaseConfig,
-} from "@devoxa/integresql-client";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
@@ -37,13 +36,8 @@ import type {
   EntityPublicOutput,
 } from "../src/server/entity-kernel/adapter";
 import type { EntityKernelEntity } from "../src/server/entity-kernel/contracts";
-import { migrateDatabase } from "./db-migrate";
 import type { CreatableEntity, EntityOverrides } from "./factories/build";
 import { z } from "zod";
-
-let client: IntegreSQLClient | undefined;
-const getIntegreSQL = () =>
-  (client ??= new IntegreSQLClient({ url: testServiceConfig().url }));
 
 const toTestDatabase = (
   value: DatabaseClient | Database,
@@ -63,8 +57,6 @@ const toTestDatabase = (
   };
   return new Database(() => runtime);
 };
-
-let hash = "";
 
 /**
  * Test-only SQL counter.  It wraps the file-local pool at its lowest shared
@@ -136,33 +128,11 @@ export const TEST_ACTOR: ActorContext = buildActorContext(
   testUserId(TEST_USER_ID),
 );
 
-async function getTemplateHash(): Promise<string> {
-  return hashSchemaTemplateInputs();
-}
-
+/** Vitest `globalSetup`: prepare the template every integration file leases from. */
 export async function setup() {
-  console.log("TEST GLOBAL SETUP");
-  hash = await getTemplateHash();
-
-  // Initialize the template database
-  await getIntegreSQL().initializeTemplate(hash, async (databaseConfig) => {
-    const connectionUrl = getIntegreSQL().databaseConfigToConnectionUrl(
-      remapDBConfig(databaseConfig),
-    );
-
-    console.log("Migrating template database");
-    const pool = new Pool({ connectionString: connectionUrl });
-    try {
-      await migrateDatabase(drizzle(pool));
-      console.log("Template database migrated");
-    } catch (err) {
-      console.error("Template migration failed:", err);
-      throw err;
-    } finally {
-      await pool.end();
-    }
-  });
+  await prepareTemplate("vitest");
 }
+
 /**
  * The one row the template does not carry. `AuditLog.userId` is NOT NULL ->
  * `user.id` and virtually every repo mutation writes an audit row, so this must
@@ -205,88 +175,64 @@ let fileDb: {
   databaseUrl: string;
   rawDb: ReturnType<typeof drizzle>;
   pool: Pool;
-  /** IntegreSQL's pool slot for this database, for {@link closeTestDb}. */
-  testId: number;
+  /** Released by {@link closeTestDb}. */
+  lease: DatabaseLease;
 } | null = null;
 
 /** `TRUNCATE` target list, resolved once per file (see {@link resetTestDb}). */
 let truncateTargets = "";
 
 /**
- * Hand the database back so IntegreSQL drops and recreates it from the template.
- *
- * This is NOT optional bookkeeping. IntegreSQL serves a fixed ring of databases
- * (16 by default) and, told nothing, eventually re-hands one that is still in
- * use. Under the old per-test model a database was held for milliseconds and
- * that rarely bit; holding one for a whole file makes it certain — two parallel
- * files get the same database and the second one's seed dies on
- * `duplicate key ... "user_pkey"`. Releasing here keeps the ring honest.
- *
- * `recreate` (not `reuse`) because we have dirtied it.
- *
- * The status check is load-bearing: `fetch` only rejects on a network error, so
- * a 404/500 (stale `testId`, hash mismatch) would resolve normally and leave a
- * dirty database in the ring — resurfacing as `duplicate key ... "user_pkey"` in
- * some unrelated file later. Fail here, where the cause is still legible.
+ * Every public table, derived from the live database rather than hardcoded,
+ * so a new table in schema.ts is cleaned automatically. A stale hardcoded list
+ * would silently leak rows between tests — the exact bug this whole mechanism
+ * exists to prevent — and nothing would fail loudly enough to notice.
  */
-async function releaseTestDb(testId: number) {
-  const hash = await getTemplateHash();
-  const url = `${testServiceConfig().url}/api/v1/templates/${hash}/tests/${testId}/recreate`;
-  const response = await fetch(url, { method: "POST" });
-  if (!response.ok) {
+async function readTruncateTargets(pool: Pool): Promise<string> {
+  const { rows } = await pool.query<{ list: string | null }>(
+    `SELECT string_agg(format('%I', tablename), ', ') AS list
+       FROM pg_tables WHERE schemaname = 'public'`,
+  );
+  const list = rows[0]?.list ?? "";
+  if (!list) {
     throw new Error(
-      `test-setup: failed to release IntegreSQL database ${testId} (${response.status} ${response.statusText}). ` +
-        "It will be re-handed to another test file while still dirty. " +
-        `Body: ${await response.text().catch(() => "<unreadable>")}`,
+      "test-setup: found no public tables to truncate — is the IntegreSQL template migrated?",
     );
   }
+  return list;
 }
 
 async function getFileDb() {
   if (fileDb) return fileDb;
 
-  const databaseConfig = await getIntegreSQL().getTestDatabase(
-    await getTemplateHash(),
-  );
-  // The high-level client drops the numeric pool id, so recover it from the
-  // database name (`integresql_test_<hash>_007`) — we need it to release.
-  const testId = Number(/_(\d+)$/.exec(databaseConfig.database)?.[1]);
-  if (!Number.isInteger(testId)) {
-    throw new Error(
-      `test-setup: could not parse an IntegreSQL pool id from "${databaseConfig.database}"`,
-    );
-  }
-  const connectionUrl = getIntegreSQL().databaseConfigToConnectionUrl(
-    remapDBConfig(databaseConfig),
-  );
-  const pool = countPoolQueries(new Pool({ connectionString: connectionUrl }));
-  // `resetTestDb` terminates this pool's own idle backends; node-postgres
-  // surfaces that as an 'error' on the idle client, and an unhandled one takes
-  // the whole worker down. Swallow it — the pool just opens a fresh connection.
-  pool.on("error", () => {});
+  // Held for the whole file, so {@link closeTestDb} must release it: an
+  // unreleased slot is re-handed to a parallel file while still in use.
+  const {
+    lease,
+    prepared: { pool, tables },
+  } = await leaseDatabase("vitest", async ({ databaseUrl }) => {
+    const pool = countPoolQueries(new Pool({ connectionString: databaseUrl }));
+    // `resetTestDb` terminates this pool's own idle backends; node-postgres
+    // surfaces that as an 'error' on the idle client, and an unhandled one
+    // takes the whole worker down. Swallow it — the pool just opens a fresh
+    // connection.
+    pool.on("error", () => {});
+    try {
+      return { pool, tables: await readTruncateTargets(pool) };
+    } catch (error) {
+      await pool.end();
+      throw error;
+    }
+  });
+  truncateTargets = tables;
   const rawDb = drizzle({ client: pool, schema });
-
-  // Derived from the live database rather than hardcoded, so a new table in
-  // schema.ts is cleaned automatically. A stale hardcoded list would silently
-  // leak rows between tests — the exact bug this whole mechanism exists to
-  // prevent — and nothing would fail loudly enough to notice.
-  const { rows } = await pool.query<{ list: string | null }>(
-    `SELECT string_agg(format('%I', tablename), ', ') AS list
-       FROM pg_tables WHERE schemaname = 'public'`,
-  );
-  truncateTargets = rows[0]?.list ?? "";
-  if (!truncateTargets) {
-    throw new Error(
-      "test-setup: found no public tables to truncate — is the IntegreSQL template migrated?",
-    );
-  }
 
   fileDb = {
     db: toTestDatabase(rawDb, pool),
-    databaseUrl: connectionUrl,
+    databaseUrl: lease.databaseUrl,
     rawDb,
     pool,
-    testId,
+    lease,
   };
   return fileDb;
 }
@@ -366,11 +312,15 @@ export interface TestDbContext {
  */
 export async function closeTestDb() {
   if (!fileDb) return;
-  const { pool, testId } = fileDb;
+  const { pool, lease } = fileDb;
   fileDb = null;
   truncateTargets = "";
-  await pool.end();
-  await releaseTestDb(testId);
+  // Release even when ending the pool fails: a held slot starves the ring.
+  try {
+    await pool.end();
+  } finally {
+    await lease.close();
+  }
 }
 
 /**
@@ -520,15 +470,6 @@ export async function raceUniqueInsert<TWinner, TLoser>(
     );
   }
 }
-
-const remapDBConfig = (
-  databaseConfig: IntegreSQLDatabaseConfig,
-): IntegreSQLDatabaseConfig => {
-  const { host, port } = testServiceConfig();
-  databaseConfig.host = host;
-  databaseConfig.port = port;
-  return databaseConfig;
-};
 
 // NOTE: We use dynamic imports for repo modules to avoid loading env.js
 // during vitest globalSetup phase (before test.env variables are applied)

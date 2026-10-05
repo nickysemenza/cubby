@@ -91,6 +91,9 @@ existing block. Extend the generic path when it almost fits. See
 - Shared builders: `packages/schemas/src/test-support`; deferreds via
   `Promise.withResolvers()`.
 - Import convergence: `apps/web/tooling/convergence-harness.ts`.
+- Disposable IntegreSQL databases: `apps/web/tooling/test-database-lease.ts`
+  (`prepareTemplate`, `leaseDatabase`, one template per namespace). Vitest
+  keeps `withTestDb`; browser workers use `createE2EDatabase`.
 - Scripts: `scripts/lib/tree-digest.ts` (`walkFiles`, `digestFiles`),
   `scripts/lib/run.ts` (child processes).
 
