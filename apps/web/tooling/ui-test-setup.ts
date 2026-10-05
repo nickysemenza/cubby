@@ -37,11 +37,13 @@ afterEach(() => {
 });
 
 // A synchronous test can render a `React.lazy` section (detail slots) and
-// return while its chunk is still importing. If that import is still pending
-// when the file's environment is torn down, it fails whichever file is
-// running ("Cannot load ... after the environment was torn down"). Settle
-// pending imports once per file, after every tree has unmounted: settling
-// after each test would instead render a resolved slot into the next test.
+// return while its chunk is still importing. The ui project reuses one
+// environment and module graph across files (`isolate: false`), and Vitest
+// rejects a worker's pending module requests when its run request ends, so
+// an import still in flight then fails whichever file is running ("Cannot
+// load ... after the environment was torn down"). Settle pending imports at
+// the end of each file, after every tree has unmounted: settling after each
+// test would instead render a resolved slot into the next test.
 afterAll(async () => {
   await vi.dynamicImportSettled();
 });
