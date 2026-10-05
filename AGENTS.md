@@ -21,8 +21,10 @@
   session's explicit `/model` or effort choice wins. Work directly by default:
   finish in the main session anything a handful of tool calls covers, including
   lookups in a known file. Delegate only independent tracks that run in
-  parallel, a broad read-heavy sweep, or an approved multi-unit implementation;
-  use an independent review agent only for broad or risky work.
+  parallel, a broad read-heavy sweep, or an approved multi-unit implementation
+  (Opus at medium). Every PR gets one independent `gpt-6.1-sol` / high review;
+  production migrations and major infra changes add `gpt-6-astra` / high, and
+  Fable / high only breaks an implementation–review disagreement.
 - Use synthetic data in repository content and outward-facing engineering text.
   Never include personal or household information, real Cubby entity identifiers
   or records, or private source material in docs, comments, fixtures, examples,

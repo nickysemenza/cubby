@@ -10,55 +10,61 @@ Delegation pays only for:
 - two or more independent tracks that run in parallel;
 - a broad read-heavy sweep whose raw output would flood the main context;
 - an approved implementation with several independent units or a long
-  mechanical body (Sonnet/Terra lane). The main agent implements small or
-  single-file changes itself.
+  mechanical body (the Opus implementation lane). The main agent implements
+  small or single-file changes itself.
 
 Anything a handful of tool calls covers stays in the main session — a lookup in
 a known file, a small plan, a focused test. Measured over 30 days of Claude
 sessions, half spawned subagents and subagents consumed 47% of all context
 tokens, so each spawn should be a deliberate choice. Parallel lanes suit
 read-heavy work; write lanes own disjoint worktrees or stay in the main thread.
+The per-PR review below is the one routine spawn.
 
 ## Lanes
 
-Use the cheapest lane that can independently validate the work. Preserve an
-explicit user model choice and the current main session. Provider configuration
-is host state; these supported pairs are the Cubby routing contract.
+Preserve an explicit user model choice and the current main session. Provider
+configuration is host state; these supported pairs are the Cubby routing
+contract.
 
-| Work                                                     | Codex                    | Claude          |
-| -------------------------------------------------------- | ------------------------ | --------------- |
-| Targeted search, log extraction, mechanical sanitization | `gpt-6-luna` / low       | haiku / low     |
-| Bounded implementation, focused tests, docs restructure  | `gpt-5.6-terra` / medium | sonnet / medium |
-| Hard diagnosis, cross-subsystem work                     | `gpt-6.1-sol` / high     | opus / medium   |
-| Independent broad or high-risk review                    | `gpt-6.1-sol` / high     | opus / high     |
+| Work                                                      | Model / effort                              |
+| --------------------------------------------------------- | ------------------------------------------- |
+| Implementation, focused tests, docs (the default lane)    | Claude opus (Opus 5.5) / medium             |
+| Targeted search, log extraction, mechanical sanitization  | haiku / low, or `gpt-6-luna` / low on Codex |
+| Hard diagnosis, cross-subsystem work                      | opus / medium                               |
+| Independent review of every PR                            | `gpt-6.1-sol` / high                        |
+| Second review: production migration or major infra change | `gpt-6-astra` / high                        |
+| Implementation and review disagree on something material  | fable (`claude-fable-5-1`) / high           |
 
-Search and extraction lanes run at low effort; diagnosis and review lanes
-start at their table effort. Escalate when evidence conflicts or
-a diagnosis has a demonstrated gap. Do not escalate just because the repository
-is large. On Claude, raise effort before changing model; use `xhigh`/`max` only
-where a quality gain was measured. In Anthropic's testing Opus 5.5 at medium
-matched or beat Opus 5 at high, and it thinks more per turn at a given level, so
-a carried-over `high` costs more for little.
+Opus at medium implements whatever the main session delegates, including long
+mechanical bodies; Sonnet and Terra are no longer routine implementation lanes.
+A Codex main session reaches the Opus lane through T3 `delegate_task`.
 
-A Claude session may hand work to Codex through the `codex:codex-rescue` agent
-(`/codex:rescue`): a stuck diagnosis, a second implementation or diagnosis pass,
-or an independent second review where a different model family adds signal.
-Reach for it before Fable. It is a delegation like any other — an independent
-track, a self-contained brief, a distilled return — not a routine reviewer.
+Every PR gets one Sol review before merge: a different model family from the
+Opus implementation, so it is the independent cross-model check. From T3 use
+`delegate_task` (provider `codex`, model `gpt-6.1-sol`, `reasoningEffort`
+high, role `review`); from plain Claude Code use the `codex:codex-rescue` agent
+(`/codex:rescue`). Give it a self-contained brief (goal, diff range, risks) and
+address its real findings.
 
-Use `gpt-6-astra` / high for an independent second review when a Sol review
-leaves an evidenced gap, or for exceptionally consequential changes such as a
-production migration or money and settlement logic. Broad scope alone does not
-require Astra.
+Add an Astra review only for a production migration or a major infrastructure
+change (CI, deploy, the Worker topology, the test harness, or auth). Broad
+scope alone does not require Astra.
 
-Fable is opt-in, not a routine lane: use fable / high only when the user asks,
-for a second review of a production migration, money or settlement logic, or a
-broad refactor, or to break a disagreement between an Opus review and the
-implementation.
+Fable is a tie-breaker, not a reviewer: use fable / high only when the
+implementation and a review disagree on something material, or when the user
+asks. Give it both positions and the evidence, and follow its ruling.
 
-When no lane has a stronger need, use `gpt-5.6-terra` / medium on Codex or
-sonnet / medium on Claude. These are fallbacks, not a reason to override an
-explicit user selection or move the current main session.
+Search and extraction lanes run at low effort; diagnosis and review lanes start
+at their table effort. Escalate when evidence conflicts or a diagnosis has a
+demonstrated gap. Do not escalate just because the repository is large. On
+Claude, raise effort before changing model; use `xhigh`/`max` only where a
+quality gain was measured. In Anthropic's testing Opus 5.5 at medium matched or
+beat Opus 5 at high, and it thinks more per turn at a given level, so a
+carried-over `high` costs more for little.
+
+`.claude/settings.json` sets `CLAUDE_CODE_SUBAGENT_MODEL` to `opus`, so a Claude
+subagent spawned without an explicit model lands on the implementation lane;
+search lanes name haiku explicitly.
 
 ## Before delegation
 
