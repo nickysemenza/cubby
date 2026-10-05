@@ -52,10 +52,19 @@ struct InlineLoadFailure: View {
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: FieldGuideTokens.Space.sm) {
                 // Borderless so a List row fires only the button, not a row-wide tap.
-                Button("Retry") { Task { await retry() } }
-                    .buttonStyle(.borderless)
-                    .frame(minHeight: FieldGuideTokens.touchTarget)
-                    .disabled(isRetrying)
+                // The frame sits inside the label: outside it, it grows layout but not the hit area.
+                Button {
+                    Task { await retry() }
+                } label: {
+                    Text("Retry")
+                        .frame(
+                            minWidth: FieldGuideTokens.touchTarget,
+                            minHeight: FieldGuideTokens.touchTarget
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .disabled(isRetrying)
                 if isRetrying { LoadingIndicator(label: "Retrying") }
             }
         }
