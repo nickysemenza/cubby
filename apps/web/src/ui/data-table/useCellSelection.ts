@@ -592,6 +592,11 @@ export function useCellSelection<TItem extends RowData>({
         !event.currentTarget.contains(event.target)
       )
         return;
+      // Header controls own their keys. Regression: with a cell selected,
+      // Space/Enter on a column's reorder handle (a keyboard drag) also opened
+      // that cell's editor, which took focus from the dropped handle.
+      if (event.target instanceof Element && event.target.closest("thead"))
+        return;
       if (rowCount === 0 || colCount === 0) return;
 
       containerElRef.current = event.currentTarget;

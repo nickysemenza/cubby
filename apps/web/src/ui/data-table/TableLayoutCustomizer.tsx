@@ -1,11 +1,5 @@
+import { DndContext, type DragEndEvent, useDroppable } from "@dnd-kit/core";
 import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  useDroppable,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
@@ -21,15 +15,8 @@ import { PushPinSlashIcon } from "@phosphor-icons/react/dist/csr/PushPinSlash";
 import { SidebarIcon } from "@phosphor-icons/react/dist/csr/Sidebar";
 import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import type { RowData } from "@tanstack/react-table";
-import { useId } from "react";
-import { z } from "zod";
 
 import { cn } from "~/lib/utils";
-import {
-  createDndAnnouncements,
-  cubbyDndScreenReaderInstructions,
-} from "~/ui/dnd/accessibility";
-import { useCubbyDndSensors } from "~/ui/dnd/sensors";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -38,15 +25,21 @@ import {
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
 
-import { isLockedColumn, withLockedEndLast } from "./column-layout";
+import {
+  applyColumnLayout,
+  columnRegion,
+  type ColumnRegion as Region,
+  columnRegionSchema,
+  columnsByRegion,
+  isLockedColumn,
+  moveColumn,
+  useColumnLayoutDndProps,
+} from "./column-layout";
 import { columnLabel } from "./data-table-view-options";
 import type {
   CubbyColumn as Column,
   CubbyTable as Table,
 } from "./table-features";
-
-const columnRegionSchema = z.enum(["start", "center", "end"]);
-type Region = z.infer<typeof columnRegionSchema>;
 
 function dragRegion(
   value: NonNullable<DragEndEvent["over"]>["data"]["current"],
@@ -54,24 +47,18 @@ function dragRegion(
   return columnRegionSchema.safeParse(value?.region).data;
 }
 
-function regionFor<TData extends RowData>(column: Column<TData>): Region {
-  return column.getIsPinned() || "center";
-}
-
 function SortableColumn<TData extends RowData>({
   column,
-  columns,
+  regionColumns,
   table,
 }: {
   column: Column<TData>;
-  columns: Column<TData>[];
+  /** The movable columns of this column's region, in display order. */
+  regionColumns: Column<TData>[];
   table: Table<TData>;
 }) {
-  const region = regionFor(column);
+  const region = columnRegion(column);
   const locked = isLockedColumn(column);
-  const regionColumns = columns.filter(
-    (item) => regionFor(item) === region && !isLockedColumn(item),
-  );
   const index = regionColumns.findIndex((item) => item.id === column.id);
   const {
     attributes,
@@ -88,25 +75,12 @@ function SortableColumn<TData extends RowData>({
 
   const move = (delta: -1 | 1) => {
     const target = regionColumns[index + delta];
-    if (!target) return;
-    if (region === "start" || region === "end") {
-      const pinning = table.state.columnPinning;
-      const ids = [...(pinning[region] ?? [])];
-      table.setColumnPinning({
-        ...pinning,
-        [region]: arrayMove(
-          ids,
-          ids.indexOf(column.id),
-          ids.indexOf(target.id),
-        ),
-      });
-      return;
+    if (target) {
+      moveColumn(table, { kind: "reorder", id: column.id, over: target.id });
     }
-    const order = columns.map((item) => item.id);
-    table.setColumnOrder(
-      arrayMove(order, order.indexOf(column.id), order.indexOf(target.id)),
-    );
   };
+  const pin = (to: Region) =>
+    moveColumn(table, { kind: "place", id: column.id, region: to });
 
   return (
     <div
@@ -163,7 +137,7 @@ function SortableColumn<TData extends RowData>({
               variant="ghost"
               size="icon-sm"
               aria-label={`Pin ${columnLabel(column)} to start`}
-              onClick={() => column.pin("start")}
+              onClick={() => pin("start")}
             >
               <SidebarIcon className="size-3" />
             </Button>
@@ -173,7 +147,7 @@ function SortableColumn<TData extends RowData>({
               variant="ghost"
               size="icon-sm"
               aria-label={`Pin ${columnLabel(column)} to end`}
-              onClick={() => column.pin("end")}
+              onClick={() => pin("end")}
             >
               <SidebarSimpleIcon className="size-3" />
             </Button>
@@ -183,7 +157,7 @@ function SortableColumn<TData extends RowData>({
               variant="ghost"
               size="icon-sm"
               aria-label={`Unpin ${columnLabel(column)}`}
-              onClick={() => column.pin(false)}
+              onClick={() => pin("center")}
             >
               <PushPinSlashIcon className="size-3" />
             </Button>
@@ -227,19 +201,19 @@ function SortableColumn<TData extends RowData>({
               Move later
             </DropdownMenuItem>
             {region !== "start" && (
-              <DropdownMenuItem onClick={() => column.pin("start")}>
+              <DropdownMenuItem onClick={() => pin("start")}>
                 <SidebarIcon className="size-3.5" />
                 Pin to start
               </DropdownMenuItem>
             )}
             {region !== "end" && (
-              <DropdownMenuItem onClick={() => column.pin("end")}>
+              <DropdownMenuItem onClick={() => pin("end")}>
                 <SidebarSimpleIcon className="size-3.5" />
                 Pin to end
               </DropdownMenuItem>
             )}
             {region !== "center" && (
-              <DropdownMenuItem onClick={() => column.pin(false)}>
+              <DropdownMenuItem onClick={() => pin("center")}>
                 <PushPinSlashIcon className="size-3.5" />
                 Unpin
               </DropdownMenuItem>
@@ -261,15 +235,14 @@ function Zone<TData extends RowData>({
   region,
   label,
   columns,
-  allColumns,
   table,
 }: {
   region: Region;
   label: string;
   columns: Column<TData>[];
-  allColumns: Column<TData>[];
   table: Table<TData>;
 }) {
+  const movable = columns.filter((column) => !isLockedColumn(column));
   const { setNodeRef, isOver } = useDroppable({
     id: `zone:${region}`,
     data: { region },
@@ -294,7 +267,7 @@ function Zone<TData extends RowData>({
             <SortableColumn
               key={column.id}
               column={column}
-              columns={allColumns}
+              regionColumns={movable}
               table={table}
             />
           ))}
@@ -309,103 +282,47 @@ export default function TableLayoutCustomizer<TData extends RowData>({
 }: {
   table: Table<TData>;
 }) {
-  const columns = table.getAllLeafColumns();
-  const sensors = useCubbyDndSensors({ touchDelay: 150, touchTolerance: 5 });
-  // Hydration-stable id; see TableHeaderLayout for why the counter default breaks.
-  const describedById = `DndDescribedBy-${useId()}`;
+  const columns = columnsByRegion(table);
+  const dndProps = useColumnLayoutDndProps("layout position");
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id) return;
-    const activeColumn = table.getColumn(String(active.id));
-    if (!activeColumn || isLockedColumn(activeColumn)) return;
-    const targetColumn = table.getColumn(String(over.id));
-    if (targetColumn && isLockedColumn(targetColumn)) return;
-    const targetRegion =
-      dragRegion(over.data.current) ??
-      (targetColumn ? regionFor(targetColumn) : undefined);
-    if (!targetRegion) return;
-
-    const idsByRegion = {
-      start: columns
-        .filter((column) => regionFor(column) === "start")
-        .map((column) => column.id),
-      center: columns
-        .filter((column) => regionFor(column) === "center")
-        .map((column) => column.id),
-      end: columns
-        .filter((column) => regionFor(column) === "end")
-        .map((column) => column.id),
-    };
-    for (const ids of Object.values(idsByRegion)) {
-      const index = ids.indexOf(activeColumn.id);
-      if (index >= 0) ids.splice(index, 1);
-    }
-    const targetIds = idsByRegion[targetRegion];
-    const targetIndex = targetColumn
-      ? targetIds.indexOf(targetColumn.id)
-      : targetIds.length;
-    targetIds.splice(
-      targetIndex < 0 ? targetIds.length : targetIndex,
-      0,
-      activeColumn.id,
-    );
-
-    const actionColumnIds = new Set(
-      columns
-        .filter(
-          (column) => column.columnDef.meta?.entityColumnRole === "action",
-        )
-        .map((column) => column.id),
-    );
-    const end = withLockedEndLast(idsByRegion.end, actionColumnIds);
-    table.setColumnPinning({ start: idsByRegion.start, end });
-    table.setColumnOrder([...idsByRegion.start, ...idsByRegion.center, ...end]);
+    if (!over) return;
+    const target = table.getColumn(String(over.id));
+    const region =
+      dragRegion(over.data.current) ?? (target && columnRegion(target));
+    if (!region) return;
+    moveColumn(table, {
+      kind: "place",
+      id: String(active.id),
+      region,
+      over: target?.id,
+    });
   };
 
   const reset = () => {
     const defaults = table.options.meta?.defaultLayout;
-    if (!defaults) return;
-    table.setColumnOrder(defaults.columnOrder);
-    table.setColumnPinning(defaults.columnPinning);
-    table.setColumnVisibility(defaults.columnVisibility);
-    table.setColumnSizing(defaults.columnSizing);
+    if (defaults) applyColumnLayout(table, defaults);
   };
 
   return (
     <div className="space-y-2 p-2">
-      <DndContext
-        id={describedById}
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={onDragEnd}
-        accessibility={{
-          container: globalThis.document?.body,
-          screenReaderInstructions: cubbyDndScreenReaderInstructions,
-          announcements: createDndAnnouncements({
-            item: (id) => `${id} column`,
-            target: (id) => `${id} layout position`,
-          }),
-        }}
-      >
+      <DndContext {...dndProps} onDragEnd={onDragEnd}>
         <Zone
           region="start"
           label="Pinned start"
-          columns={columns.filter((column) => regionFor(column) === "start")}
-          allColumns={columns}
+          columns={columns.start}
           table={table}
         />
         <Zone
           region="center"
           label="Unpinned"
-          columns={columns.filter((column) => regionFor(column) === "center")}
-          allColumns={columns}
+          columns={columns.center}
           table={table}
         />
         <Zone
           region="end"
           label="Pinned end"
-          columns={columns.filter((column) => regionFor(column) === "end")}
-          allColumns={columns}
+          columns={columns.end}
           table={table}
         />
       </DndContext>

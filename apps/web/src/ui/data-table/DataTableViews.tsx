@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
 
-import { withLockedEndLast } from "./column-layout";
+import { applyColumnLayout } from "./column-layout";
 import type { CubbyTable as Table } from "./table-features";
 
 interface DataTableViewsProps<TData extends RowData> {
@@ -49,7 +49,7 @@ interface SavedViewsMenuProps {
  *
  * A view's layout is source-controlled (`view-manifest.ts`), not user input —
  * trust a non-empty slice as-is, falling back to the table's own computed
- * default for whichever slice the view leaves empty. `withLockedEndLast`
+ * default for whichever slice the view leaves empty. `applyColumnLayout`
  * still guards the one invariant a view author could get wrong: the
  * row-actions menu never leaves the trailing edge.
  */
@@ -59,36 +59,28 @@ function applyTableLayout<TData extends RowData>(
 ) {
   const defaults = table.options.meta?.defaultLayout;
   if (!defaults) return;
-  const actionColumnIds = new Set(
-    table
-      .getAllLeafColumns()
-      .filter((column) => column.columnDef.meta?.entityColumnRole === "action")
-      .map((column) => column.id),
-  );
-  table.setColumnOrder(
-    savedLayout.columnOrder.length > 0
-      ? withLockedEndLast(savedLayout.columnOrder, actionColumnIds)
-      : defaults.columnOrder,
-  );
-  table.setColumnPinning({
-    start:
-      savedLayout.columnPinning.start.length > 0
-        ? savedLayout.columnPinning.start
-        : defaults.columnPinning.start,
-    end:
-      savedLayout.columnPinning.end.length > 0
-        ? withLockedEndLast(savedLayout.columnPinning.end, actionColumnIds)
-        : defaults.columnPinning.end,
+  const { columnOrder, columnPinning, columnSizing } = savedLayout;
+  applyColumnLayout(table, {
+    columnOrder: columnOrder.length > 0 ? columnOrder : defaults.columnOrder,
+    columnPinning: {
+      start:
+        columnPinning.start.length > 0
+          ? columnPinning.start
+          : defaults.columnPinning.start,
+      end:
+        columnPinning.end.length > 0
+          ? columnPinning.end
+          : defaults.columnPinning.end,
+    },
+    columnVisibility: {
+      ...defaults.columnVisibility,
+      ...savedLayout.columnVisibility,
+    },
+    columnSizing:
+      Object.keys(columnSizing).length > 0
+        ? columnSizing
+        : defaults.columnSizing,
   });
-  table.setColumnVisibility({
-    ...defaults.columnVisibility,
-    ...savedLayout.columnVisibility,
-  });
-  table.setColumnSizing(
-    Object.keys(savedLayout.columnSizing).length > 0
-      ? savedLayout.columnSizing
-      : defaults.columnSizing,
-  );
 }
 
 /**
