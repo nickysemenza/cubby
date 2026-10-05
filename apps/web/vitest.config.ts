@@ -319,7 +319,10 @@ export default defineConfig({
             // registers — see `closeTestDb` in tooling/test-setup.ts.
             setupFiles: ["./tooling/integration-teardown.ts"],
             name: "integration",
-            include: ["src/**/*.integration.test.ts"],
+            include: [
+              "src/**/*.integration.test.ts",
+              "tooling/**/*.integration.test.ts",
+            ],
             pool: "forks",
             // The former per-file family resolver made 8 lumpy import-index
             // files carry 76 real contract files with an isolated fork each.
