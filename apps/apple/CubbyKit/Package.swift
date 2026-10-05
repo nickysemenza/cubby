@@ -70,7 +70,7 @@ let package = Package(
                 .product(name: "GRDB", package: "GRDB.swift"),
             ],
             // `EntityCatalog`'s descriptors and the native coverage record, written by
-            // `pnpm generate` (gitignored) and decoded by the hand-written types in
+            // `pnpm generate` (gitignored) and decoded by the descriptor types in
             // Catalog/EntityManifest.swift and Catalog/NativeCoverage.swift.
             resources: [
                 .copy("Generated/entity-manifest.json"),

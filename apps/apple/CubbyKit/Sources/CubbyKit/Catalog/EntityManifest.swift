@@ -1,199 +1,13 @@
-// The entity catalog's vocabulary and descriptor types. The descriptors themselves are data:
-// `pnpm generate` writes them from the entity declarations to `Generated/entity-manifest.json`
-// (a CubbyKit resource), and `EntityCatalog` decodes that file once. `pnpm generate`
-// (`scripts/generator/entities/render/swift-catalog.ts`) reads this file: the vocabulary enums
-// (kinds, actions, renderer/slot/hero ids, wayfinding domains, presentation choices) must list
-// exactly the TS vocabulary's cases in order, and every other enum value the manifest carries must
-// be a declared case, so a new renderer or slot fails generation until its case is added here.
+// The entity catalog's descriptor types. The descriptors themselves are data: `pnpm generate`
+// writes them from the entity declarations to `Generated/entity-manifest.json` (a CubbyKit
+// resource), and `EntityCatalog` decodes that file once. The vocabulary enums they decode (kinds,
+// actions, renderer/slot/hero ids, wayfinding domains, presentation choices) are generated beside
+// it in `Generated/EntityVocabulary.swift` by `scripts/generator/entities/render/swift-catalog.ts`;
+// this file keeps the descriptors and the vocabulary's native conveniences. `EntityManifestTests`
+// decodes the bundled manifest, so a value the hand-written enums below do not declare fails CI.
 
 import CubbyAPISupport
 import Foundation
-
-public enum EntityAction: String, CaseIterable, Codable, Sendable {
-    case get = "get"
-    case list = "list"
-    case timeline = "timeline"
-    case search = "search"
-    case create = "create"
-    case update = "update"
-    case bulkUpdate = "bulkUpdate"
-    case delete = "delete"
-    case merge = "merge"
-}
-
-public enum EntityFieldKind: String, CaseIterable, Codable, Sendable {
-    case text = "text"
-    case textArray = "text-array"
-    case number = "number"
-    case boolean = "boolean"
-    case date = "date"
-    case timestamp = "timestamp"
-    case `enum` = "enum"
-    case json = "json"
-    case identifier = "identifier"
-}
-
-public enum EntityControlKind: String, CaseIterable, Codable, Sendable {
-    case text = "text"
-    case textarea = "textarea"
-    case checkbox = "checkbox"
-    case select = "select"
-    case date = "date"
-    case number = "number"
-    case specialized = "specialized"
-}
-
-public enum EntityFilterKind: String, CaseIterable, Codable, Sendable {
-    case text = "text"
-    case select = "select"
-    case multiselect = "multiselect"
-    case presence = "presence"
-    case boolean = "boolean"
-    case id = "id"
-    case idMulti = "idMulti"
-    case range = "range"
-}
-
-public enum ControlRendererID: String, CaseIterable, Codable, Sendable {
-    case amount = "amount"
-    case entityMultiSelect = "entity-multi-select"
-    case entitySelect = "entity-select"
-    case externalIds = "external-ids"
-    case imageOrder = "image-order"
-    case labelNutrition = "label-nutrition"
-    case ledgerAttributions = "ledger-attributions"
-    case money = "money"
-    case productTags = "product-tags"
-    case sourceAliases = "source-aliases"
-    case sourceRefs = "source-refs"
-    case structuredField = "structured-field"
-    case tagList = "tag-list"
-    case unitMappings = "unit-mappings"
-    case upcLookup = "upc-lookup"
-    case url = "url"
-    case usdaFood = "usda-food"
-    case vendorName = "vendor-name"
-}
-
-public enum ListRendererID: String, CaseIterable, Codable, Sendable {
-    case dataQuality = "data-quality"
-    case estimateCost = "estimate-cost"
-    case estimateKcal = "estimate-kcal"
-    case financialSettlement = "financial-settlement"
-    case orderLink = "order-link"
-    case possibleVendor = "possible-vendor"
-    case productLink = "product-link"
-    case recipeLinks = "recipe-links"
-    case recipeSource = "recipe-source"
-    case reconciliationStatus = "reconciliation-status"
-    case spendingCategorySummary = "spending-category-summary"
-    case tagLinks = "tag-links"
-    case uploadedImage = "uploaded-image"
-    case usdaFoodLink = "usda-food-link"
-    case valuationSummary = "valuation-summary"
-    case vendorCell = "vendor-cell"
-}
-
-public enum DetailRendererID: String, CaseIterable, Codable, Sendable {
-    case effectiveOwnership = "effectiveOwnership"
-    case expenseProject = "expense-project"
-    case expenseSpendingCategory = "expense-spending-category"
-    case financialAccountIdentity = "financial-account-identity"
-    case financialTransactionAllocations = "financial-transaction-allocations"
-    case financialTransactionVendorInference = "financial-transaction-vendor-inference"
-    case imageCaptureLocation = "image-capture-location"
-    case imageSightings = "image-sightings"
-    case ledgerTransferClassification = "ledger-transfer-classification"
-    case ownerLedgerPartyId = "ownerLedgerPartyId"
-    case ownershipMode = "ownershipMode"
-    case productCategory = "product-category"
-    case productExternalIds = "product-external-ids"
-    case productFdcId = "product-fdc-id"
-    case productId = "product-id"
-    case productIngredient = "product-ingredient"
-    case productPrimaryGtin = "product-primary-gtin"
-    case productTags = "product-tags"
-    case recipeSource = "recipe-source"
-    case runFailureDetails = "run-failure-details"
-    case spendingCategorySummary = "spending-category-summary"
-    case wishCandidates = "wish-candidates"
-}
-
-public enum EntityHeroActionID: String, CaseIterable, Codable, Sendable {
-    case addToInventory = "addToInventory"
-    case bulkEdit = "bulkEdit"
-    case delete = "delete"
-    case discard = "discard"
-    case edit = "edit"
-    case markPurchased = "markPurchased"
-    case recordSale = "recordSale"
-    case setStatus = "setStatus"
-}
-
-public enum EntityDetailSlotID: String, CaseIterable, Codable, Sendable {
-    case cookbookImportProgress = "cookbook.import-progress"
-    case cookbookToc = "cookbook.toc"
-    case expenseSettlement = "expense.settlement"
-    case imageAssociations = "image.associations"
-    case ingredientNutritionProduct = "ingredient.nutrition-product"
-    case ingredientRecipeUsages = "ingredient.recipe-usages"
-    case ledgerPartyWardrobe = "ledgerParty.wardrobe"
-    case locationAiDescription = "location.ai-description"
-    case locationContentsValuation = "location.contents-valuation"
-    case mealComposition = "meal.composition"
-    case mealNutrition = "meal.nutrition"
-    case productCookbooks = "product.cookbooks"
-    case productFitsWith = "product.fits-with"
-    case productLabels = "product.labels"
-    case productNutrition = "product.nutrition"
-    case productOwnership = "product.ownership"
-    case productRecipeAppearances = "product.recipe-appearances"
-    case productRuns = "product.runs"
-    case productUnitMappings = "product.unit-mappings"
-    case productCategorySpendingClassification = "productCategory.spending-classification"
-    case projectAnalytics = "project.analytics"
-    case projectBudget = "project.budget"
-    case projectContribution = "project.contribution"
-    case projectSchedule = "project.schedule"
-    case purchaseFinancialSettlement = "purchase.financial-settlement"
-    case purchaseOrderMail = "purchase.order-mail"
-    case purchaseProjectAllocation = "purchase.project-allocation"
-    case purchaseReceiving = "purchase.receiving"
-    case purchaseReconciliation = "purchase.reconciliation"
-    case purchaseRuns = "purchase.runs"
-    case recipeWorkflow = "recipe.workflow"
-    case runAiUsage = "run.ai-usage"
-    case runChanges = "run.changes"
-    case runImportAgentLive = "run.import-agent-live"
-    case runImportAgentStopped = "run.import-agent-stopped"
-    case runImportApprovals = "run.import-approvals"
-    case runImportControls = "run.import-controls"
-    case runImportDebugLog = "run.import-debug-log"
-    case runImportEvidence = "run.import-evidence"
-    case runImportFindings = "run.import-findings"
-    case runImportPreparedOrders = "run.import-prepared-orders"
-    case runImportProgressLive = "run.import-progress-live"
-    case runImportProgressStopped = "run.import-progress-stopped"
-    case runImportPurchases = "run.import-purchases"
-    case runImportStats = "run.import-stats"
-    case runImportTargets = "run.import-targets"
-    case runImportTimeline = "run.import-timeline"
-    case runLiveProgress = "run.live-progress"
-    case runPhotoBatch = "run.photo-batch"
-    case vendorOrderMail = "vendor.order-mail"
-    case vendorSpendingClassification = "vendor.spending-classification"
-    case vendorAccountChargeSearch = "vendorAccount.charge-search"
-    case vendorAccountOrderMail = "vendorAccount.order-mail"
-}
-
-/// The verbs a report `records` block offers; each has a plan in `native-coverage.json`'s
-/// `collectionActionPlan` that `HeroActionRunner` executes.
-public enum CollectionActionID: String, CaseIterable, Codable, Sendable {
-    case analyzeLocation = "analyzeLocation"
-    case attachImage = "attachImage"
-    case reviewLabelNutrition = "reviewLabelNutrition"
-    case validatePurchase = "validatePurchase"
-}
 
 public enum CollectionActionScope: String, Codable, Sendable {
     case section
@@ -205,32 +19,6 @@ extension CollectionActionID {
     public var scope: CollectionActionScope {
         NativeCoverageManifest.shared.collectionActionScope[rawValue] ?? .section
     }
-}
-
-/// Finance verbs a report's `records` block may offer; `packages/schemas/src/entity-section-actions.ts`.
-public enum SectionActionID: String, CaseIterable, Codable, Sendable {
-    case linkExpenses = "linkExpenses"
-    case linkProducts = "linkProducts"
-    case matchStatement = "matchStatement"
-    case receiveExpense = "receiveExpense"
-    case searchCharges = "searchCharges"
-    case splitExpense = "splitExpense"
-}
-
-public enum EntityListSlotID: String, CaseIterable, Codable, Sendable {
-    case expenseAnalytics = "expense.analytics"
-    case locationGallery = "location.gallery"
-    case locationVisualizations = "location.visualizations"
-    case mealCalendar = "meal.calendar"
-    case mealNutrition = "meal.nutrition"
-    case plantingSchedule = "planting.schedule"
-    case productCategoryHierarchy = "productCategory.hierarchy"
-    case projectAnalytics = "project.analytics"
-    case projectOverview = "project.overview"
-    case projectSchedule = "project.schedule"
-    case runHistory = "run.history"
-    case taskAgenda = "task.agenda"
-    case taskBoard = "task.board"
 }
 
 /// A `{value, label}` choice: a filter's options or a select control's options.
@@ -380,15 +168,6 @@ public struct FilterDescriptor: Codable, Sendable {
     public let targetEntity: EntityKey?
 }
 
-/// The five wayfinding lines, from `WAYFINDING_DOMAINS` in the entity definitions.
-public enum WayfindingDomain: String, Codable, Sendable, CaseIterable {
-    case cook = "cook"
-    case pantry = "pantry"
-    case plan = "plan"
-    case house = "house"
-    case finance = "finance"
-}
-
 public enum SectionPlacement: String, Codable, Sendable, Hashable {
     case primary = "primary"
     case supporting = "supporting"
@@ -459,21 +238,6 @@ public enum DetailVariant: String, Codable, Sendable, Hashable {
     case journal = "journal"
 }
 
-/// The shared List / Cards / Compact control. Compact keeps the Cards URL view.
-public enum ListPresentationChoice: String, Codable, Sendable, Hashable, CaseIterable {
-    case list = "list"
-    case cards = "cards"
-    case compact = "compact"
-
-    public var label: String {
-        switch self {
-        case .list: "List"
-        case .cards: "Cards"
-        case .compact: "Compact"
-        }
-    }
-}
-
 /// A manifest view; the first declared one is the default.
 public enum ListView: Codable, Sendable, Hashable, Identifiable {
     case table
@@ -492,8 +256,8 @@ public enum ListView: Codable, Sendable, Hashable, Identifiable {
 
     public var label: String {
         switch self {
-        case .table: "List"
-        case .shelf: "Cards"
+        case .table: ListPresentationChoice.list.label
+        case .shelf: ListPresentationChoice.cards.label
         case .timeline: "Timeline"
         case .slot(_, let label, _): label
         }

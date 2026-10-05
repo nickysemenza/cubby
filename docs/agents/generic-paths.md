@@ -33,7 +33,9 @@ existing block. Extend the generic path when it almost fits. See
   a draft (split, attach expenses, attach products) asks the server before it writes:
   `purchase.checkSplit` / `purchase.checkLinkExpenses` return the body to send or the
   reason not to (`server/repo/purchase-split-draft.ts`, `purchase-link-draft.ts`).
-- Swift: generated OpenAPI client, `entity-manifest.json`, and the generic list
+- Swift: generated OpenAPI client, `entity-manifest.json`, the generated manifest
+  vocabulary enums (`Generated/EntityVocabulary.swift`, from
+  `scripts/generator/entities/render/swift-catalog.ts`), and the generic list
   and detail views; no hand-written mapping layer.
 
 ## Server
