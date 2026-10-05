@@ -31,6 +31,7 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/routes/_authenticated/recipes.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/recommendations.workbench.tsx",
     "apps/web/src/routes/_authenticated/search.index.tsx",
+    "apps/web/src/routes/api/v1/$resource/$operation.ts",
   ],
   "bulk-edit.spec.ts": [
     "apps/web/src/routes/_authenticated/plantings.index.tsx",

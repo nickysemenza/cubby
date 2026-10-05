@@ -2,7 +2,7 @@ import {
   seedLocationPrerequisite,
   seedProductPrerequisite,
 } from "./fixtures-catalog";
-import { seedConcurrently } from "./fixtures-core";
+import { createEntityFixture, seedConcurrently } from "./fixtures-core";
 import { seedStaplePlanningPrerequisite } from "./fixtures-recipes";
 import { escapeRegExp, gotoAuthenticatedPage, uniqueName } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
@@ -50,6 +50,74 @@ test("browser Back restores the search query and scroll", async ({
   await expect
     .poll(() => page.evaluate(() => window.scrollY))
     .toBeCloseTo(scrollBefore, 0);
+});
+
+// A Product rename rewrites the search text of every record that embeds it
+// (`mutation-side-effects.ts` `searchDependents`): its placements, the Tasks
+// that inherit it as their subject, and the Wishes that list it as a candidate.
+test("search finds a renamed Product through its Inventory, Task, and Wish", async ({
+  page,
+  baseURL,
+}, testInfo) => {
+  const oldName = uniqueName(testInfo, "Fanout tarp");
+  const newName = uniqueName(testInfo, "Fanout awning");
+  const choreName = uniqueName(testInfo, "Gutter chore");
+  const subchoreName = uniqueName(testInfo, "Gutter subchore");
+  const wishName = uniqueName(testInfo, "Shade wish");
+  const location = await createEntityFixture(page, "location", {
+    name: uniqueName(testInfo, "Fanout shed"),
+  });
+  const product = await createEntityFixture(page, "product", {
+    name: oldName,
+  });
+  await createEntityFixture(page, "inventory", {
+    productId: product.id,
+    locationId: location.id,
+    amount: { value: 1, unit: "each" },
+  });
+  const chore = await createEntityFixture(page, "task", {
+    name: choreName,
+    trade: "other",
+    subjectProductId: product.id,
+  });
+  // No subject of its own: it inherits the parent's Product.
+  await createEntityFixture(page, "task", {
+    name: subchoreName,
+    trade: "other",
+    parentTaskId: chore.id,
+  });
+  await createEntityFixture(page, "wish", {
+    name: wishName,
+    candidateProductIds: [product.id],
+  });
+
+  const renamed = await page.request.patch(`/api/v1/products/${product.id}`, {
+    headers: { Origin: baseURL! },
+    data: { name: newName },
+  });
+  expect(renamed.status(), await renamed.text()).toBe(200);
+
+  const expectHits = async (query: string, type: string, titles: string[]) => {
+    await gotoAuthenticatedPage(
+      page,
+      `/search?${new URLSearchParams({ q: query, type })}`,
+    );
+    for (const title of titles)
+      await expect(
+        page.getByRole("link", { name: title, exact: true }),
+      ).toBeVisible();
+  };
+  await expectHits(newName, "inventory", [newName]);
+  await expectHits(newName, "task", [choreName, subchoreName]);
+  await expectHits(newName, "wish", [wishName]);
+
+  for (const type of ["product", "inventory", "task", "wish"]) {
+    await gotoAuthenticatedPage(
+      page,
+      `/search?${new URLSearchParams({ q: oldName, type })}`,
+    );
+    await expect(page.getByText("No direct matches.")).toBeVisible();
+  }
 });
 
 // A dialog-created entity has no form page: `/new` is generated to redirect

@@ -24,7 +24,7 @@ export {
   findMealEmbeddingRefsForRecipes,
   findPlantingEmbeddingRefsForPlants,
   findPlantingEmbeddingRefsForLocations,
-  findProductEmbeddingRefsForCategories,
+  findEmbeddingRefsForCategories,
   findRecipeEmbeddingRefsForIngredients,
   findTaskEmbeddingRefsForProducts,
   findTrackerEmbeddingRefsForProjects,

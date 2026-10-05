@@ -26,7 +26,7 @@ import {
   makeExpenseInput,
   makeProductInput,
   seedSearchDocumentsFixtureRaw,
-  updateProductNameFixtureRaw,
+  renameFixtureRaw,
 } from "~/server/repo/repo.fixtures";
 import {
   countUnembeddedSearchDocuments,
@@ -330,8 +330,9 @@ describe("semantic search background tasks", () => {
       embed: async (texts) => {
         if (!racedOnce) {
           racedOnce = true;
-          await updateProductNameFixtureRaw(
+          await renameFixtureRaw(
             ctx.db,
+            "product",
             product.entityId,
             "Embedding after concurrent change",
           );
