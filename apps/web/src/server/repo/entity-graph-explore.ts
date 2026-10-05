@@ -10,9 +10,9 @@ import type {
 } from "@cubby/schemas/entity-graph";
 import { sql } from "drizzle-orm";
 import { chunk } from "es-toolkit";
-import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { isStatementTimeout } from "~/server/errors/db-errors";
 import { withTransaction } from "~/server/repo/database-helpers";
 
 import { readEntityGraph } from "./entity-graph";
@@ -327,25 +327,6 @@ export async function exploreEntityGraph(
     completion: { status, requestedDepth, reachedDepth },
   };
 }
-
-const databaseErrorNodeSchema = z.object({
-  code: z.string().optional(),
-  cause: z.unknown().optional(),
-});
-
-const unparsedDatabaseErrorSchema = z.unknown();
-type UnparsedDatabaseError = z.input<typeof unparsedDatabaseErrorSchema>;
-
-const isStatementTimeout = (error: UnparsedDatabaseError): boolean => {
-  let candidate = error;
-  for (let depth = 0; depth < 8; depth += 1) {
-    const parsed = databaseErrorNodeSchema.safeParse(candidate);
-    if (!parsed.success) return false;
-    if (parsed.data.code === "57014") return true;
-    candidate = parsed.data.cause;
-  }
-  return false;
-};
 
 const DEADLINE_MS = 10_000;
 class GraphExploreDeadlineError extends Error {}

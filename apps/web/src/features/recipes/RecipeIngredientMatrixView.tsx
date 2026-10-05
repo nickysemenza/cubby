@@ -2,7 +2,7 @@ import { memo } from "react";
 
 import { IngredientComponentGrid } from "./IngredientComponentGrid";
 import type { RecipeTreeNode } from "./recipe-tree";
-import { formatYield } from "./recipe-utils";
+import { formatYield } from "./recipe-yield";
 
 // The standalone ingredient × component matrix, used by the print/export sheet.
 // The grid itself lives in the shared {@link IngredientComponentGrid} (also used

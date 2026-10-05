@@ -1,3 +1,4 @@
+import { humanize } from "@cubby/shared";
 import { type ComponentProps, useMemo } from "react";
 
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
@@ -69,13 +70,7 @@ export function DependencyGraphViewer({
           .filter((node): node is GraphNode & { kind: string } =>
             Boolean(node.kind),
           )
-          .map((node) => [
-            node.kind,
-            node.kindLabel ??
-              node.kind
-                .replaceAll("-", " ")
-                .replace(/^./, (value) => value.toUpperCase()),
-          ]),
+          .map((node) => [node.kind, node.kindLabel ?? humanize(node.kind)]),
       ).entries(),
     ],
     [graph.nodes],

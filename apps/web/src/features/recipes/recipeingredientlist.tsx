@@ -11,10 +11,8 @@ import { mapValues } from "es-toolkit";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
 
-import {
-  EntityRefLink,
-  dottedEntityLink,
-} from "~/entity/components/entity-ref-link";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { formatNumberRange } from "~/lib/format-range";
 import { scaleNutrition } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";

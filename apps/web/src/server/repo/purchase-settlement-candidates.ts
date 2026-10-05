@@ -9,6 +9,7 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { cents } from "~/server/repo/money";
 import { getPurchaseByShortcode } from "~/server/repo/purchase";
 
 /** Eligibility and rank apply to the full live set before the advisory limit.
@@ -33,7 +34,7 @@ export async function listPurchaseSettlementCandidates(
   const exactAmount = sql<boolean>`(
     ${financialTransaction.kind} = 'purchase'
     AND ${purchase.statedTotal !== null}
-    AND abs(round((${financialTransaction.amount} * 100)::numeric) - ${Math.round((purchase.statedTotal ?? 0) * 100)}) <= 1
+    AND abs(round((${financialTransaction.amount} * 100)::numeric) - ${cents(purchase.statedTotal ?? 0)}) <= 1
   )`;
   const allocations = getDb(db)
     .select({ one: sql`1` })

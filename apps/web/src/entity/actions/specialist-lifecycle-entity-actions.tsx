@@ -14,7 +14,7 @@ import { VerbMenuItem } from "./action-verb-ui";
 import { DeleteEntityDialog } from "./delete-entity-action";
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
-import { useStagedRow } from "./use-staged-row";
+import { useStagedDialogAction } from "./use-staged-dialog-action";
 
 type StagedDeleteRow = EntityActionRow & {
   recipeCount?: number;
@@ -50,9 +50,11 @@ function useStagedSpecialistDelete({
   failureMessage,
 }: StagedSpecialistDeleteConfig): EntityActionHandles {
   const [failure, setFailure] = useState<string | null>(null);
-  const { staged, stage, finish } = useStagedRow(stageRow, () =>
-    setFailure(null),
-  );
+  const {
+    items: [staged],
+    stage,
+    finish,
+  } = useStagedDialogAction(stageRow, () => setFailure(null));
 
   return {
     run: stage,

@@ -13,22 +13,14 @@ import { ledgerSourceClaim } from "~/server/db/schema";
 import { createAppError, createBlockedError } from "~/server/errors/app-error";
 import { notDeleted } from "~/server/repo/database-helpers";
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
+import { cents } from "~/server/repo/money";
 import { lookupShortcodes } from "~/server/repo/shortcode-resolver";
+import { sha256Hex } from "~/server/semantic/hash";
 
 const SOURCE_KEY_VERSION = 1;
 
-const toHex = (bytes: ArrayBuffer) =>
-  [...new Uint8Array(bytes)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-
 const digestKey = async (payload: readonly unknown[]) =>
-  `v${SOURCE_KEY_VERSION}:${toHex(
-    await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(JSON.stringify(payload)),
-    ),
-  )}`;
+  `v${SOURCE_KEY_VERSION}:${await sha256Hex(JSON.stringify(payload))}`;
 
 // The evidence is hashed in `ledgerSourceClaimNormalizedEvidence` key order, the
 // order it had when the key was first made; a stored jsonb value is reordered.
@@ -86,7 +78,7 @@ const isExpenseOwner = (
 const sameAmount = (left: number | null, right: number | null) =>
   left === null || right === null
     ? left === right
-    : Math.round(left * 100) === Math.round(right * 100);
+    : cents(left) === cents(right);
 
 const assertClaimAmounts = (
   targetAmount: number | null,
@@ -367,8 +359,7 @@ export async function replaceLedgerSourceClaims(
       row.deletedAt === null &&
       row.sourceKeyVersion === values.sourceKeyVersion &&
       isEqual(row.normalizedEvidence, values.normalizedEvidence) &&
-      Math.round(row.targetAmountAtClaim * 100) ===
-        Math.round(values.targetAmountAtClaim * 100) &&
+      cents(row.targetAmountAtClaim) === cents(values.targetAmountAtClaim) &&
       row.reconciliationDecision === values.reconciliationDecision &&
       row.reconciliationNote === values.reconciliationNote;
     if (unchanged) continue;

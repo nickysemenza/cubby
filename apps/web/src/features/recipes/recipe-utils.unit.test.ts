@@ -4,12 +4,12 @@ import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { expect, it } from "vitest";
 
 import {
-  formatYield,
   getEffectiveServings,
   getIngredientName,
   getRecipeNutritionBasis,
   getServingBasis,
 } from "./recipe-utils";
+import { formatYield } from "./recipe-yield";
 
 it("uses the canonical serving resolution even when legacy fields suggest another value", () => {
   expect(

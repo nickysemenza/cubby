@@ -87,11 +87,9 @@ export function inspectCalendarDocument(
 }
 
 export function createCalendarFeedToken(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  return Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString(
+    "base64url",
+  );
 }
 
 export function etagMatches(ifNoneMatch: string | null, etag: string): boolean {

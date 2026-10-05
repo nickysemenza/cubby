@@ -6,9 +6,9 @@ import { toast } from "sonner";
 
 import {
   entityMutationOptionsFactory,
-  type EntityMutationTransport,
   type EntityMutationVariables,
 } from "~/entity/entity-contracts";
+import { type EntityMutationTransport } from "~/entity/entity-mutation-command";
 import type { imageUpload } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Stack } from "~/ui/layout";

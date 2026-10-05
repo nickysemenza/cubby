@@ -16,6 +16,7 @@ import type {
   ProjectAttentionItem,
   ProjectAttentionType,
 } from "@cubby/schemas/project";
+import { humanize } from "@cubby/shared";
 import { DownloadIcon } from "@phosphor-icons/react/dist/csr/Download";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken";
@@ -47,7 +48,6 @@ import {
   entityPluralLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
-import { humanize } from "~/entity/filters";
 import type { ProblemQuery } from "~/entity/problem-query";
 import { problemQuery } from "~/entity/problem-registry";
 import {

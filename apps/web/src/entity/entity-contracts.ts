@@ -19,7 +19,6 @@ import {
   type GeneratedBrowserCrudEntity,
   generatedBrowserCrudEntities,
 } from "./generated/entity-routes.gen";
-export type { EntityMutationTransport } from "./entity-mutation-command";
 
 const unparsedEntityMutationVariablesSchema = z.unknown();
 type UnparsedEntityMutationVariables = z.input<

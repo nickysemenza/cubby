@@ -16,6 +16,7 @@ import {
   householdLocalDate,
 } from "~/lib/household-date";
 import { shiftPlainDate } from "~/lib/plain-date";
+import { sha256Hex } from "~/server/semantic/hash";
 
 import type {
   CalDavCollection,
@@ -341,11 +342,7 @@ export async function renderCalDavResource(
   event.addPropertyWithValue("transp", "TRANSPARENT");
   calendar.addSubcomponent(event);
   const body = serializeCalendarComponent(calendar);
-  const bytes = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(body),
-  );
-  const etag = `"${Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("")}"`;
+  const etag = `"${await sha256Hex(body)}"`;
   return {
     collection: collectionFor(projection),
     filename: identity.filename,

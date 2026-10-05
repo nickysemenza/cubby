@@ -35,13 +35,16 @@ import { expense } from "~/server/db/schema";
  * is load-bearing. Do not "simplify" the sign handling.
  *
  * A fresh object is returned per call since these `sql` fragments get spread
- * into several independent `select()`s across both callers.
+ * into several independent `select()`s across both callers. `cost` defaults to
+ * the expense's own cost; allocation-scoped reads pass the attributed cost.
  */
-export const expenseAggregateFields = () => ({
-  actual: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.cost} > 0 and ${expense.future} = false), 0)::float`,
-  committed: sql<number>`coalesce(sum(${expense.cost}) filter (where ${expense.cost} > 0 and ${expense.future} = true), 0)::float`,
-  credits: sql<number>`coalesce(-sum(${expense.cost}) filter (where ${expense.cost} < 0), 0)::float`,
-  net: sql<number>`coalesce(sum(${expense.cost}), 0)::float`,
+export const expenseAggregateFields = (
+  cost: SQL<number | null> | AnyColumn = expense.cost,
+) => ({
+  actual: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = false), 0)::float`,
+  committed: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = true), 0)::float`,
+  credits: sql<number>`coalesce(-sum(${cost}) filter (where ${cost} < 0), 0)::float`,
+  net: sql<number>`coalesce(sum(${cost}), 0)::float`,
   count: sql<number>`count(*)::int`,
 });
 

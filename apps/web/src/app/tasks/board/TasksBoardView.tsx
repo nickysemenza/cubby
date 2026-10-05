@@ -3,7 +3,6 @@ import type {
   TaskFilters,
   TaskOut,
 } from "@cubby/schemas/project";
-import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -11,18 +10,9 @@ import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
 import { task } from "~/integrations/tanstack-query/generated/catalog.gen";
-import { getErrorMessage } from "~/lib/error-utils";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/useHydrated";
 import { Row, Stack } from "~/ui/layout";
-import { Button } from "~/ui/primitives/button";
-import {
-  Empty,
-  EmptyActions,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyIcon,
-  EmptyTitle,
-} from "~/ui/primitives/empty";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
@@ -164,18 +154,11 @@ export function TasksBoardView({ filters }: { filters: TaskFilters }) {
       {isError && board === NO_BOARD ? (
         // A failed read is not an empty board: "No tasks to show" here once
         // hid a 500 behind what looked like lost data.
-        <Empty>
-          <EmptyHeader>
-            <EmptyIcon icon={ListChecksIcon} />
-            <EmptyTitle>Couldn't load tasks</EmptyTitle>
-            <EmptyDescription>{getErrorMessage(error)}</EmptyDescription>
-          </EmptyHeader>
-          <EmptyActions>
-            <Button type="button" variant="outline" onClick={() => refetch()}>
-              Retry
-            </Button>
-          </EmptyActions>
-        </Empty>
+        <ErrorDisplay
+          error={error}
+          title="tasks"
+          onRetry={() => void refetch()}
+        />
       ) : isLoading ? (
         <BoardSkeleton />
       ) : (

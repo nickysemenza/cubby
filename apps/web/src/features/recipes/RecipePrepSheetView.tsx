@@ -2,10 +2,8 @@ import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
 import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
 import { memo, useMemo, useState } from "react";
 
-import {
-  EntityRefLink,
-  dottedEntityLink,
-} from "~/entity/components/entity-ref-link";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { formatCurrencyRange } from "~/lib/format-range";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
 import { formatCurrency } from "~/lib/utils";
@@ -31,15 +29,14 @@ import {
   recipeTreeDisplayImage,
 } from "./recipe-tree";
 import {
-  entityRefForRow,
   formatMakes,
-  formatYield,
   getIngredientName,
   getServingBasis,
   gramText,
   recipeMacroSegments,
 } from "./recipe-utils";
-import { StepNumberBadge, StubWarning } from "./spec-markers";
+import { formatYield } from "./recipe-yield";
+import { StepNumberBadge, StubWarning, TreeRowNameLink } from "./spec-markers";
 
 // Prep sheet: the recipe broken into one block per component (every sub-recipe
 // + the root assembly, dependencies first), each an actionable checklist with
@@ -128,7 +125,6 @@ function PrepRow({
   // Full batch — the row's own authored amounts, plus engine-derived grams.
   const quantities = buildDisplayQuantities(row.row, gramById);
   const name = getIngredientName(row.row);
-  const ref = entityRefForRow(row);
 
   // A div, not a label: the name is now a link, and an interactive <a> can't
   // live inside a <label> (the checkbox stays individually clickable).
@@ -149,23 +145,7 @@ function PrepRow({
             ›
           </span>
         )}
-        {ref ? (
-          <EntityRefLink
-            variant="preview"
-            displayImage={
-              row.kind === "subrecipe"
-                ? recipeTreeDisplayImage(row.child.recipe)
-                : null
-            }
-            entity={ref.entity}
-            id={ref.id}
-            className={dottedEntityLink}
-          >
-            {name}
-          </EntityRefLink>
-        ) : (
-          name
-        )}
+        <TreeRowNameLink row={row} name={name} />
         <IngredientModifier modifier={row.row.modifier} />
       </span>
       <IngredientQuantities

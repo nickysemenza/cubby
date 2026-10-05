@@ -17,9 +17,9 @@ import {
   fieldResolutionFor,
 } from "~/entity/field-resolution";
 import { extractEntityTitle } from "~/lib/entity-utils";
+import type { MobileColumnMeta, MobileSlot } from "~/ui/data-table/table-meta";
 import { NoneValue } from "~/ui/primitives/none-value";
 
-import type { MobileColumnMeta, MobileSlot } from "./columnHelpers";
 import { RelationFieldWorkbench } from "./relation-field-workbench";
 import type {
   CubbyColumn as Column,

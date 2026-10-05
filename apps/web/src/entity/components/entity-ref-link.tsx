@@ -16,8 +16,6 @@ import {
 } from "./ref-link/leaf";
 import { ListRefLink, type ListRefLinkProps } from "./ref-link/list";
 
-export { dottedEntityLink } from "./ref-link/leaf";
-
 /**
  * The one way to name a record as a link.
  *

@@ -114,7 +114,13 @@ import {
   compareValidationPlan,
   PURCHASE_CURRENCY,
 } from "./validation-corrections-compare";
-import { buildPurchaseImportPlan, importVendorOrder } from "./writer";
+import {
+  amazonAsin,
+  buildPurchaseImportPlan,
+  externalSource,
+  importVendorOrder,
+  productSearchPatterns,
+} from "./writer";
 
 const operationArgs = (input: {
   prepareOperationId: string;
@@ -137,35 +143,6 @@ const assertOwnedRun = async (
   if (scope.actorUserId !== actor.userId)
     throw new Error("Purchase import run is not owned by this member");
   return scope;
-};
-
-const externalSource = (url: string | undefined, vendorId: string): string => {
-  if (!url) return `vendor-${vendorId}`;
-  const host = new URL(url).hostname.toLowerCase().replace(/^www\./u, "");
-  return (
-    host
-      .split(".")[0]
-      ?.replaceAll(/[^a-z0-9]+/gu, "-")
-      .replaceAll(/^-|-$/gu, "") || "vendor"
-  );
-};
-
-const productSearchPatterns = (title: string) =>
-  title
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((token) => token.length >= 3)
-    .slice(0, 3)
-    .map((token) => `%${token.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`);
-
-const amazonAsin = (url: string | undefined): string | null => {
-  if (!url) return null;
-  const parsed = new URL(url);
-  if (!/(^|\.)amazon\./u.test(parsed.hostname.toLowerCase())) return null;
-  return (
-    /\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:[/?]|$)/iu
-      .exec(parsed.pathname)?.[1]
-      ?.toUpperCase() ?? null
-  );
 };
 
 const lineIdentifierRequests = (

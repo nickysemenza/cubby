@@ -28,7 +28,6 @@ import {
   eq,
   gte,
   inArray,
-  isNull,
   lte,
   notExists,
   or,
@@ -136,7 +135,7 @@ const validatePlantingSource = async (
   const source = await unwrapDb(db).query.product.findFirst({
     where: and(
       eq(product.id, parseEntityId("product", sourceProductId)),
-      isNull(product.deletedAt),
+      notDeleted(product),
     ),
     columns: { categoryId: true, growsPlantId: true },
   });

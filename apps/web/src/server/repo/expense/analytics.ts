@@ -34,7 +34,10 @@ import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db";
 import { expense, project, purchase, vendor } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
-import { EXPENSE_MONTH_BUCKET as MONTH_BUCKET } from "~/server/repo/expense-aggregate-sql";
+import {
+  EXPENSE_MONTH_BUCKET as MONTH_BUCKET,
+  expenseAggregateFields,
+} from "~/server/repo/expense-aggregate-sql";
 
 import {
   effectiveExpenseProjectSql,
@@ -54,16 +57,8 @@ import {
 const effectiveProjectId = effectiveExpenseProjectSql('"Expense"');
 const effectiveTrade = effectiveExpenseTradeSql('"Expense"');
 
-const aggregateForCost = (cost: SQL<number | null>) => ({
-  actual: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = false), 0)::float`,
-  committed: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${expense.future} = true), 0)::float`,
-  credits: sql<number>`coalesce(-sum(${cost}) filter (where ${cost} < 0), 0)::float`,
-  net: sql<number>`coalesce(sum(${cost}), 0)::float`,
-  count: sql<number>`count(*)::int`,
-});
-
 const summaryFields = (cost: SQL<number | null>) => ({
-  ...aggregateForCost(cost),
+  ...expenseAggregateFields(cost),
   unpricedCount: sql<number>`count(*) filter (where ${cost} is null)::int`,
   actualCount: sql<number>`count(*) filter (where ${expense.future} = false)::int`,
   plannedCount: sql<number>`count(*) filter (where ${expense.future} = true)::int`,
@@ -92,7 +87,7 @@ export async function expenseMonthlySummary(
   const whereClause = await buildExpenseWhereClause(db, filters, {
     projectScope,
   });
-  const aggregate = aggregateForCost(analyticsCost(projectScope));
+  const aggregate = expenseAggregateFields(analyticsCost(projectScope));
   const datedWhereClause = and(whereClause, isNotNull(expense.date));
   return await getDb(db)
     .select({ month: MONTH_BUCKET, ...aggregate })
@@ -131,7 +126,7 @@ export async function expenseAnalytics(
   const whereClause = await buildExpenseWhereClause(db, filters, {
     projectScope,
   });
-  const aggregate = aggregateForCost(analyticsCost(projectScope));
+  const aggregate = expenseAggregateFields(analyticsCost(projectScope));
   const principalWhereClause = and(
     whereClause,
     eq(expense.lineKind, "principal"),

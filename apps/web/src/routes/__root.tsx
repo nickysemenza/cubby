@@ -30,12 +30,12 @@ import { RetiredFieldwork } from "~/ui/feedback/retired-fieldwork";
 import { AppFooter } from "~/ui/footer";
 import { useDebug } from "~/ui/hooks/useDebug";
 import { useNavAuthed } from "~/ui/hooks/useNavAuthed";
-import { RouteErrorComponent } from "~/ui/lazy-route-error";
-import { RouteNotFound } from "~/ui/lazy-route-not-found";
 import { MainNav } from "~/ui/MainNav";
 import { AuthenticatedAppShell } from "~/ui/navigation/authenticated-app-shell";
 import { BottomNav } from "~/ui/navigation/bottom-nav";
 import { Toaster } from "~/ui/primitives/sonner";
+import { RouteErrorComponent } from "~/ui/route-error";
+import { RouteNotFound } from "~/ui/route-not-found";
 
 import { Provider } from "../integrations/tanstack-query/root-provider";
 

@@ -32,15 +32,14 @@ import {
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatDateSpan } from "~/lib/date-span";
-import { getErrorMessage } from "~/lib/error-utils";
 import { cn, formatCurrency } from "~/lib/utils";
 import { SavedViewsMenu } from "~/ui/data-table/DataTableViews";
 import type { CubbyRow } from "~/ui/data-table/table-features";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { DashboardSectionLoading } from "~/ui/feedback/loading-skeletons";
 import type { PreviewPresentation } from "~/ui/hooks/useEntityPreview";
 import { Grid, Row, Section, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
-import { Button } from "~/ui/primitives/button";
 import {
   Card,
   CardContent,
@@ -51,7 +50,6 @@ import {
 import { Checkbox } from "~/ui/primitives/checkbox";
 import {
   Empty,
-  EmptyActions,
   EmptyDescription,
   EmptyHeader,
   EmptyIcon,
@@ -110,29 +108,6 @@ function DashboardToolbar({ filterControl }: { filterControl: ReactNode }) {
     <Row justify="end" align="center" wrap gap="sm">
       {filterControl}
     </Row>
-  );
-}
-
-function DashboardErrorState({
-  error,
-  onRetry,
-}: {
-  error: unknown;
-  onRetry: () => void;
-}) {
-  return (
-    <Empty>
-      <EmptyHeader>
-        <EmptyIcon icon={HammerIcon} />
-        <EmptyTitle>Couldn't load the project dashboard</EmptyTitle>
-        <EmptyDescription>{getErrorMessage(error)}</EmptyDescription>
-      </EmptyHeader>
-      <EmptyActions>
-        <Button type="button" variant="outline" onClick={onRetry}>
-          Retry
-        </Button>
-      </EmptyActions>
-    </Empty>
   );
 }
 
@@ -261,9 +236,10 @@ function MainDashboard({ view }: { view: DashboardView }) {
 
   if (dashboardQuery.isError) {
     return (
-      <DashboardErrorState
+      <ErrorDisplay
         error={dashboardQuery.error}
-        onRetry={() => dashboardQuery.refetch()}
+        title="the project dashboard"
+        onRetry={() => void dashboardQuery.refetch()}
       />
     );
   }

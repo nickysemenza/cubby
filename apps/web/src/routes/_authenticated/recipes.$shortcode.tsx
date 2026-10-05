@@ -14,9 +14,9 @@ import { ensureDetailRecord } from "~/entity/routing/detail-loader";
 import { detailPage, notFoundPage } from "~/entity/routing/entity-routes";
 import EditRecipeForm from "~/features/recipes/edit-recipe";
 import { shortcodeHead } from "~/lib/page-title";
-import { RouteErrorComponent } from "~/ui/lazy-route-error";
 import { Page } from "~/ui/page/Page";
 import { Button } from "~/ui/primitives/button";
+import { RouteErrorComponent } from "~/ui/route-error";
 import { DetailPagePending } from "~/ui/route-pending";
 
 /**

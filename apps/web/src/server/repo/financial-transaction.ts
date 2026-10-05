@@ -842,10 +842,10 @@ export async function updateFinancialTransaction(
       ].includes(data.kind)
     ) {
       const liveBooking = await tx.query.expense.findFirst({
-        where: (expense, { eq, isNull }) =>
+        where: (expense, { eq }) =>
           and(
             eq(expense.bookingTransactionCode, shortcode),
-            isNull(expense.deletedAt),
+            notDeleted(expense),
           ),
       });
       if (liveBooking)

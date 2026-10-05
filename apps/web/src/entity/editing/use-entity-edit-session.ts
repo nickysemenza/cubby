@@ -5,6 +5,7 @@ import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
+import type { EntityEditValue } from "~/entity/editing/value-schema";
 import type { UnparsedError } from "~/lib/error-utils";
 
 import { entityEditRegistry } from "./definitions";
@@ -19,7 +20,6 @@ import type {
   EntityEditAccess,
   EntityEditIssue,
   EntityEditResult,
-  EntityEditValue,
   EntityMutationPort,
   RuntimeEntityEditRequest,
 } from "./types";

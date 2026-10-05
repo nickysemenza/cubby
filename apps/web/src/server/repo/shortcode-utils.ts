@@ -26,10 +26,13 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { entityIdentity } from "~/server/db/schema";
+import {
+  findPgError,
+  type UnparsedDatabaseError,
+} from "~/server/errors/db-errors";
 
 import {
   FindOrCreateConflictError,
@@ -113,55 +116,22 @@ export async function generateUniqueShortcode<T extends ShortcodeType>(
 }
 
 /**
- * A Postgres unique-violation on the given table's shortcode index.
- *
- * Walks the `cause` chain rather than inspecting the thrown error directly:
- * drizzle wraps every failure in a `DrizzleQueryError` ("Failed query: insert
- * into …") and hangs the real `pg` error — the one carrying `code` and
- * `constraint` — off `.cause`. Reading only the top-level error means never
- * recognizing a collision, which silently turns the retry below into dead code.
+ * A Postgres unique-violation on the given table's shortcode index. The
+ * identity trigger's insert into `Entity` rejects a code whose payload was
+ * hard-deleted, which the payload's own index can no longer see. `constraint`
+ * is populated by node-postgres; the message check covers a driver or wrapper
+ * that only preserves the text.
  */
-const databaseErrorNodeSchema = z
-  .object({
-    code: z.string().optional(),
-    constraint: z.string().optional(),
-    message: z.string().optional(),
-    cause: z
-      .union([z.instanceof(Error), z.object({}).passthrough()])
-      .optional(),
-  })
-  .passthrough();
-
-const isShortcodeCollision = <TError>(
-  error: TError,
+const isShortcodeCollision = (
+  error: UnparsedDatabaseError,
   tableName: string,
-  depth = 0,
 ): boolean => {
-  if (depth >= 6) return false;
-  const parsedError = databaseErrorNodeSchema.safeParse(error);
-  if (!parsedError.success) return false;
-
-  // The identity trigger's insert into `Entity` rejects a code whose payload
-  // was hard-deleted, which the payload's own index can no longer see.
-  const indexNames = [
-    `${tableName}_shortcode_unique`,
-    "Entity_shortcode_unique",
-  ];
-  const { code, constraint, message, cause } = parsedError.data;
-  if (
-    code === "23505" &&
-    // `constraint` is populated by node-postgres; the message check covers a
-    // driver or wrapper that only preserves the text.
-    indexNames.some(
-      (indexName) =>
-        constraint === indexName || (message?.includes(indexName) ?? false),
-    )
-  ) {
-    return true;
-  }
-  return cause === undefined
-    ? false
-    : isShortcodeCollision(cause, tableName, depth + 1);
+  const pg = findPgError(error);
+  if (pg?.code !== "23505") return false;
+  return [`${tableName}_shortcode_unique`, "Entity_shortcode_unique"].some(
+    (indexName) =>
+      pg.constraint === indexName || (pg.message?.includes(indexName) ?? false),
+  );
 };
 
 /**

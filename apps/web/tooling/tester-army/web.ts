@@ -186,7 +186,7 @@ async function runCoupled() {
       "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
     ])
       process.env[key] = database.databaseUrl;
-    const harness = createWorkerdHarness(
+    const harness = await createWorkerdHarness(
       database.databaseUrl,
       liveGatewayWorker(agentModel),
       liveGatewayWorker(),

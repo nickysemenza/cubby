@@ -5,9 +5,10 @@ import { DurableObject } from "cloudflare:workers";
 import { httpRouteTemplate } from "~/lib/http-route-template";
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
 import { recordDatabaseWrite } from "~/server/database-freshness/client";
+import { sha256Hex } from "~/server/semantic/hash";
 import { withTrace } from "~/server/tracing";
 
-import { authenticateCalendar, calendarDigest } from "./caldav-auth";
+import { authenticateCalendar } from "./caldav-auth";
 import {
   CalDavError,
   type CalDavBackend,
@@ -106,7 +107,7 @@ export class CalendarFeedDurableObject
     this.store.setCredential({
       owner: id,
       username,
-      hash: await calendarDigest(password),
+      hash: await sha256Hex(password),
       createdAt,
     });
     await this.markDirty("credential-created", origin);

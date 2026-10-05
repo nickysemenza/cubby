@@ -1,5 +1,4 @@
 import type { ImageAssociation } from "@cubby/schemas/image";
-import { match } from "ts-pattern";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
@@ -26,95 +25,26 @@ function ImageAssociationLink({
   showRole?: boolean;
   displayImages: ReturnType<typeof useEntityDisplayImages>;
 }) {
+  const { entityKind, entityId, entityName } = association;
   const displayImage =
-    displayImages[
-      entityDisplayImageKey({
-        entityKind: association.entityKind,
-        entityId: association.entityId,
-      })
-    ] ?? null;
-  const link = match(association)
-    .with({ entityKind: "product" }, ({ entityId, entityName }) => (
-      <EntityRefLink
-        displayImage={displayImage}
-        entity="product"
-        data={{ id: entityId, name: entityName }}
-        compact={compact}
-      />
-    ))
-    .with({ entityKind: "location" }, ({ entityId, entityName }) => (
-      <EntityRefLink
-        displayImage={displayImage}
-        entity="location"
-        data={{ id: entityId, name: entityName }}
-        compact={compact}
-      />
-    ))
-    .with({ entityKind: "recipe" }, ({ entityId, entityName }) => (
-      <EntityRefLink
-        displayImage={displayImage}
-        entity="recipe"
-        data={{ id: entityId, name: entityName }}
-        compact={compact}
-      />
-    ))
-    .with({ entityKind: "cookbook" }, ({ entityId, entityName }) => (
-      <EntityRefLink
-        displayImage={displayImage}
-        entity="cookbook"
-        data={{ id: entityId, name: entityName }}
-        compact={compact}
-      />
-    ))
-    .with({ entityKind: "project" }, ({ entityId, entityName }) => (
-      <EntityRefLink
-        displayImage={displayImage}
-        entity="project"
-        data={{ id: entityId, name: entityName }}
-        compact={compact}
-      />
-    ))
-    .with({ entityKind: "purchase" }, ({ entityId, entityName }) => (
+    displayImages[entityDisplayImageKey({ entityKind, entityId })] ?? null;
+  // Purchases have no name column; their label derives from the order id.
+  const link =
+    entityKind === "purchase" ? (
       <EntityRefLink
         displayImage={displayImage}
         entity="purchase"
         data={{ id: entityId, orderId: entityName }}
         compact={compact}
       />
-    ))
-    .with({ entityKind: "vendor" }, ({ entityId, entityName }) => (
+    ) : (
       <EntityRefLink
         displayImage={displayImage}
-        entity="vendor"
+        entity={entityKind}
         data={{ id: entityId, name: entityName }}
         compact={compact}
       />
-    ))
-    .with({ entityKind: "meal" }, ({ entityId, entityName }) => (
-      <EntityRefLink
-        displayImage={displayImage}
-        entity="meal"
-        data={{ id: entityId, name: entityName }}
-        compact={compact}
-      />
-    ))
-    .with({ entityKind: "task" }, ({ entityId, entityName }) => (
-      <EntityRefLink
-        displayImage={displayImage}
-        entity="task"
-        data={{ id: entityId, name: entityName }}
-        compact={compact}
-      />
-    ))
-    .with({ entityKind: "gardenEntry" }, ({ entityId, entityName }) => (
-      <EntityRefLink
-        displayImage={displayImage}
-        entity="gardenEntry"
-        data={{ id: entityId, name: entityName }}
-        compact={compact}
-      />
-    ))
-    .exhaustive();
+    );
 
   return (
     <div className="flex min-w-0 items-baseline justify-between gap-2">

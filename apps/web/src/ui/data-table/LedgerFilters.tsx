@@ -1,10 +1,10 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
+import { humanize } from "@cubby/shared";
 import type { RowData } from "@tanstack/react-table";
 import { useCallback, useMemo } from "react";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
-import { humanize } from "~/entity/filters";
 
 import {
   barFieldFromConfig,

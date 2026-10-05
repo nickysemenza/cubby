@@ -113,20 +113,6 @@ import {
   loadLiveInventoryValuations,
 } from "./valuation";
 
-const loadInventoryEntryPricing = async (
-  db: Database,
-  entries: ReadonlyArray<{
-    product: { id: ProductId; price: number | null };
-  }>,
-) =>
-  loadProductPricing(
-    db,
-    entries.map((entry) => ({
-      id: entry.product.id,
-      price: entry.product.price,
-    })),
-  );
-
 export const checkUniqueProductDuplicate = async (
   db: Database,
   productId: ProductId,
@@ -185,7 +171,7 @@ const inventoryReader = createEntityReader({
   fromDB: async (db, row: InventoryEntryDeepDB) => {
     const [pricing, ownership, dataQualities, locationQualities, valuations] =
       await Promise.all([
-        loadInventoryEntryPricing(db, [row]),
+        loadProductPricing(db, [row.product]),
         loadEffectiveInventoryOwnership(db, [row]),
         loadDataQualities(db, "inventory", [row.id]),
         loadDataQualities(db, "location", [row.location.id]),
@@ -504,7 +490,10 @@ export const inventoryentryListRead = async (
       const found = byId.get(row.id);
       return found ? [found] : [];
     });
-    const pricing = await loadInventoryEntryPricing(db, ordered);
+    const pricing = await loadProductPricing(
+      db,
+      ordered.map((entry) => entry.product),
+    );
     candidates = ordered.map((row) =>
       dbInventoryEntryListValues(
         row,
@@ -742,7 +731,7 @@ export const updateInventoryEntry = async (
 
   const [pricing, ownership, dataQualities, locationQualities, valuations] =
     await Promise.all([
-      loadInventoryEntryPricing(db, [result]),
+      loadProductPricing(db, [result.product]),
       loadEffectiveInventoryOwnership(db, [result]),
       loadDataQualities(db, "inventory", [result.id]),
       loadDataQualities(db, "location", [result.location.id]),
@@ -843,7 +832,7 @@ export const createInventoryEntry = async (
 
   const [pricing, ownership, dataQualities, locationQualities, valuations] =
     await Promise.all([
-      loadInventoryEntryPricing(db, [result]),
+      loadProductPricing(db, [result.product]),
       loadEffectiveInventoryOwnership(db, [result]),
       loadDataQualities(db, "inventory", [result.id]),
       loadDataQualities(db, "location", [result.location.id]),
@@ -893,7 +882,10 @@ export const getInventoryByLocationIds = async (
 
   const [pricing, ownership, dataQualities, locationQualities, valuations] =
     await Promise.all([
-      loadInventoryEntryPricing(db, results),
+      loadProductPricing(
+        db,
+        results.map((entry) => entry.product),
+      ),
       loadEffectiveInventoryOwnership(db, results),
       loadDataQualities(
         db,

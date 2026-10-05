@@ -1,10 +1,8 @@
 import { uniq } from "es-toolkit";
 import { Fragment, memo, useMemo, useState } from "react";
 
-import {
-  EntityRefLink,
-  dottedEntityLink,
-} from "~/entity/components/entity-ref-link";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { tryFormatAmount } from "~/features/inventory/format-amount";
 import { renderValueOrMissing } from "~/lib/result";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
@@ -29,17 +27,15 @@ import {
   type RecipeTreeRow,
   recipeTreeDisplayImage,
 } from "./recipe-tree";
-import {
-  entityRefForRow,
-  formatYield,
-  getIngredientName,
-} from "./recipe-utils";
+import { getIngredientName } from "./recipe-utils";
+import { formatYield } from "./recipe-yield";
 import {
   BasePill,
   NoWeightPill,
   SeeAbovePointer,
   StepNumberBadge,
   StubWarning,
+  TreeRowNameLink,
 } from "./spec-markers";
 
 // Spec sheet: the engineering view. A flat recipe renders as a single bordered
@@ -185,7 +181,6 @@ function SpecRow({
   const noWeight = row.grams == null;
   const quantities = buildDisplayQuantities(row.row, gramById);
   const name = getIngredientName(row.row);
-  const ref = entityRefForRow(row);
   // Tie a sub-recipe row's marker to the colored panel it opens below.
   const isSubrecipe = row.kind === "subrecipe";
   const isExpanded = isSubrecipe && expanded.has(row.id);
@@ -199,23 +194,7 @@ function SpecRow({
             {isExpanded ? "▾" : "▸"}
           </span>
         )}
-        {ref ? (
-          <EntityRefLink
-            variant="preview"
-            displayImage={
-              row.kind === "subrecipe"
-                ? recipeTreeDisplayImage(row.child.recipe)
-                : null
-            }
-            entity={ref.entity}
-            id={ref.id}
-            className={dottedEntityLink}
-          >
-            {name}
-          </EntityRefLink>
-        ) : (
-          name
-        )}
+        <TreeRowNameLink row={row} name={name} />
         <IngredientModifier modifier={row.row.modifier} />
         {isSubrecipe && !isExpanded && <SeeAbovePointer />}
         {isBase && <BasePill />}

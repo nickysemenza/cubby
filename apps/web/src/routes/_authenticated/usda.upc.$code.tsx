@@ -1,13 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { createFileRoute } from "@tanstack/react-router";
 
-import { usdaFood } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { UsdaAlternateIdRedirect } from "~/app/usda/usda-alternate-id-redirect";
 import { pageTitle } from "~/lib/page-title";
-import { Stack } from "~/ui/layout";
-import { Page } from "~/ui/page/Page";
-import { Empty, EmptyDescription, EmptyTitle } from "~/ui/primitives/empty";
-import { Skeleton } from "~/ui/primitives/skeleton";
 
 export const Route = createFileRoute("/_authenticated/usda/upc/$code")({
   head: ({ params }) => ({
@@ -18,65 +12,11 @@ export const Route = createFileRoute("/_authenticated/usda/upc/$code")({
 
 function USDAUPCLookupPage() {
   const { code } = Route.useParams();
-  const navigate = useNavigate();
-
-  const {
-    data: food,
-    isLoading,
-    error,
-  } = useQuery(
-    usdaFood.alternateId.queryOptions({ kind: "upc", gtin_upc: code }),
-  );
-
-  useEffect(() => {
-    if (food?.fdc_id) {
-      navigate({
-        to: "/usda/$id",
-        params: { id: String(food.fdc_id) },
-        replace: true,
-      });
-    }
-  }, [food, navigate]);
-
-  if (isLoading) {
-    return (
-      <Page
-        variant="list"
-        title="Looking up UPC"
-        eyebrow="USDA"
-        compact
-        decoration="none"
-      >
-        <Stack>
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-32 w-full" />
-        </Stack>
-      </Page>
-    );
-  }
-
-  if (error || !food) {
-    return (
-      <Page variant="list" title="UPC not found" eyebrow="USDA" compact>
-        <Empty>
-          <EmptyTitle>UPC {code} was not found</EmptyTitle>
-          <EmptyDescription>
-            No USDA food is linked to that barcode yet.
-          </EmptyDescription>
-        </Empty>
-      </Page>
-    );
-  }
-
   return (
-    <Page
-      variant="list"
-      title="Redirecting to USDA food"
-      eyebrow="USDA"
-      compact
-      decoration="none"
-    >
-      <p className="text-sm text-muted-foreground">Opening USDA food...</p>
-    </Page>
+    <UsdaAlternateIdRedirect
+      alternateId={{ kind: "upc", gtin_upc: code }}
+      label={`UPC ${code}`}
+      notFoundDescription="No USDA food is linked to that barcode yet."
+    />
   );
 }

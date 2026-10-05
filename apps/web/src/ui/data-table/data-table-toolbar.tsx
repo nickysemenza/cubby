@@ -116,12 +116,7 @@ function ActionsMenu<TData extends RowData>({
 }) {
   const [columnsOpen, setColumnsOpen] = useState(false);
   const isCustomized = isTableLayoutCustomized(
-    {
-      columnOrder: table.state.columnOrder,
-      columnPinning: table.state.columnPinning,
-      columnVisibility: table.state.columnVisibility,
-      columnSizing: table.state.columnSizing,
-    },
+    table.state,
     table.options.meta?.defaultLayout,
   );
   const hasViews = viewsForEntity(entity).length > 0;
