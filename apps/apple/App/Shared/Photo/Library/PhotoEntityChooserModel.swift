@@ -25,7 +25,9 @@ final class PhotoEntityChooserModel {
     let currentGregorianDay: Date
     private let dateLane: GenericEntityListModel
     private let recentLane: GenericEntityListModel
-    private var isAdvancingRecents = false
+    private var isDrainingRecents = false
+    private var recentTarget = 0
+    private var recentDrainRequested = false
     /// Bumped by every `setScope`; a continuation from an older scope stops at its next await.
     private var scopeGeneration = 0
 
@@ -48,9 +50,9 @@ final class PhotoEntityChooserModel {
     var dateError: String? { hasDateMatches ? Self.error(in: dateLane) : nil }
     var recentError: String? { Self.error(in: recentLane) }
     var isLoadingDateNextPage: Bool { dateLane.activity == .loadingNextPage }
-    var isLoadingRecentNextPage: Bool { recentLane.activity == .loadingNextPage || isAdvancingRecents }
+    var isLoadingRecentNextPage: Bool { recentLane.activity == .loadingNextPage || isDrainingRecents }
     var isLoading: Bool {
-        recentLane.phase == .idle || isAdvancingRecents
+        recentLane.phase == .idle || isDrainingRecents
             || [dateLane, recentLane].contains { $0.activity == .loadingInitial }
     }
 
@@ -89,13 +91,13 @@ final class PhotoEntityChooserModel {
     func loadInitial() async {
         await dateLane.loadInitial()
         await recentLane.loadInitial()
-        await advanceRecents(whileCountIs: 0)
+        await drainRecents(toVisible: 1)
     }
 
     func refresh() async {
         await dateLane.refresh()
         await recentLane.refresh()
-        await advanceRecents(whileCountIs: 0)
+        await drainRecents(toVisible: 1)
     }
 
     /// Re-scopes to a changed photo selection. The capture date and the date lane's source change
@@ -112,7 +114,7 @@ final class PhotoEntityChooserModel {
                 descriptor: descriptor, key: semanticDateKey, captureDate: newDate,
                 calendar: calendar, loader: loader))
         guard generation == scopeGeneration else { return }
-        await advanceRecents(whileCountIs: 0)
+        await drainRecents(toVisible: 1, resettingTarget: true)
     }
 
     func setSearchQuery(_ query: String) {
@@ -125,22 +127,34 @@ final class PhotoEntityChooserModel {
     }
 
     func loadMoreRecents() async {
-        let count = recentRows.count
-        await recentLane.loadNextPage()
-        await advanceRecents(whileCountIs: count)
+        await drainRecents(toVisible: recentRows.count + 1)
     }
 
-    /// Recent pages advance over pages that add nothing (capture-day-only pages). The server's
-    /// total remains authoritative, so a caller can still reach records beyond a photo's
-    /// capture day.
-    private func advanceRecents(whileCountIs count: Int) async {
-        isAdvancingRecents = true
-        defer { isAdvancingRecents = false }
-        while recentRows.count == count, recentLane.hasMore {
-            let page = recentLane.page
-            await recentLane.loadNextPage()
-            // A failed, superseded or already-running page does not advance: stop, never spin.
-            guard recentLane.page > page else { return }
+    /// Pages recents until `target` rows are visible, advancing over pages that add nothing
+    /// visible (capture-day-only pages); the server's total stays authoritative, so records
+    /// beyond a photo's capture day remain reachable. One drain owns every recent next-page
+    /// request: a caller arriving while it runs only updates the target and flags a re-check,
+    /// which the owner reads after its in-flight page lands. A scope change resets the target to
+    /// the new scope's need (one visible row), so a page fetched under the old scope keeps
+    /// draining under the new one.
+    private func drainRecents(toVisible target: Int, resettingTarget: Bool = false) async {
+        recentTarget = resettingTarget ? target : max(recentTarget, target)
+        recentDrainRequested = true
+        guard !isDrainingRecents else { return }
+        isDrainingRecents = true
+        defer {
+            isDrainingRecents = false
+            recentTarget = 0
+        }
+        while recentDrainRequested {
+            recentDrainRequested = false
+            while recentRows.count < recentTarget, recentLane.hasMore {
+                let page = recentLane.page
+                await recentLane.loadNextPage()
+                // A failed, superseded or blocked page does not advance: stop, never spin. Its
+                // error, or a request that arrived meanwhile, decides whether to go on.
+                guard recentLane.page > page else { break }
+            }
         }
     }
 

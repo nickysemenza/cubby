@@ -119,6 +119,49 @@ struct PhotoEntityChooserModelTests {
         #expect(!model.hasMoreRecents)
     }
 
+    /// Scope A shows one B-day recent; page 2 (B-day rows only) is held while the scope moves to
+    /// B and B's date page finishes. When page 2 lands, recents keep draining to page 3 instead
+    /// of stopping on a baseline taken under scope A.
+    @Test func scopeChangeDuringARecentPageKeepsDrainingUnderTheNewScope() async throws {
+        let pageTwoStarted = Mutex(false)
+        let pageTwo = Gate()
+        let requested = Mutex<[Int]>([])
+        let model = PhotoEntityChooserModel(
+            descriptor: EntityCatalog[.meal], client: try makeClient(),
+            captureDates: [Self.day("2026-09-10")],
+            calendar: Self.utcCalendar,
+            now: Self.day("2026-09-17"),
+            loader: { filters, _, page, _ in
+                if let day = filters["from"]?.strings.first {
+                    return Self.page([Self.row("MEA-\(day)", date: day)], page: page, total: 1)
+                }
+                requested.withLock { $0.append(page) }
+                if page == 2 {
+                    pageTwoStarted.withLock { $0 = true }
+                    await pageTwo.wait()
+                }
+                let date = ["2026-09-05", "2026-09-05", "2026-09-03"][page - 1]
+                return Self.page([Self.row("MEA-recent-\(page)", date: date)], page: page, total: 3)
+            })
+
+        await model.loadInitial()
+        #expect(model.recentRows.map(\.id) == ["MEA-recent-1"])
+
+        let loadMore = Task { await model.loadMoreRecents() }
+        #expect(await waitUntil { pageTwoStarted.withLock { $0 } })
+        await model.setScope(captureDates: [Self.day("2026-09-05")])
+        #expect(model.dateMatches.map(\.id) == ["MEA-2026-09-05"])
+        #expect(model.recentRows.isEmpty)
+        #expect(model.isLoading)
+
+        pageTwo.open()
+        await loadMore.value
+        #expect(requested.withLock { $0 } == [1, 2, 3])
+        #expect(model.recentRows.map(\.id) == ["MEA-recent-3"])
+        #expect(!model.hasMoreRecents)
+        #expect(!model.isLoading)
+    }
+
     @Test func noCaptureDateLoadsOnlyRecentLane() async throws {
         let descriptor = EntityCatalog[.product]
         let model = PhotoEntityChooserModel(

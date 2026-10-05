@@ -72,7 +72,16 @@ struct WardrobeView: View {
         } else if case .failed(let message) = model.phase {
             LoadFailureView(title: "Couldn’t load wardrobe", message: message) { await model.refresh() }
         } else if model.phase == .loaded {
-            ContentUnavailableView("No apparel yet", systemImage: "tshirt")
+            VStack(spacing: FieldGuideTokens.Space.md) {
+                // A refresh that fails after an empty result keeps phase `.loaded`; show it.
+                if let refreshError = model.refreshError {
+                    InlineLoadFailure(message: refreshError, isRetrying: model.activity != .idle) {
+                        await model.refresh()
+                    }
+                    .padding(.horizontal, FieldGuideTokens.Space.md)
+                }
+                ContentUnavailableView("No apparel yet", systemImage: "tshirt")
+            }
         } else {
             LoadingIndicator.screen(label: "Loading wardrobe")
         }
