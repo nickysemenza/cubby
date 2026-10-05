@@ -23,6 +23,12 @@ public final class ReportBatchModel {
     public private(set) var isLoading = false
     public private(set) var loadError: String?
     public private(set) var live = false
+    /// The record's status as of the last read: a screen whose own header follows the record
+    /// (a Run detail) reads it here instead of polling the record separately.
+    public private(set) var status: String?
+    /// Counts completed reads, so a screen can re-read what it draws beside the reports (a photo
+    /// Run's review) on the same clock.
+    public private(set) var revision = 0
 
     public let id: String
     /// The status the detail screen currently shows; set again after the record reloads.
@@ -61,9 +67,13 @@ public final class ReportBatchModel {
             for (slot, report) in reports { next[slot] = ReportPresentation(report) }
             presentations = next
             live = next.values.contains { $0.live }
-            if let status = next.values.compactMap(\.status).first { noteStatus(status) }
+            if let status = next.values.compactMap(\.status).first {
+                self.status = status
+                noteStatus(status)
+            }
             loadError = nil
             isLoaded = true
+            revision += 1
         } catch {
             loadError = error.localizedDescription
         }

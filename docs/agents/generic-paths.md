@@ -13,6 +13,12 @@ existing block. Extend the generic path when it almost fits. See
   (`apps/web/src/entity/entity-display.tsx`); named renderers in
   `apps/web/src/entity/list-field-renderers.tsx`. Hand overrides in
   `entity/list-columns/` are only for mutation-bound cells.
+- Run detail: every Run route (`Route.entityDetail(.run, …)`) opens `RunConsoleView`, the
+  declared hero and `run` slots through `DetailSlotRegistry`. Its status follows the batched
+  report poll (`ReportBatchModel.status`/`revision`), never a second Run poll. Specialist
+  reviews are slots or owned sections of it: a photo Run's review is the `photo-batch` slot
+  (`RunPhotoReviewSections` with `.photoReviewConfirmations` on the console's list), led
+  ahead of the reports; never link a Run slot back to the Run screen.
 - Edit forms: generated intents plus the typed `editHooks` map in
   `apps/web/src/entity/editing/`.
 - Saved views: `presentation.list.views` on the declaration.

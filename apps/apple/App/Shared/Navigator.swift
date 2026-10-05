@@ -219,14 +219,15 @@ final class Navigator {
         }
     }
 
+    /// A photo Run's review leads its Run detail, so this opens the Run under Activity.
     func openPhotoReview(runID: String) {
         selectedActivity = nil
         #if os(iOS)
             section = .activity
-            paths[.today] = [.activityList, .photoReview(runID)]
+            paths[.today] = [.activityList, .entityDetail(.run, id: runID)]
         #else
             section = .activity
-            paths[.activity] = [.photoReview(runID)]
+            paths[.activity] = [.entityDetail(.run, id: runID)]
         #endif
     }
 

@@ -152,9 +152,7 @@ struct ProductEnrichmentHistorySlot: View {
                 }
                 ForEach(Array(history.runs.enumerated()), id: \.offset) { indexed in
                     let run = indexed.element
-                    NavigationLink {
-                        RunReviewView(runID: run.publicId)
-                    } label: {
+                    NavigationLink(value: Route.entityDetail(.run, id: run.publicId)) {
                         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                             Text(run.vendorName ?? run.vendorAccountLabel ?? "Product enrichment")
                             Text("\(run.status) · \(run.trigger)").font(.caption).foregroundStyle(.secondary)

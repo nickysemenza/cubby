@@ -457,9 +457,7 @@ struct RecordsBlockView: View {
             Text(verbError).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
         }
         if let startedRun {
-            NavigationLink {
-                RunReviewView(runID: startedRun)
-            } label: {
+            NavigationLink(value: Route.entityDetail(.run, id: startedRun)) {
                 Label("View charge search", systemImage: "arrow.up.right.square")
             }
         }

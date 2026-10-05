@@ -1,6 +1,6 @@
 context platform=ios timeout=240000
 
-# A photo Run opened from its entity link lands on photo review. Selecting only the second
+# A photo Run opened from its entity link lands on the console with photo review. Selecting only the second
 # ready group and approving the selection commits that group alone; the sim QA lane then
 # reads back one committed group, one still-proposed group and one Product. Regression:
 # the workspace is one List row, so Select once also pushed the match and draft screens, and

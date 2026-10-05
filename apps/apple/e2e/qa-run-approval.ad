@@ -3,9 +3,8 @@ context platform=ios timeout=240000
 open com.nickysemenza.cubby
 wait "role=Button label=Find" 240000
 open "cubby://entity/${APPROVAL_RUN_ID}"
-wait "label=\"Run console\"" 90000
-click "label=\"Run console\""
-wait text "Approvals" 90000
+# The Run opens on its detail; the approval sits below the hero and progress reports.
+wait text "Paused Approval" 90000
 scroll down 0.4 --until "id=report.command.${APPROVAL_ID}:approve"
 wait "id=report.command.${APPROVAL_ID}:approve" 90000
 click "id=report.command.${APPROVAL_ID}:approve"
