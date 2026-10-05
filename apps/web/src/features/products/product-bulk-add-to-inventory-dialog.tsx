@@ -21,6 +21,7 @@
 
 import type { Amount } from "@cubby/schemas/codec";
 import {
+  locationShortcode,
   type ProductShortcode,
   productShortcode,
 } from "@cubby/schemas/identifiers";
@@ -43,6 +44,9 @@ import {
   product as productOperations,
 } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
+import { requiredLocationCode } from "~/ui/form-fields";
+import { EntityValueField } from "~/ui/form-utils/entity-value-field";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
@@ -51,11 +55,8 @@ import { Description } from "~/ui/primitives/description";
 import { ResponsiveDialog } from "~/ui/primitives/responsive-dialog";
 import { Spinner } from "~/ui/primitives/spinner";
 
-import { getLocationId, requiredLocationField } from "../../ui/form-fields";
-import { ComboboxFieldWithSearch } from "../../ui/form-utils/combobox-field-with-search";
-
 const formSchema = z.object({
-  location: requiredLocationField,
+  location: requiredLocationCode,
   items: z
     .array(
       z.object({
@@ -67,7 +68,7 @@ const formSchema = z.object({
     .min(1, "Keep at least one product"),
 });
 
-type BulkAddValues = z.input<typeof formSchema>;
+const LocationSearch = referenceEntitySearch("location");
 
 export interface BulkAddProduct {
   id: ProductShortcode;
@@ -109,9 +110,13 @@ export const ProductBulkAddToInventoryDialog: FC<
   ProductBulkAddToInventoryDialogProps
 > = ({ open, onOpenChange, products, onComplete }) => {
   const sole = products.length === 1 ? products[0] : undefined;
-  const form = useForm<BulkAddValues>({
+  const form = useForm<
+    z.input<typeof formSchema>,
+    unknown,
+    z.output<typeof formSchema>
+  >({
     resolver: zodResolver(formSchema),
-    defaultValues: { location: null, items: rowsFor(products) },
+    defaultValues: { location: "", items: rowsFor(products) },
   });
   const { fields, remove } = useFieldArray({
     control: form.control,
@@ -132,8 +137,8 @@ export const ProductBulkAddToInventoryDialog: FC<
     // oxlint-disable-next-line react/exhaustive-deps -- keyed on selectionKey, not the array identity
   }, [selectionKey, open, form]);
 
-  const location = form.watch("location");
-  const locationId = location ? getLocationId(location) : null;
+  const locationId =
+    locationShortcode.safeParse(form.watch("location")).data ?? null;
 
   // The server owns the proposed amount and the warnings (parts already
   // account for every unit bought; stock already at this location), so web and
@@ -198,13 +203,13 @@ export const ProductBulkAddToInventoryDialog: FC<
   });
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) form.reset({ location: null, items: rowsFor(products) });
+    if (!nextOpen) form.reset({ location: "", items: rowsFor(products) });
     onOpenChange(nextOpen);
   };
 
   const onSubmit = form.handleSubmit(async (values) => {
     await addMutation.mutateAsync({
-      locationId: getLocationId(values.location),
+      locationId: values.location,
       items: values.items.map((item) => ({
         productId: item.productId,
         amount: item.amount,
@@ -257,21 +262,25 @@ export const ProductBulkAddToInventoryDialog: FC<
               fieldKeys={["locationId"]}
               paths={{ locationId: "location" }}
             >
-              <ComboboxFieldWithSearch
+              <EntityValueField
                 form={form}
                 name="location"
                 label="Location"
-                searchType="location"
+                entity="location"
+                SearchProvider={LocationSearch}
+                clearable
                 suggestField="locationId"
               />
             </FieldSuggestionProvider>
           </FormProvider>
         ) : (
-          <ComboboxFieldWithSearch
+          <EntityValueField
             form={form}
             name="location"
             label="Location"
-            searchType="location"
+            entity="location"
+            SearchProvider={LocationSearch}
+            clearable
           />
         )}
 

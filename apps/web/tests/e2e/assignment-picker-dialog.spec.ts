@@ -9,7 +9,7 @@ const locationParentOut = z.object({
 });
 
 /**
- * The assignment-dialog picker lifecycle (`ui/form-utils/entity-picker-field`),
+ * The assignment-dialog picker lifecycle (`ui/form-utils/entity-value-field.tsx`),
  * driven through the bulk "Move under..." dialog. Failure modes: a selected
  * label degrades to its bare shortcode once the picker's search results stop
  * listing it (search away, or a just-created record the results never held);

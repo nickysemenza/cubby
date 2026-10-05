@@ -6,14 +6,19 @@ import { Button } from "~/ui/primitives/button";
 import { FieldSuggestionHint } from "./field-suggestion-hint";
 import { useFieldSuggestionContext } from "./field-suggestion-provider";
 import { FormFieldResolution } from "./form-field-resolution";
-import { useAutoFieldSuggestion } from "./use-auto-field-suggestion";
+import {
+  useAutoFieldSuggestion,
+  type UseAutoFieldSuggestionResult,
+} from "./use-auto-field-suggestion";
 
 /**
- * The `useAutoFieldSuggestion` + `FieldSuggestionHint` pairing every
- * suggest-enabled primitive (`SelectField`, `EntityValueField`,
- * `ComboboxFieldWithSearch`, `VendorField`) renders the same way. Mounted
- * only when the primitive's `suggestField` prop is set — no-op without a
- * `FieldSuggestionProvider` above it, same as the hook it wraps.
+ * The `useAutoFieldSuggestion` + `FieldSuggestionHint` pairing the
+ * suggest-enabled primitives (`SelectField`, `VendorField`) render the same
+ * way. Mounted only when the primitive's `suggestField` prop is set — no-op
+ * without a `FieldSuggestionProvider` above it, same as the hook it wraps.
+ * The entity pickers (`ui/form-utils/entity-value-field.tsx`) call the hook
+ * themselves, because their candidate list needs its seed items, and render
+ * {@link AutoSuggestHint}.
  */
 export function AutoSuggestSlot<TFieldValues extends FieldValues>({
   form,
@@ -30,15 +35,7 @@ export function AutoSuggestSlot<TFieldValues extends FieldValues>({
   disabled?: boolean;
 }) {
   const context = useFieldSuggestionContext();
-  const {
-    suggestion,
-    applied,
-    isPending,
-    apply,
-    currentValue,
-    currentLabel,
-    questionKey,
-  } = useAutoFieldSuggestion({
+  const result = useAutoFieldSuggestion({
     form,
     name,
     field,
@@ -58,26 +55,44 @@ export function AutoSuggestSlot<TFieldValues extends FieldValues>({
             type="button"
             variant="link"
             size="sm"
-            disabled={isPending || disabled}
+            disabled={result.isPending || disabled}
             onClick={() => context.requestSuggestions?.()}
           >
             Suggest {definition.label.toLowerCase()}
           </Button>
         )}
       <FormFieldResolution form={form} field={field} />
-      <FieldSuggestionHint
-        currentLabel={currentLabel}
-        currentValue={currentValue}
-        questionKey={questionKey}
-        suggestion={suggestion}
-        applied={applied}
-        pending={isPending}
-        onApply={apply}
-        alternative={context?.isAlternative(field) ?? false}
-        outcome={context?.outcomeFor(field) ?? null}
-        autoFilled={context?.isAutoFilled(field) ?? false}
-        surface="line"
-      />
+      <AutoSuggestHint field={field} result={result} />
     </>
+  );
+}
+
+/** One field's suggestion line, from its `useAutoFieldSuggestion` result.
+ * `currentLabel` overrides the hook's own when the caller knows a better
+ * label for the current value (an id-valued picker's selected item name). */
+export function AutoSuggestHint({
+  field,
+  result,
+  currentLabel,
+}: {
+  field: string;
+  result: UseAutoFieldSuggestionResult;
+  currentLabel?: string;
+}) {
+  const context = useFieldSuggestionContext();
+  return (
+    <FieldSuggestionHint
+      currentLabel={currentLabel ?? result.currentLabel}
+      currentValue={result.currentValue}
+      questionKey={result.questionKey}
+      suggestion={result.suggestion}
+      applied={result.applied}
+      pending={result.isPending}
+      onApply={result.apply}
+      alternative={context?.isAlternative(field) ?? false}
+      outcome={context?.outcomeFor(field) ?? null}
+      autoFilled={context?.isAutoFilled(field) ?? false}
+      surface="line"
+    />
   );
 }
