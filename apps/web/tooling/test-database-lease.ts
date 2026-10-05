@@ -166,10 +166,19 @@ async function release(hash: string, id: number, name: string) {
  * Native fixtures own individually named databases on the guarded local server.
  * Retention applies only after successful setup; a failed acquisition drops the
  * database it created. A CREATE collision never makes the caller its owner.
- * Watchdogs and scenario seed/reset policies stay with their native runner.
+ *
+ * `onCreated` runs immediately after CREATE establishes ownership and before
+ * migration, so a runner's out-of-process watchdog covers the database even if
+ * the runner is killed mid-migration (regression: #1628 review). Scenario
+ * seed/reset policies stay in `setup`, which runs after migration.
  */
 export async function leaseNamedDatabase<T>(
-  options: { adminUrl: string; name: string; retention: "drop" | "retain" },
+  options: {
+    adminUrl: string;
+    name: string;
+    retention: "drop" | "retain";
+    onCreated?: (lease: DatabaseLease) => void | Promise<void>;
+  },
   setup: (lease: DatabaseLease) => Promise<T>,
 ): Promise<{ lease: DatabaseLease; prepared: T }> {
   const adminUrl = assertSimulatorAdminUrl(options.adminUrl);
@@ -214,6 +223,7 @@ export async function leaseNamedDatabase<T>(
   try {
     await admin.query(`CREATE DATABASE "${options.name}"`);
     created = true;
+    await options.onCreated?.(lease);
     const pool = new Pool({ connectionString: databaseUrl });
     try {
       await migrateDatabase(drizzle(pool));

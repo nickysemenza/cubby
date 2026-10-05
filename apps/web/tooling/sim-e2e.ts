@@ -1760,11 +1760,16 @@ async function main(): Promise<void> {
         database: {
           lease: async () => {
             const { lease } = await leaseNamedDatabase(
-              { adminUrl: adminURL, name: simName, retention: "drop" },
-              async () => {
-                console.log(`[${lane}] Disposable database ${simName}`);
-                if (watch) startDatabaseWatchdog();
+              {
+                adminUrl: adminURL,
+                name: simName,
+                retention: "drop",
+                onCreated: () => {
+                  console.log(`[${lane}] Disposable database ${simName}`);
+                  if (watch) startDatabaseWatchdog();
+                },
               },
+              async () => undefined,
             );
             phases.push({
               name: "database",

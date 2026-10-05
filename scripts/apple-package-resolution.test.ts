@@ -62,6 +62,12 @@ test("app-only resolution leaves the Kit lockfile bytes unchanged, including aft
         /CubbyKit package pin changed/,
       );
       assert.equal(readFileSync(lock, "utf8"), original);
+      // A build that deletes the lockfile still gets the Kit bytes back.
+      await assert.rejects(
+        withKitPackageResolution(root, async () => rmSync(lock)),
+        /ENOENT/,
+      );
+      assert.equal(readFileSync(lock, "utf8"), original);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

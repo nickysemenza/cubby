@@ -722,24 +722,30 @@ async function main(): Promise<void> {
         database: {
           lease: async () => {
             const { lease } = await leaseNamedDatabase(
-              { adminUrl: adminURL, name: databaseName, retention: "drop" },
-              async ({ databaseUrl }) => {
-                const watchdog = spawn(
-                  process.execPath,
-                  [
-                    path.join(webRoot, "tooling/e2e-db-watchdog.mjs"),
-                    adminURL,
-                    databaseName,
-                    String(process.pid),
-                    path.join(artifacts, "watchdog.log"),
-                  ],
-                  { cwd: webRoot, detached: true, stdio: "ignore" },
-                );
-                if (!watchdog.pid)
-                  throw new Error(
-                    "Could not start disposable database watchdog",
+              {
+                adminUrl: adminURL,
+                name: databaseName,
+                retention: "drop",
+                onCreated: () => {
+                  const watchdog = spawn(
+                    process.execPath,
+                    [
+                      path.join(webRoot, "tooling/e2e-db-watchdog.mjs"),
+                      adminURL,
+                      databaseName,
+                      String(process.pid),
+                      path.join(artifacts, "watchdog.log"),
+                    ],
+                    { cwd: webRoot, detached: true, stdio: "ignore" },
                   );
-                watchdog.unref();
+                  if (!watchdog.pid)
+                    throw new Error(
+                      "Could not start disposable database watchdog",
+                    );
+                  watchdog.unref();
+                },
+              },
+              async ({ databaseUrl }) => {
                 const pool = new Pool({ connectionString: databaseUrl });
                 try {
                   await seedBaseWorld(drizzle(pool));

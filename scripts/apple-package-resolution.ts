@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
@@ -71,7 +71,9 @@ export async function withKitPackageResolution<T>(
     errors.push(error);
   }
   try {
-    if (readFileSync(file, "utf8") !== original) writeFileSync(file, original);
+    // A build that deleted the lockfile still gets the Kit bytes back.
+    if (!existsSync(file) || readFileSync(file, "utf8") !== original)
+      writeFileSync(file, original);
   } catch (error) {
     errors.push(error);
   }
