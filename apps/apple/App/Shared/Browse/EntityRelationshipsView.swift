@@ -98,11 +98,8 @@ struct EntityRelationshipsSection: View {
                     onAccepted: onAccepted
                 )
             }
-            if let error = model.acceptError {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(.callout)
-                    .foregroundStyle(FieldGuideTokens.warning)
-            }
+            // No Retry: the failed suggestion's own Accept is still in its row.
+            if let error = model.acceptError { ActionFailureNotice(message: error) }
         }
     }
 
@@ -255,12 +252,8 @@ struct RelationshipRecommendationReviewSheet: View {
                     }
                 }
                 if let error = model.acceptError {
-                    Section("Couldn't save") {
-                        Label(error, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(FieldGuideTokens.warning)
-                        Button("Retry", action: accept)
-                            .frame(minHeight: FieldGuideTokens.touchTarget)
-                            .disabled(!canAccept)
+                    Section {
+                        ActionFailureNotice(message: error, canRetry: canAccept, retry: accept)
                     }
                 }
             }

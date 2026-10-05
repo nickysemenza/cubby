@@ -611,7 +611,7 @@ struct ActivityDetailView: View {
                     await model.load(id: id, client: appModel.client)
                 }
             } else {
-                ProgressView("Loading activity…")
+                LoadingIndicator(label: "Loading activity")
             }
         }
         .navigationTitle(model.detail?.run.subjectName ?? "Activity")

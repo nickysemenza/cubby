@@ -37,6 +37,12 @@ export async function seedNativeQa(
   const shelf = await createEntity(context, "location", {
     name: "Synthetic Pantry Shelf",
   });
+  // The shelf's child: choosing it as the shelf's parent is a server-rejected cycle, the
+  // deterministic save failure `qa-save-error.ad` drives.
+  await createEntity(context, "location", {
+    name: "Synthetic Spice Drawer",
+    parentId: shelf.id,
+  });
   const ingredient = await createEntity(context, "ingredient", {
     name: "Synthetic Flour",
   });

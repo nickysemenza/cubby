@@ -177,6 +177,9 @@ existing block. Extend the generic path when it almost fits. See
 ## Swift
 
 - `Error.userMessage`, `CubbyClient` list-all helper, `Double.usd`.
+- Native loading and failures: `LoadingIndicator`, `LoadFailureView` for an unloaded body,
+  `InlineLoadFailure` beside loaded content, and `ActionFailureNotice` for refused writes
+  preserve raw diagnostics and caller-owned mutation retry eligibility (`ScreenStyle.swift`).
 - Paged, searchable record lists: `GenericEntityListModel` owns paging, de-duplication,
   stale-result discard, retry and the debounced `EntityListSearchModel`. A surface whose rows
   do not come from the declared list route (scoped picker, photo lane, relationship cursor,

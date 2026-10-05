@@ -31,12 +31,9 @@ struct DiagnosticStoredPhotoPreview: View {
                         "Cubby display rendition · \(id.rawValue). Not the original bytes used for the stored fingerprint."
                 )
             } else if let error {
-                VStack(alignment: .leading) {
-                    Label("Image preview unavailable: \(error)", systemImage: "photo.badge.exclamationmark")
-                    Button("Retry image preview") { retry += 1 }
-                }
+                InlineLoadFailure(message: "Image preview unavailable: \(error)") { retry += 1 }
             } else {
-                ProgressView("Loading \(id.rawValue) preview…")
+                LoadingIndicator(label: "Loading \(id.rawValue) preview")
             }
         }
         .task(id: "\(appModel.host):\(id.rawValue):\(retry)") {
