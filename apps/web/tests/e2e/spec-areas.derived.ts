@@ -283,6 +283,10 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
   "product-ssr.spec.ts": [
     "apps/web/src/routes/_authenticated/products.$shortcode.tsx",
   ],
+  "project-contribution.spec.ts": [
+    "apps/web/src/routes/_authenticated/expenses.$shortcode.tsx",
+    "apps/web/src/routes/_authenticated/projects.$shortcode.tsx",
+  ],
   "project-tracker.spec.ts": [
     "apps/web/src/routes/_authenticated/tasks.$shortcode.tsx",
     "apps/web/src/routes/_authenticated/tasks.index.tsx",
