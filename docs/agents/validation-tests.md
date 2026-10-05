@@ -30,7 +30,12 @@ Playwright E2E and the coupled Workers harness share a machine-wide lock
 the same machine queues and logs who holds the lock instead of starving both
 of CPU. A lock whose owner process exited is reclaimed. Processes the holder
 spawns pass straight through. `test:e2e:watch` (`--ui`) skips the lock, since
-its idle session would otherwise hold it indefinitely. RTable's placeholder transition can eat clicks;
+its idle session would otherwise hold it indefinitely. A spec's `test.use` of a
+worker-scoped option (`video`, `trace`, `screenshot`, browser launch options),
+even to its default, moves its tests into extra workers that each boot another
+browser, database, and Worker harness; only `gmailJourney` and `purchaseAgent`
+may split workers (`tooling/e2e-worker-pool.unit.test.ts`). Record video for a
+run with `CUBBY_E2E_VIDEO=1`. RTable's placeholder transition can eat clicks;
 cell-edit tests retry opening and filling as one action.
 
 The `Purchase import agent` Playwright project
