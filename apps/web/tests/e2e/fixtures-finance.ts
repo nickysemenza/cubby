@@ -221,8 +221,8 @@ export async function seedProjectContributionPrerequisite(
       ],
       funders: funded ? [{ partyId: member.shortcode, weight: 1 }] : [],
     });
-  await expense("lumber", 100, true);
-  await expense("returned lumber", -20, true);
-  const unfunded = await expense("paint", 40, false);
+  await expense("lumber", 100.49, true);
+  await expense("returned lumber", -20.13, true);
+  const unfunded = await expense("paint", 40.08, false);
   return { project, member, guestName: `${name} guest`, unfunded };
 }

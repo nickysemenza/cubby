@@ -51,7 +51,7 @@ const TONE_FILL = {
 } as const;
 
 const formatValue = (value: number, format: "money" | "count" | "text") =>
-  format === "money" ? formatCurrency(value, 0) : String(value);
+  format === "money" ? formatCurrency(value) : String(value);
 
 function Stats({ block }: { block: Extract<ReportBlock, { kind: "stats" }> }) {
   return (

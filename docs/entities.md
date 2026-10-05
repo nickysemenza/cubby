@@ -220,8 +220,11 @@ in `packages/schemas/src/entity-report.ts`) and web (`ReportBlocks`) and native
 (`ReportDetailSlot`, Swift Charts) only draw it. Add the slot id to
 `reportSlots`, a builder to `BUILDERS`, and register the slot on both clients;
 money in a report is `SUM(Expense.cost)` or the persisted valuation, never
-recomputed on a client. The finance slots (purchase reconciliation, project
-allocation and financial settlement, expense settlement, statement-charge
+recomputed on a client. Money summaries and chart labels preserve cents, matching
+the report rows. Linked record names truncate within the available row width,
+leaving trailing amounts visible on phones. The finance slots (purchase
+reconciliation, project allocation and financial settlement, expense settlement,
+statement-charge
 search) also use the `records` block: rows a person can open or check, plus the
 verbs that act on them (`SECTION_ACTION_IDS`). Each row's and verb's
 `disabledReason`, every amount and the footer are the server's; a verb runs an
