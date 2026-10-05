@@ -100,7 +100,6 @@ struct ScopePickerSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .fieldGuideListRow()
     }
 
     private func submitCode() {

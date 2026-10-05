@@ -177,13 +177,7 @@ struct SearchContent: View {
             case .empty:
                 ContentUnavailableView.search(text: search.query)
             case .failed(let message):
-                ContentUnavailableView {
-                    Label("Couldn't search Cubby", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(message)
-                } actions: {
-                    Button("Retry") { search.retry() }
-                }
+                LoadFailureView(title: "Couldn't search Cubby", message: message) { search.retry() }
             }
         }
     }
@@ -389,13 +383,5 @@ private struct SearchHitRow: View {
         .listStyle(.plain)
         .fieldGuideScreen()
         .navigationTitle("Search")
-    }
-}
-
-#Preview("Error") {
-    NavigationStack {
-        ContentUnavailableView(
-            "Couldn't search Cubby", systemImage: "exclamationmark.triangle",
-            description: Text("The server took too long to respond."))
     }
 }

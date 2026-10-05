@@ -177,10 +177,9 @@ struct EntityDetailView: View {
         if let model, let row = model.row {
             VStack(spacing: 0) {
                 if let error = model.refreshError {
-                    HStack {
-                        Text(error).font(.callout)
-                        Button("Retry") { Task { await model.refresh(id: row.id) } }
-                    }.padding()
+                    InlineLoadFailure(message: error) { await model.refresh(id: row.id) }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
                 }
                 EntityDetailContent(
                     descriptor: descriptor, row: row,
@@ -202,12 +201,8 @@ struct EntityDetailView: View {
             case .unavailable(let message):
                 ContentUnavailableView(message, systemImage: entitySymbol(for: key))
             case .failed(let message):
-                ContentUnavailableView {
-                    Label("Couldn't load \(descriptor.singular)", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(message)
-                } actions: {
-                    Button("Retry") { Task { await setup() } }
+                LoadFailureView(title: "Couldn't load \(descriptor.singular)", message: message) {
+                    await setup()
                 }
             case .loaded:
                 ContentUnavailableView("Not found", systemImage: "questionmark.folder")
@@ -537,8 +532,7 @@ struct EntityDetailContent: View {
         case .timeline:
             Section(section.title ?? "Timeline") {
                 if let timelineError {
-                    Text(timelineError).foregroundStyle(.secondary)
-                    Button("Retry") { Task { await loadTimelineIfDeclared() } }
+                    InlineLoadFailure(message: timelineError) { await loadTimelineIfDeclared() }
                 } else if let timeline {
                     if timeline.groups.isEmpty && (timeline.rows ?? []).isEmpty {
                         Text("No events").foregroundStyle(.secondary)

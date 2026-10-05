@@ -88,8 +88,7 @@ struct OrderMailDetailSlot: View {
                 LoadingIndicator(label: "Loading order email")
             }
             if let error {
-                Text(error).font(.callout).foregroundStyle(FieldGuideTokens.destructive)
-                Button("Retry") { Task { await load() } }
+                InlineLoadFailure(message: error) { await load() }
             }
         }
         .task { await load() }

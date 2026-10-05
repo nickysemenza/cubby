@@ -98,8 +98,7 @@ private struct ReportSlotContent: View {
                 }
             } else if let message = model.failure {
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-                    Text(message).foregroundStyle(.secondary)
-                    Button("Retry") { Task { await model.refresh() } }
+                    InlineLoadFailure(message: message) { await model.refresh() }
                 }
             } else {
                 LoadingIndicator(label: "Loading")

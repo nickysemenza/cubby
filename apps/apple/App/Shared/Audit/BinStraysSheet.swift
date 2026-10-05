@@ -69,7 +69,6 @@ struct BinStraysSheet: View {
                     }
                 }
                 .padding(.vertical, FieldGuideTokens.Space.xs)
-                .fieldGuideListRow()
                 .swipeActions {
                     Button("Dismiss", role: .destructive) { session.dismissStray(stray.productID) }
                 }
@@ -93,7 +92,6 @@ struct BinStraysSheet: View {
                         .font(.fieldGuideLabel)
                         .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }
-                .fieldGuideListRow()
                 .swipeActions {
                     Button("Dismiss", role: .destructive) { session.dismissAdoption(bin.id) }
                 }

@@ -137,7 +137,6 @@ struct BinView: View {
                 .listRowSeparator(.hidden)
             ForEach(session.chips) { chip in
                 ScanChipRow(chip: chip)
-                    .fieldGuideListRow()
             }
         }
     }
@@ -159,7 +158,6 @@ struct BinView: View {
                     session: session, row: state.row, resolution: state.resolution,
                     isDuplicate: state.isDuplicate
                 )
-                .fieldGuideListRow()
             }
         }
     }
@@ -183,7 +181,6 @@ struct BinView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .fieldGuideListRow()
         }
     }
 

@@ -63,35 +63,11 @@ private struct AuditPhaseView: View {
             case .complete:
                 RecountSummaryView(session: session)
             case .failed(let message):
-                AuditFailedPanel(message: message) { Task { await session.loadTree() } }
-            }
-        }
-    }
-}
-
-/// The error state: what went wrong reading the location tree, and a way to try again.
-private struct AuditFailedPanel: View {
-    let message: String
-    let retry: () -> Void
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                Panel {
-                    Text(message)
-                        .font(.fieldGuideBody)
-                        .foregroundStyle(FieldGuideTokens.destructive)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button("Retry", action: retry)
-                        .buttonStyle(.borderedProminent)
-                        .tint(FieldGuideTokens.interaction)
+                LoadFailureView(title: "Couldn't load locations", message: message) {
+                    await session.loadTree()
                 }
             }
-            .padding(FieldGuideTokens.Space.lg)
-            .frame(maxWidth: FieldGuideTokens.readingWidth, alignment: .leading)
-            .frame(maxWidth: .infinity)
         }
-        .fieldGuideScreen()
     }
 }
 
@@ -99,8 +75,4 @@ private struct AuditFailedPanel: View {
     NavigationStack {
         AuditRootView(locationID: nil)
     }
-}
-
-#Preview("Audit — failed") {
-    AuditFailedPanel(message: "The server returned an error.") {}
 }

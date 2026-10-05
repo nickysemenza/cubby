@@ -66,10 +66,9 @@ struct AuditHistoryView: View {
     var body: some View {
         List {
             if let error = history.error {
-                ContentUnavailableView(
-                    "Couldn’t load changes", systemImage: "exclamationmark.triangle",
-                    description: Text(error))
-                Button("Retry") { Task { await history.load(client: appModel.client, reset: true) } }
+                LoadFailureView(title: "Couldn’t load changes", message: error) {
+                    await history.load(client: appModel.client, reset: true)
+                }
             }
             ForEach(history.entries, id: \.entryKey) { AuditEntryRow(entry: $0) }
             if history.entries.isEmpty && !history.loading && history.error == nil {
@@ -329,7 +328,8 @@ struct TodayContent: View {
                     switch tasks {
                     case .loading: loadingRow("Loading tasks")
                     case .failed(let message):
-                        failure(message, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
+                        InlineLoadFailure(
+                            message: message, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
                     case .loaded(let briefing):
                         nextUpEmptyState(briefing)
                         ForEach(briefing.next) { task in
@@ -339,14 +339,16 @@ struct TodayContent: View {
                         }
                     }
                     if let tasksError {
-                        failure(tasksError, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
+                        InlineLoadFailure(
+                            message: tasksError, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
                     }
                 }
                 Section("Meals today") {
                     switch meals {
                     case .loading: loadingRow("Loading meals")
                     case .failed(let message):
-                        failure(message, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
+                        InlineLoadFailure(
+                            message: message, isRetrying: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
                     case .loaded(let rows):
                         if rows.isEmpty { emptyStateText("No meals planned") }
                         ForEach(rows) { meal in
@@ -356,15 +358,16 @@ struct TodayContent: View {
                         }
                     }
                     if let mealsError {
-                        failure(mealsError, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
+                        InlineLoadFailure(
+                            message: mealsError, isRetrying: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
                     }
                 }
                 Section("Nutrition today") {
                     switch nutrition {
                     case .loading: loadingRow("Loading nutrition")
                     case .failed(let message):
-                        failure(
-                            message, isLoading: nutritionIsLoading,
+                        InlineLoadFailure(
+                            message: message, isRetrying: nutritionIsLoading,
                             retry: onRetryNutrition ?? onRefresh)
                     case .loaded(let summary):
                         MealNutritionCompactView(summary: summary)
@@ -373,8 +376,8 @@ struct TodayContent: View {
                         }
                     }
                     if let nutritionError {
-                        failure(
-                            nutritionError, isLoading: nutritionIsLoading,
+                        InlineLoadFailure(
+                            message: nutritionError, isRetrying: nutritionIsLoading,
                             retry: onRetryNutrition ?? onRefresh)
                     }
                 }
@@ -382,7 +385,9 @@ struct TodayContent: View {
                     switch problems {
                     case .loading: loadingRow("Loading problems")
                     case .failed(let message):
-                        failure(message, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
+                        InlineLoadFailure(
+                            message: message, isRetrying: problemsIsLoading,
+                            retry: onRetryProblems ?? onRefresh)
                     case .loaded(let counts):
                         Text(
                             "\(counts.total.formatted()) problems · \(counts.coverageTotal.formatted()) coverage gaps"
@@ -391,8 +396,9 @@ struct TodayContent: View {
                         .foregroundStyle(.secondary)
                     }
                     if let problemsError {
-                        failure(
-                            problemsError, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
+                        InlineLoadFailure(
+                            message: problemsError, isRetrying: problemsIsLoading,
+                            retry: onRetryProblems ?? onRefresh)
                     }
                 }
                 Section("Quick actions") {
@@ -509,7 +515,8 @@ struct TodayContent: View {
                     switch meals {
                     case .loading: LoadingIndicator(label: "Loading meals")
                     case .failed(let message):
-                        failure(message, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
+                        InlineLoadFailure(
+                            message: message, isRetrying: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
                     case .loaded(let rows):
                         if rows.isEmpty { emptyStateText("No meals planned") }
                         ForEach(rows) { meal in
@@ -519,7 +526,8 @@ struct TodayContent: View {
                         }
                     }
                     if let mealsError {
-                        failure(mealsError, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
+                        InlineLoadFailure(
+                            message: mealsError, isRetrying: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
                     }
                 }
 
@@ -527,8 +535,8 @@ struct TodayContent: View {
                     switch nutrition {
                     case .loading: LoadingIndicator(label: "Loading nutrition")
                     case .failed(let message):
-                        failure(
-                            message, isLoading: nutritionIsLoading,
+                        InlineLoadFailure(
+                            message: message, isRetrying: nutritionIsLoading,
                             retry: onRetryNutrition ?? onRefresh)
                     case .loaded(let summary):
                         MealNutritionCompactView(summary: summary)
@@ -537,8 +545,8 @@ struct TodayContent: View {
                         }
                     }
                     if let nutritionError {
-                        failure(
-                            nutritionError, isLoading: nutritionIsLoading,
+                        InlineLoadFailure(
+                            message: nutritionError, isRetrying: nutritionIsLoading,
                             retry: onRetryNutrition ?? onRefresh)
                     }
                 }
@@ -551,7 +559,8 @@ struct TodayContent: View {
                     switch tasks {
                     case .loading: LoadingIndicator(label: "Loading tasks")
                     case .failed(let message):
-                        failure(message, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
+                        InlineLoadFailure(
+                            message: message, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
                     case .loaded(let briefing):
                         nextUpEmptyState(briefing)
                         ForEach(briefing.next) { task in
@@ -561,7 +570,8 @@ struct TodayContent: View {
                         }
                     }
                     if let tasksError {
-                        failure(tasksError, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
+                        InlineLoadFailure(
+                            message: tasksError, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
                     }
                 }
 
@@ -569,7 +579,9 @@ struct TodayContent: View {
                     switch problems {
                     case .loading: LoadingIndicator(label: "Loading problems")
                     case .failed(let message):
-                        failure(message, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
+                        InlineLoadFailure(
+                            message: message, isRetrying: problemsIsLoading,
+                            retry: onRetryProblems ?? onRefresh)
                     case .loaded(let counts):
                         Text(
                             "\(counts.total.formatted()) problems · \(counts.coverageTotal.formatted()) coverage gaps"
@@ -578,8 +590,9 @@ struct TodayContent: View {
                         .foregroundStyle(.secondary)
                     }
                     if let problemsError {
-                        failure(
-                            problemsError, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
+                        InlineLoadFailure(
+                            message: problemsError, isRetrying: problemsIsLoading,
+                            retry: onRetryProblems ?? onRefresh)
                     }
                 }
 
@@ -625,16 +638,6 @@ struct TodayContent: View {
     private func loadingRow(_ label: String) -> some View {
         LoadingIndicator(label: label)
             .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
-    }
-
-    private func failure(_ message: String, isLoading: Bool, retry: @escaping @Sendable () async -> Void)
-        -> some View
-    {
-        VStack(alignment: .leading) {
-            Text(message).font(.callout).foregroundStyle(.secondary)
-            if isLoading { LoadingIndicator(label: "Retrying") }
-            Button("Retry") { Task { await retry() } }.disabled(isLoading)
-        }
     }
 
     /// `nil` when there is nothing overdue, due soon, blocked, or later to summarize — distinct

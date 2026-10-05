@@ -44,8 +44,7 @@ struct SplitExpenseSheet: View {
                 case .loading:
                     LoadingIndicator(label: "Preparing the split")
                 case .failed(let message):
-                    Text(message).foregroundStyle(.secondary)
-                    Button("Retry") { Task { await session.load() } }
+                    InlineLoadFailure(message: message) { await session.load() }
                 case .loaded(let start):
                     Section { Text(start.description).font(.caption).foregroundStyle(.secondary) }
                     ForEach(Array(session.parts.enumerated()), id: \.element.id) { index, part in
@@ -285,8 +284,7 @@ struct LinkExpensesSheet: View {
                     }
                     Section { Text(candidates.caution).font(.caption).foregroundStyle(.secondary) }
                 } else if case .failed(let message) = session.state {
-                    Text(message).foregroundStyle(.secondary)
-                    Button("Retry") { Task { await session.load() } }
+                    InlineLoadFailure(message: message) { await session.load() }
                 } else {
                     LoadingIndicator(label: "Finding expenses")
                 }
@@ -423,8 +421,7 @@ struct LinkProductsSheet: View {
                         .accessibilityAddTraits(session.isSelected(candidate.id.rawValue) ? .isSelected : [])
                     }
                 } else if case .failed(let message) = session.state {
-                    Text(message).foregroundStyle(.secondary)
-                    Button("Retry") { Task { await session.load() } }
+                    InlineLoadFailure(message: message) { await session.load() }
                 } else {
                     LoadingIndicator(label: "Finding products")
                 }

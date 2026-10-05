@@ -50,10 +50,10 @@ struct EntityRelationshipsSection: View {
             }
 
             if let error = model.graphError {
-                InlineRelationshipError(message: error) { model.requestRefresh() }
+                InlineLoadFailure(message: error) { model.requestRefresh() }
             }
             if let error = model.recommendationError {
-                InlineRelationshipError(message: error) { model.requestRefresh() }
+                InlineLoadFailure(message: error) { model.requestRefresh() }
             }
         }
         .onChange(of: model.graphError) { _, error in
@@ -563,7 +563,7 @@ private struct RelationshipBranchList: View {
                         .frame(minHeight: FieldGuideTokens.touchTarget)
                     }
                     if let error = model.pageErrors[branch.id] {
-                        InlineRelationshipError(message: error) {
+                        InlineLoadFailure(message: error) {
                             model.requestNextPage(for: branch)
                         }
                     }
@@ -630,21 +630,6 @@ private struct RelationshipRecordButton: View {
         } else {
             openURL(
                 appModel.webURL(for: node.reference.entity, id: node.reference.id))
-        }
-    }
-}
-
-private struct InlineRelationshipError: View {
-    let message: String
-    let retry: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            Label(message, systemImage: "exclamationmark.triangle")
-                .font(.callout)
-                .foregroundStyle(FieldGuideTokens.warning)
-            Button("Retry", action: retry)
-                .frame(minHeight: FieldGuideTokens.touchTarget)
         }
     }
 }

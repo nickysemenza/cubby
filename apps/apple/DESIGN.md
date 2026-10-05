@@ -22,7 +22,7 @@ iPhone keeps the Work, Capture, Library, and Find tabs with independent navigati
 
 Mac list rows prioritize comparison and native selection; iPhone rows use a readable primary line and concise supporting facts. A photo, summary, or inspector never pushes the next action off the useful first screen without purpose. At accessibility text sizes, columns and metrics wrap or stack. Preserve keyboard and VoiceOver labels, Reduce Motion, and Reduce Transparency.
 
-Today uses its real task, meal, activity, problem, and nutrition sources. Attention is identified by the data and a readable label; the citron mark is supporting emphasis. Loading is labelled, failed sections offer retry, and same-context refresh retains loaded data. Failed edits preserve input and in-flight writes keep their existing dismissal rules.
+Today uses its real task, meal, activity, problem, and nutrition sources. Attention is identified by the data and a readable label; the citron mark is supporting emphasis. Loading is labelled (`LoadingIndicator`), and same-context refresh retains loaded data. A failed load offers Retry through one of two shared views: `LoadFailureView` when a screen or sheet body never loaded, `InlineLoadFailure` (warning symbol and tone) when a section or slot fails beside loaded content. Failed edits preserve input and in-flight writes keep their existing dismissal rules.
 
 ## Acceptance
 

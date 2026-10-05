@@ -205,13 +205,8 @@ struct PhotoEntityChooser: View {
         if model.isLoading {
             LoadingIndicator.screen(label: "Loading \(descriptor.plural)")
         } else if let message = model.dateError ?? model.recentError {
-            ContentUnavailableView {
-                Label("Couldn't load \(descriptor.plural)", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(message)
-            } actions: {
-                Button("Retry") { Task { await model.refresh() } }
-                    .accessibilityIdentifier("photos.destination.retry")
+            LoadFailureView(title: "Couldn't load \(descriptor.plural)", message: message) {
+                await model.refresh()
             }
         } else {
             ContentUnavailableView("No \(descriptor.plural) yet", systemImage: entitySymbol(for: key))
@@ -283,12 +278,8 @@ struct PhotoEntityChooser: View {
                 case .idle, .debouncing, .loading:
                     LoadingIndicator.screen(label: "Searching \(descriptor.plural)")
                 case .failed(let message):
-                    ContentUnavailableView {
-                        Label("Couldn't search \(descriptor.plural)", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(message)
-                    } actions: {
-                        Button("Retry") { search.retry() }
+                    LoadFailureView(title: "Couldn't search \(descriptor.plural)", message: message) {
+                        search.retry()
                     }
                 case .loaded:
                     ContentUnavailableView("No matching \(descriptor.plural)", systemImage: "magnifyingglass")

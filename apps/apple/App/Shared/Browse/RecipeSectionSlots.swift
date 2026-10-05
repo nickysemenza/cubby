@@ -71,8 +71,7 @@ struct CookbookContentsSlot: View {
             if let usage {
                 CookbookContentsList(usage: usage)
             } else if let error {
-                Text(error).foregroundStyle(.secondary)
-                Button("Retry") { Task { await load() } }
+                InlineLoadFailure(message: error) { await load() }
             } else {
                 LoadingIndicator(label: "Loading contents")
             }

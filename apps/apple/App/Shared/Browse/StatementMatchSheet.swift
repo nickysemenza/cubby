@@ -67,8 +67,7 @@ struct StatementMatchSheet: View {
             case .loading:
                 LoadingIndicator(label: "Checking statement activity")
             case .failed(let message):
-                Text(message).foregroundStyle(.secondary)
-                Button("Retry") { Task { await session.load() } }
+                InlineLoadFailure(message: message) { await session.load() }
             case .loaded(let review):
                 if let message = review.message { Text(message).foregroundStyle(.secondary) }
                 if review.suggestHint != nil {

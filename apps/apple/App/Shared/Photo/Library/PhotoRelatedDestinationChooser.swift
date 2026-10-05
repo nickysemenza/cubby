@@ -46,13 +46,8 @@ struct PhotoRelatedDestinationChooser: View {
                     if isLoading, rows.isEmpty {
                         LoadingIndicator.screen(label: "Loading related \(descriptor.plural)")
                     } else if let errorMessage, rows.isEmpty {
-                        ContentUnavailableView {
-                            Label(
-                                "Couldn't load \(descriptor.plural)", systemImage: "exclamationmark.triangle")
-                        } description: {
-                            Text(errorMessage)
-                        } actions: {
-                            Button("Retry") { Task { await load(reset: true) } }
+                        LoadFailureView(title: "Couldn't load \(descriptor.plural)", message: errorMessage) {
+                            await load(reset: true)
                         }
                     } else if rows.isEmpty {
                         ContentUnavailableView {

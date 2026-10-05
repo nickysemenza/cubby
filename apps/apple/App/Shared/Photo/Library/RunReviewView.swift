@@ -67,10 +67,7 @@ struct RunReviewView: View {
                 workTimeline(snapshot)
             } else if let error = model.error {
                 Section {
-                    ContentUnavailableView(
-                        "Couldn’t load run", systemImage: "exclamationmark.triangle", description: Text(error)
-                    )
-                    Button("Retry") { Task { await refresh() } }
+                    LoadFailureView(title: "Couldn’t load run", message: error) { await refresh() }
                 }
             } else {
                 ProgressView("Loading run…")
@@ -244,9 +241,7 @@ struct RunReviewView: View {
                     .font(.caption)
                 }
                 if let error = model.error {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(FieldGuideTokens.warning)
-                    Button("Retry") { Task { await refresh() } }
+                    InlineLoadFailure(message: error) { await refresh() }
                 }
                 if let error = model.actionError {
                     Label(error, systemImage: "exclamationmark.triangle")
@@ -771,8 +766,7 @@ private struct PhotoCandidateSelectionView: View {
             if loading { ProgressView("Finding products…") }
             if let error {
                 Section {
-                    Text(error).foregroundStyle(FieldGuideTokens.destructive)
-                    Button("Retry") { Task { await load() } }
+                    InlineLoadFailure(message: error) { await load() }
                 }
             }
             Section("Possible matches") {
