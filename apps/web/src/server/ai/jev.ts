@@ -92,9 +92,8 @@ const jevChoiceResponseSchema = z.object({
 export type JevChoiceResponse = z.infer<typeof jevChoiceResponseSchema>;
 
 /**
- * The gateway's Workers AI envelope (`{state, result, gatewayMetadata}`),
- * returned by the binding and the REST fallback alike — verified against the
- * live `workers-ai/run/typesafe/jev` route.
+ * Jev wraps its answer in `result`; Clef returns the answer directly.
+ * Keep both wire shapes validated against the same choice contract.
  */
 const jevGatewayEnvelopeSchema = z.object({ result: jevChoiceResponseSchema });
 
@@ -134,6 +133,8 @@ export function decisionConfidence(probability: number): Confidence {
 function parseJevResponse(response: unknown): JevChoiceResponse {
   const enveloped = jevGatewayEnvelopeSchema.safeParse(response);
   if (enveloped.success) return enveloped.data.result;
+  const direct = jevChoiceResponseSchema.safeParse(response);
+  if (direct.success) return direct.data;
   throw new Error("Decision model returned an invalid choice response.");
 }
 

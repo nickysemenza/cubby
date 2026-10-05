@@ -132,7 +132,11 @@ export default {
     ) {
       const choice = jevChoice(feature, await request.json());
       calls.push({ feature, matched: choice.label });
-      return Response.json({ result: choice.response });
+      return Response.json(
+        url.pathname.endsWith("/run/@cf/cloudflare/clef")
+          ? choice.response
+          : { result: choice.response },
+      );
     }
     if (url.pathname !== "/openai/responses") {
       calls.push({ feature, matched: null });

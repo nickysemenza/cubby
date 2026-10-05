@@ -455,8 +455,12 @@ hits. Compare upstream latency on rows with `attempt > 0`, excluding
 application-cache hits. `CLEF_TRAFFIC_SHARE` in `models.ts` controls the trial:
 0 returns all calls to Jev; 1 selects Clef for all calls. Clef requires
 `model: "clef"` in its body and is priced from its registry rate while absent
-from the pinned Rust catalog. Both models keep the existing 254-candidate and
-32,000-byte input bounds; oversized rosters still use the chat overflow tier.
+from the pinned Rust catalog. Jev's gateway response wraps `answers` and
+`usage` under `result`; Clef returns them at the root. The decision parser
+accepts both envelopes and validates the same choice contract. Gateway test
+fixtures must preserve each model's observed response shape. Both models keep
+the existing 254-candidate and 32,000-byte input bounds; oversized rosters
+still use the chat overflow tier.
 
 Each feature's tier is declared once in `apps/web/src/server/ai/features.ts`.
 Chat and embedding models derive from that tier; decision calls sample the
