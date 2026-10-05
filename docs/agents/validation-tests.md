@@ -33,13 +33,32 @@ spawns pass straight through. `test:e2e:watch` (`--ui`) skips the lock, since
 its idle session would otherwise hold it indefinitely. A spec's `test.use` of a
 worker-scoped option (`video`, `trace`, `screenshot`, browser launch options),
 even to its default, moves its tests into extra workers that each boot another
-browser, database, and Worker harness; only `gmailJourney` and `purchaseAgent`
-may split workers (`tooling/e2e-worker-pool.unit.test.ts`). Record video for a
+browser, database, and Worker harness; only `workerdProfile` may split
+workers (`tooling/e2e-worker-pool.unit.test.ts`). Record video for a
 run with `CUBBY_E2E_VIDEO=1`. RTable's placeholder transition can eat clicks;
 cell-edit tests retry opening and filling as one action.
 
+Every workerd-backed lane starts the built Worker through one runtime:
+`openWorkerdRuntime` (`apps/web/tooling/workerd-runtime.ts`) acquires the
+database (a lease it releases, or a borrowed Vitest database it never
+closes), object storage, the profile's peers and the harness, and its
+`close()` releases them newest first, running every release even when one
+fails. A start that fails at any step releases everything acquired before
+it. The profile (`WORKERD_PROFILES`, `apps/web/tooling/workerd-harness.ts`)
+routes each production queue consumer: `real` (the Worker's own consumer),
+`dropped`, `unconsumed`, or `native-continuation`. Browser specs pick one
+with `test.use({ workerdProfile })`: `offline` (default; no background work
+runs), `gmail` (real background consumer and the local Google provider), or
+`purchase-agent`. Vitest purchase-agent scenarios and live evals use
+`purchase-agent`; coupled Tester Army journeys use `coupled` (every consumer
+real); the Mac import lane uses `native-import`. Starting a profile whose
+routes no longer match the compiled Worker's consumers throws, and
+`tooling/workerd-runtime.integration.test.ts` probes each profile's queues
+in a running harness.
+
 The `Purchase import agent` Playwright project
-(`tests/e2e/purchase-import-run.spec.ts`, `test.use({ purchaseAgent: true })`)
+(`tests/e2e/purchase-import-run.spec.ts`,
+`test.use({ workerdProfile: "purchase-agent" })`)
 runs the browser against the purchase-agent workerd harness with a scripted
 model and gateway; `e2eRuntime.purchaseAgent` loads each test's script. It is
 excluded from the required desktop shards and runs in CI as an optional job

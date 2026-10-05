@@ -122,8 +122,8 @@ export const CF_AIG_GATEWAY_ID = process.env.AI_GATEWAY_ID || "cubby";
 export const getAiGateway = () => cfEnv?.AI?.gateway(CF_AIG_GATEWAY_ID);
 
 /**
- * The deterministic gateway peer that exists only in the purchase-agent
- * workerd harness (`tooling/purchase-agent-workerd-harness.ts`). It is deliberately
+ * The deterministic gateway peer that exists only in the workerd harness's
+ * purchase-agent profiles (`tooling/workerd-harness.ts`). It is deliberately
  * absent from wrangler.jsonc, so a deployed Worker can never resolve it and
  * keeps the mandatory `env.AI` transport above.
  */

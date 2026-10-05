@@ -5,6 +5,7 @@ import {
   WORKERD_EXPLORER_ANNOTATION,
   WORKERD_LOGS_ATTACHMENT,
 } from "../../tooling/e2e-workerd-logs";
+import type { WorkerdProfile } from "../../tooling/workerd-harness";
 import {
   createE2EWorkerRuntime,
   type E2EWorkerRuntime,
@@ -13,8 +14,8 @@ import {
 type TestFixtures = { e2eFailureDiagnostics: void };
 type WorkerFixtures = {
   e2eRuntime: E2EWorkerRuntime;
-  gmailJourney: boolean;
-  purchaseAgent: boolean;
+  /** Which queues and peers the Worker runs (`WORKERD_PROFILES`). */
+  workerdProfile: WorkerdProfile;
 };
 
 /** `CUBBY_E2E_VIDEO=1` records every test in the run; specs pace demos on it. */
@@ -25,15 +26,13 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
   // default, splits its tests into separate workers, each booting another
   // browser, database, and Worker harness. Recording is chosen per run here.
   video: [recordingVideo ? "on" : "off", { scope: "worker" }],
-  gmailJourney: [false, { scope: "worker", option: true }],
-  purchaseAgent: [false, { scope: "worker", option: true }],
+  workerdProfile: ["offline", { scope: "worker", option: true }],
   e2eRuntime: [
-    async ({ gmailJourney, purchaseAgent }, provide, workerInfo) => {
+    async ({ workerdProfile }, provide, workerInfo) => {
       const runtime = await createE2EWorkerRuntime({
         authenticated: workerInfo.project.metadata.authenticated === true,
         parallelIndex: workerInfo.parallelIndex,
-        gmailJourney,
-        purchaseAgent,
+        profile: workerdProfile,
       });
       try {
         await provide(runtime);

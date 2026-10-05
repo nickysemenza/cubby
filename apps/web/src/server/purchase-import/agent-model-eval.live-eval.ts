@@ -4,8 +4,8 @@ import path from "node:path";
 import { runEntityId, parseEntityId } from "@cubby/schemas/identifiers";
 import { sleep } from "@cubby/shared/retry";
 import { and, eq, inArray } from "drizzle-orm";
-import { createWorkerdHarness } from "tooling/purchase-agent-workerd-harness";
 import { withTestDb } from "tooling/test-setup";
+import { openWorkerdRuntime } from "tooling/workerd-runtime";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -110,16 +110,15 @@ describe("photo coordinator model eval", () => {
           scopes: ["openid", "profile", "email", "offline_access"],
         });
 
-      for (const key of [
-        "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
-        "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED",
-      ])
-        process.env[key] = ctx.databaseUrl;
-      const harness = await createWorkerdHarness(
-        ctx.databaseUrl,
-        liveEvalModelWorker(),
+      const { runtime } = await openWorkerdRuntime(
+        {
+          profile: "purchase-agent",
+          database: { borrowed: ctx.databaseUrl },
+          models: { agent: liveEvalModelWorker() },
+        },
+        async () => undefined,
       );
-      await harness.listen();
+      const { harness } = runtime;
       // The web Worker is the harness's primary Worker, so `listen()`'s URL
       // serves the app; the agent queue is reached through its producer.
       const queue = harness.getWorker("cubby-queue-producer");
@@ -342,7 +341,7 @@ describe("photo coordinator model eval", () => {
       ].join("\n");
       writeFileSync(path.join(outDir, "report.md"), `${table}\n`);
       console.log(`[agent-eval] report: ${outDir}\n${table}`);
-      await harness.close();
+      await runtime.close();
       expect(results).toHaveLength(candidates.length * cases.length * repeats);
     },
     24 * 60 * 60_000,

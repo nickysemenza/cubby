@@ -24,7 +24,7 @@ import {
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
-test.use({ gmailJourney: true });
+test.use({ workerdProfile: "gmail" });
 
 // Failure boundaries: OAuth callback must persist its real account, mailbox
 // discovery must classify actual MIME evidence, conflicting identities must

@@ -8,22 +8,17 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { TestHarness } from "wrangler";
 import { z } from "zod";
 
+import { createE2EDatabase } from "../tests/e2e/e2e-database";
 import { createE2EWorkerRuntime } from "../tests/e2e/e2e-worker-runtime";
-import { writeLocalWorkerdConfig } from "./e2e-worker-config";
-import { createLocalGoogleProvider } from "./local-google-provider";
-import { createE2EObjectStorage } from "./local-object-storage";
-import {
-  createLocalWorkerdHarness,
-  installDatabaseEnvironment,
-} from "./local-workerd-harness";
-import {
-  createWorkerdHarness,
-  HOLD_WORKERD_HARNESS_TIMEOUT_MS,
-  holdWorkerdHarness,
-  scenarioControls,
-} from "./purchase-agent-workerd-harness";
+import { scenarioControls } from "./purchase-agent-workerd-harness";
 import { prepareTemplate } from "./test-database-lease";
 import { withTestDb } from "./test-setup";
+import {
+  HOLD_WORKERD_HARNESS_TIMEOUT_MS,
+  holdWorkerdHarness,
+  type WorkerdProfile,
+} from "./workerd-harness";
+import { openWorkerdRuntime } from "./workerd-runtime";
 
 // Failure modes pinned at the real workerd boundary:
 // - a profile silently stops running a real queue consumer (or starts one it
@@ -130,79 +125,24 @@ async function realConsumers(harness: TestHarness, expected: string[]) {
   return consumed();
 }
 
-interface Started {
-  harness: TestHarness;
-  origin: string;
-  databaseUrl: string;
-  close(): Promise<void>;
-}
-
 const ctx = withTestDb();
 let releaseHarness: (() => void) | undefined;
 beforeAll(async () => {
   releaseHarness = await holdWorkerdHarness();
-  writeLocalWorkerdConfig(new URL("..", import.meta.url).pathname);
   await prepareTemplate("browser");
 }, HOLD_WORKERD_HARNESS_TIMEOUT_MS);
 afterAll(() => releaseHarness?.());
 
-async function startLocal(
-  databaseUrl: string,
-  options: { gmail?: boolean; nativeImport?: boolean } = {},
-): Promise<Started & { googleProviderUrl?: string }> {
-  const storage = await createE2EObjectStorage();
-  const google = options.gmail ? await createLocalGoogleProvider() : undefined;
-  const restore = installDatabaseEnvironment(databaseUrl);
-  const harness = createLocalWorkerdHarness(
-    databaseUrl,
-    storage.url,
-    options.nativeImport ?? false,
-    google?.url,
-  );
-  const { url } = await harness.listen();
-  return {
-    harness,
-    origin: url.origin,
-    databaseUrl,
-    googleProviderUrl: google?.url,
-    close: async () => {
-      await harness.close();
-      await google?.close();
-      await storage.close();
-      restore();
-    },
-  };
-}
-
-async function startPurchaseAgent(
-  databaseUrl: string,
-  backgroundQueue: boolean,
-): Promise<Started> {
-  const storage = backgroundQueue ? await createE2EObjectStorage() : undefined;
-  const restore = installDatabaseEnvironment(databaseUrl);
-  const harness = await createWorkerdHarness(
-    databaseUrl,
-    undefined,
-    undefined,
+async function start(profile: WorkerdProfile) {
+  const { runtime } = await openWorkerdRuntime(
     {
-      objectStorage: storage && {
-        endpoint: storage.url,
-        publicUrl: storage.url,
-      },
-      backgroundQueue,
+      profile,
+      database: { borrowed: ctx.databaseUrl },
+      objectStorage: {},
     },
+    async () => undefined,
   );
-  const { url } = await harness.listen();
-  return {
-    harness,
-    origin: url.origin,
-    databaseUrl,
-    close: async () => {
-      await harness.close();
-      await storage?.close();
-      restore();
-    },
-  };
+  return runtime;
 }
 
 /** Authenticate, write through the Worker, and find the write in this database. */
@@ -216,7 +156,7 @@ async function expectWriteLands(started: {
 
 describe("workerd test runtime profiles", () => {
   it("offline drops background work and runs no consumer", async () => {
-    const started = await startLocal(ctx.databaseUrl);
+    const started = await start("offline");
     try {
       await expectWriteLands(started);
       expect(await realConsumers(started.harness, [])).toEqual([]);
@@ -226,13 +166,13 @@ describe("workerd test runtime profiles", () => {
   }, 120_000);
 
   it("gmail runs the real background consumer against the local Google provider", async () => {
-    const started = await startLocal(ctx.databaseUrl, { gmail: true });
+    const started = await start("gmail");
     try {
       await expectWriteLands(started);
       const env = await started.harness
         .getWorker<{ E2E_GOOGLE_PROVIDER_URL: string }>()
         .getEnv();
-      expect(env.E2E_GOOGLE_PROVIDER_URL).toBe(started.googleProviderUrl);
+      expect(env.E2E_GOOGLE_PROVIDER_URL).toBe(started.googleProvider?.url);
       expect(
         await realConsumers(started.harness, ["cubby-background"]),
       ).toEqual(["cubby-background"]);
@@ -242,7 +182,7 @@ describe("workerd test runtime profiles", () => {
   }, 120_000);
 
   it("native-import delivers agent events to the continuation peer", async () => {
-    const started = await startLocal(ctx.databaseUrl, { nativeImport: true });
+    const started = await start("native-import");
     try {
       await expectWriteLands(started);
       const event: PurchaseAgentEvent = {
@@ -278,7 +218,7 @@ describe("workerd test runtime profiles", () => {
   }, 120_000);
 
   it("purchase-agent runs the real agent and telemetry consumers with scripted peers", async () => {
-    const started = await startPurchaseAgent(ctx.databaseUrl, false);
+    const started = await start("purchase-agent");
     try {
       await expectWriteLands(started);
       const controls = scenarioControls(started.harness);
@@ -296,7 +236,7 @@ describe("workerd test runtime profiles", () => {
   }, 120_000);
 
   it("coupled runs every real consumer", async () => {
-    const started = await startPurchaseAgent(ctx.databaseUrl, true);
+    const started = await start("coupled");
     try {
       await expectWriteLands(started);
       expect(
@@ -356,4 +296,69 @@ describe("workerd test runtime lifecycle", () => {
       { label: "workerd exited after close", timeoutMs: 20_000 },
     );
   }, 180_000);
+
+  it.each([
+    {
+      step: "publishing object storage",
+      profile: "offline",
+      publish: () => Promise.reject(new Error("synthetic publish failure")),
+      models: undefined,
+      prepareFails: false,
+      error: /synthetic publish failure/u,
+    },
+    {
+      step: "starting workerd",
+      profile: "purchase-agent",
+      publish: undefined,
+      models: { agent: { main: "tooling/synthetic-missing-model-peer.ts" } },
+      prepareFails: false,
+      error: /synthetic-missing-model-peer/u,
+    },
+    {
+      step: "preparing the listening runtime",
+      profile: "offline",
+      publish: undefined,
+      models: undefined,
+      prepareFails: true,
+      error: /synthetic prepare failure/u,
+    },
+  ] as const)(
+    "a failure while $step releases everything acquired before it",
+    async ({ profile, publish, models, prepareFails, error }) => {
+      const before = environment();
+      const workerdBefore = workerdChildren().length;
+      let released = 0;
+      await expect(
+        openWorkerdRuntime(
+          {
+            profile,
+            database: {
+              lease: async () => {
+                const lease = await createE2EDatabase();
+                return {
+                  ...lease,
+                  close: () => {
+                    released += 1;
+                    return lease.close();
+                  },
+                };
+              },
+            },
+            objectStorage: { publish },
+            models,
+          },
+          async () => {
+            if (prepareFails) throw new Error("synthetic prepare failure");
+          },
+        ),
+      ).rejects.toThrow(error);
+      expect(released).toBe(1);
+      expect(environment()).toEqual(before);
+      await pollUntil(
+        () => (workerdChildren().length === workerdBefore ? true : undefined),
+        { label: "workerd exited after the failed start", timeoutMs: 20_000 },
+      );
+    },
+    120_000,
+  );
 });
