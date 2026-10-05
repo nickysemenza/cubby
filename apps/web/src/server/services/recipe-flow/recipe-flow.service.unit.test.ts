@@ -218,6 +218,44 @@ describe("recipe-flow service", () => {
     });
   });
 
+  // Retiering recipe flow moves new generations to another model; a flow the
+  // previous model generated for the same prompt version must stay current
+  // rather than vanish until someone regenerates it.
+  it("keeps a stored flow current whichever model generated it", async () => {
+    const missing = await getRecipeFlowState(db, RECIPE_ID, memory.ports);
+    const fromOtherModel: RecipeFlowArtifact = {
+      ...artifact(missing.currentFingerprint),
+      model: "claude-opus-5-5",
+    };
+    memory.analyses.push({
+      inputFingerprint: missing.currentFingerprint,
+      model: fromOtherModel.model,
+      promptVersion: fromOtherModel.promptVersion,
+      result: fromOtherModel,
+      updatedAt: fromOtherModel.generatedAt,
+    });
+
+    await expect(
+      getRecipeFlowState(db, RECIPE_ID, memory.ports),
+    ).resolves.toMatchObject({ status: "current", artifact: fromOtherModel });
+  });
+
+  it("ignores a stored row whose artifact disagrees with it", async () => {
+    const missing = await getRecipeFlowState(db, RECIPE_ID, memory.ports);
+    const cached = artifact(missing.currentFingerprint);
+    memory.analyses.push({
+      inputFingerprint: missing.currentFingerprint,
+      model: "claude-opus-5-5",
+      promptVersion: cached.promptVersion,
+      result: cached,
+      updatedAt: cached.generatedAt,
+    });
+
+    await expect(
+      getRecipeFlowState(db, RECIPE_ID, memory.ports),
+    ).resolves.toMatchObject({ status: "missing" });
+  });
+
   it("persists a valid single-pass graph", async () => {
     memory.generated.push(validCandidate());
 
@@ -228,7 +266,7 @@ describe("recipe-flow service", () => {
         RUN_ID,
         memory.ports,
       ),
-    ).resolves.toMatchObject({ model: "gpt-6-sol" });
+    ).resolves.toMatchObject({ model: "gpt-6-luna" });
     expect(memory.analyses).toHaveLength(1);
   });
 
@@ -250,7 +288,7 @@ describe("recipe-flow service", () => {
         RUN_ID,
         memory.ports,
       ),
-    ).resolves.toMatchObject({ model: "gpt-6-sol" });
+    ).resolves.toMatchObject({ model: "gpt-6-luna" });
     expect(memory.analyses).toHaveLength(1);
   });
 

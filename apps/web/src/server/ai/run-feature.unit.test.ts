@@ -253,7 +253,7 @@ describe("runStructuredFeature", () => {
     });
   });
 
-  it("maps the reasoning tier to OpenAI Responses options", async () => {
+  it("maps a high-effort fast feature to OpenAI Responses options", async () => {
     const { calls, ports } = fakePorts([respondWith(RECIPE_FLOW_FIXTURE)]);
 
     await runStructuredFeature(
@@ -265,7 +265,7 @@ describe("runStructuredFeature", () => {
 
     expect(calls[0]!.options).toEqual({
       maxTokens: 16000,
-      reasoningEffort: "low",
+      reasoningEffort: "high",
       toolChoice: { type: "function", name: RESPOND_TOOL_NAME },
     });
   });

@@ -89,11 +89,10 @@ const supportedAiModel = z.enum([
 ]);
 type SupportedAiModel = z.infer<typeof supportedAiModel>;
 
-/** The three measured tiers every feature is assigned to. */
+/** The two measured chat tiers every chat feature is assigned to. */
 export const FAST_MODEL = "gpt-6-luna" satisfies SupportedChatModel;
 export const VISION_BATCH_MODEL =
   "gemini-2.5-flash" satisfies SupportedChatModel;
-export const REASONING_MODEL = "gpt-6-sol" satisfies SupportedChatModel;
 export const AUDIT_RECOVERY_MODEL =
   "claude-opus-5-5" satisfies SupportedChatModel;
 /**

@@ -92,21 +92,15 @@ describe("the AI feature table", () => {
   });
 });
 
-describe("output schemas an Anthropic model may receive", () => {
+describe("the audit output schema", () => {
   // Anthropic structured outputs reject array bounds (`maxItems`/`minItems`)
-  // with a 400 that no retry can fix. The audit feature shipped one and
-  // every stop-for-review of an account-sync run failed on it. The audit's
-  // recovery call goes to Anthropic whatever the audit's own tier.
-  it("carry no array bounds Anthropic rejects", () => {
-    for (const feature of AI_FEATURES) {
-      if (
-        !("schema" in feature) ||
-        (feature.tier !== "reasoning" &&
-          feature !== PURCHASE_IMPORT_AUDIT_FEATURE)
-      )
-        continue;
-      const rendered = JSON.stringify(z.toJSONSchema(feature.schema));
-      expect(rendered).not.toMatch(/"(max|min)Items"/);
-    }
+  // with a 400 that no retry can fix. The audit schema shipped one and every
+  // stop-for-review of an account-sync run failed on it. A failed audit is
+  // retried on the Anthropic recovery model (`extract.ts`).
+  it("carries no array bounds Anthropic rejects", () => {
+    const rendered = JSON.stringify(
+      z.toJSONSchema(PURCHASE_IMPORT_AUDIT_FEATURE.schema),
+    );
+    expect(rendered).not.toMatch(/"(max|min)Items"/);
   });
 });
