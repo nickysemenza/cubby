@@ -181,6 +181,17 @@ pnpm --dir apps/web eval:purchase-decisions
 
 Neither uses an authenticated household session or production data.
 
+`createWorkerdHarness` (`apps/web/tooling/purchase-agent-workerd-harness.ts`)
+first takes the machine-wide harness lock, then checks every Worker build it
+loads (`COUPLED_WORKER_BUILDS` in `apps/web/tooling/worker-builds.ts`) against
+a content hash of its sources. The web build carries
+`dist/web-build-provenance.json`; the agent build is stamped by
+`scripts/stamped-worker-build.ts`. Locally a stale build is rebuilt in place
+before workerd starts; in CI, where the Worker artifact must be current, a
+stale build fails with the exact rebuild command. A suite holds the harness
+across its tests with `holdWorkerdHarness()` in `beforeAll`, so the wait and
+any rebuild never count against a test timeout.
+
 Rollback is additive: pause the `cubby-purchase-agent` consumer and deploy the
 previous web and Apple versions. Postgres import rows and the retained
 `PurchaseImportDurableObject` namespace remain compatible.

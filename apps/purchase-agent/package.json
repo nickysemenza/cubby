@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node ../../scripts/generator/ensure.ts && vite build",
+    "build": "node ../../scripts/generator/ensure.ts && node ../../scripts/stamped-worker-build.ts purchase-agent -- vite build",
     "deploy": "pnpm run build && wrangler deploy",
     "types:generate": "wrangler types --env-interface CloudflareBindings --include-runtime=false --strict-vars=false",
     "types:check": "pnpm types:generate --check",

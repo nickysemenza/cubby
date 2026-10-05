@@ -10,7 +10,6 @@ import {
   assertJourneyPassed,
   childTracker,
   laneOutput,
-  repoRoot,
   runTesterArmyLane,
   webRoot,
 } from "./runner";
@@ -75,7 +74,7 @@ async function runWithServices() {
   ])
     process.env[key] = database.databaseUrl;
   const live = liveGatewayWorker();
-  const harness = createWorkerdHarness(
+  const harness = await createWorkerdHarness(
     database.databaseUrl,
     {
       ...live,
@@ -154,10 +153,4 @@ else
     tracker,
     evidence: [usageFile],
     runtime: { agentModel: agentModel.model, agentEffort: agentModel.effort },
-    build: () =>
-      runOrThrow("pnpm", ["--dir", "apps/purchase-agent", "run", "build"], {
-        ...tracker,
-        cwd: repoRoot,
-        stdio: "inherit",
-      }),
   });

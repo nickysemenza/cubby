@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 
 import { createTestHarness } from "wrangler";
 
+import { acquireHarnessLock } from "../../../scripts/lib/harness-lock.ts";
+
+import { COUPLED_WORKER_BUILDS, ensureWorkerBuilds } from "./worker-builds";
+
 const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -111,15 +115,60 @@ const DETERMINISTIC_GATEWAY: WorkerdModelWorker = {
 };
 
 /**
+ * Queue for the machine-wide harness lock, then make every coupled Worker
+ * build current (rebuilding a stale one locally). A suite calls this in
+ * `beforeAll` with a long timeout and releases in `afterAll`, so the wait and
+ * any rebuild never count against a test's timeout.
+ */
+export async function holdWorkerdHarness(): Promise<() => void> {
+  const release = await acquireHarnessLock("coupled Workers harness");
+  try {
+    ensureWorkerBuilds(COUPLED_WORKER_BUILDS);
+  } catch (error) {
+    release();
+    throw error;
+  }
+  return release;
+}
+
+/** Long enough to queue behind another suite and rebuild every Worker. */
+export const HOLD_WORKERD_HARNESS_TIMEOUT_MS = 30 * 60_000;
+
+/**
  * The coupled web + purchase-agent workerd harness. Its model worker is
  * `cubby-test-model` (the agent's provider) and its gateway worker is
  * `cubby-test-gateway` (the web Worker's structured features): deterministic
  * fakes by default, or Gateway proxies for live evals and journeys.
  */
-export function createWorkerdHarness(
+export async function createWorkerdHarness(
   databaseUrl: string,
   modelWorker: WorkerdModelWorker = DETERMINISTIC_MODEL,
   gatewayWorker: WorkerdModelWorker = DETERMINISTIC_GATEWAY,
+) {
+  const release = await holdWorkerdHarness();
+  let harness: ReturnType<typeof createTestHarness>;
+  try {
+    harness = startHarness(databaseUrl, modelWorker, gatewayWorker);
+  } catch (error) {
+    release();
+    throw error;
+  }
+  const close = harness.close.bind(harness);
+  return Object.assign(harness, {
+    close: async () => {
+      try {
+        await close();
+      } finally {
+        release();
+      }
+    },
+  });
+}
+
+function startHarness(
+  databaseUrl: string,
+  modelWorker: WorkerdModelWorker,
+  gatewayWorker: WorkerdModelWorker,
 ) {
   return createTestHarness({
     root: webRoot,
