@@ -31,6 +31,16 @@ let usage: Record<string, RouteUsage> = {};
 
 const bodyModel = z.looseObject({ model: z.string() });
 
+/** The model a JSON body names; counting is telemetry, so any other body counts none. */
+function wireModel(body: ArrayBuffer) {
+  try {
+    return bodyModel.safeParse(JSON.parse(new TextDecoder().decode(body))).data
+      ?.model;
+  } catch {
+    return undefined;
+  }
+}
+
 const DROPPED_HEADERS = [
   "authorization",
   "x-api-key",
@@ -52,21 +62,17 @@ export default {
       request.method === "GET" || request.method === "HEAD"
         ? undefined
         : await request.arrayBuffer();
-    let model: string | undefined;
-    if (body && request.headers.get("content-type")?.includes("json")) {
-      let json: unknown = JSON.parse(new TextDecoder().decode(body));
-      if (env.RESPONSES_MODEL && url.pathname === "/openai/responses") {
-        json = swapResponsesModel(
-          json,
-          modelSwapSchema.parse({
-            model: env.RESPONSES_MODEL,
-            effort: env.RESPONSES_EFFORT,
-          }),
-        );
-        body = new TextEncoder().encode(JSON.stringify(json)).buffer;
-      }
-      model = bodyModel.safeParse(json).data?.model;
+    if (env.RESPONSES_MODEL && url.pathname === "/openai/responses" && body) {
+      const swapped = swapResponsesModel(
+        JSON.parse(new TextDecoder().decode(body)),
+        modelSwapSchema.parse({
+          model: env.RESPONSES_MODEL,
+          effort: env.RESPONSES_EFFORT,
+        }),
+      );
+      body = new TextEncoder().encode(JSON.stringify(swapped)).buffer;
     }
+    const model = body && wireModel(body);
     const headers = new Headers(request.headers);
     for (const name of DROPPED_HEADERS) headers.delete(name);
     headers.set("cf-aig-authorization", `Bearer ${env.GATEWAY_TOKEN}`);

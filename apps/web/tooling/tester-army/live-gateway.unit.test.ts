@@ -31,8 +31,9 @@ afterEach(() => {
 async function send(
   gatewayEnv: typeof env,
   pathname: string,
-  body: { model: string },
-): Promise<{ url: string; body: unknown }> {
+  body: string,
+  contentType = "application/json",
+): Promise<{ url: string; body: string }> {
   vi.stubGlobal("fetch", upstream);
   upstream.mockResolvedValue(new Response("ok"));
   await liveGateway.fetch(
@@ -42,13 +43,13 @@ async function send(
   await liveGateway.fetch(
     new Request(`https://ai-gateway.invalid${pathname}`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
+      headers: { "content-type": contentType },
+      body,
     }),
     gatewayEnv,
   );
   const [url, init] = upstream.mock.lastCall ?? [];
-  return { url: String(url), body: await new Response(init?.body).json() };
+  return { url: String(url), body: await new Response(init?.body).text() };
 }
 
 async function usage(gatewayEnv: typeof env) {
@@ -61,29 +62,51 @@ async function usage(gatewayEnv: typeof env) {
 }
 
 it("swaps the configured model and effort into Responses calls", async () => {
-  const sent = await send(agentEnv, "/openai/responses", responsesBody);
-  expect(sent).toEqual({
-    url: `${env.GATEWAY_BASE_URL}/openai/responses`,
-    body: {
-      ...responsesBody,
-      model: "gpt-6-luna",
-      reasoning: { effort: "high", summary: "auto" },
-    },
-  });
+  const swapped = {
+    ...responsesBody,
+    model: "gpt-6-luna",
+    reasoning: { effort: "high", summary: "auto" },
+  };
+  const sent = await send(
+    agentEnv,
+    "/openai/responses",
+    JSON.stringify(responsesBody),
+  );
+  expect(sent.url).toBe(`${env.GATEWAY_BASE_URL}/openai/responses`);
+  expect(JSON.parse(sent.body)).toEqual(swapped);
   expect(await usage(agentEnv)).toMatchObject({
     openai: { requests: 1, models: { "gpt-6-luna": 1 } },
   });
+  // Media types are case-insensitive; the swap must not depend on them.
+  const mixedCase = await send(
+    agentEnv,
+    "/openai/responses",
+    JSON.stringify(responsesBody),
+    "Application/JSON; charset=utf-8",
+  );
+  expect(JSON.parse(mixedCase.body)).toEqual(swapped);
 });
 
 it("forwards unconfigured peers and other routes unchanged", async () => {
-  expect((await send(env, "/openai/responses", responsesBody)).body).toEqual(
-    responsesBody,
+  const unchanged = JSON.stringify(responsesBody);
+  expect((await send(env, "/openai/responses", unchanged)).body).toBe(
+    unchanged,
   );
   expect(await usage(env)).toMatchObject({
     openai: { models: { "gpt-6-sol": 1 } },
   });
-  const messages = { model: "synthetic-messages-model", max_tokens: 16 };
-  expect(
-    (await send(agentEnv, "/anthropic/v1/messages", messages)).body,
-  ).toEqual(messages);
+  const messages = JSON.stringify({
+    model: "synthetic-messages-model",
+    max_tokens: 16,
+  });
+  expect((await send(agentEnv, "/anthropic/v1/messages", messages)).body).toBe(
+    messages,
+  );
+  // Model counting is telemetry: a body it cannot read is still forwarded.
+  expect((await send(env, "/workers-ai/run", "{not json")).body).toBe(
+    "{not json",
+  );
+  expect(await usage(env)).toMatchObject({
+    "workers-ai": { requests: 1, models: {} },
+  });
 });
