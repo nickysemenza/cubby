@@ -126,7 +126,11 @@ existing block. Extend the generic path when it almost fits. See
 - Dialogs: `WorkflowDialog`, `ResponsiveDialog` + `DialogFormActions`,
   `DeleteEntityDialog` + `useStagedDialogAction`, `LocationMoveDialog`.
 - Pickers: `EntityPicker` / `EntityReferencePicker`, `referenceEntitySearch`;
-  no direct `ui/combobox` use outside picker builders.
+  no direct `ui/combobox` use outside picker builders. A form field binds one
+  through `ui/form-utils/entity-value-field.tsx`: `EntityValueField` stores the
+  shortcode (assignment forms and dialogs), `EntityItemField` stores the whole
+  item (recipe rows, quick add). Both share one binding for validation,
+  suggestions, and the selected label.
 - Tables: `RTable` and the generic relation table; raw `<table>` only for
   matrices, cross-tabs, and debug views.
 - Formatting: `lib/utils` formatters (`formatCurrency`, `formatCount`,

@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ComboboxItem } from "./combobox/combobox-types";
-import {
-  buildUpdateObject,
-  detectComboboxIdChange,
-  getSubmitButtonText,
-} from "./form-utils";
+import { buildUpdateObject, getSubmitButtonText } from "./form-utils";
 
 describe("form-utils", () => {
   describe("getSubmitButtonText", () => {
@@ -143,101 +138,6 @@ describe("form-utils", () => {
 
     it.each(CASES)("$name", ({ entity, formValues, fields, expected }) => {
       expect(buildUpdateObject(entity, formValues, fields)).toEqual(expected);
-    });
-  });
-
-  describe("detectComboboxIdChange", () => {
-    // entityId × combobox → the id to write (undefined = no change, null = clear).
-    interface Case {
-      name: string;
-      entityId: string | null | undefined;
-      combobox: ComboboxItem | null | undefined;
-      expected: string | null | undefined;
-    }
-
-    const item = (id: string, name = "Item"): ComboboxItem => ({ id, name });
-
-    const CASES: Case[] = [
-      {
-        name: "null entity, null combobox → no change",
-        entityId: null,
-        combobox: null,
-        expected: undefined,
-      },
-      {
-        name: "null entity, undefined combobox → no change",
-        entityId: null,
-        combobox: undefined,
-        expected: undefined,
-      },
-      // undefined entityId is not strictly null, so the "removing association" branch fires.
-      {
-        name: "undefined entity, null combobox → clear",
-        entityId: undefined,
-        combobox: null,
-        expected: null,
-      },
-      {
-        name: "null entity, combobox value → set new id",
-        entityId: null,
-        combobox: item("new-id", "New Item"),
-        expected: "new-id",
-      },
-      {
-        name: "entity value, empty combobox → clear",
-        entityId: "existing-id",
-        combobox: null,
-        expected: null,
-      },
-      {
-        name: "differing combobox id → new id",
-        entityId: "old-id",
-        combobox: item("new-id", "New Item"),
-        expected: "new-id",
-      },
-      {
-        name: "matching combobox id → no change",
-        entityId: "same-id",
-        combobox: item("same-id", "Same Item"),
-        expected: undefined,
-      },
-      {
-        name: "undefined entity, combobox value → set new id",
-        entityId: undefined,
-        combobox: item("new-id", "New Item"),
-        expected: "new-id",
-      },
-      // Both undefined: entityId !== null and !comboboxItem → clear.
-      {
-        name: "undefined entity, undefined combobox → clear",
-        entityId: undefined,
-        combobox: undefined,
-        expected: null,
-      },
-      {
-        name: "string entity, undefined combobox → clear",
-        entityId: "entity-id",
-        combobox: undefined,
-        expected: null,
-      },
-      {
-        name: "empty-string entity, combobox value → new id",
-        entityId: "",
-        combobox: item("new-id", "New Item"),
-        expected: "new-id",
-      },
-      {
-        name: "empty-string combobox id is preserved",
-        entityId: "entity-id",
-        combobox: item("", "Empty ID Item"),
-        expected: "",
-      },
-    ];
-
-    it.each(CASES)("$name", ({ entityId, combobox, expected }) => {
-      expect(detectComboboxIdChange(entityId, combobox, (value) => value)).toBe(
-        expected,
-      );
     });
   });
 });

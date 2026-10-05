@@ -31,8 +31,6 @@ import { useDialogHeaderActionsRegistration } from "~/ui/primitives/responsive-d
 import { Spinner } from "~/ui/primitives/spinner";
 import { Textarea } from "~/ui/primitives/textarea";
 
-import type { ComboboxItem, PickerEntity } from "./combobox/combobox-types";
-import { EntityPicker } from "./combobox/entity-picker";
 import { StaticPicker } from "./combobox/static-picker";
 import { DatePickerInput } from "./date-picker-input";
 import { FormFieldGroup } from "./forms/form-field-group";
@@ -614,107 +612,6 @@ export function NullableNumericField<
   );
 }
 
-// Helper for handling combobox fields
-export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
-  form,
-  name,
-  label,
-  items,
-  onSearchChange,
-  isLoading,
-  onCreateNew,
-  onSelect,
-  onOpenChange,
-  entity,
-  clearable = true,
-  disabledItemReasons,
-  suggestField,
-}: {
-  form: UseFormReturn<TFieldValues>;
-  name: FieldPathByValue<TFieldValues, ComboboxItem | null | undefined>;
-  label?: string;
-  items: ComboboxItem[];
-  onSearchChange: (query: string) => void;
-  isLoading?: boolean;
-  onCreateNew?: (name: string) => Promise<ComboboxItem>;
-  // Fires with the selected item (or null on clear), after the field updates.
-  // Lets callers sync a sibling field — e.g. write the ingredient's aliases to
-  // the row so the Re-parse drift check sees them.
-  onSelect?: (item: ComboboxItem | null) => void;
-  // Forwarded to the combobox so an async-search wrapper can defer its options
-  // query until the dropdown opens.
-  onOpenChange?: (open: boolean) => void;
-  entity: PickerEntity;
-  clearable?: boolean;
-  disabledItemReasons?: Readonly<Record<string, string>>;
-  /** The manifest target key this field suggests (e.g. `"projectId"`). The
-   * field's value is the whole `ComboboxItem`, so an auto-fill writes one
-   * directly — no separate `seedItem` lookup needed the way `EntityValueField`
-   * (id-valued) requires it. */
-  suggestField?: string;
-}) {
-  return (
-    <Controller
-      control={form.control}
-      name={name}
-      render={({ field, fieldState }) => (
-        <FormFieldGroup
-          htmlFor={name}
-          label={label}
-          invalid={fieldState.invalid}
-          error={fieldState.error}
-        >
-          <EntityPicker
-            inputId={name}
-            inputRef={field.ref}
-            entity={entity}
-            label={label ?? "item"}
-            items={items.map((item) => {
-              const disabledReason = disabledItemReasons?.[item.id];
-              return disabledReason
-                ? {
-                    ...item,
-                    presentation: {
-                      ...item.presentation,
-                      group: {
-                        id: "unavailable",
-                        label: "Unavailable",
-                        order: 99,
-                      },
-                      disabledReason,
-                    },
-                  }
-                : item;
-            })}
-            onSearchChange={onSearchChange}
-            isLoading={isLoading}
-            value={field.value ?? null}
-            setValue={(value) => {
-              field.onBlur();
-              field.onChange(value);
-              onSelect?.(value);
-            }}
-            onCreateNew={onCreateNew}
-            onOpenChange={(open) => {
-              if (!open) field.onBlur();
-              onOpenChange?.(open);
-            }}
-            clearable={clearable}
-          />
-          {suggestField && (
-            <AutoSuggestSlot
-              form={form}
-              name={name}
-              field={suggestField}
-              valueKind="item"
-            />
-          )}
-        </FormFieldGroup>
-      )}
-    />
-  );
-}
-
 // Generic function to build an update object based on changed fields
 export function buildUpdateObject<
   T extends object,
@@ -732,29 +629,6 @@ export function buildUpdateObject<
   });
 
   return updates;
-}
-
-// Helper to extract ID from a ComboboxItem if different from entity
-// Generic version that preserves ID type branding
-// Accepts either branded or unbranded combobox items for flexibility with form values
-export function detectComboboxIdChange<TId extends string>(
-  entityId: TId | string | undefined | null,
-  comboboxItem: ComboboxItem | null | undefined,
-  parseId: (value: string) => TId,
-): TId | null | undefined {
-  if (entityId === null && !comboboxItem) {
-    return undefined; // No change if both are null/empty
-  }
-  if (entityId === null && comboboxItem) {
-    return parseId(comboboxItem.id); // Set new ID if entity was null
-  }
-  if (entityId !== null && !comboboxItem) {
-    return null; // Set to null if removing association
-  }
-  if (comboboxItem && comboboxItem.id !== entityId) {
-    return parseId(comboboxItem.id); // Change ID if different
-  }
-  return undefined; // No change
 }
 
 // Helper to build a common form layout with two fields side by side
@@ -872,8 +746,8 @@ export function UnifiedTextField<
  *
  * Pick the right combobox for the job:
  * - `SelectField` — static options, page-level forms.
- * - {@link ComboboxField} / `ComboboxFieldWithSearch` — async entity search
- *   (ingredient/product/location/recipe) and anything rendered inside a Dialog,
+ * - `EntityValueField` (stores the shortcode) / `EntityItemField` (stores the
+ *   whole item), in `form-utils/entity-value-field.tsx` — async entity search
  *   through the shared Base UI entity picker.
  */
 export function SelectField<TFieldValues extends FieldValues = FieldValues>({

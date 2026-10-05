@@ -14,9 +14,10 @@
  * explicit "Additional units arrived" and a typed quantity.
  */
 
-import type {
-  ExpenseShortcode,
-  ProductShortcode,
+import {
+  locationShortcode,
+  type ExpenseShortcode,
+  type ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   positiveAmount,
@@ -35,9 +36,9 @@ import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { FieldSuggestionProvider } from "~/features/ai/field-suggestion-provider";
 import { AmountFieldGroup } from "~/features/inventory/amount-field-group";
 import { inventory as inventoryOperations } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { referenceEntitySearch } from "~/ui/combobox/reference-entity-search";
 import { WorkflowDialog } from "~/ui/dialogs/workflow-dialog";
-import { getOptionalLocationId, optionalLocationField } from "~/ui/form-fields";
-import { ComboboxFieldWithSearch } from "~/ui/form-utils/combobox-field-with-search";
+import { EntityValueField } from "~/ui/form-utils/entity-value-field";
 import { useActionMutation } from "~/ui/hooks/useActionMutation";
 import { Row, Stack } from "~/ui/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/primitives/alert";
@@ -48,7 +49,9 @@ import { Input } from "~/ui/primitives/input";
 // A null quantity is "not entered yet": an already-counted Product starts
 // blank so units can never be added without typing a number.
 const formSchema = z.object({
-  location: optionalLocationField,
+  // The picker's shortcode, "" until one is chosen; read through
+  // `locationShortcode` before any receive.
+  location: z.string(),
   addQuantity: z.number().positive().nullable(),
   createAmount: z.object({
     value: z.number().nullable(),
@@ -57,6 +60,8 @@ const formSchema = z.object({
 });
 
 type ReceiveValues = z.infer<typeof formSchema>;
+
+const LocationSearch = referenceEntitySearch("location");
 
 interface ReceiveExpenseDialogProps {
   open: boolean;
@@ -139,12 +144,12 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
   const form = useForm<ReceiveValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      location: null,
+      location: "",
       addQuantity: defaultQuantity,
       createAmount: { value: defaultQuantity, unit: defaultUnit },
     },
   });
-  const locationId = getOptionalLocationId(form.watch("location"));
+  const locationId = locationShortcode.safeParse(form.watch("location")).data;
   const addQuantity = form.watch("addQuantity");
 
   const receive = useActionMutation({
@@ -240,11 +245,13 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
             a one-of-a-kind item, so receiving it again moves it rather than
             adding a second entry.
           </Description>
-          <ComboboxFieldWithSearch
+          <EntityValueField
             form={form}
             name="location"
             label="Move to"
-            searchType="location"
+            entity="location"
+            SearchProvider={LocationSearch}
+            clearable
             suggestField="locationId"
           />
           <Row justify="end">
@@ -268,11 +275,13 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
 
     return (
       <Stack gap="md">
-        <ComboboxFieldWithSearch
+        <EntityValueField
           form={form}
           name="location"
           label="Location"
-          searchType="location"
+          entity="location"
+          SearchProvider={LocationSearch}
+          clearable
           suggestField="locationId"
         />
         {!locationId ? (
