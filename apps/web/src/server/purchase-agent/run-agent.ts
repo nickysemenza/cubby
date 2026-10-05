@@ -321,26 +321,25 @@ export class PurchaseImportRunAgent
       this.writeState(STATE_KEYS.identity, JSON.stringify(identity));
     }
     await this.ensureRunReady(identity);
+    // Record a new event, and its submission as the newest, before pi
+    // persists it: a submission that persists but fails to return is then
+    // still the newest when the queue redelivers it, and gets its watcher. A
+    // redelivered older event leaves the newest submission alone.
+    const eventId = input.signal.attributes?.eventId;
+    if (!eventId || !this.receivedEventIds().includes(eventId)) {
+      if (eventId) this.recordReceived(eventId);
+      this.writeState(STATE_KEYS.latestSubmission, input.operationId);
+    }
     const receipt = await this.harness.submit(renderSignal(input.signal), {
       operationId: input.operationId,
       whenBusy: "steer",
     });
-    const eventId = input.signal.attributes?.eventId;
-    if (eventId) this.recordReceived(eventId);
-    if (receipt.accepted) await this.watchSettlement(receipt.operationId);
-    // A redelivery of the newest submission restores a watcher its first
-    // delivery may have lost; the job id makes this idempotent.
-    else if (
+    if (
+      receipt.accepted ||
       this.readState(STATE_KEYS.latestSubmission) === receipt.operationId
     )
       await this.settlement.watch({ operationId: receipt.operationId });
     return { accepted: receipt.accepted };
-  }
-
-  /** The newest submission is the one whose settlement speaks for the run. */
-  private async watchSettlement(operationId: string) {
-    this.writeState(STATE_KEYS.latestSubmission, operationId);
-    await this.settlement.watch({ operationId });
   }
 
   private receivedEventIds(): string[] {
@@ -401,11 +400,13 @@ export class PurchaseImportRunAgent
     if (!parsed.success)
       return Response.json({ error: parsed.error.message }, { status: 400 });
     await this.ensureRunReady(identity);
+    const operationId = `prompt:${crypto.randomUUID()}`;
+    this.writeState(STATE_KEYS.latestSubmission, operationId);
     const receipt = await this.harness.submit(parsed.data.body, {
-      operationId: `prompt:${crypto.randomUUID()}`,
+      operationId,
       whenBusy: "steer",
     });
-    if (receipt.accepted) await this.watchSettlement(receipt.operationId);
+    await this.settlement.watch({ operationId: receipt.operationId });
     return Response.json({ operationId: receipt.operationId }, { status: 202 });
   }
 

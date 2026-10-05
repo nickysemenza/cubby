@@ -1342,6 +1342,15 @@ export async function reconcileSettledRun(
     (await unreceivedWake(db, scope, input.receivedEventIds, broker))
   )
     return { reconciled: false as const, status: "running" as const };
+  // A command still awaiting the Mac will resume the conversation with its
+  // result; the sweep's cutoff abandons only commands nobody answered.
+  const cutoff = input.abandonCommandsBefore?.getTime();
+  if (
+    pending.some(
+      (command) => cutoff === undefined || command.createdAt >= cutoff,
+    )
+  )
+    return { reconciled: false as const, status: "running" as const };
   if (input.failure) {
     const { failed } = await markRunFailed(db, {
       runId: input.runId,
@@ -1400,12 +1409,6 @@ export async function reconcileSettledRun(
       return { reconciled: false as const, status: "running" as const };
   }
   if (broker) {
-    const cutoff = input.abandonCommandsBefore?.getTime();
-    const live = pending.filter(
-      (command) => cutoff === undefined || command.createdAt >= cutoff,
-    );
-    if (live.length > 0)
-      return { reconciled: false as const, status: "running" as const };
     // A command the Mac never answered within the stale window is not work
     // in flight; it is the reason the run stalled. Its 25-hour deadline is
     // the bridge's replay bound, not a promise anyone is still keeping.

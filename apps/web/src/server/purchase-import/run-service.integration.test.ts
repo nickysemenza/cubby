@@ -603,6 +603,7 @@ describe("purchase import run admission", () => {
     });
     const commandId = crypto.randomUUID();
     let answered: string | null = null;
+    let awaitingMac = false;
     const broker = {
       enqueue: async () => undefined,
       // SAFETY: reconcile only asks whether a result exists, not its shape.
@@ -610,7 +611,10 @@ describe("purchase import run admission", () => {
         id === answered ? ({} as BrowserBridgeResult) : null,
       cancel: async () => undefined,
       connected: async () => true,
-      pendingCommands: async () => [],
+      pendingCommands: async () =>
+        awaitingMac
+          ? [{ requestId: crypto.randomUUID(), createdAt: Date.now() }]
+          : [],
       notifyRunCompleted: async () => undefined,
       requestAuthentication: async () => undefined,
     };
@@ -666,6 +670,13 @@ describe("purchase import run admission", () => {
     await expect(
       settle([wake, result], { failureCode: "agent_failed" }),
     ).resolves.toEqual(kept);
+    // A command still awaiting the Mac will resume the conversation, so not
+    // even an unanswered submission fails the run.
+    awaitingMac = true;
+    await expect(
+      settle([dispatch, wake, result], { failureCode: "agent_failed" }),
+    ).resolves.toEqual(kept);
+    awaitingMac = false;
     await expect(settle([dispatch, wake, result])).resolves.toEqual({
       reconciled: true,
       status: "needs_review",

@@ -32,6 +32,9 @@ export class RunSettlement extends LifecycleCapability {
   }
 
   async watch(job: SettlementJob): Promise<void> {
+    // A push with an existing id replaces that job, resetting its schedule
+    // and in-flight state; a redelivered submission keeps the one it has.
+    if (this.lifecycle.jobs.get(`settle:${job.operationId}`)) return;
     await this.lifecycle.jobs.push({
       id: `settle:${job.operationId}`,
       fn: "settle",
