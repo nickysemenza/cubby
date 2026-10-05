@@ -120,6 +120,18 @@ describe("MCP tool JSON Schema — toWire parity", () => {
     expect(hits).toEqual([]);
   });
 
+  it("publishes a tuple as one items schema with Zod's own length bounds", () => {
+    const schema = safeToJsonSchema(
+      z.object({ pair: z.tuple([z.string(), z.number().optional()]) }),
+      "input",
+    );
+    expect(jsonAt(schema, "properties", "pair")).toMatchObject({
+      items: { anyOf: [{ type: "string" }, { type: "number" }] },
+      minItems: 1,
+      maxItems: 2,
+    });
+  });
+
   it("advertises no bare `format: date` anywhere in the catalog", () => {
     const hits: string[] = [];
     for (const action of actions) {

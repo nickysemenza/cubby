@@ -63,7 +63,7 @@ export function safeToJsonSchema(
         // Clients validate tool schemas as 2020-12, where `items` is one
         // schema; a draft-7 tuple (`items: [...]`) made them reject the whole
         // tool. Publish a tuple as an array of its member schemas bounded to
-        // its length: valid in both drafts, and the response is still parsed
+        // its length (Zod's own bounds): valid in both drafts, and the response is still parsed
         // with the exact Zod tuple.
         if (Array.isArray(jsonSchema.items)) {
           const prefix = jsonSchema.items;
@@ -81,8 +81,8 @@ export function safeToJsonSchema(
               : members.length === 1
                 ? members[0]
                 : { anyOf: members.map(asObject) };
-          if (prefix.length > 0) jsonSchema.minItems = prefix.length;
-          if (rest === false) jsonSchema.maxItems = prefix.length;
+          // Zod already emits the tuple's `minItems`/`maxItems` (optional
+          // members lower `minItems`), so the length bounds stay its own.
           delete jsonSchema.additionalItems;
         }
       },
