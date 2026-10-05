@@ -261,7 +261,9 @@ struct RunPhotoReviewSections: View {
                     Label(
                         workspace.selectedGroupKeys.contains(group.groupKey) ? "Selected" : "Select",
                         systemImage: workspace.selectedGroupKeys.contains(group.groupKey)
-                            ? "checkmark.circle.fill" : "circle")
+                            ? "checkmark.circle.fill" : "circle"
+                    )
+                    .touchTargetLabel()
                 }
                 .disabled(session.busy || approvalBlocker(group, images: images) != nil)
             }
@@ -299,6 +301,7 @@ struct RunPhotoReviewSections: View {
                 }
             } label: {
                 Label("Compare possible matches", systemImage: "square.stack.3d.up")
+                    .touchTargetLabel()
             }
             if case .create = group.product {
                 NavigationLink {
@@ -307,6 +310,7 @@ struct RunPhotoReviewSections: View {
                     }
                 } label: {
                     Label("Edit proposed product", systemImage: "pencil")
+                        .touchTargetLabel()
                 }
             }
             HStack {
@@ -316,14 +320,18 @@ struct RunPhotoReviewSections: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(session.busy || approvalBlocker(group, images: images) != nil)
-                Button("Discard", role: .destructive) { workspace.discardingGroup = group.groupKey }
-                    .disabled(session.busy)
+                Button(role: .destructive) {
+                    workspace.discardingGroup = group.groupKey
+                } label: {
+                    Text("Discard").touchTargetLabel()
+                }
+                .disabled(session.busy)
             }
         }
         .padding(.vertical, FieldGuideTokens.Space.xs)
         // The whole workspace is one List row. A row's automatic-style buttons and links all fire
         // on any tap in it, so Select also pushed both match and draft screens; an explicit
-        // style keeps each control to its own hit area.
+        // style keeps each control to its own hit area, which `touchTargetLabel` sizes.
         .buttonStyle(.borderless)
     }
 
@@ -357,6 +365,15 @@ struct RunPhotoReviewSections: View {
                 .foregroundStyle(state == .ready ? FieldGuideTokens.positive : .secondary)
             if let reason, !reason.isEmpty { Text(reason).foregroundStyle(.secondary) }
         }
+    }
+}
+
+extension View {
+    /// A borderless control's hit area is its label's shape, so the minimum height and the
+    /// rectangle go inside the label; a frame outside it grows the layout but not the hit area.
+    fileprivate func touchTargetLabel() -> some View {
+        frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+            .contentShape(.rect)
     }
 }
 
