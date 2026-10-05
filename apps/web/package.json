@@ -23,6 +23,7 @@
     "test:e2e:affected": "NODE_ENV=test node scripts/e2e-affected.ts",
     "test:e2e:watch": "tsx tooling/build-cf.ts --ensure && NODE_ENV=test node ../../scripts/test-services.ts --warm -- concurrently -k -n build,test \"pnpm run build:cf:watch\" \"playwright test --ui\"",
     "test:e2e:ci:desktop": "NODE_ENV=test node ../../scripts/test-services.ts -- playwright test --project='Unauthenticated tests' --project='Authenticated tests'",
+    "test:e2e:ci:purchase-import": "NODE_ENV=test node ../../scripts/test-services.ts -- playwright test --project='Purchase import agent'",
     "test:e2e:install-browser": "playwright install",
     "test:e2e:install-deps": "playwright install-deps",
     "typecheck": "node ../../scripts/generator/ensure.ts && node ../../scripts/typecheck-web.ts",

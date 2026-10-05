@@ -555,6 +555,15 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/app/purchases/**`,
     `${WEB}/src/server/purchase-import/gmail/**`,
   ],
+  "purchase-import-run.spec.ts": [
+    `${WEB}/src/app/vendors/**`,
+    `${WEB}/src/app/purchases/**`,
+    `${WEB}/src/app/runs/**`,
+    `${WEB}/src/server/purchase-import/**`,
+    `${WEB}/src/server/purchase-agent/**`,
+    `${WEB}/tooling/purchase-agent-*.ts`,
+    `${WEB}/tests/e2e/harness-services/purchase-*.ts`,
+  ],
   "tools-flow.spec.ts": [
     `${WEB}/src/server/repo/project-tools.integration.test.ts`,
     `${WEB}/src/server/repo/product/**`,

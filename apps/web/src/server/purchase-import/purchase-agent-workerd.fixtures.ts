@@ -1,12 +1,19 @@
-/* eslint-disable anti-slop/no-unsafe-dictionary-type, anti-slop/no-object-parameters, anti-slop/no-unknown-returns, anti-slop/no-known-value-widening -- Queue events, browser outcomes, and peer fixtures are external wire payloads the harness forwards unchanged as JSON. */
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { sleep } from "@cubby/shared/retry";
 import { eq } from "drizzle-orm";
-import type { ScriptStep } from "tooling/purchase-agent-script";
-import { createWorkerdHarness } from "tooling/purchase-agent-workerd-harness";
+import {
+  from,
+  mcp,
+  type ScriptStep,
+  type ScriptValue,
+} from "tooling/purchase-agent-script";
+import {
+  createWorkerdHarness,
+  type ScriptedScenario,
+  scenarioControls,
+} from "tooling/purchase-agent-workerd-harness";
 import type { TestDbContext } from "tooling/test-setup";
 import type { TestHarness } from "wrangler";
-import { z } from "zod";
 
 import {
   aiUsage,
@@ -26,6 +33,110 @@ import {
 } from "./agent-auth";
 
 type Db = TestDbContext["db"];
+
+type Line = {
+  title: string;
+  amount: number;
+  lineKind: "principal" | "tax" | "shipping";
+  sku?: string;
+};
+
+/** The extractor's wire shape: every optional field is an explicit null. */
+export const readyExtraction = (
+  orderId: string,
+  orderedAt: string,
+  lines: Line[],
+) => ({
+  status: "ready",
+  candidate: {
+    orderId,
+    orderedAt,
+    merchant: "Scenario garden shop",
+    currency: "USD",
+    printedGrandTotal: lines.reduce((sum, line) => sum + line.amount, 0),
+    lines: lines.map((line) => ({
+      title: line.title,
+      amount: line.amount,
+      lineKind: line.lineKind,
+      quantity: line.lineKind === "principal" ? 1 : null,
+      productUrl: null,
+      imageUrl: null,
+      sku: line.sku ?? null,
+      seller: null,
+    })),
+    payments: [],
+    allShipmentsDelivered: false,
+  },
+  reason: null,
+  detail: null,
+});
+
+/**
+ * Prepare the order an `extract_run_evidence` call returned, unchanged, as
+ * `prepare-<suffix>`; then the commit for its single line as a new Product.
+ * Each commit step id is `commit-<suffix>`.
+ */
+export const mailPrepare = (
+  extractCallId: string,
+  suffix: string,
+  runId: ScriptValue,
+): ScriptStep => {
+  const order = (path: string) => from(extractCallId, path);
+  return mcp(
+    `prepare-${suffix}`,
+    "purchase_import",
+    runId,
+    {
+      action: "prepare",
+      orders: [
+        {
+          stableOrderId: order("stableOrderId"),
+          itemOperationId: order("itemOperationId"),
+          source: order("source"),
+          evidenceChecksum: order("evidenceChecksum"),
+          extractionRevision: order("extractionRevision"),
+          extraction: order("extraction"),
+          lineIds: order("lineIds"),
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        },
+      ],
+    },
+    { itemOperationIds: [order("itemOperationId")] },
+  );
+};
+
+/**
+ * Commit `prepare-<suffix>` under operation id `commit-<suffix>`; `callId`
+ * names the step, so a second call with the same suffix is a replay.
+ */
+export const mailCommit = (
+  extractCallId: string,
+  suffix: string,
+  runId: ScriptValue,
+  callId = `commit-${suffix}`,
+): ScriptStep => {
+  const order = (path: string) => from(extractCallId, path);
+  return mcp(
+    callId,
+    "purchase_import",
+    runId,
+    {
+      action: "commit",
+      prepareOperationId: `prepare-${suffix}`,
+      // A principal Expense needs a trade; nothing else supplies one.
+      defaultTrade: "other",
+      resolutions: [
+        {
+          stableOrderId: order("stableOrderId"),
+          stableLineId: order("lineIds.0"),
+          resolution: { kind: "new" },
+        },
+      ],
+    },
+    { operationId: `commit-${suffix}` },
+  );
+};
 
 /** Poll a database predicate; a scenario never sleeps a fixed interval. */
 export async function waitFor(
@@ -138,11 +249,7 @@ export type ScenarioHarness = Awaited<ReturnType<typeof startScenarioHarness>>;
  */
 export async function startScenarioHarness(
   databaseUrl: string,
-  scenario: {
-    steps: ScriptStep[];
-    extractions?: Array<{ match: string; output: unknown }>;
-    audit?: unknown;
-  },
+  scenario: ScriptedScenario,
 ) {
   const hyperdrive = new Map(
     [
@@ -160,109 +267,11 @@ export async function startScenarioHarness(
   };
   try {
     await harness.listen();
-    const model = harness.getWorker("cubby-test-model");
-    const gateway = harness.getWorker("cubby-test-gateway");
-    type JsonPost = {
-      method: "POST";
-      headers: Record<string, string>;
-      body: string;
-    };
-    type Sender = (
-      path: string,
-      init: JsonPost,
-    ) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>;
-    const post = async (send: Sender, path: string, body: object) => {
-      const response = await send(path, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok)
-        throw new Error(`${path} ${response.status}: ${await response.text()}`);
-    };
-    const toModel: Sender = (path, init) => model.fetch(path, init);
-    const toGateway: Sender = (path, init) => gateway.fetch(path, init);
-    const queue = harness.getWorker("cubby-queue-producer");
-    const toQueue: Sender = (path, init) =>
-      queue.fetch(new URL(path, "https://queue.test"), init);
-    const agentUrl = (agentId: string, suffix = "") =>
-      new URL(
-        `/agent/${encodeURIComponent(agentId)}${suffix}`,
-        "https://queue.test",
-      );
-    const readJson = async <T>(
-      schema: z.ZodType<T>,
-      send: () => Promise<{ json(): Promise<unknown> }>,
-    ): Promise<T> => schema.parse(await (await send()).json());
-    await post(toModel, "https://model.test/configure", {
-      steps: scenario.steps,
-    });
-    const gatewayFixture: { extractions: unknown[]; audit?: unknown } = {
-      extractions: scenario.extractions ?? [],
-    };
-    if (scenario.audit) gatewayFixture.audit = scenario.audit;
-    await post(toGateway, "https://gateway.test/configure", gatewayFixture);
+    const controls = scenarioControls(harness);
+    await controls.configure(scenario);
     return {
       harness,
-      /** Deliver one purchase-agent queue event, as the web Worker would. */
-      dispatch: (event: Record<string, unknown>) =>
-        post(toQueue, "/dispatch", event),
-      /** Connect a simulated Mac browser that answers commands by URL. */
-      connectBrowser: (input: {
-        vendorAccountId: string;
-        ledgerPartyId: string;
-        userId: string;
-        outcomes?: Record<string, unknown>;
-        delayMs?: number;
-      }) => post(toQueue, "/browser-connect", input),
-      /** Deliver a member's chat turn to the run's agent conversation. */
-      prompt: (agentId: string, body: string) =>
-        post(toQueue, agentUrl(agentId).pathname, { kind: "user", body }),
-      /**
-       * The run page's two reads of the agent conversation: the snapshot and
-       * the first SSE frame of the live stream, each as the agent answered.
-       */
-      conversation: async (agentId: string) => {
-        const snapshot = await queue.fetch(agentUrl(agentId));
-        const stream = await queue.fetch(agentUrl(agentId, "/stream"));
-        // A whole-snapshot frame can span several chunks; read to its end.
-        const decoder = new TextDecoder();
-        let firstFrame = "";
-        const reader = stream.body?.getReader();
-        if (reader) {
-          for (;;) {
-            const chunk = await reader.read();
-            if (chunk.done) break;
-            firstFrame += decoder.decode(chunk.value, { stream: true });
-            if (firstFrame.includes("\n\n")) break;
-          }
-          await reader.cancel();
-        }
-        return {
-          snapshot: { status: snapshot.status, body: await snapshot.text() },
-          stream: {
-            status: stream.status,
-            contentType: stream.headers.get("content-type"),
-            firstFrame: firstFrame.split("\n\n")[0] ?? "",
-          },
-        };
-      },
-      violations: async () =>
-        readJson(z.array(z.string()), () =>
-          model.fetch("https://model.test/violations"),
-        ),
-      /** Each step the scripted model emitted: what the agent actually executed. */
-      emitted: async () =>
-        readJson(z.array(z.string()), () =>
-          model.fetch("https://model.test/emitted"),
-        ),
-      gatewayCalls: async () =>
-        readJson(
-          z.array(
-            z.object({ feature: z.string(), matched: z.string().nullable() }),
-          ),
-          () => gateway.fetch("https://gateway.test/calls"),
-        ),
+      ...controls,
       close: async () => {
         try {
           await harness.close();

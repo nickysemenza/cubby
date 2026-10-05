@@ -25,6 +25,17 @@ while Playwright reuses it, so the E2E fixtures retry an idempotent
 or PATCH is never replayed. RTable's placeholder transition can eat clicks;
 cell-edit tests retry opening and filling as one action.
 
+The `Purchase import agent` Playwright project
+(`tests/e2e/purchase-import-run.spec.ts`, `test.use({ purchaseAgent: true })`)
+runs the browser against the purchase-agent workerd harness with a scripted
+model and gateway; `e2eRuntime.purchaseAgent` loads each test's script. It is
+excluded from the required desktop shards and runs in CI as an optional job
+(`pnpm --dir apps/web test:e2e:ci:purchase-import`). Hold the model with a
+`{ gate }` step to observe a live Run instead of racing it; a Run the browser
+starts has no id until the click, so scripts use `currentRunId`. Prefer it over
+a UI-less scenario for anything the Run or Purchase page shows; keep scenarios
+for server fences the UI cannot observe.
+
 Every completed E2E run produces a sanitized run bundle with its revision,
 replay command, runtime versions, case results, and SHA-256 checksums. CI uploads
 successful and failed bundles for seven days. A dirty local checkout or a build

@@ -77,6 +77,40 @@ test("routes web, shared, auxiliary, Rust, and Apple dependencies", () => {
   ]);
 });
 
+// The optional purchase-import browser lane follows its own surfaces only.
+test("routes purchase-import surfaces to the import browser lane", () => {
+  for (const file of [
+    "apps/web/src/server/purchase-import/gmail/import.ts",
+    "apps/web/src/server/purchase-agent/run-agent.ts",
+    "apps/web/src/app/purchases/purchase-import-run-detail.tsx",
+    "apps/web/src/app/runs/agent-observation.ts",
+    "apps/web/src/app/vendors/order-mail-worklist.tsx",
+    "apps/web/src/routes/_authenticated/runs.$shortcode.tsx",
+    "apps/web/tooling/purchase-agent-workerd-harness.ts",
+    "apps/web/tests/e2e/harness-services/purchase-agent-test-model.ts",
+    "apps/web/tests/e2e/purchase-import-run.spec.ts",
+  ])
+    assert.deepEqual(active([file]), ["validation", "web", "importE2e"], file);
+  assert.deepEqual(active(["apps/web/src/app/products/page.tsx"]), [
+    "validation",
+    "web",
+  ]);
+  // The Worker bundles these skills as the agent's instructions.
+  assert.deepEqual(
+    active([".claude/skills/purchase-import/references/run-workflow.md"]),
+    ["web", "docs", "format", "importE2e"],
+  );
+  assert.deepEqual(active([".claude/skills/photo-inventory-import/SKILL.md"]), [
+    "web",
+    "docs",
+    "format",
+  ]);
+  assert.deepEqual(active([".claude/skills/repo-audit/SKILL.md"]), [
+    "docs",
+    "format",
+  ]);
+});
+
 test("runs full verification for shared configuration, unknown paths, and manual runs", () => {
   for (const files of [
     ["pnpm-lock.yaml"],

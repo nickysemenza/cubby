@@ -9,6 +9,8 @@ export interface CiChangeScope {
   apple: boolean;
   docs: boolean;
   format: boolean;
+  /** The optional purchase-import browser lane (never a merge gate). */
+  importE2e: boolean;
 }
 
 const emptyScope = (): CiChangeScope => ({
@@ -19,6 +21,7 @@ const emptyScope = (): CiChangeScope => ({
   apple: false,
   docs: false,
   format: false,
+  importE2e: false,
 });
 
 const fullScope = (): CiChangeScope => ({
@@ -29,6 +32,7 @@ const fullScope = (): CiChangeScope => ({
   apple: true,
   docs: true,
   format: true,
+  importE2e: true,
 });
 
 const markdown = /\.(?:md|mdx|markdown)$/i;
@@ -40,6 +44,28 @@ const appleGeneratorInputs = [
   "apps/web/src/lib/http-api/",
   "apps/web/scripts/apple-preview-fixtures.ts",
   "apps/web/src/lib/test/mock-schema.ts",
+];
+
+// The Worker bundles these skills as agent instructions (?raw imports).
+const workerSkills = [
+  ".claude/skills/purchase-import/",
+  ".claude/skills/product-enrichment/",
+  ".claude/skills/photo-inventory-import/",
+];
+// What the purchase-import browser spec drives: the agent and its server,
+// the vendor import start, the Run and Purchase pages, and its harness.
+const importE2eInputs = [
+  "apps/web/src/server/purchase-import/",
+  "apps/web/src/server/purchase-agent/",
+  "apps/web/src/app/purchases/",
+  "apps/web/src/app/runs/",
+  "apps/web/src/app/vendors/order-mail",
+  "apps/web/src/routes/_authenticated/runs.",
+  "apps/web/tooling/purchase-agent-",
+  "apps/web/tests/e2e/harness-services/purchase-",
+  "apps/web/tests/e2e/purchase-import-run.spec.ts",
+  ".claude/skills/purchase-import/",
+  ".claude/skills/product-enrichment/",
 ];
 
 const sharedConfig = new Set([
@@ -67,7 +93,10 @@ const affectedByPath = (path: string): Partial<CiChangeScope> | null => {
     return {
       docs: true,
       format: true,
-      ...(path.startsWith("docs/") && { web: true }),
+      ...((path.startsWith("docs/") ||
+        workerSkills.some((prefix) => path.startsWith(prefix))) && {
+        web: true,
+      }),
     };
   if (
     path.startsWith(".github/") ||
@@ -123,6 +152,8 @@ export function classifyCiChanges(
     const affected = affectedByPath(path);
     if (!affected) return fullScope();
     Object.assign(scope, affected);
+    if (importE2eInputs.some((prefix) => path.startsWith(prefix)))
+      scope.importE2e = true;
   }
   return scope;
 }
