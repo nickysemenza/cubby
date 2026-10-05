@@ -22,10 +22,13 @@ public struct JSONNullMiddleware: ClientMiddleware {
         operationID: String,
         next: @Sendable (HTTPRequest, HTTPBody?, URL) async throws -> (HTTPResponse, HTTPBody?)
     ) async throws -> (HTTPResponse, HTTPBody?) {
-        guard let source = Self.source else { return try await next(request, body, baseURL) }
+        // Without a null to restore the typed body is already exact; pass it through unbuffered.
+        guard let source = Self.source, source.containsNull else {
+            return try await next(request, body, baseURL)
+        }
         var typed = JSONValue.object([:])
         if let body {
-            let data = try await Data(collecting: body, upTo: 1 << 20)
+            let data = try await Data(collecting: body, upTo: .max)
             if !data.isEmpty { typed = try JSONDecoder().decode(JSONValue.self, from: data) }
         }
         let encoded = try JSONEncoder().encode(Self.restoringNulls(typed, from: source))
@@ -54,6 +57,17 @@ public struct JSONNullMiddleware: ClientMiddleware {
             return .array(zip(items, originals).map { restoringNulls($0, from: $1) })
         default:
             return typed
+        }
+    }
+}
+
+extension JSONValue {
+    fileprivate var containsNull: Bool {
+        switch self {
+        case .null: true
+        case .object(let object): object.values.contains { $0.containsNull }
+        case .array(let items): items.contains { $0.containsNull }
+        default: false
         }
     }
 }

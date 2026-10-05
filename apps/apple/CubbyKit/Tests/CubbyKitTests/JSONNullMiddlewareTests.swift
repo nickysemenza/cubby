@@ -109,6 +109,19 @@ struct JSONNullMiddlewareTests {
         #expect(requests.map(\.body) == [["sourceAliases": aliases]])
     }
 
+    /// Restoring nulls buffers the body; a body with none must not inherit that buffer's limit.
+    @Test func aLargeBodyWithoutNullsIsSentUnchanged() async throws {
+        let notes = String(repeating: "a", count: 2 << 20)
+        let requests = try await capture { client in
+            await #expect(throws: CubbyAPIError.self) {
+                try await client.update(
+                    EntityCatalog[.product], id: "PRD-2345",
+                    patch: EntityPatch(values: ["notes": .string(notes)]))
+            }
+        }
+        #expect(requests.map(\.body) == [["notes": .string(notes)]])
+    }
+
     @Test func aNestedNullInACreateReachesTheWire() async throws {
         let aliases: JSONValue = [
             ["source": "synthetic-bank", "alias": "SYN CHK 0001", "externalAccountId": .null]

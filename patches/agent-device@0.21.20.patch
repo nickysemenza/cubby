@@ -40,67 +40,92 @@ index 12326d822cf912aeacdbf5c673f3ec43fc237410..3b4aa4a78b38dc3973317dff1e92894d
  
  ## Bounded depth recovery
  
+diff --git a/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+CommandExecution.swift b/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+CommandExecution.swift
+index e37f95cc015faa4d7d8d0274e5f1bc5337bc1737..52174f01dc3fc12a282bcfaea6c0e51cb5129183 100644
+--- a/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+CommandExecution.swift
++++ b/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+CommandExecution.swift
+@@ -91,7 +91,7 @@ extension RunnerTests {
+               if isTextEntry {
+                 waitForTextEntryReadinessAfterTap(app: activeApp, element: element)
+               }
+-              rememberTextEntryTap(isTextEntry ? element : nil)
++              rememberTextEntryTap(isTextEntry ? element : nil, app: activeApp)
+               return gestureResponse(
+                 message: match.usedNonHittableFallback
+                   ? "tapped via non-hittable coordinate fallback"
+@@ -127,7 +127,7 @@ extension RunnerTests {
+           if isTextEntry {
+             waitForTextEntryReadinessAfterTap(app: activeApp, element: element)
+           }
+-          rememberTextEntryTap(isTextEntry ? element : nil)
++          rememberTextEntryTap(isTextEntry ? element : nil, app: activeApp)
+           return gestureResponse(
+             message: match.usedNonHittableFallback ? "tapped via non-hittable coordinate fallback" : "tapped",
+             timing: timing,
+@@ -171,7 +171,7 @@ extension RunnerTests {
+             synthesizedTapAt(app: activeApp, x: x, y: y, context: context)
+           }) {
+           case .performed(let timing):
+-            rememberTextEntryTap(textInput)
++            rememberTextEntryTap(textInput, app: activeApp)
+             return gestureResponse(message: "tapped", timing: timing)
+           case .xctestFallback(let message, let hint):
+             fallback = GestureFallback(strategy: "xctest-coordinate-tap", message: message, hint: hint)
+@@ -186,7 +186,7 @@ extension RunnerTests {
+           clearRememberedTextEntryTap()
+           return response
+         }
+-        rememberTextEntryTap(textInput)
++        rememberTextEntryTap(textInput, app: activeApp)
+         return gestureResponse(
+           message: "tapped",
+           timing: timing,
 diff --git a/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+TextEntryFocus.swift b/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+TextEntryFocus.swift
-index 27f621b6e880e7a40ed98e6693d33853454b00eb..aa87f741ecc57742dda477f9e8b4d1b2e8e46246 100644
+index 27f621b6e880e7a40ed98e6693d33853454b00eb..6aeb8f99764fe9d5d410ab88b51f4210c467535a 100644
 --- a/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+TextEntryFocus.swift
 +++ b/dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+TextEntryFocus.swift
-@@ -74,6 +74,15 @@ extension RunnerTests {
+@@ -7,13 +7,14 @@ import XCTest
  
+ extension RunnerTests {
+   @MainActor
+-  func rememberTextEntryTap(_ element: XCUIElement?) {
++  func rememberTextEntryTap(_ element: XCUIElement?, app: XCUIApplication) {
+     guard let element, isTextEntryElement(element) else {
+       clearRememberedTextEntryTap()
+       return
+     }
+     textEntryTapWitness = TextEntryTapWitness(
+-      element: element,
++      // Cubby patch: a later `type` must reach this input even after the form scrolls.
++      element: rebindByIdentifier(app: app, element),
+       bundleId: mainOwned.bundleId,
+       processIdentifier: mainOwned.processIdentifier
+     )
+@@ -112,7 +113,11 @@ extension RunnerTests {
+     }
  
-       if keyboardBecameVisible(app: app, wasVisibleAtEntry: keyboardVisibleAtEntry) {
-+        // Cubby patch: opening the keyboard can scroll the form, and an index-bound target then
-+        // resolves to a different input. Prefer the first responder once it is reported.
-+        let focusDeadline = Date().addingTimeInterval(TextEntryTiming.readinessTimeout)
-+        while Date() < focusDeadline {
-+          if let focused = focusedTextInput(app: app) {
-+            return TextEntryStabilization(element: focused, focusConfirmed: true)
-+          }
-+          sleepFor(TextEntryTiming.pollInterval)
-+        }
-         return TextEntryStabilization(element: latest, focusConfirmed: true)
-       }
-       sleepFor(TextEntryTiming.pollInterval)
-@@ -114,6 +123,11 @@ extension RunnerTests {
      let keyboardVisibleBeforeTap = isKeyboardVisible(app: app)
-     let target = textInputAt(app: app, x: x, y: y)
+-    let target = textInputAt(app: app, x: x, y: y)
++    // Cubby patch: the probe binds its input by query index, which resolves to another input once
++    // focusing opens the keyboard or scrolls the form, and typing then targets an unfocused field
++    // until the watchdog fires. Rebind an identified input by its identifier, which stays put.
++    // (`focusedTextInput` cannot recover it: it returns nil on iOS.)
++    let target = textInputAt(app: app, x: x, y: y).map { rebindByIdentifier(app: app, $0) }
      let requestedPoint = CGPoint(x: x, y: y)
-+    // Cubby patch: `target` is bound by query index, which can resolve to another input once the
-+    // tap scrolls the form; remember its identifier to find the input the tap focused.
-+    let targetIdentifier = target.map { element in
-+      safely("TEXT_INPUT_IDENTIFIER", "", { element.identifier })
-+    } ?? ""
      if let target {
        let frame = target.frame
-       if !frame.isEmpty {
-@@ -128,8 +142,10 @@ extension RunnerTests {
- 
- 
-     if keyboardVisibleBeforeTap, let target {
-+      let focused = targetIdentifier.isEmpty
-+        ? nil : focusedTextInput(app: app, identifiedAs: targetIdentifier)
-       return TextEntryTarget(
--        element: target,
-+        element: focused ?? target,
-         refreshPoint: textEntryRefreshPoint(for: target) ?? requestedPoint,
-         prefersFocusedElement: false
-       )
-@@ -155,6 +171,21 @@ extension RunnerTests {
+@@ -155,6 +160,16 @@ extension RunnerTests {
      )
    }
  
-+  /// The first responder once it carries `identifier`; nil when no such input gains focus in time.
++  /// `element` re-queried by its accessibility identifier when it has one that is unique.
 +  @MainActor
-+  private func focusedTextInput(app: XCUIApplication, identifiedAs identifier: String) -> XCUIElement? {
-+    let deadline = Date().addingTimeInterval(TextEntryTiming.readinessTimeout)
-+    while Date() < deadline {
-+      if let focused = focusedTextInput(app: app),
-+        safely("FOCUSED_TEXT_INPUT_IDENTIFIER", "", { focused.identifier }) == identifier
-+      {
-+        return focused
-+      }
-+      sleepFor(TextEntryTiming.pollInterval)
-+    }
-+    return nil
++  private func rebindByIdentifier(app: XCUIApplication, _ element: XCUIElement) -> XCUIElement {
++    let identifier = safely("TEXT_INPUT_IDENTIFIER", "", { element.identifier })
++    guard !identifier.isEmpty else { return element }
++    let query = app.descendants(matching: element.elementType).matching(identifier: identifier)
++    guard safely("TEXT_INPUT_IDENTIFIER_COUNT", 0, { query.count }) == 1 else { return element }
++    return query.element
 +  }
 +
    private func textEntryRefreshPoint(for element: XCUIElement?) -> CGPoint? {
