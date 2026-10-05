@@ -238,7 +238,7 @@ export const PURCHASE_IMPORT_REVERSAL_KIND_FEATURE = defineFeature({
 
 // ---------------------------------------------------------------------------
 // Fast tier — GPT-6 Luna. Identification, detection, oversized selection,
-// and, at high effort, the purchase-import audit.
+// and, at high effort, the purchase-import audit and extraction repair.
 // ---------------------------------------------------------------------------
 
 /**
@@ -324,6 +324,23 @@ export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
   schema: importAuditModelOutput,
 }) satisfies AiStructuredFeature<ImportAuditModelOutput>;
 
+/**
+ * Moved from Sol after `eval:features` (2026-10-04): Luna at high effort
+ * matched Sol high 14/14 with zero unsafe repairs (no line invented, moved,
+ * or scaled to balance a total), at about 1/19 of the cost. The eval's cases
+ * are text-only; production also attaches the capture's screenshot, which
+ * that parity does not cover.
+ */
+export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
+  feature: "purchase-import-repair",
+  tier: "fast",
+  maxTokens: 4_000,
+  effort: "high",
+  cache: false,
+  promptVersion: "2026-09-19.1",
+  schema: importExtractionModelOutput,
+}) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
+
 // ---------------------------------------------------------------------------
 // Vision batch tier — Gemini 2.5 Flash. Cheap, accurate, ~14 s to first
 // token: backfill only. No `effort`: keep Gemini's own thinking on.
@@ -368,16 +385,6 @@ export const RECIPE_FLOW_PRIMARY_FEATURE = defineFeature({
   analysisSchema: recipeFlowArtifactSchema,
 }) satisfies AiStructuredFeature<RecipeFlowAiPlan> &
   AiAnalysisFeature<RecipeFlowArtifact>;
-
-export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
-  feature: "purchase-import-repair",
-  tier: "reasoning",
-  maxTokens: 4_000,
-  effort: "high",
-  cache: false,
-  promptVersion: "2026-09-19.1",
-  schema: importExtractionModelOutput,
-}) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
 export const SEMANTIC_QUERY_FEATURE = defineFeature({
   feature: "semantic-query",
