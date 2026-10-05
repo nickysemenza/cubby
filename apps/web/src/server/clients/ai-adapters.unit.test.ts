@@ -15,7 +15,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const opts = { metadata: { feature: "test" } };
+const opts = { metadata: { feature: "test", operation: "adapter.routing" } };
 
 describe("piCallTarget resolves the registry's wire model and route", () => {
   it("sends the fast tier to OpenAI's Responses API", () => {
