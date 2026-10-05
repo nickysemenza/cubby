@@ -1,4 +1,5 @@
 import type { RunId } from "@cubby/schemas/identifiers";
+import { encodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
 import { and, desc, eq, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -142,16 +143,10 @@ const runUsageCursor = z.object({
 });
 
 const encodeRunUsageCursor = (value: z.infer<typeof runUsageCursor>) =>
-  btoa(JSON.stringify(value))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
+  encodeBase64Url(JSON.stringify(value));
 
-const decodeRunUsageCursor = (value: string) => {
-  const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
-  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
-  return runUsageCursor.parse(JSON.parse(atob(padded)));
-};
+const decodeRunUsageCursor = (value: string) =>
+  runUsageCursor.parse(JSON.parse(decodeBase64UrlText(value)));
 
 /**
  * Every AI call one Run grouped, newest first, with the full-run subtotal.

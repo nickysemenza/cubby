@@ -16,6 +16,7 @@ import {
   type AllowedImageType,
 } from "@cubby/schemas/image";
 import { cookbookBundleManifestSchema } from "@cubby/schemas/import-recipe";
+import { encodeBase64 } from "@cubby/shared/base64";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQueries } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
@@ -67,7 +68,7 @@ import {
   resetReextractedBook,
   shouldPreparePhoto,
 } from "./photo-lifecycle";
-import { bytesToBase64, heroPhoto, selectedPhotoItemIds } from "./photos";
+import { heroPhoto, selectedPhotoItemIds } from "./photos";
 import type { Book, ExtractPhase, ImportResult, PhotoResult } from "./types";
 
 /**
@@ -882,7 +883,7 @@ export function CookbookImport({
           cookbookId,
           recipeId,
           sourceRecipeId: id,
-          data: bytesToBase64(bytes),
+          data: encodeBase64(bytes),
         });
         setPhotoResult(book.source, id, result);
       } catch (error) {

@@ -1,3 +1,4 @@
+import { decodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
 import type { BetterAuthPlugin } from "better-auth";
 import { z } from "zod";
 
@@ -53,11 +54,6 @@ const claimsSchema = z
     exp: z.number(),
   })
   .loose();
-const bytes = (value: string) =>
-  Uint8Array.from(
-    atob(value.replaceAll("-", "+").replaceAll("_", "/")),
-    (character) => character.charCodeAt(0),
-  );
 
 /** Only the provider transport changes: Better Auth still validates callback state/PKCE and persists the account. */
 export function localGoogleProviderPlugin(
@@ -69,7 +65,7 @@ export function localGoogleProviderPlugin(
     if (!headerPart || !payload || !signature || extra) return null;
     const header = z
       .object({ alg: z.literal("RS256"), kid: z.string() })
-      .parse(JSON.parse(new TextDecoder().decode(bytes(headerPart))));
+      .parse(JSON.parse(decodeBase64UrlText(headerPart)));
     const response = await fetch(`${origin}/jwks`);
     if (!response.ok)
       throw new Error(`Local provider JWKS: HTTP ${response.status}`);
@@ -88,14 +84,12 @@ export function localGoogleProviderPlugin(
       !(await crypto.subtle.verify(
         "RSASSA-PKCS1-v1_5",
         imported,
-        bytes(signature),
+        decodeBase64Url(signature),
         new TextEncoder().encode(`${headerPart}.${payload}`),
       ))
     )
       return null;
-    const claims = claimsSchema.parse(
-      JSON.parse(new TextDecoder().decode(bytes(payload))),
-    );
+    const claims = claimsSchema.parse(JSON.parse(decodeBase64UrlText(payload)));
     const now = Date.now() / 1000;
     if (
       claims.iss !== origin ||
