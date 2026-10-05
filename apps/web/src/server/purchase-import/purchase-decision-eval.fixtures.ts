@@ -1,4 +1,6 @@
-import { formatCurrency } from "~/lib/number-format";
+import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
+
+import { formatCount, formatCurrency } from "~/lib/number-format";
 
 import type {
   ExpectedDecision,
@@ -26,8 +28,10 @@ type DecisionLine = {
   key: string;
   title: string;
   amount: number;
-  lineKind: "principal" | "tax" | "shipping" | "discount";
+  lineKind: ExpenseLineKind;
   sku?: string;
+  /** Units the line prints; principal lines default to 1. */
+  quantity?: number;
 };
 
 export type DecisionCase = {
@@ -45,12 +49,20 @@ export type DecisionCase = {
     | { status: "ready" }
     | {
         status: "needs_review";
-        reason: "missing_total" | "ambiguous_order";
+        reason:
+          | "missing_total"
+          | "ambiguous_order"
+          | "sum_mismatch"
+          | "foreign_currency";
         detail: string;
       }
     | { status: "unreadable"; detail: string };
   /** False when the confirmation prints no grand total. */
   printsTotal: boolean;
+  /** A printed grand total that differs from the line sum. */
+  printedTotal?: number;
+  /** Order currency; USD unless stated. */
+  currency?: string;
   lines: DecisionLine[];
   catalog: DecisionCatalogProduct[];
   /** Saved card charges the settlement verification can see. */
@@ -377,23 +389,497 @@ export const purchaseDecisionCases: DecisionCase[] = [
     catalog: [],
     expected: { kind: "review", evidence: [] },
   },
+  {
+    // The exact-variant SKU decides identity even when the title is terse.
+    name: "identity-sku-abbreviated-title",
+    focus: "identity",
+    orderId: "DEC10006",
+    orderedAt: "2026-09-20",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [line("shell", "TH rain shell olv M", 64, "principal", "RS-OLV-M")],
+    catalog: shellCatalog,
+    expected: written("2026-09-20", [
+      [
+        line("shell", "TH rain shell olv M", 64, "principal", "RS-OLV-M"),
+        { kind: "existing", product: "shell-olive-m" },
+      ],
+    ]),
+  },
+  {
+    // The title says M and the SKU belongs to L: conflicting identity
+    // evidence is a human's call.
+    name: "identity-sku-conflicts-title",
+    focus: "identity",
+    orderId: "DEC10007",
+    orderedAt: "2026-09-20",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [
+      line(
+        "shell",
+        "Trailhead rain shell, Olive, size M",
+        64,
+        "principal",
+        "RS-OLV-L",
+      ),
+    ],
+    catalog: shellCatalog,
+    expected: {
+      kind: "review",
+      evidence: [{ key: "shell", cost: 64, date: "2026-09-20" }],
+    },
+  },
+  {
+    // Same style number, a color the catalog lacks: a new sibling.
+    name: "identity-new-color-sibling",
+    focus: "identity",
+    orderId: "DEC10008",
+    orderedAt: "2026-09-20",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [line("shell", "Trailhead rain shell RS-2020, Navy, size M", 64)],
+    catalog: shellCatalog,
+    expected: written("2026-09-20", [
+      [
+        line("shell", "Trailhead rain shell RS-2020, Navy, size M", 64),
+        { kind: "new" },
+      ],
+    ]),
+  },
+  {
+    // The same kind of item from another brand is not the catalog Product.
+    name: "identity-different-brand",
+    focus: "identity",
+    orderId: "DEC10009",
+    orderedAt: "2026-09-21",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [line("pot", "Brightclay ceramic plant pot, 6 in", 22)],
+    catalog: [
+      {
+        key: "pot-6",
+        name: "Fernleaf ceramic plant pot, 6 in",
+        manufacturer: "Fernleaf",
+      },
+    ],
+    expected: written("2026-09-21", [
+      [line("pot", "Brightclay ceramic plant pot, 6 in", 22), { kind: "new" }],
+    ]),
+  },
+  {
+    // A different pack size is a different sellable variant.
+    name: "identity-pack-size-variant",
+    focus: "identity",
+    orderId: "DEC10010",
+    orderedAt: "2026-09-21",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [line("washers", "Copperline hose washers, 25-pack", 7)],
+    catalog: [
+      {
+        key: "washers-10",
+        name: "Copperline hose washers, 10-pack",
+        manufacturer: "Copperline",
+      },
+    ],
+    expected: written("2026-09-21", [
+      [line("washers", "Copperline hose washers, 25-pack", 7), { kind: "new" }],
+    ]),
+  },
+  {
+    name: "identity-mixed-existing-and-new",
+    focus: "identity",
+    orderId: "DEC10011",
+    orderedAt: "2026-09-22",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [shellM, kneeler, tax(6.56)],
+    catalog: shellCatalog,
+    expected: written("2026-09-22", [
+      [shellM, { kind: "existing", product: "shell-olive-m" }],
+      [kneeler, { kind: "new" }],
+      [tax(6.56), none],
+    ]),
+  },
+  {
+    // Only punctuation and casing differ: reuse, never duplicate.
+    name: "identity-reformatted-name",
+    focus: "identity",
+    orderId: "DEC10012",
+    orderedAt: "2026-09-22",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [line("pot", "FERNLEAF Ceramic Plant Pot (6 in.)", 22)],
+    catalog: [
+      {
+        key: "pot-6",
+        name: "Fernleaf ceramic plant pot, 6 in",
+        manufacturer: "Fernleaf",
+      },
+      {
+        key: "pot-8",
+        name: "Fernleaf ceramic plant pot, 8 in",
+        manufacturer: "Fernleaf",
+      },
+    ],
+    expected: written("2026-09-22", [
+      [
+        line("pot", "FERNLEAF Ceramic Plant Pot (6 in.)", 22),
+        { kind: "existing", product: "pot-6" },
+      ],
+    ]),
+  },
+  {
+    name: "line-roles-fee-and-tip",
+    focus: "line_roles",
+    orderId: "DEC20002",
+    orderedAt: "2026-09-22",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [
+      kneeler,
+      line("fee", "Small order fee", 2.5, "fee"),
+      line("tip", "Courier tip", 3, "tip"),
+    ],
+    catalog: [],
+    expected: written("2026-09-22", [
+      [kneeler, { kind: "new" }],
+      [line("fee", "Small order fee", 2.5, "fee"), none],
+      [line("tip", "Courier tip", 3, "tip"), none],
+    ]),
+  },
+  {
+    // A shipping charge cancelled by a free-shipping discount: both lines
+    // are kept, neither carries a Product.
+    name: "line-roles-free-shipping-offset",
+    focus: "line_roles",
+    orderId: "DEC20003",
+    orderedAt: "2026-09-22",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [
+      kneeler,
+      line("shipping", "Ground shipping", 5.99, "shipping"),
+      line("free-shipping", "Free shipping promotion", -5.99, "discount"),
+    ],
+    catalog: [],
+    expected: written("2026-09-22", [
+      [kneeler, { kind: "new" }],
+      [line("shipping", "Ground shipping", 5.99, "shipping"), none],
+      [
+        line("free-shipping", "Free shipping promotion", -5.99, "discount"),
+        none,
+      ],
+    ]),
+  },
+  {
+    // Two units on one line: one Product, the line's printed extended cost.
+    name: "line-roles-quantity-two",
+    focus: "line_roles",
+    orderId: "DEC20004",
+    orderedAt: "2026-09-23",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [
+      { ...line("kneelers", "Fernleaf garden kneeler pad", 36), quantity: 2 },
+    ],
+    catalog: [],
+    expected: written("2026-09-23", [
+      [line("kneelers", "Fernleaf garden kneeler pad", 36), { kind: "new" }],
+    ]),
+  },
+  {
+    name: "line-roles-split-taxes",
+    focus: "line_roles",
+    orderId: "DEC20005",
+    orderedAt: "2026-09-23",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [
+      line("pot", "Fernleaf ceramic plant pot, 6 in", 22),
+      line("state-tax", "State sales tax", 1.32, "tax"),
+      line("county-tax", "County sales tax", 0.44, "tax"),
+    ],
+    catalog: [
+      {
+        key: "pot-6",
+        name: "Fernleaf ceramic plant pot, 6 in",
+        manufacturer: "Fernleaf",
+      },
+    ],
+    expected: written("2026-09-23", [
+      [
+        line("pot", "Fernleaf ceramic plant pot, 6 in", 22),
+        { kind: "existing", product: "pot-6" },
+      ],
+      [line("state-tax", "State sales tax", 1.32, "tax"), none],
+      [line("county-tax", "County sales tax", 0.44, "tax"), none],
+    ]),
+  },
+  {
+    // A refund-only order: the credit reverses the exact owned variant and
+    // the tax refund carries no Product.
+    name: "reversal-full-return",
+    focus: "reversal",
+    orderId: "DEC30002",
+    orderedAt: "2026-09-24",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [
+      line(
+        "shell-credit",
+        "Return credit: Trailhead rain shell, Olive, size M",
+        -64,
+        "principal",
+        "RS-OLV-M",
+      ),
+      line("tax-credit", "Sales tax refund", -5.12, "tax"),
+    ],
+    catalog: shellCatalog,
+    expected: written("2026-09-24", [
+      [
+        line(
+          "shell-credit",
+          "Return credit: Trailhead rain shell, Olive, size M",
+          -64,
+          "principal",
+          "RS-OLV-M",
+        ),
+        { kind: "existing", product: "shell-olive-m" },
+      ],
+      [line("tax-credit", "Sales tax refund", -5.12, "tax"), none],
+    ]),
+  },
+  {
+    name: "reversal-price-adjustment",
+    focus: "reversal",
+    orderId: "DEC30003",
+    orderedAt: "2026-09-24",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [
+      line("pot", "Fernleaf ceramic plant pot, 6 in", 22),
+      line("adjustment", "Price adjustment", -3, "discount"),
+    ],
+    catalog: [
+      {
+        key: "pot-6",
+        name: "Fernleaf ceramic plant pot, 6 in",
+        manufacturer: "Fernleaf",
+      },
+    ],
+    expected: written("2026-09-24", [
+      [
+        line("pot", "Fernleaf ceramic plant pot, 6 in", 22),
+        { kind: "existing", product: "pot-6" },
+      ],
+      [line("adjustment", "Price adjustment", -3, "discount"), none],
+    ]),
+  },
+  {
+    name: "reversal-return-with-restocking-fee",
+    focus: "reversal",
+    orderId: "DEC30004",
+    orderedAt: "2026-09-24",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [
+      line(
+        "saw-credit",
+        "Return credit: Synthetic pruning saw",
+        -9,
+        "principal",
+        "SAW-30",
+      ),
+      line("restocking", "Restocking fee", 1.5, "fee"),
+    ],
+    catalog: [{ key: "saw", name: "Synthetic pruning saw", sku: "SAW-30" }],
+    expected: written("2026-09-24", [
+      [
+        line(
+          "saw-credit",
+          "Return credit: Synthetic pruning saw",
+          -9,
+          "principal",
+          "SAW-30",
+        ),
+        { kind: "existing", product: "saw" },
+      ],
+      [line("restocking", "Restocking fee", 1.5, "fee"), none],
+    ]),
+  },
+  {
+    // Two printed payments match two charges; a third charge equal to the
+    // order total is a coincidence the printed evidence rules out.
+    name: "settlement-split-payment",
+    focus: "settlement",
+    orderId: "DEC40004",
+    orderedAt: "2026-09-21",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [kneeler, tax(1.44)],
+    catalog: [],
+    payments: [
+      { amount: 10, date: "2026-09-22" },
+      { amount: 9.44, date: "2026-09-22" },
+    ],
+    charges: [
+      { key: "card-a", amount: 10, date: "2026-09-22" },
+      { key: "card-b", amount: 9.44, date: "2026-09-22" },
+      { key: "card-c", amount: 19.44, date: "2026-09-22" },
+    ],
+    expected: written(
+      "2026-09-21",
+      [
+        [kneeler, { kind: "new" }],
+        [tax(1.44), none],
+      ],
+      [
+        { transaction: "card-a", amount: 10 },
+        { transaction: "card-b", amount: 9.44 },
+      ],
+      true,
+    ),
+  },
+  {
+    // The only charge is one cent off the printed payment: no settlement.
+    name: "settlement-amount-off-by-cent",
+    focus: "settlement",
+    orderId: "DEC40005",
+    orderedAt: "2026-09-21",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [kneeler, tax(1.44)],
+    catalog: [],
+    payments: [{ amount: 19.44, date: "2026-09-22" }],
+    charges: [{ key: "card-a", amount: 19.45, date: "2026-09-22" }],
+    expected: written(
+      "2026-09-21",
+      [
+        [kneeler, { kind: "new" }],
+        [tax(1.44), none],
+      ],
+      [],
+      true,
+    ),
+  },
+  {
+    // Two equal charges, but only one on the printed payment date; the
+    // other predates the order.
+    name: "settlement-printed-date-disambiguates",
+    focus: "settlement",
+    orderId: "DEC40006",
+    orderedAt: "2026-09-21",
+    extraction: { status: "ready" },
+    printsTotal: true,
+    lines: [kneeler, tax(1.44)],
+    catalog: [],
+    payments: [{ amount: 19.44, date: "2026-09-22" }],
+    charges: [
+      { key: "card-a", amount: 19.44, date: "2026-09-22" },
+      { key: "card-b", amount: 19.44, date: "2026-08-30" },
+    ],
+    expected: written(
+      "2026-09-21",
+      [
+        [kneeler, { kind: "new" }],
+        [tax(1.44), none],
+      ],
+      [{ transaction: "card-a", amount: 19.44 }],
+      true,
+    ),
+  },
+  {
+    name: "incomplete-ambiguous-order",
+    focus: "incomplete_evidence",
+    orderId: "DEC50003",
+    orderedAt: "2026-09-24",
+    extraction: {
+      status: "needs_review",
+      reason: "ambiguous_order",
+      detail: "The message lists two order numbers and one set of items.",
+    },
+    printsTotal: true,
+    lines: [line("reel", "Copperline hose reel", 39)],
+    catalog: [],
+    expected: {
+      kind: "review",
+      evidence: [{ key: "reel", cost: 39, date: "2026-09-24" }],
+    },
+  },
+  {
+    // The printed total disagrees with the lines: a line is missing or
+    // misread, so nothing may be completed.
+    name: "incomplete-sum-mismatch",
+    focus: "incomplete_evidence",
+    orderId: "DEC50004",
+    orderedAt: "2026-09-24",
+    extraction: {
+      status: "needs_review",
+      reason: "sum_mismatch",
+      detail: "Lines sum to 23.76 but the printed grand total is 30.76.",
+    },
+    printsTotal: true,
+    printedTotal: 30.76,
+    lines: [line("pot", "Fernleaf ceramic plant pot, 6 in", 22), tax(1.76)],
+    catalog: [],
+    expected: {
+      kind: "review",
+      evidence: [
+        { key: "pot", cost: 22, date: "2026-09-24" },
+        { key: "tax", cost: 1.76, date: "2026-09-24" },
+      ],
+    },
+  },
+  {
+    name: "incomplete-foreign-currency",
+    focus: "incomplete_evidence",
+    orderId: "DEC50005",
+    orderedAt: "2026-09-24",
+    extraction: {
+      status: "needs_review",
+      reason: "foreign_currency",
+      detail: "The order is priced in EUR.",
+    },
+    printsTotal: true,
+    currency: "EUR",
+    lines: [line("reel", "Copperline hose reel", 36)],
+    catalog: [],
+    expected: {
+      kind: "review",
+      evidence: [{ key: "reel", cost: 36, date: "2026-09-24" }],
+    },
+  },
 ];
 
-const money = (amount: number) => formatCurrency(amount);
+const money = (amount: number, currency = "USD") =>
+  currency === "USD"
+    ? formatCurrency(amount)
+    : `${currency} ${formatCount(amount, 2)}`;
+
+const printedTotal = (decision: DecisionCase) =>
+  decision.printedTotal ??
+  Math.round(
+    decision.lines.reduce((sum, entry) => sum + entry.amount, 0) * 100,
+  ) / 100;
 
 /** The saved confirmation body the coordinator may read. */
 export function decisionMailBody(decision: DecisionCase) {
-  const total = decision.lines.reduce((sum, entry) => sum + entry.amount, 0);
+  const currency = decision.currency ?? "USD";
   return [
     `${MERCHANT} order ${decision.orderId}`,
     decision.orderedAt ? `Placed ${decision.orderedAt}` : null,
     ...decision.lines.map(
       (entry) =>
-        `${entry.title}${entry.sku ? ` (SKU ${entry.sku})` : ""} ${money(entry.amount)}`,
+        `${entry.title}${entry.sku ? ` (SKU ${entry.sku})` : ""}${entry.quantity && entry.quantity > 1 ? ` x${entry.quantity}` : ""} ${money(entry.amount, currency)}`,
     ),
-    decision.printsTotal ? `Order total ${money(total)} USD` : null,
+    decision.printsTotal
+      ? `Order total ${money(printedTotal(decision), currency)} ${currency}`
+      : null,
     ...(decision.payments ?? []).map(
-      (payment) => `Charged ${money(payment.amount)} on ${payment.date}`,
+      (payment) =>
+        `Charged ${money(payment.amount, currency)} on ${payment.date}`,
     ),
   ]
     .filter((part): part is string => part !== null)
@@ -402,7 +888,6 @@ export function decisionMailBody(decision: DecisionCase) {
 
 /** The extractor's fixed wire output for the case. */
 export function decisionExtraction(decision: DecisionCase) {
-  const total = decision.lines.reduce((sum, entry) => sum + entry.amount, 0);
   const candidate =
     decision.extraction.status === "unreadable"
       ? null
@@ -412,15 +897,16 @@ export function decisionExtraction(decision: DecisionCase) {
             ? `${decision.orderedAt}T12:00:00.000Z`
             : null,
           merchant: MERCHANT,
-          currency: "USD",
+          currency: decision.currency ?? "USD",
           printedGrandTotal: decision.printsTotal
-            ? Math.round(total * 100) / 100
+            ? printedTotal(decision)
             : null,
           lines: decision.lines.map((entry) => ({
             title: entry.title,
             amount: entry.amount,
             lineKind: entry.lineKind,
-            quantity: entry.lineKind === "principal" ? 1 : null,
+            quantity:
+              entry.quantity ?? (entry.lineKind === "principal" ? 1 : null),
             productUrl: null,
             imageUrl: null,
             sku: entry.sku ?? null,

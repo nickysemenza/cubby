@@ -170,9 +170,11 @@ Two local suites exercise the real agent in the coupled workerd harness.
 extractor/audit model, and asserts the database graph, run status, findings,
 approvals, and replay fences of whole purchase journeys; it proves
 orchestration, not model judgment. The opt-in, billed decision eval runs live
-candidate models on synthetic Product-identity, line-role, reversal,
+candidate models on 32 synthetic Product-identity, line-role, reversal,
 settlement, and incomplete-evidence cases and scores each outcome correct,
-unsafe, or reviewable miss, with latency and token cost:
+unsafe, or reviewable miss, with latency and token cost. The web Worker is the
+harness's primary Worker, so the evals queue the agent through the
+`cubby-queue-producer` Worker, never through `listen()`'s URL:
 
 ```bash
 pnpm --dir apps/web eval:purchase-decisions
@@ -356,6 +358,19 @@ Provider routing and model identifiers live in
 configuration are Cloudflare AI Gateway state; no provider key belongs in this
 repository. Verify that every model in the checked-in registry is enabled in
 the gateway before relying on a feature that selects it.
+
+Each feature's tier, and so its model, is declared once in
+`apps/web/src/server/ai/features.ts`. Retier a feature only on live-eval
+evidence: `pnpm --dir apps/web eval:features` (opt-in, billed) places the
+production purchase-import audit, extraction-repair, and recipe-flow prompts
+through the Gateway as each candidate, with the production schema, validator,
+and repair turn, and scores synthetic cases correct, unsafe, or reviewable
+miss with token cost. `FEATURE_EVAL_FEATURES` narrows to `audit`, `repair`, or
+`recipe-flow`; `AGENT_EVAL_CANDIDATES` (for example `gpt-6-luna:xhigh`) and
+`AGENT_EVAL_REPEATS` set the candidates and repeats. Each run writes its
+revision, replay command, and results under `artifacts/feature-routing-eval/`.
+The purchase coordinator's model is measured by `eval:purchase-decisions`
+(see the purchase agent section).
 
 The `AI_GATEWAY_API_KEY` environment variable authenticates the direct REST
 fallback used outside Cloudflare Workers. It is optional in the deployed Worker
