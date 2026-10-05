@@ -26,6 +26,24 @@ import { insertWithShortcode } from "./shortcode-utils";
 
 const page = (pageIndex: number, pageSize = 2) => ({ pageIndex, pageSize });
 
+/**
+ * Every two-row page of a read, concatenated. Fixtures that tie on every
+ * requested sort key straddle these page boundaries, so only a deterministic
+ * fallback order keeps each row on exactly one page.
+ */
+const readPages = async <T>(
+  read: (pageIndex: number) => Promise<{ data: T[]; count: number }>,
+) => {
+  const rows: T[] = [];
+  for (let pageIndex = 0; pageIndex < 10; pageIndex++) {
+    const result = await read(pageIndex);
+    rows.push(...result.data);
+    if (result.data.length === 0 || rows.length >= result.count) break;
+  }
+  return rows;
+};
+const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
 describe("custom list readers", () => {
   const ctx = withTestDb();
 
@@ -74,6 +92,46 @@ describe("custom list readers", () => {
       { data: [{ id: alpha!.id }, { id: gamma!.id }], hasMore: true },
       { data: [{ id: beta!.id }], hasMore: false },
     ]);
+
+    // Four rows tie on both requested sorts, so the shortcode decides.
+    const [lead, ...tied] = await Promise.all(
+      ["one", "two", "three", "four", "five"].map((suffix) =>
+        createIngredientFixture(
+          ctx.db,
+          { name: `Tiecase ${suffix}`, aliases: [] },
+          ctx.actor,
+        ),
+      ),
+    );
+    await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Tiecase lead product",
+        ingredientId: lead!.id,
+      }),
+      ctx.actor,
+    );
+    const tieFilters = { nameFilter: "Tiecase" };
+    const tieSorts = [
+      { orderBy: "product", direction: "desc" as const },
+      { orderBy: "appearsInRecipes", direction: "desc" as const },
+    ];
+    const expected = [lead!.id, ...tied.map((row) => row.id).sort(byText)];
+    expect(
+      (
+        await readPages((index) =>
+          ingredientList(ctx.db, tieFilters, tieSorts, page(index)),
+        )
+      ).map((row) => row.id),
+    ).toEqual(expected);
+    const idPages = await Promise.all(
+      [0, 1, 2].map((index) =>
+        ingredientList(ctx.db, tieFilters, tieSorts, page(index), "ids"),
+      ),
+    );
+    expect(
+      idPages.flatMap((result) => result.data.map((row) => row.id)),
+    ).toEqual(expected);
   });
 
   it("pages the Location picker by its own sort roster", async () => {
@@ -104,6 +162,34 @@ describe("custom list readers", () => {
       ["Shelf alpha"],
     ]);
     expect(pages.map((result) => result.count)).toEqual([3, 3]);
+
+    // Five rows tie on the requested type, so the private id decides.
+    const tied = [];
+    for (const suffix of ["one", "two", "three", "four", "five"])
+      tied.push(
+        await createLocationFixture(
+          ctx.db,
+          makeLocationInput({ name: `Tiebox ${suffix}`, type: "box" }),
+          ctx.actor,
+        ),
+      );
+    const byId = new Map(tied.map((row) => [row.id, row.entityId]));
+    expect(
+      (
+        await readPages((index) =>
+          locationSearch(
+            ctx.db,
+            { nameFilter: "Tiebox" },
+            [{ orderBy: "type", direction: "asc" }],
+            page(index),
+          ),
+        )
+      ).map((row) => row.id),
+    ).toEqual(
+      tied
+        .map((row) => row.id)
+        .sort((a, b) => byText(byId.get(a)!, byId.get(b)!)),
+    );
   });
 
   it("pages the Product picker and matches names through aliases", async () => {
@@ -143,6 +229,29 @@ describe("custom list readers", () => {
       ["Picker alpha"],
     ]);
     expect(pages.map((result) => result.count)).toEqual([3, 3]);
+
+    // Five rows tie on manufacturer and model, so the name decides.
+    for (const suffix of ["e", "c", "a", "d", "b"])
+      await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: `Tiepick ${suffix}` }),
+        ctx.actor,
+      );
+    expect(
+      (
+        await readPages((index) =>
+          productSearch(
+            ctx.db,
+            { nameFilter: "Tiepick" },
+            [
+              { orderBy: "manufacturer", direction: "asc" },
+              { orderBy: "model", direction: "asc" },
+            ],
+            page(index),
+          ),
+        )
+      ).map((row) => row.name),
+    ).toEqual(["a", "b", "c", "d", "e"].map((suffix) => `Tiepick ${suffix}`));
   });
 
   it("pages Inventory by a joined-product sort and totals the whole filtered set", async () => {
@@ -200,6 +309,52 @@ describe("custom list readers", () => {
       count: 3,
       sums: undefined,
     });
+
+    // Five entries of one product tie on product and amount, so the
+    // creation-time and id fallback decides; paging must match one read.
+    const sku = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Tiestock item", price: 1 }),
+      ctx.actor,
+    );
+    const tied = [];
+    for (const suffix of ["one", "two", "three", "four", "five"]) {
+      const shelf = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name: `Tiestock ${suffix}`, type: "box" }),
+        ctx.actor,
+      );
+      tied.push(
+        await createInventoryFixture(
+          ctx.db,
+          {
+            productId: sku.id,
+            locationId: shelf.id,
+            amount: { value: 1, unit: "each" },
+          },
+          ctx.actor,
+        ),
+      );
+    }
+    const tieRead = (pagination: { pageIndex: number; pageSize: number }) =>
+      inventoryentryList(
+        ctx.db,
+        { productNameFilter: "Tiestock" },
+        [
+          { orderBy: "product", direction: "asc" },
+          { orderBy: "amount", direction: "asc" },
+        ],
+        pagination,
+      );
+    const paged = (await readPages((index) => tieRead(page(index)))).map(
+      (row) => row.id,
+    );
+    expect(paged).toEqual(
+      (await tieRead(page(0, 100))).data.map((row) => row.id),
+    );
+    expect([...paged].sort(byText)).toEqual(
+      tied.map((row) => row.id).sort(byText),
+    );
   });
 
   it("pages Projects and sums the cost estimate over the whole filtered set", async () => {
@@ -230,5 +385,38 @@ describe("custom list readers", () => {
       { count: 3, sums: { costEstimate: 60 } },
     ]);
     expect(await read(0, "count")).toEqual({ data: [], count: 3 });
+
+    // Four rows tie on cost and status, so the shortcode decides.
+    const lead = await insertWithShortcode(ctx.db, "project", {
+      name: "Tieproj lead",
+      costEstimate: 50,
+    });
+    const tied = [];
+    for (const suffix of ["one", "two", "three", "four"])
+      tied.push(
+        await insertWithShortcode(ctx.db, "project", {
+          name: `Tieproj ${suffix}`,
+          costEstimate: 20,
+        }),
+      );
+    expect(
+      (
+        await readPages((index) =>
+          projectListRead(
+            ctx.db,
+            { search: "Tieproj" },
+            [
+              { orderBy: "costEstimate", direction: "desc" },
+              { orderBy: "status", direction: "asc" },
+            ],
+            page(index),
+            { kind: "full" },
+          ),
+        )
+      ).map((row) => row.id),
+    ).toEqual([
+      lead.shortcode,
+      ...tied.map((row) => row.shortcode).sort(byText),
+    ]);
   });
 });
