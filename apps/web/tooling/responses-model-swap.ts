@@ -7,7 +7,7 @@ import { z } from "zod";
  */
 export const modelSwapSchema = z.object({
   model: z.string().min(1),
-  effort: z.enum(["none", "low", "medium", "high"]),
+  effort: z.enum(["none", "low", "medium", "high", "xhigh"]),
 });
 export type ModelSwap = z.infer<typeof modelSwapSchema>;
 

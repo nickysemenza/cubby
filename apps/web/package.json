@@ -18,6 +18,7 @@
     "test:watch": "pnpm test:prepare && vitest --ui",
     "test:e2e": "NODE_ENV=test node ../../scripts/test-services.ts -- playwright test",
     "eval:agent-models": "pnpm run build:cf && pnpm --dir ../purchase-agent run build && NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/purchase-import/agent-model-eval.live-eval.ts",
+    "eval:features": "NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/ai/feature-routing-eval.live-eval.ts",
     "eval:purchase-decisions": "pnpm run build:cf && pnpm --dir ../purchase-agent run build && NODE_ENV=test node ../../scripts/test-services.ts -- vitest run --project live-eval src/server/purchase-import/purchase-decision-eval.live-eval.ts",
     "test:e2e:affected": "NODE_ENV=test node scripts/e2e-affected.ts",
     "test:e2e:watch": "tsx tooling/build-cf.ts --ensure && NODE_ENV=test node ../../scripts/test-services.ts --warm -- concurrently -k -n build,test \"pnpm run build:cf:watch\" \"playwright test --ui\"",

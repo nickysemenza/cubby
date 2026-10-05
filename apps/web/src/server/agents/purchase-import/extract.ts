@@ -41,6 +41,9 @@ import {
   type PurchaseAuditRenderedBatch,
 } from "./prompts";
 
+const SUM_MISMATCH_ISSUE =
+  "Lines do not equal the printed grand total; retain the candidate and return needs_review with sum_mismatch.";
+
 const validateExtraction = (output: ImportExtractionOutcome) => {
   const candidate = output.candidate;
   if (!candidate) return { ok: true } as const;
@@ -56,9 +59,7 @@ const validateExtraction = (output: ImportExtractionOutcome) => {
     return { ok: true } as const;
   return {
     ok: false,
-    issues: [
-      "Lines do not equal the printed grand total; retain the candidate and return needs_review with sum_mismatch.",
-    ],
+    issues: [SUM_MISMATCH_ISSUE],
   };
 };
 
@@ -167,16 +168,25 @@ const extractPurchaseText = async (
       },
     ),
   );
-  const repairedValidation = validateExtraction(repaired);
-  if (repairedValidation.ok) return repaired;
-  if (!repaired.candidate) return repaired;
-  return {
-    status: "needs_review" as const,
-    candidate: repaired.candidate,
-    reason: "sum_mismatch" as const,
-    detail: repairedValidation.issues.join(" ").slice(0, 2_000),
-  };
+  return settleRepairedExtraction(repaired);
 };
+
+/**
+ * What production keeps from the one repair answer: a repair that still does
+ * not balance is retained for review as `sum_mismatch`, never used as ready.
+ */
+export function settleRepairedExtraction(
+  repaired: ImportExtractionOutcome,
+): ImportExtractionOutcome {
+  const validation = validateExtraction(repaired);
+  if (validation.ok || !repaired.candidate) return repaired;
+  return {
+    status: "needs_review",
+    candidate: repaired.candidate,
+    reason: "sum_mismatch",
+    detail: validation.issues.join(" ").slice(0, 2_000),
+  };
+}
 
 function purchaseRepairMessages(
   originalMessages: readonly AiMessage[],
@@ -206,29 +216,37 @@ function purchaseRepairMessages(
   ];
 }
 
-/** An AI-only probe for the repair prompt, without an extraction write. */
-export function purchaseRepairRequest(capture: BrowserCapture) {
+const exampleInvalidExtraction: ImportExtractionOutcome = {
+  status: "ready",
+  candidate: {
+    orderId: "example-1",
+    orderedAt: null,
+    merchant: "Example Tools",
+    currency: "USD",
+    printedGrandTotal: 80,
+    lines: [
+      { title: "Cordless drill kit", amount: 79.95, lineKind: "principal" },
+    ],
+    payments: [],
+    allShipmentsDelivered: null,
+  },
+};
+
+/**
+ * An AI-only probe for the repair prompt, without an extraction write: the
+ * smoke run and the routing eval send the exact repair turn production sends
+ * after `previous` fails validation.
+ */
+export function purchaseRepairRequest(
+  capture: BrowserCapture,
+  previous: ImportExtractionOutcome = exampleInvalidExtraction,
+) {
   const request = purchaseExtractionPrompt(capture);
-  const previous: ImportExtractionOutcome = {
-    status: "ready",
-    candidate: {
-      orderId: "example-1",
-      orderedAt: null,
-      merchant: "Example Tools",
-      currency: "USD",
-      printedGrandTotal: 80,
-      lines: [
-        { title: "Cordless drill kit", amount: 79.95, lineKind: "principal" },
-      ],
-      payments: [],
-      allShipmentsDelivered: null,
-    },
-  };
   return {
     systemPrompts: request.systemPrompts,
     messages: purchaseRepairMessages(
       request.messages,
-      ["Lines do not equal the printed grand total."],
+      [SUM_MISMATCH_ISSUE],
       previous,
       null,
     ),

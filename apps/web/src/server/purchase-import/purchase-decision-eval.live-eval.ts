@@ -109,7 +109,10 @@ describe("purchase coordinator decision eval", () => {
         ctx.databaseUrl,
         liveEvalModelWorker(),
       );
-      const { url } = await harness.listen();
+      await harness.listen();
+      // The web Worker is the harness's primary Worker, so `listen()`'s URL
+      // serves the app; the agent queue is reached through its producer.
+      const queue = harness.getWorker("cubby-queue-producer");
       const model = harness.getWorker("cubby-test-model");
       const gateway = harness.getWorker("cubby-test-gateway");
       const configure = (worker: typeof model, target: string, body: object) =>
@@ -221,11 +224,17 @@ describe("purchase coordinator decision eval", () => {
           .where(eq(runTable.shortcode, started.runId));
         if (!run) throw new Error("Missing decision run");
         const startedAt = new Date();
-        await fetch(new URL("/dispatch", url), {
+        // An unanswered dispatch never starts the agent; unchecked, it showed
+        // only as an eight-minute timeout with no model calls.
+        const dispatched = await queue.fetch("https://queue.test/dispatch", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(sent[0]),
         });
+        if (!dispatched.ok)
+          throw new Error(
+            `Dispatch failed (${dispatched.status}): ${await dispatched.text()}`,
+          );
 
         let status = "timeout";
         const deadline = Date.now() + RUN_TIMEOUT_MS;
@@ -376,6 +385,12 @@ describe("purchase coordinator decision eval", () => {
                 deletedAt: new Date(),
               })
               .where(gte(product.createdAt, caseStartedAt));
+            // A retained Purchase keeps its printed payment evidence, which
+            // would compete with a later case's charge for settlement.
+            await getDb(ctx.db)
+              .update(purchase)
+              .set({ deletedAt: new Date() })
+              .where(gte(purchase.createdAt, caseStartedAt));
             // Written per run so a later failure keeps finished results.
             writeFileSync(
               path.join(outDir, "results.jsonl"),
