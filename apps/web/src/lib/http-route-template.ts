@@ -34,6 +34,7 @@ const STATIC_TRACE_ROUTES = new Set([
   "/ai-smoke-test",
   "/ai-usage",
   BROWSER_OPERATION_PATH,
+  "/api/ai/chatgpt",
   "/api/debug/timing",
   "/api/import/agent/accounts",
   "/api/import/agent/debug-events",

@@ -1,3 +1,4 @@
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -9,6 +10,78 @@ import {
 // Failure modes: concurrent token rotation, losing the replacement on restart,
 // absent permission, stale model selection, and accidentally returning tokens.
 describe("ChatGPT credential ownership", () => {
+  // A temporary catalog failure must not orphan a newly authorized renewable session.
+  it("retains a verified first registration when the catalog probe fails", async () => {
+    const { publicKey, privateKey } = await generateKeyPair("RS256");
+    const key = {
+      ...(await exportJWK(publicKey)),
+      kid: "example-sign-in",
+      alg: "RS256",
+    };
+    const idToken = await new SignJWT({
+      nonce: "example-nonce-value",
+      email: "user@example.com",
+    })
+      .setProtectedHeader({ alg: "RS256", kid: key.kid })
+      .setIssuer("https://auth.openai.com")
+      .setAudience("oaiapp_example")
+      .setSubject("example-subject")
+      .setIssuedAt()
+      .setExpirationTime("5m")
+      .sign(privateKey);
+    vi.stubGlobal("fetch", async () => Response.json({ keys: [key] }));
+    const records = new Map<string, ChatGptConnection | string>();
+    const store: CredentialStore = {
+      get: async (key) => records.get(key),
+      put: async (key, value) => {
+        records.set(key, value);
+      },
+      delete: async (key) => records.delete(key),
+    };
+    let catalogFails = true;
+    const session = new ChatGptSession(store, async (url) => {
+      if (String(url).includes("oauth/token"))
+        return Response.json({
+          access_token: "example-access",
+          refresh_token: "example-refresh",
+          expires_in: 3600,
+          token_type: "Bearer",
+          scope: "chatgpt.tokens.use.direct resource.invoke",
+          id_token: idToken,
+        });
+      return catalogFails
+        ? new Response("example temporary catalog failure", { status: 503 })
+        : Response.json({ models: [] });
+    });
+    try {
+      await expect(
+        session.connect({
+          code: "example-code",
+          clientId: "oaiapp_example",
+          verifier: "v".repeat(43),
+          nonce: "example-nonce-value",
+          redirectUri: "http://127.0.0.1:12345/auth/callback",
+        }),
+      ).rejects.toThrow("temporary catalog failure");
+      expect(records.get("connection")).toMatchObject({
+        clientId: "oaiapp_example",
+        subject: "example-subject",
+        accessToken: "example-access",
+        refreshToken: "example-refresh",
+      });
+      const restarted = new ChatGptSession(store, async () =>
+        Response.json({ models: [] }),
+      );
+      expect(await restarted.authorizationHost()).toMatchObject({
+        clientId: "oaiapp_example",
+      });
+      catalogFails = false;
+      expect(await session.models()).toEqual([]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("refreshes once for concurrent requests and persists the rotated session", async () => {
     const records = new Map<string, ChatGptConnection | string>();
     const store: CredentialStore = {

@@ -36,7 +36,10 @@ First registration uses `dynamic_agent_client`; later authorization reuses the
 issued client ID. It securely sends the authorization code and original verifier
 through the generated `chatgpt.connect` operation. Workers exchanges the code, verifies the
 signed ID token's issuer, audience, expiration, nonce and the originally registered account identity, checks the granted
-plan scope, and confirms model-catalog access before storing credentials.
+plan scope, and persists the verified registration before probing model-catalog
+access. A temporary catalog failure retains the renewable session and issued
+client ID; Check connection and Refresh models can recover without another OAuth
+registration.
 No ChatGPT token is returned to the browser or saved by the CLI.
 The Mac can close after setup; Workers owns refreshes.
 

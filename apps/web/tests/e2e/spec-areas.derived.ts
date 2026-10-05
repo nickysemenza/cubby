@@ -51,6 +51,7 @@ export const DERIVED_SPEC_GLOBS: SpecGlobMap = {
     "apps/web/src/app/problems/**",
     "apps/web/src/routes/_authenticated/settings.tsx",
     "apps/web/src/routes/api/ai/chatgpt.ts",
+    "apps/web/src/routes/api/v1/$resource/$operation.ts",
   ],
   "companion-analysis.spec.ts": [
     "apps/web/src/routes/api/v1/$resource/$operation.ts",

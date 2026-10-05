@@ -157,8 +157,8 @@ export interface PurchaseAgentQueueEnvironment {
 
 /** One `cubby-purchase-agent` delivery. */
 export interface PurchaseAgentQueueDeliveredMessage {
-  /** Whatever JSON was on the wire; the consumer parses it. */
-  readonly body: Awaited<ReturnType<typeof gatewayQuery>>;
+  /** Raw queue JSON; only parsePurchaseAgentEvent narrows it to an event. */
+  readonly body: unknown;
   /** Delivery attempts, starting at 1. */
   readonly attempts: number;
   ack(): void;

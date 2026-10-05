@@ -163,7 +163,6 @@ export class ChatGptSession {
         refreshToken: result.refresh_token,
         expiresAt: Date.now() + result.expires_in * 1000,
       };
-      await this.catalog(result.access_token);
       const previous = await this.read();
       if (
         previous &&
@@ -175,6 +174,7 @@ export class ChatGptSession {
         );
       }
       await this.store.put("connection", saved);
+      await this.catalog(result.access_token);
       return this.summary(saved);
     });
   }
