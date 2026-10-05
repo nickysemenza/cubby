@@ -52,6 +52,9 @@ inference responses, never access or refresh tokens. The HTTP `chatgpt.connect`
 operation calls the internal `authorizePlan` RPC because Cloudflare reserves
 `connect` on Durable Object stubs for sockets. A real Workers regression test
 checks that authorization reaches session validation across this boundary.
+The session wraps native `fetch` rather than storing it as an object method:
+Workers requires the global receiver. The same runtime regression exercises
+token exchange with a synthetic upstream rejection to catch binding failures.
 Concurrent refreshes are
 serialized; the replacement access/refresh pair is persisted together before
 use. No PostgreSQL schema change or new environment secret is required.

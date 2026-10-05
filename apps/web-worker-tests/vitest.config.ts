@@ -12,6 +12,16 @@ export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   plugins: [
     cloudflareTest({
+      miniflare: {
+        outboundService: async (request) => {
+          if (
+            request.url === "https://auth.openai.com/api/accounts/oauth/token"
+          ) {
+            return new Response("synthetic token rejection", { status: 400 });
+          }
+          return fetch(request);
+        },
+      },
       wrangler: {
         configPath: fileURLToPath(
           new URL("../web/wrangler.calendar-test.jsonc", import.meta.url),
