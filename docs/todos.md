@@ -241,6 +241,16 @@ See also the image operational passes at the end of this file.
 
 ## Native app
 
+- 🟢 **Run companion image work in the background on macOS and iOS.** The
+  `CompanionImageWorker` socket opens only while the scene is active
+  (`setCompanionSceneActive(scenePhase == .active)` in `CubbyApp.swift`), so
+  on-device descriptions and subject lifts queued for a device (`waiting_for_device`)
+  sit until someone opens the app. macOS should keep the worker connected
+  while the app runs, windowed or not; iOS should drain pending jobs from a
+  `BGProcessingTask` (`AppModel.runCompanionJobsInBackground()` exists but
+  nothing calls it; only library sync registers today). Both respect the
+  Automatic work switch.
+
 - 🤔 **Keep a focused structured-editor input clear of the keyboard.**
   `StructuredValueControl` draws a whole array row (an external ID's source,
   kind, id, URL) inside one Form row, so keyboard avoidance scrolls that tall
