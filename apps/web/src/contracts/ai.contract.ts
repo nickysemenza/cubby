@@ -140,6 +140,8 @@ export const aiContract = defineContract("ai", {
   usageRecent: query({
     input: aiUsageRecentInput,
     output: aiUsageRecentOut,
+    // Nested `filters` has no GET query projection.
+    transport: "post",
     cache: { tags: [["ai", "usage"]] },
   }),
   usageSummary: query({

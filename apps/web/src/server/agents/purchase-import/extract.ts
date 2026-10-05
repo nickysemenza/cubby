@@ -7,11 +7,13 @@ import {
   normalizeImportAuditModelOutput,
   normalizeImportExtractionModelOutput,
 } from "@cubby/schemas/purchase-import";
+import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { env } from "~/env";
 import { localGoogleProviderOrigin } from "~/lib/e2e-google-provider";
+import type { UnparsedError } from "~/lib/error-utils";
 import { recordAiUsage } from "~/server/ai-usage";
 import {
   PURCHASE_IMPORT_AUDIT_FEATURE,
@@ -285,15 +287,64 @@ async function recoverPurchaseAudit(
   // Anthropic accepts the same portable object as OpenAI once the generated
   // dialect marker is removed. No union or numeric bounds reach the provider.
   const { $schema: _dialect, ...outputSchema } = schema;
-  const fetchThroughGateway = ports.gateway(
-    "anthropic",
-    cachedCall({
+  let transport: AiUsageTransport = "unknown";
+  const fetchThroughGateway = ports.gateway("anthropic", {
+    ...cachedCall({
       metadata: {
         feature: "purchase-import-audit",
         operation: "purchaseImport.audit.recovery",
       },
     }),
+    onTransport: (selected) => {
+      transport = selected;
+    },
+  });
+  const usage = {
+    provider: "anthropic",
+    model: AUDIT_RECOVERY_MODEL,
+    feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature,
+    operation: "purchaseImport.audit.recovery",
+    runId: runEntityId.parse(args.runId),
+  };
+  const body = await requestAuditRecovery(
+    fetchThroughGateway,
+    request,
+    outputSchema,
+  ).catch(async (error: UnparsedError) => {
+    // A failed attempt is still a call on its selected transport.
+    await ports.usage(args.db, {
+      ...usage,
+      transport,
+      status: "failed",
+      durationMs: Date.now() - started,
+    });
+    throw error;
+  });
+  await ports.usage(args.db, {
+    ...usage,
+    transport,
+    inputTokens: body.usage.input_tokens,
+    outputTokens: body.usage.output_tokens,
+    estimatedCost: estimateAiUsageCostUsd("anthropic", AUDIT_RECOVERY_MODEL, {
+      inputTokens: body.usage.input_tokens,
+      outputTokens: body.usage.output_tokens,
+    }),
+    durationMs: Date.now() - started,
+  });
+  const text = body.content
+    .filter((part) => part.type === "text")
+    .map((part) => part.text ?? "")
+    .join("");
+  return normalizeImportAuditModelOutput(
+    importAuditModelOutput.parse(JSON.parse(text)),
   );
+}
+
+async function requestAuditRecovery(
+  fetchThroughGateway: typeof fetch,
+  request: ReturnType<typeof purchaseAuditPrompt>,
+  outputSchema: Omit<z.core.JSONSchema.BaseSchema, "$schema">,
+) {
   const response = await fetchThroughGateway(
     `${gatewayBaseURL("anthropic")}/v1/messages`,
     {
@@ -319,28 +370,7 @@ async function recoverPurchaseAudit(
     throw new Error(
       `Audit recovery failed (${response.status}): ${await response.text()}`,
     );
-  const body = auditRecoveryResponse.parse(await response.json());
-  await ports.usage(args.db, {
-    provider: "anthropic",
-    model: AUDIT_RECOVERY_MODEL,
-    feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature,
-    operation: "purchaseImport.audit.recovery",
-    runId: runEntityId.parse(args.runId),
-    inputTokens: body.usage.input_tokens,
-    outputTokens: body.usage.output_tokens,
-    estimatedCost: estimateAiUsageCostUsd("anthropic", AUDIT_RECOVERY_MODEL, {
-      inputTokens: body.usage.input_tokens,
-      outputTokens: body.usage.output_tokens,
-    }),
-    durationMs: Date.now() - started,
-  });
-  const text = body.content
-    .filter((part) => part.type === "text")
-    .map((part) => part.text ?? "")
-    .join("");
-  return normalizeImportAuditModelOutput(
-    importAuditModelOutput.parse(JSON.parse(text)),
-  );
+  return auditRecoveryResponse.parse(await response.json());
 }
 
 export const auditPurchaseImportBatch = async (

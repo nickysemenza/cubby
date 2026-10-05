@@ -8,6 +8,7 @@ import type {
 } from "@cubby/schemas/entity-report";
 import { runStatus } from "@cubby/schemas/run-fields";
 import { TRADE_LABELS, tradeValues } from "@cubby/schemas/task-fields";
+import { AI_USAGE_TRANSPORT_LABELS } from "@cubby/schemas/telemetry";
 import {
   ACTIVE_RUN_STATUSES,
   HOUSEHOLD_TIMEZONE,
@@ -929,6 +930,7 @@ export function aiUsageBlocks(usage: AiRunUsage): ReportBlock[] {
               call.status,
               call.status === "succeeded" ? "positive" : "destructive",
             ),
+            badge(AI_USAGE_TRANSPORT_LABELS[call.transport]),
           ],
           lines: [
             line(`${call.model} · attempt ${call.attempt}`, "muted"),
@@ -940,7 +942,7 @@ export function aiUsageBlocks(usage: AiRunUsage): ReportBlock[] {
                 call.applicationCacheStatus === "hit"
                   ? "Application hit · no model call"
                   : `Application ${call.applicationCacheStatus ?? "—"}`
-              } · Gateway ${call.cacheStatus ?? "—"} · ${call.cacheReadTokens ?? "—"} read / ${call.cacheWriteTokens ?? "—"} write`,
+              } · Cache ${call.cacheStatus ?? "—"} · ${call.cacheReadTokens ?? "—"} read / ${call.cacheWriteTokens ?? "—"} write`,
               "muted",
             ),
             line(

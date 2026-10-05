@@ -124,6 +124,20 @@ export interface AgentGateway {
 }
 
 /**
+ * The household's ChatGPT plan: null only when no plan is connected. A
+ * connected plan calls `onSelected` before inference and throws on failure,
+ * so the call is never retried through the paid gateway.
+ */
+export type ChatGptInference = (
+  body: Awaited<ReturnType<typeof gatewayQuery>>,
+  options?: {
+    signal?: AbortSignal;
+    requestTimeoutMs?: number;
+    onSelected?: () => void;
+  },
+) => Promise<Response | null>;
+
+/**
  * The narrowed environment of one coordinator Durable Object. Its services
  * are bound to the Run its object name identifies, so the agent cannot
  * address another Run.
@@ -132,10 +146,7 @@ export interface PurchaseAgentEnvironment {
   /** Cubby's AI Gateway through the Worker's AI binding. */
   gateway(): AgentGateway;
   /** Returns null only when the household has no ChatGPT plan connection. */
-  chatGptInference?(
-    body: Awaited<ReturnType<typeof gatewayQuery>>,
-    options?: { signal?: AbortSignal; requestTimeoutMs?: number },
-  ): Promise<Response | null>;
+  chatGptInference?: ChatGptInference;
   /** The services of this object's Run. */
   readonly services: RunServices;
   /**

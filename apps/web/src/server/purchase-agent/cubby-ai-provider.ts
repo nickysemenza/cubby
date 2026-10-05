@@ -1,3 +1,4 @@
+import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import {
   endpointFor,
   gatewayQuery,
@@ -9,10 +10,15 @@ import type { Provider } from "@earendil-works/pi-ai";
 import { z } from "zod";
 
 import { type ContextRecorder, withContextCapture } from "./context-breakdown";
-import type { AgentGateway, PurchaseAgentEnvironment } from "./environment";
+import type {
+  AgentGateway,
+  ChatGptInference,
+  PurchaseAgentEnvironment,
+} from "./environment";
 
 type TestModel = NonNullable<PurchaseAgentEnvironment["testModel"]>;
 type JsonBody = Awaited<ReturnType<typeof gatewayQuery>>;
+type AgentTransport = Extract<AiUsageTransport, "gateway" | "chatgpt">;
 
 /**
  * pi ends a run on a terminating tool only when every call of that round
@@ -45,11 +51,9 @@ export function createCubbyGatewayFetch(
   route: GatewayRoute,
   gatewayForRequest: () => AgentGateway,
   runId: () => string | undefined,
-  subscription?: (
-    body: Awaited<ReturnType<typeof gatewayQuery>>,
-    options?: { signal?: AbortSignal; requestTimeoutMs?: number },
-  ) => Promise<Response | null>,
-  onUnbilledResponse?: () => void,
+  subscription?: ChatGptInference,
+  /** Called before the request leaves with what will carry it. */
+  onTransport?: (transport: AgentTransport) => void,
 ): typeof fetch {
   return async (input, init) => {
     const headers = strippedHeaders(init);
@@ -63,12 +67,11 @@ export function createCubbyGatewayFetch(
     if (route === "openai" && subscription) {
       const response = await subscription(body, {
         signal: init?.signal ?? undefined,
+        onSelected: () => onTransport?.("chatgpt"),
       });
-      if (response) {
-        onUnbilledResponse?.();
-        return response;
-      }
+      if (response) return response;
     }
+    onTransport?.("gateway");
     const gateway = gatewayForRequest();
     return gateway.run(
       {
@@ -93,8 +96,11 @@ export function createCubbyGatewayFetch(
 function testModelFetch(
   route: GatewayRoute,
   testModel: TestModel,
+  onTransport?: (transport: AgentTransport) => void,
 ): typeof fetch {
   return async (input, init) => {
+    // The scripted peer stands in for the Gateway.
+    onTransport?.("gateway");
     const body = withSequentialToolCalls(route, await gatewayQuery(init?.body));
     return testModel.fetch(
       new Request(requestUrl(input), {
@@ -116,21 +122,23 @@ export function cubbyAgentProviders(input: {
   runId: () => string | undefined;
   recorder: ContextRecorder;
   testModel?: TestModel;
-  subscription?: (
-    body: Awaited<ReturnType<typeof gatewayQuery>>,
-    options?: { signal?: AbortSignal; requestTimeoutMs?: number },
-  ) => Promise<Response | null>;
+  subscription?: ChatGptInference;
+  /** Each model request's transport, reported before it leaves. */
+  onTransport?: (transport: AgentTransport) => void;
 }): Provider[] {
   return cubbyPiProviders((route, onUnbilledResponse) =>
     withContextCapture(
       input.testModel
-        ? testModelFetch(route, input.testModel)
+        ? testModelFetch(route, input.testModel, input.onTransport)
         : createCubbyGatewayFetch(
             route,
             input.gateway,
             input.runId,
             input.subscription,
-            onUnbilledResponse,
+            (transport) => {
+              input.onTransport?.(transport);
+              if (transport === "chatgpt") onUnbilledResponse?.();
+            },
           ),
       { recorder: input.recorder, scope: () => CONTEXT_SCOPE },
     ),

@@ -1,4 +1,5 @@
 import type { RunId } from "@cubby/schemas/identifiers";
+import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import { createLogger } from "@cubby/worker-tracing";
 
 import { getErrorMessage } from "~/lib/error-utils";
@@ -38,6 +39,8 @@ export type RecordAiUsageInput = {
   durationMs: number;
   cacheStatus?: "hit" | "miss" | "none" | null;
   applicationCacheStatus?: "hit" | "miss" | "none" | null;
+  /** What carried the call; `unknown` only when the caller has no evidence. */
+  transport: AiUsageTransport;
   entity?: { entityKind: string; entityId: string } | null;
 };
 
@@ -72,6 +75,7 @@ export async function recordAiUsage(
       durationMs: input.durationMs,
       cacheStatus: input.cacheStatus ?? null,
       applicationCacheStatus: input.applicationCacheStatus ?? null,
+      transport: input.transport,
       entityKind: input.entity?.entityKind ?? null,
       entityId: input.entity?.entityId ?? null,
       estimatedCost: input.estimatedCost ?? null,

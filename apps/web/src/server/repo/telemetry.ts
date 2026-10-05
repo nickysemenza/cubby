@@ -112,17 +112,21 @@ export async function persistTelemetryMessages(
             // The event's own figure wins (the cookbook extractor and the agent
             // provider price every model attempt); the registry prices calls
             // whose provider did not return an exact total.
+            // ChatGPT plan usage is never API spend, whatever tokens it reports.
             estimatedCost:
-              event.estimatedCost ??
-              estimateAiUsageCostUsd(event.provider, event.model, {
-                inputTokens: event.inputTokens,
-                outputTokens: event.outputTokens,
-                cacheReadTokens: event.cacheReadTokens,
-                cacheWriteTokens: event.cacheWriteTokens,
-              }),
+              event.transport === "chatgpt"
+                ? 0
+                : (event.estimatedCost ??
+                  estimateAiUsageCostUsd(event.provider, event.model, {
+                    inputTokens: event.inputTokens,
+                    outputTokens: event.outputTokens,
+                    cacheReadTokens: event.cacheReadTokens,
+                    cacheWriteTokens: event.cacheWriteTokens,
+                  })),
             durationMs: event.durationMs,
             cacheStatus: event.cacheStatus,
             applicationCacheStatus: event.applicationCacheStatus ?? null,
+            transport: event.transport ?? "unknown",
             entityKind: event.entityKind,
             entityId: event.entityId,
             createdAt: new Date(event.occurredAt),

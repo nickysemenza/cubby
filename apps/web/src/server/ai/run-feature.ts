@@ -1,4 +1,5 @@
 import type { RunId } from "@cubby/schemas/identifiers";
+import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import {
   fetchExternalResponse,
   readResponseWithLimit,
@@ -147,6 +148,8 @@ type UsageCallContext = Pick<
 
 /** What one call did; the rest of the row comes from the feature and context. */
 export interface FeatureUsageOutcome {
+  /** What carried the call; `cache` when an answer replayed without one. */
+  transport: AiUsageTransport;
   durationMs: number;
   inputTokens?: number | null;
   outputTokens?: number | null;
@@ -191,16 +194,22 @@ export async function recordFeatureUsage(
     durationMs: outcome.durationMs,
     cacheStatus: outcome.cacheStatus ?? ctx.cacheStatus ?? "none",
     applicationCacheStatus: outcome.applicationCacheStatus,
+    transport: outcome.transport,
   });
 }
 
-/** A gateway-response-cache answer: no tokens, no cost, zero attempts. */
+/**
+ * An application response-cache (`withAiResponseCache`) answer: no upstream
+ * call, so transport `cache`, no tokens, no cost, zero attempts. A Gateway
+ * response-cache hit is different — it still went through the gateway.
+ */
 export function recordApplicationCacheHit(
   spec: Pick<AiFeature, "feature" | "model">,
   ctx: UsageCallContext,
   durationMs: number,
 ): Promise<void> {
   return recordFeatureUsage(spec, ctx, {
+    transport: "cache",
     durationMs,
     inputTokens: 0,
     outputTokens: 0,
@@ -578,6 +587,8 @@ async function placeStructuredCall<T>(args: {
   schema: z.ZodType<T>;
   maxTokens: number;
   effort?: OpenAiEffort | AnthropicEffort;
+  /** Receives the response before validation, which may still reject it. */
+  onResponse: (message: AssistantMessage) => void;
 }): Promise<{ value: T; message: AssistantMessage }> {
   const { tool, optionalPaths } = respondToolFor(args.schema);
   const target = args.ports.callTarget(args.model, args.call);
@@ -599,6 +610,7 @@ async function placeStructuredCall<T>(args: {
     // is the untyped dispatch shape `models.complete()` itself declares.
     options as Parameters<PiCallTarget["complete"]>[1],
   );
+  args.onResponse(message);
   if (message.stopReason === "error" || message.stopReason === "aborted") {
     throw new Error(
       message.errorMessage ??
@@ -641,10 +653,16 @@ export async function runStructuredFeature<T>(
     },
   ): Promise<T> => {
     let responseFailure: GatewayResponseFailure | undefined;
+    // Unknown until the transport selects itself before the request leaves.
+    let transport: AiUsageTransport = "unknown";
+    let response: AssistantMessage | undefined;
     const call: GatewayCallOptions = {
       ...plan.call,
       onErrorResponse: (failure) => {
         responseFailure = failure;
+      },
+      onTransport: (selected) => {
+        transport = selected;
       },
     };
     const startedAt = performance.now();
@@ -657,9 +675,13 @@ export async function runStructuredFeature<T>(
         schema: spec.schema,
         maxTokens: spec.maxTokens,
         effort: spec.effort,
+        onResponse: (message) => {
+          response = message;
+        },
       });
       if (callCtx.db) {
         await recordFeatureUsage(spec, callCtx, {
+          transport,
           durationMs: Math.round(performance.now() - startedAt),
           inputTokens: message.usage.input,
           outputTokens: message.usage.output,
@@ -669,6 +691,19 @@ export async function runStructuredFeature<T>(
       }
       return value;
     } catch (error) {
+      // A failed call is still a call on its transport — a connected ChatGPT
+      // plan's failure stays `chatgpt` even when no response ever arrived —
+      // and a response the forced tool call or schema rejected was still
+      // billed, so its usage stays on the row.
+      await recordFeatureUsage(spec, callCtx, {
+        transport,
+        durationMs: Math.round(performance.now() - startedAt),
+        status: "failed",
+        inputTokens: response?.usage.input ?? null,
+        outputTokens: response?.usage.output ?? null,
+        estimatedCost: response?.usage.cost.total ?? null,
+        applicationCacheStatus: callCtx.applicationCacheStatus,
+      });
       const model = getChatModelConfig(plan.model);
       throw wrapAiGatewayError(
         error,
@@ -748,7 +783,8 @@ export async function runStructuredFeature<T>(
 export async function runEmbeddingFeature(
   spec: { feature: string; model: SupportedEmbeddingModel },
   args: {
-    embed: () => Promise<{
+    /** Reports what carries the request before it leaves. */
+    embed: (onTransport: (transport: AiUsageTransport) => void) => Promise<{
       embeddings: { index: number; vector: number[] }[];
       usage?: { promptTokens?: number | null; totalTokens?: number | null };
     }>;
@@ -756,26 +792,36 @@ export async function runEmbeddingFeature(
   ctx: Omit<AiRunContext, "runId"> & { runId?: RunId },
 ) {
   const startedAt = performance.now();
-  const result = await args.embed().catch((error: UnparsedError) => {
-    throw wrapAiGatewayError(error, {
-      model: spec.model,
-      provider: providerFor(spec.model),
-      route: "openai",
-      feature: spec.feature,
-      operation: ctx.operation,
+  let transport: AiUsageTransport = "unknown";
+  const usageCtx = ctx.runId ? { ...ctx, runId: ctx.runId } : null;
+  const result = await args
+    .embed((selected) => {
+      transport = selected;
+    })
+    .catch(async (error: UnparsedError) => {
+      if (usageCtx)
+        await recordFeatureUsage(spec, usageCtx, {
+          transport,
+          durationMs: Math.round(performance.now() - startedAt),
+          status: "failed",
+          cacheStatus: "none",
+        });
+      throw wrapAiGatewayError(error, {
+        model: spec.model,
+        provider: providerFor(spec.model),
+        route: "openai",
+        feature: spec.feature,
+        operation: ctx.operation,
+      });
     });
-  });
-  if (ctx.runId) {
-    await recordFeatureUsage(
-      spec,
-      { ...ctx, runId: ctx.runId },
-      {
-        inputTokens:
-          result.usage?.promptTokens ?? result.usage?.totalTokens ?? null,
-        durationMs: Math.round(performance.now() - startedAt),
-        cacheStatus: "none",
-      },
-    );
+  if (usageCtx) {
+    await recordFeatureUsage(spec, usageCtx, {
+      transport,
+      inputTokens:
+        result.usage?.promptTokens ?? result.usage?.totalTokens ?? null,
+      durationMs: Math.round(performance.now() - startedAt),
+      cacheStatus: "none",
+    });
   }
   return result;
 }

@@ -141,6 +141,7 @@ describe("AiUsage accounting", () => {
       runId,
       inputTokens: 4,
       cacheStatus: "none",
+      transport: "gateway",
     });
   });
 
@@ -164,17 +165,21 @@ describe("AiUsage accounting", () => {
       ),
     ]);
     const ports: StructuredRunPorts = {
-      callTarget: () => ({
+      callTarget: (_model, call) => ({
         model: faux.getModel(),
         // SAFETY: the faux provider accepts any API's stream options as an
         // untyped bag; `options` already came from `chatCompletionOptionsFor`,
         // shaped for the real model's API.
-        complete: (context, options) =>
-          fauxModels.complete(
+        complete: (context, options) => {
+          call.onTransport?.("gateway");
+          // SAFETY: the faux provider takes the same API-shaped options
+          // produced by chatCompletionOptionsFor, with a loose model ID.
+          return fauxModels.complete(
             faux.getModel(),
             context,
             options as ModelsApiStreamOptions<string>,
-          ),
+          );
+        },
       }),
     };
 
@@ -190,6 +195,8 @@ describe("AiUsage accounting", () => {
     expect(rows[0]).toMatchObject({
       feature: "location-description",
       operation: "locationDescription",
+      status: "succeeded",
+      transport: "gateway",
     });
     // The faux provider estimates usage from message/response length rather
     // than taking an exact override; the invariant under test is "exactly
@@ -218,7 +225,7 @@ describe("AiUsage accounting", () => {
         operation: "locationDescription",
         entity: { entityKind: "location", entityId: locationId },
       },
-      { durationMs: 0, cacheStatus: "hit" },
+      { transport: "cache", durationMs: 0, cacheStatus: "hit" },
     );
 
     const rows = await usageRows();
@@ -232,6 +239,7 @@ describe("AiUsage accounting", () => {
       cacheStatus: "hit",
       entityKind: "location",
       entityId: locationId,
+      transport: "cache",
     });
   });
 
@@ -256,6 +264,148 @@ describe("AiUsage accounting", () => {
       attempt: 0,
       applicationCacheStatus: "hit",
       durationMs: 7,
+      transport: "cache",
     });
+  });
+
+  // A connected ChatGPT plan owns the call once selected: a failure before any
+  // HTTP response (the plan's RPC throwing) is still a ChatGPT call, never an
+  // API call, and never silently retried through the gateway.
+  it("records a failed ChatGPT call as chatgpt even without a response", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const faux = fauxProvider();
+    const transports: string[] = [];
+    const ports: StructuredRunPorts = {
+      callTarget: (_model, call) => ({
+        model: faux.getModel(),
+        complete: async () => {
+          call.onTransport?.("chatgpt");
+          transports.push("chatgpt");
+          throw new Error("ChatGPT inference exceeded its deadline");
+        },
+      }),
+    };
+
+    await expect(
+      runStructuredFeature(
+        LOCATION_DESCRIPTION_FEATURE,
+        {
+          systemPrompts: ["frame"],
+          messages: [{ role: "user", content: "x" }],
+        },
+        { db: ctx.db, runId, operation: "locationDescription" },
+        ports,
+      ),
+    ).rejects.toThrow(/deadline/);
+
+    expect(transports).toEqual(["chatgpt"]);
+    const rows = await usageRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      feature: "location-description",
+      status: "failed",
+      transport: "chatgpt",
+      inputTokens: null,
+      outputTokens: null,
+      estimatedCost: 0,
+    });
+  });
+
+  // The model answered and was billed; only the forced tool call / schema
+  // check failed. The row keeps the response's usage and cost.
+  it("keeps a billed response's usage when its answer fails validation", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const faux = fauxProvider();
+    const fauxModels = createModels();
+    fauxModels.setProvider(faux.provider);
+    faux.setResponses([
+      fauxAssistantMessage(
+        fauxToolCall(RESPOND_TOOL_NAME, { description: 42 }),
+        { stopReason: "toolUse" },
+      ),
+    ]);
+    const ports: StructuredRunPorts = {
+      callTarget: (_model, call) => ({
+        model: faux.getModel(),
+        complete: (context, options) => {
+          call.onTransport?.("gateway");
+          // SAFETY: the faux provider takes the same API-shaped options
+          // produced by chatCompletionOptionsFor, with a loose model ID.
+          return fauxModels.complete(
+            faux.getModel(),
+            context,
+            options as ModelsApiStreamOptions<string>,
+          );
+        },
+      }),
+    };
+
+    await expect(
+      runStructuredFeature(
+        LOCATION_DESCRIPTION_FEATURE,
+        {
+          systemPrompts: ["frame"],
+          messages: [{ role: "user", content: "x" }],
+        },
+        { db: ctx.db, runId, operation: "locationDescription" },
+        ports,
+      ),
+    ).rejects.toThrow(/expected string/);
+
+    const rows = await usageRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: "failed", transport: "gateway" });
+    expect(rows[0]?.inputTokens).toBeGreaterThan(0);
+    expect(rows[0]?.outputTokens).toBeGreaterThan(0);
+  });
+
+  // Plan usage is never API spend, even when the registry could price the
+  // tokens a ChatGPT response reports.
+  it("never prices a ChatGPT plan call from its tokens", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const { recordAiUsage } = await import("~/server/ai-usage");
+    await recordAiUsage(ctx.db, {
+      provider: "openai",
+      model: "gpt-6-sol",
+      feature: "location-description",
+      operation: "locationDescription",
+      runId,
+      inputTokens: 1_000,
+      outputTokens: 1_000,
+      durationMs: 5,
+      transport: "chatgpt",
+    });
+
+    const rows = await usageRows();
+    expect(rows[0]).toMatchObject({ transport: "chatgpt", estimatedCost: 0 });
+  });
+
+  it("records unknown when a failed call never selected a transport", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const faux = fauxProvider();
+    const ports: StructuredRunPorts = {
+      callTarget: () => ({
+        model: faux.getModel(),
+        complete: async () => {
+          throw new Error("ChatGPT plan status lookup failed");
+        },
+      }),
+    };
+
+    await expect(
+      runStructuredFeature(
+        LOCATION_DESCRIPTION_FEATURE,
+        {
+          systemPrompts: ["frame"],
+          messages: [{ role: "user", content: "x" }],
+        },
+        { db: ctx.db, runId, operation: "locationDescription" },
+        ports,
+      ),
+    ).rejects.toThrow(/status lookup/);
+
+    const rows = await usageRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: "failed", transport: "unknown" });
   });
 });

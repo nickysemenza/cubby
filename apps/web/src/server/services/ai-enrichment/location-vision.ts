@@ -215,7 +215,7 @@ async function recordLocationAiUsage(
       | typeof LOCATION_DESCRIPTION_FEATURE
       | typeof LOCATION_INVENTORY_DETECTION_FEATURE;
     operation: string;
-    cacheStatus: "hit" | "miss";
+    cacheStatus: "hit";
     durationMs: number;
     locationId: LocationId;
     runId: RunId;
@@ -229,7 +229,12 @@ async function recordLocationAiUsage(
       operation: input.operation,
       entity: { entityKind: "location", entityId: input.locationId },
     },
-    { durationMs: input.durationMs, cacheStatus: input.cacheStatus },
+    {
+      // A miss's model call records its own row through the runner.
+      transport: "cache",
+      durationMs: input.durationMs,
+      cacheStatus: input.cacheStatus,
+    },
   );
 }
 

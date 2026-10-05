@@ -10,6 +10,7 @@ import {
   gatewayConfigured,
   gatewayFetch,
   type GatewayMetadata,
+  type GatewayTransport,
 } from "~/server/clients/ai-gateway";
 import type { Database } from "~/server/db";
 import { ensureRun, systemActor } from "~/server/runs/ensure-run";
@@ -37,7 +38,10 @@ export interface EmbeddingPorts {
    * One fetch per call: the gateway's request metadata is fixed when the
    * transport is built, so it cannot be hoisted to a shared client.
    */
-  readonly fetchFor: (metadata: GatewayMetadata) => typeof fetch;
+  readonly fetchFor: (
+    metadata: GatewayMetadata,
+    onTransport: (transport: GatewayTransport) => void,
+  ) => typeof fetch;
   /** Provider reachability only; `embedTexts` guards on this alone. */
   readonly configured: () => boolean;
   readonly vectorStore: VectorStorePort;
@@ -49,7 +53,8 @@ const productionEmbeddingPorts: EmbeddingPorts = {
   // misses; caching only ever short-circuits an identical (model, input)
   // pair, which is deterministic. Repeat search queries were paying the full
   // provider round-trip (p50 ~940ms) without this.
-  fetchFor: (metadata) => gatewayFetch("openai", cachedCall({ metadata })),
+  fetchFor: (metadata, onTransport) =>
+    gatewayFetch("openai", { ...cachedCall({ metadata }), onTransport }),
   configured: gatewayConfigured,
   vectorStore: productionVectorStore,
   config: getSemanticEmbeddingConfig,
@@ -129,8 +134,8 @@ export async function embedTexts(
     const result = await runEmbeddingFeature(
       { feature, model: config.model },
       {
-        embed: async () => {
-          const fetchThroughGateway = ports.fetchFor(metadata);
+        embed: async (onTransport) => {
+          const fetchThroughGateway = ports.fetchFor(metadata, onTransport);
           const response = await fetchThroughGateway(
             `${gatewayBaseURL("openai")}/embeddings`,
             {

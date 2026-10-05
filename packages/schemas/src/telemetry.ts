@@ -37,6 +37,33 @@ export const mcpToolCallTelemetrySchema = z.strictObject({
 });
 export type McpToolCallTelemetry = z.infer<typeof mcpToolCallTelemetrySchema>;
 
+/**
+ * What carried one AI call. `gateway` is Cloudflare AI Gateway (API-billed),
+ * `chatgpt` the household's connected ChatGPT plan (selected before the call,
+ * so a failure keeps the attribution), `direct` a provider reached without
+ * either, and `cache` an answer replayed with no model call. `unknown` means
+ * no evidence: historical rows without a gateway log id or application-cache
+ * hit, and queued telemetry minted before the field existed.
+ */
+export const aiUsageTransportValues = [
+  "gateway",
+  "chatgpt",
+  "direct",
+  "cache",
+  "unknown",
+] as const;
+export const aiUsageTransport = z.enum(aiUsageTransportValues);
+export type AiUsageTransport = z.infer<typeof aiUsageTransport>;
+
+/** Display labels shared by the run report and the AI usage page. */
+export const AI_USAGE_TRANSPORT_LABELS = {
+  gateway: "AI Gateway",
+  chatgpt: "ChatGPT plan",
+  direct: "Direct",
+  cache: "Cache",
+  unknown: "Unknown transport",
+} as const satisfies Record<AiUsageTransport, string>;
+
 export const aiUsageTelemetrySchema = z.strictObject({
   ...telemetryEnvelope,
   type: z.literal("ai_usage"),
@@ -65,6 +92,9 @@ export const aiUsageTelemetrySchema = z.strictObject({
   durationMs: z.number().int().nonnegative(),
   cacheStatus: z.enum(["hit", "miss", "none"]).nullable(),
   applicationCacheStatus: z.enum(["hit", "miss", "none"]).nullable().optional(),
+  // What carried the call. Optional only so messages queued by the preceding
+  // deployment still validate; the consumer files those as `unknown`.
+  transport: aiUsageTransport.optional(),
   entityKind: z.string().min(1).nullable(),
   entityId: z.uuid().nullable(),
   // The caller's own cost figure (the cookbook crate prices every model it

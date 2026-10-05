@@ -78,6 +78,34 @@ Subscription usage records have zero separately billed API cost;
 token counts remain visible. Embeddings, Workers AI and Anthropic keep their
 existing transport and billing.
 
+### Usage attribution
+
+Every `AiUsage` row names its `transport` (`aiUsageTransportValues` in
+`packages/schemas/src/telemetry.ts`): `gateway`, `chatgpt`, `direct`, `cache`
+or `unknown`. The transport is selected before the request leaves
+(`GatewayCallOptions.onTransport`, the agent's `onSelected`), so a connected
+plan's failure — even one that throws before any HTTP response — records a
+failed `chatgpt` row and is never retried through the paid gateway. The
+telemetry writer stores every `chatgpt` row at zero cost, whatever tokens it
+reports. `cache` means an application replay with no upstream call (the
+application response cache or a stored `AiAnalysis`); a Gateway response-cache
+hit still went through the gateway and stays `gateway`. Failed attempts record
+a failed row on their selected transport, keeping a billed response's usage
+when only its validation failed.
+
+Rows written before the column existed stay `unknown` unless they carry
+positive evidence: the migration set `cache` for an application-cache hit and
+`gateway` for a non-empty `gatewayLogId`. Zero cost and a caller-cache `hit`
+are not evidence (a prompt-cache read also wrote `hit`), so neither is guessed.
+The column keeps `DEFAULT 'unknown'` for writers deployed before it and queued
+telemetry minted without the field.
+
+The AI usage page uses Cubby's shared RTable for summaries and recent calls.
+Recent calls filter by transport, status, provider, model, feature, and search
+text. Filters apply to the full history before taking the newest requested
+number of calls; changing the summary's date window does not restrict recent
+calls. Search matches feature, model, or operation.
+
 OpenAI eligibility, region, revoked-session and usage-limit errors are surfaced
 with credential-shaped values scrubbed. Temporary refresh errors preserve credentials. Terminal refresh errors clear
 unusable tokens and show Reconnect ChatGPT; the deployment remains on subscription

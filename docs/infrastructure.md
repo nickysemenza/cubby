@@ -184,7 +184,8 @@ errors through the Worker's own configuration (`server/worker-sentry.ts`;
 the Durable Object's issues carry tag `service: purchase-agent`); it receives
 no traces, and model and tool content is never recorded in either
 destination. Each model response's usage reaches `AiUsage` through
-`recordAgentUsage`.
+`recordAgentUsage`, with the transport selected before the request
+([usage attribution](runbooks/chatgpt-plan.md#usage-attribution)).
 
 Account syncs and explicit Purchase validation/Product enrichment runs share
 the same queue. Each admitted run records a stable start-event id and the

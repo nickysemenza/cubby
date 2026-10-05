@@ -1,6 +1,7 @@
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
+import type { GatewayCallOptions } from "~/server/clients/ai-gateway";
 import { Database } from "~/server/db";
 
 import { auditPurchaseImportBatch, type PurchaseAuditPorts } from "./extract";
@@ -23,7 +24,12 @@ describe("purchase import audit recovery", () => {
     const recordUsage = vi.fn();
     const ports = fromPartial<PurchaseAuditPorts>({
       runStructured,
-      gateway: () => gatewayRequest,
+      gateway:
+        (_provider: string, call: GatewayCallOptions) =>
+        (url: RequestInfo | URL, init?: RequestInit) => {
+          call.onTransport?.("gateway");
+          return gatewayRequest(String(url), init);
+        },
       usage: recordUsage,
     });
     const db = new Database(() => {
@@ -59,6 +65,45 @@ describe("purchase import audit recovery", () => {
         model: "claude-opus-5-5",
         inputTokens: 100,
         outputTokens: 20,
+        transport: "gateway",
+      }),
+    );
+  });
+
+  it("records a failed recovery on its transport and rethrows", async () => {
+    const recordUsage = vi.fn();
+    const ports = fromPartial<PurchaseAuditPorts>({
+      runStructured: vi.fn(async () => {
+        throw new Error("primary schema rejected");
+      }),
+      gateway: (_provider: string, call: GatewayCallOptions) => async () => {
+        call.onTransport?.("gateway");
+        return new Response("overloaded", { status: 529 });
+      },
+      usage: recordUsage,
+    });
+    const db = new Database(() => {
+      throw new Error(
+        "Audit recovery unit test never resolves a database runtime",
+      );
+    });
+
+    await expect(
+      auditPurchaseImportBatch(
+        {
+          db,
+          runId: "00000000-0000-4000-8000-000000000001",
+          renderedBatch: [],
+        },
+        ports,
+      ),
+    ).rejects.toThrow(/failed on both/);
+    expect(recordUsage).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        operation: "purchaseImport.audit.recovery",
+        status: "failed",
+        transport: "gateway",
       }),
     );
   });

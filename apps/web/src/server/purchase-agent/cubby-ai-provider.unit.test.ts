@@ -34,7 +34,11 @@ describe("createCubbyGatewayFetch", () => {
       gateway: () => ({ id: "cubby", run: async () => response() }),
       runId: () => undefined,
       recorder: createContextRecorder(),
-      subscription: async () => (subscribed ? response() : null),
+      subscription: async (_body, options) => {
+        if (!subscribed) return null;
+        options?.onSelected?.();
+        return response();
+      },
     }))
       models.setProvider(provider);
     const model = models.getModel("openai", "gpt-6-sol");
@@ -50,6 +54,47 @@ describe("createCubbyGatewayFetch", () => {
     const paid = await models.complete(model, { messages: [] });
     expect(paid.usage.cost.total).toBeGreaterThan(0);
   });
+  it("keeps a connected plan's failure on chatgpt without a gateway retry", async () => {
+    const run = vi.fn(async () => new Response("stream"));
+    const transports: string[] = [];
+    const gatewayFetch = createCubbyGatewayFetch(
+      "openai",
+      () => ({ id: "cubby", run }),
+      () => runId,
+      async (_body, options) => {
+        options?.onSelected?.();
+        throw new Error("ChatGPT plan connection reset");
+      },
+      (transport) => transports.push(transport),
+    );
+    await expect(
+      gatewayFetch("https://ai-gateway.invalid/openai/responses", {
+        method: "POST",
+        body: JSON.stringify({ model: "gpt-6-sol" }),
+      }),
+    ).rejects.toThrow(/connection reset/);
+    expect(transports).toEqual(["chatgpt"]);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("reports gateway when the household has no plan connection", async () => {
+    const run = vi.fn(async () => new Response("stream"));
+    const transports: string[] = [];
+    const gatewayFetch = createCubbyGatewayFetch(
+      "openai",
+      () => ({ id: "cubby", run }),
+      () => runId,
+      async () => null,
+      (transport) => transports.push(transport),
+    );
+    await gatewayFetch("https://ai-gateway.invalid/openai/responses", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-6-sol" }),
+    });
+    expect(transports).toEqual(["gateway"]);
+    expect(run).toHaveBeenCalledOnce();
+  });
+
   it("attributes a coordinator request to its import run", async () => {
     const run = vi.fn(
       async (
