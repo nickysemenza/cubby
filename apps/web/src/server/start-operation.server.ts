@@ -38,6 +38,7 @@ import {
   readPolicyFor,
 } from "~/server/read-policy";
 import {
+  actorSpanAttributes,
   createRequestContext,
   requireActor,
   selectOperationContext,
@@ -386,7 +387,13 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
               options.request.verifiedContext ??
               (await runtime.authenticate(options.request.headers, span));
             actorVerified = true;
-            span.setAttribute("cubby.authenticated", true);
+            span.setAttributes({
+              "cubby.authenticated": true,
+              ...actorSpanAttributes(
+                authenticated.auth.sessionId,
+                authenticated.actorContext,
+              ),
+            });
             const readPolicy =
               options.type !== "query"
                 ? "strong"

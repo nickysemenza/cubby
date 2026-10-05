@@ -667,6 +667,30 @@ describe("image repository — import-run targets", () => {
       second.shortcode,
       third.shortcode,
     ]);
+
+    // The run order outranks a requested sort and holds across a page
+    // boundary; the total counts the whole run.
+    const runFilter = { runId: parseShortcodeFor("run", run.shortcode) };
+    const nameDesc = [{ orderBy: "filename", direction: "desc" as const }];
+    const pages = await Promise.all(
+      [0, 1].map((pageIndex) =>
+        imageList(ctx.db, runFilter, nameDesc, { pageIndex, pageSize: 2 }),
+      ),
+    );
+    expect(pages.map((page) => page.data.map((row) => row.id))).toEqual([
+      [first.shortcode, second.shortcode],
+      [third.shortcode],
+    ]);
+    expect(pages.map((page) => page.count)).toEqual([3, 3]);
+    expect(
+      await imageList(
+        ctx.db,
+        runFilter,
+        nameDesc,
+        { pageIndex: 0, pageSize: 2 },
+        "count",
+      ),
+    ).toEqual({ data: [], count: 3 });
   });
 });
 

@@ -118,6 +118,15 @@ describe("runJevChoice", () => {
     },
   );
 
+  it("preserves the complete provider rejection body", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    vi.resetModules();
+    const { runJevChoice: request } = await import("./jev");
+    const body = "synthetic provider diagnostic ".repeat(20);
+    vi.stubGlobal("fetch", async () => new Response(body, { status: 401 }));
+    await expect(request({ ...base, choices: ["one"] })).rejects.toThrow(body);
+  });
+
   it("aborts a stalled gateway request at the overall deadline", async () => {
     vi.useFakeTimers();
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");

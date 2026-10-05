@@ -13,21 +13,22 @@ dependency.
 
 ## Production topology
 
-| Concern                       | Provider                           | Production resource                                                                   |
-| ----------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------- |
-| Web application and APIs      | Cloudflare Workers                 | Worker `cubby`, custom domain `cubby.nickysemenza.com`                                |
-| Purchase-import orchestration | Agents SDK + pi-durable            | Worker `cubby`: queue `cubby-purchase-agent`, Durable Object `PurchaseImportRunAgent` |
-| PostgreSQL                    | Neon through Cloudflare Hyperdrive | One Neon origin, two Hyperdrive configurations                                        |
-| Images and documents          | Cloudflare R2                      | Bucket `foo`, public origin `https://media.nickysemenza.com`                          |
-| Product lookup                | Main Worker + PostgreSQL           | `UpcLookupCache` table, upcitemdb fallback (no key)                                   |
-| USDA food data                | Cloudflare Workers                 | Worker `usda-api`, D1 `usda-api-index`, R2 `usda-api-bundles`                         |
-| AI routing                    | Cloudflare AI Gateway              | Gateway `cubby`, Workers AI binding `AI`                                              |
-| Semantic vectors              | Cloudflare Vectorize               | `cubby-openai-text-embedding-3-small-1536`                                            |
-| Gmail discovery               | Google Cloud                       | Project `cubby-481519`, Gmail API, OAuth web client                                   |
-| Errors                        | Sentry                             | Web/Workers project represented by the checked-in DSN; separate `cubby-apple` project |
-| Worker logs and traces        | Cloudflare Workers Observability   | Native traces; logs also exported through `grafana-logs`                              |
-| Deployment                    | GitHub Actions                     | `.github/workflows/deploy.yaml` on `main`                                             |
-| Native clients                | Apple Developer/Xcode              | Associated domain `cubby.nickysemenza.com`; locally installed iOS/macOS apps          |
+| Concern                       | Provider                           | Production resource                                                                      |
+| ----------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------- |
+| Web application and APIs      | Cloudflare Workers                 | Worker `cubby`, custom domain `cubby.nickysemenza.com`                                   |
+| Purchase-import orchestration | Agents SDK + pi-durable            | Worker `cubby`: queue `cubby-purchase-agent`, Durable Object `PurchaseImportRunAgent`    |
+| PostgreSQL                    | Neon through Cloudflare Hyperdrive | One Neon origin, two Hyperdrive configurations                                           |
+| Images and documents          | Cloudflare R2                      | Bucket `foo`, public origin `https://media.nickysemenza.com`                             |
+| Product lookup                | Main Worker + PostgreSQL           | `UpcLookupCache` table, upcitemdb fallback (no key)                                      |
+| USDA food data                | Cloudflare Workers                 | Worker `usda-api`, D1 `usda-api-index`, R2 `usda-api-bundles`                            |
+| AI routing                    | Cloudflare AI Gateway              | Gateway `cubby`, Workers AI binding `AI`                                                 |
+| ChatGPT plan usage            | OpenAI OAuth + Responses API       | Worker `cubby`, SQLite Durable Object `ChatGptPlanDurableObject`, binding `CHATGPT_PLAN` |
+| Semantic vectors              | Cloudflare Vectorize               | `cubby-openai-text-embedding-3-small-1536`                                               |
+| Gmail discovery               | Google Cloud                       | Project `cubby-481519`, Gmail API, OAuth web client                                      |
+| Errors                        | Sentry                             | Web/Workers project represented by the checked-in DSN; separate `cubby-apple` project    |
+| Worker logs and traces        | Cloudflare Workers Observability   | Native traces; logs also exported through `grafana-logs`                                 |
+| Deployment                    | GitHub Actions                     | `.github/workflows/deploy.yaml` on `main`                                                |
+| Native clients                | Apple Developer/Xcode              | Associated domain `cubby.nickysemenza.com`; locally installed iOS/macOS apps             |
 
 The checked-in provider configurations are:
 
@@ -162,7 +163,8 @@ loads the consumer when a `cubby-purchase-agent` batch arrives
 (`apps/web/scripts/check-server-closure.ts` budgets both paths).
 
 The agent supplies Cubby's typed tools (`server/purchase-agent/tools.ts`,
-replay-safe, each effect memoized per operation id), mounts the purpose's
+replay-safe, each effect memoized per operation id; their parameters are the
+host contracts narrowed in `purchaseAgentToolInputs`), mounts the purpose's
 Cubby MCP tools as `mcp__cubby__<tool>` from the same compiled catalog
 the MCP server lists to it (`server/mcp/agent-tool-catalog.ts`, so the first
 dispatch lists nothing), and adds the purpose's skill plus product enrichment
@@ -221,9 +223,10 @@ WHERE c.client_id = 'cubby-purchase-agent'
 GROUP BY c.client_id, c.public, c.require_pkce;
 ```
 
-Three suites exercise the real agent in the workerd harness
-(`apps/web/tooling/purchase-agent-workerd-harness.ts`, the built `cubby`
-Worker with a scripted model and gateway).
+Three suites exercise the real agent in the workerd harness's
+`purchase-agent` profile (`apps/web/tooling/workerd-harness.ts`, the built
+`cubby` Worker with a scripted model and gateway, driven through
+`apps/web/tooling/purchase-agent-workerd-harness.ts`).
 `apps/web/src/server/purchase-import/purchase-agent-scenarios.integration.test.ts`
 (PostgreSQL tier) scripts only the coordinator model and the web Worker's
 extractor/audit model, and asserts the database graph, run status, findings,
@@ -249,9 +252,9 @@ pnpm --dir apps/web eval:purchase-decisions
 
 Neither uses an authenticated household session or production data.
 
-`createWorkerdHarness` (`apps/web/tooling/purchase-agent-workerd-harness.ts`)
-first takes the machine-wide harness lock, then checks every Worker build it
-loads (`COUPLED_WORKER_BUILDS` in `apps/web/tooling/worker-builds.ts`; today
+The `purchase-agent` and `coupled` profiles (`startWorkerdHarness`,
+`apps/web/tooling/workerd-harness.ts`) first take the machine-wide harness
+lock, then check every Worker build they load (`COUPLED_WORKER_BUILDS` in `apps/web/tooling/worker-builds.ts`; today
 only the web Worker, which hosts the agent) against the content hash in
 `dist/web-build-provenance.json`. Locally a stale build is rebuilt in place
 before workerd starts; in CI, where the Worker artifact must be current, a

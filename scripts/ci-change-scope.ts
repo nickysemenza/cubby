@@ -62,6 +62,9 @@ const importE2eInputs = [
   "apps/web/src/app/vendors/order-mail",
   "apps/web/src/routes/_authenticated/runs.",
   "apps/web/tooling/purchase-agent-",
+  // The runtime and profile table route the agent's queue and peers.
+  "apps/web/tooling/workerd-harness.ts",
+  "apps/web/tooling/workerd-runtime.ts",
   "apps/web/tests/e2e/harness-services/purchase-",
   "apps/web/tests/e2e/purchase-import-run.spec.ts",
   "apps/web/tests/e2e/e2e-test.ts",

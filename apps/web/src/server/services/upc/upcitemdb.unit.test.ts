@@ -89,7 +89,7 @@ describe("lookupUPCitemdb status mapping", () => {
     const runtime = runtimeFor(() =>
       jsonResponse({ code: "OK", total: 1, offset: 0, items: [{ title: 42 }] }),
     );
-    expect(await lookupUPCitemdb("012345678905", runtime)).toEqual({
+    expect(await lookupUPCitemdb("012345678905", runtime)).toMatchObject({
       status: "error",
     });
   });
@@ -100,7 +100,7 @@ describe("lookupUPCitemdb status mapping", () => {
     const runtime = runtimeFor(() =>
       jsonResponse({ code: "OK", total: 0, offset: 0 }),
     );
-    expect(await lookupUPCitemdb("012345678905", runtime)).toEqual({
+    expect(await lookupUPCitemdb("012345678905", runtime)).toMatchObject({
       status: "error",
     });
   });
@@ -123,14 +123,35 @@ describe("lookupUPCitemdb status mapping", () => {
 
   it("returns error (not a miss) on a 429 rate limit", async () => {
     const runtime = runtimeFor(() => jsonResponse({}, 429));
-    expect(await lookupUPCitemdb("012345678905", runtime)).toEqual({
+    expect(await lookupUPCitemdb("012345678905", runtime)).toMatchObject({
       status: "error",
     });
   });
 
+  it("preserves the upstream HTTP status and complete rejection body", async () => {
+    const body = "synthetic quota diagnostic ".repeat(20);
+    const result = await lookupUPCitemdb(
+      "012345678905",
+      runtimeFor(() => new Response(body, { status: 429 })),
+    );
+    expect(result).toMatchObject({
+      status: "error",
+      error: { message: `UPCitemdb request failed (HTTP 429): ${body}` },
+    });
+  });
+
+  it("preserves a transport exception for the batch failure cause", async () => {
+    const error = new Error("synthetic transport failure");
+    const result = await lookupUPCitemdb(
+      "012345678905",
+      runtimeFor(() => Promise.reject(error)),
+    );
+    expect(result).toEqual({ status: "error", error });
+  });
+
   it("returns error on a 5xx", async () => {
     const runtime = runtimeFor(() => jsonResponse({}, 503));
-    expect(await lookupUPCitemdb("012345678905", runtime)).toEqual({
+    expect(await lookupUPCitemdb("012345678905", runtime)).toMatchObject({
       status: "error",
     });
   });
@@ -141,7 +162,7 @@ describe("lookupUPCitemdb status mapping", () => {
       err.name = "AbortError";
       return Promise.reject(err);
     });
-    expect(await lookupUPCitemdb("012345678905", runtime)).toEqual({
+    expect(await lookupUPCitemdb("012345678905", runtime)).toMatchObject({
       status: "error",
     });
   });

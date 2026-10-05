@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./sentry-data-collection": "./src/sentry-data-collection.ts",
-    "./sentry-dsn": "./src/sentry-dsn.ts"
+    "./sentry-dsn": "./src/sentry-dsn.ts",
+    "./scrub-error-message": "./src/scrub-error-message.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

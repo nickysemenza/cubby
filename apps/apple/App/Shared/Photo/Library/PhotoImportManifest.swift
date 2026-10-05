@@ -351,7 +351,7 @@ final class PhotoImportManifest {
     /// The routing policy's related-record lookup for an existing/create pair's "existing" side:
     /// the target's relation filter keyed to the source record, plus the capture-date range
     /// `PhotoEntityChooserModel` already derives for the target descriptor. Shared by the manual
-    /// "Choose existing" chooser (`PhotoRelatedDestinationChooser.load`) and `chooseSourceRecord`'s
+    /// "Choose existing" chooser (`PhotoRelatedDestinationChooser.relatedSource`) and `chooseSourceRecord`'s
     /// auto-resolve so a same-day match reads identically from both paths. `nil` when the target
     /// has no filter keyed to the source entity — the caller falls back to the bounded
     /// relationship-page walk.

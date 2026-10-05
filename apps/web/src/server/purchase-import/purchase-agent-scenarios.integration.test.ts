@@ -11,11 +11,11 @@ import {
   mcpRead,
   type ScriptStep,
 } from "tooling/purchase-agent-script";
+import { type TestDbContext, withTestDb } from "tooling/test-setup";
 import {
   HOLD_WORKERD_HARNESS_TIMEOUT_MS,
   holdWorkerdHarness,
-} from "tooling/purchase-agent-workerd-harness";
-import { type TestDbContext, withTestDb } from "tooling/test-setup";
+} from "tooling/workerd-harness";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 

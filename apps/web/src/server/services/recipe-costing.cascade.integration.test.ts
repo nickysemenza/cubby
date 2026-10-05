@@ -281,7 +281,7 @@ describe("recipe totals cascade", () => {
         "[repair-on-read] [recipe.get] failed",
         expect.objectContaining({
           recipes: [tree.child],
-          error: expect.any(Error),
+          error: expect.objectContaining({ message: "publication refused" }),
         }),
       );
     } finally {

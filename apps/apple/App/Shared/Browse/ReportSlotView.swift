@@ -268,6 +268,17 @@ private struct ReportTableView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
+                // The server's column headings, in the same label/value layout as the rows.
+                if let first = table.columns.first {
+                    LabeledContent {
+                        Text(table.columns.dropFirst().joined(separator: " · "))
+                    } label: {
+                        Text(first)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.isHeader)
+                }
                 ForEach(table.rows) { row in
                     if let route = routeTarget(row.ref) {
                         NavigationLink(value: route) { cells(row) }

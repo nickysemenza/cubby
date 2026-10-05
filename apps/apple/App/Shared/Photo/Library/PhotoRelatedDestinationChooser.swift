@@ -16,16 +16,20 @@ struct PhotoRelatedDestinationChooser: View {
     let onSelect: (EntityRow) -> Void
     let onCreate: (PhotoDestinationOption, [String: JSONValue]) -> Void
 
-    @State private var rows: [EntityRow] = []
-    @State private var nextOffset: Int?
-    @State private var isLoading = true
-    @State private var errorMessage: String?
+    @State private var model: GenericEntityListModel?
     @State private var search = ""
     @State private var creation: PhotoDestinationOption?
-    @State private var listPage = 1
     @State private var rankScores: [String: PhotoEvidenceScorer.Score] = [:]
 
+    private nonisolated struct RelatedScope: Hashable, Sendable {
+        let contextID: String
+        let captureDate: Date?
+    }
+
+    private static let pageSize = 25
     private var descriptor: EntityDescriptor { context.option.descriptor }
+    private var scope: RelatedScope { RelatedScope(contextID: context.id, captureDate: captureDate) }
+    private var rows: [EntityRow] { (model?.rows ?? []).sorted { $0.title < $1.title } }
 
     private var filteredRows: [EntityRow] {
         guard !search.isEmpty else { return rows }
@@ -43,13 +47,13 @@ struct PhotoRelatedDestinationChooser: View {
                 }
                 PhotoAnalysisDisclosure(manifest: importManifest)
                 Group {
-                    if isLoading, rows.isEmpty {
-                        LoadingIndicator.screen(label: "Loading related \(descriptor.plural)")
-                    } else if let errorMessage, rows.isEmpty {
-                        LoadFailureView(title: "Couldn't load \(descriptor.plural)", message: errorMessage) {
-                            await load(reset: true)
+                    if let model, !rows.isEmpty {
+                        destinationList(model)
+                    } else if case .failed(let message)? = model?.phase {
+                        LoadFailureView(title: "Couldn't load \(descriptor.plural)", message: message) {
+                            await model?.refresh()
                         }
-                    } else if rows.isEmpty {
+                    } else if model?.phase == .loaded {
                         ContentUnavailableView {
                             Label(
                                 "No related \(descriptor.plural)",
@@ -65,42 +69,7 @@ struct PhotoRelatedDestinationChooser: View {
                             }
                         }
                     } else {
-                        List {
-                            if let createOption {
-                                Section {
-                                    Button("Create new \(createOption.descriptor.singular)") {
-                                        creation = createOption
-                                    }
-                                }
-                            }
-                            ForEach(Array(filteredRows.enumerated()), id: \.element.id) { index, row in
-                                Button {
-                                    onSelect(row)
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        EntityRowView(
-                                            key: context.option.route.target, row: row, photoMode: true)
-                                        if developerOverlays {
-                                            DevOverlayText(rankDiagnosticCaption(for: row, rank: index))
-                                        }
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityIdentifier("photos.destination.related.\(row.id)")
-                            }
-                            if nextOffset != nil, search.isEmpty {
-                                Button {
-                                    Task { await load(reset: false) }
-                                } label: {
-                                    if isLoading {
-                                        LoadingIndicator(label: "Loading more \(descriptor.plural)")
-                                    } else {
-                                        Text("Load more")
-                                    }
-                                }
-                                .disabled(isLoading)
-                            }
-                        }
+                        LoadingIndicator.screen(label: "Loading related \(descriptor.plural)")
                     }
                 }
                 .frame(maxHeight: .infinity)
@@ -117,15 +86,15 @@ struct PhotoRelatedDestinationChooser: View {
             }
         }
         .nativeSheet(.editor)
-        .task {
-            if let preloaded = context.preloaded {
-                rows = preloaded.items.sorted { $0.title < $1.title }
-                let hasMore = preloaded.meta.pageSize < preloaded.meta.totalCount
-                nextOffset = hasMore ? preloaded.meta.pageSize : nil
-                listPage = 2
-                isLoading = false
+        .task(id: scope) {
+            let source = relatedSource()
+            if let model {
+                await model.setSource(source)
             } else {
-                await load(reset: true)
+                let model = GenericEntityListModel(
+                    descriptor: descriptor, client: appModel.client, source: source)
+                self.model = model
+                await model.loadInitial()
             }
         }
         .task(id: rows.map(\.id)) { await rankRows() }
@@ -141,70 +110,115 @@ struct PhotoRelatedDestinationChooser: View {
         }
     }
 
-    private func load(reset: Bool) async {
-        guard let relationshipKey = context.option.route.relationPath.first,
-            context.option.route.relationPath.count == 1
-        else {
-            errorMessage = "This relationship path is not supported by this version of Cubby."
-            isLoading = false
-            return
-        }
-        if reset {
-            rows = []
-            nextOffset = nil
-            listPage = 1
-        }
-        guard !isLoading || reset else { return }
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
-        do {
-            if let page = try await PhotoImportManifest.findRelated(
-                option: context.option, source: context.source, captureDate: captureDate,
-                client: appModel.client, page: listPage, pageSize: 25)
-            {
-                mergeRows(page.items)
-                let hasMore = listPage * page.meta.pageSize < page.meta.totalCount
-                nextOffset = hasMore ? listPage * page.meta.pageSize : nil
-                listPage += 1
-                return
+    private func destinationList(_ model: GenericEntityListModel) -> some View {
+        List {
+            if let createOption {
+                Section {
+                    Button("Create new \(createOption.descriptor.singular)") {
+                        creation = createOption
+                    }
+                }
             }
-            let root = EntityRef(entity: context.option.route.source, id: context.source.id)
-            let page = try await appModel.client.relationshipPage(
-                root: root,
-                relationshipKey: relationshipKey,
-                offset: reset ? 0 : (nextOffset ?? 0),
-                limit: 25)
-            let branch = page.branches.first {
-                $0.root == root && $0.relationshipKey == relationshipKey
+            ForEach(Array(filteredRows.enumerated()), id: \.element.id) { index, row in
+                Button {
+                    onSelect(row)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        EntityRowView(key: context.option.route.target, row: row, photoMode: true)
+                        if developerOverlays {
+                            DevOverlayText(rankDiagnosticCaption(for: row, rank: index))
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("photos.destination.related.\(row.id)")
             }
-            let nodes = Dictionary(
-                page.nodes.map { ($0.reference, $0) }, uniquingKeysWith: { _, newer in newer })
-            let loaded = (branch?.items ?? []).compactMap { reference -> EntityRow? in
-                guard reference.entity == context.option.route.target,
-                    let node = nodes[reference]
-                else { return nil }
-                return EntityRow(
-                    id: reference.id,
-                    title: node.label,
-                    subtitle: nil,
-                    imageURL: node.imageURL,
-                    raw: .object(["id": .string(reference.id), "name": .string(node.label)]))
+            // This sheet has no refresh gesture, so `refreshError` can't arise; a failed next page
+            // keeps the loaded rows and shows its raw error with a retry.
+            if let error = model.nextPageError, search.isEmpty {
+                InlineLoadFailure(message: error, isRetrying: model.activity != .idle) {
+                    await model.loadNextPage()
+                }
+            } else if model.hasMore, search.isEmpty {
+                Button {
+                    Task { await model.loadNextPage() }
+                } label: {
+                    if model.activity == .loadingNextPage {
+                        LoadingIndicator(label: "Loading more \(descriptor.plural)")
+                    } else {
+                        Text("Load more")
+                    }
+                }
+                .disabled(model.activity != .idle)
             }
-            mergeRows(loaded)
-            nextOffset = branch?.nextOffset
-        } catch is CancellationError {
-            return
-        } catch {
-            errorMessage = error.localizedDescription
-            Diagnostics.report(error, context: "photos.destination.related.\(context.option.id)")
         }
     }
 
-    private func mergeRows(_ loaded: [EntityRow]) {
-        let grouped: [String: [EntityRow]] = Dictionary(grouping: rows + loaded, by: \.id)
-        let latest: [EntityRow] = grouped.values.compactMap(\.last)
-        rows = latest.sorted { $0.title < $1.title }
+    /// Page 1 is the auto-resolve's preloaded page when there is one. A route with a declared
+    /// relation filter pages the date-scoped list; otherwise the relationship cursor answers,
+    /// with page N at offset `(N - 1) * pageSize` (the graph clamps `limit` to the same 25).
+    private func relatedSource() -> EntityListPageSource {
+        let context = context
+        let captureDate = captureDate
+        let client = appModel.client
+        let pageSize = Self.pageSize
+        return EntityListPageSource(id: scope) { @MainActor page in
+            do {
+                if page == 1, let preloaded = context.preloaded { return preloaded }
+                if let listed = try await PhotoImportManifest.findRelated(
+                    option: context.option, source: context.source, captureDate: captureDate,
+                    client: client, page: page, pageSize: pageSize)
+                {
+                    return listed
+                }
+                return try await Self.relationshipPage(
+                    context: context, client: client, page: page, pageSize: pageSize)
+            } catch {
+                if !(error is CancellationError) {
+                    Diagnostics.report(error, context: "photos.destination.related.\(context.option.id)")
+                }
+                throw error
+            }
+        }
+    }
+
+    private static func relationshipPage(
+        context: PhotoRelatedContext, client: CubbyClient, page: Int, pageSize: Int
+    ) async throws -> ListPage<EntityRow> {
+        guard let relationshipKey = context.option.route.relationPath.first,
+            context.option.route.relationPath.count == 1
+        else { throw UnsupportedRelationPath() }
+        let root = EntityRef(entity: context.option.route.source, id: context.source.id)
+        let offset = (page - 1) * pageSize
+        let graph = try await client.relationshipPage(
+            root: root, relationshipKey: relationshipKey, offset: offset, limit: pageSize)
+        let branch = graph.branches.first {
+            $0.root == root && $0.relationshipKey == relationshipKey
+        }
+        let nodes = Dictionary(
+            graph.nodes.map { ($0.reference, $0) }, uniquingKeysWith: { _, newer in newer })
+        let loaded = (branch?.items ?? []).compactMap { reference -> EntityRow? in
+            guard reference.entity == context.option.route.target,
+                let node = nodes[reference]
+            else { return nil }
+            return EntityRow(
+                id: reference.id,
+                title: node.label,
+                subtitle: nil,
+                imageURL: node.imageURL,
+                raw: .object(["id": .string(reference.id), "name": .string(node.label)]))
+        }
+        // The cursor reports `nextOffset`, not a total: one past this page keeps `hasMore` true
+        // until the cursor ends.
+        let totalCount = branch?.nextOffset == nil ? offset + loaded.count : page * pageSize + 1
+        return ListPage(
+            items: loaded, meta: ListPageMeta(pageIndex: page, pageSize: pageSize, totalCount: totalCount))
+    }
+
+    private struct UnsupportedRelationPath: LocalizedError {
+        var errorDescription: String? {
+            "This relationship path is not supported by this version of Cubby."
+        }
     }
 
     /// Developer overlays layer 3: this chooser has one flat list (no separate date/recent lanes),

@@ -46,8 +46,6 @@ import {
 } from "~/server/repo/data-quality/hydrate";
 import {
   buildSearchConditions,
-  countWhere,
-  executeListQueryWithCount,
   getDb,
   idSetPresence,
   imageOrder,
@@ -602,26 +600,22 @@ const ingredientListImpl = async (
       ];
     return null;
   };
-  const orderByClause = ingredientScaffold.orderBy(
-    sorts,
-    {
-      resolve: resolveIngredientSort,
-    },
-    filters,
-  );
-
-  const { take, skip } = ingredientScaffold.page(pagination);
 
   if (readIntent === "ids") {
+    const { take, skip } = ingredientScaffold.page(pagination);
     // Routed through the relational builder, not a plain `.select().from()`,
-    // so `orderByClause` resolves against the same `"ingredient"` alias a
+    // so the order resolves against the same `"ingredient"` alias a
     // resolver sort hand-qualifies (see `resolveIngredientSort` above) — a
     // plain select has no alias, so a resolver sort would throw
     // `missing FROM-clause entry for table "ingredient"`.
     const rows = await dbClient.query.ingredient.findMany({
       columns: { shortcode: true },
       where: whereClause,
-      orderBy: orderByClause,
+      orderBy: ingredientScaffold.orderBy(
+        sorts,
+        { resolve: resolveIngredientSort },
+        filters,
+      ),
       // One look-ahead row tells the bulk scan whether another page exists,
       // avoiding a count query it would otherwise discard.
       limit: take + 1,
@@ -650,107 +644,102 @@ const ingredientListImpl = async (
     },
   } as const;
 
-  const { data: results, count: totalCount } = await executeListQueryWithCount({
-    kind: readIntent,
-    rows: () =>
-      getDb(db).query.ingredient.findMany({
-        where: whereClause,
-        with: {
-          product: wantsListGroup(projection, "relations")
-            ? leanRelations.with.product
-            : undefined,
-        },
-        extras: {
-          appearsInRecipes: wantsListGroup(projection, "relations")
-            ? leanRelations.extras.appearsInRecipes
-            : sql<RecipeRef[] | null>`NULL::jsonb`.as("appearsInRecipes"),
-          ownRecipeCount: wantsListGroup(projection, "derived")
-            ? leanRelations.extras.ownRecipeCount
-            : sql<number | null>`NULL::int`.as("ownRecipeCount"),
-        },
-        orderBy: orderByClause,
-        limit: take,
-        offset: skip,
-      }),
-    count: () => countWhere(db, ingredient, whereClause),
-  });
-  if (readIntent === "count") {
-    return { data: [], count: totalCount };
-  }
-
-  if (projection.kind === "base")
-    return {
-      data: projectListRows(
-        "ingredient",
-        results.map((row) => ({ ...row, id: row.shortcode })),
-        projection,
-      ),
-      count: totalCount,
-    };
-  const hydratedRows = results.map((row) => ({
-    ...row,
-    product: (row.product ?? []).flatMap((linkedProduct) =>
-      "unitMappings" in linkedProduct ? [linkedProduct] : [],
-    ),
-  }));
-  const linkedProducts = hydratedRows.flatMap((row) => row.product);
-  const [pricedProducts, qualifiedProducts, ingredientQualityById] =
-    await Promise.all([
-      loadListGroup(projection, "relations", () =>
-        enrichProductRowsWithPricing(db, linkedProducts),
-      ),
-      loadListGroup(projection, "relations", () =>
-        attachDataQuality(db, "product", linkedProducts),
-      ),
-      loadListGroup(projection, "quality", () =>
-        loadDataQualities(
-          db,
-          "ingredient",
-          results.map((row) => row.id),
-        ),
-      ),
-    ]);
-  const pricingById = new Map(
-    pricedProducts?.map((row) => [row.id, row.pricing]),
-  );
-  const qualityById = new Map(
-    qualifiedProducts?.map((row) => [row.id, row.dataQuality]),
-  );
-  const mapRow = (
-    row: (typeof hydratedRows)[number],
-    displayImages: Parameters<typeof dbIngredientToListValues>[1] = [],
-  ) => {
-    if (!wantsListGroup(projection, "relations"))
-      return {
-        ...row,
-        id: row.shortcode,
-        ownRecipeCount:
-          row.ownRecipeCount === null ? undefined : Number(row.ownRecipeCount),
-        dataQuality: ingredientQualityById?.get(row.id),
-        displayImages,
-      };
-    return dbIngredientToListValues(
-      {
-        ...row,
-        product: (row.product ?? []).map((product) => ({
-          ...product,
-          pricing: pricingById.get(product.id),
-          dataQuality: qualityById.get(product.id)!,
-        })),
-        appearsInRecipes: row.appearsInRecipes ?? [],
-        ownRecipeCount: row.ownRecipeCount ?? 0,
+  return ingredientScaffold.list(
+    db,
+    { filters, sorts, pagination, readIntent, projection },
+    {
+      where: whereClause,
+      resolveSort: resolveIngredientSort,
+      select: (page) =>
+        dbClient.query.ingredient.findMany({
+          ...page,
+          with: {
+            product: wantsListGroup(projection, "relations")
+              ? leanRelations.with.product
+              : undefined,
+          },
+          extras: {
+            appearsInRecipes: wantsListGroup(projection, "relations")
+              ? leanRelations.extras.appearsInRecipes
+              : sql<RecipeRef[] | null>`NULL::jsonb`.as("appearsInRecipes"),
+            ownRecipeCount: wantsListGroup(projection, "derived")
+              ? leanRelations.extras.ownRecipeCount
+              : sql<number | null>`NULL::int`.as("ownRecipeCount"),
+          },
+        }),
+      hydrate: async (results) => {
+        if (projection.kind === "base")
+          return projectListRows(
+            "ingredient",
+            results.map((row) => ({ ...row, id: row.shortcode })),
+            projection,
+          );
+        const hydratedRows = results.map((row) => ({
+          ...row,
+          product: (row.product ?? []).flatMap((linkedProduct) =>
+            "unitMappings" in linkedProduct ? [linkedProduct] : [],
+          ),
+        }));
+        const linkedProducts = hydratedRows.flatMap((row) => row.product);
+        const [pricedProducts, qualifiedProducts, ingredientQualityById] =
+          await Promise.all([
+            loadListGroup(projection, "relations", () =>
+              enrichProductRowsWithPricing(db, linkedProducts),
+            ),
+            loadListGroup(projection, "relations", () =>
+              attachDataQuality(db, "product", linkedProducts),
+            ),
+            loadListGroup(projection, "quality", () =>
+              loadDataQualities(
+                db,
+                "ingredient",
+                results.map((row) => row.id),
+              ),
+            ),
+          ]);
+        const pricingById = new Map(
+          pricedProducts?.map((row) => [row.id, row.pricing]),
+        );
+        const qualityById = new Map(
+          qualifiedProducts?.map((row) => [row.id, row.dataQuality]),
+        );
+        const mapRow = (
+          row: (typeof hydratedRows)[number],
+          displayImages: Parameters<typeof dbIngredientToListValues>[1] = [],
+        ) => {
+          if (!wantsListGroup(projection, "relations"))
+            return {
+              ...row,
+              id: row.shortcode,
+              ownRecipeCount:
+                row.ownRecipeCount === null
+                  ? undefined
+                  : Number(row.ownRecipeCount),
+              dataQuality: ingredientQualityById?.get(row.id),
+              displayImages,
+            };
+          return dbIngredientToListValues(
+            {
+              ...row,
+              product: (row.product ?? []).map((product) => ({
+                ...product,
+                pricing: pricingById.get(product.id),
+                dataQuality: qualityById.get(product.id)!,
+              })),
+              appearsInRecipes: row.appearsInRecipes ?? [],
+              ownRecipeCount: row.ownRecipeCount ?? 0,
+            },
+            displayImages,
+            ingredientQualityById?.get(row.id),
+          );
+        };
+        const mapped = wantsListGroup(projection, "media")
+          ? await withDisplayImages(db, "ingredient", hydratedRows, mapRow)
+          : hydratedRows.map((row) => mapRow(row));
+        return projectListRows("ingredient", mapped, projection);
       },
-      displayImages,
-      ingredientQualityById?.get(row.id),
-    );
-  };
-  const mapped = wantsListGroup(projection, "media")
-    ? await withDisplayImages(db, "ingredient", hydratedRows, mapRow)
-    : hydratedRows.map((row) => mapRow(row));
-  return {
-    data: projectListRows("ingredient", mapped, projection),
-    count: totalCount,
-  };
+    },
+  );
 };
 
 export const ingredientListRead = async (
@@ -768,8 +757,7 @@ export const ingredientListRead = async (
     "page",
     projection,
   );
-  if (page.count === undefined)
-    throw new Error("Wrong ingredient list read intent");
+  if (!("count" in page)) throw new Error("Wrong ingredient list read intent");
   return {
     data: page.data.map((row) => listReadRowSchema.parse(row)),
     count: page.count,

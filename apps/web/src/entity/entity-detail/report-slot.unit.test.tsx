@@ -219,6 +219,47 @@ describe("EntityReportSlot records", () => {
     expect(screen.getAllByText("second")).toHaveLength(1);
   });
 
+  it("draws a table with column headings, row links and a truncation notice", async () => {
+    answer = () => ({
+      blocks: [
+        {
+          kind: "table",
+          title: "Attribution gaps",
+          columns: ["Issue", "Amount", "Records"],
+          rows: [
+            {
+              id: "g1",
+              cells: ["Some funding is unattributed", "$40.00", "EXP-4K7M"],
+            },
+            {
+              id: "g2",
+              cells: ["Sub-project spend", "$5.00", ""],
+              ref: { entity: "project", id: "PRJ-4K7M" },
+            },
+          ],
+          truncated: true,
+        },
+      ],
+    });
+    render(<EntityReportSlot slot="project.contribution" id="PRJ-4K7N" />, {
+      wrapper: harness.wrapper,
+    });
+    const table = await screen.findByRole("region", {
+      name: "Attribution gaps",
+    });
+    expect(
+      screen.getAllByRole("columnheader").map((cell) => cell.textContent),
+    ).toEqual(["Issue", "Amount", "Records"]);
+    expect(screen.getByRole("link", { name: "EXP-4K7M" })).toHaveAttribute(
+      "href",
+      "/expenses/EXP-4K7M",
+    );
+    expect(
+      screen.getByRole("link", { name: "Sub-project spend" }),
+    ).toHaveAttribute("href", "/projects/PRJ-4K7M");
+    expect(table).toHaveTextContent("Showing the first rows only.");
+  });
+
   it("renders nothing for a report with no blocks", async () => {
     answer = () => ({ live: false, status: "completed", blocks: [] });
     const { container } = render(

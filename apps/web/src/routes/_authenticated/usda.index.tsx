@@ -2,7 +2,7 @@ import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 
 import { USDAFoodList } from "~/app/usda/usdafoodlist";
 import { entitySearch } from "~/entity/generated/entity-search.gen";
-import { listChromePage } from "~/entity/routing/entity-routes";
+import { listChromePage } from "~/entity/routing/list-page";
 import { pageTitle } from "~/lib/page-title";
 
 // Bound to a const, not inlined into the options object: the router plugin's

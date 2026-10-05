@@ -8,6 +8,7 @@ import {
 import { z } from "zod";
 
 import { env } from "~/env";
+import { chatGptInference } from "~/server/ai/chatgpt/client";
 import {
   CF_ACCOUNT_ID,
   CF_AIG_GATEWAY_ID,
@@ -78,6 +79,8 @@ export interface GatewayCallOptions {
   requestTimeoutMs?: number;
   /** Preserve a failed HTTP response even if the provider SDK replaces it. */
   onErrorResponse?: (failure: GatewayResponseFailure) => void;
+  /** Subscription inference has no separately billed API token cost. */
+  onChatGptPlan?: () => void;
 }
 
 async function captureFailure(response: Response, opts: GatewayCallOptions) {
@@ -169,6 +172,17 @@ export function gatewayFetch(
         ),
         opts,
       );
+    }
+
+    if (provider === "openai" && endpoint === "responses") {
+      const subscription = await chatGptInference(
+        await gatewayQuery(init?.body),
+        { signal, requestTimeoutMs: opts.requestTimeoutMs },
+      );
+      if (subscription) {
+        opts.onChatGptPlan?.();
+        return captureFailure(subscription, opts);
+      }
     }
 
     const gateway = getAiGateway();

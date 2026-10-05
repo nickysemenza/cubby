@@ -187,10 +187,13 @@ describe("entity report", () => {
     expect(
       stats?.figures.find((entry) => entry.label === "Whole-group cost")?.value,
     ).toBe(125);
+    // An aggregated gap stands for many expenses: one row with a count, never
+    // one link per record.
     expect(
-      blocksOf(blocks, "table").find((table) => table.title?.includes("gaps"))
-        ?.rows.length,
-    ).toBeGreaterThan(0);
+      blocksOf(blocks, "table")
+        .find((table) => table.title === "Attribution gaps")
+        ?.rows.map((row) => row.cells),
+    ).toContainEqual(["Committed, not yet paid", "$125.00", "1 expense"]);
   });
 
   it("values a location's contents and breaks direct stock down by manufacturer", async () => {

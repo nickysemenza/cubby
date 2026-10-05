@@ -1,50 +1,20 @@
 import { request, type APIRequestContext } from "@playwright/test";
-import { type TestHarness } from "wrangler";
 import type { PurchaseImportNamespace } from "~/server/purchase-import/run-service";
 
-import {
-  closeE2EWorkerResources,
-  type E2EWorkerResources,
-} from "../../tooling/e2e-worker-resources";
-import {
-  createLocalWorkerdHarness,
-  installDatabaseEnvironment,
-} from "../../tooling/local-workerd-harness";
-import {
-  createWorkerdHarness,
-  type ScenarioControls,
-  scenarioControls,
-} from "../../tooling/purchase-agent-workerd-harness";
-import { createE2EDatabase } from "./e2e-database";
-import { createE2EObjectStorage } from "../../tooling/local-object-storage";
-import {
-  createLocalGoogleProvider,
-  type LocalGoogleProvider,
-} from "../../tooling/local-google-provider";
 import {
   harnessExplorerUrl,
   sanitizeWorkerdLogs,
   type WorkerdLog,
 } from "../../tooling/e2e-workerd-logs";
+import { scenarioControls } from "../../tooling/purchase-agent-workerd-harness";
+import { WORKERD_PROFILES } from "../../tooling/workerd-harness";
+import {
+  openWorkerdRuntime,
+  type WorkerdRuntimeOptions,
+} from "../../tooling/workerd-runtime";
+import { createE2EDatabase } from "./e2e-database";
 
 type E2EStorageState = Awaited<ReturnType<APIRequestContext["storageState"]>>;
-
-export interface E2EWorkerRuntime {
-  baseURL: string;
-  databaseUrl: string;
-  objectStorageUrl: string;
-  googleProvider?: LocalGoogleProvider;
-  /** The scripted coordinator and gateway, when the Worker hosts the purchase agent. */
-  purchaseAgent?: ScenarioControls;
-  browserNamespace(): Promise<PurchaseImportNamespace>;
-  storageState: E2EStorageState;
-  /** Bindings, Durable Object, queue and R2 explorer of this live harness. */
-  explorerUrl: string;
-  /** Sanitized workerd logs since the last `clearLogs()`. */
-  getLogs(): WorkerdLog[];
-  clearLogs(): void;
-  close(): Promise<void>;
-}
 
 export async function authenticate(baseURL: string): Promise<E2EStorageState> {
   const email = process.env.E2E_TEST_USER_EMAIL;
@@ -84,20 +54,24 @@ export async function authenticate(baseURL: string): Promise<E2EStorageState> {
   }
 }
 
+/**
+ * The browser runtime: a seeded `browser` database lease, local object
+ * storage, and the built Worker under `profile`, optionally signed in.
+ * `close()` releases all of it (see `openWorkerdRuntime`).
+ */
 export async function createE2EWorkerRuntime({
   authenticated,
   parallelIndex,
-  gmailJourney = false,
-  purchaseAgent = false,
+  profile = "offline",
+  models,
+  objectStorage = {},
 }: {
   authenticated: boolean;
   parallelIndex: number;
-  gmailJourney?: boolean;
-  purchaseAgent?: boolean;
-}): Promise<E2EWorkerRuntime> {
-  const resources: E2EWorkerResources = {};
-  let restoreEnvironment = () => {};
-  let harness: TestHarness | undefined;
+  profile?: WorkerdRuntimeOptions["profile"];
+  models?: WorkerdRuntimeOptions["models"];
+  objectStorage?: NonNullable<WorkerdRuntimeOptions["objectStorage"]>;
+}) {
   // Phase timings attribute a slow or failed worker start without a trace.
   let phaseStart = performance.now();
   const logPhase = (phase: string) => {
@@ -107,92 +81,61 @@ export async function createE2EWorkerRuntime({
     );
     phaseStart = now;
   };
-  try {
-    const database = await createE2EDatabase();
-    logPhase("database checkout");
-    resources.database = database;
-    restoreEnvironment = installDatabaseEnvironment(database.databaseUrl);
+  const {
+    runtime,
+    prepared: { storageState, objectStorageUrl },
+  } = await openWorkerdRuntime(
+    {
+      profile,
+      database: { lease: createE2EDatabase },
+      objectStorage,
+      models,
+      onPhase: logPhase,
+    },
+    async ({ origin, objectStorageUrl }) => {
+      if (!objectStorageUrl)
+        throw new Error("The browser runtime always starts object storage");
+      const state = authenticated
+        ? await authenticate(origin)
+        : { cookies: [], origins: [] };
+      logPhase("auth");
+      return { storageState: state, objectStorageUrl };
+    },
+  );
+  const { harness, origin: baseURL } = runtime;
+  const explorerUrl = harnessExplorerUrl(baseURL);
+  console.log(
+    `[E2E Worker ${parallelIndex}] ${runtime.databaseName} at ${baseURL} (explorer ${explorerUrl})`,
+  );
 
-    const objectStorage = await createE2EObjectStorage();
-    resources.objectStorage = objectStorage;
-    logPhase("object storage");
-
-    const googleProvider = gmailJourney
-      ? await createLocalGoogleProvider()
-      : undefined;
-    resources.googleProvider = googleProvider;
-
-    // The purchase-agent harness runs the Worker's agent and queue consumer
-    // against a scripted model and gateway instead of offline peers.
-    harness = purchaseAgent
-      ? await createWorkerdHarness(database.databaseUrl, undefined, undefined, {
-          objectStorage: {
-            endpoint: objectStorage.url,
-            publicUrl: objectStorage.url,
-          },
-        })
-      : createLocalWorkerdHarness(
-          database.databaseUrl,
-          objectStorage.url,
-          false,
-          googleProvider?.url,
-        );
-    resources.harness = harness;
-    const { url } = await harness.listen();
-    const baseURL = url.origin;
-    logPhase("harness create+listen");
-    const storageState = authenticated
-      ? await authenticate(baseURL)
-      : { cookies: [], origins: [] };
-    logPhase("auth");
-
-    const explorerUrl = harnessExplorerUrl(baseURL);
-    console.log(
-      `[E2E Worker ${parallelIndex}] ${database.name} at ${baseURL} (explorer ${explorerUrl})`,
-    );
-
-    let closed = false;
-    return {
-      baseURL,
-      databaseUrl: database.databaseUrl,
-      objectStorageUrl: objectStorage.url,
-      googleProvider,
-      purchaseAgent: purchaseAgent ? scenarioControls(harness) : undefined,
-      async browserNamespace() {
-        if (!harness) throw new Error("Browser harness is closed");
-        return (
-          await harness
-            .getWorker<{ PURCHASE_IMPORT: PurchaseImportNamespace }>()
-            .getEnv()
-        ).PURCHASE_IMPORT;
-      },
-      storageState,
-      explorerUrl,
-      getLogs: () => sanitizeWorkerdLogs(harness?.getLogs() ?? []),
-      clearLogs: () => harness?.clearLogs(),
-      async close() {
-        if (closed) return;
-        closed = true;
-        try {
-          await closeE2EWorkerResources(resources);
-        } finally {
-          restoreEnvironment();
-        }
-      },
-    };
-  } catch (error) {
-    try {
-      harness?.debug();
-      await closeE2EWorkerResources(resources);
-    } catch (cleanupError) {
-      throw new AggregateError(
-        [error, cleanupError],
-        "E2E worker setup and cleanup failed",
-        { cause: cleanupError },
-      );
-    } finally {
-      restoreEnvironment();
-    }
-    throw error;
-  }
+  return {
+    baseURL,
+    databaseUrl: runtime.databaseUrl,
+    objectStorageUrl,
+    googleProvider: runtime.googleProvider,
+    /** The workerd harness, for peers a lane reads directly. */
+    harness,
+    /** The scripted coordinator and gateway, when the profile has them. */
+    purchaseAgent: WORKERD_PROFILES[profile].purchaseAgentPeers
+      ? scenarioControls(harness)
+      : undefined,
+    async browserNamespace(): Promise<PurchaseImportNamespace> {
+      return (
+        await harness
+          .getWorker<{ PURCHASE_IMPORT: PurchaseImportNamespace }>()
+          .getEnv()
+      ).PURCHASE_IMPORT;
+    },
+    storageState,
+    /** Bindings, Durable Object, queue and R2 explorer of this live harness. */
+    explorerUrl,
+    /** Sanitized workerd logs since the last `clearLogs()`. */
+    getLogs: (): WorkerdLog[] => sanitizeWorkerdLogs(harness.getLogs()),
+    clearLogs: () => harness.clearLogs(),
+    close: runtime.close,
+  };
 }
+
+export type E2EWorkerRuntime = Awaited<
+  ReturnType<typeof createE2EWorkerRuntime>
+>;

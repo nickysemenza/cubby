@@ -743,6 +743,11 @@ extension JSONValue {
  * hand-written in `CubbyClient.swift`.
  */
 const CLIENT_PASSTHROUGH_METHODS = {
+  "chatgpt.authorizationHost": {
+    method: "chatGptAuthorizationHost",
+    doc: null,
+  },
+  "chatgpt.connect": { method: "connectChatGpt", doc: null },
   "purchase.products": { method: "purchaseProducts", doc: null },
   "purchase.settlementCandidates": {
     method: "purchaseSettlementCandidates",

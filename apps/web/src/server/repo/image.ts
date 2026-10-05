@@ -100,7 +100,6 @@ import {
   countWhere,
   eqAny,
   eqAnyRequested,
-  executeListQueryWithCount,
   getDb,
   imageJoinBindings,
   type ImageJoinBinding,
@@ -1306,80 +1305,76 @@ export const imageList = async (
   // A photo-inventory run's picker order overrides the caller's own sort:
   // an agent working `filters.runId` wants the run's physical capture
   // order, not whatever default/requested sort the generic image list uses.
-  const orderByClause =
-    runIdsForOrder !== undefined
-      ? [
+  const runOrder =
+    runIdsForOrder === undefined
+      ? undefined
+      : [
           sql`(
             SELECT "position" FROM "RunTarget"
             WHERE "RunTarget"."entityId" = ${listImage.id}
               AND "RunTarget"."runId" = ANY(${uuidArrayParam(runIdsForOrder)})
           ) asc nulls last`,
           asc(listImage.createdAt),
-        ]
-      : imageScaffold.orderBy(sorts, {}, filters);
+        ];
 
-  const { take, skip } = imageScaffold.page(pagination);
-
-  const { data: images, count } = await executeListQueryWithCount({
-    kind: readIntent,
-    rows: () =>
-      dbClient.query.image.findMany({
-        where: whereClause,
-        orderBy: orderByClause,
-        limit: take,
-        offset: skip,
-        with: imageEntityRelations,
-      }),
-    // Not `countWhere`/`$count`: that helper renders `FROM` from the
-    // table's bare name, which for an `aliasedTable` is just the alias
-    // itself (`FROM "image"`, no real relation) rather than `FROM "Image"
-    // AS "image"`. A plain `.from(listImage)` renders the alias correctly.
-    count: () =>
-      getDb(db)
-        .select({ count: sql<number>`count(*)::int` })
-        .from(listImage)
-        .where(whereClause)
-        .then((rows) => rows[0]?.count ?? 0),
-  });
-
-  const imageShortcodes = images.map((item) => item.shortcode);
-  const imageIds = images.map((item) => parseEntityId("image", item.id));
-  const [
-    representations,
-    processingIssues,
-    importTargets,
-    analysisSummaries,
-    capturedByParties,
-    dataQualities,
-  ] = await Promise.all([
-    loadImageRepresentations(db, imageShortcodes),
-    loadImageProcessingIssues(db, imageShortcodes),
-    loadImportTargets(db, imageShortcodes),
-    loadImageAnalysisSummaries(db, imageShortcodes),
-    loadCapturedByParties(
-      db,
-      images.map((item) => item.capturedByPartyId),
-    ),
-    loadDataQualities(db, "image", imageIds),
-  ]);
-  const processedImages = images.map((item) => ({
-    ...imageWithRelationsToAPI(
-      item,
-      item.capturedByPartyId
-        ? (capturedByParties.get(item.capturedByPartyId) ?? null)
-        : null,
-    ),
-    representations: representations.get(item.shortcode),
-    processingIssue: processingIssues.get(item.shortcode) ?? null,
-    importTarget: importTargets.get(item.shortcode) ?? null,
-    analysisSummary: analysisSummaries.get(item.shortcode) ?? null,
-    dataQuality: dataQualities.get(parseEntityId("image", item.id)),
-  }));
-
-  return {
-    data: processedImages,
-    count,
-  };
+  return imageScaffold.list(
+    db,
+    { filters, sorts, pagination, readIntent },
+    {
+      where: whereClause,
+      orderBy: runOrder,
+      select: (page) =>
+        dbClient.query.image.findMany({ ...page, with: imageEntityRelations }),
+      // Not `countWhere`/`$count`: that helper renders `FROM` from the
+      // table's bare name, which for an `aliasedTable` is just the alias
+      // itself (`FROM "image"`, no real relation) rather than `FROM "Image"
+      // AS "image"`. A plain `.from(listImage)` renders the alias correctly.
+      count: () =>
+        dbClient
+          .select({ count: sql<number>`count(*)::int` })
+          .from(listImage)
+          .where(whereClause)
+          .then((rows) => rows[0]?.count ?? 0),
+      hydrate: async (images) => {
+        const imageShortcodes = images.map((item) => item.shortcode);
+        const [
+          representations,
+          processingIssues,
+          importTargets,
+          analysisSummaries,
+          capturedByParties,
+          dataQualities,
+        ] = await Promise.all([
+          loadImageRepresentations(db, imageShortcodes),
+          loadImageProcessingIssues(db, imageShortcodes),
+          loadImportTargets(db, imageShortcodes),
+          loadImageAnalysisSummaries(db, imageShortcodes),
+          loadCapturedByParties(
+            db,
+            images.map((item) => item.capturedByPartyId),
+          ),
+          loadDataQualities(
+            db,
+            "image",
+            images.map((item) => parseEntityId("image", item.id)),
+          ),
+        ]);
+        return images.map((item) => ({
+          ...imageWithRelationsToAPI(
+            item,
+            item.capturedByPartyId
+              ? (capturedByParties.get(item.capturedByPartyId) ?? null)
+              : null,
+          ),
+          representations: representations.get(item.shortcode),
+          processingIssue: processingIssues.get(item.shortcode) ?? null,
+          importTarget: importTargets.get(item.shortcode) ?? null,
+          analysisSummary: analysisSummaries.get(item.shortcode) ?? null,
+          dataQuality: dataQualities.get(parseEntityId("image", item.id)),
+        }));
+      },
+    },
+  );
 };
 
 export const getImageById = async (

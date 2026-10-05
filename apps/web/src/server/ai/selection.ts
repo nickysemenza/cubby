@@ -11,7 +11,7 @@
  * - A roster the decision tier can take in one choice goes to Jev
  *   (`jev.ts`), which answers over positional `c0…cn` choices — the
  *   winner's index resolves straight back to the shown roster.
- * - A larger roster overflows to the fast chat tier
+ * - A roster exceeding the choice or byte budget overflows to the fast chat tier
  *   ({@link SELECTION_OVERFLOW_FEATURE}): the model names the chosen
  *   candidate's id from a rendered shortlist, and an id it never saw
  *   resolves to null rather than to a guess.
@@ -23,7 +23,7 @@ import {
   SELECTION_OVERFLOW_FEATURE,
 } from "~/server/ai/features";
 import {
-  JEV_MAX_CANDIDATES,
+  jevChoiceFitsContext,
   type JevPort,
   runJevChoice,
 } from "~/server/ai/jev";
@@ -136,12 +136,17 @@ export async function runAiSelection<C>(
     };
   }
 
-  if (shown.length > JEV_MAX_CANDIDATES) {
+  const choices = shown.map(spec.renderLine);
+  if (
+    !jevChoiceFitsContext({ subject: args.subject, rules: spec.rules, choices })
+  ) {
     const port = args.ai ?? productionAiSelectionPort;
     const result = await port.select({
       rules: spec.rules,
       subject: args.subject,
-      shortlist: shown.map(spec.renderLine).join("\n"),
+      shortlist: shown
+        .map((candidate, index) => `${spec.idOf(candidate)}: ${choices[index]}`)
+        .join("\n"),
       usage: args.usage,
     });
     const wanted =
@@ -164,7 +169,7 @@ export async function runAiSelection<C>(
     feature: spec.feature,
     subject: args.subject,
     rules: spec.rules,
-    choices: shown.map(spec.renderLine),
+    choices,
     usage: args.usage,
     port: args.jev,
   });

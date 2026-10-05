@@ -156,6 +156,16 @@ fallbacks use capture metadata, never modification/upload dates. Undated photos
 need an explicit date. Prefills say Date from photo; explicit date edits survive
 selection changes and existing-entry dates are preserved.
 
+Existing-record destinations keep capture-date matches and unscoped recents in
+independent paged lists. Recents skip capture-day rows and continue until a
+visible destination is available or the source ends. Selection changes retarget
+that model-owned drain; replacing a SwiftUI scope task does not cancel a recent
+request still wanted by the new selection. Dismissal stops further paging and
+invalidates pending refresh continuations. Reappearance waits for a surviving
+initial or refresh page to land before evaluating its visible recents, even when
+cached rows are already available. Refresh supersedes obsolete pages without
+waiting for their loaders to honor cancellation.
+
 Garden review enforces 20 photos per entry before uploading. Saves are sequential;
 confirmed entry IDs and successful upload IDs survive failures. Reuse, including
 references to other selected photos, transfers no image bytes. The destination

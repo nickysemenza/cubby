@@ -47,16 +47,17 @@ conversation: it reaches Cubby through one Run's services and nothing else
 
 ## Where to look
 
-| Need                                       | File                                                        |
-| ------------------------------------------ | ----------------------------------------------------------- |
-| Queue event and bridge message shapes      | `packages/schemas/src/purchase-import.ts`                   |
-| Run lifecycle, claims, and terminal states | `run-service.ts` (search the function name from above)      |
-| What the agent may call, and its inputs    | `agent-services.ts`, `server/purchase-agent/environment.ts` |
-| Gmail order-mail pipeline (hourly cron)    | `gmail/` (`hourly.ts`, `process.ts`, `import.ts`)           |
-| Statement-charge hunts                     | `hunts.ts`, `charge-runs.ts`, `charge-hunt-state.ts`        |
-| Agent model, prompts, and MCP tools        | `server/purchase-agent/run-agent.ts`, `cubby-mcp.ts`        |
-| Scripted/workerd harness for the agent     | `apps/web/tooling/purchase-agent-workerd-harness.ts`        |
-| Billed model evals                         | `*.live-eval.ts`, `agent-eval-live-support.ts`              |
+| Need                                             | File                                                        |
+| ------------------------------------------------ | ----------------------------------------------------------- |
+| Queue event and bridge message shapes            | `packages/schemas/src/purchase-import.ts`                   |
+| Run lifecycle, claims, and terminal states       | `run-service.ts` (search the function name from above)      |
+| What the agent may call, and its inputs          | `agent-services.ts`, `server/purchase-agent/environment.ts` |
+| Gmail order-mail pipeline (hourly cron)          | `gmail/` (`hourly.ts`, `process.ts`, `import.ts`)           |
+| Statement-charge hunts                           | `hunts.ts`, `charge-runs.ts`, `charge-hunt-state.ts`        |
+| Agent model, prompts, and MCP tools              | `server/purchase-agent/run-agent.ts`, `cubby-mcp.ts`        |
+| Scripted/workerd harness for the agent           | `apps/web/tooling/purchase-agent-workerd-harness.ts`        |
+| Its workerd runtime and `purchase-agent` profile | `apps/web/tooling/workerd-runtime.ts`, `workerd-harness.ts` |
+| Billed model evals                               | `*.live-eval.ts`, `agent-eval-live-support.ts`              |
 
 ## Hidden dependencies
 
