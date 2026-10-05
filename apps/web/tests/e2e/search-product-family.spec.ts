@@ -1,0 +1,142 @@
+import { eq } from "drizzle-orm";
+
+import { entityLink, product } from "~/server/db/schema";
+import { getDb } from "~/server/repo/database-helpers";
+import { linkValues } from "~/server/repo/entity-links";
+
+import {
+  escapeRegExp,
+  gotoAuthenticatedPage,
+  openCommandPalette,
+  uniqueName,
+} from "./e2e-helpers";
+import { expect, test } from "./e2e-test";
+import { createEntityFixture, getFixtureDb } from "./fixtures-core";
+
+// The full search page and the command menu render one Product family (its
+// direct placements, kit-content placements, and matched records) from the
+// same `SearchResultGroup`. Both must reach the same family, the same child
+// rows, and the same placement records; the menu alone caps each child
+// category and hands the remainder to full search.
+test("the search page and command menu open the same Product family", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const name = uniqueName(testInfo, "Family drill");
+  const shelfName = uniqueName(testInfo, "Family shelf");
+  const shelf = await createEntityFixture(page, "location", {
+    name: shelfName,
+  });
+  const bin = await createEntityFixture(page, "location", {
+    name: uniqueName(testInfo, "Family bin"),
+  });
+  const kit = await createEntityFixture(page, "product", { name });
+  const battery = await createEntityFixture(page, "product", {
+    name: uniqueName(testInfo, "Spare cell"),
+  });
+  const direct = await createEntityFixture(page, "inventory", {
+    productId: kit.id,
+    locationId: shelf.id,
+    amount: { value: 1.5, unit: "kg" },
+  });
+  const kitContent = await createEntityFixture(page, "inventory", {
+    productId: battery.id,
+    locationId: bin.id,
+    amount: { value: 2, unit: "each" },
+  });
+  const chores = ["oil", "sharpen", "store"].map((verb) => `${name} ${verb}`);
+  for (const chore of chores)
+    await createEntityFixture(page, "task", {
+      name: chore,
+      trade: "other",
+      subjectProductId: kit.id,
+    });
+  const db = getDb(getFixtureDb());
+  const [kitRow, batteryRow] = await Promise.all(
+    [kit.id, battery.id].map(async (shortcode) => {
+      const row = await db.query.product.findFirst({
+        where: eq(product.shortcode, shortcode),
+        columns: { id: true },
+      });
+      if (!row) throw new Error(`Product ${shortcode} was not seeded.`);
+      return row;
+    }),
+  );
+  await db
+    .insert(entityLink)
+    .values(linkValues("productComponent", kitRow!.id, batteryRow!.id, 2));
+
+  const regionName = `${name} placements and matching records`;
+  const toggleName = new RegExp(`^Expand ${escapeRegExp(regionName)}$`);
+
+  // Full search: every child, each a link to its own record.
+  await gotoAuthenticatedPage(
+    page,
+    `/search?${new URLSearchParams({ q: name })}`,
+  );
+  await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
+  await page.getByRole("button", { name: toggleName }).click();
+  const pageFamily = page.getByRole("group", { name: regionName });
+  const pageChildren = pageFamily.getByRole("link");
+  await expect(pageChildren).toHaveCount(2 + chores.length);
+  await expect(
+    pageFamily.getByRole("link", { name: new RegExp(escapeRegExp(direct.id)) }),
+  ).toContainText(shelfName);
+  await expect(
+    pageFamily.getByRole("link", {
+      name: new RegExp(escapeRegExp(kitContent.id)),
+    }),
+  ).toContainText("2× kit content");
+  for (const chore of chores)
+    await expect(
+      pageFamily.getByRole("link", { name: new RegExp(escapeRegExp(chore)) }),
+    ).toBeVisible();
+  await pageFamily
+    .getByRole("link", { name: new RegExp(escapeRegExp(kitContent.id)) })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/inventory/${kitContent.id}$`));
+
+  // Command menu: the same family, keyboard-driven, capped at two per category.
+  const palette = await openCommandPalette(page);
+  const input = palette.getByPlaceholder("Search or jump to a page…");
+  await input.fill(name);
+  // Task children also start with the Product's name; only the parent ends
+  // with its shortcode.
+  const parent = palette.getByRole("option", {
+    name: new RegExp(`^${escapeRegExp(name)}.*${escapeRegExp(kit.id)}$`),
+  });
+  await expect(parent).toHaveAttribute("aria-expanded", "false");
+  await expect(parent).toHaveAttribute("aria-selected", "true");
+  await palette.getByRole("button", { name: toggleName }).click();
+  const menuFamily = palette.getByRole("group", { name: regionName });
+  await expect(menuFamily).toBeVisible();
+  await expect(
+    menuFamily.getByRole("option", {
+      name: new RegExp(escapeRegExp(direct.id)),
+    }),
+  ).toBeVisible();
+  await expect(
+    menuFamily.getByRole("option", {
+      name: new RegExp(escapeRegExp(kitContent.id)),
+    }),
+  ).toContainText("2× kit content");
+  await expect(
+    menuFamily.getByRole("option", { name: /^See 1 more in full search$/ }),
+  ).toBeVisible();
+  await input.focus();
+  await input.press("ArrowDown");
+  await input.press("Enter");
+  await expect(page).toHaveURL(new RegExp(`/inventory/${direct.id}$`));
+
+  // The menu's overflow row hands off to the full page for the same query.
+  const again = await openCommandPalette(page);
+  await again.getByPlaceholder("Search or jump to a page…").fill(name);
+  await again.getByRole("button", { name: toggleName }).click();
+  await again
+    .getByRole("option", { name: /^See 1 more in full search$/ })
+    .click();
+  await expect(page).toHaveURL(/\/search\?/);
+  await expect(
+    page.getByRole("searchbox", { name: "Search Cubby" }),
+  ).toHaveValue(name);
+});
