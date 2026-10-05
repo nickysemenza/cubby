@@ -156,8 +156,12 @@ export async function findInventoryEmbeddingRefsForProducts(
   return rows.map((row) => ({ entityKind: "inventory", entityId: row.id }));
 }
 
-/** Product embeddings include their category name, including inherited roots. */
-export async function findProductEmbeddingRefsForCategories(
+/**
+ * Product and Inventory search text carries the category, so an edit to a
+ * category or any of its ancestors reaches every descendant Product and its
+ * Inventory.
+ */
+export async function findEmbeddingRefsForCategories(
   db: Database | DrizzleTransaction,
   categoryIds: ProductCategoryId[],
 ): Promise<SearchableEntityRef[]> {
@@ -169,7 +173,16 @@ export async function findProductEmbeddingRefsForCategories(
     ),
     columns: { id: true },
   });
-  return rows.map((row) => ({ entityKind: "product", entityId: row.id }));
+  return [
+    ...rows.map((row): SearchableEntityRef => ({
+      entityKind: "product",
+      entityId: row.id,
+    })),
+    ...(await findInventoryEmbeddingRefsForProducts(
+      db,
+      rows.map((row) => row.id),
+    )),
+  ];
 }
 
 /** Tasks embed their subject product's name, so a product rename must refresh

@@ -15,18 +15,18 @@ import {
   issueBrowserCommand,
   readBrowserCommandResult,
   loadRunScope,
-  runImportOperation,
   startOrResumeRun,
   type PurchaseImportNamespace,
 } from "../src/server/purchase-import/run-service";
+import { executeLeasedOperation } from "../src/server/runs/operation";
 import {
   buildKernelContext,
   buildScenarioDatabase,
   createFixtureWithContext,
 } from "./scenarios/context";
 import { MacImportDriver } from "./mac-import-driver";
-import type { createLocalWorkerdHarness } from "./local-workerd-harness";
 import type { createMacRetailerFixture } from "./mac-retailer-fixture";
+import type { WorkerdHarness } from "./workerd-harness";
 import { buildEntity } from "./factories/build";
 
 type Input = {
@@ -35,7 +35,7 @@ type Input = {
   artifacts: string;
   repoRoot: string;
   nonce: string;
-  harness: ReturnType<typeof createLocalWorkerdHarness>;
+  harness: WorkerdHarness;
   retailer: Awaited<ReturnType<typeof createMacRetailerFixture>>;
 };
 
@@ -152,7 +152,7 @@ export async function createMacBrowserScenario(input: Input) {
         // The coordinator's decision on a retry: claim the run's next work,
         // as its `claim_next_import_work` tool does.
         const operationId = `native-resume:${retry.eventId}`;
-        await runImportOperation(
+        await executeLeasedOperation(
           db,
           {
             runId: run.id,

@@ -44,10 +44,18 @@ existing block. Extend the generic path when it almost fits. See
   (`apps/web/src/server/entity-kernel/execute.ts`).
 - Repositories: `defineRepository`, `createEntityReader`, `createEntityCrud`
   (`server/repo/repository.ts`), `declaredFilterPredicates` /
-  `listScaffold` (`server/repo/list.ts`), `insertAndReturn`,
+  `listScaffold` (`server/repo/list.ts`; a list read goes through its `list`,
+  passing its own `where`, `orderBy`, `select` or `count` instead of calling
+  `executeListQueryWithCount`), `insertAndReturn`,
   `updateAndReturn`, `withTransaction`, `formatSearchTerm`, `notDeleted`,
   `buildSearchConditions`, the shortcode resolver, `finalizeMerge`,
   policy-driven removal (`server/repo/removal/`).
+- Search fan-out: a record whose search text embeds another entity is one
+  `searchDependents` entry (`server/services/mutation-side-effects.ts`) naming
+  an explicit query in `server/repo/entity-embedding-cleanup.ts`; it drives
+  both the projection refresh and the embedding wave. Writers call
+  `runMutationSideEffects(ForEntities)`, or `refreshDerivedSearchRefs` for
+  refs captured before an edge is removed.
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
 - Money: `cents`, `dollars`, `round2` (`server/repo/money.ts`); expense
   rollups select `expenseAggregateFields` (`server/repo/expense-aggregate-sql.ts`);
@@ -64,7 +72,26 @@ existing block. Extend the generic path when it almost fits. See
   (`@cubby/shared/base64`); `capitalize`, `pascalCase`, `humanize`,
   `screamingSnake` (`@cubby/shared/text-case`). Never hand-roll
   `crypto.subtle.digest` + hex or `btoa` alphabet swaps.
+- Run operation replay: every `RunOperation` read by key and every write goes
+  through `server/repo/run-operation.ts` (`readOperation`, `insertOperation`
+  (one row or a batch; `ifAbsent` is `ON CONFLICT DO NOTHING`),
+  `insertDebugEventOperations`,
+  `reclaimOperation`, `completeOperation`, `setOperationResult`,
+  `failOperation`, `failOperationsForRun`); agent tools whose work runs outside
+  the ledger transaction use the leased policy `executeLeasedOperation`
+  (`server/runs/operation.ts`); writers whose row commits with their business
+  writes (purchase prepare, commit, validate, Product enrichment, validation
+  corrections) use the atomic policy `executeAtomicOperation` there, which
+  replays only a completed row and calls any other "outcome is uncertain".
+  Approval and browser-command flows call the primitives directly. Each
+  caller chooses the payload its fingerprint hashes:
+  the stored rows of paused Runs replay only if each site's key order, the
+  `(runId, operationId)` key, and the browser command id stay unchanged.
 - Cross-Worker RPC: one Zod contract per boundary, `z.infer` on both sides.
+- Purchase-agent typed tools: each tool's parameters are the JSON Schema of
+  its entry in `purchaseAgentToolInputs` (`@cubby/schemas/purchase-agent-services`),
+  a projection of the host service contract with explicit narrowing; never
+  restate a tool input in TypeBox.
 - GTIN and barcodes: recipebridge `scan_code_gtin14` and `@cubby/shared/upc`.
 
 ## Web UI
@@ -83,6 +110,9 @@ existing block. Extend the generic path when it almost fits. See
 - Errors and clipboard: `showErrorToast`, `ErrorDisplay`, `copyTextWithToast`.
 - Data: generated query catalog operations, `useActionMutation`,
   `useUpdateMutation`, `useDeletableConfig`, `useAllEntityRecords`.
+  Cursor-paged operations use `cursorQueryOptions`
+  (`integrations/tanstack-query/cursor-query-options.ts`); numeric
+  page/offset paging stays on `infiniteQueryOptions`.
 - Use `es-toolkit` collection helpers and exhaustive `ts-pattern` matches.
 
 ## Tests and tooling
@@ -96,6 +126,10 @@ existing block. Extend the generic path when it almost fits. See
 - Disposable IntegreSQL databases: `apps/web/tooling/test-database-lease.ts`
   (`prepareTemplate`, `leaseDatabase`, one template per namespace). Vitest
   keeps `withTestDb`; browser workers use `createE2EDatabase`.
+- A running Cubby Worker for tests: `apps/web/tooling/workerd-runtime.ts`
+  (`openWorkerdRuntime`) under a `WORKERD_PROFILES` profile
+  (`apps/web/tooling/workerd-harness.ts`); browser specs wrap it in
+  `createE2EWorkerRuntime`. Add a profile rather than assembling a harness.
 - Scripts: `scripts/lib/tree-digest.ts` (`walkFiles`, `digestFiles`),
   `scripts/lib/run.ts` (child processes).
 

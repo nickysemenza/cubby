@@ -2,8 +2,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { acquireHarnessLock } from "../../../../scripts/lib/harness-lock.ts";
-import { writeLocalWorkerdConfig } from "../../tooling/e2e-worker-config";
 import { prepareTemplate } from "../../tooling/test-database-lease";
+import { webBuildNeedsBuild } from "../../tooling/web-build-provenance";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,8 +19,8 @@ async function globalSetup(): Promise<() => void> {
   const release = process.argv.includes("--ui")
     ? () => {}
     : await acquireHarnessLock("Playwright E2E");
-  const webRoot = path.join(__dirname, "../..");
-  writeLocalWorkerdConfig(webRoot);
+  // Workers start the built bundle; a stale one fails here, once.
+  webBuildNeedsBuild(path.join(__dirname, "../../../.."), true);
 
   console.log("[E2E Setup] Preparing shared PostgreSQL template...");
   const templateStart = performance.now();

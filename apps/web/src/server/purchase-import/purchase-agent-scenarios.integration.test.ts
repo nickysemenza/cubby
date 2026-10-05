@@ -11,11 +11,11 @@ import {
   mcpRead,
   type ScriptStep,
 } from "tooling/purchase-agent-script";
+import { type TestDbContext, withTestDb } from "tooling/test-setup";
 import {
   HOLD_WORKERD_HARNESS_TIMEOUT_MS,
   holdWorkerdHarness,
-} from "tooling/purchase-agent-workerd-harness";
-import { type TestDbContext, withTestDb } from "tooling/test-setup";
+} from "tooling/workerd-harness";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -1046,6 +1046,27 @@ describe("purchase-agent scripted scenarios", () => {
         call("extract-1", "extract_run_evidence"),
         mailPrepare("extract-1", "1", runId),
         mailCommit("extract-1", "1", runId),
+        // A coordinator that lost the commit response re-issues it under the
+        // same operation id: the recorded result answers and nothing is
+        // written again. A changed payload under that id is refused.
+        mailCommit("extract-1", "1", runId, "commit-1-replay"),
+        { check: "commit-1-replay", includes: "findingCount" },
+        mcp(
+          "commit-1-changed",
+          "purchase_import",
+          runId,
+          {
+            action: "commit",
+            prepareOperationId: "prepare-1",
+            defaultTrade: "other",
+            resolutions: [],
+          },
+          { operationId: "commit-1" },
+        ),
+        {
+          check: "commit-1-changed",
+          includes: "Operation id was replayed with different input",
+        },
         settlementRead("settlement-1"),
         call("claim-2", "claim_next_import_work"),
         { check: "claim-2", includes: "SCN70002" },
@@ -1082,9 +1103,21 @@ describe("purchase-agent scripted scenarios", () => {
     await scenario.dispatch(sent[0]);
     await waitForStatus(runId, "needs_review");
 
-    expect((await purchaseGraph(vendor.id)).purchases).toMatchObject([
-      { orderId: "SCN70001" },
-    ]);
+    const graph = await purchaseGraph(vendor.id);
+    expect(graph.purchases).toMatchObject([{ orderId: "SCN70001" }]);
+    expect(graph.expenses).toHaveLength(1);
+    // The refused payload left the recorded commit as it was.
+    expect(
+      await getDb(ctx.db)
+        .select({ state: runOperation.state, error: runOperation.error })
+        .from(runOperation)
+        .where(
+          and(
+            eq(runOperation.runId, runId),
+            eq(runOperation.operationId, "commit-1"),
+          ),
+        ),
+    ).toEqual([{ state: "completed", error: null }]);
     expect(
       await getDb(ctx.db)
         .select({

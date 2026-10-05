@@ -218,7 +218,7 @@ describe("commitPhotoGroup", () => {
     const first = await commitPhotoGroup(ctx.db, commitArgs, ctx.actor);
     expect(first.outcome).toBe("committed");
 
-    // Simulate the crash window documented in `runImportOperation`: the
+    // Simulate the crash window documented in `executeLeasedOperation`: the
     // writer's own transaction committed, but the operation ledger row never
     // reached `completed`. Deleting it forces the next call to re-enter
     // `doCommit`, which must recognize the already-attached image and refuse

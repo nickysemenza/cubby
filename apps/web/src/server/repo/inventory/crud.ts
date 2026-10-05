@@ -18,7 +18,6 @@ import {
 } from "@cubby/schemas/inventory";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import {
-  buildTakeSkip,
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
@@ -50,7 +49,11 @@ import {
   relations,
   updateLiveAndReturn,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates, listIdsCondition } from "~/server/repo/list";
+import {
+  declaredFilterPredicates,
+  listIdsCondition,
+  listScaffold,
+} from "~/server/repo/list";
 import {
   loadListGroup,
   wantsListGroup,
@@ -250,6 +253,7 @@ const resolveInventorySort =
     return null;
   };
 
+const inventoryScaffold = listScaffold("inventory", inventoryEntry);
 const inventoryScoreSort = dataQualitySortResolver("inventory", inventoryEntry);
 
 const inventoryListOrderBy = (
@@ -287,7 +291,7 @@ const inventoryListOrderBy = (
  * is what makes this honest: rows, count, and the valuation aggregate all
  * narrow the same way, and a caller with no joins gets the same population.
  */
-// Not on `listScaffold`: the text searches run over the JOINED product and
+// Not `inventoryScaffold.where`: the text searches run over the JOINED product and
 // location tables, not this entity's own columns, so no declared stored
 // predicate can express them.
 export const buildInventoryWhere = async (
@@ -321,7 +325,7 @@ export const buildInventoryWhere = async (
       ...auditDateWhereConditions(inventoryEntry, filters),
       ...relatedWhereConditions("inventory", filters, inventoryEntry.id),
       // Stored id filters (`ownerLedgerPartyId`) come from the manifest; this
-      // hand-built where must apply them since it is not on `listScaffold`.
+      // hand-built where must apply them since it bypasses `inventoryScaffold.where`.
       ...declaredFilterPredicates("inventory", inventoryEntry, filters),
       listIdsCondition(inventoryEntry.shortcode, filters),
       lexicalEligibility("inventory", inventoryEntry.id, filters.searchQuery),
@@ -378,7 +382,6 @@ export const inventoryentryListRead = async (
   projection: ListProjection,
   readIntent: ListReadIntent = "page",
 ) => {
-  const { take, skip } = buildTakeSkip(pagination);
   // The rows, their sort/filter and the footer total all read ONE computed map;
   // a count-only read shows none of them.
   const valuations =
@@ -390,59 +393,77 @@ export const inventoryentryListRead = async (
       : await loadLiveInventoryValuations(db);
   const whereCondition = await buildInventoryWhere(db, filters, valuations);
 
-  if (readIntent === "count") {
-    const [result] = await getDb(db)
-      .select({ count: count() })
-      .from(inventoryEntry)
-      .innerJoin(
-        product,
-        and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
-      )
-      .innerJoin(
-        location,
-        and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
-      )
-      .where(whereCondition);
-    return {
-      data: [],
-      count: result?.count ?? 0,
-      sums: undefined,
-      // Count-only consumers deliberately do not request table footers.
-    };
-  }
-
-  const baseQuery = getDb(db)
-    .select({
-      inventoryEntry,
-      productName: product.name,
-      locationName: location.name,
-    })
-    .from(inventoryEntry)
-    .innerJoin(
-      product,
-      and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
-    )
-    .innerJoin(
-      location,
-      and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
-    )
-    .where(whereCondition);
-
-  const [results, [countResult]] = await Promise.all([
-    baseQuery
-      .orderBy(...inventoryListOrderBy(sorts, filters, valuations))
-      .limit(take)
-      .offset(skip),
-    // Count + valuation aggregate share the joins/filters, so the footer's
-    // valuation total covers the FULL filtered set (client only holds a page).
-    inventoryListAggregate(
+  // Count-only consumers deliberately do not request table footers.
+  const withSums = projection.kind === "full" && readIntent === "page";
+  // Count + valuation aggregate share the joins/filters, so the footer's
+  // valuation total covers the FULL filtered set (client only holds a page).
+  // One query serves both: the scaffold's count reads it, the sums reuse it.
+  let aggregate: ReturnType<typeof inventoryListAggregate> | undefined;
+  const readAggregate = () =>
+    (aggregate ??= inventoryListAggregate(
       db,
       whereCondition,
       valuations,
-      projection.kind === "full" && readIntent === "page",
-    ).then((result) => [result]),
-  ]);
+      withSums,
+    ));
 
+  const page = await inventoryScaffold.list(
+    db,
+    { filters, sorts, pagination, readIntent, projection },
+    {
+      where: whereCondition,
+      orderBy: inventoryListOrderBy(sorts, filters, valuations),
+      // A plain select, not the relational builder: the text filters and the
+      // product/location sorts read the joined tables.
+      select: (clauses) =>
+        getDb(db)
+          .select({
+            inventoryEntry,
+            productName: product.name,
+            locationName: location.name,
+          })
+          .from(inventoryEntry)
+          .innerJoin(
+            product,
+            and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
+          )
+          .innerJoin(
+            location,
+            and(
+              eq(inventoryEntry.locationId, location.id),
+              notDeleted(location),
+            ),
+          )
+          .where(clauses.where)
+          .orderBy(...clauses.orderBy)
+          .limit(clauses.limit)
+          .offset(clauses.offset),
+      count: () => readAggregate().then((result) => result.count),
+      hydrate: (results) =>
+        hydrateInventoryListRows(db, results, valuations, projection),
+    },
+  );
+  const valuationSum = withSums
+    ? Number((await readAggregate()).valuationSum ?? 0)
+    : 0;
+  return {
+    ...page,
+    sums: withSums
+      ? { valuation: Number.isNaN(valuationSum) ? 0 : valuationSum }
+      : undefined,
+  };
+};
+
+const hydrateInventoryListRows = async (
+  db: Database,
+  results: Array<{
+    inventoryEntry: typeof inventoryEntry.$inferSelect;
+    productName: string;
+    locationName: string;
+  }>,
+  valuations: InventoryValuations | undefined,
+  projection: ListProjection,
+) => {
   const entries = results.map((row) => row.inventoryEntry);
   const [ownership, dataQualities] = await Promise.all([
     loadListGroup(projection, ["relations", "derived"], () =>
@@ -512,16 +533,7 @@ export const inventoryentryListRead = async (
         )!,
       )
     : candidates;
-  const inventoryEntries = projectListRows("inventory", mapped, projection);
-  const valuationSum = Number(countResult?.valuationSum ?? 0);
-  return {
-    data: inventoryEntries,
-    count: countResult?.count ?? 0,
-    sums:
-      projection.kind === "full" && readIntent === "page"
-        ? { valuation: Number.isNaN(valuationSum) ? 0 : valuationSum }
-        : undefined,
-  };
+  return projectListRows("inventory", mapped, projection);
 };
 
 const inventoryListAggregate = async (

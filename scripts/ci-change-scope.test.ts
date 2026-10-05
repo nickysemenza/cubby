@@ -87,6 +87,7 @@ test("routes purchase-import surfaces to the import browser lane", () => {
     "apps/web/src/app/vendors/order-mail-worklist.tsx",
     "apps/web/src/routes/_authenticated/runs.$shortcode.tsx",
     "apps/web/tooling/purchase-agent-workerd-harness.ts",
+    "apps/web/tooling/workerd-harness.ts",
     "apps/web/tests/e2e/harness-services/purchase-agent-test-model.ts",
     "apps/web/tests/e2e/purchase-import-run.spec.ts",
     "apps/web/tests/e2e/e2e-worker-runtime.ts",

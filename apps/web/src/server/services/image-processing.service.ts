@@ -1,11 +1,13 @@
 import { parseShortcodeFor, type RunId } from "@cubby/schemas/identifiers";
 import {
+  imageProcessingHello,
   pullCompanionImageProcessingInput,
   imageProcessingTerminalResult,
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-processing";
 import type {
+  ImageProcessingCommand,
   ImageProcessingJobKind,
   ImageProcessingTerminalResult as ImageProcessingResult,
   ImageProcessingResult as CompanionImageProcessingResult,
@@ -44,7 +46,7 @@ import {
 } from "~/server/repo/image-processing";
 import {
   assignImageProcessingExecutor,
-  isAssignedImageProcessingDevice,
+  findImageProcessingDeviceAssignment,
 } from "~/server/repo/image-processing-history";
 import {
   recordImageProcessingEvent,
@@ -426,9 +428,20 @@ export async function retryImageProcessingFailures(
   return { retried: jobs.length, submissionId: submission.publicId };
 }
 
+/** What a device's hello declares about who runs a claimed job. */
+export type CompanionDevice = Pick<
+  z.infer<typeof imageProcessingHello>,
+  | "deviceId"
+  | "platform"
+  | "appVersion"
+  | "deviceName"
+  | "osVersion"
+  | "capabilities"
+>;
+
 /** Pulling grants one bounded assignment; the socket's foreground gate stays truthful. */
 function companionClaimCapabilities(
-  hello: z.infer<typeof pullCompanionImageProcessingInput>["hello"],
+  hello: Pick<CompanionDevice, "capabilities">,
 ) {
   const revisions: number[] = [];
   const kinds: ImageProcessingJobKind[] = [];
@@ -469,38 +482,59 @@ export async function pullCompanionImageProcessing(
     automaticWork: hello.participation.automaticWork,
   });
   const empty = { command: null, remotePaused: participation.remotePaused };
-  if (
-    !participation.automaticWork ||
-    participation.remotePaused ||
-    (await readImageProcessingSettings(db)).paused
-  )
-    return empty;
+  if (!participation.automaticWork || participation.remotePaused) return empty;
+  const command = await claimCompanionImageCommand(db, {
+    device: hello,
+    userId,
+    leaseMs: input.leaseSeconds * 1000,
+  });
+  return command ? { command, remotePaused: false } : empty;
+}
+
+/**
+ * Claim and assign the next job a participating device can run. Both the HTTP
+ * pull and a socket's hello/result claim through here, so a device takes
+ * waiting work the moment it can run it rather than at the next wakeup.
+ */
+export async function claimCompanionImageCommand(
+  db: Database,
+  input: {
+    device: CompanionDevice;
+    userId: string;
+    leaseMs: number;
+    /** The socket the command goes to; absent for an HTTP pull. */
+    connectionId?: string;
+  },
+): Promise<ImageProcessingCommand | null> {
+  const { device } = input;
+  if ((await readImageProcessingSettings(db)).paused) return null;
   const { revisions, kinds, allowAvifNormalization } =
-    companionClaimCapabilities(hello);
-  if (!kinds.length) return empty;
+    companionClaimCapabilities(device);
+  if (!kinds.length) return null;
   await reclaimExpiredImageProcessingLeases(db);
   for (let skipped = 0; skipped < 8; skipped++) {
     const claimed = await claimImageProcessingJob(db, {
       kinds,
       processorRevisions: revisions,
       allowAvifNormalization,
-      leaseMs: input.leaseSeconds * 1000,
+      leaseMs: input.leaseMs,
     });
-    if (!claimed) return empty;
+    if (!claimed) return null;
     try {
       const command = await prepareCompanionImageCommand(db, claimed);
       if (!command) continue;
       const assigned = await assignImageProcessingExecutor(db, {
         jobId: claimed.id,
         attemptId: claimed.attemptId,
-        userId,
+        userId: input.userId,
+        connectionId: input.connectionId,
         executor: {
           kind: "device",
-          deviceId: hello.deviceId,
-          name: hello.deviceName ?? "Apple device",
-          platform: hello.platform,
-          appVersion: hello.appVersion,
-          osVersion: hello.osVersion ?? null,
+          deviceId: device.deviceId,
+          name: device.deviceName ?? "Apple device",
+          platform: device.platform,
+          appVersion: device.appVersion,
+          osVersion: device.osVersion ?? null,
         },
       });
       if (!assigned) {
@@ -508,10 +542,10 @@ export async function pullCompanionImageProcessing(
           jobId: claimed.id,
           attemptId: claimed.attemptId,
         });
-        return empty;
+        return null;
       }
-      if (!(await reserveCompanionAnalysisOutput(db, command))) return empty;
-      return { command, remotePaused: false };
+      if (!(await reserveCompanionAnalysisOutput(db, command))) return null;
+      return command;
     } catch (error) {
       await markImageProcessingWaitingForDevice(db, {
         jobId: claimed.id,
@@ -520,7 +554,7 @@ export async function pullCompanionImageProcessing(
       throw error;
     }
   }
-  return empty;
+  return null;
 }
 
 export async function completeAssignedCompanionImageProcessing(
@@ -529,7 +563,7 @@ export async function completeAssignedCompanionImageProcessing(
   userId: string,
 ) {
   if (
-    !(await isAssignedImageProcessingDevice(db, {
+    !(await findImageProcessingDeviceAssignment(db, {
       jobId: input.result.jobId,
       attemptId: input.result.attemptId,
       deviceId: input.deviceId,

@@ -16,8 +16,6 @@ import type { Database } from "~/server/db";
 import { entityAttachment, image, project } from "~/server/db/schema";
 import { loadDataQualities } from "~/server/repo/data-quality/hydrate";
 import {
-  countWhere,
-  executeListQueryWithCount,
   getDb,
   formatSearchTerm,
   textArrayMatches,
@@ -352,98 +350,99 @@ export const projectListRead = async (
     filters,
     sorts,
   );
-  if (readIntent === "count") {
-    return {
-      data: [],
-      count: await countWhere(db, project, whereClause),
-    };
-  }
-  const { take, skip } = projectScaffold.page(pagination);
+  // Both start beside the page read rather than after it.
+  const sumsRead =
+    readIntent === "page" && projection.kind === "full"
+      ? projectListSums(db, whereClause)
+      : undefined;
+  const treeRead =
+    readIntent !== "count" &&
+    (wantsListGroup(projection, "relations") ||
+      wantsListGroup(projection, "derived"))
+      ? Promise.resolve(tree ?? loadProjectTree(db))
+      : undefined;
 
-  const [{ data: rows, count }, sums, loadedTree] = await Promise.all([
-    executeListQueryWithCount({
-      kind: readIntent,
-      rows: () =>
-        getDb(db).query.project.findMany({
-          where: whereClause,
-          orderBy: orderByArray,
-          limit: take,
-          offset: skip,
-        }),
-      count: () => countWhere(db, project, whereClause),
-    }),
-    projection.kind !== "full" || readIntent === "sample"
-      ? Promise.resolve(undefined)
-      : projectListSums(db, whereClause),
-    wantsListGroup(projection, "relations") ||
-    wantsListGroup(projection, "derived")
-      ? (tree ?? loadProjectTree(db))
-      : Promise.resolve(undefined),
-  ]);
+  const [page, sums] = await Promise.all([
+    projectScaffold.list(
+      db,
+      { filters, sorts, pagination, readIntent, projection },
+      {
+        where: whereClause,
+        orderBy: orderByArray,
+        select: (clauses) => getDb(db).query.project.findMany({ ...clauses }),
+        hydrate: async (rows) => {
+          if (projection.kind === "base")
+            return projectListRows(
+              "project",
+              rows.map((row) => ({ ...row, id: row.shortcode })),
+              projection,
+            );
+          const loadedTree = await treeRead;
+          const ids = rows.map((r) => r.id);
 
-  if (projection.kind === "base")
-    return {
-      data: projectListRows(
-        "project",
-        rows.map((row) => ({ ...row, id: row.shortcode })),
-        projection,
-      ),
-      count,
-    };
-  const ids = rows.map((r) => r.id);
+          const [projectContext, deps, dataQualities] = await Promise.all([
+            loadListGroup(projection, "derived", () =>
+              loadProjectSubtreeRollups(db, ids, loadedTree),
+            ),
+            loadListGroup(projection, "relations", () =>
+              projectDependencyIds(db, ids),
+            ),
+            loadListGroup(projection, "quality", () =>
+              loadDataQualities(db, "project", ids),
+            ),
+          ]);
 
-  const [projectContext, deps, dataQualities] = await Promise.all([
-    loadListGroup(projection, "derived", () =>
-      loadProjectSubtreeRollups(db, ids, loadedTree),
+          const selectedRows = wantsListGroup(projection, "relations")
+            ? await withProjectExternalUrls(db, rows)
+            : rows;
+          const context =
+            projectContext ??
+            (loadedTree
+              ? {
+                  ...loadedTree,
+                  ownRollups: new Map(),
+                  subtreeRollups: new Map(),
+                  dateWindows: new Map(),
+                }
+              : undefined);
+          const mapRow = (row: (typeof selectedRows)[number]) =>
+            context
+              ? hydrateProjectRow(
+                  {
+                    ...row,
+                    googleDriveFolderUrl:
+                      "googleDriveFolderUrl" in row
+                        ? z.string().nullable().parse(row.googleDriveFolderUrl)
+                        : null,
+                    notionPageUrl:
+                      "notionPageUrl" in row
+                        ? z.string().nullable().parse(row.notionPageUrl)
+                        : null,
+                  },
+                  context,
+                  deps ?? { blockedBy: new Map(), blocking: new Map() },
+                  dataQualities?.get(row.id),
+                )
+              : {
+                  ...row,
+                  id: parseShortcodeFor("project", row.shortcode),
+                  dataQuality: dataQualities?.get(row.id),
+                };
+          const mapped = wantsListGroup(projection, "media")
+            ? await withDisplayImages(db, "project", selectedRows, mapRow)
+            : selectedRows.map(mapRow);
+          return projectListRows("project", mapped, projection);
+        },
+      },
     ),
-    loadListGroup(projection, "relations", () => projectDependencyIds(db, ids)),
-    loadListGroup(projection, "quality", () =>
-      loadDataQualities(db, "project", ids),
-    ),
+    sumsRead,
+    // Awaited here too, so a failed tree read never goes unhandled while the
+    // page query is still running.
+    treeRead,
   ]);
-
-  const selectedRows = wantsListGroup(projection, "relations")
-    ? await withProjectExternalUrls(db, rows)
-    : rows;
-  const context =
-    projectContext ??
-    (loadedTree
-      ? {
-          ...loadedTree,
-          ownRollups: new Map(),
-          subtreeRollups: new Map(),
-          dateWindows: new Map(),
-        }
-      : undefined);
-  const mapRow = (row: (typeof selectedRows)[number]) =>
-    context
-      ? hydrateProjectRow(
-          {
-            ...row,
-            googleDriveFolderUrl:
-              "googleDriveFolderUrl" in row
-                ? z.string().nullable().parse(row.googleDriveFolderUrl)
-                : null,
-            notionPageUrl:
-              "notionPageUrl" in row
-                ? z.string().nullable().parse(row.notionPageUrl)
-                : null,
-          },
-          context,
-          deps ?? { blockedBy: new Map(), blocking: new Map() },
-          dataQualities?.get(row.id),
-        )
-      : {
-          ...row,
-          id: parseShortcodeFor("project", row.shortcode),
-          dataQuality: dataQualities?.get(row.id),
-        };
-  const mapped = wantsListGroup(projection, "media")
-    ? await withDisplayImages(db, "project", selectedRows, mapRow)
-    : selectedRows.map(mapRow);
-  const data = projectListRows("project", mapped, projection);
-
-  return { data, count, sums: readIntent === "page" ? sums : undefined };
+  return projection.kind === "base" || readIntent === "count"
+    ? page
+    : { ...page, sums };
 };
 
 export const projectList = completeListReader(

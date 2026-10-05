@@ -16,7 +16,6 @@ import {
   validationDiff,
   validationPlanLine,
 } from "@cubby/schemas/purchase-import";
-import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -25,7 +24,6 @@ import {
   expense,
   product,
   purchase,
-  runOperation,
   run as runTable,
   runTarget,
 } from "~/server/db/schema";
@@ -40,6 +38,7 @@ import {
   updateExpense,
 } from "~/server/repo/expense/crud";
 import { updatePurchase } from "~/server/repo/purchase";
+import { executeAtomicOperation } from "~/server/runs/operation";
 
 import { loadRunScopeByShortcode } from "./run-service";
 import {
@@ -410,9 +409,6 @@ export async function applyValidationCorrections(
       `Validation corrections wait for the run to finish; it is ${scope.public.status}.`,
     );
   const runActor = actorInRun(actor, scope.public.runId);
-  const fingerprint = await sha256Hex(
-    JSON.stringify({ ...input, correctionIds }),
-  );
   const refuse = (stale: StaleEntry[]) =>
     noPriceEffects(
       applyValidationCorrectionsOut.parse({
@@ -423,107 +419,98 @@ export async function applyValidationCorrections(
       }),
     );
 
-  return withTransactionDatabase(db, async (txDb) => {
-    const database = getDb(txDb);
-    const [purchaseRow] = await database
-      .select({ id: purchase.id })
-      .from(purchase)
-      .where(eq(purchase.shortcode, input.purchaseId))
-      .limit(1);
-    if (!purchaseRow)
-      throw new Error(`Purchase not found: ${input.purchaseId}`);
-    const [target] = await database
-      .select({ id: runTarget.id, diff: runTarget.diff })
-      .from(runTarget)
-      .where(
-        and(
-          eq(runTarget.runId, scope.public.runId),
-          eq(runTarget.entityId, purchaseRow.id),
-        ),
-      )
-      .limit(1)
-      .for("update");
-    if (!target)
-      throw new Error(`${input.purchaseId} is not a target of this run`);
-
-    const [existing] = await database
-      .select({
-        inputFingerprint: runOperation.inputFingerprint,
-        result: runOperation.result,
-      })
-      .from(runOperation)
-      .where(
-        and(
-          eq(runOperation.runId, scope.public.runId),
-          eq(runOperation.operationId, input.operationId),
-        ),
-      )
-      .limit(1);
-    if (existing) {
-      if (existing.inputFingerprint !== fingerprint)
-        throw new Error("Operation id was replayed with different input");
-      return noPriceEffects(
-        applyValidationCorrectionsOut.parse(existing.result),
-      );
-    }
-
-    const stored = validationDiff.safeParse(target.diff);
-    if (!stored.success)
-      throw new Error(
-        "This validation target has no reviewable corrections; run validation again.",
-      );
-    const live = await loadLiveValidationState(txDb, purchaseRow.id, {
-      lock: true,
-      requireLive: true,
-    });
-    if (!live)
-      return refuse([
-        {
-          correctionId: null,
-          reason: `${input.purchaseId} was deleted after this diff was reviewed.`,
-        },
-      ]);
-    const fresh = await compareValidationPlan(stored.data.expected, live);
-    const { stale, selected } = selectCorrections(
-      correctionIds,
-      stored.data.corrections,
-      fresh.corrections,
-    );
-    if (stale.length > 0) return refuse(stale);
-
-    const priceAffectedProductIds = await writeCorrections(
-      txDb,
-      runActor,
-      { purchaseCode: input.purchaseId, purchaseId: purchaseRow.id },
-      stored.data.expected,
-      selected,
-    );
-    const { outcome, remaining } = await recordAppliedOutcome(
-      txDb,
-      { runId: scope.public.runId, status: scope.public.status },
-      target,
-      purchaseRow.id,
-      stored.data,
-      `Applied ${selected.length} reviewed correction${selected.length === 1 ? "" : "s"} (${input.operationId}).`,
-    );
-    const result = applyValidationCorrectionsOut.parse({
-      status: "applied",
-      runId: input.runId,
-      purchaseId: input.purchaseId,
-      operationId: input.operationId,
-      applied: selected.map((correction) => correction.id),
-      outcome,
-      remainingCorrections: remaining,
-    });
-    await database.insert(runOperation).values({
+  return executeAtomicOperation(
+    db,
+    {
       runId: scope.public.runId,
       operationId: input.operationId,
       kind: "apply_validation_corrections",
-      inputFingerprint: fingerprint,
-      state: "completed",
-      result,
-      completedAt: new Date(),
-    });
-    return { result, priceAffectedProductIds };
-  });
+      // The selection deduplicated and sorted in place, so its order is not
+      // part of the operation's identity.
+      payload: { ...input, correctionIds },
+      subject: "Correction",
+    },
+    (ledger) =>
+      withTransactionDatabase(db, async (txDb) => {
+        const database = getDb(txDb);
+        const [purchaseRow] = await database
+          .select({ id: purchase.id })
+          .from(purchase)
+          .where(eq(purchase.shortcode, input.purchaseId))
+          .limit(1);
+        if (!purchaseRow)
+          throw new Error(`Purchase not found: ${input.purchaseId}`);
+        const [target] = await database
+          .select({ id: runTarget.id, diff: runTarget.diff })
+          .from(runTarget)
+          .where(
+            and(
+              eq(runTarget.runId, scope.public.runId),
+              eq(runTarget.entityId, purchaseRow.id),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        if (!target)
+          throw new Error(`${input.purchaseId} is not a target of this run`);
+
+        const replayed = await ledger.replay(
+          database,
+          applyValidationCorrectionsOut,
+        );
+        if (replayed) return noPriceEffects(replayed);
+
+        const stored = validationDiff.safeParse(target.diff);
+        if (!stored.success)
+          throw new Error(
+            "This validation target has no reviewable corrections; run validation again.",
+          );
+        const live = await loadLiveValidationState(txDb, purchaseRow.id, {
+          lock: true,
+          requireLive: true,
+        });
+        if (!live)
+          return refuse([
+            {
+              correctionId: null,
+              reason: `${input.purchaseId} was deleted after this diff was reviewed.`,
+            },
+          ]);
+        const fresh = await compareValidationPlan(stored.data.expected, live);
+        const { stale, selected } = selectCorrections(
+          correctionIds,
+          stored.data.corrections,
+          fresh.corrections,
+        );
+        if (stale.length > 0) return refuse(stale);
+
+        const priceAffectedProductIds = await writeCorrections(
+          txDb,
+          runActor,
+          { purchaseCode: input.purchaseId, purchaseId: purchaseRow.id },
+          stored.data.expected,
+          selected,
+        );
+        const { outcome, remaining } = await recordAppliedOutcome(
+          txDb,
+          { runId: scope.public.runId, status: scope.public.status },
+          target,
+          purchaseRow.id,
+          stored.data,
+          `Applied ${selected.length} reviewed correction${selected.length === 1 ? "" : "s"} (${input.operationId}).`,
+        );
+        const result = applyValidationCorrectionsOut.parse({
+          status: "applied",
+          runId: input.runId,
+          purchaseId: input.purchaseId,
+          operationId: input.operationId,
+          applied: selected.map((correction) => correction.id),
+          outcome,
+          remainingCorrections: remaining,
+        });
+        // A stale refusal above is not recorded, so the same id can be retried.
+        await ledger.complete(database, result);
+        return { result, priceAffectedProductIds };
+      }),
+  );
 }

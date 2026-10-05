@@ -137,7 +137,7 @@ describe("derived spec areas", () => {
 describe("computeAffected", () => {
   // Harness/config changes outside src must not silently select zero specs.
   it.each([
-    "apps/web/tooling/local-workerd-harness.ts",
+    "apps/web/tooling/workerd-harness.ts",
     "apps/web/scripts/e2e-affected.ts",
     "scripts/test-services.ts",
     "apps/web/wrangler.jsonc",

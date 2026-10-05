@@ -24,7 +24,7 @@ import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 import type { SearchableEntity } from "@cubby/schemas/search";
-import { eq, inArray, sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { z } from "zod";
 
@@ -34,7 +34,9 @@ import {
   entityAttachment,
   entityIdentity,
   type image,
+  location,
   product,
+  productCategory,
   recipe,
 } from "~/server/db/schema";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
@@ -185,16 +187,18 @@ export const createProductFixture = retainEntityId(
   createProductWithResolvedIngredient,
 );
 
-/** Simulate an out-of-band source edit without running mutation side effects. */
-export const updateProductNameFixtureRaw = async (
+const renameableTables = { product, productCategory, location };
+
+/** Simulate an out-of-band rename without running mutation side effects. */
+export const renameFixtureRaw = async (
   db: Database,
-  productId: string,
+  entity: keyof typeof renameableTables,
+  id: string,
   name: string,
 ): Promise<void> => {
-  await getDb(db)
-    .update(product)
-    .set({ name })
-    .where(eq(product.id, parseEntityId("product", productId)));
+  await getDb(db).execute(
+    sql`UPDATE ${renameableTables[entity]} SET "name" = ${name} WHERE "id" = ${id}::uuid`,
+  );
 };
 
 /**

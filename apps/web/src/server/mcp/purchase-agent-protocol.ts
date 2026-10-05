@@ -10,15 +10,15 @@ import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import {
-  auditLog,
-  run as runTable,
-  runApproval,
-  runOperation,
-} from "~/server/db/schema";
+import { auditLog, run as runTable, runApproval } from "~/server/db/schema";
 import type { McpOperationContext } from "~/server/mcp/operation-context";
 import { recordRunWrites } from "~/server/purchase-import/run-audit";
 import { getDb } from "~/server/repo/database-helpers";
+import {
+  completeOperation,
+  insertOperation,
+  readOperation,
+} from "~/server/repo/run-operation";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 import type { ToolExtra } from "./tools/tool-registration";
@@ -155,27 +155,17 @@ export async function executePurchaseAgentMutation<T>(input: {
     input.db,
     args,
   );
-  const [operation] = await getDb(input.db)
-    .select({
-      state: runOperation.state,
-      inputFingerprint: runOperation.inputFingerprint,
-      result: runOperation.result,
-    })
-    .from(runOperation)
-    .where(
-      and(
-        eq(runOperation.runId, run.id),
-        eq(runOperation.operationId, input.execution.operationId),
-      ),
-    )
-    .limit(1);
+  const operationKey = {
+    runId: run.id,
+    operationId: input.execution.operationId,
+  };
+  const operation = await readOperation(getDb(input.db), operationKey);
   if (!operation) {
     if (run.status !== "running" && run.status !== "paused_approval")
       throw new Error(`Purchase-agent run is fenced in ${run.status}`);
     await getDb(input.db).transaction(async (tx) => {
-      await tx.insert(runOperation).values({
-        runId: run.id,
-        operationId: input.execution.operationId,
+      await insertOperation(tx, {
+        ...operationKey,
         kind: `mcp:${input.toolName}`,
         inputFingerprint: argsFingerprint,
         state: "paused_approval",
@@ -243,37 +233,29 @@ export async function executePurchaseAgentMutation<T>(input: {
   return input.operationContext.inTransaction(async (prepared) => {
     const transactionDb = prepared.entityKernel.db;
     const database = getDb(transactionDb);
-    const [[lockedRun], [lockedOperation], [lockedApproval]] =
-      await Promise.all([
-        database
-          .select({ status: runTable.status })
-          .from(runTable)
-          .where(eq(runTable.id, run.id))
-          .limit(1)
-          .for("update"),
-        database
-          .select({ state: runOperation.state })
-          .from(runOperation)
-          .where(
-            and(
-              eq(runOperation.runId, run.id),
-              eq(runOperation.operationId, input.execution.operationId),
-            ),
-          )
-          .limit(1)
-          .for("update"),
-        database
-          .select({
-            state: runApproval.state,
-            argsFingerprint: runApproval.argsFingerprint,
-            targetFingerprint: runApproval.targetFingerprint,
-            evidenceFingerprint: runApproval.evidenceFingerprint,
-          })
-          .from(runApproval)
-          .where(eq(runApproval.id, approval.id))
-          .limit(1)
-          .for("update"),
-      ]);
+    // Lock order is Run → RunOperation → RunApproval, the order `controlRun`
+    // takes; issuing them concurrently or reordered can deadlock against an
+    // overlapping cancel or approval decision.
+    const [lockedRun] = await database
+      .select({ status: runTable.status })
+      .from(runTable)
+      .where(eq(runTable.id, run.id))
+      .limit(1)
+      .for("update");
+    const lockedOperation = await readOperation(database, operationKey, {
+      forUpdate: true,
+    });
+    const [lockedApproval] = await database
+      .select({
+        state: runApproval.state,
+        argsFingerprint: runApproval.argsFingerprint,
+        targetFingerprint: runApproval.targetFingerprint,
+        evidenceFingerprint: runApproval.evidenceFingerprint,
+      })
+      .from(runApproval)
+      .where(eq(runApproval.id, approval.id))
+      .limit(1)
+      .for("update");
     const currentTargetFingerprint = await purchaseAgentTargetFingerprint(
       transactionDb,
       args,
@@ -326,21 +308,7 @@ export async function executePurchaseAgentMutation<T>(input: {
       .update(runApproval)
       .set({ state: "consumed", consumedAt: new Date() })
       .where(eq(runApproval.id, approval.id));
-    await database
-      .update(runOperation)
-      .set({
-        state: "completed",
-        result,
-        error: null,
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(runOperation.runId, run.id),
-          eq(runOperation.operationId, input.execution.operationId),
-        ),
-      );
+    await completeOperation(database, operationKey, result);
     const remainingApprovals = await database
       .select({ id: runApproval.id })
       .from(runApproval)

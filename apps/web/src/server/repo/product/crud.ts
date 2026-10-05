@@ -19,11 +19,10 @@ import type {
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
-import {
-  buildTakeSkip,
-  type PaginationParams,
-  type ListGroupSummary,
-  type SortParams,
+import type {
+  PaginationParams,
+  ListGroupSummary,
+  SortParams,
 } from "@cubby/schemas/pagination";
 import type {
   ProductBulkStockTrackedInput,
@@ -87,7 +86,6 @@ import {
   assertNoDependents,
   associatePendingImages,
   countWhere,
-  executeListQueryWithCount,
   formatSearchTerm,
   getDb,
   idSetPresence,
@@ -1142,7 +1140,6 @@ const readProductListPage = async (
       filters,
     ),
   ];
-  const { take, skip } = productScaffold.page(pagination);
   const relationFields = wantsListGroup(projection, "relations");
   const derivedFields = wantsListGroup(projection, "derived");
   const extras = relations.product.listBase.extras;
@@ -1160,19 +1157,22 @@ const readProductListPage = async (
       expenseTotal: extras.expenseTotal,
       purchaseDate: extras.purchaseDate,
     });
-  const page = await executeListQueryWithCount({
-    kind: readIntent,
-    rows: () =>
-      getDb(db).query.product.findMany({
-        where: whereClause,
-        orderBy: orderByArray,
-        limit: take,
-        offset: skip,
-        with: relationFields ? relations.product.listBase.with : undefined,
-        extras: selectedExtras,
-      }),
-    count: () => countWhere(db, product, whereClause),
-  });
+  const page = await productScaffold.list(
+    db,
+    { filters, sorts, pagination, readIntent, projection },
+    {
+      where: whereClause,
+      orderBy: orderByArray,
+      select: (clauses) =>
+        getDb(db).query.product.findMany({
+          ...clauses,
+          with: relationFields ? relations.product.listBase.with : undefined,
+          extras: selectedExtras,
+        }),
+      // Each caller hydrates the page for its own projection.
+      hydrate: (rows) => rows,
+    },
+  );
   // SAFETY: SQL extras use the same contracts as ProductListDB. The projection
   // gates select optional extras and joins, which Drizzle loses when `with`
   // is conditional; stored Product columns are always selected.
@@ -1647,42 +1647,35 @@ export const productSearch = async (
       : undefined,
   );
 
-  const orderByArray = productListOrderBy(sorts);
-
-  const { take, skip } = buildTakeSkip(pagination);
-
-  const { data: results, count } = await executeListQueryWithCount({
-    kind: "page",
-    // No `...relations.product.full` — scalar columns only. The picker output
-    // schema omits relations that were not loaded.
-    rows: () =>
-      getDb(db).query.product.findMany({
-        where: whereClause,
-        orderBy: orderByArray,
-        limit: take,
-        offset: skip,
-      }),
-    count: () => countWhere(db, product, whereClause),
-  });
-
-  const categories = await loadCategorySummaries(db);
-  const resultIds = results.map((result) => result.id);
-  const [quantities, coverImageUrls, prices] = await Promise.all([
-    loadProductPickerQuantities(db, resultIds),
-    getProductCoverImageUrlsByProductIds(db, resultIds),
-    loadEffectiveProductPricesById(db, resultIds),
-  ]);
-  const data = results.map((result) =>
-    dbProductToPickerItemAPI({
-      ...result,
-      category: categories.get(result.categoryId!) ?? null,
-      ...quantities.get(result.id)!,
-      price: prices.get(result.id) ?? null,
-      coverImageUrl: coverImageUrls.get(result.id) ?? null,
-    }),
+  return productScaffold.list(
+    db,
+    { filters, sorts, pagination },
+    {
+      where: whereClause,
+      orderBy: productListOrderBy(sorts),
+      // No `...relations.product.full` — scalar columns only. The picker
+      // output schema omits relations that were not loaded.
+      select: (page) => getDb(db).query.product.findMany({ ...page }),
+      hydrate: async (results) => {
+        const categories = await loadCategorySummaries(db);
+        const resultIds = results.map((result) => result.id);
+        const [quantities, coverImageUrls, prices] = await Promise.all([
+          loadProductPickerQuantities(db, resultIds),
+          getProductCoverImageUrlsByProductIds(db, resultIds),
+          loadEffectiveProductPricesById(db, resultIds),
+        ]);
+        return results.map((result) =>
+          dbProductToPickerItemAPI({
+            ...result,
+            category: categories.get(result.categoryId!) ?? null,
+            ...quantities.get(result.id)!,
+            price: prices.get(result.id) ?? null,
+            coverImageUrl: coverImageUrls.get(result.id) ?? null,
+          }),
+        );
+      },
+    },
   );
-
-  return { data, count };
 };
 
 export const getProductPickerItemsByIds = async (

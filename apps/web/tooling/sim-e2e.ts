@@ -1320,6 +1320,7 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
 }
 
 let qaIds: Record<string, string> = {};
+let qaUserId = "";
 let journeyIdsFile = "";
 
 async function seedNativeScenario(userId: string): Promise<{
@@ -1340,6 +1341,7 @@ async function seedNativeScenario(userId: string): Promise<{
     if (qa) {
       const { seedNativeQa } = await import("./scenarios/native-qa");
       qaIds = await seedNativeQa(seedPool, userId);
+      qaUserId = userId;
       return { productId: qaIds.PRODUCT_ID ?? "" };
     }
     if (testerArmy) {
@@ -1420,9 +1422,42 @@ async function assertQaOutcomes(): Promise<void> {
       throw new Error(
         `Run approval must be granted: ${JSON.stringify(approvals)}`,
       );
+    const groups = await rows<{ groupKey: string; state: string }>(
+      `SELECT g."groupKey", g.state FROM "PhotoGroupProposal" g JOIN "Run" r ON r.id = g."runId"
+       WHERE r.shortcode = $1 ORDER BY g."groupKey"`,
+      [qaIds.PHOTO_RUN_ID],
+    );
+    const photoProducts = await rows<{ name: string }>(
+      `SELECT p.name FROM "PhotoGroupProposal" g JOIN "Run" r ON r.id = g."runId"
+       JOIN "Product" p ON p.id = g."productId" WHERE r.shortcode = $1`,
+      [qaIds.PHOTO_RUN_ID],
+    );
+    if (
+      groups.map((row) => `${row.groupKey}:${row.state}`).join() !==
+        "synthetic-qa-a-unselected-mug:proposed,synthetic-qa-b-selected-shirt:committed" ||
+      photoProducts.map((row) => row.name).join() !== qaIds.PHOTO_SELECTED_NAME
+    )
+      throw new Error(
+        `Approving the selection must commit only the selected ready group: ${JSON.stringify({ groups, photoProducts })}`,
+      );
     console.log(`[${lane}] Native QA writes verified in ${simName}`);
   } finally {
     await checkPool.end();
+  }
+}
+
+/**
+ * A journey that commits before its last checks (photo approval) may have written already when it
+ * fails, so its retry gets a freshly seeded subject; the outcome check reads the latest one.
+ */
+async function reseedQaJourney(journey: string): Promise<void> {
+  if (journey !== "qa-photo-selected-approval.ad") return;
+  const { seedProposedPhotoRun } = await import("./scenarios/native-qa");
+  const seedPool = new Pool({ connectionString: databaseURL });
+  try {
+    Object.assign(qaIds, await seedProposedPhotoRun(seedPool, qaUserId));
+  } finally {
+    await seedPool.end();
   }
 }
 
@@ -1494,6 +1529,7 @@ async function runQaJourneys(
           console.log(
             `[${lane}] ${journey} attempt ${attempt} failed; retrying`,
           );
+          await reseedQaJourney(journey);
         }
       }
     }
@@ -1597,13 +1633,7 @@ async function main(): Promise<void> {
   assertSimulatorAdminUrl(adminURL);
   const admin = new Pool({ connectionString: adminURL });
   let created = false;
-  let harness:
-    | Awaited<
-        ReturnType<
-          (typeof import("./local-workerd-harness"))["createLocalWorkerdHarness"]
-        >
-      >
-    | undefined;
+  let harness: import("./workerd-harness").WorkerdHarness | undefined;
   let objectStorage:
     | Awaited<
         ReturnType<
@@ -1618,7 +1648,6 @@ async function main(): Promise<void> {
         >
       >
     | undefined;
-  let restoreEnvironment = () => {};
   let productId = "";
   let disposableSimulatorID: string | undefined;
   let inputDriverSessionArgs: string[] | undefined;
@@ -1690,7 +1719,6 @@ async function main(): Promise<void> {
         errors.push(error instanceof Error ? error : new Error(String(error)));
       }
     }
-    restoreEnvironment();
     if (created) {
       try {
         await admin.query(`DROP DATABASE "${simName}" WITH (FORCE)`);
@@ -1776,13 +1804,17 @@ async function main(): Promise<void> {
       durationMs: Math.round(performance.now() - databaseStarted),
     });
     const workerStarted = performance.now();
-    const { writeLocalWorkerdConfig } = await import("./e2e-worker-config");
-    writeLocalWorkerdConfig(webRoot);
-    const runtime = await import("./local-workerd-harness");
+    const { startWorkerdHarness } = await import("./workerd-harness");
     const { createE2EObjectStorage } = await import("./local-object-storage");
-    restoreEnvironment = runtime.installDatabaseEnvironment(databaseURL);
     objectStorage = await createE2EObjectStorage();
-    harness = runtime.createLocalWorkerdHarness(databaseURL, objectStorage.url);
+    harness = await startWorkerdHarness({
+      profile: "offline",
+      databaseUrl: databaseURL,
+      objectStorage: {
+        endpoint: objectStorage.url,
+        publicUrl: objectStorage.url,
+      },
+    });
     const { url } = await harness.listen();
     if (testerArmy) process.env.TESTER_ARMY_ORIGIN = url.origin;
     const context = await request.newContext({

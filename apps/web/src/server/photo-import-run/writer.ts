@@ -37,10 +37,7 @@ import {
   product,
 } from "~/server/db/schema";
 import { assertRunCapability } from "~/server/purchase-import/capabilities";
-import {
-  loadRunScopeByShortcode,
-  runImportOperation,
-} from "~/server/purchase-import/run-service";
+import { loadRunScopeByShortcode } from "~/server/purchase-import/run-service";
 import {
   getDb,
   notDeleted,
@@ -54,6 +51,7 @@ import {
 import { inventoryAmountSql } from "~/server/repo/inventory/helpers";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/request-context";
+import { executeLeasedOperation } from "~/server/runs/operation";
 import { createProductWithSideEffects } from "~/server/services/product-orchestration.service";
 import { createProductWriteActions } from "~/server/services/product.service";
 
@@ -682,13 +680,13 @@ export async function commitPhotoGroup(
   const scope = await loadRunScopeByShortcode(db, input.runId);
   assertRunCapability(scope.public.purpose, "photo_commit");
   // NOT gated on `status === "running"` here: a crash-window retry (see
-  // `runImportOperation`) can legitimately arrive after the SAME commit
+  // `executeLeasedOperation`) can legitimately arrive after the SAME commit
   // already flipped the run to `completed`, and must still resolve as a
   // replay. `doCommit` enforces "running" only for genuinely new work.
 
   // Preflight BEFORE any operation row: a name/alias collision on a NEW
   // Product is reported as data, with zero writes, and never touches the
-  // replay ledger — routing it through `runImportOperation` would either
+  // replay ledger — routing it through `executeLeasedOperation` would either
   // replay the conflict forever (if reported under this operation id) or
   // reject a corrected payload sent under the same groupKey.
   if (input.product.kind === "create" && groupTouchesProduct(input)) {
@@ -709,7 +707,7 @@ export async function commitPhotoGroup(
     }
   }
 
-  return runImportOperation(
+  return executeLeasedOperation(
     db,
     {
       runId: scope.public.runId,

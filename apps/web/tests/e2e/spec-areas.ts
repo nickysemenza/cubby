@@ -104,6 +104,15 @@ export const SPEC_EXTRA_GLOBS: SpecGlobMap = {
     `${WEB}/src/contracts/image-processing.contract.ts`,
     "packages/schemas/src/image-processing.ts",
   ],
+  "companion-socket.spec.ts": [
+    `${WEB}/src/server/image-processing/**`,
+    `${WEB}/src/server/repo/image-processing*.ts`,
+    `${WEB}/src/server/repo/device-participation.ts`,
+    `${WEB}/src/server/services/image-processing.service.ts`,
+    `${WEB}/src/server/direct-socket-paths.ts`,
+    `${WEB}/src/cf-server.ts`,
+    "packages/schemas/src/image-processing.ts",
+  ],
   "label-nutrition-review.spec.ts": [
     `${WEB}/src/app/products/**`,
     `${WEB}/src/features/nutrition/**`,

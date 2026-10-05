@@ -10,9 +10,9 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { type ReactNode, useEffect } from "react";
-import { z } from "zod";
 
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { cn, formatCurrency } from "~/lib/utils";
@@ -328,13 +328,7 @@ function useReportBlocks(
         : false,
   });
   const paged = useInfiniteQuery({
-    ...entityReport.get.infiniteQueryOptions(input, {
-      pageParamSchema: z.string().nullable(),
-      page: (pageInput, cursor) =>
-        cursor === null ? pageInput : { ...pageInput, cursor },
-      initialPageParam: null,
-      getNextPageParam: (last) => last.nextCursor ?? undefined,
-    }),
+    ...cursorQueryOptions(entityReport.get, input),
     enabled: !batched,
   });
   const report = batch.data?.reports.find(

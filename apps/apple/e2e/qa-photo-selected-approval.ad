@@ -1,0 +1,25 @@
+context platform=ios timeout=240000
+
+# A photo Run opened from its entity link lands on photo review. Selecting only the second
+# ready group and approving the selection commits that group alone; the sim QA lane then
+# reads back one committed group, one still-proposed group and one Product. Regression:
+# the workspace is one List row, so Select once also pushed the match and draft screens, and
+# a tap beside a group's name did not open that group.
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 240000
+open "cubby://entity/${PHOTO_RUN_ID}"
+wait "id=review.workspace" 90000
+wait text "Proposed items · 2" 90000
+# The groups, decision and header controls all fit on the first iPhone 17 screen.
+click "role=Button label=\"${PHOTO_SELECTED_NAME}\""
+wait "role=Button label=\"${PHOTO_SELECTED_NAME}\" selected=true" 30000
+click "role=Button label=Select"
+wait "role=Button label=Selected" 30000
+click "label=\"Approve selected · 1\""
+# Every approval dialog shares the "Approve N items" label; tap the one on screen.
+wait "label=\"Approve 1 items\" hittable=true" 30000
+# The popover's button reports hittable while it is still animating in; a tap then is dropped.
+wait stable 500 10000
+click "label=\"Approve 1 items\" hittable=true"
+# The settled group sits below the long evidence list; the lane's database readback checks it.
+wait text "Proposed items · 1" 90000

@@ -260,7 +260,6 @@ const locationOptionItemFields = {
 };
 
 export const locationOptionItemOut = z.object(locationOptionItemFields);
-export type LocationOptionItemOut = z.infer<typeof locationOptionItemOut>;
 
 /**
  * A roster row for a surface that also draws a thumbnail.

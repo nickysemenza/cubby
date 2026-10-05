@@ -152,14 +152,16 @@ export async function assignImageProcessingExecutor(
   });
 }
 
-export async function isAssignedImageProcessingDevice(
+/** The attempt's assignment when it went to this member's device, else null. */
+export async function findImageProcessingDeviceAssignment(
   db: Database,
   input: { jobId: string; attemptId: string; deviceId: string; userId: string },
-): Promise<boolean> {
+): Promise<{ connectionId: string | null } | null> {
   const [attempt] = await getDb(db)
     .select({
       executor: imageProcessingAttempt.executor,
       userId: imageProcessingAttempt.assignedUserId,
+      connectionId: imageProcessingAttempt.assignedConnectionId,
     })
     .from(imageProcessingAttempt)
     .where(
@@ -168,11 +170,11 @@ export async function isAssignedImageProcessingDevice(
         eq(imageProcessingAttempt.jobId, input.jobId),
       ),
     );
-  return (
-    attempt?.executor?.kind === "device" &&
+  return attempt?.executor?.kind === "device" &&
     attempt.executor.deviceId === input.deviceId &&
     attempt.userId === input.userId
-  );
+    ? { connectionId: attempt.connectionId }
+    : null;
 }
 
 export const createImageProcessingSubmission = (db: Database) =>

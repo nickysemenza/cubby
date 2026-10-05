@@ -23,7 +23,7 @@ import { expect, test } from "./e2e-test";
 // The Worker hosts the real import-run agent, its tools, MCP, and queue; only
 // the coordinator model and the extractor/audit gateway are scripted. These
 // prove the browser journey and its server writes, never model judgment.
-test.use({ purchaseAgent: true });
+test.use({ workerdProfile: "purchase-agent" });
 
 const ORDERED_AT = "2026-09-10T15:00:00.000Z";
 const herbPacket = (orderId: string, title: string, amount: number) => ({

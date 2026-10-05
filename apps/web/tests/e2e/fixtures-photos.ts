@@ -196,6 +196,83 @@ export async function seedActivityHistory(page: Page, name: string) {
 }
 
 /**
+ * More image jobs, attempts, and events than one cursor page (20) holds, all
+ * in one synthetic submission so `/runs?submissionId=` lists only them. Job
+ * `NN` is `NN` minutes old: newest-first lists `01` first and leaves the
+ * oldest on the second page. The newest job also carries `count` attempts
+ * and `count` events for the detail's own cursors.
+ */
+export async function seedPagedActivityHistory(name: string, count: number) {
+  const db = getFixtureDb();
+  const database = getDb(db);
+  const [submission] = await database
+    .insert(schema.imageProcessingSubmission)
+    .values({})
+    .returning();
+  if (!submission) throw new Error("Paged activity submission not created");
+  const label = (index: number) => String(index + 1).padStart(2, "0");
+  const minutesAgo = (minutes: number) =>
+    new Date(Date.now() - minutes * 60_000);
+  const jobs = [];
+  for (let index = 0; index < count; index += 1) {
+    const image = await createUploadedImageRecord(db, {
+      key: `tests/${crypto.randomUUID()}.png`,
+      filename: `${name} ${label(index)}.png`,
+      contentType: "image/png",
+      size: 100,
+    });
+    const [job] = await database
+      .insert(schema.imageProcessingJob)
+      .values({
+        imageId: parseEntityId("image", image.id),
+        kind: "describe_image",
+        sourceContentHash: "b".repeat(64),
+        processorRevision: 1,
+        state: "failed",
+        attempts: index === 0 ? count : 0,
+        lastError: "Synthetic paged failure",
+        submissionId: submission.id,
+        createdAt: minutesAgo(index + 1),
+      })
+      .returning();
+    if (!job) throw new Error("Paged activity job not created");
+    jobs.push(job);
+  }
+  await database.insert(schema.imageProcessingSubmissionJob).values(
+    jobs.map((job) => ({
+      submissionId: submission.id,
+      jobId: job.id,
+      disposition: "new",
+      baselineAttempts: 0,
+    })),
+  );
+  const newest = jobs[0];
+  if (!newest) throw new Error("Paged activity needs at least one job");
+  await database.insert(schema.imageProcessingAttempt).values(
+    Array.from({ length: count }, (_, index) => ({
+      id: crypto.randomUUID(),
+      jobId: newest.id,
+      number: index + 1,
+      state: "failed",
+      startedAt: minutesAgo(count - index),
+      completedAt: minutesAgo(count - index),
+    })),
+  );
+  await database.insert(schema.imageProcessingEvent).values(
+    Array.from({ length: count }, (_, index) => ({
+      jobId: newest.id,
+      eventKey: `paged-${label(index)}`,
+      event: `synthetic.step.${label(index)}`,
+      occurredAt: minutesAgo(count - index),
+    })),
+  );
+  return {
+    submissionId: submission.publicId,
+    newestJobId: newest.publicId,
+  };
+}
+
+/**
  * A running photo-inventory Run with three synthetic photos, seeded
  * two suggested groups (a two-photo item/label pair and a single-photo item),
  * and the Location the item group's inventory targets. There is no browser

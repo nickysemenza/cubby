@@ -15,16 +15,11 @@ import { locationListItemOut } from "@cubby/schemas/location";
 import type {
   InfLocation,
   LocationCreateInput,
-  LocationOptionItemOut,
   LocationPickerItemOut,
   LocationUpdateInput,
 } from "@cubby/schemas/location";
 import { locationPickerSortableFields } from "@cubby/schemas/location";
-import {
-  buildTakeSkip,
-  type PaginationParams,
-  type SortParams,
-} from "@cubby/schemas/pagination";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   and,
   eq,
@@ -65,10 +60,8 @@ import {
   associatePendingImages,
   buildOrderBy,
   buildPartialUpdateValues,
-  countWhere,
   eqAny,
   eqAnyOrPresence,
-  executeListQueryWithCount,
   getDb,
   idSetPresence,
   imageJoinBindings,
@@ -903,105 +896,100 @@ export const locationListRead = async (
       : null;
   if (groups) orderByClause.unshift(groupOrder);
 
-  const { take, skip } = locationScaffold.page(pagination);
-
-  const { data: results, count: totalCount } = await executeListQueryWithCount({
-    kind: readIntent,
-    rows: () =>
-      getDb(db).query.location.findMany({
-        where: whereClause,
-        extras: relations.location.list.extras,
-        with: {
-          parent: wantsListGroup(projection, "relations")
-            ? relations.location.list.with.parent
-            : undefined,
-          product: wantsListGroup(projection, "relations")
-            ? relations.location.list.with.product
-            : undefined,
-          children: wantsListGroup(projection, "relations")
-            ? relations.location.list.with.children
-            : undefined,
-          inventoryEntries: wantsListGroup(projection, "relations")
-            ? relations.location.list.with.inventoryEntries
-            : undefined,
-          images: wantsListGroup(projection, "media")
-            ? relations.location.list.with.images
-            : undefined,
-        },
-        orderBy: orderByClause,
-        limit: take,
-        offset: skip,
-      }),
-    count: () => countWhere(db, location, whereClause),
-  });
-  if (readIntent === "count") {
-    return { data: [], count: totalCount };
-  }
-
-  const hydratedResults = results.map((row) => ({
-    ...row,
-    product: row.product && "category" in row.product ? row.product : null,
-    inventoryEntries: (row.inventoryEntries ?? []).flatMap((entry) =>
-      "product" in entry ? [entry] : [],
-    ),
-    images: (row.images ?? []).flatMap((entry) =>
-      "image" in entry ? [entry] : [],
-    ),
-  }));
-  const pageProducts = hydratedResults.flatMap((row) =>
-    row.inventoryEntries.map((entry) => entry.product),
+  const page = await locationScaffold.list(
+    db,
+    { filters, sorts, pagination, readIntent, projection },
+    {
+      where: whereClause,
+      orderBy: orderByClause,
+      select: (clauses) =>
+        getDb(db).query.location.findMany({
+          ...clauses,
+          extras: relations.location.list.extras,
+          with: {
+            parent: wantsListGroup(projection, "relations")
+              ? relations.location.list.with.parent
+              : undefined,
+            product: wantsListGroup(projection, "relations")
+              ? relations.location.list.with.product
+              : undefined,
+            children: wantsListGroup(projection, "relations")
+              ? relations.location.list.with.children
+              : undefined,
+            inventoryEntries: wantsListGroup(projection, "relations")
+              ? relations.location.list.with.inventoryEntries
+              : undefined,
+            images: wantsListGroup(projection, "media")
+              ? relations.location.list.with.images
+              : undefined,
+          },
+        }),
+      hydrate: async (results) => {
+        const hydratedResults = results.map((row) => ({
+          ...row,
+          product:
+            row.product && "category" in row.product ? row.product : null,
+          inventoryEntries: (row.inventoryEntries ?? []).flatMap((entry) =>
+            "product" in entry ? [entry] : [],
+          ),
+          images: (row.images ?? []).flatMap((entry) =>
+            "image" in entry ? [entry] : [],
+          ),
+        }));
+        const pageProducts = hydratedResults.flatMap((row) =>
+          row.inventoryEntries.map((entry) => entry.product),
+        );
+        const [pricingByProductId, valuations, dataQualities] =
+          await Promise.all([
+            loadListGroup(projection, "relations", () =>
+              loadProductPricing(db, pageProducts),
+            ),
+            loadListGroup(projection, "derived", () =>
+              computeLocationValuations(db, entryValuations),
+            ),
+            loadListGroup(projection, "quality", () =>
+              loadDataQualities(
+                db,
+                "location",
+                results.map((row) => row.id),
+              ),
+            ),
+          ]);
+        const valuedResults = hydratedResults.map((row) => ({
+          ...row,
+          children: row.children ?? [],
+          parent: row.parent ?? null,
+          inventoryEntries: attachInventoryValuations(
+            row.inventoryEntries ?? [],
+            entryValuations ?? new Map(),
+          ),
+        }));
+        const mapRow = (row: (typeof valuedResults)[number]) =>
+          wantsListGroup(projection, "relations")
+            ? dbLocationToListAPI(
+                row,
+                pricingByProductId ?? new Map(),
+                valuations,
+                dataQualities?.get(row.id),
+              )
+            : dbLocationToAPI(row, valuations, dataQualities?.get(row.id));
+        const mapped = wantsListGroup(projection, "media")
+          ? await withDisplayImages(db, "location", valuedResults, mapRow)
+          : valuedResults.map(mapRow);
+        return projectListRows("location", mapped, projection);
+      },
+    },
   );
-  const [pricingByProductId, valuations, dataQualities] = await Promise.all([
-    loadListGroup(projection, "relations", () =>
-      loadProductPricing(db, pageProducts),
-    ),
-    loadListGroup(projection, "derived", () =>
-      computeLocationValuations(db, entryValuations),
-    ),
-    loadListGroup(projection, "quality", () =>
-      loadDataQualities(
-        db,
-        "location",
-        results.map((row) => row.id),
-      ),
-    ),
-  ]);
-  const valuedResults = hydratedResults.map((row) => ({
-    ...row,
-    children: row.children ?? [],
-    parent: row.parent ?? null,
-    inventoryEntries: attachInventoryValuations(
-      row.inventoryEntries ?? [],
-      entryValuations ?? new Map(),
-    ),
-  }));
-  const mapRow = (row: (typeof valuedResults)[number]) =>
-    wantsListGroup(projection, "relations")
-      ? dbLocationToListAPI(
-          row,
-          pricingByProductId ?? new Map(),
-          valuations,
-          dataQualities?.get(row.id),
-        )
-      : dbLocationToAPI(row, valuations, dataQualities?.get(row.id));
-  const mapped = wantsListGroup(projection, "media")
-    ? await withDisplayImages(db, "location", valuedResults, mapRow)
-    : valuedResults.map(mapRow);
-  const items = projectListRows("location", mapped, projection);
-  const result = {
-    data: items,
-    count: totalCount,
-  };
   return groups
     ? {
-        ...result,
+        ...page,
         groups: groups.map(({ type, count }) => ({
           key: type ?? LOCATION_GROUPING.nullGroupKey,
           label: type ?? "(unspecified)",
           count,
         })),
       }
-    : result;
+    : page;
 };
 
 /**
@@ -1123,23 +1111,20 @@ type LocationRosterFilters = Pick<
 >;
 
 /**
- * The shared body of both roster reads: one scalar page + its breadcrumbs.
+ * Location typeahead for picker comboboxes: one scalar page, its breadcrumbs,
+ * and each row's cover photo, which is the other half of telling two
+ * same-named shelves apart.
  *
  * Skips the inventory-entry / product / valuation relation load AND the
  * batched product-pricing pass that `locationList` pays for, none of which a
  * dropdown renders. Same split as `productSearch`.
  */
-const locationRosterPage = async (
+export const locationSearch = async (
   db: Database,
   filters: LocationRosterFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
-): Promise<{
-  data: LocationOptionItemOut[];
-  ids: LocationId[];
-  productIds: Array<ProductId | null>;
-  count: number;
-}> => {
+): Promise<{ data: LocationPickerItemOut[]; count: number }> => {
   const parentCodes = filters.parentId ? [filters.parentId].flat() : [];
   const parentIds = await resolveAllPresent(db, "location", parentCodes);
   // A requested-but-unresolvable parent must match nothing rather than widening
@@ -1182,86 +1167,50 @@ const locationRosterPage = async (
     ),
   ]);
 
-  const orderByClause = buildOrderBy(location, sorts, [
-    ...locationPickerSortableFields,
-  ]);
-  const { take, skip } = buildTakeSkip(pagination);
-
-  const { data: results, count: totalCount } = await executeListQueryWithCount({
-    kind: "page",
-    // No `...relations.location.list` — scalar columns only.
-    rows: () =>
-      getDb(db).query.location.findMany({
-        where: whereClause,
-        columns: {
-          id: true,
-          shortcode: true,
-          name: true,
-          type: true,
-          aliases: true,
-          productId: true,
-        },
-        orderBy: orderByClause,
-        limit: take,
-        offset: skip,
-      }),
-    count: () => countWhere(db, location, whereClause),
-  });
-
-  const ids = results.map((row) => row.id);
-  const ancestorsById = await loadLocationAncestors(db, ids);
-
-  const data = results.map((row) => ({
-    id: parseShortcodeFor("location", row.shortcode),
-    name: row.name,
-    type: parseLocationType(row.type),
-    aliases: row.aliases ?? [],
-    ancestors: ancestorsById.get(row.id) ?? [],
-  }));
-
-  return {
-    data,
-    ids,
-    productIds: results.map((row) => row.productId),
-    count: totalCount,
-  };
-};
-
-/**
- * Location typeahead for picker comboboxes — the roster plus each row's cover
- * photo, which is the other half of telling two same-named shelves apart.
- */
-export const locationSearch = async (
-  db: Database,
-  filters: LocationRosterFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-): Promise<{ data: LocationPickerItemOut[]; count: number }> => {
-  const { data, ids, productIds, count } = await locationRosterPage(
+  return locationScaffold.list(
     db,
-    filters,
-    sorts,
-    pagination,
+    { filters, sorts, pagination },
+    {
+      where: whereClause,
+      // The picker's own sort roster, not the list's declared one.
+      orderBy: buildOrderBy(location, sorts, [...locationPickerSortableFields]),
+      // No `...relations.location.list` — scalar columns only.
+      select: (page) =>
+        getDb(db).query.location.findMany({
+          ...page,
+          columns: {
+            id: true,
+            shortcode: true,
+            name: true,
+            type: true,
+            aliases: true,
+            productId: true,
+          },
+        }),
+      hydrate: async (rows): Promise<LocationPickerItemOut[]> => {
+        const ids = rows.map((row) => row.id);
+        const [ancestorsById, coverById, productCoverById] = await Promise.all([
+          loadLocationAncestors(db, ids),
+          loadLocationCoverImages(db, ids),
+          loadIdentityProductCoverImages(
+            db,
+            rows.flatMap((row) => (row.productId ? [row.productId] : [])),
+          ),
+        ]);
+        return rows.map((row) => ({
+          id: parseShortcodeFor("location", row.shortcode),
+          name: row.name,
+          type: parseLocationType(row.type),
+          aliases: row.aliases ?? [],
+          ancestors: ancestorsById.get(row.id) ?? [],
+          coverImage:
+            coverById.get(row.id) ??
+            (row.productId ? productCoverById.get(row.productId) : null) ??
+            null,
+        }));
+      },
+    },
   );
-  const [coverById, productCoverById] = await Promise.all([
-    loadLocationCoverImages(db, ids),
-    loadIdentityProductCoverImages(
-      db,
-      productIds.filter((id): id is ProductId => id !== null),
-    ),
-  ]);
-
-  return {
-    data: data.map((row, index) => ({
-      ...row,
-      // `ids` is the same page in the same order — `data` is a 1:1 map of it.
-      coverImage:
-        coverById.get(ids[index]!) ??
-        (productIds[index] ? productCoverById.get(productIds[index]!) : null) ??
-        null,
-    })),
-    count,
-  };
 };
 
 /**
