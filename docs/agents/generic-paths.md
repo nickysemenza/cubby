@@ -77,7 +77,12 @@ existing block. Extend the generic path when it almost fits. See
   `reclaimOperation`, `completeOperation`, `setOperationResult`,
   `failOperation`, `failOperationsForRun`); agent tools whose work runs outside
   the ledger transaction use the leased policy `executeLeasedOperation`
-  (`server/runs/operation.ts`). Callers keep computing their own fingerprint:
+  (`server/runs/operation.ts`); writers whose row commits with their business
+  writes (purchase prepare, commit, validate, Product enrichment, validation
+  corrections) use the atomic policy `executeAtomicOperation` there, which
+  replays only a completed row and calls any other "outcome is uncertain".
+  Approval and browser-command flows call the primitives directly. Each
+  caller chooses the payload its fingerprint hashes:
   the stored rows of paused Runs replay only if each site's key order, the
   `(runId, operationId)` key, and the browser command id stay unchanged.
 - Cross-Worker RPC: one Zod contract per boundary, `z.infer` on both sides.
