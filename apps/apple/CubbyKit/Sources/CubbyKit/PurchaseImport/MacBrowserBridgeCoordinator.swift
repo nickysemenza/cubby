@@ -187,8 +187,9 @@
                 statuses[account.id] = .connecting
                 BrowserBridgeDebugLog.emit(
                     .connectRequested, browser: browser, accountID: account.id)
-                let url = try BrowserBridgeEndpoint.socketURL(
-                    baseURL: baseURL, vendorAccountID: account.id)
+                let url = try AuthenticatedSocketSupport.socketURL(
+                    baseURL: baseURL, path: "/api/import/agent/socket",
+                    queryItems: [URLQueryItem(name: "vendorAccount", value: account.id)])
                 await bridge.connect(
                     BrowserBridgeConnectionConfiguration(
                         url: url, deviceID: deviceID, browser: browser,

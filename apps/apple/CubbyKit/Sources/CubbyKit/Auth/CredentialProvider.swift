@@ -22,6 +22,15 @@ public actor CredentialProvider {
         currentState()?.credential
     }
 
+    /// The session token the hand-built socket and browser-bridge requests carry; an API key
+    /// cannot open them.
+    func bearerToken() throws -> String {
+        guard case .bearer(let token) = current(), !token.isEmpty else {
+            throw URLError(.userAuthenticationRequired)
+        }
+        return token
+    }
+
     /// A replayable snapshot captured immediately before a request leaves the client.
     /// A response may change stored authentication only while this snapshot is current.
     struct RequestState: Sendable {

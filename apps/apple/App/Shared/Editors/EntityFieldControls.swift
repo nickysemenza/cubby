@@ -435,7 +435,7 @@ struct EntityFieldControl: View {
             iso.formatOptions = [.withInternetDateTime]
             if let date = iso.date(from: string) { return date }
         }
-        return PlainDate(rawValue: string).date
+        return PlainDate(rawValue: string).date()
     }
 
     private func encode(_ date: Date) -> JSONValue {

@@ -1,6 +1,5 @@
 import CoreGraphics
 import CoreText
-import CryptoKit
 import Foundation
 
 public struct NormalizedBrowserEvidence: Sendable, Hashable {
@@ -73,7 +72,7 @@ public enum NormalizedEvidencePDF {
             "normalized-evidence-\(UUID().uuidString).pdf")
         try data.write(to: url, options: .atomic)
         return BrowserLocalEvidence(
-            url: url, kind: .normalizedPdf, checksum: sha256(data), contentType: "application/pdf")
+            url: url, kind: .normalizedPdf, checksum: data.sha256Hex, contentType: "application/pdf")
     }
 
     public static func makeData(_ evidence: NormalizedBrowserEvidence) throws -> Data {
@@ -135,10 +134,6 @@ public enum NormalizedEvidencePDF {
         context.closePDF()
         return data as Data
     }
-
-    public static func sha256(_ data: Data) -> String {
-        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-    }
 }
 
 /// A PDF rendered from Cubby's dedicated browser window. It complements the normalized text PDF
@@ -163,7 +158,7 @@ public enum RenderedBrowserEvidencePDF {
         context.closePDF()
         let data = try Data(contentsOf: url)
         return BrowserLocalEvidence(
-            url: url, kind: .renderedPdf, checksum: NormalizedEvidencePDF.sha256(data),
+            url: url, kind: .renderedPdf, checksum: data.sha256Hex,
             contentType: "application/pdf")
     }
 }

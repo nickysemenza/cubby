@@ -230,16 +230,9 @@ struct HeroActionSheet: View {
             })
     }
 
-    private static let plainDate: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-
     private func dateBinding(_ key: String) -> Binding<Date> {
         Binding(
-            get: { model.values[key]?.stringValue.flatMap(Self.plainDate.date(from:)) ?? Date() },
-            set: { model.setValue(key, .string(Self.plainDate.string(from: $0))) })
+            get: { model.values[key]?.stringValue.flatMap { PlainDate(rawValue: $0).date() } ?? Date() },
+            set: { model.setValue(key, .string(PlainDate($0).rawValue)) })
     }
 }

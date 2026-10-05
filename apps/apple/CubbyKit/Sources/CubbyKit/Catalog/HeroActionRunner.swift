@@ -173,7 +173,7 @@ public struct HeroActionRunner: Sendable {
         var values: [String: JSONValue] = [:]
         for field in fields {
             switch field.defaultValue {
-            case .string("today"): values[field.key] = .string(plainDate(now))
+            case .string("today"): values[field.key] = .string(PlainDate(now).rawValue)
             case .string("one"): values[field.key] = ["value": 1, "unit": "each"]
             case let value?: values[field.key] = value
             case nil: break
@@ -243,13 +243,6 @@ public struct HeroActionRunner: Sendable {
         case .string(let text)?: return text.isEmpty ? requirement.reason : nil
         default: return nil
         }
-    }
-
-    private static func plainDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
     }
 
     // MARK: - Preview

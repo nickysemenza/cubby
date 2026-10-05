@@ -536,7 +536,7 @@
             return BrowserScreenshot(
                 evidence: BrowserLocalEvidence(
                     url: url, kind: .screenshot,
-                    checksum: NormalizedEvidencePDF.sha256(data as Data), contentType: "image/png"),
+                    checksum: (data as Data).sha256Hex, contentType: "image/png"),
                 image: image)
         }
 

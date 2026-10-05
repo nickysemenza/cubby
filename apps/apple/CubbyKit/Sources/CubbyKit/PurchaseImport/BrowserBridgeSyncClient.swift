@@ -1,3 +1,4 @@
+import CubbyAPISupport
 import Foundation
 
 /// An inclusive order-date window the server backfills instead of the usual incremental sync.
@@ -12,8 +13,8 @@ public struct BrowserBridgeBackfillRange: Codable, Sendable, Hashable {
         let start = calendar.startOfDay(for: from)
         let end = calendar.startOfDay(for: to)
         guard start <= end else { return nil }
-        self.from = Self.format(start, calendar: calendar)
-        self.to = Self.format(end, calendar: calendar)
+        self.from = PlainDate(start, in: calendar.timeZone).rawValue
+        self.to = PlainDate(end, in: calendar.timeZone).rawValue
     }
 
     /// Today back one year: the one decision the control makes for the household.
@@ -22,11 +23,6 @@ public struct BrowserBridgeBackfillRange: Codable, Sendable, Hashable {
     {
         let end = calendar.startOfDay(for: today)
         return (calendar.date(byAdding: .year, value: -1, to: end) ?? end, end)
-    }
-
-    private static func format(_ date: Date, calendar: Calendar) -> String {
-        let parts = calendar.dateComponents([.year, .month, .day], from: date)
-        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 }
 
@@ -97,25 +93,11 @@ public actor URLSessionBrowserBridgeSyncClient: BrowserBridgeSyncRequesting {
     public func requestSync(vendorAccountID: String, backfill: BrowserBridgeBackfillRange?)
         async throws -> BrowserBridgeSyncResponse
     {
-        guard case .bearer(let token) = await credentials.current(), !token.isEmpty else {
-            throw Failure(status: 401, message: "A signed-in Cubby session is required.")
-        }
-        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
-            throw Failure(status: 0, message: "The Cubby server URL is invalid.")
-        }
-        components.path = "/api/import/agent/sync"
-        components.query = nil
-        components.fragment = nil
-        guard let url = components.url else {
-            throw Failure(status: 0, message: "The Cubby server URL is invalid.")
-        }
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
+        var request = try await AuthenticatedSocketSupport.agentRequest(
+            baseURL: baseURL, path: "/api/import/agent/sync", credentials: credentials,
+            jsonBody: try JSONEncoder().encode(
+                BrowserBridgeSyncRequest(vendorAccount: vendorAccountID, backfill: backfill)))
         request.timeoutInterval = 30
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(
-            BrowserBridgeSyncRequest(vendorAccount: vendorAccountID, backfill: backfill))
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {

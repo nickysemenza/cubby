@@ -405,7 +405,7 @@ struct EntityFilterSheet: View {
             DatePicker(
                 label,
                 selection: Binding(
-                    get: { PlainDate(rawValue: value).date ?? .now },
+                    get: { PlainDate(rawValue: value).date() ?? .now },
                     set: { set(PlainDate($0).rawValue) }),
                 displayedComponents: .date
             )

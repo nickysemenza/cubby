@@ -96,21 +96,11 @@ public actor URLSessionBrowserBridgeDebugReporter: BrowserBridgeDebugReporting {
         let batch = Array(pending.prefix(100))
         pending.removeFirst(batch.count)
         do {
-            guard case .bearer(let token) = await credentials.current(), !token.isEmpty else {
-                throw URLError(.userAuthenticationRequired)
-            }
-            var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
-            components?.path = "/api/import/agent/debug-events"
-            components?.query = nil
-            components?.fragment = nil
-            guard let url = components?.url else { throw URLError(.badURL) }
-            var request = URLRequest(url: url)
-            request.httpMethod = "POST"
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
-            request.httpBody = try encoder.encode(Batch(events: batch))
+            let request = try await AuthenticatedSocketSupport.agentRequest(
+                baseURL: baseURL, path: "/api/import/agent/debug-events", credentials: credentials,
+                jsonBody: try encoder.encode(Batch(events: batch)))
             let (_, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode)
             else { throw URLError(.badServerResponse) }

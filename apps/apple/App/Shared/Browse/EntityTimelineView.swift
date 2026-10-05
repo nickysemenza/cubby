@@ -74,11 +74,12 @@ struct EntityTimelineView: View {
 
     /// The day span every lifecycle bar is scaled against: the server's `extent`, else the rows'.
     static func extent(of timeline: EntityTimelineOut) -> ClosedRange<Date> {
-        if let extent = timeline.extent, let from = extent.from.date, let to = extent.to.date, from <= to {
+        if let extent = timeline.extent, let from = extent.from.date(), let to = extent.to.date(), from <= to
+        {
             return from...to
         }
         let days = (timeline.rows ?? []).flatMap { row in
-            row.intervals.flatMap { [$0.start.date, $0.end?.date] } + row.markers.map { $0.date.date }
+            row.intervals.flatMap { [$0.start.date(), $0.end?.date()] } + row.markers.map { $0.date.date() }
         }.compactMap { $0 }
         let from = days.min() ?? .now
         let to = max(days.max() ?? .now, .now)
@@ -128,8 +129,8 @@ private struct LifecycleRowView: View {
                     cornerRadius: 1)
                 context.fill(track, with: .color(FieldGuideTokens.hairline))
                 for interval in row.intervals {
-                    guard let start = interval.start.date else { continue }
-                    let end = interval.end?.date ?? .now
+                    guard let start = interval.start.date() else { continue }
+                    let end = interval.end?.date() ?? .now
                     let x0 = position(start, in: size.width)
                     let x1 = max(x0 + 3, position(end, in: size.width))
                     let bar = Path(
@@ -144,7 +145,7 @@ private struct LifecycleRowView: View {
                     }
                 }
                 for marker in row.markers {
-                    guard let day = marker.date.date else { continue }
+                    guard let day = marker.date.date() else { continue }
                     let x = position(day, in: size.width)
                     let dot = Path(ellipseIn: CGRect(x: x - 4, y: size.height / 2 - 4, width: 8, height: 8))
                     context.fill(dot, with: .color(FieldGuideTokens.graphite))
@@ -164,9 +165,9 @@ private struct LifecycleRowView: View {
     }
 
     private var span: String {
-        guard let first = row.intervals.first?.start.date else { return "" }
+        guard let first = row.intervals.first?.start.date() else { return "" }
         let start = first.formatted(date: .abbreviated, time: .omitted)
-        guard let end = row.intervals.last?.end?.date else { return "\(start) →" }
+        guard let end = row.intervals.last?.end?.date() else { return "\(start) →" }
         return "\(start) – \(end.formatted(date: .abbreviated, time: .omitted))"
     }
 

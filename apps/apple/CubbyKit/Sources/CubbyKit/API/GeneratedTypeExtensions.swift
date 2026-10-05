@@ -335,3 +335,13 @@ extension ImageAnalysisOutput {
                 filename: analysis.provenance.filename))
     }
 }
+
+extension ReceiptHunt {
+    /// Where to look for the receipt photo: the charge's day in the device's zone, the day the
+    /// camera roll files it under.
+    public var searchContext: NearbyReceiptSearchContext? {
+        guard let date = PlainDate(rawValue: transactionDate).date() else { return nil }
+        return NearbyReceiptSearchContext(
+            huntID: id, transactionDate: date, merchant: merchant, amountInCents: amountInCents)
+    }
+}

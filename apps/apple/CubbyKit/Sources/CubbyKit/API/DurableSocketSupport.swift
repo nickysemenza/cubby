@@ -11,20 +11,45 @@ enum AuthenticatedSocketSupport {
         return scheme == "wss" || (scheme == "ws" && localDevelopmentHosts.contains(host))
     }
 
-    static func socketURL(baseURL: URL, path: String) throws -> URL {
-        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false),
-            let host = components.host?.lowercased()
-        else { throw URLError(.badURL) }
+    static func socketURL(baseURL: URL, path: String, queryItems: [URLQueryItem]? = nil) throws -> URL {
+        var components = try endpoint(baseURL, path: path, queryItems: queryItems)
+        guard let host = components.host?.lowercased() else { throw URLError(.badURL) }
         switch components.scheme?.lowercased() {
         case "https": components.scheme = "wss"
         case "http" where localDevelopmentHosts.contains(host): components.scheme = "ws"
         default: throw URLError(.secureConnectionFailed)
         }
-        components.path = path
-        components.query = nil
-        components.fragment = nil
         guard let url = components.url else { throw URLError(.badURL) }
         return url
+    }
+
+    /// A bearer-authenticated request to one of the browser bridge's HTTP routes
+    /// (`/api/import/agent/*`). They sit beside its socket, outside the `/api/v1` OpenAPI
+    /// document, so the generated client cannot reach them. A `jsonBody` makes it a POST.
+    static func agentRequest(
+        baseURL: URL, path: String, credentials: CredentialProvider, jsonBody: Data? = nil
+    ) async throws -> URLRequest {
+        guard let url = try endpoint(baseURL, path: path).url else { throw URLError(.badURL) }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(try await credentials.bearerToken())", forHTTPHeaderField: "Authorization")
+        if let jsonBody {
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = jsonBody
+        }
+        return request
+    }
+
+    private static func endpoint(
+        _ baseURL: URL, path: String, queryItems: [URLQueryItem]? = nil
+    ) throws -> URLComponents {
+        guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+            throw URLError(.badURL)
+        }
+        components.path = path
+        components.queryItems = queryItems
+        components.fragment = nil
+        return components
     }
 
     static func request(url: URL, bearerToken: String, userAgent: String) throws -> URLRequest {

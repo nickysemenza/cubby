@@ -788,6 +788,14 @@ const CLIENT_PASSTHROUGH_METHODS = {
     method: "attachProductsToPurchase",
     doc: "Records which products a Purchase bought. The link carries no money or quantity.",
   },
+  "purchaseImport.listReceiptHunts": {
+    method: "receiptHunts",
+    doc: "Receipt hunts awaiting a person-confirmed photo of the receipt.",
+  },
+  "purchaseImport.submitReceiptEvidence": {
+    method: "submitReceiptEvidence",
+    doc: "Attaches a finalized, person-confirmed receipt image to a hunt and queues its extraction once.",
+  },
   "vendor.startChargeRun": {
     method: "startChargeRun",
     doc: "One browser run for exactly the selected statement charges; the server refuses the whole selection if any charge is no longer searchable.",

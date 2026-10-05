@@ -20,8 +20,8 @@ struct SettingsView: View {
     @State private var photoAnalysisSummary: (analysed: Int, total: Int)?
     @State private var photoStorageSummary: PhotoAnalysisStorageSummary?
     @State private var photosReady = false
-    @State private var receiptHunts: [ReceiptHuntSummary] = []
-    @State private var selectedReceiptHunt: ReceiptHuntSummary?
+    @State private var receiptHunts: [ReceiptHunt] = []
+    @State private var selectedReceiptHunt: ReceiptHunt?
     /// On iOS Settings is a view-based `NavigationLink` destination. Pushing Dev through the
     /// tab's value path before popping Settings makes SwiftUI animate two independent stacks at
     /// once, which can leave the destination visually blank. Pop first, then append the route
@@ -167,11 +167,7 @@ struct SettingsView: View {
                     NearbyReceiptSearchView(
                         context: context,
                         onConfirm: { file, context in
-                            let submitter = URLSessionConfirmedReceiptImportSubmitter(
-                                baseURL: model.baseURL, credentials: model.credentials,
-                                client: model.client)
-                            try await submitter.submitConfirmedReceipt(
-                                ConfirmedReceiptImport(context: context, file: file))
+                            try await model.client.submitConfirmedReceipt(file, huntID: context.huntID)
                             await loadReceiptHunts()
                         })
                 }
@@ -360,9 +356,7 @@ struct SettingsView: View {
 
     @MainActor private func loadReceiptHunts() async {
         do {
-            receiptHunts = try await URLSessionReceiptHuntClient(
-                baseURL: model.baseURL, credentials: model.credentials
-            ).list()
+            receiptHunts = try await model.client.receiptHunts().items
         } catch {
             Diagnostics.report(error, context: "purchaseImport.receiptHunts")
         }

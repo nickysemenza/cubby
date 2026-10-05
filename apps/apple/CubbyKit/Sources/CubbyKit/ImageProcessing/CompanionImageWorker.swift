@@ -244,11 +244,7 @@ public actor CompanionImageWorker {
     }
 
     private func runOneConnection(generation: Int) async throws {
-        guard let credential = await credentials.current(),
-            case .bearer(let token) = credential, !token.isEmpty
-        else {
-            throw URLError(.userAuthenticationRequired)
-        }
+        let token = try await credentials.bearerToken()
         let endpoint = try AuthenticatedSocketSupport.socketURL(
             baseURL: baseURL, path: "/api/companion/image-processing/socket")
         let request = try AuthenticatedSocketSupport.request(

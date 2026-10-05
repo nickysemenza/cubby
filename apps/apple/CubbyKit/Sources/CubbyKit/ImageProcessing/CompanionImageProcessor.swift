@@ -1,5 +1,4 @@
 import CoreGraphics
-import CryptoKit
 import Foundation
 import ImageIO
 
@@ -134,7 +133,7 @@ public struct CompanionImageProcessor: Sendable {
         guard data.count <= PhotoFile.maximumByteCount else {
             throw Failure.sourceTooLarge(actual: data.count, maximum: PhotoFile.maximumByteCount)
         }
-        guard Self.sha256(data) == source.sha256 else {
+        guard data.sha256Hex == source.sha256 else {
             throw Failure.sourceChecksumMismatch
         }
 
@@ -164,7 +163,7 @@ public struct CompanionImageProcessor: Sendable {
             lifted.image, maxPixelSize: Self.maximumCutoutPixelSize)
         let png = try ImageEncoding.encode(cutout, as: .png)
         let processingMilliseconds = Self.milliseconds(since: processingStarted)
-        let digest = Self.sha256(png)
+        let digest = png.sha256Hex
         let uploadStarted = ContinuousClock.now
         try await put(png, output.uploadURL, output.contentType)
         let uploadMilliseconds = Self.milliseconds(since: uploadStarted)
@@ -224,7 +223,7 @@ public struct CompanionImageProcessor: Sendable {
         try await put(jpeg, output.uploadURL, output.contentType)
         diagnostics.uploadMilliseconds = Self.milliseconds(since: uploadStarted)
         return CompanionImageArtifact(
-            sha256: Self.sha256(jpeg), contentType: output.contentType,
+            sha256: jpeg.sha256Hex, contentType: output.contentType,
             width: decoded.image.width, height: decoded.image.height, diagnostics: diagnostics)
     }
 
@@ -243,7 +242,7 @@ public struct CompanionImageProcessor: Sendable {
         guard data.count <= PhotoFile.maximumByteCount else {
             throw Failure.sourceTooLarge(actual: data.count, maximum: PhotoFile.maximumByteCount)
         }
-        guard Self.sha256(data) == source.sha256 else {
+        guard data.sha256Hex == source.sha256 else {
             throw Failure.sourceChecksumMismatch
         }
         let decodeStarted = ContinuousClock.now
@@ -256,10 +255,6 @@ public struct CompanionImageProcessor: Sendable {
             diagnostics: .init(
                 decodeMilliseconds: Self.milliseconds(since: decodeStarted),
                 width: image.width, height: image.height, orientation: Self.orientation(in: data)))
-    }
-
-    private static func sha256(_ data: Data) -> String {
-        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
     private static func orientation(in data: Data) -> Int? {

@@ -1,3 +1,4 @@
+import CubbyAPISupport
 import Foundation
 
 /// The display formats a catalog field renders identically on web and native: fixed en-US shapes,
@@ -6,10 +7,6 @@ import Foundation
 /// calls (`ValueFormat`); only `plainDate` is Swift (the web twin is `formatCalendarDay`; Rust has
 /// no timezone database). Change a rule by editing the vector first, then Rust (and `plainDate`).
 public enum DisplayFormat {
-    private static let monthNames = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-    ]
-
     /// `currency` and `signedCurrency`: USD with grouping and cents (`-$5.00`). The sign is never
     /// spelled `+`; the web only colours it.
     public static func currency(_ value: Double) -> String {
@@ -18,17 +15,12 @@ public enum DisplayFormat {
 
     /// `plainDate`: a real `YYYY-MM-DD` day as `MMM d, yyyy`; anything else comes back unchanged.
     public static func plainDate(_ value: String) -> String {
-        let parts = value.split(separator: "-", omittingEmptySubsequences: false)
-        guard parts.count == 3, parts[0].count == 4, parts[1].count == 2, parts[2].count == 2,
-            let year = Int(parts[0]), let month = Int(parts[1]), let day = Int(parts[2]),
-            (1...12).contains(month), day >= 1
-        else { return value }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        guard let first = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
-            let days = calendar.range(of: .day, in: .month, for: first), days.contains(day)
-        else { return value }
-        return "\(monthNames[month - 1]) \(day), \(year)"
+        guard let day = PlainDate(rawValue: value).date(in: .gmt) else { return value }
+        return day.formatted(
+            Date.VerbatimFormatStyle(
+                format: "\(month: .abbreviated) \(day: .defaultDigits), \(year: .defaultDigits)",
+                locale: Locale(identifier: "en_US_POSIX"), timeZone: .gmt,
+                calendar: Calendar(identifier: .gregorian)))
     }
 
     /// A bare numeric field: the shortest round-trip decimal, no grouping and no rounding — what

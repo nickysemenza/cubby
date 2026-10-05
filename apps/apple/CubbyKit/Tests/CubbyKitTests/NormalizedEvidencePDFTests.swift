@@ -24,7 +24,7 @@ struct NormalizedEvidencePDFTests {
 
         let data = try Data(contentsOf: evidence.url)
         #expect(data.starts(with: Data("%PDF".utf8)))
-        #expect(evidence.checksum == NormalizedEvidencePDF.sha256(data))
+        #expect(evidence.checksum == data.sha256Hex)
         let document = try #require(PDFDocument(data: data))
         #expect(document.pageCount == 1)
         let text = try #require(document.string)
