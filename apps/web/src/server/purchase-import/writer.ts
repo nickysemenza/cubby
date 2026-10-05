@@ -17,6 +17,7 @@ import {
   type ImportWriterOutput,
   type ProposedImportFix,
 } from "@cubby/schemas/purchase-import";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, ilike, isNotNull, or, sql } from "drizzle-orm";
 
 import {
@@ -57,7 +58,6 @@ import {
   findProductsByExternalIds,
 } from "~/server/repo/product/find-by-external-ids";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { sha256Hex } from "~/server/semantic/hash";
 import { dateOnly } from "~/server/utils/date-only";
 
 import {

@@ -9,6 +9,7 @@ import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -36,15 +37,8 @@ import { updateFinancialTransaction } from "./financial-transaction";
 import { createPurchase } from "./purchase";
 import { resolveOrThrow } from "./shortcode-resolver";
 
-export async function digestValue<T extends object>(value: T) {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(JSON.stringify(value)),
-  );
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-}
+export const digestValue = <T extends object>(value: T) =>
+  sha256Hex(JSON.stringify(value));
 const fail = (message: string): never => {
   throw createAppError("CONSTRAINT_VIOLATION", message);
 };

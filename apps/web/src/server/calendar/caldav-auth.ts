@@ -1,9 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 
 import { userId } from "@cubby/schemas/identifiers";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { parse } from "basic-auth";
-
-import { sha256Hex } from "~/server/semantic/hash";
 
 import type { CalendarSqlStore } from "./sql-store";
 

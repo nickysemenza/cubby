@@ -9,6 +9,7 @@ import {
   type StatementCsvCommitInput,
   type StatementCsvFileInput,
 } from "@cubby/schemas/statement-row";
+import { sha256Hex } from "@cubby/shared/sha256";
 
 import {
   parseMappedStatementCsv,
@@ -27,7 +28,6 @@ import {
   attachStatementObservation,
   updateStatementRows,
 } from "~/server/repo/statement-row";
-import { sha256Hex } from "~/server/semantic/hash";
 
 async function parseFile(input: StatementCsvFileInput) {
   const headers = statementCsvHeaders(input.text);

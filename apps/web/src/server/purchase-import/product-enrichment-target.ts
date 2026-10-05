@@ -1,9 +1,9 @@
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq } from "drizzle-orm";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { notDeleted } from "~/server/repo/database-helpers";
-import { sha256Hex } from "~/server/semantic/hash";
 
 type ProductId = typeof product.$inferSelect.id;
 

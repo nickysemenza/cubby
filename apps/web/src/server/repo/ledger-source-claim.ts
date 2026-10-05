@@ -5,6 +5,7 @@ import {
   ledgerSourceClaimNormalizedEvidence,
   type LedgerSourceClaimInput,
 } from "@cubby/schemas/ledger-transfer";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 
@@ -15,7 +16,6 @@ import { notDeleted } from "~/server/repo/database-helpers";
 import { ensureExternalSources } from "~/server/repo/entity-external-ids";
 import { cents } from "~/server/repo/money";
 import { lookupShortcodes } from "~/server/repo/shortcode-resolver";
-import { sha256Hex } from "~/server/semantic/hash";
 
 const SOURCE_KEY_VERSION = 1;
 

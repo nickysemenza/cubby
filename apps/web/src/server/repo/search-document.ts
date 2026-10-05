@@ -5,6 +5,7 @@ import {
   type SearchableEntityRef,
   searchableEntities,
 } from "@cubby/schemas/search";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -207,13 +208,7 @@ async function searchDocumentSourceHash(
   source: SearchDocumentSource,
   body: string,
 ): Promise<string> {
-  const bytes = new Uint8Array(
-    await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(JSON.stringify({ ...source, body })),
-    ),
-  );
-  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return sha256Hex(JSON.stringify({ ...source, body }));
 }
 
 const textList = (values: Array<string | null | undefined>): string[] =>

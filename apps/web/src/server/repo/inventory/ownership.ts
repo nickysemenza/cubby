@@ -7,6 +7,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { EffectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -25,7 +26,6 @@ import {
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { liveLinks } from "~/server/repo/entity-links";
 import { expenseAcquisitionSql } from "~/server/repo/expense-aggregate-sql";
-import { sha256Hex } from "~/server/semantic/hash";
 import { dateOnly } from "~/server/utils/date-only";
 
 import {

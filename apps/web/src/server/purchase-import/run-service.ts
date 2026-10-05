@@ -54,6 +54,7 @@ import {
 import type { Trade } from "@cubby/schemas/task-fields";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
 import { vendorAgentHints } from "@cubby/schemas/vendor-import-fields";
+import { sha256Hex, sha256Uuid } from "@cubby/shared/sha256";
 import {
   and,
   asc,
@@ -120,7 +121,6 @@ import {
   findOrCreateWithShortcode,
   insertWithShortcode,
 } from "~/server/repo/shortcode-utils";
-import { sha256Hex, sha256Uuid } from "~/server/semantic/hash";
 import { publishImageProcessingWakeups } from "~/server/services/image-processing.service";
 import {
   productionPhotoImportCommitPorts,
