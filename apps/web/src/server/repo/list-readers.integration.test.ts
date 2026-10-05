@@ -6,9 +6,13 @@
  * builds its ordering before pagination, so a page boundary must continue
  * the same sequence and the total must count the whole filtered set.
  */
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { inventoryEntry } from "~/server/db/schema";
+
+import { getDb } from "./database-helpers";
 import { ingredientList } from "./ingredient/search";
 import { inventoryentryList } from "./inventory/crud";
 import { locationSearch } from "./location/crud";
@@ -336,25 +340,43 @@ describe("custom list readers", () => {
         ),
       );
     }
-    const tieRead = (pagination: { pageIndex: number; pageSize: number }) =>
-      inventoryentryList(
-        ctx.db,
-        { productNameFilter: "Tiestock" },
-        [
-          { orderBy: "product", direction: "asc" },
-          { orderBy: "amount", direction: "asc" },
-        ],
-        pagination,
-      );
-    const paged = (await readPages((index) => tieRead(page(index)))).map(
-      (row) => row.id,
-    );
-    expect(paged).toEqual(
-      (await tieRead(page(0, 100))).data.map((row) => row.id),
-    );
-    expect([...paged].sort(byText)).toEqual(
-      tied.map((row) => row.id).sort(byText),
-    );
+    // Positions 1–3 share one creation time across the page boundary, so the
+    // id breaks that tie; the outer two pin the creation-time direction.
+    const createdAt = [
+      "2026-01-03T00:00:00.000Z",
+      "2026-01-02T00:00:00.000Z",
+      "2026-01-02T00:00:00.000Z",
+      "2026-01-02T00:00:00.000Z",
+      "2026-01-01T00:00:00.000Z",
+    ];
+    for (const [index, entry] of tied.entries())
+      await getDb(ctx.db)
+        .update(inventoryEntry)
+        .set({ createdAt: new Date(createdAt[index]!) })
+        .where(eq(inventoryEntry.id, entry.entityId));
+    const expected = tied
+      .map((entry, index) => ({ entry, createdAt: createdAt[index]! }))
+      .sort(
+        (a, b) =>
+          byText(b.createdAt, a.createdAt) ||
+          byText(a.entry.entityId, b.entry.entityId),
+      )
+      .map(({ entry }) => entry.id);
+    expect(
+      (
+        await readPages((index) =>
+          inventoryentryList(
+            ctx.db,
+            { productNameFilter: "Tiestock" },
+            [
+              { orderBy: "product", direction: "asc" },
+              { orderBy: "amount", direction: "asc" },
+            ],
+            page(index),
+          ),
+        )
+      ).map((row) => row.id),
+    ).toEqual(expected);
   });
 
   it("pages Projects and sums the cost estimate over the whole filtered set", async () => {
