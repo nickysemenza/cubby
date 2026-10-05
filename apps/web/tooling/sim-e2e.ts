@@ -1491,6 +1491,35 @@ async function runQaJourneys(
     ? await recordSimulatorVideo(common[3] ?? "")
     : undefined;
   const flaky: string[] = [];
+  const replay = (
+    journey: string,
+    attempt: number,
+    variables: Record<string, string>,
+  ) =>
+    run(
+      "pnpm",
+      [
+        "exec",
+        "agent-device",
+        "test",
+        `apps/apple/e2e/${journey}`,
+        ...common,
+        "--retries",
+        "0",
+        "--artifacts-dir",
+        artifacts,
+        "--reporter",
+        "default",
+        "--reporter",
+        // Per attempt, so a retried pass keeps the failed attempt's report beside it.
+        `junit:${path.join(artifacts, `junit-${journey}-attempt-${attempt}.xml`)}`,
+        ...Object.entries(variables).flatMap(([key, value]) => [
+          "-e",
+          `${key}=${value}`,
+        ]),
+      ],
+      repoRoot,
+    );
   try {
     for (const journey of journeys) {
       // A scroll can land short while a detail page is still laying out; a journey only
@@ -1498,30 +1527,7 @@ async function runQaJourneys(
       for (let attempt = 1; ; attempt += 1) {
         await relaunch();
         try {
-          await run(
-            "pnpm",
-            [
-              "exec",
-              "agent-device",
-              "test",
-              `apps/apple/e2e/${journey}`,
-              ...common,
-              "--retries",
-              "0",
-              "--artifacts-dir",
-              artifacts,
-              "--reporter",
-              "default",
-              "--reporter",
-              // Per attempt, so a retried pass keeps the failed attempt's report beside it.
-              `junit:${path.join(artifacts, `junit-${journey}-attempt-${attempt}.xml`)}`,
-              ...Object.entries(qaIds).flatMap(([key, value]) => [
-                "-e",
-                `${key}=${value}`,
-              ]),
-            ],
-            repoRoot,
-          );
+          await replay(journey, attempt, qaIds);
           break;
         } catch (error) {
           flaky.push(journey);
@@ -1532,6 +1538,34 @@ async function runQaJourneys(
           await reseedQaJourney(journey);
         }
       }
+    }
+    // The stop guard's two phases share one open screen, so only the first relaunches; a
+    // retry seeds a fresh running Run.
+    const { runNativeRunStopJourney } =
+      await import("./scenarios/native-run-stop");
+    const stopPool = new Pool({ connectionString: databaseURL });
+    try {
+      for (let attempt = 1; ; attempt += 1) {
+        await relaunch();
+        try {
+          scenarioEvidence.push(
+            await runNativeRunStopJourney({
+              pool: stopPool,
+              userId: qaUserId,
+              artifacts,
+              replay: (journey, variables) =>
+                replay(journey, attempt, variables),
+            }),
+          );
+          break;
+        } catch (error) {
+          flaky.push("run-stop");
+          if (attempt >= 2 || interrupted) throw error;
+          console.log(`[${lane}] run-stop attempt ${attempt} failed; retrying`);
+        }
+      }
+    } finally {
+      await stopPool.end();
     }
   } finally {
     await stopRecording?.();

@@ -195,11 +195,12 @@ export async function seedSplitSettlement(
   };
 }
 
-/** A running import Run holding one approval that awaits the household's decision. */
-export async function seedPendingApprovalRun(
+/** A running account-sync Run on a fresh synthetic vendor account (`name` keeps seeds apart). */
+export async function startSyntheticSyncRun(
   pool: Pool,
   userId: string,
-): Promise<Record<string, string>> {
+  name: string,
+) {
   const db = buildScenarioDatabase(pool);
   const member = await pool.query<{ id: string }>(
     'SELECT id FROM "LedgerParty" WHERE "userId" = $1 AND kind = $2 AND "deletedAt" IS NULL LIMIT 1',
@@ -207,21 +208,31 @@ export async function seedPendingApprovalRun(
   );
   const memberId = member.rows[0]?.id;
   if (!memberId) throw new Error("Synthetic member party is missing");
+  const domain = `${name.toLowerCase().replaceAll(/[^a-z0-9]+/gu, "-")}.example.test`;
   const vendor = await insertWithShortcode(db, "vendor", {
-    name: "Synthetic Approval Vendor",
-    website: "https://shop.example.test",
-    browserDomains: ["shop.example.test"],
+    name: `Synthetic ${name} Vendor`,
+    website: `https://${domain}`,
+    browserDomains: [domain],
   });
   const account = await insertWithShortcode(db, "vendorAccount", {
-    label: "Synthetic approval account",
+    label: `Synthetic ${name.toLowerCase()} account`,
     vendorId: vendor.id,
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
   });
-  const run = await startOrResumeRun(db, {
+  return startOrResumeRun(db, {
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
     vendorAccountId: account.id,
     trigger: "manual",
   });
+}
+
+/** A running import Run holding one approval that awaits the household's decision. */
+export async function seedPendingApprovalRun(
+  pool: Pool,
+  userId: string,
+): Promise<Record<string, string>> {
+  const db = buildScenarioDatabase(pool);
+  const run = await startSyntheticSyncRun(pool, userId, "Approval");
   const runRow = await pool.query<{ id: string }>(
     'SELECT id FROM "Run" WHERE shortcode = $1',
     [run.publicId],

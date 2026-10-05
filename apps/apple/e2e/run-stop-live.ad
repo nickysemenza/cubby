@@ -1,0 +1,9 @@
+context platform=ios timeout=240000
+
+# Phase one of the ordinary-Run stop guard (`scenarios/native-run-stop.ts`): open a running
+# account-sync Run and see it live. The scenario then stops it server-side and replays
+# run-stop-stopped.ad against this same open screen.
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 240000
+open "cubby://entity/${STOP_RUN_ID}"
+wait text "Running" 90000
